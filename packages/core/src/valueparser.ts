@@ -1124,20 +1124,136 @@ export function keyValue(
     if (!valueResult.success) {
       return { success: false, error: invalidValueError(valueResult.error) };
     }
-    return makeKeyValueSuccess(keyResult, valueResult);
+    return validateResultParts(input, keyResult, valueResult);
   }
 
   function validateKeyForSuggestion(key: string): boolean {
     if (!allowEmptyKey && key === "") {
       return false;
     }
-    return keyParser.parse(key).success;
+    const keyResult = keyParser.parse(key);
+    if (!keyResult.success) {
+      return false;
+    }
+    if (!allowEmptyKey && keyResult.value === "") {
+      return false;
+    }
+    const formattedKeyResult = formatValueParserValue(
+      keyParser,
+      keyResult.value,
+    );
+    if (!formattedKeyResult.success) {
+      return false;
+    }
+    const formattedKey = formattedKeyResult.value;
+    return split !== "first" ||
+      formattedKey == null ||
+      !formattedKey.includes(separator);
   }
 
   function fallbackInput(key: unknown, value: unknown): string {
     return `${typeof key === "string" ? key : ""}${separator}${
       typeof value === "string" ? value : ""
     }`;
+  }
+
+  function validateResultParts(
+    input: string,
+    keyResult: Extract<
+      ValueParserResult<unknown>,
+      { readonly success: true }
+    >,
+    valueResult: Extract<
+      ValueParserResult<unknown>,
+      { readonly success: true }
+    >,
+  ): ValueParserResult<readonly [unknown, unknown]> {
+    if (!allowEmptyKey && keyResult.value === "") {
+      return { success: false, error: emptyKeyError(input) };
+    }
+    if (!allowEmptyValue && valueResult.value === "") {
+      return { success: false, error: emptyValueError(input) };
+    }
+
+    const formattedKeyResult = formatValueParserValue(
+      keyParser,
+      keyResult.value,
+    );
+    if (!formattedKeyResult.success) {
+      return {
+        success: false,
+        error: invalidKeyError(formattedKeyResult.error),
+      };
+    }
+    const formattedValueResult = formatValueParserValue(
+      valueParser,
+      valueResult.value,
+    );
+    if (!formattedValueResult.success) {
+      return {
+        success: false,
+        error: invalidValueError(formattedValueResult.error),
+      };
+    }
+    const formattedKey = formattedKeyResult.value;
+    const formattedValue = formattedValueResult.value;
+    const formattedInput = `${formattedKey ?? ""}${separator}${
+      formattedValue ?? ""
+    }`;
+    if (!allowEmptyKey && formattedKey === "") {
+      return { success: false, error: emptyKeyError(input) };
+    }
+    if (!allowEmptyValue && formattedValue === "") {
+      return { success: false, error: emptyValueError(input) };
+    }
+    if (
+      split === "first" &&
+      formattedKey != null &&
+      formattedKey.includes(separator)
+    ) {
+      return {
+        success: false,
+        error: invalidKeyError(
+          message`Expected a key without ${separator}, but got ${formattedKey}.`,
+        ),
+      };
+    }
+    if (
+      split === "last" &&
+      formattedValue != null &&
+      formattedValue.includes(separator)
+    ) {
+      return {
+        success: false,
+        error: invalidValueError(
+          message`Expected a value without ${separator}, but got ${formattedValue}.`,
+        ),
+      };
+    }
+    if (formattedKey != null && formattedValue != null) {
+      const index = findSeparator(formattedInput);
+      const roundTripKey = formattedInput.slice(0, index);
+      const roundTripValue = formattedInput.slice(index + separator.length);
+      if (
+        roundTripKey !== formattedKey ||
+        roundTripValue !== formattedValue
+      ) {
+        return split === "first"
+          ? {
+            success: false,
+            error: invalidKeyError(
+              message`Expected a key that round-trips with ${separator}, but got ${formattedKey}.`,
+            ),
+          }
+          : {
+            success: false,
+            error: invalidValueError(
+              message`Expected a value that round-trips with ${separator}, but got ${formattedValue}.`,
+            ),
+          };
+      }
+    }
+    return makeKeyValueSuccess(keyResult, valueResult);
   }
 
   return {
@@ -1191,83 +1307,11 @@ export function keyValue(
         return { success: false, error: invalidValueError(valueResult.error) };
       }
 
-      const formattedKeyResult = formatValueParserValue(
-        keyParser,
-        keyResult.value,
+      return validateResultParts(
+        fallbackInput(value[0], value[1]),
+        keyResult,
+        valueResult,
       );
-      if (!formattedKeyResult.success) {
-        return {
-          success: false,
-          error: invalidKeyError(formattedKeyResult.error),
-        };
-      }
-      const formattedValueResult = formatValueParserValue(
-        valueParser,
-        valueResult.value,
-      );
-      if (!formattedValueResult.success) {
-        return {
-          success: false,
-          error: invalidValueError(formattedValueResult.error),
-        };
-      }
-      const formattedKey = formattedKeyResult.value;
-      const formattedValue = formattedValueResult.value;
-      const input = `${formattedKey ?? ""}${separator}${formattedValue ?? ""}`;
-      if (!allowEmptyKey && formattedKey === "") {
-        return { success: false, error: emptyKeyError(input) };
-      }
-      if (!allowEmptyValue && formattedValue === "") {
-        return { success: false, error: emptyValueError(input) };
-      }
-      if (
-        split === "first" &&
-        formattedKey != null &&
-        formattedKey.includes(separator)
-      ) {
-        return {
-          success: false,
-          error: invalidKeyError(
-            message`Expected a key without ${separator}, but got ${formattedKey}.`,
-          ),
-        };
-      }
-      if (
-        split === "last" &&
-        formattedValue != null &&
-        formattedValue.includes(separator)
-      ) {
-        return {
-          success: false,
-          error: invalidValueError(
-            message`Expected a value without ${separator}, but got ${formattedValue}.`,
-          ),
-        };
-      }
-      if (formattedKey != null && formattedValue != null) {
-        const index = findSeparator(input);
-        const roundTripKey = input.slice(0, index);
-        const roundTripValue = input.slice(index + separator.length);
-        if (
-          roundTripKey !== formattedKey ||
-          roundTripValue !== formattedValue
-        ) {
-          return split === "first"
-            ? {
-              success: false,
-              error: invalidKeyError(
-                message`Expected a key that round-trips with ${separator}, but got ${formattedKey}.`,
-              ),
-            }
-            : {
-              success: false,
-              error: invalidValueError(
-                message`Expected a value that round-trips with ${separator}, but got ${formattedValue}.`,
-              ),
-            };
-        }
-      }
-      return makeKeyValueSuccess(keyResult, valueResult);
     },
     ...(hasNormalize
       ? {

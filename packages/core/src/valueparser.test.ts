@@ -18789,6 +18789,96 @@ describe("keyValue", () => {
       assert.deepEqual(result.value, ["port", 5432]);
     });
 
+    it("should reject parsed keys that canonicalize to empty strings", () => {
+      const key: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "KEY",
+        parse: (input) => ({
+          success: true,
+          value: input === "default" ? "" : input,
+        }),
+        format: (input) => input,
+      };
+      const parser = keyValue({ key });
+
+      const result = parser.parse("default=enabled");
+
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a non-empty key in " },
+        { type: "value", value: "default=enabled" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should reject parsed values that canonicalize to empty strings", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "VALUE",
+        parse: (input) => ({
+          success: true,
+          value: input === "default" ? "" : input,
+        }),
+        format: (input) => input,
+      };
+      const parser = keyValue({ allowEmptyValue: false, value });
+
+      const result = parser.parse("mode=default");
+
+      assert.ok(!result.success);
+      assert.deepStrictEqual(result.error, [
+        { type: "text", text: "Expected a non-empty value in " },
+        { type: "value", value: "mode=default" },
+        { type: "text", text: "." },
+      ]);
+    });
+
+    it("should reject parsed keys that cannot round-trip", () => {
+      const key: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "KEY",
+        parse: (input) => ({
+          success: true,
+          value: input === "default" ? "A=B" : input,
+        }),
+        format: (input) => input,
+      };
+      const parser = keyValue({ key });
+
+      const result = parser.parse("default=C");
+
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Invalid key: Expected a key without "=", but got "A=B".',
+      );
+    });
+
+    it("should reject parsed values that cannot round-trip", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "VALUE",
+        parse: (input) => ({
+          success: true,
+          value: input === "default" ? "B=C" : input,
+        }),
+        format: (input) => input,
+      };
+      const parser = keyValue({ split: "last", value });
+
+      const result = parser.parse("A=default");
+
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        'Invalid value: Expected a value without "=", but got "B=C".',
+      );
+    });
+
     it("should wrap key parser failures as invalid-key errors", () => {
       const parser = keyValue({
         key: choice(["host", "port"] as const),
@@ -19199,6 +19289,27 @@ describe("keyValue", () => {
       });
 
       const suggestions = [...parser.suggest?.("=d") ?? []];
+
+      assert.deepEqual(suggestions, []);
+    });
+
+    it("should not suggest values when the key canonicalizes to empty", () => {
+      const key: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "KEY",
+        placeholder: "KEY",
+        parse: (input) => ({
+          success: true,
+          value: input === "default" ? "" : input,
+        }),
+        format: (input) => input,
+      };
+      const parser = keyValue({
+        key,
+        value: choice(["debug"] as const),
+      });
+
+      const suggestions = [...parser.suggest?.("default=d") ?? []];
 
       assert.deepEqual(suggestions, []);
     });
