@@ -911,7 +911,7 @@ export function string(
 export interface KeyValueOptions<K = string, V = string> {
   /**
    * The metavariable name for this parser.  Used in help messages to
-   * indicate the expected key-value shape.
+   * indicate the expected key–value shape.
    * @default `"KEY=VALUE"` with the configured separator.
    */
   readonly metavar?: NonEmptyString;
@@ -954,7 +954,7 @@ export interface KeyValueOptions<K = string, V = string> {
   readonly split?: "first" | "last";
 
   /**
-   * Custom error messages for key-value parsing failures.
+   * Custom error messages for key–value parsing failures.
    * @since 1.1.0
    */
   readonly errors?: {
@@ -1010,8 +1010,8 @@ type KeyValueResultType<
  * inferred tuple type.
  *
  * @template Options The option object type used to infer child parser results.
- * @param options Configuration options for the key-value parser.
- * @returns A sync value parser producing readonly key-value tuples.
+ * @param options Configuration options for the key–value parser.
+ * @returns A sync value parser producing readonly key–value tuples.
  * @throws {TypeError} If `separator` or `metavar` is empty, if
  *   `allowEmptyKey` or `allowEmptyValue` is not a boolean, if `split` is not
  *   `"first"` or `"last"`, or if `key` or `value` is not a sync value parser.
