@@ -1,10 +1,10 @@
-import { or } from "@optique/core/constructs";
+import { longestMatch, or } from "@optique/core/constructs";
 import type {
   SourceContext,
   SourceContextRequest,
 } from "@optique/core/context";
 import type { DocState } from "@optique/core/parser";
-import type { DocFragments } from "@optique/core/doc";
+import type { DocFragment, DocFragments } from "@optique/core/doc";
 import { map } from "@optique/core/modifiers";
 import type { Message } from "@optique/core/message";
 import type { Mode, Parser } from "@optique/core/parser";
@@ -99,6 +99,16 @@ export interface DiscoverCommandsOptions {
    * @default Runtime-aware extension defaults from {@link getDefaultExtensions}
    */
   readonly extensions?: readonly string[];
+
+  /**
+   * File name that maps to the containing command path after extension
+   * stripping.  For example, `stash/index.ts` maps to `stash`, and root
+   * `index.ts` maps to the root command.  Pass `false` to treat matching files
+   * as ordinary command names.
+   *
+   * @default `"index"`
+   */
+  readonly entryFileName?: string | false;
 }
 
 /**
@@ -186,6 +196,14 @@ export interface RunProgramDiscoveryOptions extends RunProgramBaseOptions {
   readonly extensions?: readonly string[];
 
   /**
+   * File name that maps to the containing command path after extension
+   * stripping.
+   *
+   * @default `"index"`
+   */
+  readonly entryFileName?: string | false;
+
+  /**
    * Static commands cannot be used together with `dir`.
    */
   readonly commands?: never;
@@ -211,6 +229,11 @@ export interface RunProgramStaticOptions extends RunProgramBaseOptions {
    * File suffixes are only used with file-system discovery.
    */
   readonly extensions?: never;
+
+  /**
+   * Entry file names are only used with file-system discovery.
+   */
+  readonly entryFileName?: never;
 }
 
 /**
@@ -255,8 +278,8 @@ export function getDefaultExtensions(
  * @param options Discovery options.
  * @returns Discovered commands sorted by command path.
  * @throws {TypeError} If options are invalid, discovery finds no commands,
- *         command paths conflict, or a module does not default-export a
- *         command created with `defineCommand()`.
+ *         command paths are duplicated, or a module does not default-export
+ *         a command created with `defineCommand()`.
  * @since 1.1.0
  */
 export async function discoverCommands(
@@ -266,6 +289,7 @@ export async function discoverCommands(
   const extensions = normalizeExtensions(
     options.extensions ?? getDefaultExtensions(),
   );
+  const entryFileName = normalizeEntryFileName(options.entryFileName);
   const files = await collectCommandFiles(dir, extensions);
   if (files.length < 1) {
     throw new TypeError(`No command modules found in ${dir}.`);
@@ -274,11 +298,11 @@ export async function discoverCommands(
   const seen = new Map<string, string>();
   const discovered: DiscoveredCommand[] = [];
   for (const filePath of files) {
-    const path = commandPathFromFile(dir, filePath, extensions);
+    const path = commandPathFromFile(dir, filePath, extensions, entryFileName);
     const key = commandPathKey(path);
     const previous = seen.get(key);
     if (previous != null) {
-      const displayPath = path.join(" ");
+      const displayPath = displayCommandPath(path);
       throw new TypeError(
         `Duplicate command path "${displayPath}" from ${previous} and ${filePath}.`,
       );
@@ -300,14 +324,13 @@ export async function discoverCommands(
     ) {
       throw new TypeError(
         `Module ${filePath} declares command path "${
-          commandDefinition.path.join(" ")
-        }" but file path defines "${path.join(" ")}".`,
+          displayCommandPath(commandDefinition.path)
+        }" but file path defines "${displayCommandPath(path)}".`,
       );
     }
     discovered.push({ path, filePath, command: commandDefinition });
   }
 
-  rejectPathConflicts(discovered);
   return sortCommands(discovered);
 }
 
@@ -317,7 +340,8 @@ export async function discoverCommands(
  * @param commands Commands to compose.
  * @param metadata Optional root documentation metadata.
  * @returns A parser that resolves to an internal command invocation.
- * @throws {TypeError} If no commands are provided or command paths conflict.
+ * @throws {TypeError} If no commands are provided or command paths are
+ *         duplicated.
  * @since 1.1.0
  */
 export function createProgramParser(
@@ -331,13 +355,7 @@ export function createProgramParser(
   rejectDuplicatePaths(
     sortedCommands.map((entry) => ({
       path: entry.path,
-      filePath: entry.path.join("/"),
-    })),
-  );
-  rejectPathConflicts(
-    sortedCommands.map((entry) => ({
-      path: entry.path,
-      filePath: entry.path.join("/"),
+      filePath: displayCommandPath(entry.path),
     })),
   );
   const rootNode = buildCommandTree(sortedCommands);
@@ -362,6 +380,7 @@ export async function runProgram(options: RunProgramOptions): Promise<void> {
     commands = await discoverCommands({
       dir: options.dir,
       extensions: options.extensions,
+      entryFileName: options.entryFileName,
     });
   }
   const parser = createProgramParser(commands, options.metadata);
@@ -450,6 +469,23 @@ function normalizeExtensions(extensions: readonly string[]): readonly string[] {
   );
 }
 
+function normalizeEntryFileName(
+  entryFileName: string | false | undefined,
+): string | false {
+  if (entryFileName === false) return false;
+  const normalized = entryFileName ?? "index";
+  if (
+    normalized.length < 1 ||
+    normalized.includes("/") ||
+    normalized.includes("\\")
+  ) {
+    throw new TypeError(
+      `Command entry file name must be a non-empty file name: ${normalized}`,
+    );
+  }
+  return normalized;
+}
+
 async function collectCommandFiles(
   dir: string,
   extensions: readonly string[],
@@ -511,6 +547,7 @@ function commandPathFromFile(
   rootDir: string,
   filePath: string,
   extensions: readonly string[],
+  entryFileName: string | false,
 ): CommandPath {
   const matchedExtension = extensions.find((ext) => filePath.endsWith(ext));
   if (matchedExtension == null) {
@@ -519,42 +556,26 @@ function commandPathFromFile(
   const withoutExtension = filePath.slice(0, -matchedExtension.length);
   const relativePath = relative(rootDir, withoutExtension);
   const path = relativePath.split(sep).filter((segment) => segment.length > 0);
-  const [first, ...rest] = path;
-  if (first == null) {
+  if (path.length < 1) {
     throw new TypeError(`Command file ${filePath} does not define a path.`);
   }
-  return [first, ...rest];
+  if (entryFileName !== false && path[path.length - 1] === entryFileName) {
+    return path.slice(0, -1);
+  }
+  return path;
 }
 
 function commandPathKey(path: readonly string[]): string {
   return path.join("\0");
 }
 
-function isCommandPath(path: unknown): path is CommandPath {
-  return Array.isArray(path) &&
-    path.length > 0 &&
-    path.every((segment) => typeof segment === "string" && segment.length > 0);
+function displayCommandPath(path: readonly string[]): string {
+  return path.length < 1 ? "<root>" : path.join(" ");
 }
 
-function rejectPathConflicts(
-  commands: readonly Pick<DiscoveredCommand, "path" | "filePath">[],
-): void {
-  const paths = new Map(
-    commands.map((entry) => [commandPathKey(entry.path), entry]),
-  );
-  for (const entry of commands) {
-    for (let i = 1; i < entry.path.length; i++) {
-      const parent = entry.path.slice(0, i);
-      const parentEntry = paths.get(commandPathKey(parent));
-      if (parentEntry != null) {
-        throw new TypeError(
-          `Command path "${parent.join(" ")}" conflicts with nested command "${
-            entry.path.join(" ")
-          }".`,
-        );
-      }
-    }
-  }
+function isCommandPath(path: unknown): path is CommandPath {
+  return Array.isArray(path) &&
+    path.every((segment) => typeof segment === "string" && segment.length > 0);
 }
 
 function rejectDuplicatePaths(
@@ -565,7 +586,7 @@ function rejectDuplicatePaths(
     const key = commandPathKey(entry.path);
     const previous = seen.get(key);
     if (previous != null) {
-      const displayPath = entry.path.join(" ");
+      const displayPath = displayCommandPath(entry.path);
       throw new TypeError(
         `Duplicate command path "${displayPath}" from ${previous} and ${entry.filePath}.`,
       );
@@ -606,7 +627,7 @@ function staticCommandsToEntries(
     }
     if (!isCommandPath(command.path)) {
       throw new TypeError(
-        "Static command entries must declare a non-empty path.",
+        "Static command entries must declare a path.",
       );
     }
     return {
@@ -648,13 +669,26 @@ function buildNodeParser(
   node: CommandTreeNode,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
+  const childParser = buildChildrenParser(node);
+  if (childParser != null) parsers.push(childParser);
+  if (node.command != null) parsers.push(createLeafParser(node.command));
+  if (parsers.length === 1) return parsers[0];
+  if (parsers.length < 1) {
+    throw new TypeError("Command tree node must contain a command.");
+  }
+  return longestMatch(...parsers) as Parser<Mode, ProgramInvocation, unknown>;
+}
+
+function buildChildrenParser(
+  node: CommandTreeNode,
+): Parser<Mode, ProgramInvocation, unknown> | undefined {
+  const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
   for (const [name, child] of node.children) {
-    const childParser = child.command != null
-      ? createLeafParser(child.command)
-      : buildNodeParser(child);
+    const childParser = buildNodeParser(child);
     const metadata = child.command?.metadata;
     parsers.push(command(name, childParser, metadata));
   }
+  if (parsers.length < 1) return undefined;
   if (parsers.length === 1) return parsers[0];
   return or(...parsers) as Parser<Mode, ProgramInvocation, unknown>;
 }
@@ -677,23 +711,34 @@ function withRootDocs(
   metadata: ProgramHelpMetadata,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const rootState = parser.initialState;
-  const rootDocs = (): DocFragments => ({
-    brief: metadata.brief,
-    description: metadata.description,
-    footer: metadata.footer,
-    fragments: [{
-      type: "section",
-      entries: commands.map((entry) => ({
-        term: {
-          type: "command",
-          name: entry.path.join(" "),
-          hidden: entry.command.metadata?.hidden,
-        },
-        description: entry.command.metadata?.brief ??
-          entry.command.metadata?.description,
-      })),
-    }],
-  });
+  const rootCommand = commands.find((entry) => entry.path.length < 1);
+  const listedCommands = commands.filter((entry) => entry.path.length > 0);
+  const rootDocs = (): DocFragments => {
+    const fragments: DocFragment[] = [
+      ...(rootCommand?.command.parser.getDocFragments({ kind: "unavailable" })
+        .fragments ?? []),
+    ];
+    if (listedCommands.length > 0) {
+      fragments.push({
+        type: "section",
+        entries: listedCommands.map((entry) => ({
+          term: {
+            type: "command",
+            name: entry.path.join(" "),
+            hidden: entry.command.metadata?.hidden,
+          },
+          description: entry.command.metadata?.brief ??
+            entry.command.metadata?.description,
+        })),
+      });
+    }
+    return {
+      brief: metadata.brief,
+      description: metadata.description,
+      footer: metadata.footer,
+      fragments,
+    };
+  };
   return {
     ...parser,
     getDocFragments(
@@ -717,6 +762,7 @@ function buildRunOptions(options: RunProgramOptions): RunOptions {
     dir: _dir,
     commands: _commands,
     extensions: _extensions,
+    entryFileName: _entryFileName,
     metadata: _metadata,
     help,
     version,

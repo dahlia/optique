@@ -52,6 +52,17 @@ describe("defineCommand()", () => {
     assert.deepEqual(path, ["user", "add"]);
   });
 
+  it("preserves static root command paths", () => {
+    const staticCommand = defineCommand({
+      path: [],
+      parser: object({}),
+      handler() {},
+    });
+
+    const path: CommandPath = staticCommand.path;
+    assert.deepEqual(path, []);
+  });
+
   it("rejects malformed command definitions", () => {
     assert.throws(
       () =>
@@ -75,25 +86,25 @@ describe("defineCommand()", () => {
     assert.throws(
       () =>
         defineCommand({
-          path: [] as never,
-          parser: object({}),
-          handler() {},
-        }),
-      {
-        name: "TypeError",
-        message: "Command path must be a non-empty array of non-empty strings.",
-      },
-    );
-    assert.throws(
-      () =>
-        defineCommand({
           path: ["build", ""] as never,
           parser: object({}),
           handler() {},
         }),
       {
         name: "TypeError",
-        message: "Command path must be a non-empty array of non-empty strings.",
+        message: "Command path must be an array of non-empty strings.",
+      },
+    );
+    assert.throws(
+      () =>
+        defineCommand({
+          path: [1] as never,
+          parser: object({}),
+          handler() {},
+        }),
+      {
+        name: "TypeError",
+        message: "Command path must be an array of non-empty strings.",
       },
     );
   });
@@ -140,7 +151,7 @@ describe("discoverCommands()", () => {
     }
   });
 
-  it("rejects duplicate command paths and file namespace conflicts", async () => {
+  it("rejects duplicate command paths", async () => {
     const duplicateDir = await makeTempDir();
     try {
       await writeCommand(duplicateDir, ["build.ts"], "build");
@@ -157,18 +168,102 @@ describe("discoverCommands()", () => {
     } finally {
       await rm(duplicateDir, { recursive: true, force: true });
     }
+  });
 
-    const conflictDir = await makeTempDir();
+  it("allows executable parent command files with nested commands", async () => {
+    const dir = await makeTempDir();
     try {
-      await writeCommand(conflictDir, ["user.ts"], "user");
-      await writeCommand(conflictDir, ["user", "add.ts"], "add");
+      await writeCommand(dir, ["user.ts"], "user");
+      await writeCommand(dir, ["user", "add.ts"], "add");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["user"],
+        ["user", "add"],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("maps entry files to containing command paths", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["index.ts"], "root");
+      await writeCommand(dir, ["build.ts"], "build");
+      await writeCommand(dir, ["stash", "index.ts"], "stash");
+      await writeCommand(dir, ["stash", "list.ts"], "list");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        [],
+        ["build"],
+        ["stash"],
+        ["stash", "list"],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports custom and disabled entry file names", async () => {
+    const modDir = await makeTempDir();
+    try {
+      await writeCommand(modDir, ["mod.ts"], "root");
+      await writeCommand(modDir, ["stash", "mod.ts"], "stash");
+
+      const commands = await discoverCommands({
+        dir: modDir,
+        extensions: [".ts"],
+        entryFileName: "mod",
+      });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        [],
+        ["stash"],
+      ]);
+    } finally {
+      await rm(modDir, { recursive: true, force: true });
+    }
+
+    const indexDir = await makeTempDir();
+    try {
+      await writeCommand(indexDir, ["index.ts"], "index");
+      await writeCommand(indexDir, ["stash", "index.ts"], "stash-index");
+
+      const commands = await discoverCommands({
+        dir: indexDir,
+        extensions: [".ts"],
+        entryFileName: false,
+      });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["index"],
+        ["stash", "index"],
+      ]);
+    } finally {
+      await rm(indexDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects duplicate root entry command paths", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["index.ts"], "root");
+      await writeCommand(dir, ["index.cmd.ts"], "root");
 
       await assert.rejects(
-        () => discoverCommands({ dir: conflictDir, extensions: [".ts"] }),
-        /Command path "user" conflicts with nested command "user add"\./,
+        () =>
+          discoverCommands({
+            dir,
+            extensions: [".cmd.ts", ".ts"],
+          }),
+        /Duplicate command path "<root>"/,
       );
     } finally {
-      await rm(conflictDir, { recursive: true, force: true });
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
@@ -332,6 +427,42 @@ describe("discoverCommands()", () => {
     }
   });
 
+  it("accepts declared root paths that match entry files", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(
+        dir,
+        ["index.ts"],
+        "root",
+        `
+          import { defineCommand } from "${
+          runtimeModuleUrl("command.ts", "../dist/command.js")
+        }";
+          import { object } from "${
+          runtimeModuleUrl(
+            "../../core/src/constructs.ts",
+            "../../core/dist/constructs.js",
+          )
+        }";
+
+          export default defineCommand({
+            path: [],
+            parser: object({}),
+            handler() {},
+          });
+        `,
+      );
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        [],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("ignores TypeScript declaration files", async () => {
     const dir = await makeTempDir();
     try {
@@ -430,6 +561,107 @@ describe("createProgramParser()", () => {
     assert.deepEqual(calls, [{ name: "Ada" }]);
   });
 
+  it("dispatches executable parent commands and nested commands", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          metadata: { brief: message`Stash changes.` },
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({
+            limit: withDefault(option("--limit", integer()), 10),
+          }),
+          metadata: { brief: message`List stashes.` },
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      },
+    ]);
+
+    const parentState = await parseAll(parser, ["stash", "--message", "wip"]);
+    const parentResult = await parser.complete(parentState);
+    assert.ok(parentResult.success);
+    if (parentResult.success) {
+      await parentResult.value.handler(parentResult.value.value);
+    }
+
+    const childState = await parseAll(parser, [
+      "stash",
+      "list",
+      "--limit",
+      "3",
+    ]);
+    const childResult = await parser.complete(childState);
+    assert.ok(childResult.success);
+    if (childResult.success) {
+      await childResult.value.handler(childResult.value.value);
+    }
+
+    assert.deepEqual(calls, [
+      ["stash", { message: "wip" }],
+      ["stash list", { limit: 3 }],
+    ]);
+  });
+
+  it("dispatches root commands alongside nested commands", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: [],
+        command: defineCommand({
+          parser: object({
+            name: option("--name", string()),
+          }),
+          metadata: { brief: message`Create an app.` },
+          handler(value) {
+            calls.push(["root", value]);
+          },
+        }),
+      },
+      {
+        path: ["build"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Build the app.` },
+          handler(value) {
+            calls.push(["build", value]);
+          },
+        }),
+      },
+    ]);
+
+    const rootState = await parseAll(parser, ["--name", "demo"]);
+    const rootResult = await parser.complete(rootState);
+    assert.ok(rootResult.success);
+    if (rootResult.success) {
+      await rootResult.value.handler(rootResult.value.value);
+    }
+
+    const buildState = await parseAll(parser, ["build"]);
+    const buildResult = await parser.complete(buildState);
+    assert.ok(buildResult.success);
+    if (buildResult.success) {
+      await buildResult.value.handler(buildResult.value.value);
+    }
+
+    assert.deepEqual(calls, [
+      ["root", { name: "demo" }],
+      ["build", {}],
+    ]);
+  });
+
   it("shows leaf command paths in root help", async () => {
     const parser = createProgramParser([
       {
@@ -458,6 +690,37 @@ describe("createProgramParser()", () => {
     assert.match(text, /tool user add/);
     assert.match(text, /build\s+Build the project\./);
     assert.match(text, /user add\s+Add a user\./);
+  });
+
+  it("shows root command options and nested commands in root help", async () => {
+    const parser = createProgramParser([
+      {
+        path: [],
+        command: defineCommand({
+          parser: object({
+            name: option("--name", string()),
+          }),
+          metadata: { brief: message`Create an app.` },
+          handler() {},
+        }),
+      },
+      {
+        path: ["build"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Build the app.` },
+          handler() {},
+        }),
+      },
+    ], { brief: message`Project tool.` });
+
+    const page = await getDocPageAsync(parser);
+    assert.ok(page != null);
+    const text = formatDocPage("tool", page);
+
+    assert.match(text, /--name/);
+    assert.match(text, /build\s+Build the app\./);
+    assert.doesNotMatch(text, /^\s+Create an app\./m);
   });
 
   it("rejects duplicate command paths", () => {
@@ -521,6 +784,32 @@ describe("runProgram()", () => {
     });
 
     assert.deepEqual(calls, [{ value: "done" }]);
+  });
+
+  it("runs statically registered root commands", async () => {
+    const calls: unknown[] = [];
+    const createCommand = defineCommand({
+      path: [],
+      parser: object({
+        name: option("--name", string()),
+      }),
+      handler(value) {
+        calls.push(value);
+      },
+    });
+
+    await runProgram({
+      commands: [createCommand],
+      metadata: { name: "create-demo", version: "1.0.0" },
+      args: ["--name", "demo"],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [{ name: "demo" }]);
   });
 
   it("shows statically registered nested commands in root help", async () => {
@@ -659,7 +948,7 @@ describe("runProgram()", () => {
         }),
       {
         name: "TypeError",
-        message: "Static command entries must declare a non-empty path.",
+        message: "Static command entries must declare a path.",
       },
     );
   });

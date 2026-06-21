@@ -117,6 +117,10 @@ By default, Deno and Bun discover `.ts`, `.mts`, `.js`, and `.mjs` files.
 Node.js discovers `.js`, `.mjs`, and `.cjs` files, plus `.ts`, `.mts`, and
 `.cts` when it reports native TypeScript support or runs with a recognized
 TypeScript loader.  TypeScript declaration files such as `.d.ts` are ignored.
+Entry files named `index` map to their containing command path, so
+`commands/index.ts` defines the root command and `commands/user/index.ts`
+defines `user`.  Use `entryFileName` to choose another entry name or disable
+this rule.
 
 For more resources, see the [docs] and the [*examples/*](/examples/)
 directory.

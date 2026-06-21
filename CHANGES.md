@@ -8,6 +8,16 @@ Version 1.2.0
 
 To be released.
 
+### @optique/discover
+
+ -  Added executable parent commands to file-system discovery.  Entry files
+    such as `stash/index.ts` now map to the containing command path (`stash`),
+    root `index.ts` defines the root command, and parent commands can coexist
+    with nested commands such as `stash list`.  The `entryFileName` option
+    customizes or disables the entry-file rule.  [[#838]]
+
+[#838]: https://github.com/dahlia/optique/issues/838
+
 
 Version 1.1.0
 -------------
