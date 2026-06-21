@@ -248,6 +248,49 @@ describe("discoverCommands()", () => {
     }
   });
 
+  it("rejects malformed entry file names", async () => {
+    const dir = await makeTempDir();
+    try {
+      await assert.rejects(
+        () =>
+          discoverCommands({
+            dir,
+            entryFileName: null as never,
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Command entry file name must be a non-empty file name: null",
+        },
+      );
+      await assert.rejects(
+        () =>
+          discoverCommands({
+            dir,
+            entryFileName: "",
+          }),
+        {
+          name: "TypeError",
+          message: "Command entry file name must be a non-empty file name: ",
+        },
+      );
+      await assert.rejects(
+        () =>
+          discoverCommands({
+            dir,
+            entryFileName: "mod/index",
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Command entry file name must be a non-empty file name: mod/index",
+        },
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects duplicate root entry command paths", async () => {
     const dir = await makeTempDir();
     try {

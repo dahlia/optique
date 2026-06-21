@@ -472,8 +472,14 @@ function normalizeExtensions(extensions: readonly string[]): readonly string[] {
 function normalizeEntryFileName(
   entryFileName: string | false | undefined,
 ): string | false {
+  if (entryFileName === undefined) return "index";
   if (entryFileName === false) return false;
-  const normalized = entryFileName ?? "index";
+  if (typeof entryFileName !== "string") {
+    throw new TypeError(
+      `Command entry file name must be a non-empty file name: ${entryFileName}`,
+    );
+  }
+  const normalized = entryFileName;
   if (
     normalized.length < 1 ||
     normalized.includes("/") ||
