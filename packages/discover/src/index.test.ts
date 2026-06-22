@@ -1077,6 +1077,39 @@ describe("createProgramParser()", () => {
     assert.match(usageLineText, /Use stash list to inspect entries\./);
   });
 
+  it("shows executable parent descriptions in namespace help", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["repo", "remote"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { description: message`Manage remotes.` },
+          handler() {},
+        }),
+      },
+      {
+        path: ["repo", "remote", "add"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Add a remote.` },
+          handler() {},
+        }),
+      },
+    ]);
+
+    const page = await getDocPageAsync(parser, ["repo"]);
+    assert.ok(page != null);
+    const text = formatDocPage("git", page);
+
+    assert.match(text, /remote\s+Manage remotes\./);
+
+    const childPage = await getDocPageAsync(parser, ["repo", "remote", "add"]);
+    assert.ok(childPage != null);
+    const childText = formatDocPage("git", childPage);
+
+    assert.doesNotMatch(childText, /Manage remotes\./);
+  });
+
   it("dispatches executable parent command aliases", async () => {
     const calls: unknown[] = [];
     const parser = createProgramParser([

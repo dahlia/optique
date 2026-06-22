@@ -6,7 +6,11 @@ import type {
 import type { DocState } from "@optique/core/parser";
 import type { DocFragment, DocFragments } from "@optique/core/doc";
 import type { RuntimeNode } from "@optique/core/dependency-runtime";
-import { inheritAnnotations } from "@optique/core/extension";
+import {
+  inheritAnnotations,
+  mapModeValue,
+  wrapForMode,
+} from "@optique/core/extension";
 import { map } from "@optique/core/modifiers";
 import type { Message } from "@optique/core/message";
 import type {
@@ -116,6 +120,7 @@ export interface DiscoverCommandsOptions {
    * as ordinary command names.
    *
    * @default `"index"`
+   * @since 1.2.0
    */
   readonly entryFileName?: string | false;
 }
@@ -209,6 +214,7 @@ export interface RunProgramDiscoveryOptions extends RunProgramBaseOptions {
    * stripping.
    *
    * @default `"index"`
+   * @since 1.2.0
    */
   readonly entryFileName?: string | false;
 
@@ -732,24 +738,22 @@ function createExecutableNodeParser(
             branchParser,
           ),
         );
-        if (isPromiseLike(result)) {
-          return result.then((resolved) =>
-            wrapBranchParseResult(context, activeState, resolved)
-          );
-        }
-        return wrapBranchParseResult(context, activeState, result);
+        return mapModeValue(
+          parser.mode,
+          wrapForMode(parser.mode, result),
+          (resolved) => wrapBranchParseResult(context, activeState, resolved),
+        );
       }
 
       const result = parser.parse({
         ...context,
         state: toExclusiveState(activeState, context.state),
       });
-      if (isPromiseLike(result)) {
-        return result.then((resolved) =>
-          wrapInitialParseResult(context, resolved)
-        );
-      }
-      return wrapInitialParseResult(context, result);
+      return mapModeValue(
+        parser.mode,
+        wrapForMode(parser.mode, result),
+        (resolved) => wrapInitialParseResult(context, resolved),
+      );
     },
     complete(state, exec) {
       const activeState = normalizeExecutableNodeState(state);
@@ -867,12 +871,17 @@ function completeExecutableNodeLeaf(
   leafParser: Parser<Mode, ProgramInvocation, unknown>,
 ) {
   const result = parseExecutableNodeLeaf(state, exec, leafParser);
-  if (isPromiseLike(result)) {
-    return result.then((resolved) =>
+  if (leafParser.mode === "async") {
+    return Promise.resolve(wrapForMode("async", result)).then((resolved) =>
       completeParsedExecutableNodeLeaf(state, exec, leafParser, resolved)
     );
   }
-  return completeParsedExecutableNodeLeaf(state, exec, leafParser, result);
+  return completeParsedExecutableNodeLeaf(
+    state,
+    exec,
+    leafParser,
+    wrapForMode("sync", result),
+  );
 }
 
 function completeParsedExecutableNodeLeaf(
@@ -902,8 +911,8 @@ function extractExecutableNodePhase2Seed(
     return phase2SeedHook.extract(toExclusiveState(activeState, state), exec);
   }
   const result = parseExecutableNodeLeaf(state, exec, leafParser);
-  if (isPromiseLike(result)) {
-    return result.then((resolved) =>
+  if (leafParser.mode === "async") {
+    return Promise.resolve(wrapForMode("async", result)).then((resolved) =>
       extractParsedExecutableNodePhase2Seed(
         state,
         exec,
@@ -915,7 +924,7 @@ function extractExecutableNodePhase2Seed(
   return extractParsedExecutableNodePhase2Seed(
     state,
     exec,
-    result,
+    wrapForMode("sync", result),
     phase2SeedHook,
   );
 }
@@ -1125,14 +1134,6 @@ function mergeExecutableNodeChildExec(
   };
 }
 
-function isPromiseLike<T>(
-  value: T | Promise<T>,
-): value is Promise<T> {
-  return value != null &&
-    typeof value === "object" &&
-    typeof (value as { readonly then?: unknown }).then === "function";
-}
-
 function withCommandDocMetadata(
   fragments: DocFragments,
   metadata: CommandMetadata | undefined,
@@ -1152,14 +1153,69 @@ function buildChildrenParser(
   const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
   for (const [name, child] of node.children) {
     const childParser = buildNodeParser(child);
-    const metadata = child.children.size > 0
-      ? namespaceCommandMetadata(child.command?.metadata)
-      : child.command?.metadata;
-    parsers.push(command(name, childParser, metadata));
+    if (child.children.size > 0) {
+      parsers.push(
+        createNamespaceCommandParser(name, childParser, child.command),
+      );
+    } else {
+      parsers.push(command(name, childParser, child.command?.metadata));
+    }
   }
   if (parsers.length < 1) return undefined;
   if (parsers.length === 1) return parsers[0];
   return or(...parsers) as Parser<Mode, ProgramInvocation, unknown>;
+}
+
+function createNamespaceCommandParser(
+  name: string,
+  childParser: Parser<Mode, ProgramInvocation, unknown>,
+  commandDefinition: AnyCommand | undefined,
+): Parser<Mode, ProgramInvocation, unknown> {
+  const metadata = commandDefinition?.metadata;
+  const parser: Parser<Mode, ProgramInvocation, unknown> = command(
+    name,
+    childParser,
+    namespaceCommandMetadata(metadata),
+  );
+  const description = metadata?.brief ?? metadata?.description;
+  if (description == null) return parser;
+  return {
+    ...parser,
+    getDocFragments(state, defaultValue) {
+      const fragments = parser.getDocFragments(state, defaultValue);
+      if (
+        state.kind !== "unavailable" &&
+        (state.kind !== "available" ||
+          !Object.is(state.state, parser.initialState))
+      ) {
+        return fragments;
+      }
+      return withNamespaceListDocDescription(fragments, name, description);
+    },
+  };
+}
+
+function withNamespaceListDocDescription(
+  fragments: DocFragments,
+  name: string,
+  description: Message,
+): DocFragments {
+  return {
+    ...fragments,
+    fragments: fragments.fragments.map((fragment): DocFragment => {
+      if (
+        fragment.type !== "entry" ||
+        fragment.term.type !== "command" ||
+        fragment.term.name !== name
+      ) {
+        return fragment;
+      }
+      return {
+        ...fragment,
+        description: fragment.description ?? description,
+      };
+    }),
+  };
 }
 
 function namespaceCommandMetadata(
