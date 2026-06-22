@@ -15,11 +15,13 @@ const commandBrand = Symbol.for("@optique/discover/command");
 export type CommandMetadata = CommandOptions;
 
 /**
- * Non-empty command path used by static command registration.
+ * Command path used by static command registration.
+ *
+ * An empty path represents the root command.
  *
  * @since 1.1.0
  */
-export type CommandPath = readonly [string, ...string[]];
+export type CommandPath = readonly string[];
 
 /**
  * Input accepted by {@link defineCommand}.
@@ -31,6 +33,7 @@ export type CommandPath = readonly [string, ...string[]];
 export interface CommandDefinition<M extends Mode, T> {
   /**
    * Command path used when commands are passed directly to `runProgram()`.
+   * Use an empty path (`[]`) to register the root command.
    *
    * File-based discovery derives the command path from the file name and uses
    * this field only to validate that the declared path matches.
@@ -176,14 +179,13 @@ export function isCommand(value: unknown): value is AnyCommand {
 function validateCommandPath(path: unknown): asserts path is CommandPath {
   if (!isCommandPath(path)) {
     throw new TypeError(
-      "Command path must be a non-empty array of non-empty strings.",
+      "Command path must be an array of non-empty strings.",
     );
   }
 }
 
 function isCommandPath(path: unknown): path is CommandPath {
   return Array.isArray(path) &&
-    path.length > 0 &&
     path.every((segment) => typeof segment === "string" && segment.length > 0);
 }
 

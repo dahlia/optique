@@ -1,11 +1,30 @@
 import { object } from "@optique/core/constructs";
+import { getAnnotations } from "@optique/core/annotations";
+import { dependency } from "@optique/core/dependency";
 import { formatDocPage } from "@optique/core/doc";
-import { message } from "@optique/core/message";
+import {
+  defineTraits,
+  inheritAnnotations,
+  injectAnnotations,
+} from "@optique/core/extension";
+import { formatMessage, message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
-import { getDocPageAsync } from "@optique/core/parser";
+import {
+  getDocPageAsync,
+  type Parser,
+  type ParserContext,
+  type ParserResult,
+  suggestAsync,
+} from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
+import type { OptionName } from "@optique/core/usage";
 import type { SourceContext } from "@optique/core/context";
-import { integer, string } from "@optique/core/valueparser";
+import {
+  choice,
+  integer,
+  string,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -52,6 +71,17 @@ describe("defineCommand()", () => {
     assert.deepEqual(path, ["user", "add"]);
   });
 
+  it("preserves static root command paths", () => {
+    const staticCommand = defineCommand({
+      path: [],
+      parser: object({}),
+      handler() {},
+    });
+
+    const path: CommandPath = staticCommand.path;
+    assert.deepEqual(path, []);
+  });
+
   it("rejects malformed command definitions", () => {
     assert.throws(
       () =>
@@ -75,25 +105,25 @@ describe("defineCommand()", () => {
     assert.throws(
       () =>
         defineCommand({
-          path: [] as never,
-          parser: object({}),
-          handler() {},
-        }),
-      {
-        name: "TypeError",
-        message: "Command path must be a non-empty array of non-empty strings.",
-      },
-    );
-    assert.throws(
-      () =>
-        defineCommand({
           path: ["build", ""] as never,
           parser: object({}),
           handler() {},
         }),
       {
         name: "TypeError",
-        message: "Command path must be a non-empty array of non-empty strings.",
+        message: "Command path must be an array of non-empty strings.",
+      },
+    );
+    assert.throws(
+      () =>
+        defineCommand({
+          path: [1] as never,
+          parser: object({}),
+          handler() {},
+        }),
+      {
+        name: "TypeError",
+        message: "Command path must be an array of non-empty strings.",
       },
     );
   });
@@ -140,7 +170,7 @@ describe("discoverCommands()", () => {
     }
   });
 
-  it("rejects duplicate command paths and file namespace conflicts", async () => {
+  it("rejects duplicate command paths", async () => {
     const duplicateDir = await makeTempDir();
     try {
       await writeCommand(duplicateDir, ["build.ts"], "build");
@@ -157,18 +187,145 @@ describe("discoverCommands()", () => {
     } finally {
       await rm(duplicateDir, { recursive: true, force: true });
     }
+  });
 
-    const conflictDir = await makeTempDir();
+  it("allows executable parent command files with nested commands", async () => {
+    const dir = await makeTempDir();
     try {
-      await writeCommand(conflictDir, ["user.ts"], "user");
-      await writeCommand(conflictDir, ["user", "add.ts"], "add");
+      await writeCommand(dir, ["user.ts"], "user");
+      await writeCommand(dir, ["user", "add.ts"], "add");
 
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["user"],
+        ["user", "add"],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("maps entry files to containing command paths", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["index.ts"], "root");
+      await writeCommand(dir, ["build.ts"], "build");
+      await writeCommand(dir, ["stash", "index.ts"], "stash");
+      await writeCommand(dir, ["stash", "list.ts"], "list");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        [],
+        ["build"],
+        ["stash"],
+        ["stash", "list"],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports custom and disabled entry file names", async () => {
+    const modDir = await makeTempDir();
+    try {
+      await writeCommand(modDir, ["mod.ts"], "root");
+      await writeCommand(modDir, ["stash", "mod.ts"], "stash");
+
+      const commands = await discoverCommands({
+        dir: modDir,
+        extensions: [".ts"],
+        entryFileName: "mod",
+      });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        [],
+        ["stash"],
+      ]);
+    } finally {
+      await rm(modDir, { recursive: true, force: true });
+    }
+
+    const indexDir = await makeTempDir();
+    try {
+      await writeCommand(indexDir, ["index.ts"], "index");
+      await writeCommand(indexDir, ["stash", "index.ts"], "stash-index");
+
+      const commands = await discoverCommands({
+        dir: indexDir,
+        extensions: [".ts"],
+        entryFileName: false,
+      });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["index"],
+        ["stash", "index"],
+      ]);
+    } finally {
+      await rm(indexDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects malformed entry file names", async () => {
+    const dir = await makeTempDir();
+    try {
       await assert.rejects(
-        () => discoverCommands({ dir: conflictDir, extensions: [".ts"] }),
-        /Command path "user" conflicts with nested command "user add"\./,
+        () =>
+          discoverCommands({
+            dir,
+            entryFileName: null as never,
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Command entry file name must be a non-empty file name: null",
+        },
+      );
+      await assert.rejects(
+        () =>
+          discoverCommands({
+            dir,
+            entryFileName: "",
+          }),
+        {
+          name: "TypeError",
+          message: "Command entry file name must be a non-empty file name: ",
+        },
+      );
+      await assert.rejects(
+        () =>
+          discoverCommands({
+            dir,
+            entryFileName: "mod/index",
+          }),
+        {
+          name: "TypeError",
+          message:
+            "Command entry file name must be a non-empty file name: mod/index",
+        },
       );
     } finally {
-      await rm(conflictDir, { recursive: true, force: true });
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects duplicate root entry command paths", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["index.ts"], "root");
+      await writeCommand(dir, ["index.cmd.ts"], "root");
+
+      await assert.rejects(
+        () =>
+          discoverCommands({
+            dir,
+            extensions: [".cmd.ts", ".ts"],
+          }),
+        /Duplicate command path "<root>"/,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 
@@ -332,6 +489,42 @@ describe("discoverCommands()", () => {
     }
   });
 
+  it("accepts declared root paths that match entry files", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(
+        dir,
+        ["index.ts"],
+        "root",
+        `
+          import { defineCommand } from "${
+          runtimeModuleUrl("command.ts", "../dist/command.js")
+        }";
+          import { object } from "${
+          runtimeModuleUrl(
+            "../../core/src/constructs.ts",
+            "../../core/dist/constructs.js",
+          )
+        }";
+
+          export default defineCommand({
+            path: [],
+            parser: object({}),
+            handler() {},
+          });
+        `,
+      );
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        [],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("ignores TypeScript declaration files", async () => {
     const dir = await makeTempDir();
     try {
@@ -430,6 +623,378 @@ describe("createProgramParser()", () => {
     assert.deepEqual(calls, [{ name: "Ada" }]);
   });
 
+  it("dispatches executable parent commands and nested commands", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          metadata: { brief: message`Stash changes.` },
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({
+            limit: withDefault(option("--limit", integer()), 10),
+          }),
+          metadata: { brief: message`List stashes.` },
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      },
+    ]);
+
+    const parentState = await parseAll(parser, ["stash", "--message", "wip"]);
+    const parentResult = await parser.complete(parentState);
+    assert.ok(parentResult.success);
+    if (parentResult.success) {
+      await parentResult.value.handler(parentResult.value.value);
+    }
+
+    const childState = await parseAll(parser, [
+      "stash",
+      "list",
+      "--limit",
+      "3",
+    ]);
+    const childResult = await parser.complete(childState);
+    assert.ok(childResult.success);
+    if (childResult.success) {
+      await childResult.value.handler(childResult.value.value);
+    }
+
+    assert.deepEqual(calls, [
+      ["stash", { message: "wip" }],
+      ["stash list", { limit: 3 }],
+    ]);
+  });
+
+  it("does not switch to nested commands after parsing parent arguments", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      },
+    ]);
+
+    let context: ParserContext<unknown> = {
+      buffer: ["stash", "--message", "wip", "list"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    let failed = false;
+    while (context.buffer.length > 0) {
+      const result = await parser.parse(context);
+      if (!result.success) {
+        failed = true;
+        break;
+      }
+      context = result.next;
+    }
+
+    assert.ok(failed);
+    assert.deepEqual(calls, []);
+  });
+
+  it("dispatches root commands alongside nested commands", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: [],
+        command: defineCommand({
+          parser: object({
+            name: option("--name", string()),
+          }),
+          metadata: { brief: message`Create an app.` },
+          handler(value) {
+            calls.push(["root", value]);
+          },
+        }),
+      },
+      {
+        path: ["build"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Build the app.` },
+          handler(value) {
+            calls.push(["build", value]);
+          },
+        }),
+      },
+    ]);
+
+    const rootState = await parseAll(parser, ["--name", "demo"]);
+    const rootResult = await parser.complete(rootState);
+    assert.ok(rootResult.success);
+    if (rootResult.success) {
+      await rootResult.value.handler(rootResult.value.value);
+    }
+
+    const buildState = await parseAll(parser, ["build"]);
+    const buildResult = await parser.complete(buildState);
+    assert.ok(buildResult.success);
+    if (buildResult.success) {
+      await buildResult.value.handler(buildResult.value.value);
+    }
+
+    assert.deepEqual(calls, [
+      ["root", { name: "demo" }],
+      ["build", {}],
+    ]);
+  });
+
+  it("preserves source annotations for executable parent commands", async () => {
+    const sourceId = Symbol("source");
+    const context = createStringSourceContext(sourceId, "from-source");
+    const calls: unknown[] = [];
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: ["stash"],
+          parser: createSourceBackedParser(sourceId),
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+        defineCommand({
+          path: ["stash", "list"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      ],
+      metadata: { name: "git" },
+      args: ["stash"],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: [],
+          parser: createSourceBackedParser(sourceId),
+          handler(value) {
+            calls.push(["root", value]);
+          },
+        }),
+        defineCommand({
+          path: ["build"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["build", value]);
+          },
+        }),
+      ],
+      metadata: { name: "tool" },
+      args: [],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [
+      ["stash", "from-source"],
+      ["root", "from-source"],
+    ]);
+  });
+
+  it("preserves phase-two seeds for executable parent commands", async () => {
+    const sourceId = Symbol("source");
+    const phase2Values: unknown[] = [];
+    const calls: unknown[] = [];
+    const context: SourceContext = {
+      id: Symbol("test-context"),
+      phase: "two-pass",
+      getAnnotations(request) {
+        if (request?.phase !== "phase2") return {};
+        phase2Values.push(request.parsed);
+        const config = request.parsed != null &&
+            typeof request.parsed === "object"
+          ? (request.parsed as { readonly config?: unknown }).config
+          : undefined;
+        return typeof config === "string"
+          ? { [sourceId]: `loaded:${config}` }
+          : {};
+      },
+    };
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: ["stash"],
+          parser: object({
+            config: option("--config", string()),
+            source: createSourceBackedOptionParser(sourceId, "--source"),
+          }),
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+        defineCommand({
+          path: ["stash", "list"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      ],
+      metadata: { name: "git" },
+      args: ["stash", "--config", "stash.json"],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [
+      [
+        "stash",
+        { config: "stash.json", source: "loaded:stash.json" },
+      ],
+    ]);
+    assert.equal(phase2Values.length, 1);
+    assert.equal(
+      phase2Values[0] != null && typeof phase2Values[0] === "object"
+        ? (phase2Values[0] as { readonly config?: unknown }).config
+        : undefined,
+      "stash.json",
+    );
+  });
+
+  it("completes source-backed executable parents without CLI tokens", async () => {
+    const sourceId = Symbol("source");
+    const context = createStringSourceContext(sourceId, "from-source");
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: [],
+        command: defineCommand({
+          parser: createSourceBackedOptionParser(sourceId, "--source"),
+          handler(value) {
+            calls.push(["root complete", value]);
+          },
+        }),
+      },
+      {
+        path: ["build"],
+        command: defineCommand({
+          parser: object({}),
+          handler(value) {
+            calls.push(["build complete", value]);
+          },
+        }),
+      },
+    ]);
+
+    const result = await parser.complete(
+      injectAnnotations(parser.initialState, { [sourceId]: "from-source" }),
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      await result.value.handler(result.value.value);
+    }
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: [],
+          parser: createSourceBackedOptionParser(sourceId, "--source"),
+          handler(value) {
+            calls.push(["root", value]);
+          },
+        }),
+        defineCommand({
+          path: ["build"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["build", value]);
+          },
+        }),
+      ],
+      metadata: { name: "tool" },
+      args: [],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [
+      ["root complete", "from-source"],
+      ["root", "from-source"],
+    ]);
+  });
+
+  it("includes source nodes for uncommitted executable parent completion", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            mode: withDefault(option("--mode", modeParser), "prod" as const),
+          }),
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler() {},
+        }),
+      },
+    ]);
+
+    const state = await parseAll(parser, ["stash"]);
+    const sourceNode = parser.getSuggestRuntimeNodes?.(state, [])?.find(
+      (node) => node.parser.dependencyMetadata?.source != null,
+    );
+
+    assert.ok(sourceNode);
+    assert.deepEqual(sourceNode.path, ["stash", 1, "mode"]);
+  });
+
   it("shows leaf command paths in root help", async () => {
     const parser = createProgramParser([
       {
@@ -458,6 +1023,310 @@ describe("createProgramParser()", () => {
     assert.match(text, /tool user add/);
     assert.match(text, /build\s+Build the project\./);
     assert.match(text, /user add\s+Add a user\./);
+  });
+
+  it("shows root command options and nested commands in root help", async () => {
+    const parser = createProgramParser([
+      {
+        path: [],
+        command: defineCommand({
+          parser: object({
+            name: option("--name", string()),
+          }),
+          metadata: { brief: message`Create an app.` },
+          handler() {},
+        }),
+      },
+      {
+        path: ["build"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Build the app.` },
+          handler() {},
+        }),
+      },
+    ], { brief: message`Project tool.` });
+
+    const page = await getDocPageAsync(parser);
+    assert.ok(page != null);
+    const text = formatDocPage("tool", page);
+
+    assert.match(text, /--name/);
+    assert.match(text, /build\s+Build the app\./);
+    assert.doesNotMatch(text, /^\s+Create an app\./m);
+  });
+
+  it("keeps executable parent metadata out of nested command help", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          metadata: {
+            description: message`Manage saved changes.`,
+            footer: message`Use stash list to inspect entries.`,
+            hidden: "usage",
+            usageLine: [{ type: "literal", value: "stash-usage" }],
+          },
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`List saved changes.` },
+          handler() {},
+        }),
+      },
+    ]);
+
+    const page = await getDocPageAsync(parser, ["stash", "list"]);
+    assert.ok(page != null);
+    const text = formatDocPage("git", page);
+
+    assert.match(text, /Usage: git stash list/);
+    assert.match(text, /List saved changes\./);
+    assert.doesNotMatch(text, /Manage saved changes\./);
+
+    const parentPage = await getDocPageAsync(parser, [
+      "stash",
+      "--message",
+      "wip",
+    ]);
+    assert.ok(parentPage != null);
+    const parentText = formatDocPage("git", parentPage);
+
+    assert.match(parentText, /Manage saved changes\./);
+
+    const usageLinePage = await getDocPageAsync(parser, ["stash"]);
+    assert.ok(usageLinePage != null);
+    const usageLineText = formatDocPage("git", usageLinePage);
+
+    assert.match(usageLineText, /Usage: git stash stash-usage/);
+    assert.match(usageLineText, /Manage saved changes\./);
+    assert.match(usageLineText, /Use stash list to inspect entries\./);
+  });
+
+  it("shows executable parent descriptions in namespace help", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["repo", "remote"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { description: message`Manage remotes.` },
+          handler() {},
+        }),
+      },
+      {
+        path: ["repo", "remote", "add"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Add a remote.` },
+          handler() {},
+        }),
+      },
+    ]);
+
+    const page = await getDocPageAsync(parser, ["repo"]);
+    assert.ok(page != null);
+    const text = formatDocPage("git", page);
+
+    assert.match(text, /remote\s+Manage remotes\./);
+
+    const childPage = await getDocPageAsync(parser, ["repo", "remote", "add"]);
+    assert.ok(childPage != null);
+    const childText = formatDocPage("git", childPage);
+
+    assert.doesNotMatch(childText, /Manage remotes\./);
+  });
+
+  it("keeps hidden executable parent namespaces out of help and suggestions", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["repo", "remote"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: {
+            description: message`Manage remotes.`,
+            hidden: true,
+          },
+          handler() {},
+        }),
+      },
+      {
+        path: ["repo", "remote", "add"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Add a remote.` },
+          handler() {},
+        }),
+      },
+    ]);
+
+    const page = await getDocPageAsync(parser, ["repo"]);
+    assert.ok(page != null);
+    const text = formatDocPage("git", page);
+
+    assert.doesNotMatch(text, /\bremote\b/);
+
+    const rootPage = await getDocPageAsync(parser);
+    assert.ok(rootPage != null);
+    const rootText = formatDocPage("git", rootPage);
+
+    assert.doesNotMatch(rootText, /repo remote add/);
+    assert.doesNotMatch(rootText, /Usage: git repo add/);
+
+    const suggestions = await suggestAsync(parser, ["repo", ""]);
+    assert.ok(
+      !suggestions.some((suggestion) =>
+        suggestion.kind === "literal" && suggestion.text === "remote"
+      ),
+    );
+
+    const childPage = await getDocPageAsync(parser, [
+      "repo",
+      "remote",
+      "add",
+    ]);
+    assert.ok(childPage != null);
+    const childText = formatDocPage("git", childPage);
+
+    assert.match(childText, /Usage: git repo remote add/);
+  });
+
+  it("wraps executable parent completion with async mode", async () => {
+    const asyncChildParser: Parser<"async", Record<string, never>, undefined> =
+      {
+        $valueType: [],
+        $stateType: [],
+        mode: "async",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true,
+            consumed: [],
+            next: context,
+          });
+        },
+        complete() {
+          return Promise.resolve({ success: true, value: {} });
+        },
+        async *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({}),
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: asyncChildParser,
+          handler() {},
+        }),
+      },
+    ]);
+
+    assert.equal(parser.mode, "async");
+
+    const parentState = await parseAll(parser, ["stash"]);
+    const result = parser.complete(parentState);
+
+    assert.ok(result instanceof Promise);
+    assert.ok((await result).success);
+  });
+
+  it("dispatches executable parent command aliases", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          metadata: { aliases: ["st"] },
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      },
+    ]);
+
+    const parentState = await parseAll(parser, ["st", "--message", "wip"]);
+    const parentResult = await parser.complete(parentState);
+    assert.ok(parentResult.success);
+    if (parentResult.success) {
+      await parentResult.value.handler(parentResult.value.value);
+    }
+
+    const childState = await parseAll(parser, ["st", "list"]);
+    const childResult = await parser.complete(childState);
+    assert.ok(childResult.success);
+    if (childResult.success) {
+      await childResult.value.handler(childResult.value.value);
+    }
+
+    assert.deepEqual(calls, [
+      ["stash", { message: "wip" }],
+      ["stash list", {}],
+    ]);
+  });
+
+  it("uses executable parent command errors for namespaces", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: {
+            errors: { notMatched: message`Choose stash.` },
+          },
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler() {},
+        }),
+      },
+    ]);
+
+    const result = await parser.parse({
+      buffer: ["stahs"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Choose stash.");
+    }
   });
 
   it("rejects duplicate command paths", () => {
@@ -521,6 +1390,32 @@ describe("runProgram()", () => {
     });
 
     assert.deepEqual(calls, [{ value: "done" }]);
+  });
+
+  it("runs statically registered root commands", async () => {
+    const calls: unknown[] = [];
+    const createCommand = defineCommand({
+      path: [],
+      parser: object({
+        name: option("--name", string()),
+      }),
+      handler(value) {
+        calls.push(value);
+      },
+    });
+
+    await runProgram({
+      commands: [createCommand],
+      metadata: { name: "create-demo", version: "1.0.0" },
+      args: ["--name", "demo"],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [{ name: "demo" }]);
   });
 
   it("shows statically registered nested commands in root help", async () => {
@@ -659,7 +1554,7 @@ describe("runProgram()", () => {
         }),
       {
         name: "TypeError",
-        message: "Static command entries must declare a non-empty path.",
+        message: "Static command entries must declare a path.",
       },
     );
   });
@@ -945,4 +1840,164 @@ async function parseAll(
     context = result.next;
   }
   return context.state;
+}
+
+function createStringSourceContext(
+  id: symbol,
+  value: string,
+): SourceContext {
+  return {
+    id,
+    phase: "single-pass",
+    getAnnotations() {
+      return { [id]: value };
+    },
+  };
+}
+
+function createSourceBackedParser(
+  sourceId: symbol,
+): Parser<"sync", string, undefined> {
+  const parser: Parser<"sync", string, undefined> = {
+    mode: "sync",
+    $valueType: [],
+    $stateType: [],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete(state) {
+      const value = getAnnotations(state)?.[sourceId];
+      return typeof value === "string"
+        ? { success: true, value }
+        : { success: false, error: message`Missing source value.` };
+    },
+    suggest() {
+      return [];
+    },
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+  defineTraits(parser, {
+    inheritsAnnotations: true,
+    completesFromSource: true,
+  });
+  return parser;
+}
+
+interface SourceBackedOptionState {
+  readonly hasCliValue: boolean;
+  readonly cliState?: ValueParserResult<string> | undefined;
+}
+
+function isSourceBackedOptionState(
+  value: unknown,
+): value is SourceBackedOptionState {
+  return value != null &&
+    typeof value === "object" &&
+    typeof (value as { readonly hasCliValue?: unknown }).hasCliValue ===
+      "boolean";
+}
+
+function createSourceBackedOptionParser(
+  sourceId: symbol,
+  name: OptionName,
+): Parser<"sync", string, SourceBackedOptionState | undefined> {
+  const cliParser = option(name, string());
+  const parser: Parser<"sync", string, SourceBackedOptionState | undefined> = {
+    mode: "sync",
+    $valueType: [],
+    $stateType: [],
+    priority: cliParser.priority,
+    usage: cliParser.usage,
+    leadingNames: cliParser.leadingNames,
+    acceptingAnyToken: cliParser.acceptingAnyToken,
+    initialState: undefined,
+    parse(context) {
+      const currentState = isSourceBackedOptionState(context.state)
+        ? context.state.cliState ?? cliParser.initialState
+        : cliParser.initialState;
+      const result = cliParser.parse({ ...context, state: currentState });
+      if (result.success) {
+        return wrapSourceBackedOptionParseResult(context.state, result);
+      }
+      if (result.consumed > 0) {
+        return result;
+      }
+      return {
+        success: true,
+        next: {
+          ...context,
+          state: inheritAnnotations(context.state, { hasCliValue: false }),
+        },
+        consumed: [],
+      };
+    },
+    complete(state, exec) {
+      if (isSourceBackedOptionState(state) && state.hasCliValue) {
+        return cliParser.complete(
+          inheritAnnotations(state, state.cliState ?? cliParser.initialState),
+          exec,
+        );
+      }
+      const value = getAnnotations(state)?.[sourceId];
+      return typeof value === "string"
+        ? { success: true, value }
+        : { success: false, error: message`Missing source value.` };
+    },
+    suggest(context, prefix) {
+      return cliParser.suggest({
+        ...context,
+        state: cliParser.initialState,
+      }, prefix);
+    },
+    getDocFragments(state, defaultValue) {
+      return cliParser.getDocFragments(
+        state.kind === "available" && isSourceBackedOptionState(state.state) &&
+          state.state.hasCliValue
+          ? {
+            kind: "available",
+            state: inheritAnnotations(
+              state.state,
+              state.state.cliState ?? cliParser.initialState,
+            ),
+          }
+          : { kind: "unavailable" },
+        defaultValue,
+      );
+    },
+  };
+  defineTraits(parser, {
+    inheritsAnnotations: true,
+    completesFromSource: true,
+  });
+  return parser;
+}
+
+function wrapSourceBackedOptionParseResult(
+  sourceState: unknown,
+  result: ParserResult<ValueParserResult<string> | undefined>,
+): ParserResult<SourceBackedOptionState | undefined> {
+  if (!result.success) return result;
+  const state: SourceBackedOptionState = result.consumed.length > 0
+    ? { hasCliValue: true, cliState: result.next.state }
+    : { hasCliValue: false };
+  return {
+    success: true,
+    ...(result.provisional ? { provisional: true as const } : {}),
+    next: {
+      ...result.next,
+      state: inheritAnnotations(sourceState, state),
+    },
+    consumed: result.consumed,
+  };
 }

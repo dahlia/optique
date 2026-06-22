@@ -1,15 +1,29 @@
-import { or } from "@optique/core/constructs";
+import { longestMatch, or } from "@optique/core/constructs";
 import type {
   SourceContext,
   SourceContextRequest,
 } from "@optique/core/context";
 import type { DocState } from "@optique/core/parser";
-import type { DocFragments } from "@optique/core/doc";
+import type { DocFragment, DocFragments } from "@optique/core/doc";
+import type { RuntimeNode } from "@optique/core/dependency-runtime";
+import {
+  dispatchByMode,
+  inheritAnnotations,
+  mapModeValue,
+  wrapForMode,
+} from "@optique/core/extension";
 import { map } from "@optique/core/modifiers";
 import type { Message } from "@optique/core/message";
-import type { Mode, Parser } from "@optique/core/parser";
+import type {
+  ExecutionContext,
+  Mode,
+  Parser,
+  ParserContext,
+  ParserResult,
+} from "@optique/core/parser";
 import type { ProgramMetadata } from "@optique/core/program";
 import { command } from "@optique/core/primitives";
+import { type HiddenVisibility, mergeHidden } from "@optique/core/usage";
 import { runAsync } from "@optique/run";
 import type { RunOptions } from "@optique/run";
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -19,6 +33,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   type AnyCommand,
   type AnyStaticCommand,
+  type CommandMetadata,
   type CommandPath,
   isCommand,
 } from "./command.ts";
@@ -99,6 +114,17 @@ export interface DiscoverCommandsOptions {
    * @default Runtime-aware extension defaults from {@link getDefaultExtensions}
    */
   readonly extensions?: readonly string[];
+
+  /**
+   * File name that maps to the containing command path after extension
+   * stripping.  For example, `stash/index.ts` maps to `stash`, and root
+   * `index.ts` maps to the root command.  Pass `false` to treat matching files
+   * as ordinary command names.
+   *
+   * @default `"index"`
+   * @since 1.2.0
+   */
+  readonly entryFileName?: string | false;
 }
 
 /**
@@ -186,6 +212,15 @@ export interface RunProgramDiscoveryOptions extends RunProgramBaseOptions {
   readonly extensions?: readonly string[];
 
   /**
+   * File name that maps to the containing command path after extension
+   * stripping.
+   *
+   * @default `"index"`
+   * @since 1.2.0
+   */
+  readonly entryFileName?: string | false;
+
+  /**
    * Static commands cannot be used together with `dir`.
    */
   readonly commands?: never;
@@ -211,6 +246,11 @@ export interface RunProgramStaticOptions extends RunProgramBaseOptions {
    * File suffixes are only used with file-system discovery.
    */
   readonly extensions?: never;
+
+  /**
+   * Entry file names are only used with file-system discovery.
+   */
+  readonly entryFileName?: never;
 }
 
 /**
@@ -255,8 +295,8 @@ export function getDefaultExtensions(
  * @param options Discovery options.
  * @returns Discovered commands sorted by command path.
  * @throws {TypeError} If options are invalid, discovery finds no commands,
- *         command paths conflict, or a module does not default-export a
- *         command created with `defineCommand()`.
+ *         command paths are duplicated, or a module does not default-export
+ *         a command created with `defineCommand()`.
  * @since 1.1.0
  */
 export async function discoverCommands(
@@ -266,6 +306,7 @@ export async function discoverCommands(
   const extensions = normalizeExtensions(
     options.extensions ?? getDefaultExtensions(),
   );
+  const entryFileName = normalizeEntryFileName(options.entryFileName);
   const files = await collectCommandFiles(dir, extensions);
   if (files.length < 1) {
     throw new TypeError(`No command modules found in ${dir}.`);
@@ -274,11 +315,11 @@ export async function discoverCommands(
   const seen = new Map<string, string>();
   const discovered: DiscoveredCommand[] = [];
   for (const filePath of files) {
-    const path = commandPathFromFile(dir, filePath, extensions);
+    const path = commandPathFromFile(dir, filePath, extensions, entryFileName);
     const key = commandPathKey(path);
     const previous = seen.get(key);
     if (previous != null) {
-      const displayPath = path.join(" ");
+      const displayPath = displayCommandPath(path);
       throw new TypeError(
         `Duplicate command path "${displayPath}" from ${previous} and ${filePath}.`,
       );
@@ -300,14 +341,13 @@ export async function discoverCommands(
     ) {
       throw new TypeError(
         `Module ${filePath} declares command path "${
-          commandDefinition.path.join(" ")
-        }" but file path defines "${path.join(" ")}".`,
+          displayCommandPath(commandDefinition.path)
+        }" but file path defines "${displayCommandPath(path)}".`,
       );
     }
     discovered.push({ path, filePath, command: commandDefinition });
   }
 
-  rejectPathConflicts(discovered);
   return sortCommands(discovered);
 }
 
@@ -317,7 +357,8 @@ export async function discoverCommands(
  * @param commands Commands to compose.
  * @param metadata Optional root documentation metadata.
  * @returns A parser that resolves to an internal command invocation.
- * @throws {TypeError} If no commands are provided or command paths conflict.
+ * @throws {TypeError} If no commands are provided or command paths are
+ *         duplicated.
  * @since 1.1.0
  */
 export function createProgramParser(
@@ -331,13 +372,7 @@ export function createProgramParser(
   rejectDuplicatePaths(
     sortedCommands.map((entry) => ({
       path: entry.path,
-      filePath: entry.path.join("/"),
-    })),
-  );
-  rejectPathConflicts(
-    sortedCommands.map((entry) => ({
-      path: entry.path,
-      filePath: entry.path.join("/"),
+      filePath: displayCommandPath(entry.path),
     })),
   );
   const rootNode = buildCommandTree(sortedCommands);
@@ -362,6 +397,7 @@ export async function runProgram(options: RunProgramOptions): Promise<void> {
     commands = await discoverCommands({
       dir: options.dir,
       extensions: options.extensions,
+      entryFileName: options.entryFileName,
     });
   }
   const parser = createProgramParser(commands, options.metadata);
@@ -450,6 +486,29 @@ function normalizeExtensions(extensions: readonly string[]): readonly string[] {
   );
 }
 
+function normalizeEntryFileName(
+  entryFileName: string | false | undefined,
+): string | false {
+  if (entryFileName === undefined) return "index";
+  if (entryFileName === false) return false;
+  if (typeof entryFileName !== "string") {
+    throw new TypeError(
+      `Command entry file name must be a non-empty file name: ${entryFileName}`,
+    );
+  }
+  const normalized = entryFileName;
+  if (
+    normalized.length < 1 ||
+    normalized.includes("/") ||
+    normalized.includes("\\")
+  ) {
+    throw new TypeError(
+      `Command entry file name must be a non-empty file name: ${normalized}`,
+    );
+  }
+  return normalized;
+}
+
 async function collectCommandFiles(
   dir: string,
   extensions: readonly string[],
@@ -511,6 +570,7 @@ function commandPathFromFile(
   rootDir: string,
   filePath: string,
   extensions: readonly string[],
+  entryFileName: string | false,
 ): CommandPath {
   const matchedExtension = extensions.find((ext) => filePath.endsWith(ext));
   if (matchedExtension == null) {
@@ -519,42 +579,26 @@ function commandPathFromFile(
   const withoutExtension = filePath.slice(0, -matchedExtension.length);
   const relativePath = relative(rootDir, withoutExtension);
   const path = relativePath.split(sep).filter((segment) => segment.length > 0);
-  const [first, ...rest] = path;
-  if (first == null) {
+  if (path.length < 1) {
     throw new TypeError(`Command file ${filePath} does not define a path.`);
   }
-  return [first, ...rest];
+  if (entryFileName !== false && path[path.length - 1] === entryFileName) {
+    return path.slice(0, -1);
+  }
+  return path;
 }
 
 function commandPathKey(path: readonly string[]): string {
   return path.join("\0");
 }
 
-function isCommandPath(path: unknown): path is CommandPath {
-  return Array.isArray(path) &&
-    path.length > 0 &&
-    path.every((segment) => typeof segment === "string" && segment.length > 0);
+function displayCommandPath(path: readonly string[]): string {
+  return path.length < 1 ? "<root>" : path.join(" ");
 }
 
-function rejectPathConflicts(
-  commands: readonly Pick<DiscoveredCommand, "path" | "filePath">[],
-): void {
-  const paths = new Map(
-    commands.map((entry) => [commandPathKey(entry.path), entry]),
-  );
-  for (const entry of commands) {
-    for (let i = 1; i < entry.path.length; i++) {
-      const parent = entry.path.slice(0, i);
-      const parentEntry = paths.get(commandPathKey(parent));
-      if (parentEntry != null) {
-        throw new TypeError(
-          `Command path "${parent.join(" ")}" conflicts with nested command "${
-            entry.path.join(" ")
-          }".`,
-        );
-      }
-    }
-  }
+function isCommandPath(path: unknown): path is CommandPath {
+  return Array.isArray(path) &&
+    path.every((segment) => typeof segment === "string" && segment.length > 0);
 }
 
 function rejectDuplicatePaths(
@@ -565,7 +609,7 @@ function rejectDuplicatePaths(
     const key = commandPathKey(entry.path);
     const previous = seen.get(key);
     if (previous != null) {
-      const displayPath = entry.path.join(" ");
+      const displayPath = displayCommandPath(entry.path);
       throw new TypeError(
         `Duplicate command path "${displayPath}" from ${previous} and ${entry.filePath}.`,
       );
@@ -606,7 +650,7 @@ function staticCommandsToEntries(
     }
     if (!isCommandPath(command.path)) {
       throw new TypeError(
-        "Static command entries must declare a non-empty path.",
+        "Static command entries must declare a path.",
       );
     }
     return {
@@ -646,29 +690,654 @@ function buildCommandTree(
 
 function buildNodeParser(
   node: CommandTreeNode,
+  inheritedHidden?: HiddenVisibility,
 ): Parser<Mode, ProgramInvocation, unknown> {
+  const childParser = buildChildrenParser(node, inheritedHidden);
+  if (childParser != null && node.command != null) {
+    return createExecutableNodeParser(childParser, node.command);
+  }
+  if (childParser != null) return childParser;
+  if (node.command != null) return createLeafParser(node.command);
+  throw new TypeError("Command tree node must contain a command.");
+}
+
+interface ExecutableNodeState {
+  readonly branch: number;
+  readonly result: ParserResult<unknown>;
+  readonly committed: boolean;
+}
+
+type ExecutableNodeParserState = ExecutableNodeState | undefined;
+
+function createExecutableNodeParser(
+  childParser: Parser<Mode, ProgramInvocation, unknown>,
+  commandDefinition: AnyCommand,
+): Parser<Mode, ProgramInvocation, ExecutableNodeParserState> {
+  const leafParser = createLeafParser(commandDefinition, true);
+  const branchParsers = [childParser, leafParser] as const;
+  const parser = longestMatch(
+    childParser,
+    leafParser,
+  ) as Parser<Mode, ProgramInvocation, unknown>;
+  const phase2SeedHook = findPhase2SeedHook(parser);
+  const executableParser: Parser<
+    Mode,
+    ProgramInvocation,
+    ExecutableNodeParserState
+  > = {
+    ...parser,
+    $valueType: [],
+    $stateType: [],
+    initialState: undefined,
+    parse(context) {
+      const activeState = normalizeExecutableNodeState(context.state);
+      if (activeState?.committed === true && activeState.result.success) {
+        const branchParser = branchParsers[activeState.branch];
+        const result = branchParser.parse(
+          withExecutableNodeChildContext(
+            context,
+            activeState.branch,
+            inheritAnnotations(context.state, activeState.result.next.state),
+            branchParser,
+          ),
+        );
+        return mapModeValue(
+          parser.mode,
+          wrapForMode(parser.mode, result),
+          (resolved) => wrapBranchParseResult(context, activeState, resolved),
+        );
+      }
+
+      const result = parser.parse({
+        ...context,
+        state: toExclusiveState(activeState, context.state),
+      });
+      return mapModeValue(
+        parser.mode,
+        wrapForMode(parser.mode, result),
+        (resolved) => wrapInitialParseResult(context, resolved),
+      );
+    },
+    complete(state, exec) {
+      const activeState = normalizeExecutableNodeState(state);
+      if (activeState?.result.success === true) {
+        return wrapForMode(
+          parser.mode,
+          branchParsers[activeState.branch].complete(
+            inheritAnnotations(state, activeState.result.next.state),
+            withExecutableNodeChildExecPath(exec, activeState.branch),
+          ),
+        );
+      }
+      if (activeState == null) {
+        return wrapForMode(
+          parser.mode,
+          completeExecutableNodeLeaf(state, exec, leafParser),
+        );
+      }
+      return wrapForMode(
+        parser.mode,
+        parser.complete(toExclusiveState(activeState, state), exec),
+      );
+    },
+    suggest(context, prefix) {
+      const activeState = normalizeExecutableNodeState(context.state);
+      if (activeState?.committed === true && activeState.result.success) {
+        const branchParser = branchParsers[activeState.branch];
+        return branchParser.suggest(
+          withExecutableNodeChildContext(
+            context,
+            activeState.branch,
+            inheritAnnotations(context.state, activeState.result.next.state),
+            branchParser,
+          ),
+          prefix,
+        );
+      }
+      return parser.suggest({
+        ...context,
+        state: toExclusiveState(activeState, context.state),
+      }, prefix);
+    },
+    getSuggestRuntimeNodes(state, path): readonly RuntimeNode[] {
+      const activeState = normalizeExecutableNodeState(state);
+      if (activeState == null) {
+        const branchPath = [...path, 1];
+        const branchState = inheritAnnotations(state, leafParser.initialState);
+        return getExecutableNodeBranchSuggestRuntimeNodes(
+          leafParser,
+          branchState,
+          branchPath,
+        );
+      }
+      if (activeState?.result.success !== true) {
+        return parser.getSuggestRuntimeNodes?.(
+          toExclusiveState(activeState, state),
+          path,
+        ) ?? [];
+      }
+      const branchParser = branchParsers[activeState.branch];
+      const branchPath = [...path, activeState.branch];
+      const branchState = inheritAnnotations(
+        state,
+        activeState.result.next.state,
+      );
+      return getExecutableNodeBranchSuggestRuntimeNodes(
+        branchParser,
+        branchState,
+        branchPath,
+      );
+    },
+    getDocFragments(state, defaultValue) {
+      const activeState = state.kind === "available"
+        ? normalizeExecutableNodeState(state.state)
+        : undefined;
+      const fragments = parser.getDocFragments(
+        state.kind === "available"
+          ? {
+            kind: "available",
+            state: toExclusiveState(activeState, state.state),
+          }
+          : state,
+        defaultValue,
+      );
+      if (activeState == null) {
+        return withCommandDocMetadata(fragments, commandDefinition.metadata);
+      }
+      return fragments;
+    },
+  };
+  if (phase2SeedHook != null) {
+    Object.defineProperty(executableParser, phase2SeedHook.key, {
+      value(state: unknown, exec?: ExecutionContext) {
+        return extractExecutableNodePhase2Seed(
+          state,
+          exec,
+          leafParser,
+          phase2SeedHook,
+        );
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  }
+  return executableParser;
+}
+
+function getExecutableNodeBranchSuggestRuntimeNodes(
+  parser: Parser<Mode, ProgramInvocation, unknown>,
+  state: unknown,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  return parser.getSuggestRuntimeNodes?.(state, path) ??
+    (parser.dependencyMetadata?.source != null
+      ? [{ path, parser, state }]
+      : []);
+}
+
+interface Phase2SeedHook {
+  readonly key: symbol;
+  readonly extract: (state: unknown, exec?: ExecutionContext) => unknown;
+}
+
+const phase2SeedSymbolDescription = "@optique/core/extractPhase2Seed";
+
+function findPhase2SeedHook(parser: object): Phase2SeedHook | undefined {
+  for (const key of Object.getOwnPropertySymbols(parser)) {
+    if (key.description !== phase2SeedSymbolDescription) continue;
+    const value = Reflect.get(parser, key);
+    if (typeof value !== "function") continue;
+    return {
+      key,
+      extract(state, exec) {
+        const seed: unknown = Reflect.apply(value, parser, [state, exec]);
+        return seed;
+      },
+    };
+  }
+  return undefined;
+}
+
+function completeExecutableNodeLeaf(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+) {
+  const result = parseExecutableNodeLeaf(state, exec, leafParser);
+  return dispatchByMode(
+    leafParser.mode,
+    () =>
+      wrapForMode(
+        "sync",
+        completeParsedExecutableNodeLeaf(
+          state,
+          exec,
+          leafParser,
+          wrapForMode("sync", result),
+        ),
+      ),
+    () =>
+      Promise.resolve(wrapForMode("async", result)).then((resolved) =>
+        wrapForMode(
+          "async",
+          completeParsedExecutableNodeLeaf(state, exec, leafParser, resolved),
+        )
+      ),
+  );
+}
+
+function completeParsedExecutableNodeLeaf(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+  result: ParserResult<unknown>,
+) {
+  const childExec = withExecutableNodeChildExecPath(exec, 1);
+  const nextExec = result.success
+    ? mergeExecutableNodeChildExec(childExec, result.next.exec)
+    : childExec;
+  const nextState = result.success
+    ? inheritAnnotations(state, result.next.state)
+    : inheritAnnotations(state, leafParser.initialState);
+  return leafParser.complete(nextState, nextExec);
+}
+
+function extractExecutableNodePhase2Seed(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+  phase2SeedHook: Phase2SeedHook,
+) {
+  const activeState = normalizeExecutableNodeState(state);
+  if (activeState != null) {
+    return phase2SeedHook.extract(toExclusiveState(activeState, state), exec);
+  }
+  const result = parseExecutableNodeLeaf(state, exec, leafParser);
+  return dispatchByMode(
+    leafParser.mode,
+    () =>
+      extractParsedExecutableNodePhase2Seed(
+        state,
+        exec,
+        wrapForMode("sync", result),
+        phase2SeedHook,
+      ),
+    () =>
+      Promise.resolve(wrapForMode("async", result)).then((resolved) =>
+        extractParsedExecutableNodePhase2Seed(
+          state,
+          exec,
+          resolved,
+          phase2SeedHook,
+        )
+      ),
+  );
+}
+
+function extractParsedExecutableNodePhase2Seed(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  result: ParserResult<unknown>,
+  phase2SeedHook: Phase2SeedHook,
+) {
+  if (!result.success) {
+    return phase2SeedHook.extract(toExclusiveState(undefined, state), exec);
+  }
+  const executableState = inheritAnnotations(state, {
+    branch: 1,
+    result,
+    committed: false,
+  });
+  return phase2SeedHook.extract(toExclusiveState(executableState, state), exec);
+}
+
+function parseExecutableNodeLeaf(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+) {
+  const childExec = withExecutableNodeChildExecPath(exec, 1);
+  const childContext: ParserContext<unknown> = {
+    buffer: [],
+    optionsTerminated: false,
+    usage: leafParser.usage,
+    state: inheritAnnotations(state, leafParser.initialState),
+    ...(childExec != null
+      ? {
+        exec: childExec,
+        dependencyRegistry: childExec.dependencyRegistry,
+      }
+      : {}),
+  };
+  return leafParser.parse(childContext);
+}
+
+function normalizeExecutableNodeState(
+  state: unknown,
+): ExecutableNodeParserState {
+  if (
+    state == null ||
+    typeof state !== "object" ||
+    !("branch" in state) ||
+    !("result" in state)
+  ) {
+    return undefined;
+  }
+  const branch = (state as { readonly branch?: unknown }).branch;
+  if (branch !== 0 && branch !== 1) return undefined;
+  const result = (state as { readonly result?: unknown }).result;
+  if (
+    result == null ||
+    typeof result !== "object" ||
+    typeof (result as { readonly success?: unknown }).success !== "boolean"
+  ) {
+    return undefined;
+  }
+  return inheritAnnotations(state, {
+    branch,
+    result: result as ParserResult<unknown>,
+    committed: (state as { readonly committed?: unknown }).committed === true,
+  });
+}
+
+function toExclusiveState(
+  state: ExecutableNodeParserState,
+  sourceState: unknown = state,
+): unknown {
+  const exclusiveState = state == null
+    ? undefined
+    : [state.branch, state.result] as [number, ParserResult<unknown>];
+  return inheritAnnotations(sourceState, exclusiveState);
+}
+
+function fromExclusiveState(
+  state: unknown,
+): ExecutableNodeParserState {
+  if (
+    !Array.isArray(state) ||
+    state.length !== 2 ||
+    (state[0] !== 0 && state[0] !== 1)
+  ) {
+    return undefined;
+  }
+  return inheritAnnotations(state, {
+    branch: state[0],
+    result: state[1] as ParserResult<unknown>,
+    committed: isCommittedResult(state[1]),
+  });
+}
+
+function isCommittedResult(result: unknown): boolean {
+  return result != null &&
+    typeof result === "object" &&
+    (result as { readonly success?: unknown }).success === true &&
+    Array.isArray((result as { readonly consumed?: unknown }).consumed) &&
+    (result as { readonly consumed: readonly unknown[] }).consumed.length > 0;
+}
+
+function wrapInitialParseResult(
+  _context: ParserContext<ExecutableNodeParserState>,
+  result: ParserResult<unknown>,
+): ParserResult<ExecutableNodeParserState> {
+  if (!result.success) return result;
+  return {
+    success: true,
+    consumed: result.consumed,
+    provisional: result.provisional,
+    next: {
+      ...result.next,
+      state: fromExclusiveState(result.next.state),
+    },
+  };
+}
+
+function wrapBranchParseResult(
+  context: ParserContext<ExecutableNodeParserState>,
+  activeState: ExecutableNodeState,
+  result: ParserResult<unknown>,
+): ParserResult<ExecutableNodeParserState> {
+  if (!result.success) return result;
+  const mergedExec = mergeExecutableNodeChildExec(
+    context.exec,
+    result.next.exec,
+  );
+  const dependencyRegistry = mergedExec?.dependencyRegistry ??
+    result.next.dependencyRegistry ?? context.dependencyRegistry;
+  const nextState = inheritAnnotations(result.next.state, {
+    branch: activeState.branch,
+    result,
+    committed: activeState.committed || result.consumed.length > 0,
+  });
+  return {
+    success: true,
+    consumed: result.consumed,
+    provisional: result.provisional,
+    next: {
+      ...context,
+      buffer: result.next.buffer,
+      optionsTerminated: result.next.optionsTerminated,
+      state: inheritAnnotations(context.state, nextState),
+      ...(mergedExec != null
+        ? { exec: mergedExec, trace: mergedExec.trace }
+        : {}),
+      ...(dependencyRegistry != null ? { dependencyRegistry } : {}),
+    },
+  };
+}
+
+function withExecutableNodeChildContext(
+  context: ParserContext<ExecutableNodeParserState>,
+  branch: number,
+  state: unknown,
+  parser: Parser<Mode, ProgramInvocation, unknown>,
+): ParserContext<unknown> {
+  const exec = withExecutableNodeChildExecPath(context.exec, branch);
+  const dependencyRegistry = context.dependencyRegistry ??
+    exec?.dependencyRegistry;
+  return {
+    ...context,
+    state,
+    usage: parser.usage,
+    ...(exec != null
+      ? {
+        exec: dependencyRegistry === exec.dependencyRegistry
+          ? exec
+          : { ...exec, dependencyRegistry },
+        dependencyRegistry,
+      }
+      : {}),
+  };
+}
+
+function withExecutableNodeChildExecPath(
+  exec: ExecutionContext | undefined,
+  branch: number,
+): ExecutionContext | undefined {
+  if (exec == null) return undefined;
+  return {
+    ...exec,
+    path: [...(exec.path ?? []), branch],
+  };
+}
+
+function mergeExecutableNodeChildExec(
+  parent: ExecutionContext | undefined,
+  child: ExecutionContext | undefined,
+): ExecutionContext | undefined {
+  if (parent == null) return child;
+  if (child == null) return parent;
+  return {
+    ...parent,
+    trace: child.trace ?? parent.trace,
+    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
+    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
+    commandPath: child.commandPath ?? parent.commandPath,
+    preCompletedByParser: child.preCompletedByParser ??
+      parent.preCompletedByParser,
+    excludedSourceFields: child.excludedSourceFields ??
+      parent.excludedSourceFields,
+  };
+}
+
+function withCommandDocMetadata(
+  fragments: DocFragments,
+  metadata: CommandMetadata | undefined,
+): DocFragments {
+  if (metadata == null) return fragments;
+  return {
+    ...fragments,
+    brief: fragments.brief ?? metadata.brief,
+    description: fragments.description ?? metadata.description,
+    footer: fragments.footer ?? metadata.footer,
+  };
+}
+
+function buildChildrenParser(
+  node: CommandTreeNode,
+  inheritedHidden?: HiddenVisibility,
+): Parser<Mode, ProgramInvocation, unknown> | undefined {
   const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
   for (const [name, child] of node.children) {
-    const childParser = child.command != null
-      ? createLeafParser(child.command)
-      : buildNodeParser(child);
-    const metadata = child.command?.metadata;
-    parsers.push(command(name, childParser, metadata));
+    const childHidden = mergeHidden(
+      inheritedHidden,
+      child.command?.metadata?.hidden,
+    );
+    const childParser = buildNodeParser(child, childHidden);
+    if (child.children.size > 0) {
+      parsers.push(
+        createNamespaceCommandParser(
+          name,
+          childParser,
+          child.command,
+          inheritedHidden,
+        ),
+      );
+    } else {
+      parsers.push(
+        command(
+          name,
+          childParser,
+          commandMetadataWithInheritedHidden(
+            child.command?.metadata,
+            inheritedHidden,
+          ),
+        ),
+      );
+    }
   }
+  if (parsers.length < 1) return undefined;
   if (parsers.length === 1) return parsers[0];
   return or(...parsers) as Parser<Mode, ProgramInvocation, unknown>;
 }
 
+function createNamespaceCommandParser(
+  name: string,
+  childParser: Parser<Mode, ProgramInvocation, unknown>,
+  commandDefinition: AnyCommand | undefined,
+  inheritedHidden?: HiddenVisibility,
+): Parser<Mode, ProgramInvocation, unknown> {
+  const metadata = commandDefinition?.metadata;
+  const parser: Parser<Mode, ProgramInvocation, unknown> = command(
+    name,
+    childParser,
+    namespaceCommandMetadata(metadata, inheritedHidden),
+  );
+  const description = metadata?.brief ?? metadata?.description;
+  if (description == null) return parser;
+  return {
+    ...parser,
+    getDocFragments(state, defaultValue) {
+      const fragments = parser.getDocFragments(state, defaultValue);
+      if (
+        state.kind !== "unavailable" &&
+        (state.kind !== "available" ||
+          !Object.is(state.state, parser.initialState))
+      ) {
+        return fragments;
+      }
+      return withNamespaceListDocDescription(fragments, name, description);
+    },
+  };
+}
+
+function withNamespaceListDocDescription(
+  fragments: DocFragments,
+  name: string,
+  description: Message,
+): DocFragments {
+  return {
+    ...fragments,
+    fragments: fragments.fragments.map((fragment): DocFragment => {
+      if (
+        fragment.type !== "entry" ||
+        fragment.term.type !== "command" ||
+        fragment.term.name !== name
+      ) {
+        return fragment;
+      }
+      return {
+        ...fragment,
+        description: fragment.description ?? description,
+      };
+    }),
+  };
+}
+
+function namespaceCommandMetadata(
+  metadata: CommandMetadata | undefined,
+  inheritedHidden?: HiddenVisibility,
+): CommandMetadata | undefined {
+  const hidden = mergeHidden(inheritedHidden, metadata?.hidden);
+  if (
+    metadata?.aliases == null &&
+    metadata?.errors == null &&
+    hidden == null &&
+    metadata?.usageLine == null
+  ) {
+    return undefined;
+  }
+  return {
+    ...(metadata?.aliases != null && { aliases: metadata.aliases }),
+    ...(metadata?.errors != null && { errors: metadata.errors }),
+    ...(hidden != null && { hidden }),
+    ...(metadata?.usageLine != null && { usageLine: metadata.usageLine }),
+  };
+}
+
+function commandMetadataWithInheritedHidden(
+  metadata: CommandMetadata | undefined,
+  inheritedHidden: HiddenVisibility | undefined,
+): CommandMetadata | undefined {
+  const hidden = mergeHidden(inheritedHidden, metadata?.hidden);
+  if (metadata == null) {
+    return hidden == null ? undefined : { hidden };
+  }
+  if (hidden === metadata.hidden) return metadata;
+  return {
+    ...metadata,
+    ...(hidden != null && { hidden }),
+  };
+}
+
 function createLeafParser(
   commandDefinition: AnyCommand,
+  includeMetadata = false,
 ): Parser<Mode, ProgramInvocation, unknown> {
-  return map(commandDefinition.parser, (value): ProgramInvocation => ({
+  const parser = map(commandDefinition.parser, (value): ProgramInvocation => ({
     command: commandDefinition,
     value,
     handler: commandDefinition.handler as (
       value: unknown,
     ) => void | Promise<void>,
   })) as Parser<Mode, ProgramInvocation, unknown>;
+  if (!includeMetadata) return parser;
+  return {
+    ...parser,
+    getDocFragments(state, defaultValue) {
+      const fragments = parser.getDocFragments(state, defaultValue);
+      return withCommandDocMetadata(fragments, commandDefinition.metadata);
+    },
+  };
 }
 
 function withRootDocs(
@@ -677,23 +1346,37 @@ function withRootDocs(
   metadata: ProgramHelpMetadata,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const rootState = parser.initialState;
-  const rootDocs = (): DocFragments => ({
-    brief: metadata.brief,
-    description: metadata.description,
-    footer: metadata.footer,
-    fragments: [{
-      type: "section",
-      entries: commands.map((entry) => ({
-        term: {
-          type: "command",
-          name: entry.path.join(" "),
-          hidden: entry.command.metadata?.hidden,
-        },
-        description: entry.command.metadata?.brief ??
-          entry.command.metadata?.description,
-      })),
-    }],
-  });
+  const rootCommand = commands.find((entry) => entry.path.length < 1);
+  const listedCommands = commands.filter((entry) => entry.path.length > 0);
+  const commandsByPath = new Map(
+    commands.map((entry) => [commandPathKey(entry.path), entry.command]),
+  );
+  const rootDocs = (): DocFragments => {
+    const fragments: DocFragment[] = [
+      ...(rootCommand?.command.parser.getDocFragments({ kind: "unavailable" })
+        .fragments ?? []),
+    ];
+    if (listedCommands.length > 0) {
+      fragments.push({
+        type: "section",
+        entries: listedCommands.map((entry) => ({
+          term: {
+            type: "command",
+            name: entry.path.join(" "),
+            hidden: commandPathHidden(entry.path, commandsByPath),
+          },
+          description: entry.command.metadata?.brief ??
+            entry.command.metadata?.description,
+        })),
+      });
+    }
+    return {
+      brief: metadata.brief,
+      description: metadata.description,
+      footer: metadata.footer,
+      fragments,
+    };
+  };
   return {
     ...parser,
     getDocFragments(
@@ -711,12 +1394,28 @@ function withRootDocs(
   };
 }
 
+function commandPathHidden(
+  path: readonly string[],
+  commandsByPath: ReadonlyMap<string, AnyCommand>,
+): HiddenVisibility | undefined {
+  let hidden: HiddenVisibility | undefined;
+  for (let length = 1; length <= path.length; length++) {
+    hidden = mergeHidden(
+      hidden,
+      commandsByPath.get(commandPathKey(path.slice(0, length)))?.metadata
+        ?.hidden,
+    );
+  }
+  return hidden;
+}
+
 function buildRunOptions(options: RunProgramOptions): RunOptions {
   const metadata = options.metadata;
   const {
     dir: _dir,
     commands: _commands,
     extensions: _extensions,
+    entryFileName: _entryFileName,
     metadata: _metadata,
     help,
     version,

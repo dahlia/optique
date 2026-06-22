@@ -2070,6 +2070,22 @@ describe("getDocPage", () => {
     );
   });
 
+  it("should reveal matched hidden commands after exclusive terms", () => {
+    const parser = seq(
+      or(
+        command("alpha", object({}), { hidden: true }),
+        command("beta", object({}), { hidden: true }),
+      ),
+      command("child", object({}), { hidden: true }),
+    );
+
+    const docPage = getDocPageSync(parser, ["alpha", "child"]);
+
+    assert.ok(docPage);
+    assert.ok(docPage.usage);
+    assert.equal(formatUsage("tool", docPage.usage), "tool alpha child");
+  });
+
   it("should preserve seq command docs after positional prefixes", () => {
     const parser = seq(
       optional(argument(string({ metavar: "PROFILE" }))),

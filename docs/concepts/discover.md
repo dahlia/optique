@@ -58,7 +58,8 @@ export default defineCommand({
 If you change the parser, TypeScript checks the handler against the new shape.
 When commands are passed manually to `runProgram()`, add a `path` field to the
 command definition.  File-based discovery can omit `path`; if it is present,
-it must match the path derived from the file name.
+it must match the path derived from the file name.  An empty path (`[]`)
+defines the root command when commands are passed manually.
 
 
 Running a discovered program
@@ -84,8 +85,10 @@ With this file layout:
 
 ~~~~ text
 commands/
+  index.ts
   build.ts
   user/
+    index.ts
     add.ts
     remove.ts
 ~~~~
@@ -93,7 +96,9 @@ commands/
 the discovered command paths are:
 
 ~~~~ bash
+admin
 admin build
+admin user
 admin user add
 admin user remove
 ~~~~
@@ -176,22 +181,37 @@ File names and extensions
 -------------------------
 
 The relative file path becomes the command path after removing the configured
-suffix.  Compound suffixes are supported, so `user/add.cmd.ts` can become
-`user add` when `.cmd.ts` is listed before `.ts`.
+suffix.  Compound suffixes are supported, so *user/add.cmd.ts* can become
+`user add` when *.cmd.ts* is listed before *.ts*.
+
+By default, an entry file named *index* maps to its containing command path:
+
+~~~~ text
+commands/
+  index.ts         # admin
+  stash/
+    index.ts       # admin stash
+    list.ts        # admin stash list
+    pop.ts         # admin stash pop
+~~~~
+
+This is useful for executable parent commands.  In the example above,
+`admin stash` has its own parser and handler, while `admin stash list` and
+`admin stash pop` remain nested commands.
 
 By default, *@optique/discover* chooses extensions for the current runtime:
 
 | Runtime | Default extensions                                  |
 | ------- | --------------------------------------------------- |
-| Deno    | `.ts`, `.mts`, `.js`, `.mjs`                        |
-| Bun     | `.ts`, `.mts`, `.js`, `.mjs`                        |
-| Node.js | `.js`, `.mjs`, `.cjs`, and sometimes TypeScript too |
+| Deno    | *.ts*, *.mts*, *.js*, *.mjs*                        |
+| Bun     | *.ts*, *.mts*, *.js*, *.mjs*                        |
+| Node.js | *.js*, *.mjs*, *.cjs*, and sometimes TypeScript too |
 
-Node.js also includes `.ts`, `.mts`, and `.cts` when it appears to be running
+Node.js also includes *.ts*, *.mts*, and *.cts* when it appears to be running
 with native TypeScript support, a TypeScript loader such as `tsx`, `ts-node`,
 `tsimp`, or `jiti`, or Node's built-in type-stripping flags.
 
-TypeScript declaration files (`.d.ts`, `.d.mts`, and `.d.cts`) are ignored even
+TypeScript declaration files (*.d.ts*, *.d.mts*, and *.d.cts*) are ignored even
 when their suffix matches the configured extension list.
 
 Pass `extensions` when you want an explicit policy:
@@ -206,29 +226,49 @@ await runProgram({
 });
 ~~~~
 
+Pass `entryFileName` to use a different entry filename, such as *mod* for a
+Deno-style layout:
+
+~~~~ typescript twoslash
+import { runProgram } from "@optique/discover";
+
+await runProgram({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: { name: "admin" },
+  entryFileName: "mod",
+});
+~~~~
+
+Pass `entryFileName: false` to disable entry-file handling and treat
+*index.ts* as an ordinary `index` command.
+
 > [!NOTE]
 > Command modules are imported eagerly during startup.  This keeps discovery
 > simple and makes help, errors, and completion aware of the full command tree.
 > Avoid side effects at module top level other than defining the command.
 
 
-Path conflicts
---------------
+Duplicate paths
+---------------
 
 Each discovered file must map to exactly one command path.  Discovery rejects
-duplicate paths, such as `build.ts` and `build.cmd.ts` both becoming `build`.
-It also rejects file-vs-namespace conflicts such as:
+duplicate paths, such as *build.ts* and *build.cmd.ts* both becoming `build`.
+It also rejects duplicates introduced by entry files, such as *user.ts* and
+*user/index.ts* both becoming `user`.
+
+A file and directory with the same name are allowed when they map to distinct
+command paths:
 
 ~~~~ text
 commands/
-  user.ts
+  user.ts          # user
   user/
-    add.ts
+    add.ts         # user add
 ~~~~
 
-In that layout, `user` would need to be both a leaf command and a namespace for
-`user add`.  Move the shared behavior into a helper module or choose a deeper
-leaf command path instead.
+In that layout, `user` is an executable parent command and `user add` is a
+nested command.  You can also write the parent command as *user/index.ts*
+instead of *user.ts*, but not both at once unless you change `entryFileName`.
 
 
 When to use command discovery
