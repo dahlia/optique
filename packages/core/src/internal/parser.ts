@@ -1974,10 +1974,122 @@ function buildDocPage(
     }
   }
   return {
-    usage,
+    usage: revealMatchedCommandUsage(
+      usage,
+      effectiveArgs,
+      commandArgIndices ?? null,
+    ),
     sections,
     ...(brief != null && { brief: cloneMessage(brief) }),
     ...(description != null && { description: cloneMessage(description) }),
     ...(footer != null && { footer: cloneMessage(footer) }),
   };
+}
+
+// Hidden commands stay out of namespace listings, but help reached through a
+// matched hidden command still needs the full command path in its usage line.
+function revealMatchedCommandUsage(
+  usage: Usage,
+  args: readonly string[],
+  matchedCommandArgIndices: ReadonlySet<number> | null,
+): Usage {
+  if (args.length < 1) return usage;
+  const [revealed] = revealMatchedCommandUsageTerms(
+    usage,
+    args,
+    matchedCommandArgIndices,
+    0,
+  );
+  return revealed;
+}
+
+function revealMatchedCommandUsageTerms(
+  usage: Usage,
+  args: readonly string[],
+  matchedCommandArgIndices: ReadonlySet<number> | null,
+  argIndex: number,
+): readonly [Usage, number] {
+  const terms: UsageTerm[] = [];
+  let nextArgIndex = argIndex;
+  for (const term of usage) {
+    const [revealed, afterTermArgIndex] = revealMatchedCommandUsageTerm(
+      term,
+      args,
+      matchedCommandArgIndices,
+      nextArgIndex,
+    );
+    terms.push(revealed);
+    nextArgIndex = afterTermArgIndex;
+  }
+  return [terms, nextArgIndex];
+}
+
+function revealMatchedCommandUsageTerm(
+  term: UsageTerm,
+  args: readonly string[],
+  matchedCommandArgIndices: ReadonlySet<number> | null,
+  argIndex: number,
+): readonly [UsageTerm, number] {
+  if (term.type === "command") {
+    const nextArgIndex = findNextMatchedCommandArgIndex(
+      args,
+      matchedCommandArgIndices,
+      argIndex,
+    );
+    if (
+      nextArgIndex < args.length &&
+      commandTermMatches(term, args[nextArgIndex])
+    ) {
+      const { hidden: _hidden, ...revealed } = term;
+      return [revealed, nextArgIndex + 1];
+    }
+    return [term, argIndex];
+  }
+  if (term.type === "sequence") {
+    const [terms, nextArgIndex] = revealMatchedCommandUsageTerms(
+      term.terms,
+      args,
+      matchedCommandArgIndices,
+      argIndex,
+    );
+    return [{ ...term, terms }, nextArgIndex];
+  }
+  if (term.type === "optional" || term.type === "multiple") {
+    const [terms, nextArgIndex] = revealMatchedCommandUsageTerms(
+      term.terms,
+      args,
+      matchedCommandArgIndices,
+      argIndex,
+    );
+    return [{ ...term, terms }, nextArgIndex];
+  }
+  if (term.type === "exclusive") {
+    return [
+      {
+        ...term,
+        terms: term.terms.map((branch) =>
+          revealMatchedCommandUsageTerms(
+            branch,
+            args,
+            matchedCommandArgIndices,
+            argIndex,
+          )[0]
+        ),
+      },
+      argIndex,
+    ];
+  }
+  return [term, argIndex];
+}
+
+function findNextMatchedCommandArgIndex(
+  args: readonly string[],
+  matchedCommandArgIndices: ReadonlySet<number> | null,
+  start: number,
+): number {
+  if (matchedCommandArgIndices == null) return start;
+  for (let index = start; index < args.length; index++) {
+    if (matchedCommandArgIndices.has(index)) return index;
+  }
+  return args.length;
 }

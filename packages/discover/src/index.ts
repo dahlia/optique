@@ -1247,6 +1247,7 @@ function namespaceCommandMetadata(
   if (
     metadata.aliases == null &&
     metadata.errors == null &&
+    metadata.hidden == null &&
     metadata.usageLine == null
   ) {
     return undefined;
@@ -1254,6 +1255,7 @@ function namespaceCommandMetadata(
   return {
     ...(metadata.aliases != null && { aliases: metadata.aliases }),
     ...(metadata.errors != null && { errors: metadata.errors }),
+    ...(metadata.hidden != null && { hidden: metadata.hidden }),
     ...(metadata.usageLine != null && { usageLine: metadata.usageLine }),
   };
 }

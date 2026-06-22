@@ -13,6 +13,7 @@ import {
   type Parser,
   type ParserContext,
   type ParserResult,
+  suggestAsync,
 } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import type { OptionName } from "@optique/core/usage";
@@ -1108,6 +1109,53 @@ describe("createProgramParser()", () => {
     const childText = formatDocPage("git", childPage);
 
     assert.doesNotMatch(childText, /Manage remotes\./);
+  });
+
+  it("keeps hidden executable parent namespaces out of help and suggestions", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["repo", "remote"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: {
+            description: message`Manage remotes.`,
+            hidden: true,
+          },
+          handler() {},
+        }),
+      },
+      {
+        path: ["repo", "remote", "add"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Add a remote.` },
+          handler() {},
+        }),
+      },
+    ]);
+
+    const page = await getDocPageAsync(parser, ["repo"]);
+    assert.ok(page != null);
+    const text = formatDocPage("git", page);
+
+    assert.doesNotMatch(text, /\bremote\b/);
+
+    const suggestions = await suggestAsync(parser, ["repo", ""]);
+    assert.ok(
+      !suggestions.some((suggestion) =>
+        suggestion.kind === "literal" && suggestion.text === "remote"
+      ),
+    );
+
+    const childPage = await getDocPageAsync(parser, [
+      "repo",
+      "remote",
+      "add",
+    ]);
+    assert.ok(childPage != null);
+    const childText = formatDocPage("git", childPage);
+
+    assert.match(childText, /Usage: git repo remote add/);
   });
 
   it("wraps executable parent completion with async mode", async () => {
