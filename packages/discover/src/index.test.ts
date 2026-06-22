@@ -1,8 +1,14 @@
 import { object } from "@optique/core/constructs";
+import { getAnnotations } from "@optique/core/annotations";
 import { formatDocPage } from "@optique/core/doc";
+import { defineTraits } from "@optique/core/extension";
 import { formatMessage, message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
-import { getDocPageAsync, type ParserContext } from "@optique/core/parser";
+import {
+  getDocPageAsync,
+  type Parser,
+  type ParserContext,
+} from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import type { SourceContext } from "@optique/core/context";
 import { integer, string } from "@optique/core/valueparser";
@@ -750,6 +756,71 @@ describe("createProgramParser()", () => {
     ]);
   });
 
+  it("preserves source annotations for executable parent commands", async () => {
+    const sourceId = Symbol("source");
+    const context = createStringSourceContext(sourceId, "from-source");
+    const calls: unknown[] = [];
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: ["stash"],
+          parser: createSourceBackedParser(sourceId),
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+        defineCommand({
+          path: ["stash", "list"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      ],
+      metadata: { name: "git" },
+      args: ["stash"],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: [],
+          parser: createSourceBackedParser(sourceId),
+          handler(value) {
+            calls.push(["root", value]);
+          },
+        }),
+        defineCommand({
+          path: ["build"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["build", value]);
+          },
+        }),
+      ],
+      metadata: { name: "tool" },
+      args: [],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [
+      ["stash", "from-source"],
+      ["root", "from-source"],
+    ]);
+  });
+
   it("shows leaf command paths in root help", async () => {
     const parser = createProgramParser([
       {
@@ -1456,4 +1527,56 @@ async function parseAll(
     context = result.next;
   }
   return context.state;
+}
+
+function createStringSourceContext(
+  id: symbol,
+  value: string,
+): SourceContext {
+  return {
+    id,
+    phase: "single-pass",
+    getAnnotations() {
+      return { [id]: value };
+    },
+  };
+}
+
+function createSourceBackedParser(
+  sourceId: symbol,
+): Parser<"sync", string, undefined> {
+  const parser: Parser<"sync", string, undefined> = {
+    mode: "sync",
+    $valueType: [],
+    $stateType: [],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete(state) {
+      const value = getAnnotations(state)?.[sourceId];
+      return typeof value === "string"
+        ? { success: true, value }
+        : { success: false, error: message`Missing source value.` };
+    },
+    suggest() {
+      return [];
+    },
+    getDocFragments() {
+      return { fragments: [] };
+    },
+  };
+  defineTraits(parser, {
+    inheritsAnnotations: true,
+    completesFromSource: true,
+  });
+  return parser;
 }

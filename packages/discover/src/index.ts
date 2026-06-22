@@ -6,6 +6,7 @@ import type {
 import type { DocState } from "@optique/core/parser";
 import type { DocFragment, DocFragments } from "@optique/core/doc";
 import type { RuntimeNode } from "@optique/core/dependency-runtime";
+import { inheritAnnotations } from "@optique/core/extension";
 import { map } from "@optique/core/modifiers";
 import type { Message } from "@optique/core/message";
 import type {
@@ -722,7 +723,7 @@ function createExecutableNodeParser(
           withExecutableNodeChildContext(
             context,
             activeState.branch,
-            activeState.result.next.state,
+            inheritAnnotations(context.state, activeState.result.next.state),
             branchParser,
           ),
         );
@@ -736,7 +737,7 @@ function createExecutableNodeParser(
 
       const result = parser.parse({
         ...context,
-        state: toExclusiveState(activeState),
+        state: toExclusiveState(activeState, context.state),
       });
       if (isPromiseLike(result)) {
         return result.then((resolved) =>
@@ -749,11 +750,11 @@ function createExecutableNodeParser(
       const activeState = normalizeExecutableNodeState(state);
       if (activeState?.result.success === true) {
         return branchParsers[activeState.branch].complete(
-          activeState.result.next.state,
+          inheritAnnotations(state, activeState.result.next.state),
           withExecutableNodeChildExecPath(exec, activeState.branch),
         );
       }
-      return parser.complete(toExclusiveState(activeState), exec);
+      return parser.complete(toExclusiveState(activeState, state), exec);
     },
     suggest(context, prefix) {
       const activeState = normalizeExecutableNodeState(context.state);
@@ -763,7 +764,7 @@ function createExecutableNodeParser(
           withExecutableNodeChildContext(
             context,
             activeState.branch,
-            activeState.result.next.state,
+            inheritAnnotations(context.state, activeState.result.next.state),
             branchParser,
           ),
           prefix,
@@ -771,20 +772,23 @@ function createExecutableNodeParser(
       }
       return parser.suggest({
         ...context,
-        state: toExclusiveState(activeState),
+        state: toExclusiveState(activeState, context.state),
       }, prefix);
     },
     getSuggestRuntimeNodes(state, path): readonly RuntimeNode[] {
       const activeState = normalizeExecutableNodeState(state);
       if (activeState?.result.success !== true) {
         return parser.getSuggestRuntimeNodes?.(
-          toExclusiveState(activeState),
+          toExclusiveState(activeState, state),
           path,
         ) ?? [];
       }
       const branchParser = branchParsers[activeState.branch];
       const branchPath = [...path, activeState.branch];
-      const branchState = activeState.result.next.state;
+      const branchState = inheritAnnotations(
+        state,
+        activeState.result.next.state,
+      );
       return branchParser.getSuggestRuntimeNodes?.(branchState, branchPath) ??
         (branchParser.dependencyMetadata?.source != null
           ? [{ path: branchPath, parser: branchParser, state: branchState }]
@@ -796,7 +800,10 @@ function createExecutableNodeParser(
         : undefined;
       const fragments = parser.getDocFragments(
         state.kind === "available"
-          ? { kind: "available", state: toExclusiveState(activeState) }
+          ? {
+            kind: "available",
+            state: toExclusiveState(activeState, state.state),
+          }
           : state,
         defaultValue,
       );
@@ -829,18 +836,21 @@ function normalizeExecutableNodeState(
   ) {
     return undefined;
   }
-  return {
+  return inheritAnnotations(state, {
     branch,
     result: result as ParserResult<unknown>,
     committed: (state as { readonly committed?: unknown }).committed === true,
-  };
+  });
 }
 
 function toExclusiveState(
   state: ExecutableNodeParserState,
-): undefined | [number, ParserResult<unknown>] {
-  if (state == null) return undefined;
-  return [state.branch, state.result];
+  sourceState: unknown = state,
+): unknown {
+  const exclusiveState = state == null
+    ? undefined
+    : [state.branch, state.result] as [number, ParserResult<unknown>];
+  return inheritAnnotations(sourceState, exclusiveState);
 }
 
 function fromExclusiveState(
@@ -853,11 +863,11 @@ function fromExclusiveState(
   ) {
     return undefined;
   }
-  return {
+  return inheritAnnotations(state, {
     branch: state[0],
     result: state[1] as ParserResult<unknown>,
     committed: isCommittedResult(state[1]),
-  };
+  });
 }
 
 function isCommittedResult(result: unknown): boolean {
@@ -896,6 +906,11 @@ function wrapBranchParseResult(
   );
   const dependencyRegistry = mergedExec?.dependencyRegistry ??
     result.next.dependencyRegistry ?? context.dependencyRegistry;
+  const nextState = inheritAnnotations(result.next.state, {
+    branch: activeState.branch,
+    result,
+    committed: activeState.committed || result.consumed.length > 0,
+  });
   return {
     success: true,
     consumed: result.consumed,
@@ -904,11 +919,7 @@ function wrapBranchParseResult(
       ...context,
       buffer: result.next.buffer,
       optionsTerminated: result.next.optionsTerminated,
-      state: {
-        branch: activeState.branch,
-        result,
-        committed: activeState.committed || result.consumed.length > 0,
-      },
+      state: inheritAnnotations(context.state, nextState),
       ...(mergedExec != null
         ? { exec: mergedExec, trace: mergedExec.trace }
         : {}),
