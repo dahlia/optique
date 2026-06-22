@@ -777,6 +777,7 @@ describe("createProgramParser()", () => {
           metadata: {
             description: message`Manage saved changes.`,
             hidden: "usage",
+            usageLine: [{ type: "literal", value: "stash-usage" }],
           },
           handler() {},
         }),
@@ -808,6 +809,12 @@ describe("createProgramParser()", () => {
     const parentText = formatDocPage("git", parentPage);
 
     assert.match(parentText, /Manage saved changes\./);
+
+    const usageLinePage = await getDocPageAsync(parser, ["stash"]);
+    assert.ok(usageLinePage != null);
+    const usageLineText = formatDocPage("git", usageLinePage);
+
+    assert.match(usageLineText, /Usage: git stash stash-usage/);
   });
 
   it("dispatches executable parent command aliases", async () => {

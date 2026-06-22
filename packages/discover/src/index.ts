@@ -708,10 +708,17 @@ function namespaceCommandMetadata(
   metadata: CommandMetadata | undefined,
 ): CommandMetadata | undefined {
   if (metadata == null) return undefined;
-  if (metadata.aliases == null && metadata.errors == null) return undefined;
+  if (
+    metadata.aliases == null &&
+    metadata.errors == null &&
+    metadata.usageLine == null
+  ) {
+    return undefined;
+  }
   return {
     ...(metadata.aliases != null && { aliases: metadata.aliases }),
     ...(metadata.errors != null && { errors: metadata.errors }),
+    ...(metadata.usageLine != null && { usageLine: metadata.usageLine }),
   };
 }
 
