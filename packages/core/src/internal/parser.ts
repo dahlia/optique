@@ -2064,19 +2064,25 @@ function revealMatchedCommandUsageTerm(
     return [{ ...term, terms }, nextArgIndex];
   }
   if (term.type === "exclusive") {
+    let maxArgIndex = argIndex;
+    const terms = term.terms.map((branch) => {
+      const [revealed, nextArgIndex] = revealMatchedCommandUsageTerms(
+        branch,
+        args,
+        matchedCommandArgIndices,
+        argIndex,
+      );
+      if (nextArgIndex > maxArgIndex) {
+        maxArgIndex = nextArgIndex;
+      }
+      return revealed;
+    });
     return [
       {
         ...term,
-        terms: term.terms.map((branch) =>
-          revealMatchedCommandUsageTerms(
-            branch,
-            args,
-            matchedCommandArgIndices,
-            argIndex,
-          )[0]
-        ),
+        terms,
       },
-      argIndex,
+      maxArgIndex,
     ];
   }
   return [term, argIndex];

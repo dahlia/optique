@@ -1140,6 +1140,13 @@ describe("createProgramParser()", () => {
 
     assert.doesNotMatch(text, /\bremote\b/);
 
+    const rootPage = await getDocPageAsync(parser);
+    assert.ok(rootPage != null);
+    const rootText = formatDocPage("git", rootPage);
+
+    assert.doesNotMatch(rootText, /repo remote add/);
+    assert.doesNotMatch(rootText, /Usage: git repo add/);
+
     const suggestions = await suggestAsync(parser, ["repo", ""]);
     assert.ok(
       !suggestions.some((suggestion) =>

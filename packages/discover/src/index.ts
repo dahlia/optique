@@ -23,6 +23,7 @@ import type {
 } from "@optique/core/parser";
 import type { ProgramMetadata } from "@optique/core/program";
 import { command } from "@optique/core/primitives";
+import { type HiddenVisibility, mergeHidden } from "@optique/core/usage";
 import { runAsync } from "@optique/run";
 import type { RunOptions } from "@optique/run";
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -689,8 +690,9 @@ function buildCommandTree(
 
 function buildNodeParser(
   node: CommandTreeNode,
+  inheritedHidden?: HiddenVisibility,
 ): Parser<Mode, ProgramInvocation, unknown> {
-  const childParser = buildChildrenParser(node);
+  const childParser = buildChildrenParser(node, inheritedHidden);
   if (childParser != null && node.command != null) {
     return createExecutableNodeParser(childParser, node.command);
   }
@@ -1171,16 +1173,35 @@ function withCommandDocMetadata(
 
 function buildChildrenParser(
   node: CommandTreeNode,
+  inheritedHidden?: HiddenVisibility,
 ): Parser<Mode, ProgramInvocation, unknown> | undefined {
   const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
   for (const [name, child] of node.children) {
-    const childParser = buildNodeParser(child);
+    const childHidden = mergeHidden(
+      inheritedHidden,
+      child.command?.metadata?.hidden,
+    );
+    const childParser = buildNodeParser(child, childHidden);
     if (child.children.size > 0) {
       parsers.push(
-        createNamespaceCommandParser(name, childParser, child.command),
+        createNamespaceCommandParser(
+          name,
+          childParser,
+          child.command,
+          inheritedHidden,
+        ),
       );
     } else {
-      parsers.push(command(name, childParser, child.command?.metadata));
+      parsers.push(
+        command(
+          name,
+          childParser,
+          commandMetadataWithInheritedHidden(
+            child.command?.metadata,
+            inheritedHidden,
+          ),
+        ),
+      );
     }
   }
   if (parsers.length < 1) return undefined;
@@ -1192,12 +1213,13 @@ function createNamespaceCommandParser(
   name: string,
   childParser: Parser<Mode, ProgramInvocation, unknown>,
   commandDefinition: AnyCommand | undefined,
+  inheritedHidden?: HiddenVisibility,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const metadata = commandDefinition?.metadata;
   const parser: Parser<Mode, ProgramInvocation, unknown> = command(
     name,
     childParser,
-    namespaceCommandMetadata(metadata),
+    namespaceCommandMetadata(metadata, inheritedHidden),
   );
   const description = metadata?.brief ?? metadata?.description;
   if (description == null) return parser;
@@ -1242,21 +1264,37 @@ function withNamespaceListDocDescription(
 
 function namespaceCommandMetadata(
   metadata: CommandMetadata | undefined,
+  inheritedHidden?: HiddenVisibility,
 ): CommandMetadata | undefined {
-  if (metadata == null) return undefined;
+  const hidden = mergeHidden(inheritedHidden, metadata?.hidden);
   if (
-    metadata.aliases == null &&
-    metadata.errors == null &&
-    metadata.hidden == null &&
-    metadata.usageLine == null
+    metadata?.aliases == null &&
+    metadata?.errors == null &&
+    hidden == null &&
+    metadata?.usageLine == null
   ) {
     return undefined;
   }
   return {
-    ...(metadata.aliases != null && { aliases: metadata.aliases }),
-    ...(metadata.errors != null && { errors: metadata.errors }),
-    ...(metadata.hidden != null && { hidden: metadata.hidden }),
-    ...(metadata.usageLine != null && { usageLine: metadata.usageLine }),
+    ...(metadata?.aliases != null && { aliases: metadata.aliases }),
+    ...(metadata?.errors != null && { errors: metadata.errors }),
+    ...(hidden != null && { hidden }),
+    ...(metadata?.usageLine != null && { usageLine: metadata.usageLine }),
+  };
+}
+
+function commandMetadataWithInheritedHidden(
+  metadata: CommandMetadata | undefined,
+  inheritedHidden: HiddenVisibility | undefined,
+): CommandMetadata | undefined {
+  const hidden = mergeHidden(inheritedHidden, metadata?.hidden);
+  if (metadata == null) {
+    return hidden == null ? undefined : { hidden };
+  }
+  if (hidden === metadata.hidden) return metadata;
+  return {
+    ...metadata,
+    ...(hidden != null && { hidden }),
   };
 }
 
@@ -1289,6 +1327,9 @@ function withRootDocs(
   const rootState = parser.initialState;
   const rootCommand = commands.find((entry) => entry.path.length < 1);
   const listedCommands = commands.filter((entry) => entry.path.length > 0);
+  const commandsByPath = new Map(
+    commands.map((entry) => [commandPathKey(entry.path), entry.command]),
+  );
   const rootDocs = (): DocFragments => {
     const fragments: DocFragment[] = [
       ...(rootCommand?.command.parser.getDocFragments({ kind: "unavailable" })
@@ -1301,7 +1342,7 @@ function withRootDocs(
           term: {
             type: "command",
             name: entry.path.join(" "),
-            hidden: entry.command.metadata?.hidden,
+            hidden: commandPathHidden(entry.path, commandsByPath),
           },
           description: entry.command.metadata?.brief ??
             entry.command.metadata?.description,
@@ -1330,6 +1371,21 @@ function withRootDocs(
       return parser.getDocFragments(state, defaultValue);
     },
   };
+}
+
+function commandPathHidden(
+  path: readonly string[],
+  commandsByPath: ReadonlyMap<string, AnyCommand>,
+): HiddenVisibility | undefined {
+  let hidden: HiddenVisibility | undefined;
+  for (let length = 1; length <= path.length; length++) {
+    hidden = mergeHidden(
+      hidden,
+      commandsByPath.get(commandPathKey(path.slice(0, length)))?.metadata
+        ?.hidden,
+    );
+  }
+  return hidden;
 }
 
 function buildRunOptions(options: RunProgramOptions): RunOptions {
