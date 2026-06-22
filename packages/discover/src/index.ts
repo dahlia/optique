@@ -710,7 +710,12 @@ function createExecutableNodeParser(
     childParser,
     leafParser,
   ) as Parser<Mode, ProgramInvocation, unknown>;
-  return {
+  const phase2SeedHook = findPhase2SeedHook(parser);
+  const executableParser: Parser<
+    Mode,
+    ProgramInvocation,
+    ExecutableNodeParserState
+  > = {
     ...parser,
     $valueType: [],
     $stateType: [],
@@ -753,6 +758,9 @@ function createExecutableNodeParser(
           inheritAnnotations(state, activeState.result.next.state),
           withExecutableNodeChildExecPath(exec, activeState.branch),
         );
+      }
+      if (activeState == null) {
+        return completeExecutableNodeLeaf(state, exec, leafParser);
       }
       return parser.complete(toExclusiveState(activeState, state), exec);
     },
@@ -813,6 +821,141 @@ function createExecutableNodeParser(
       return fragments;
     },
   };
+  if (phase2SeedHook != null) {
+    Object.defineProperty(executableParser, phase2SeedHook.key, {
+      value(state: unknown, exec?: ExecutionContext) {
+        return extractExecutableNodePhase2Seed(
+          state,
+          exec,
+          leafParser,
+          phase2SeedHook,
+        );
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  }
+  return executableParser;
+}
+
+interface Phase2SeedHook {
+  readonly key: symbol;
+  readonly extract: (state: unknown, exec?: ExecutionContext) => unknown;
+}
+
+const phase2SeedSymbolDescription = "@optique/core/extractPhase2Seed";
+
+function findPhase2SeedHook(parser: object): Phase2SeedHook | undefined {
+  for (const key of Object.getOwnPropertySymbols(parser)) {
+    if (key.description !== phase2SeedSymbolDescription) continue;
+    const value = Reflect.get(parser, key);
+    if (typeof value !== "function") continue;
+    return {
+      key,
+      extract(state, exec) {
+        const seed: unknown = Reflect.apply(value, parser, [state, exec]);
+        return seed;
+      },
+    };
+  }
+  return undefined;
+}
+
+function completeExecutableNodeLeaf(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+) {
+  const result = parseExecutableNodeLeaf(state, exec, leafParser);
+  if (isPromiseLike(result)) {
+    return result.then((resolved) =>
+      completeParsedExecutableNodeLeaf(state, exec, leafParser, resolved)
+    );
+  }
+  return completeParsedExecutableNodeLeaf(state, exec, leafParser, result);
+}
+
+function completeParsedExecutableNodeLeaf(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+  result: ParserResult<unknown>,
+) {
+  const childExec = withExecutableNodeChildExecPath(exec, 1);
+  const nextExec = result.success
+    ? mergeExecutableNodeChildExec(childExec, result.next.exec)
+    : childExec;
+  const nextState = result.success
+    ? inheritAnnotations(state, result.next.state)
+    : inheritAnnotations(state, leafParser.initialState);
+  return leafParser.complete(nextState, nextExec);
+}
+
+function extractExecutableNodePhase2Seed(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+  phase2SeedHook: Phase2SeedHook,
+) {
+  const activeState = normalizeExecutableNodeState(state);
+  if (activeState != null) {
+    return phase2SeedHook.extract(toExclusiveState(activeState, state), exec);
+  }
+  const result = parseExecutableNodeLeaf(state, exec, leafParser);
+  if (isPromiseLike(result)) {
+    return result.then((resolved) =>
+      extractParsedExecutableNodePhase2Seed(
+        state,
+        exec,
+        resolved,
+        phase2SeedHook,
+      )
+    );
+  }
+  return extractParsedExecutableNodePhase2Seed(
+    state,
+    exec,
+    result,
+    phase2SeedHook,
+  );
+}
+
+function extractParsedExecutableNodePhase2Seed(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  result: ParserResult<unknown>,
+  phase2SeedHook: Phase2SeedHook,
+) {
+  if (!result.success) {
+    return phase2SeedHook.extract(toExclusiveState(undefined, state), exec);
+  }
+  const executableState = inheritAnnotations(state, {
+    branch: 1,
+    result,
+    committed: false,
+  });
+  return phase2SeedHook.extract(toExclusiveState(executableState, state), exec);
+}
+
+function parseExecutableNodeLeaf(
+  state: unknown,
+  exec: ExecutionContext | undefined,
+  leafParser: Parser<Mode, ProgramInvocation, unknown>,
+) {
+  const childExec = withExecutableNodeChildExecPath(exec, 1);
+  const childContext: ParserContext<unknown> = {
+    buffer: [],
+    optionsTerminated: false,
+    usage: leafParser.usage,
+    state: inheritAnnotations(state, leafParser.initialState),
+    ...(childExec != null
+      ? {
+        exec: childExec,
+        dependencyRegistry: childExec.dependencyRegistry,
+      }
+      : {}),
+  };
+  return leafParser.parse(childContext);
 }
 
 function normalizeExecutableNodeState(

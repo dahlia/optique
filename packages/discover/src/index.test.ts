@@ -1,17 +1,27 @@
 import { object } from "@optique/core/constructs";
 import { getAnnotations } from "@optique/core/annotations";
 import { formatDocPage } from "@optique/core/doc";
-import { defineTraits } from "@optique/core/extension";
+import {
+  defineTraits,
+  inheritAnnotations,
+  injectAnnotations,
+} from "@optique/core/extension";
 import { formatMessage, message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
 import {
   getDocPageAsync,
   type Parser,
   type ParserContext,
+  type ParserResult,
 } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
+import type { OptionName } from "@optique/core/usage";
 import type { SourceContext } from "@optique/core/context";
-import { integer, string } from "@optique/core/valueparser";
+import {
+  integer,
+  string,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -821,6 +831,137 @@ describe("createProgramParser()", () => {
     ]);
   });
 
+  it("preserves phase-two seeds for executable parent commands", async () => {
+    const sourceId = Symbol("source");
+    const phase2Values: unknown[] = [];
+    const calls: unknown[] = [];
+    const context: SourceContext = {
+      id: Symbol("test-context"),
+      phase: "two-pass",
+      getAnnotations(request) {
+        if (request?.phase !== "phase2") return {};
+        phase2Values.push(request.parsed);
+        const config = request.parsed != null &&
+            typeof request.parsed === "object"
+          ? (request.parsed as { readonly config?: unknown }).config
+          : undefined;
+        return typeof config === "string"
+          ? { [sourceId]: `loaded:${config}` }
+          : {};
+      },
+    };
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: ["stash"],
+          parser: object({
+            config: option("--config", string()),
+            source: createSourceBackedOptionParser(sourceId, "--source"),
+          }),
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+        defineCommand({
+          path: ["stash", "list"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      ],
+      metadata: { name: "git" },
+      args: ["stash", "--config", "stash.json"],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [
+      [
+        "stash",
+        { config: "stash.json", source: "loaded:stash.json" },
+      ],
+    ]);
+    assert.equal(phase2Values.length, 1);
+    assert.equal(
+      phase2Values[0] != null && typeof phase2Values[0] === "object"
+        ? (phase2Values[0] as { readonly config?: unknown }).config
+        : undefined,
+      "stash.json",
+    );
+  });
+
+  it("completes source-backed executable parents without CLI tokens", async () => {
+    const sourceId = Symbol("source");
+    const context = createStringSourceContext(sourceId, "from-source");
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: [],
+        command: defineCommand({
+          parser: createSourceBackedOptionParser(sourceId, "--source"),
+          handler(value) {
+            calls.push(["root complete", value]);
+          },
+        }),
+      },
+      {
+        path: ["build"],
+        command: defineCommand({
+          parser: object({}),
+          handler(value) {
+            calls.push(["build complete", value]);
+          },
+        }),
+      },
+    ]);
+
+    const result = await parser.complete(
+      injectAnnotations(parser.initialState, { [sourceId]: "from-source" }),
+    );
+    assert.ok(result.success);
+    if (result.success) {
+      await result.value.handler(result.value.value);
+    }
+
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: [],
+          parser: createSourceBackedOptionParser(sourceId, "--source"),
+          handler(value) {
+            calls.push(["root", value]);
+          },
+        }),
+        defineCommand({
+          path: ["build"],
+          parser: object({}),
+          handler(value) {
+            calls.push(["build", value]);
+          },
+        }),
+      ],
+      metadata: { name: "tool" },
+      args: [],
+      contexts: [context],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [
+      ["root complete", "from-source"],
+      ["root", "from-source"],
+    ]);
+  });
+
   it("shows leaf command paths in root help", async () => {
     const parser = createProgramParser([
       {
@@ -1579,4 +1720,112 @@ function createSourceBackedParser(
     completesFromSource: true,
   });
   return parser;
+}
+
+interface SourceBackedOptionState {
+  readonly hasCliValue: boolean;
+  readonly cliState?: ValueParserResult<string> | undefined;
+}
+
+function isSourceBackedOptionState(
+  value: unknown,
+): value is SourceBackedOptionState {
+  return value != null &&
+    typeof value === "object" &&
+    typeof (value as { readonly hasCliValue?: unknown }).hasCliValue ===
+      "boolean";
+}
+
+function createSourceBackedOptionParser(
+  sourceId: symbol,
+  name: OptionName,
+): Parser<"sync", string, SourceBackedOptionState | undefined> {
+  const cliParser = option(name, string());
+  const parser: Parser<"sync", string, SourceBackedOptionState | undefined> = {
+    mode: "sync",
+    $valueType: [],
+    $stateType: [],
+    priority: cliParser.priority,
+    usage: cliParser.usage,
+    leadingNames: cliParser.leadingNames,
+    acceptingAnyToken: cliParser.acceptingAnyToken,
+    initialState: undefined,
+    parse(context) {
+      const currentState = isSourceBackedOptionState(context.state)
+        ? context.state.cliState ?? cliParser.initialState
+        : cliParser.initialState;
+      const result = cliParser.parse({ ...context, state: currentState });
+      if (result.success) {
+        return wrapSourceBackedOptionParseResult(context.state, result);
+      }
+      if (result.consumed > 0) {
+        return result;
+      }
+      return {
+        success: true,
+        next: {
+          ...context,
+          state: inheritAnnotations(context.state, { hasCliValue: false }),
+        },
+        consumed: [],
+      };
+    },
+    complete(state, exec) {
+      if (isSourceBackedOptionState(state) && state.hasCliValue) {
+        return cliParser.complete(
+          inheritAnnotations(state, state.cliState ?? cliParser.initialState),
+          exec,
+        );
+      }
+      const value = getAnnotations(state)?.[sourceId];
+      return typeof value === "string"
+        ? { success: true, value }
+        : { success: false, error: message`Missing source value.` };
+    },
+    suggest(context, prefix) {
+      return cliParser.suggest({
+        ...context,
+        state: cliParser.initialState,
+      }, prefix);
+    },
+    getDocFragments(state, defaultValue) {
+      return cliParser.getDocFragments(
+        state.kind === "available" && isSourceBackedOptionState(state.state) &&
+          state.state.hasCliValue
+          ? {
+            kind: "available",
+            state: inheritAnnotations(
+              state.state,
+              state.state.cliState ?? cliParser.initialState,
+            ),
+          }
+          : { kind: "unavailable" },
+        defaultValue,
+      );
+    },
+  };
+  defineTraits(parser, {
+    inheritsAnnotations: true,
+    completesFromSource: true,
+  });
+  return parser;
+}
+
+function wrapSourceBackedOptionParseResult(
+  sourceState: unknown,
+  result: ParserResult<ValueParserResult<string> | undefined>,
+): ParserResult<SourceBackedOptionState | undefined> {
+  if (!result.success) return result;
+  const state: SourceBackedOptionState = result.consumed.length > 0
+    ? { hasCliValue: true, cliState: result.next.state }
+    : { hasCliValue: false };
+  return {
+    success: true,
+    ...(result.provisional ? { provisional: true as const } : {}),
+    next: {
+      ...result.next,
+      state: inheritAnnotations(sourceState, state),
+    },
+    consumed: result.consumed,
+  };
 }
