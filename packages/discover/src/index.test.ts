@@ -2,7 +2,7 @@ import { object } from "@optique/core/constructs";
 import { formatDocPage } from "@optique/core/doc";
 import { formatMessage, message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
-import { getDocPageAsync } from "@optique/core/parser";
+import { getDocPageAsync, type ParserContext } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import type { SourceContext } from "@optique/core/context";
 import { integer, string } from "@optique/core/valueparser";
@@ -658,6 +658,51 @@ describe("createProgramParser()", () => {
     ]);
   });
 
+  it("does not switch to nested commands after parsing parent arguments", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      },
+    ]);
+
+    let context: ParserContext<unknown> = {
+      buffer: ["stash", "--message", "wip", "list"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    let failed = false;
+    while (context.buffer.length > 0) {
+      const result = await parser.parse(context);
+      if (!result.success) {
+        failed = true;
+        break;
+      }
+      context = result.next;
+    }
+
+    assert.ok(failed);
+    assert.deepEqual(calls, []);
+  });
+
   it("dispatches root commands alongside nested commands", async () => {
     const calls: unknown[] = [];
     const parser = createProgramParser([
@@ -776,6 +821,7 @@ describe("createProgramParser()", () => {
           }),
           metadata: {
             description: message`Manage saved changes.`,
+            footer: message`Use stash list to inspect entries.`,
             hidden: "usage",
             usageLine: [{ type: "literal", value: "stash-usage" }],
           },
@@ -815,6 +861,8 @@ describe("createProgramParser()", () => {
     const usageLineText = formatDocPage("git", usageLinePage);
 
     assert.match(usageLineText, /Usage: git stash stash-usage/);
+    assert.match(usageLineText, /Manage saved changes\./);
+    assert.match(usageLineText, /Use stash list to inspect entries\./);
   });
 
   it("dispatches executable parent command aliases", async () => {

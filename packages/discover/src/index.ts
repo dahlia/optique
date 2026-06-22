@@ -5,9 +5,16 @@ import type {
 } from "@optique/core/context";
 import type { DocState } from "@optique/core/parser";
 import type { DocFragment, DocFragments } from "@optique/core/doc";
+import type { RuntimeNode } from "@optique/core/dependency-runtime";
 import { map } from "@optique/core/modifiers";
 import type { Message } from "@optique/core/message";
-import type { Mode, Parser } from "@optique/core/parser";
+import type {
+  ExecutionContext,
+  Mode,
+  Parser,
+  ParserContext,
+  ParserResult,
+} from "@optique/core/parser";
 import type { ProgramMetadata } from "@optique/core/program";
 import { command } from "@optique/core/primitives";
 import { runAsync } from "@optique/run";
@@ -675,17 +682,314 @@ function buildCommandTree(
 function buildNodeParser(
   node: CommandTreeNode,
 ): Parser<Mode, ProgramInvocation, unknown> {
-  const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
   const childParser = buildChildrenParser(node);
-  if (childParser != null) parsers.push(childParser);
-  if (node.command != null) {
-    parsers.push(createLeafParser(node.command, childParser != null));
+  if (childParser != null && node.command != null) {
+    return createExecutableNodeParser(childParser, node.command);
   }
-  if (parsers.length === 1) return parsers[0];
-  if (parsers.length < 1) {
-    throw new TypeError("Command tree node must contain a command.");
+  if (childParser != null) return childParser;
+  if (node.command != null) return createLeafParser(node.command);
+  throw new TypeError("Command tree node must contain a command.");
+}
+
+interface ExecutableNodeState {
+  readonly branch: number;
+  readonly result: ParserResult<unknown>;
+  readonly committed: boolean;
+}
+
+type ExecutableNodeParserState = ExecutableNodeState | undefined;
+
+function createExecutableNodeParser(
+  childParser: Parser<Mode, ProgramInvocation, unknown>,
+  commandDefinition: AnyCommand,
+): Parser<Mode, ProgramInvocation, ExecutableNodeParserState> {
+  const leafParser = createLeafParser(commandDefinition, true);
+  const branchParsers = [childParser, leafParser] as const;
+  const parser = longestMatch(
+    childParser,
+    leafParser,
+  ) as Parser<Mode, ProgramInvocation, unknown>;
+  return {
+    ...parser,
+    $valueType: [],
+    $stateType: [],
+    initialState: undefined,
+    parse(context) {
+      const activeState = normalizeExecutableNodeState(context.state);
+      if (activeState?.committed === true && activeState.result.success) {
+        const branchParser = branchParsers[activeState.branch];
+        const result = branchParser.parse(
+          withExecutableNodeChildContext(
+            context,
+            activeState.branch,
+            activeState.result.next.state,
+            branchParser,
+          ),
+        );
+        if (isPromiseLike(result)) {
+          return result.then((resolved) =>
+            wrapBranchParseResult(context, activeState, resolved)
+          );
+        }
+        return wrapBranchParseResult(context, activeState, result);
+      }
+
+      const result = parser.parse({
+        ...context,
+        state: toExclusiveState(activeState),
+      });
+      if (isPromiseLike(result)) {
+        return result.then((resolved) =>
+          wrapInitialParseResult(context, resolved)
+        );
+      }
+      return wrapInitialParseResult(context, result);
+    },
+    complete(state, exec) {
+      const activeState = normalizeExecutableNodeState(state);
+      if (activeState?.result.success === true) {
+        return branchParsers[activeState.branch].complete(
+          activeState.result.next.state,
+          withExecutableNodeChildExecPath(exec, activeState.branch),
+        );
+      }
+      return parser.complete(toExclusiveState(activeState), exec);
+    },
+    suggest(context, prefix) {
+      const activeState = normalizeExecutableNodeState(context.state);
+      if (activeState?.committed === true && activeState.result.success) {
+        const branchParser = branchParsers[activeState.branch];
+        return branchParser.suggest(
+          withExecutableNodeChildContext(
+            context,
+            activeState.branch,
+            activeState.result.next.state,
+            branchParser,
+          ),
+          prefix,
+        );
+      }
+      return parser.suggest({
+        ...context,
+        state: toExclusiveState(activeState),
+      }, prefix);
+    },
+    getSuggestRuntimeNodes(state, path): readonly RuntimeNode[] {
+      const activeState = normalizeExecutableNodeState(state);
+      if (activeState?.result.success !== true) {
+        return parser.getSuggestRuntimeNodes?.(
+          toExclusiveState(activeState),
+          path,
+        ) ?? [];
+      }
+      const branchParser = branchParsers[activeState.branch];
+      const branchPath = [...path, activeState.branch];
+      const branchState = activeState.result.next.state;
+      return branchParser.getSuggestRuntimeNodes?.(branchState, branchPath) ??
+        (branchParser.dependencyMetadata?.source != null
+          ? [{ path: branchPath, parser: branchParser, state: branchState }]
+          : []);
+    },
+    getDocFragments(state, defaultValue) {
+      const activeState = state.kind === "available"
+        ? normalizeExecutableNodeState(state.state)
+        : undefined;
+      const fragments = parser.getDocFragments(
+        state.kind === "available"
+          ? { kind: "available", state: toExclusiveState(activeState) }
+          : state,
+        defaultValue,
+      );
+      if (activeState == null) {
+        return withCommandDocMetadata(fragments, commandDefinition.metadata);
+      }
+      return fragments;
+    },
+  };
+}
+
+function normalizeExecutableNodeState(
+  state: unknown,
+): ExecutableNodeParserState {
+  if (
+    state == null ||
+    typeof state !== "object" ||
+    !("branch" in state) ||
+    !("result" in state)
+  ) {
+    return undefined;
   }
-  return longestMatch(...parsers) as Parser<Mode, ProgramInvocation, unknown>;
+  const branch = (state as { readonly branch?: unknown }).branch;
+  if (branch !== 0 && branch !== 1) return undefined;
+  const result = (state as { readonly result?: unknown }).result;
+  if (
+    result == null ||
+    typeof result !== "object" ||
+    typeof (result as { readonly success?: unknown }).success !== "boolean"
+  ) {
+    return undefined;
+  }
+  return {
+    branch,
+    result: result as ParserResult<unknown>,
+    committed: (state as { readonly committed?: unknown }).committed === true,
+  };
+}
+
+function toExclusiveState(
+  state: ExecutableNodeParserState,
+): undefined | [number, ParserResult<unknown>] {
+  if (state == null) return undefined;
+  return [state.branch, state.result];
+}
+
+function fromExclusiveState(
+  state: unknown,
+): ExecutableNodeParserState {
+  if (
+    !Array.isArray(state) ||
+    state.length !== 2 ||
+    (state[0] !== 0 && state[0] !== 1)
+  ) {
+    return undefined;
+  }
+  return {
+    branch: state[0],
+    result: state[1] as ParserResult<unknown>,
+    committed: isCommittedResult(state[1]),
+  };
+}
+
+function isCommittedResult(result: unknown): boolean {
+  return result != null &&
+    typeof result === "object" &&
+    (result as { readonly success?: unknown }).success === true &&
+    Array.isArray((result as { readonly consumed?: unknown }).consumed) &&
+    (result as { readonly consumed: readonly unknown[] }).consumed.length > 0;
+}
+
+function wrapInitialParseResult(
+  _context: ParserContext<ExecutableNodeParserState>,
+  result: ParserResult<unknown>,
+): ParserResult<ExecutableNodeParserState> {
+  if (!result.success) return result;
+  return {
+    success: true,
+    consumed: result.consumed,
+    provisional: result.provisional,
+    next: {
+      ...result.next,
+      state: fromExclusiveState(result.next.state),
+    },
+  };
+}
+
+function wrapBranchParseResult(
+  context: ParserContext<ExecutableNodeParserState>,
+  activeState: ExecutableNodeState,
+  result: ParserResult<unknown>,
+): ParserResult<ExecutableNodeParserState> {
+  if (!result.success) return result;
+  const mergedExec = mergeExecutableNodeChildExec(
+    context.exec,
+    result.next.exec,
+  );
+  const dependencyRegistry = mergedExec?.dependencyRegistry ??
+    result.next.dependencyRegistry ?? context.dependencyRegistry;
+  return {
+    success: true,
+    consumed: result.consumed,
+    provisional: result.provisional,
+    next: {
+      ...context,
+      buffer: result.next.buffer,
+      optionsTerminated: result.next.optionsTerminated,
+      state: {
+        branch: activeState.branch,
+        result,
+        committed: activeState.committed || result.consumed.length > 0,
+      },
+      ...(mergedExec != null
+        ? { exec: mergedExec, trace: mergedExec.trace }
+        : {}),
+      ...(dependencyRegistry != null ? { dependencyRegistry } : {}),
+    },
+  };
+}
+
+function withExecutableNodeChildContext(
+  context: ParserContext<ExecutableNodeParserState>,
+  branch: number,
+  state: unknown,
+  parser: Parser<Mode, ProgramInvocation, unknown>,
+): ParserContext<unknown> {
+  const exec = withExecutableNodeChildExecPath(context.exec, branch);
+  const dependencyRegistry = context.dependencyRegistry ??
+    exec?.dependencyRegistry;
+  return {
+    ...context,
+    state,
+    usage: parser.usage,
+    ...(exec != null
+      ? {
+        exec: dependencyRegistry === exec.dependencyRegistry
+          ? exec
+          : { ...exec, dependencyRegistry },
+        dependencyRegistry,
+      }
+      : {}),
+  };
+}
+
+function withExecutableNodeChildExecPath(
+  exec: ExecutionContext | undefined,
+  branch: number,
+): ExecutionContext | undefined {
+  if (exec == null) return undefined;
+  return {
+    ...exec,
+    path: [...(exec.path ?? []), branch],
+  };
+}
+
+function mergeExecutableNodeChildExec(
+  parent: ExecutionContext | undefined,
+  child: ExecutionContext | undefined,
+): ExecutionContext | undefined {
+  if (parent == null) return child;
+  if (child == null) return parent;
+  return {
+    ...parent,
+    trace: child.trace ?? parent.trace,
+    dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
+    dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
+    commandPath: child.commandPath ?? parent.commandPath,
+    preCompletedByParser: child.preCompletedByParser ??
+      parent.preCompletedByParser,
+    excludedSourceFields: child.excludedSourceFields ??
+      parent.excludedSourceFields,
+  };
+}
+
+function isPromiseLike<T>(
+  value: T | Promise<T>,
+): value is Promise<T> {
+  return value != null &&
+    typeof value === "object" &&
+    typeof (value as { readonly then?: unknown }).then === "function";
+}
+
+function withCommandDocMetadata(
+  fragments: DocFragments,
+  metadata: CommandMetadata | undefined,
+): DocFragments {
+  if (metadata == null) return fragments;
+  return {
+    ...fragments,
+    brief: fragments.brief ?? metadata.brief,
+    description: fragments.description ?? metadata.description,
+    footer: fragments.footer ?? metadata.footer,
+  };
 }
 
 function buildChildrenParser(
@@ -738,13 +1042,7 @@ function createLeafParser(
     ...parser,
     getDocFragments(state, defaultValue) {
       const fragments = parser.getDocFragments(state, defaultValue);
-      return {
-        ...fragments,
-        brief: fragments.brief ?? commandDefinition.metadata?.brief,
-        description: fragments.description ??
-          commandDefinition.metadata?.description,
-        footer: fragments.footer ?? commandDefinition.metadata?.footer,
-      };
+      return withCommandDocMetadata(fragments, commandDefinition.metadata);
     },
   };
 }
