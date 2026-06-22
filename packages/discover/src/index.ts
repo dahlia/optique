@@ -677,7 +677,9 @@ function buildNodeParser(
   const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
   const childParser = buildChildrenParser(node);
   if (childParser != null) parsers.push(childParser);
-  if (node.command != null) parsers.push(createLeafParser(node.command));
+  if (node.command != null) {
+    parsers.push(createLeafParser(node.command, childParser != null));
+  }
   if (parsers.length === 1) return parsers[0];
   if (parsers.length < 1) {
     throw new TypeError("Command tree node must contain a command.");
@@ -691,7 +693,9 @@ function buildChildrenParser(
   const parsers: Parser<Mode, ProgramInvocation, unknown>[] = [];
   for (const [name, child] of node.children) {
     const childParser = buildNodeParser(child);
-    const metadata = child.command?.metadata;
+    const metadata = child.children.size > 0
+      ? undefined
+      : child.command?.metadata;
     parsers.push(command(name, childParser, metadata));
   }
   if (parsers.length < 1) return undefined;
@@ -701,14 +705,29 @@ function buildChildrenParser(
 
 function createLeafParser(
   commandDefinition: AnyCommand,
+  includeMetadata = false,
 ): Parser<Mode, ProgramInvocation, unknown> {
-  return map(commandDefinition.parser, (value): ProgramInvocation => ({
+  const parser = map(commandDefinition.parser, (value): ProgramInvocation => ({
     command: commandDefinition,
     value,
     handler: commandDefinition.handler as (
       value: unknown,
     ) => void | Promise<void>,
   })) as Parser<Mode, ProgramInvocation, unknown>;
+  if (!includeMetadata) return parser;
+  return {
+    ...parser,
+    getDocFragments(state, defaultValue) {
+      const fragments = parser.getDocFragments(state, defaultValue);
+      return {
+        ...fragments,
+        brief: fragments.brief ?? commandDefinition.metadata?.brief,
+        description: fragments.description ??
+          commandDefinition.metadata?.description,
+        footer: fragments.footer ?? commandDefinition.metadata?.footer,
+      };
+    },
+  };
 }
 
 function withRootDocs(

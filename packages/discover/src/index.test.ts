@@ -766,6 +766,50 @@ describe("createProgramParser()", () => {
     assert.doesNotMatch(text, /^\s+Create an app\./m);
   });
 
+  it("keeps executable parent metadata out of nested command help", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          metadata: {
+            description: message`Manage saved changes.`,
+            hidden: "usage",
+          },
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`List saved changes.` },
+          handler() {},
+        }),
+      },
+    ]);
+
+    const page = await getDocPageAsync(parser, ["stash", "list"]);
+    assert.ok(page != null);
+    const text = formatDocPage("git", page);
+
+    assert.match(text, /Usage: git stash list/);
+    assert.match(text, /List saved changes\./);
+    assert.doesNotMatch(text, /Manage saved changes\./);
+
+    const parentPage = await getDocPageAsync(parser, [
+      "stash",
+      "--message",
+      "wip",
+    ]);
+    assert.ok(parentPage != null);
+    const parentText = formatDocPage("git", parentPage);
+
+    assert.match(parentText, /Manage saved changes\./);
+  });
+
   it("rejects duplicate command paths", () => {
     const makeCommand = () =>
       defineCommand({
