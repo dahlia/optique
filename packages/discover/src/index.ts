@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   type AnyCommand,
   type AnyStaticCommand,
+  type CommandMetadata,
   type CommandPath,
   isCommand,
 } from "./command.ts";
@@ -694,13 +695,24 @@ function buildChildrenParser(
   for (const [name, child] of node.children) {
     const childParser = buildNodeParser(child);
     const metadata = child.children.size > 0
-      ? undefined
+      ? namespaceCommandMetadata(child.command?.metadata)
       : child.command?.metadata;
     parsers.push(command(name, childParser, metadata));
   }
   if (parsers.length < 1) return undefined;
   if (parsers.length === 1) return parsers[0];
   return or(...parsers) as Parser<Mode, ProgramInvocation, unknown>;
+}
+
+function namespaceCommandMetadata(
+  metadata: CommandMetadata | undefined,
+): CommandMetadata | undefined {
+  if (metadata == null) return undefined;
+  if (metadata.aliases == null && metadata.errors == null) return undefined;
+  return {
+    ...(metadata.aliases != null && { aliases: metadata.aliases }),
+    ...(metadata.errors != null && { errors: metadata.errors }),
+  };
 }
 
 function createLeafParser(

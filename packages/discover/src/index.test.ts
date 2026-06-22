@@ -1,6 +1,6 @@
 import { object } from "@optique/core/constructs";
 import { formatDocPage } from "@optique/core/doc";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
 import { getDocPageAsync } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
@@ -808,6 +808,86 @@ describe("createProgramParser()", () => {
     const parentText = formatDocPage("git", parentPage);
 
     assert.match(parentText, /Manage saved changes\./);
+  });
+
+  it("dispatches executable parent command aliases", async () => {
+    const calls: unknown[] = [];
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            message: withDefault(option("--message", string()), "parent"),
+          }),
+          metadata: { aliases: ["st"] },
+          handler(value) {
+            calls.push(["stash", value]);
+          },
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler(value) {
+            calls.push(["stash list", value]);
+          },
+        }),
+      },
+    ]);
+
+    const parentState = await parseAll(parser, ["st", "--message", "wip"]);
+    const parentResult = await parser.complete(parentState);
+    assert.ok(parentResult.success);
+    if (parentResult.success) {
+      await parentResult.value.handler(parentResult.value.value);
+    }
+
+    const childState = await parseAll(parser, ["st", "list"]);
+    const childResult = await parser.complete(childState);
+    assert.ok(childResult.success);
+    if (childResult.success) {
+      await childResult.value.handler(childResult.value.value);
+    }
+
+    assert.deepEqual(calls, [
+      ["stash", { message: "wip" }],
+      ["stash list", {}],
+    ]);
+  });
+
+  it("uses executable parent command errors for namespaces", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: {
+            errors: { notMatched: message`Choose stash.` },
+          },
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler() {},
+        }),
+      },
+    ]);
+
+    const result = await parser.parse({
+      buffer: ["stahs"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "Choose stash.");
+    }
   });
 
   it("rejects duplicate command paths", () => {
