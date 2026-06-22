@@ -1110,6 +1110,58 @@ describe("createProgramParser()", () => {
     assert.doesNotMatch(childText, /Manage remotes\./);
   });
 
+  it("wraps executable parent completion with async mode", async () => {
+    const asyncChildParser: Parser<"async", Record<string, never>, undefined> =
+      {
+        $valueType: [],
+        $stateType: [],
+        mode: "async",
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true,
+            consumed: [],
+            next: context,
+          });
+        },
+        complete() {
+          return Promise.resolve({ success: true, value: {} });
+        },
+        async *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({}),
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: asyncChildParser,
+          handler() {},
+        }),
+      },
+    ]);
+
+    assert.equal(parser.mode, "async");
+
+    const parentState = await parseAll(parser, ["stash"]);
+    const result = parser.complete(parentState);
+
+    assert.ok(result instanceof Promise);
+    assert.ok((await result).success);
+  });
+
   it("dispatches executable parent command aliases", async () => {
     const calls: unknown[] = [];
     const parser = createProgramParser([

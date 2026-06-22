@@ -7,6 +7,7 @@ import type { DocState } from "@optique/core/parser";
 import type { DocFragment, DocFragments } from "@optique/core/doc";
 import type { RuntimeNode } from "@optique/core/dependency-runtime";
 import {
+  dispatchByMode,
   inheritAnnotations,
   mapModeValue,
   wrapForMode,
@@ -758,15 +759,24 @@ function createExecutableNodeParser(
     complete(state, exec) {
       const activeState = normalizeExecutableNodeState(state);
       if (activeState?.result.success === true) {
-        return branchParsers[activeState.branch].complete(
-          inheritAnnotations(state, activeState.result.next.state),
-          withExecutableNodeChildExecPath(exec, activeState.branch),
+        return wrapForMode(
+          parser.mode,
+          branchParsers[activeState.branch].complete(
+            inheritAnnotations(state, activeState.result.next.state),
+            withExecutableNodeChildExecPath(exec, activeState.branch),
+          ),
         );
       }
       if (activeState == null) {
-        return completeExecutableNodeLeaf(state, exec, leafParser);
+        return wrapForMode(
+          parser.mode,
+          completeExecutableNodeLeaf(state, exec, leafParser),
+        );
       }
-      return parser.complete(toExclusiveState(activeState, state), exec);
+      return wrapForMode(
+        parser.mode,
+        parser.complete(toExclusiveState(activeState, state), exec),
+      );
     },
     suggest(context, prefix) {
       const activeState = normalizeExecutableNodeState(context.state);
@@ -871,16 +881,25 @@ function completeExecutableNodeLeaf(
   leafParser: Parser<Mode, ProgramInvocation, unknown>,
 ) {
   const result = parseExecutableNodeLeaf(state, exec, leafParser);
-  if (leafParser.mode === "async") {
-    return Promise.resolve(wrapForMode("async", result)).then((resolved) =>
-      completeParsedExecutableNodeLeaf(state, exec, leafParser, resolved)
-    );
-  }
-  return completeParsedExecutableNodeLeaf(
-    state,
-    exec,
-    leafParser,
-    wrapForMode("sync", result),
+  return dispatchByMode(
+    leafParser.mode,
+    () =>
+      wrapForMode(
+        "sync",
+        completeParsedExecutableNodeLeaf(
+          state,
+          exec,
+          leafParser,
+          wrapForMode("sync", result),
+        ),
+      ),
+    () =>
+      Promise.resolve(wrapForMode("async", result)).then((resolved) =>
+        wrapForMode(
+          "async",
+          completeParsedExecutableNodeLeaf(state, exec, leafParser, resolved),
+        )
+      ),
   );
 }
 
@@ -911,21 +930,24 @@ function extractExecutableNodePhase2Seed(
     return phase2SeedHook.extract(toExclusiveState(activeState, state), exec);
   }
   const result = parseExecutableNodeLeaf(state, exec, leafParser);
-  if (leafParser.mode === "async") {
-    return Promise.resolve(wrapForMode("async", result)).then((resolved) =>
+  return dispatchByMode(
+    leafParser.mode,
+    () =>
       extractParsedExecutableNodePhase2Seed(
         state,
         exec,
-        resolved,
+        wrapForMode("sync", result),
         phase2SeedHook,
-      )
-    );
-  }
-  return extractParsedExecutableNodePhase2Seed(
-    state,
-    exec,
-    wrapForMode("sync", result),
-    phase2SeedHook,
+      ),
+    () =>
+      Promise.resolve(wrapForMode("async", result)).then((resolved) =>
+        extractParsedExecutableNodePhase2Seed(
+          state,
+          exec,
+          resolved,
+          phase2SeedHook,
+        )
+      ),
   );
 }
 
