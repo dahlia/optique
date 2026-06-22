@@ -801,6 +801,15 @@ function createExecutableNodeParser(
     },
     getSuggestRuntimeNodes(state, path): readonly RuntimeNode[] {
       const activeState = normalizeExecutableNodeState(state);
+      if (activeState == null) {
+        const branchPath = [...path, 1];
+        const branchState = inheritAnnotations(state, leafParser.initialState);
+        return getExecutableNodeBranchSuggestRuntimeNodes(
+          leafParser,
+          branchState,
+          branchPath,
+        );
+      }
       if (activeState?.result.success !== true) {
         return parser.getSuggestRuntimeNodes?.(
           toExclusiveState(activeState, state),
@@ -813,10 +822,11 @@ function createExecutableNodeParser(
         state,
         activeState.result.next.state,
       );
-      return branchParser.getSuggestRuntimeNodes?.(branchState, branchPath) ??
-        (branchParser.dependencyMetadata?.source != null
-          ? [{ path: branchPath, parser: branchParser, state: branchState }]
-          : []);
+      return getExecutableNodeBranchSuggestRuntimeNodes(
+        branchParser,
+        branchState,
+        branchPath,
+      );
     },
     getDocFragments(state, defaultValue) {
       const activeState = state.kind === "available"
@@ -852,6 +862,17 @@ function createExecutableNodeParser(
     });
   }
   return executableParser;
+}
+
+function getExecutableNodeBranchSuggestRuntimeNodes(
+  parser: Parser<Mode, ProgramInvocation, unknown>,
+  state: unknown,
+  path: readonly PropertyKey[],
+): readonly RuntimeNode[] {
+  return parser.getSuggestRuntimeNodes?.(state, path) ??
+    (parser.dependencyMetadata?.source != null
+      ? [{ path, parser, state }]
+      : []);
 }
 
 interface Phase2SeedHook {

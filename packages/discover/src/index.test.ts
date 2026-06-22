@@ -1,5 +1,6 @@
 import { object } from "@optique/core/constructs";
 import { getAnnotations } from "@optique/core/annotations";
+import { dependency } from "@optique/core/dependency";
 import { formatDocPage } from "@optique/core/doc";
 import {
   defineTraits,
@@ -19,6 +20,7 @@ import { option } from "@optique/core/primitives";
 import type { OptionName } from "@optique/core/usage";
 import type { SourceContext } from "@optique/core/context";
 import {
+  choice,
   integer,
   string,
   type ValueParserResult,
@@ -961,6 +963,36 @@ describe("createProgramParser()", () => {
       ["root complete", "from-source"],
       ["root", "from-source"],
     ]);
+  });
+
+  it("includes source nodes for uncommitted executable parent completion", async () => {
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const parser = createProgramParser([
+      {
+        path: ["stash"],
+        command: defineCommand({
+          parser: object({
+            mode: withDefault(option("--mode", modeParser), "prod" as const),
+          }),
+          handler() {},
+        }),
+      },
+      {
+        path: ["stash", "list"],
+        command: defineCommand({
+          parser: object({}),
+          handler() {},
+        }),
+      },
+    ]);
+
+    const state = await parseAll(parser, ["stash"]);
+    const sourceNode = parser.getSuggestRuntimeNodes?.(state, [])?.find(
+      (node) => node.parser.dependencyMetadata?.source != null,
+    );
+
+    assert.ok(sourceNode);
+    assert.deepEqual(sourceNode.path, ["stash", 1, "mode"]);
   });
 
   it("shows leaf command paths in root help", async () => {
