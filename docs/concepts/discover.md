@@ -181,10 +181,10 @@ File names and extensions
 -------------------------
 
 The relative file path becomes the command path after removing the configured
-suffix.  Compound suffixes are supported, so `user/add.cmd.ts` can become
-`user add` when `.cmd.ts` is listed before `.ts`.
+suffix.  Compound suffixes are supported, so *user/add.cmd.ts* can become
+`user add` when *.cmd.ts* is listed before *.ts*.
 
-By default, an entry file named `index` maps to its containing command path:
+By default, an entry file named *index* maps to its containing command path:
 
 ~~~~ text
 commands/
@@ -203,15 +203,15 @@ By default, *@optique/discover* chooses extensions for the current runtime:
 
 | Runtime | Default extensions                                  |
 | ------- | --------------------------------------------------- |
-| Deno    | `.ts`, `.mts`, `.js`, `.mjs`                        |
-| Bun     | `.ts`, `.mts`, `.js`, `.mjs`                        |
-| Node.js | `.js`, `.mjs`, `.cjs`, and sometimes TypeScript too |
+| Deno    | *.ts*, *.mts*, *.js*, *.mjs*                        |
+| Bun     | *.ts*, *.mts*, *.js*, *.mjs*                        |
+| Node.js | *.js*, *.mjs*, *.cjs*, and sometimes TypeScript too |
 
-Node.js also includes `.ts`, `.mts`, and `.cts` when it appears to be running
+Node.js also includes *.ts*, *.mts*, and *.cts* when it appears to be running
 with native TypeScript support, a TypeScript loader such as `tsx`, `ts-node`,
 `tsimp`, or `jiti`, or Node's built-in type-stripping flags.
 
-TypeScript declaration files (`.d.ts`, `.d.mts`, and `.d.cts`) are ignored even
+TypeScript declaration files (*.d.ts*, *.d.mts*, and *.d.cts*) are ignored even
 when their suffix matches the configured extension list.
 
 Pass `extensions` when you want an explicit policy:
@@ -226,7 +226,7 @@ await runProgram({
 });
 ~~~~
 
-Pass `entryFileName` to use a different entry filename, such as `mod` for a
+Pass `entryFileName` to use a different entry filename, such as *mod* for a
 Deno-style layout:
 
 ~~~~ typescript twoslash
@@ -240,7 +240,7 @@ await runProgram({
 ~~~~
 
 Pass `entryFileName: false` to disable entry-file handling and treat
-`index.ts` as an ordinary `index` command.
+*index.ts* as an ordinary `index` command.
 
 > [!NOTE]
 > Command modules are imported eagerly during startup.  This keeps discovery
@@ -252,9 +252,9 @@ Duplicate paths
 ---------------
 
 Each discovered file must map to exactly one command path.  Discovery rejects
-duplicate paths, such as `build.ts` and `build.cmd.ts` both becoming `build`.
-It also rejects duplicates introduced by entry files, such as `user.ts` and
-`user/index.ts` both becoming `user`.
+duplicate paths, such as *build.ts* and *build.cmd.ts* both becoming `build`.
+It also rejects duplicates introduced by entry files, such as *user.ts* and
+*user/index.ts* both becoming `user`.
 
 A file and directory with the same name are allowed when they map to distinct
 command paths:
@@ -267,8 +267,8 @@ commands/
 ~~~~
 
 In that layout, `user` is an executable parent command and `user add` is a
-nested command.  You can also write the parent command as `user/index.ts`
-instead of `user.ts`, but not both at once unless you change `entryFileName`.
+nested command.  You can also write the parent command as *user/index.ts*
+instead of *user.ts*, but not both at once unless you change `entryFileName`.
 
 
 When to use command discovery
