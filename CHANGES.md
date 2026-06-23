@@ -17,6 +17,12 @@ To be released.
     command entries that can be passed directly to
     `runProgram({ commands })`.  [[#830], [#840]]
 
+ -  Added the `optique-discover` command to generate static TypeScript command
+    modules for bundlers and single-file CLI packaging.  The generated module
+    imports discovered command files and default-exports the
+    `commandsFromModules()` result, with `--watch` support for regenerating
+    when command files are added, removed, or renamed.  [[#835], [#841]]
+
  -  Added executable parent commands to file-system discovery.  Entry files
     such as *stash/index.ts* now map to the containing command path (`stash`),
     root *index.ts* defines the root command, and parent commands can coexist
@@ -24,9 +30,11 @@ To be released.
     customizes or disables the entry-file rule.  [[#838], [#839]]
 
 [#830]: https://github.com/dahlia/optique/issues/830
+[#835]: https://github.com/dahlia/optique/issues/835
 [#838]: https://github.com/dahlia/optique/issues/838
 [#839]: https://github.com/dahlia/optique/pull/839
 [#840]: https://github.com/dahlia/optique/pull/840
+[#841]: https://github.com/dahlia/optique/pull/841
 
 
 Version 1.1.0

@@ -187,6 +187,67 @@ The returned entries can also be passed to `createProgramParser()` when you
 want to build the parser directly instead of using `runProgram()`.
 
 
+Generating static module maps
+-----------------------------
+
+If your toolchain does not provide an eager glob API, or you do not want to
+maintain the static module map by hand, use the `optique-discover` command to
+generate a TypeScript module:
+
+~~~~ bash
+optique-discover ./commands --output ./commands.generated.ts --extension .ts
+~~~~
+
+The generated module imports every command file and exports the
+`commandsFromModules()` result as its default export:
+
+~~~~ typescript
+import { commandsFromModules } from "@optique/discover";
+import * as cmd0 from "./commands/build.ts";
+import * as cmd1 from "./commands/user/add.ts";
+
+export default commandsFromModules(
+  {
+    "./commands/build.ts": cmd0,
+    "./commands/user/add.ts": cmd1,
+  },
+  {
+    base: "./commands",
+    extensions: [".ts"],
+  },
+);
+~~~~
+
+Use that generated module from your CLI entry point:
+
+~~~~ typescript
+import { message } from "@optique/core/message";
+import { runProgram } from "@optique/discover";
+import commands from "./commands.generated.ts";
+
+await runProgram({
+  commands,
+  metadata: {
+    name: "admin",
+    version: "1.0.0",
+    brief: message`Administrative command-line tools.`,
+  },
+});
+~~~~
+
+Pass `--watch` during development to regenerate when command files are added,
+removed, or renamed:
+
+~~~~ bash
+optique-discover ./commands --output ./commands.generated.ts \
+  --extension .ts --watch
+~~~~
+
+Watch mode tracks the command file set, not file contents.  Editing a command
+module does not rewrite the generated module because the module map has not
+changed.
+
+
 Running manually imported commands
 ----------------------------------
 
@@ -349,6 +410,13 @@ Use `commandsFromModules()` with a static module map when:
     packaging
  -  You want command modules to be visible to the bundler while keeping the
     file layout as the command registry
+
+Use `optique-discover` when:
+
+ -  You want a checked-in or generated static command module instead of a
+    bundler-specific glob API
+ -  You want watch mode to keep the generated module in sync when command files
+    are added, removed, or renamed
 
 Use plain *@optique/core* and *@optique/run* when:
 

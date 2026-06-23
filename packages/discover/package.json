@@ -58,6 +58,10 @@
       },
       "import": "./dist/command.js",
       "require": "./dist/command.cjs"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
     }
   },
   "imports": {
@@ -67,6 +71,9 @@
     }
   },
   "sideEffects": false,
+  "bin": {
+    "optique-discover": "./dist/cli.js"
+  },
   "dependencies": {
     "@optique/core": "workspace:*",
     "@optique/run": "workspace:*"
