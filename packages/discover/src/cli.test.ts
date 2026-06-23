@@ -115,6 +115,30 @@ describe("optique-discover CLI", { skip: !hasReliableSubprocess }, () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("should report a missing output option", async () => {
+    if (!hasReliableSubprocess) return;
+
+    const dir = await makeTempDir();
+    try {
+      const commandsDir = join(dir, "commands");
+      await writeText(join(commandsDir, "build.ts"), "");
+
+      const result = await runCli([
+        commandsDir,
+        "--extension",
+        ".ts",
+      ]);
+
+      assert.equal(result.exitCode, 1);
+      assert.equal(result.stdout, "");
+      assert.match(result.stderr, /Usage: optique-discover/);
+      assert.match(result.stderr, /Missing option `-o`\/`--output`\./);
+      assert.doesNotMatch(result.stderr, /TypeError/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("package exports", () => {
