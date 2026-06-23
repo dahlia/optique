@@ -3,6 +3,7 @@ import { mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 import {
   generateCommandsModule,
   watchCommandsModule,
@@ -120,12 +121,15 @@ export default commandsFromModules(
     }
   });
 
-  it("should dynamically load escaped import specifiers", async () => {
+  it("should statically import URL-significant paths through file URLs", async () => {
     const dir = await makeTempDir();
     try {
       const commandsDir = join(dir, "src", "commands");
       const outputFile = join(dir, "src", "generated.ts");
-      await writeText(join(commandsDir, "user#name", "build%fast.ts"), "");
+      const queryPath = join(commandsDir, "build?fast.ts");
+      const fragmentPath = join(commandsDir, "user#name", "build%fast.ts");
+      await writeText(queryPath, "");
+      await writeText(fragmentPath, "");
 
       const result = await generateCommandsModule({
         dir: commandsDir,
@@ -140,22 +144,41 @@ export default commandsFromModules(
         })),
         [
           {
-            importSpecifier: "./commands/user%23name/build%25fast.ts",
+            importSpecifier: pathToFileURL(queryPath).href,
+            modulePath: "./commands/build?fast.ts",
+          },
+          {
+            importSpecifier: pathToFileURL(fragmentPath).href,
             modulePath: "./commands/user#name/build%fast.ts",
           },
         ],
       );
       assert.match(
         result.code,
-        /const cmd0 = await import\(new URL\("\.\/commands\/user%23name\/build%25fast\.ts", import\.meta\.url\)\.href\);/,
-      );
-      assert.doesNotMatch(
-        result.code,
-        /import \* as cmd0 from "\.\/commands\/user%23name\/build%25fast\.ts";/,
+        new RegExp(
+          `// @ts-ignore: File URL import preserves URL-significant ` +
+            `command paths\\.\\nimport \\* as cmd0 from ${
+              escapeRegExp(JSON.stringify(pathToFileURL(queryPath).href))
+            };`,
+        ),
       );
       assert.match(
         result.code,
-        /"\.\/commands\/user#name\/build%fast\.ts": cmd0/,
+        new RegExp(
+          `// @ts-ignore: File URL import preserves URL-significant ` +
+            `command paths\\.\\nimport \\* as cmd1 from ${
+              escapeRegExp(JSON.stringify(pathToFileURL(fragmentPath).href))
+            };`,
+        ),
+      );
+      assert.doesNotMatch(result.code, /await import/);
+      assert.match(
+        result.code,
+        /"\.\/commands\/build\?fast\.ts": cmd0/,
+      );
+      assert.match(
+        result.code,
+        /"\.\/commands\/user#name\/build%fast\.ts": cmd1/,
       );
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -402,6 +425,10 @@ function trackAbortListeners(signal: AbortSignal): () => number {
   });
 
   return () => activeCount;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

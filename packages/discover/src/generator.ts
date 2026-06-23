@@ -1,6 +1,6 @@
 import { mkdir, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, posix, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { getDefaultExtensions } from "./index.ts";
 
 /**
@@ -15,7 +15,10 @@ export interface GeneratedCommandModuleFile {
   readonly filePath: string;
 
   /**
-   * Module specifier used by the generated module loader.
+   * Module specifier used by the generated import declaration.
+   *
+   * Paths containing URL-significant characters use absolute file URLs so
+   * runtime loaders and bundlers resolve the same command file.
    */
   readonly importSpecifier: string;
 
@@ -286,16 +289,17 @@ function generateCommandsModuleFromFiles(
 
 function formatCommandModuleImport(file: GeneratedCommandModuleFile): string {
   const importSpecifier = JSON.stringify(file.importSpecifier);
-  if (requiresDynamicImport(file.importSpecifier)) {
-    return `const ${file.identifier} = await import(` +
-      `new URL(${importSpecifier}, import.meta.url).href` +
-      `);`;
+  const importDeclaration =
+    `import * as ${file.identifier} from ${importSpecifier};`;
+  if (requiresTypeScriptResolutionIgnore(file.importSpecifier)) {
+    return `// @ts-ignore: File URL import preserves URL-significant ` +
+      `command paths.\n${importDeclaration}`;
   }
-  return `import * as ${file.identifier} from ${importSpecifier};`;
+  return importDeclaration;
 }
 
-function requiresDynamicImport(specifier: string): boolean {
-  return specifier.includes("%");
+function requiresTypeScriptResolutionIgnore(specifier: string): boolean {
+  return specifier.startsWith("file:");
 }
 
 function normalizeGenerateOptions(
@@ -526,12 +530,14 @@ function relativeModuleSpecifier(fromDir: string, target: string): string {
 }
 
 function relativeImportSpecifier(fromDir: string, target: string): string {
-  return encodeImportSpecifier(relativeModuleSpecifier(fromDir, target));
+  const specifier = relativeModuleSpecifier(fromDir, target);
+  if (requiresFileUrlImport(specifier)) return pathToFileURL(target).href;
+  return specifier;
 }
 
-function encodeImportSpecifier(specifier: string): string {
-  return specifier.split("/").map((segment) => encodeURIComponent(segment))
-    .join("/");
+function requiresFileUrlImport(specifier: string): boolean {
+  return specifier.includes("#") || specifier.includes("?") ||
+    specifier.includes("%");
 }
 
 function normalizeRelativePath(path: string): string {
