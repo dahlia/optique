@@ -24,3 +24,5 @@ allowBuilds:
 
 engineStrict: true
 nodeVersion: 24.15.0
+patchedDependencies:
+  vite@7.3.5: patches/vite@7.3.5.patch
