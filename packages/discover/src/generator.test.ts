@@ -3,7 +3,6 @@ import { mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
-import { pathToFileURL } from "node:url";
 import {
   generateCommandsModule,
   watchCommandsModule,
@@ -121,7 +120,7 @@ export default commandsFromModules(
     }
   });
 
-  it("should statically import URL-significant paths through file URLs", async () => {
+  it("should statically import URL-significant paths with encoded specifiers", async () => {
     const dir = await makeTempDir();
     try {
       const commandsDir = join(dir, "src", "commands");
@@ -144,11 +143,11 @@ export default commandsFromModules(
         })),
         [
           {
-            importSpecifier: pathToFileURL(queryPath).href,
+            importSpecifier: "./commands/build%3Ffast.ts",
             modulePath: "./commands/build?fast.ts",
           },
           {
-            importSpecifier: pathToFileURL(fragmentPath).href,
+            importSpecifier: "./commands/user%23name/build%25fast.ts",
             modulePath: "./commands/user#name/build%fast.ts",
           },
         ],
@@ -156,22 +155,22 @@ export default commandsFromModules(
       assert.match(
         result.code,
         new RegExp(
-          `// @ts-ignore: File URL import preserves URL-significant ` +
-            `command paths\\.\\nimport \\* as cmd0 from ${
-              escapeRegExp(JSON.stringify(pathToFileURL(queryPath).href))
-            };`,
+          `// @ts-ignore: Percent-encoded import preserves ` +
+            `URL-significant command paths\\.\\nimport \\* as cmd0 ` +
+            `from "${escapeRegExp("./commands/build%3Ffast.ts")}";`,
         ),
       );
       assert.match(
         result.code,
         new RegExp(
-          `// @ts-ignore: File URL import preserves URL-significant ` +
-            `command paths\\.\\nimport \\* as cmd1 from ${
-              escapeRegExp(JSON.stringify(pathToFileURL(fragmentPath).href))
-            };`,
+          `// @ts-ignore: Percent-encoded import preserves ` +
+            `URL-significant command paths\\.\\nimport \\* as cmd1 ` +
+            `from "${escapeRegExp("./commands/user%23name/build%25fast.ts")}";`,
         ),
       );
       assert.doesNotMatch(result.code, /await import/);
+      assert.doesNotMatch(result.code, /file:/);
+      assert.doesNotMatch(result.code, new RegExp(escapeRegExp(dir)));
       assert.match(
         result.code,
         /"\.\/commands\/build\?fast\.ts": cmd0/,

@@ -1,6 +1,6 @@
 import { mkdir, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, posix, relative, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { getDefaultExtensions } from "./index.ts";
 
 /**
@@ -17,8 +17,8 @@ export interface GeneratedCommandModuleFile {
   /**
    * Module specifier used by the generated import declaration.
    *
-   * Paths containing URL-significant characters use absolute file URLs so
-   * runtime loaders and bundlers resolve the same command file.
+   * Paths containing URL-significant characters use percent-encoded
+   * relative specifiers so generated modules stay relocatable.
    */
   readonly importSpecifier: string;
 
@@ -292,14 +292,14 @@ function formatCommandModuleImport(file: GeneratedCommandModuleFile): string {
   const importDeclaration =
     `import * as ${file.identifier} from ${importSpecifier};`;
   if (requiresTypeScriptResolutionIgnore(file.importSpecifier)) {
-    return `// @ts-ignore: File URL import preserves URL-significant ` +
+    return `// @ts-ignore: Percent-encoded import preserves URL-significant ` +
       `command paths.\n${importDeclaration}`;
   }
   return importDeclaration;
 }
 
 function requiresTypeScriptResolutionIgnore(specifier: string): boolean {
-  return specifier.startsWith("file:");
+  return specifier.includes("%");
 }
 
 function normalizeGenerateOptions(
@@ -531,13 +531,20 @@ function relativeModuleSpecifier(fromDir: string, target: string): string {
 
 function relativeImportSpecifier(fromDir: string, target: string): string {
   const specifier = relativeModuleSpecifier(fromDir, target);
-  if (requiresFileUrlImport(specifier)) return pathToFileURL(target).href;
+  if (requiresEncodedImportSpecifier(specifier)) {
+    return encodeImportSpecifier(specifier);
+  }
   return specifier;
 }
 
-function requiresFileUrlImport(specifier: string): boolean {
+function requiresEncodedImportSpecifier(specifier: string): boolean {
   return specifier.includes("#") || specifier.includes("?") ||
     specifier.includes("%");
+}
+
+function encodeImportSpecifier(specifier: string): string {
+  return specifier.split("/").map((segment) => encodeURIComponent(segment))
+    .join("/");
 }
 
 function normalizeRelativePath(path: string): string {
