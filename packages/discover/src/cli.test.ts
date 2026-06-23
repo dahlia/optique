@@ -17,15 +17,19 @@ interface RunResult {
 }
 
 function isSubprocessReliable(): boolean {
-  const probe = spawnSync(
-    process.execPath,
-    ["-e", "process.stdout.write('ok')"],
-    {
-      encoding: "utf8",
-      timeout: 5000,
-    },
-  );
-  return probe.status === 0 && probe.stdout === "ok";
+  try {
+    const probe = spawnSync(
+      process.execPath,
+      ["-e", "process.stdout.write('ok')"],
+      {
+        encoding: "utf8",
+        timeout: 5000,
+      },
+    );
+    return probe.status === 0 && probe.stdout === "ok";
+  } catch {
+    return false;
+  }
 }
 
 const hasReliableSubprocess = isSubprocessReliable();
@@ -126,9 +130,31 @@ describe("package exports", () => {
       assert.ok(!Object.hasOwn(cliExport.types, "require"));
     }
   });
+
+  it("should publish the generator subpath", async () => {
+    const packageJson = JSON.parse(
+      await readFile(join(__dirname, "..", "package.json"), "utf-8"),
+    ) as PackageJson;
+    const denoJson = JSON.parse(
+      await readFile(join(__dirname, "..", "deno.json"), "utf-8"),
+    ) as DenoJson;
+    const generatorExport = packageJson.exports?.["./generator"];
+
+    assert.ok(isRecord(generatorExport));
+    assert.equal(generatorExport.import, "./dist/generator.js");
+    assert.equal(generatorExport.require, "./dist/generator.cjs");
+    assert.ok(isRecord(generatorExport.types));
+    assert.equal(generatorExport.types.import, "./dist/generator.d.ts");
+    assert.equal(generatorExport.types.require, "./dist/generator.d.cts");
+    assert.equal(denoJson.exports?.["./generator"], "./src/generator.ts");
+  });
 });
 
 interface PackageJson {
+  readonly exports?: Record<string, unknown>;
+}
+
+interface DenoJson {
   readonly exports?: Record<string, unknown>;
 }
 

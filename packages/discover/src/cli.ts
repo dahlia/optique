@@ -12,6 +12,7 @@ import { printError, runSync } from "@optique/run";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { watchCommandsModule, writeCommandsModule } from "./generator.ts";
+import { isMainModule } from "./main-check.ts";
 // @ts-ignore: JSON import
 import denoJson from "../deno.json" with { type: "json" };
 
@@ -130,9 +131,11 @@ function writeGeneratedMessage(count: number): void {
   console.log(`Generated ${count} ${noun}.`);
 }
 
-const isMain: boolean = "main" in import.meta
-  ? import.meta.main
-  : process.argv[1] === fileURLToPath(import.meta.url);
+const isMain = isMainModule({
+  importMetaMain: "main" in import.meta ? import.meta.main : undefined,
+  modulePath: fileURLToPath(import.meta.url),
+  argvEntry: process.argv[1],
+});
 if (isMain) {
   void main().catch((error) => {
     printGenerationError(error, EXIT_GENERATION_FAILED);

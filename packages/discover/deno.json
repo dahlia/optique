@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./command": "./src/command.ts",
+    "./generator": "./src/generator.ts",
     "./cli": "./src/cli.ts"
   },
   "imports": {

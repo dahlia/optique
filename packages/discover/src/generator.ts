@@ -192,12 +192,10 @@ export async function watchCommandsModule(
       });
       const signature = files.map((file) => file.filePath).join("\0");
       if (signature !== previousSignature) {
-        if (files.length > 0) {
-          const result = generateCommandsModuleFromFiles(normalized, files);
-          await mkdir(dirname(normalized.outputFile), { recursive: true });
-          await writeFile(normalized.outputFile, result.code, "utf-8");
-          options.onGenerate?.(result);
-        }
+        const result = generateCommandsModuleFromFiles(normalized, files);
+        await mkdir(dirname(normalized.outputFile), { recursive: true });
+        await writeFile(normalized.outputFile, result.code, "utf-8");
+        options.onGenerate?.(result);
         previousSignature = signature;
       }
     } catch (error) {
@@ -254,6 +252,14 @@ function generateCommandsModuleFromFiles(
   options: NormalizedGenerateOptions,
   files: readonly GeneratedCommandModuleFile[],
 ): GeneratedCommandsModule {
+  if (files.length < 1) {
+    return {
+      code: `import type { ModuleCommand } from "@optique/discover";\n\n` +
+        `export default [] satisfies readonly ModuleCommand[];\n`,
+      files,
+    };
+  }
+
   const imports = files
     .map((file) =>
       `import * as ${file.identifier} from ${

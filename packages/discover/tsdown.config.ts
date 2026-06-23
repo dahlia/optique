@@ -7,6 +7,7 @@ export default defineConfig({
     "src/index.ts",
     "src/command.ts",
     "src/generator.ts",
+    "src/main-check.ts",
     "src/cli.ts",
   ],
   dts: true,

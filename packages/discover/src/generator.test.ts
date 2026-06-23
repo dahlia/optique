@@ -268,12 +268,19 @@ describe("watchCommandsModule()", () => {
 
       await rm(join(commandsDir, "build.ts"));
       await rm(join(commandsDir, "deploy.ts"));
-      await delay(80);
-      assert.deepEqual(generatedCounts, [1, 2]);
+      await waitFor(() => generatedCounts.length === 3);
+      assert.deepEqual(generatedCounts, [1, 2, 0]);
+      assert.equal(
+        await readFile(outputFile, "utf-8"),
+        `import type { ModuleCommand } from "@optique/discover";
+
+export default [] satisfies readonly ModuleCommand[];
+`,
+      );
 
       await writeText(join(commandsDir, "status.ts"), "");
-      await waitFor(() => generatedCounts.length === 3);
-      assert.deepEqual(generatedCounts, [1, 2, 1]);
+      await waitFor(() => generatedCounts.length === 4);
+      assert.deepEqual(generatedCounts, [1, 2, 0, 1]);
 
       controller.abort();
       await watching;

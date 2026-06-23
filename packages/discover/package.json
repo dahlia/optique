@@ -59,6 +59,14 @@
       "import": "./dist/command.js",
       "require": "./dist/command.cjs"
     },
+    "./generator": {
+      "types": {
+        "import": "./dist/generator.d.ts",
+        "require": "./dist/generator.d.cts"
+      },
+      "import": "./dist/generator.js",
+      "require": "./dist/generator.cjs"
+    },
     "./cli": {
       "types": "./dist/cli.d.ts",
       "import": "./dist/cli.js"
