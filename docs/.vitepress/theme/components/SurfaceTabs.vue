@@ -141,7 +141,6 @@ function onKeydown(e: KeyboardEvent) {
 
 <style scoped>
 .ol-surf {
-  margin-top: 32px;
   border: 1px solid var(--vp-c-border);
   border-radius: 12px;
   overflow: hidden;

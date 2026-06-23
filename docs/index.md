@@ -119,7 +119,7 @@ type Deploy =
 
 <LandingSection eyebrow="One parser, every surface" title="Define it once. Optique refracts the rest." lead="The same definition drives argument parsing, type inference, help text, shell completion, and Unix man pages. Add an option and every surface follows, with nothing to keep in sync by hand.">
 
-<Cols center>
+<Cols>
 
 ~~~~ ts twoslash
 import { object } from "@optique/core/constructs";
@@ -141,11 +141,9 @@ const parser = object({
 });
 ~~~~
 
-<OptiquePrism variant="dispersion" />
+<SurfaceTabs />
 
 </Cols>
-
-<SurfaceTabs />
 
 </LandingSection>
 
