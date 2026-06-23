@@ -131,6 +131,21 @@ const parser = object({
 
 </LandingSection>
 
+<LandingSection eyebrow="Diagnostics" title="Your errors aren't strings." lead="Every error and help line is a structured <a href='/concepts/messages'><code>Message</code></a> composed from semantic parts (option names, values, metavars, env vars, command examples, even URLs), not concatenated text. Optique styles them in a terminal and falls back to plain, quoted text when output is piped or running in CI. You compose your own errors and option descriptions the same way.">
+
+~~~~ ts twoslash
+import { message, metavar, optionName } from "@optique/core/message";
+// ---cut-before---
+const input = "99999";
+
+// The same components compose error messages and help text:
+const error = message`Expected ${metavar("PORT")} for ${optionName("--port")}, but got ${input}.`;
+~~~~
+
+<MessageRender />
+
+</LandingSection>
+
 <LandingSection eyebrow="Composition" title="Parsers are values you can share and transform." lead="Build small option groups once, then <a href='/concepts/constructs#merge-parser'><code>merge()</code></a> and <a href='/concepts/constructs#or-parser'><code>or()</code></a> them into larger commands without losing a single type. The same pieces compose across every tool you ship." tint>
 
 ~~~~ ts twoslash

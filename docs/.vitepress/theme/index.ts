@@ -15,6 +15,7 @@ import CommandGrammar from "./components/CommandGrammar.vue";
 import CompletionDemo from "./components/CompletionDemo.vue";
 import CompletionShowcase from "./components/CompletionShowcase.vue";
 import LandingSection from "./components/LandingSection.vue";
+import MessageRender from "./components/MessageRender.vue";
 import OptiquePrism from "./components/OptiquePrism.vue";
 import PackageGrid from "./components/PackageGrid.vue";
 import ParserCatalog from "./components/ParserCatalog.vue";
@@ -34,6 +35,7 @@ export default {
     app.component("CompletionDemo", CompletionDemo);
     app.component("CompletionShowcase", CompletionShowcase);
     app.component("LandingSection", LandingSection);
+    app.component("MessageRender", MessageRender);
     app.component("OptiquePrism", OptiquePrism);
     app.component("PackageGrid", PackageGrid);
     app.component("ParserCatalog", ParserCatalog);
