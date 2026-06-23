@@ -220,6 +220,40 @@ const parser = object({
 
 </LandingSection>
 
+<LandingSection eyebrow="Shell completion" title="Completion your users install in one line." lead="The completion script comes from the same parser, so suggestions never drift from what the CLI accepts. It is context-aware: subcommands, options, and even values that depend on other options.">
+
+<Cols>
+
+<CompletionShowcase />
+
+::: code-group
+
+~~~~ bash [Bash]
+myapp completion bash >> ~/.bashrc
+~~~~
+
+~~~~ bash [zsh]
+myapp completion zsh > ~/.zsh/completions/_myapp
+~~~~
+
+~~~~ bash [fish]
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+~~~~
+
+~~~~ bash [PowerShell]
+myapp completion pwsh > myapp-completion.ps1
+~~~~
+
+~~~~ bash [Nushell]
+myapp completion nu | save myapp-completion.nu
+~~~~
+
+:::
+
+</Cols>
+
+</LandingSection>
+
 <LandingSection eyebrow="Every value, one model" title="The same parser for CLI, environment, config, and prompts." lead="Integration packages are parser wrappers. Stack them and the priority is just the wrapping order: CLI over environment over config over an interactive prompt." tint>
 
 ~~~~ ts twoslash
@@ -249,6 +283,9 @@ const host = prompt(
 );
 ~~~~
 
+</LandingSection>
+<LandingSection eyebrow="From the cookbook" title="The awkward parts of real CLIs, already solved." lead="Mutually exclusive modes, options that gate others, key–value pairs, pass-through, verbosity, negatable flags. Each hard requirement is a small composition, and each one has a recipe in the cookbook.">
+<PatternShowcase />
 </LandingSection>
 <LandingSection eyebrow="Batteries included" title="Reach for a parser before you write one." lead="Forty built-in value parsers, from <code>integer()</code> and <code>ip()</code> to Temporal dates and async Git refs, plus the combinators that assemble them. Every one returns an ordinary parser that composes with the rest.">
 <ParserCatalog />

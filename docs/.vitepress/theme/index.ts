@@ -13,10 +13,12 @@ import Cols from "./components/Cols.vue";
 import CommandFork from "./components/CommandFork.vue";
 import CommandGrammar from "./components/CommandGrammar.vue";
 import CompletionDemo from "./components/CompletionDemo.vue";
+import CompletionShowcase from "./components/CompletionShowcase.vue";
 import LandingSection from "./components/LandingSection.vue";
 import OptiquePrism from "./components/OptiquePrism.vue";
 import PackageGrid from "./components/PackageGrid.vue";
 import ParserCatalog from "./components/ParserCatalog.vue";
+import PatternShowcase from "./components/PatternShowcase.vue";
 import RunsOn from "./components/RunsOn.vue";
 import SurfaceTabs from "./components/SurfaceTabs.vue";
 
@@ -29,10 +31,12 @@ export default {
     app.component("CommandFork", CommandFork);
     app.component("CommandGrammar", CommandGrammar);
     app.component("CompletionDemo", CompletionDemo);
+    app.component("CompletionShowcase", CompletionShowcase);
     app.component("LandingSection", LandingSection);
     app.component("OptiquePrism", OptiquePrism);
     app.component("PackageGrid", PackageGrid);
     app.component("ParserCatalog", ParserCatalog);
+    app.component("PatternShowcase", PatternShowcase);
     app.component("RunsOn", RunsOn);
     app.component("SurfaceTabs", SurfaceTabs);
   },
