@@ -15,7 +15,7 @@ export interface GeneratedCommandModuleFile {
   readonly filePath: string;
 
   /**
-   * Module specifier used by the generated import declaration.
+   * Module specifier used by the generated module loader.
    */
   readonly importSpecifier: string;
 
@@ -260,13 +260,7 @@ function generateCommandsModuleFromFiles(
     };
   }
 
-  const imports = files
-    .map((file) =>
-      `import * as ${file.identifier} from ${
-        JSON.stringify(file.importSpecifier)
-      };`
-    )
-    .join("\n");
+  const imports = files.map(formatCommandModuleImport).join("\n");
   const entries = files
     .map((file) =>
       `    ${JSON.stringify(file.modulePath)}: ${file.identifier},`
@@ -288,6 +282,20 @@ function generateCommandsModuleFromFiles(
       `);\n`,
     files,
   };
+}
+
+function formatCommandModuleImport(file: GeneratedCommandModuleFile): string {
+  const importSpecifier = JSON.stringify(file.importSpecifier);
+  if (requiresDynamicImport(file.importSpecifier)) {
+    return `const ${file.identifier} = await import(` +
+      `new URL(${importSpecifier}, import.meta.url).href` +
+      `);`;
+  }
+  return `import * as ${file.identifier} from ${importSpecifier};`;
+}
+
+function requiresDynamicImport(specifier: string): boolean {
+  return specifier.includes("%");
 }
 
 function normalizeGenerateOptions(

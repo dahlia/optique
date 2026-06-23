@@ -120,7 +120,7 @@ export default commandsFromModules(
     }
   });
 
-  it("should encode import specifiers without changing module map keys", async () => {
+  it("should dynamically load escaped import specifiers", async () => {
     const dir = await makeTempDir();
     try {
       const commandsDir = join(dir, "src", "commands");
@@ -146,6 +146,10 @@ export default commandsFromModules(
         ],
       );
       assert.match(
+        result.code,
+        /const cmd0 = await import\(new URL\("\.\/commands\/user%23name\/build%25fast\.ts", import\.meta\.url\)\.href\);/,
+      );
+      assert.doesNotMatch(
         result.code,
         /import \* as cmd0 from "\.\/commands\/user%23name\/build%25fast\.ts";/,
       );
