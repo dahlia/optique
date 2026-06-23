@@ -33,6 +33,7 @@ import { describe, it } from "node:test";
 import { defineCommand } from "#src/command.ts";
 import {
   type CommandPath,
+  commandsFromModules,
   createProgramParser,
   discoverCommands,
   getDefaultExtensions,
@@ -580,6 +581,211 @@ describe("discoverCommands()", () => {
 
     const denoDefaults = getDefaultExtensions({ runtime: "deno" });
     assert.deepEqual(denoDefaults, [".ts", ".mts", ".js", ".mjs"]);
+  });
+});
+
+describe("commandsFromModules()", () => {
+  it("derives command paths from static module map keys", () => {
+    const buildCommand = makeCommand();
+    const addCommand = makeCommand();
+
+    const commands = commandsFromModules({
+      "./commands/user/add.ts": { default: addCommand },
+      "./commands/build.ts": { default: buildCommand },
+    }, {
+      base: "./commands",
+      extensions: [".ts"],
+    });
+
+    assert.deepEqual(commands.map((command) => command.path), [
+      ["build"],
+      ["user", "add"],
+    ]);
+    assert.equal(commands[0]?.command, buildCommand);
+    assert.equal(commands[1]?.command, addCommand);
+  });
+
+  it("maps entry files to containing command paths", () => {
+    const rootCommand = makeCommand();
+    const stashCommand = makeCommand();
+    const listCommand = makeCommand();
+
+    const commands = commandsFromModules({
+      "./commands/stash/list.ts": { default: listCommand },
+      "./commands/index.ts": { default: rootCommand },
+      "./commands/stash/index.ts": { default: stashCommand },
+    }, {
+      base: "./commands",
+      extensions: [".ts"],
+    });
+
+    assert.deepEqual(commands.map((command) => command.path), [
+      [],
+      ["stash"],
+      ["stash", "list"],
+    ]);
+    assert.equal(commands[0]?.command, rootCommand);
+    assert.equal(commands[1]?.command, stashCommand);
+    assert.equal(commands[2]?.command, listCommand);
+  });
+
+  it("matches compound extension precedence and ignores declaration files", () => {
+    const commandCommand = makeCommand();
+    const zzzCommand = makeCommand();
+
+    const commands = commandsFromModules({
+      "./commands/a.d.ts": { default: makeCommand() },
+      "./commands/a.cmd.ts": { default: commandCommand },
+      "./commands/a-zzz.ts": { default: zzzCommand },
+    }, {
+      base: "./commands",
+      extensions: [".ts", ".cmd.ts"],
+    });
+
+    assert.deepEqual(commands.map((command) => command.path), [
+      ["a"],
+      ["a-zzz"],
+    ]);
+    assert.equal(commands[0]?.command, commandCommand);
+    assert.equal(commands[1]?.command, zzzCommand);
+  });
+
+  it("supports custom and disabled entry file names", () => {
+    const modCommands = commandsFromModules({
+      "./commands/mod.ts": { default: makeCommand() },
+      "./commands/stash/mod.ts": { default: makeCommand() },
+    }, {
+      base: "./commands",
+      extensions: [".ts"],
+      entryFileName: "mod",
+    });
+
+    assert.deepEqual(modCommands.map((command) => command.path), [
+      [],
+      ["stash"],
+    ]);
+
+    const indexCommands = commandsFromModules({
+      "./commands/index.ts": { default: makeCommand() },
+      "./commands/stash/index.ts": { default: makeCommand() },
+    }, {
+      base: "./commands",
+      extensions: [".ts"],
+      entryFileName: false,
+    });
+
+    assert.deepEqual(indexCommands.map((command) => command.path), [
+      ["index"],
+      ["stash", "index"],
+    ]);
+  });
+
+  it("rejects duplicate command paths", () => {
+    assert.throws(
+      () =>
+        commandsFromModules({
+          "./commands/build.ts": { default: makeCommand() },
+          "./commands/build.cmd.ts": { default: makeCommand() },
+        }, {
+          base: "./commands",
+          extensions: [".cmd.ts", ".ts"],
+        }),
+      /Duplicate command path "build" from \.\/commands\/build\.cmd\.ts and \.\/commands\/build\.ts\./,
+    );
+  });
+
+  it("rejects modules whose default export is not a command", () => {
+    assert.throws(
+      () =>
+        commandsFromModules({
+          "./commands/bad.ts": {},
+        }, {
+          base: "./commands",
+          extensions: [".ts"],
+        }),
+      {
+        name: "TypeError",
+        message:
+          "Module ./commands/bad.ts default export must be created with defineCommand().",
+      },
+    );
+  });
+
+  it("unwraps CommonJS default-wrapped command exports", () => {
+    const buildCommand = makeCommand();
+
+    const commands = commandsFromModules({
+      "./commands/build.cjs": { default: { default: buildCommand } },
+    }, {
+      base: "./commands",
+      extensions: [".cjs"],
+    });
+
+    assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+    assert.equal(commands[0]?.command, buildCommand);
+  });
+
+  it("rejects declared paths that do not match module-derived paths", () => {
+    assert.throws(
+      () =>
+        commandsFromModules({
+          "./commands/build.ts": {
+            default: defineCommand({
+              path: ["deploy"],
+              parser: object({}),
+              handler() {},
+            }),
+          },
+        }, {
+          base: "./commands",
+          extensions: [".ts"],
+        }),
+      /declares command path "deploy" but module path defines "build"\./,
+    );
+  });
+
+  it("works with createProgramParser() for help and dispatch", async () => {
+    const calls: unknown[] = [];
+    const commands = commandsFromModules({
+      "./commands/index.ts": {
+        default: defineCommand({
+          parser: object({
+            name: option("--name", string()),
+          }),
+          metadata: { brief: message`Create an app.` },
+          handler(value) {
+            calls.push(["root", value]);
+          },
+        }),
+      },
+      "./commands/build.ts": {
+        default: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Build the app.` },
+          handler(value) {
+            calls.push(["build", value]);
+          },
+        }),
+      },
+    }, {
+      base: "./commands",
+      extensions: [".ts"],
+    });
+    const parser = createProgramParser(commands);
+
+    const page = await getDocPageAsync(parser);
+    assert.ok(page != null);
+    const text = formatDocPage("tool", page);
+    assert.match(text, /--name/);
+    assert.match(text, /build\s+Build the app\./);
+
+    const state = await parseAll(parser, ["build"]);
+    const result = await parser.complete(state);
+    assert.ok(result.success);
+    if (result.success) {
+      await result.value.handler(result.value.value);
+    }
+    assert.deepEqual(calls, [["build", {}]]);
   });
 });
 
@@ -1392,6 +1598,38 @@ describe("runProgram()", () => {
     assert.deepEqual(calls, [{ value: "done" }]);
   });
 
+  it("runs commands converted from a static module map", async () => {
+    const calls: unknown[] = [];
+    const commands = commandsFromModules({
+      "./commands/write.ts": {
+        default: defineCommand({
+          parser: object({
+            value: option("--value", string()),
+          }),
+          handler(value) {
+            calls.push(value);
+          },
+        }),
+      },
+    }, {
+      base: "./commands",
+      extensions: [".ts"],
+    });
+
+    await runProgram({
+      commands,
+      metadata: { name: "tool", version: "1.0.0" },
+      args: ["write", "--value", "done"],
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new Error(`Unexpected exit ${exitCode}.`);
+      },
+    });
+
+    assert.deepEqual(calls, [{ value: "done" }]);
+  });
+
   it("runs statically registered root commands", async () => {
     const calls: unknown[] = [];
     const createCommand = defineCommand({
@@ -1821,6 +2059,13 @@ function runtimeModuleUrl(
     runtime.Bun === undefined &&
     runtime.Deno === undefined;
   return moduleUrl(isNode ? nodeRelative : sourceRelative);
+}
+
+function makeCommand() {
+  return defineCommand({
+    parser: object({}),
+    handler() {},
+  });
 }
 
 async function parseAll(

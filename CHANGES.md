@@ -10,14 +10,23 @@ To be released.
 
 ### @optique/discover
 
+ -  Added `commandsFromModules()` for bundler-friendly command discovery from
+    static module maps such as eager `import.meta.glob()` results.  The helper
+    derives command paths with the same extension, entry-file, duplicate-path,
+    and explicit `path` validation rules as file-system discovery, and returns
+    command entries that can be passed directly to
+    `runProgram({ commands })`.  [[#830], [#840]]
+
  -  Added executable parent commands to file-system discovery.  Entry files
     such as *stash/index.ts* now map to the containing command path (`stash`),
     root *index.ts* defines the root command, and parent commands can coexist
     with nested commands such as `stash list`.  The `entryFileName` option
     customizes or disables the entry-file rule.  [[#838], [#839]]
 
+[#830]: https://github.com/dahlia/optique/issues/830
 [#838]: https://github.com/dahlia/optique/issues/838
 [#839]: https://github.com/dahlia/optique/pull/839
+[#840]: https://github.com/dahlia/optique/pull/840
 
 
 Version 1.1.0

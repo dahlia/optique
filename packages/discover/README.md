@@ -14,7 +14,8 @@ handler.
 > *@optique/discover* reads command files and imports them dynamically at
 > runtime.  It is a poor fit for CLIs that rely on aggressive tree shaking,
 > static bundling, or single-file executable packaging.  In those cases, use
-> manually imported commands with `runProgram({ commands })`.
+> `commandsFromModules()` with a static module map, or manually imported
+> commands with `runProgram({ commands })`.
 
 
 Installation
@@ -79,32 +80,23 @@ admin --help
 admin completion bash
 ~~~~
 
-For bundlers and single-file packagers, import commands manually and declare
-their paths in the command definitions:
+For bundlers and single-file packagers, turn a static module map into command
+entries:
 
 ~~~~ typescript
 // cli.ts
-import { defineCommand, runProgram } from "@optique/discover";
-import { object } from "@optique/core/constructs";
+import { commandsFromModules, runProgram } from "@optique/discover";
 import { message } from "@optique/core/message";
-import { option } from "@optique/core/primitives";
-import { string } from "@optique/core/valueparser";
 
-const addUser = defineCommand({
-  path: ["user", "add"],
-  parser: object({
-    name: option("--name", string()),
-  }),
-  metadata: {
-    brief: message`Add a user.`,
-  },
-  handler(value) {
-    console.log(`Adding ${value.name}.`);
-  },
+const modules = import.meta.glob("./commands/**/*.ts", {
+  eager: true,
 });
 
 await runProgram({
-  commands: [addUser],
+  commands: commandsFromModules(modules, {
+    base: "./commands",
+    extensions: [".ts"],
+  }),
   metadata: {
     name: "admin",
     version: "1.0.0",
@@ -113,6 +105,11 @@ await runProgram({
 });
 ~~~~
 
+`commandsFromModules()` preserves the file-based command layout while making
+the module list visible to bundlers.  For smaller registries, you can also
+import commands manually, declare `path` in each `defineCommand()` call, and
+pass those commands to `runProgram({ commands })`.
+
 By default, Deno and Bun discover `.ts`, `.mts`, `.js`, and `.mjs` files.
 Node.js discovers `.js`, `.mjs`, and `.cjs` files, plus `.ts`, `.mts`, and
 `.cts` when it reports native TypeScript support or runs with a recognized
@@ -120,7 +117,8 @@ TypeScript loader.  TypeScript declaration files such as `.d.ts` are ignored.
 Entry files named `index` map to their containing command path, so
 `commands/index.ts` defines the root command and `commands/user/index.ts`
 defines `user`.  Use `entryFileName` to choose another entry name or disable
-this rule.
+this rule.  `commandsFromModules()` applies the same path rules to module map
+keys after stripping its `base` option.
 
 For more resources, see the [docs] and the [*examples/*](/examples/)
 directory.
