@@ -201,7 +201,9 @@ optique-discover ./commands --output ./commands.generated.ts --extension .ts
 The generated module imports every command file and exports the
 `commandsFromModules()` result as its default export:
 
-~~~~ typescript
+~~~~ typescript twoslash
+// @noErrors: 2307
+// ---cut-before---
 import { commandsFromModules } from "@optique/discover";
 import * as cmd0 from "./commands/build.ts";
 import * as cmd1 from "./commands/user/add.ts";
@@ -220,7 +222,9 @@ export default commandsFromModules(
 
 Use that generated module from your CLI entry point:
 
-~~~~ typescript
+~~~~ typescript twoslash
+// @noErrors: 2307
+// ---cut-before---
 import { message } from "@optique/core/message";
 import { runProgram } from "@optique/discover";
 import commands from "./commands.generated.ts";

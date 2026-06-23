@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
@@ -180,6 +180,34 @@ export default commandsFromModules(
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("should reject duplicate generated command paths", async () => {
+    const dir = await makeTempDir();
+    try {
+      const commandsDir = join(dir, "commands");
+      const outputFile = join(dir, "generated.ts");
+      await writeText(join(commandsDir, "user.ts"), "");
+      await writeText(join(commandsDir, "user", "index.ts"), "");
+
+      await assert.rejects(
+        () =>
+          generateCommandsModule({
+            dir: commandsDir,
+            outputFile,
+            extensions: [".ts"],
+          }),
+        (error) => {
+          assert.ok(error instanceof TypeError);
+          assert.match(error.message, /Duplicate command path "user"/);
+          assert.match(error.message, /\.\/commands\/user\.ts/);
+          assert.match(error.message, /\.\/commands\/user\/index\.ts/);
+          return true;
+        },
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("writeCommandsModule()", () => {
@@ -237,6 +265,54 @@ describe("watchCommandsModule()", () => {
       await writeText(join(commandsDir, "deploy.ts"), "");
       await waitFor(() => generatedCounts.length === 2);
       assert.deepEqual(generatedCounts, [1, 2]);
+
+      await rm(join(commandsDir, "build.ts"));
+      await rm(join(commandsDir, "deploy.ts"));
+      await delay(80);
+      assert.deepEqual(generatedCounts, [1, 2]);
+
+      await writeText(join(commandsDir, "status.ts"), "");
+      await waitFor(() => generatedCounts.length === 3);
+      assert.deepEqual(generatedCounts, [1, 2, 1]);
+
+      controller.abort();
+      await watching;
+    } finally {
+      controller.abort();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("should report watch errors without stopping", async () => {
+    const dir = await makeTempDir();
+    const controller = new AbortController();
+    try {
+      const commandsDir = join(dir, "commands");
+      const blockedPath = join(dir, "blocked");
+      const outputFile = join(blockedPath, "generated.ts");
+      await writeText(join(commandsDir, "build.ts"), "");
+      await writeText(blockedPath, "not a directory");
+
+      const errors: unknown[] = [];
+      const generatedCounts: number[] = [];
+      const watching = watchCommandsModule({
+        dir: commandsDir,
+        outputFile,
+        extensions: [".ts"],
+        intervalMs: 20,
+        signal: controller.signal,
+        onGenerate(result) {
+          generatedCounts.push(result.files.length);
+        },
+        onError(error) {
+          errors.push(error);
+        },
+      });
+
+      await waitFor(() => errors.length > 0);
+      await unlink(blockedPath);
+      await waitFor(() => generatedCounts.length === 1);
+      assert.deepEqual(generatedCounts, [1]);
 
       controller.abort();
       await watching;

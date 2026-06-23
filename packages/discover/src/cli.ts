@@ -58,6 +58,12 @@ or renamed.`,
   },
 });
 
+/**
+ * Runs the optique-discover command-line interface.
+ *
+ * @returns A promise that resolves after generation or watch mode finishes.
+ * @since 1.2.0
+ */
 export async function main(): Promise<void> {
   const args = runSync(cliProgram, {
     help: "option",
@@ -71,6 +77,7 @@ export async function main(): Promise<void> {
       message`Use either --entry-file-name or --no-entry-file-name, not both.`,
       { exitCode: EXIT_INVALID_OPTIONS },
     );
+    return;
   }
 
   const options = {
@@ -92,16 +99,27 @@ export async function main(): Promise<void> {
         onGenerate(result) {
           writeGeneratedMessage(result.files.length);
         },
+        onError(error) {
+          printGenerationError(error);
+        },
       });
     } else {
       const result = await writeCommandsModule(options);
       writeGeneratedMessage(result.files.length);
     }
   } catch (error) {
-    const messageText = error instanceof Error ? error.message : String(error);
+    printGenerationError(error, EXIT_GENERATION_FAILED);
+  }
+}
+
+function printGenerationError(error: unknown, exitCode?: number): void {
+  const messageText = error instanceof Error ? error.message : String(error);
+  if (exitCode == null) {
+    printError(message`Failed to generate command module: ${messageText}`);
+  } else {
     printError(
       message`Failed to generate command module: ${messageText}`,
-      { exitCode: EXIT_GENERATION_FAILED },
+      { exitCode },
     );
   }
 }
@@ -115,4 +133,8 @@ function writeGeneratedMessage(count: number): void {
 const isMain: boolean = "main" in import.meta
   ? import.meta.main
   : process.argv[1] === fileURLToPath(import.meta.url);
-if (isMain) main();
+if (isMain) {
+  void main().catch((error) => {
+    printGenerationError(error, EXIT_GENERATION_FAILED);
+  });
+}

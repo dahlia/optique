@@ -62,6 +62,9 @@ function runCli(args: readonly string[]): Promise<RunResult> {
     child.on("close", (code) => {
       resolve({ stdout, stderr, exitCode: code ?? 0 });
     });
+    child.on("error", (error) => {
+      resolve({ stdout, stderr: String(error), exitCode: 1 });
+    });
   });
 }
 

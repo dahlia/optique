@@ -1,5 +1,5 @@
 import { mkdir, readdir, realpath, stat, writeFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getDefaultExtensions } from "./index.ts";
 
@@ -108,6 +108,13 @@ export interface WatchCommandsModuleOptions
    * Callback invoked after each regeneration.
    */
   readonly onGenerate?: (result: GeneratedCommandsModule) => void;
+
+  /**
+   * Callback invoked when generation fails during watching.
+   *
+   * @since 1.2.0
+   */
+  readonly onError?: (error: unknown) => void;
 }
 
 interface NormalizedGenerateOptions {
@@ -163,8 +170,7 @@ export async function writeCommandsModule(
  *
  * @param options Watch options.
  * @returns A promise that resolves when the watch signal is aborted.
- * @throws {TypeError} If options are invalid or no command modules are found.
- * @throws {Error} If the generated module cannot be written.
+ * @throws {TypeError} If options are invalid.
  * @since 1.2.0
  */
 export async function watchCommandsModule(
@@ -180,21 +186,34 @@ export async function watchCommandsModule(
 
   let previousSignature: string | undefined;
   while (options.signal?.aborted !== true) {
-    const files = await collectGeneratedCommandFiles(normalized);
-    const signature = files.map((file) => file.filePath).join("\0");
-    if (signature !== previousSignature) {
-      const result = generateCommandsModuleFromFiles(normalized, files);
-      await mkdir(dirname(normalized.outputFile), { recursive: true });
-      await writeFile(normalized.outputFile, result.code, "utf-8");
-      options.onGenerate?.(result);
-      previousSignature = signature;
+    try {
+      const files = await collectGeneratedCommandFiles(normalized, {
+        allowEmpty: true,
+      });
+      const signature = files.map((file) => file.filePath).join("\0");
+      if (signature !== previousSignature) {
+        if (files.length > 0) {
+          const result = generateCommandsModuleFromFiles(normalized, files);
+          await mkdir(dirname(normalized.outputFile), { recursive: true });
+          await writeFile(normalized.outputFile, result.code, "utf-8");
+          options.onGenerate?.(result);
+        }
+        previousSignature = signature;
+      }
+    } catch (error) {
+      options.onError?.(error);
     }
     await delay(intervalMs, options.signal);
   }
 }
 
+interface CollectGeneratedCommandFilesOptions {
+  readonly allowEmpty?: boolean;
+}
+
 async function collectGeneratedCommandFiles(
   options: NormalizedGenerateOptions,
+  collectOptions: CollectGeneratedCommandFilesOptions = {},
 ): Promise<readonly GeneratedCommandModuleFile[]> {
   const filePaths = await collectCommandFiles(
     options.dir,
@@ -202,9 +221,10 @@ async function collectGeneratedCommandFiles(
     options.outputFile,
   );
   if (filePaths.length < 1) {
+    if (collectOptions.allowEmpty === true) return [];
     throw new TypeError(`No command modules found in ${options.dir}.`);
   }
-  return filePaths.map((filePath, index) => {
+  const files = filePaths.map((filePath, index) => {
     const importSpecifier = relativeImportSpecifier(
       options.outputDir,
       filePath,
@@ -226,6 +246,8 @@ async function collectGeneratedCommandFiles(
       identifier: `cmd${index}`,
     };
   });
+  rejectDuplicateCommandPaths(files, options);
+  return files;
 }
 
 function generateCommandsModuleFromFiles(
@@ -396,6 +418,94 @@ function isDeclarationFile(fileName: string): boolean {
   return /\.d\.[cm]?ts$/.test(fileName);
 }
 
+function rejectDuplicateCommandPaths(
+  files: readonly GeneratedCommandModuleFile[],
+  options: NormalizedGenerateOptions,
+): void {
+  const entryFileName = options.entryFileName ?? "index";
+  const seen = new Map<string, string>();
+  for (const file of files) {
+    const commandPath = commandPathFromModulePath(
+      options.base,
+      file.modulePath,
+      options.extensions,
+      entryFileName,
+    );
+    const key = commandPath.join("\0");
+    const previous = seen.get(key);
+    if (previous != null) {
+      throw new TypeError(
+        `Duplicate command path "${
+          displayCommandPath(commandPath)
+        }" from ${previous} and ${file.modulePath}.`,
+      );
+    }
+    seen.set(key, file.modulePath);
+  }
+}
+
+function commandPathFromModulePath(
+  base: string,
+  modulePath: string,
+  extensions: readonly string[],
+  entryFileName: string | false,
+): readonly string[] {
+  const withoutExtension = stripCommandExtension(modulePath, extensions);
+  const relativePath = relativeModulePath(base, withoutExtension, modulePath);
+  const path = relativePath.split("/").filter((segment) => segment.length > 0);
+  return commandPathFromSegments(path, modulePath, entryFileName);
+}
+
+function stripCommandExtension(
+  path: string,
+  extensions: readonly string[],
+): string {
+  const matchedExtension = extensions.find((ext) => path.endsWith(ext));
+  if (matchedExtension == null) {
+    throw new TypeError(`No configured extension matches ${path}.`);
+  }
+  return path.slice(0, -matchedExtension.length);
+}
+
+function relativeModulePath(
+  base: string,
+  modulePath: string,
+  originalModulePath: string,
+): string {
+  const normalizedBase = normalizeDerivedModulePath(base);
+  const normalizedPath = normalizeDerivedModulePath(modulePath);
+  const relativePath = posix.relative(normalizedBase, normalizedPath);
+  if (
+    relativePath.length < 1 ||
+    relativePath === ".." ||
+    relativePath.startsWith("../") ||
+    posix.isAbsolute(relativePath)
+  ) {
+    throw new TypeError(
+      `Module path ${originalModulePath} is not under base path ${base}.`,
+    );
+  }
+  return relativePath;
+}
+
+function commandPathFromSegments(
+  path: readonly string[],
+  source: string,
+  entryFileName: string | false,
+): readonly string[] {
+  if (path.length < 1) {
+    throw new TypeError(`Command module ${source} does not define a path.`);
+  }
+  if (entryFileName !== false && path[path.length - 1] === entryFileName) {
+    return path.slice(0, -1);
+  }
+  return path;
+}
+
+function displayCommandPath(path: readonly string[]): string {
+  return path.length < 1 ? "<root>" : path.join(" ");
+}
+
 function relativeModuleSpecifier(fromDir: string, target: string): string {
   const relativePath = normalizeRelativePath(relative(fromDir, target));
   return relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
@@ -416,6 +526,10 @@ function normalizeRelativePath(path: string): string {
 
 function normalizeModulePath(path: string): string {
   return path.replaceAll("\\", "/");
+}
+
+function normalizeDerivedModulePath(path: string): string {
+  return posix.normalize(normalizeModulePath(path));
 }
 
 function joinModulePath(base: string, relativePath: string): string {
