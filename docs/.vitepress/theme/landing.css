@@ -1,0 +1,412 @@
+/**
+ * Landing page (docs/index.md, pageClass: optique-landing)
+ *
+ * The home body renders inside `.vp-doc.container`, whose descendant rules
+ * (`.vp-doc p`, `.vp-doc h1`, `.vp-doc a`, …) are specificity 0,1,1 and would
+ * override bare `.ol-*` rules (0,1,0). Every selector here is therefore scoped
+ * under `.optique-landing` (0,2,x) so the bespoke layout wins cleanly. Brand
+ * tokens come from style.css.
+ * -------------------------------------------------------------------------- */
+
+.optique-landing .VPHome {
+  margin-bottom: 0;
+}
+
+/* Release the content container so each band can own its full width. */
+.optique-landing .vp-doc.container {
+  max-width: none;
+  padding: 0;
+}
+
+/* Neutralize doc-prose heading chrome (border/padding) without touching the
+   margins each title sets for itself. */
+.optique-landing .vp-doc
+  :is(.ol-hero__title, .ol-section__title, .ol-closing__title) {
+  border-top: 0;
+  padding: 0;
+}
+
+/* Link-based buttons and cards opt out of doc-link styling. */
+.optique-landing .vp-doc a:is(.ol-btn, .ol-pkg) {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.optique-landing .vp-doc a.ol-btn--brand {
+  color: #fff;
+}
+
+.optique-landing .vp-doc a.ol-btn--alt {
+  color: var(--vp-c-text-1);
+}
+
+.optique-landing .vp-doc a.ol-btn--alt:hover {
+  color: var(--vp-c-brand-1);
+}
+
+.optique-landing .vp-doc a.ol-pkg {
+  font-weight: inherit;
+}
+
+/* ------------------------------------------------------------------ Hero -- */
+
+.optique-landing .ol-hero {
+  position: relative;
+  padding: 48px 24px 16px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.optique-landing .ol-hero__glow {
+  position: absolute;
+  inset: -20% 0 auto;
+  height: 460px;
+  background:
+    radial-gradient(
+      60% 60% at 50% 30%,
+      var(--vp-c-brand-soft),
+      transparent 70%
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.optique-landing .ol-hero > :not(.ol-hero__glow) {
+  position: relative;
+  z-index: 1;
+}
+
+.optique-landing .ol-hero__prism {
+  margin: 0 auto 8px;
+}
+
+.optique-landing .ol-hero__eyebrow {
+  margin: 0 0 18px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--vp-c-brand-1);
+}
+
+.optique-landing .ol-hero__title {
+  margin: 0 auto;
+  max-width: 20ch;
+  font-family: var(--optique-font-display);
+  font-size: clamp(2.1rem, 1.2rem + 4vw, 3.85rem);
+  font-weight: 600;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--vp-c-text-1);
+}
+
+.optique-landing .ol-hero__lead {
+  margin: 22px auto 0;
+  max-width: 40rem;
+  font-size: 1.165rem;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+}
+
+.optique-landing .ol-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.optique-landing .ol-hero__install {
+  margin: 30px auto 0;
+  max-width: 480px;
+  text-align: left;
+}
+
+/* The install code-group provides its own tabs and copy button (VitePress);
+   just sit it flush inside the centered wrapper. */
+.optique-landing .ol-hero__install .vp-code-group,
+.optique-landing .ol-hero__install div[class*="language-"] {
+  margin: 0;
+}
+
+/* On narrow screens the 5 tabs scroll; keep them swipeable but hide the bar so
+   it doesn't stack a second scrollbar above the code. */
+.optique-landing .ol-hero__install .vp-code-group .tabs {
+  scrollbar-width: none;
+}
+
+.optique-landing .ol-hero__install .vp-code-group .tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* "Runs on" runtime badges, below the install command. */
+.optique-landing .ol-hero .ol-runson {
+  margin: 36px auto 0;
+  max-width: 760px;
+}
+
+/* ---------------------------------------------------------------- Buttons -- */
+
+.optique-landing .ol-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 22px;
+  height: 46px;
+  border-radius: 23px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s,
+    transform 0.1s;
+}
+
+.optique-landing .ol-btn:active {
+  transform: translateY(1px);
+}
+
+.optique-landing .ol-btn--brand {
+  background: var(--vp-c-brand-3);
+  color: #fff;
+}
+
+.optique-landing .ol-btn--brand:hover {
+  background: var(--vp-c-brand-2);
+}
+
+.optique-landing .ol-btn--alt {
+  background: var(--vp-c-bg-soft);
+  border-color: var(--vp-c-border);
+  color: var(--vp-c-text-1);
+}
+
+.optique-landing .ol-btn--alt:hover {
+  border-color: var(--vp-c-brand-2);
+  color: var(--vp-c-brand-1);
+}
+
+/* ----------------------------------------------------- Before/after proof -- */
+
+.optique-landing .ol-proof {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 56px 24px 64px;
+}
+
+/* The inferred type spans the full width of the before/after row above it. */
+.optique-landing .ol-proof__result {
+  margin: 28px 0 0;
+}
+
+/* --------------------------------------------------------- Labeled code --- */
+
+.optique-landing .ol-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.optique-landing .ol-card div[class*="language-"] {
+  margin: 0;
+}
+
+.optique-landing .ol-card__label {
+  align-self: flex-start;
+  margin: 0 0 10px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-soft);
+  font-family: var(--vp-font-family-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+}
+
+.optique-landing .ol-card--after .ol-card__label {
+  border-color: transparent;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+}
+
+.optique-landing .ol-card--result .ol-card__label {
+  border-color: transparent;
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--optique-spectrum-3);
+}
+
+.dark .optique-landing .ol-card--result .ol-card__label {
+  background: rgba(94, 234, 212, 0.13);
+  color: #5eead4;
+}
+
+/* ------------------------------------------------- Two-column code layout -- */
+
+.optique-landing .ol-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+/* Flex/grid cells default to min-width:auto and refuse to shrink below their
+   code's intrinsic width, which scrolls the whole page. Let them shrink so the
+   code block's own overflow-x:auto clips instead. */
+.optique-landing .ol-cols > *,
+.optique-landing .ol-card,
+.optique-landing .ol-card > * {
+  min-width: 0;
+}
+
+.optique-landing .ol-cols--center {
+  align-items: center;
+}
+
+.optique-landing .ol-cols > p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.optique-landing .ol-cols div[class*="language-"] {
+  margin: 0;
+}
+
+.optique-landing .ol-cols .ol-prism {
+  margin-block: 8px;
+}
+
+/* ----------------------------------------------------- Positioning strip --- */
+
+.optique-landing .ol-strip {
+  padding: 56px 24px;
+  text-align: center;
+  border-block: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-alt);
+}
+
+.optique-landing .ol-strip__line {
+  margin: 0 auto;
+  max-width: 60ch;
+  font-family: var(--optique-font-display);
+  font-size: clamp(1.25rem, 0.9rem + 1.6vw, 1.7rem);
+  font-weight: 500;
+  line-height: 1.32;
+  letter-spacing: -0.01em;
+  color: var(--vp-c-text-1);
+}
+
+.optique-landing .ol-strip__line em {
+  font-style: normal;
+  color: var(--vp-c-brand-1);
+}
+
+.optique-landing .ol-strip .ol-grammar {
+  margin-top: 28px;
+}
+
+/* --------------------------------------------------------------- Runtimes -- */
+
+.optique-landing .ol-runtimes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 24px;
+}
+
+.optique-landing .ol-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 15px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 999px;
+  background: var(--vp-c-bg-elv);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+}
+
+.optique-landing .ol-chip b {
+  color: var(--vp-c-brand-1);
+}
+
+/* --------------------------------------------------------- Closing call ---- */
+
+.optique-landing .ol-closing {
+  padding: 92px 24px 104px;
+  text-align: center;
+}
+
+.optique-landing .ol-closing__title {
+  margin: 0 auto;
+  max-width: 18ch;
+  font-family: var(--optique-font-display);
+  font-size: clamp(1.8rem, 1.1rem + 3vw, 2.8rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--vp-c-text-1);
+}
+
+.optique-landing .ol-closing .ol-hero__actions {
+  margin-top: 30px;
+}
+
+/* GitHub Sponsors link below the closing call to action. */
+.optique-landing .vp-doc a.ol-sponsor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--vp-c-text-2);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.optique-landing .vp-doc a.ol-sponsor:hover {
+  color: var(--vp-c-text-1);
+}
+
+.optique-landing .ol-sponsor__heart {
+  width: 17px;
+  height: 17px;
+  fill: #db61a2;
+}
+
+/* ------------------------------------------------------------- Responsive -- */
+
+/* Code in a half-width column overflows once lines pass ~50 chars, so stack
+   the columns below a comfortable desktop width rather than risk clipping. */
+@media (max-width: 1080px) {
+  .optique-landing .ol-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .optique-landing .ol-hero__title,
+  .optique-landing .ol-hero__lead,
+  .optique-landing .ol-hero__actions,
+  .optique-landing .ol-hero__install,
+  .optique-landing .ol-hero .ol-runson {
+    animation: ol-rise 0.6s ease-out both;
+  }
+  .optique-landing .ol-hero__lead { animation-delay: 0.05s; }
+  .optique-landing .ol-hero__actions { animation-delay: 0.1s; }
+  .optique-landing .ol-hero__install { animation-delay: 0.15s; }
+  .optique-landing .ol-hero .ol-runson { animation-delay: 0.2s; }
+
+  @keyframes ol-rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}

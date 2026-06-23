@@ -43,11 +43,44 @@
  *   in custom container, badges, etc.
  * -------------------------------------------------------------------------- */
 
+/**
+ * Optique brand palette
+ *
+ * Every purple below is sampled from the logo (docs/public/optique.svg), a
+ * prism refracting a beam into a spectrum.  The ramp runs from the deep prism
+ * core to the light outgoing ray:
+ *
+ *   #48286e  deep prism core
+ *   #5e3b8c
+ *   #6e4e98
+ *   #744f9e  brand
+ *   #8364a7
+ *   #ad95c5
+ *   #c9b3e0  light ray
+ *
+ * The faint multi-hue spectrum (--optique-spectrum-*) is reserved for a single
+ * signature: the refracted rays of the hero prism.  Nothing else uses it.
+ * -------------------------------------------------------------------------- */
+
 :root {
-    --vp-c-purple-1: #7c3aed;
-    --vp-c-purple-2: #a855f7;
-    --vp-c-purple-3: #c084fc;
-    --vp-c-purple-soft: rgba(124, 58, 237, 0.14);
+    --optique-prism-1: #48286e;
+    --optique-prism-2: #5e3b8c;
+    --optique-prism-3: #6e4e98;
+    --optique-prism-4: #744f9e;
+    --optique-prism-5: #8364a7;
+    --optique-prism-6: #ad95c5;
+    --optique-prism-7: #c9b3e0;
+
+    /* Signature dispersion, used only in the hero prism. */
+    --optique-spectrum-1: #7c3aed;
+    --optique-spectrum-2: #4f46e5;
+    --optique-spectrum-3: #0d9488;
+    --optique-spectrum-4: #d97706;
+
+    --vp-c-purple-1: #5e3b8c;
+    --vp-c-purple-2: #6e4e98;
+    --vp-c-purple-3: #744f9e;
+    --vp-c-purple-soft: rgba(116, 79, 158, 0.13);
 
     --vp-c-default-1: var(--vp-c-gray-1);
     --vp-c-default-2: var(--vp-c-gray-2);
@@ -59,9 +92,9 @@
     --vp-c-brand-3: var(--vp-c-purple-3);
     --vp-c-brand-soft: var(--vp-c-purple-soft);
 
-    --vp-c-tip-1: var(--vp-c-green-1);
-    --vp-c-tip-2: var(--vp-c-green-2);
-    --vp-c-tip-3: var(--vp-c-green-3);
+    --vp-c-tip-1: var(--vp-c-brand-1);
+    --vp-c-tip-2: var(--vp-c-brand-2);
+    --vp-c-tip-3: var(--vp-c-brand-3);
     --vp-c-tip-soft: var(--vp-c-brand-soft);
 
     --vp-c-warning-1: var(--vp-c-yellow-1);
@@ -76,14 +109,49 @@
 }
 
 /**
+ * Surfaces and ink
+ *
+ * A faint lavender tint warms the paper without hurting body legibility; ink
+ * is a deep desaturated purple-gray rather than pure black.
+ * -------------------------------------------------------------------------- */
+
+:root {
+    --vp-c-bg: #fbfafd;
+    --vp-c-bg-alt: #f4f2f9;
+    --vp-c-bg-soft: #f2eff8;
+    --vp-c-bg-elv: #ffffff;
+
+    --vp-c-text-1: #28233a;
+    --vp-c-text-2: #5b556b;
+    --vp-c-text-3: #8a849b;
+
+    --vp-c-divider: rgba(72, 40, 110, 0.12);
+    --vp-c-border: rgba(72, 40, 110, 0.16);
+    --vp-c-gutter: rgba(72, 40, 110, 0.1);
+}
+
+/**
  * Dark mode color adjustments
  * -------------------------------------------------------------------------- */
 
 .dark:root {
-    --vp-c-purple-1: #c4b5fd;
-    --vp-c-purple-2: #a78bfa;
-    --vp-c-purple-3: #8b5cf6;
-    --vp-c-purple-soft: rgba(196, 181, 253, 0.16);
+    --vp-c-purple-1: #cbb8ef;
+    --vp-c-purple-2: #b39fe0;
+    --vp-c-purple-3: #7c5bb0;
+    --vp-c-purple-soft: rgba(180, 162, 240, 0.17);
+
+    --vp-c-bg: #16131d;
+    --vp-c-bg-alt: #100e17;
+    --vp-c-bg-soft: #1d1929;
+    --vp-c-bg-elv: #1d1929;
+
+    --vp-c-text-1: #ece9f5;
+    --vp-c-text-2: #b6b0c6;
+    --vp-c-text-3: #7c7690;
+
+    --vp-c-divider: rgba(201, 179, 224, 0.16);
+    --vp-c-border: rgba(201, 179, 224, 0.2);
+    --vp-c-gutter: rgba(0, 0, 0, 0.36);
 }
 
 /**
@@ -92,14 +160,41 @@
 
 :root {
     --vp-button-brand-border: transparent;
-    --vp-button-brand-text: var(--vp-c-white);
+    --vp-button-brand-text: #ffffff;
     --vp-button-brand-bg: var(--vp-c-brand-3);
     --vp-button-brand-hover-border: transparent;
-    --vp-button-brand-hover-text: var(--vp-c-white);
+    --vp-button-brand-hover-text: #ffffff;
     --vp-button-brand-hover-bg: var(--vp-c-brand-2);
     --vp-button-brand-active-border: transparent;
-    --vp-button-brand-active-text: var(--vp-c-white);
-    --vp-button-brand-active-bg: var(--vp-c-brand-1);
+    --vp-button-brand-active-text: #ffffff;
+    --vp-button-brand-active-bg: var(--optique-prism-1);
+}
+
+.dark {
+    --vp-button-brand-text: #ffffff;
+    --vp-button-brand-bg: var(--vp-c-brand-3);
+    --vp-button-brand-hover-bg: #8d6cc4;
+    --vp-button-brand-active-bg: #6e4e98;
+}
+
+/**
+ * Typography
+ *
+ * Body stays on the default humanist sans so long-form docs read cleanly.
+ * Space Grotesk, a calm and faintly optical grotesque, carries the brand voice
+ * in the wordmark and on landing headings.  (The face is loaded in theme
+ * entry via @fontsource-variable/space-grotesk.)
+ * -------------------------------------------------------------------------- */
+
+:root {
+    --optique-font-display: "Space Grotesk Variable", "Space Grotesk",
+        var(--vp-font-family-base);
+}
+
+.VPNavBarTitle .title {
+    font-family: var(--optique-font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
 }
 
 /**

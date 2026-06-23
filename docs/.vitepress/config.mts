@@ -228,7 +228,15 @@ export default defineConfig({
 
   vite: {
     plugins: [
-      groupIconVitePlugin(),
+      groupIconVitePlugin({
+        customIcon: {
+          npm: "logos:npm-icon",
+          pnpm: "logos:pnpm",
+          yarn: "logos:yarn",
+          deno: "logos:deno",
+          bun: "logos:bun",
+        },
+      }),
       llmstxt({
         ignoreFiles: [
           "changelog.md",
