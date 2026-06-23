@@ -116,7 +116,9 @@ describe("optique-discover CLI", { skip: !hasReliableSubprocess }, () => {
     }
   });
 
-  it("should report a missing output option", async () => {
+  it("should report a missing output option", {
+    skip: !hasReliableSubprocess,
+  }, async () => {
     if (!hasReliableSubprocess) return;
 
     const dir = await makeTempDir();
