@@ -6,6 +6,9 @@ defineProps<{
   title?: string;
   lead?: string;
   tint?: boolean;
+  // An optional "read more" link to the in-depth doc for this section.
+  moreHref?: string;
+  moreText?: string;
 }>();
 </script>
 
@@ -21,6 +24,10 @@ defineProps<{
       <div class="ol-section__body">
         <slot />
       </div>
+      <!-- moreText is authored, static copy; v-html lets it carry inline <code>. -->
+      <p v-if="moreHref" class="ol-section__more">
+        <a :href="moreHref" v-html="moreText" />
+      </p>
     </div>
   </section>
 </template>
@@ -102,6 +109,45 @@ defineProps<{
   border-radius: 6px;
   background: var(--vp-c-bg-elv);
   color: var(--vp-c-text-1);
+}
+
+/* "Read more" affordance linking the section to its in-depth doc. */
+.ol-section__more {
+  margin: 36px 0 0;
+}
+
+.ol-section__more a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--vp-c-brand-1);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.ol-section__more a::after {
+  content: "→";
+  transition: transform 0.15s;
+}
+
+.ol-section__more a:hover {
+  color: var(--vp-c-brand-2);
+}
+
+.ol-section__more a:hover::after {
+  transform: translateX(3px);
+}
+
+/* Inline code in the link blends into the mono label rather than pilling. */
+.ol-section__more a :deep(code) {
+  font-family: inherit;
+  font-size: 1em;
+  color: inherit;
+  background: none;
+  padding: 0;
 }
 
 @media (min-width: 640px) {

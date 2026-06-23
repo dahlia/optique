@@ -93,7 +93,7 @@ bun add @optique/core @optique/run
 
 </div>
 
-<LandingSection eyebrow="See it refuse" title="Don't take our word for it." lead="This is the exact <code>deploy</code> parser from above, not a mockup. Mix the two modes, pass an out-of-range port, or drop a required option, and it refuses each one at runtime with the same typed errors your users would see. (It runs right here because <code>@optique/core</code> is dependency-free ECMAScript.)">
+<LandingSection eyebrow="See it refuse" title="Don't take our word for it." lead="This is the exact <code>deploy</code> parser from above, not a mockup. Mix the two modes, pass an out-of-range port, or drop a required option, and it refuses each one at runtime with the same typed errors your users would see. (It runs right here because <code>@optique/core</code> is dependency-free ECMAScript.)" moreHref="/why#complex-option-constraints-made-simple" moreText="Why it refuses invalid input">
 
 <RunDemo />
 
@@ -101,7 +101,7 @@ bun add @optique/core @optique/run
 
 <div class="ol-strip"><p class="ol-strip__line">Not a friendlier option builder. A <em>parser-combinator library</em> whose result types are the grammar of your command line.</p><CommandGrammar /></div>
 
-<LandingSection eyebrow="One parser, every surface" title="Define it once. Optique refracts the rest." lead="The same definition drives argument parsing, type inference, help text, shell completion, and Unix man pages. Add an option and every surface follows, with nothing to keep in sync by hand.">
+<LandingSection eyebrow="One parser, every surface" title="Define it once. Optique refracts the rest." lead="The same definition drives argument parsing, type inference, help text, shell completion, and Unix man pages. Add an option and every surface follows, with nothing to keep in sync by hand." moreHref="/why#context-aware-options-and-generated-documentation" moreText="How every surface is generated">
 
 <Cols>
 
@@ -131,7 +131,7 @@ const parser = object({
 
 </LandingSection>
 
-<LandingSection eyebrow="Diagnostics" title="Your errors aren't strings." lead="Every error and help line is a structured <a href='/concepts/messages'><code>Message</code></a> composed from semantic parts (option names, values, metavars, env vars, command examples, even URLs), not concatenated text. Optique styles them in a terminal and falls back to plain, quoted text when output is piped or running in CI. You compose your own errors and option descriptions the same way.">
+<LandingSection eyebrow="Diagnostics" title="Your errors aren't strings." lead="Every error and help line is a structured <a href='/concepts/messages'><code>Message</code></a> composed from semantic parts (option names, values, metavars, env vars, command examples, even URLs), not concatenated text. Optique styles them in a terminal and falls back to plain, quoted text when output is piped or running in CI. You compose your own errors and option descriptions the same way." moreHref="/concepts/messages" moreText="Composing your own messages">
 
 ~~~~ ts twoslash
 import { message, metavar, optionName } from "@optique/core/message";
@@ -146,7 +146,7 @@ const error = message`Expected ${metavar("PORT")} for ${optionName("--port")}, b
 
 </LandingSection>
 
-<LandingSection eyebrow="Composition" title="Parsers are values you can share and transform." lead="Build small option groups once, then <a href='/concepts/constructs#merge-parser'><code>merge()</code></a> and <a href='/concepts/constructs#or-parser'><code>or()</code></a> them into larger commands without losing a single type. The same pieces compose across every tool you ship." tint>
+<LandingSection eyebrow="Composition" title="Parsers are values you can share and transform." lead="Build small option groups once, then <a href='/concepts/constructs#merge-parser'><code>merge()</code></a> and <a href='/concepts/constructs#or-parser'><code>or()</code></a> them into larger commands without losing a single type. The same pieces compose across every tool you ship." tint moreHref="/concepts/constructs" moreText="Construct combinators in depth">
 
 ~~~~ ts twoslash
 import { object, merge } from "@optique/core/constructs";
@@ -168,7 +168,7 @@ const deployParser = merge(CommonOptions, DeployOptions);
 
 </LandingSection>
 
-<LandingSection eyebrow="Command structure" title="Subcommands become a union you can narrow." lead="Branch between subcommands with <a href='/concepts/constructs#command-alternatives'><code>or()</code></a>, and each <a href='/concepts/primitives#command-parser'><code>command()</code></a> becomes one arm of a discriminated union. TypeScript narrows every branch by its tag, so a handler only ever sees the options that subcommand actually defines.">
+<LandingSection eyebrow="Command structure" title="Subcommands become a union you can narrow." lead="Branch between subcommands with <a href='/concepts/constructs#command-alternatives'><code>or()</code></a>, and each <a href='/concepts/primitives#command-parser'><code>command()</code></a> becomes one arm of a discriminated union. TypeScript narrows every branch by its tag, so a handler only ever sees the options that subcommand actually defines." moreHref="/concepts/primitives#command-parser" moreText="Subcommands with <code>command()</code>">
 
 <Cols center>
 
@@ -205,7 +205,7 @@ type Command = InferValue<typeof cli>;
 
 </LandingSection>
 
-<LandingSection eyebrow="Inter-option dependencies" title="Options can depend on values, not just presence." lead="When one option's valid values depend on another, Optique resolves that relationship after parsing, then uses the very same graph to power context-aware completion. The values <kbd>Tab</kbd> offers are the values your parser will accept.">
+<LandingSection eyebrow="Inter-option dependencies" title="Options can depend on values, not just presence." lead="When one option's valid values depend on another, Optique resolves that relationship after parsing, then uses the very same graph to power context-aware completion. The values <kbd>Tab</kbd> offers are the values your parser will accept." moreHref="/concepts/dependencies" moreText="How dependencies resolve">
 
 <Cols>
 
@@ -241,7 +241,7 @@ const parser = object({
 
 </LandingSection>
 
-<LandingSection eyebrow="Shell completion" title="Completion your users install in one line." lead="The completion script comes from the same parser, so suggestions never drift from what the CLI accepts. It is context-aware: subcommands, options, and even values that depend on other options.">
+<LandingSection eyebrow="Shell completion" title="Completion your users install in one line." lead="The completion script comes from the same parser, so suggestions never drift from what the CLI accepts. It is context-aware: subcommands, options, and even values that depend on other options." moreHref="/concepts/completion" moreText="The shell completion guide">
 
 <Cols>
 
@@ -275,7 +275,7 @@ myapp completion nu | save myapp-completion.nu
 
 </LandingSection>
 
-<LandingSection eyebrow="Every value, one model" title="The same parser for CLI, environment, config, and prompts." lead="Integration packages are parser wrappers. Stack them and the priority is just the wrapping order: CLI over environment over config over an interactive prompt." tint>
+<LandingSection eyebrow="Every value, one model" title="The same parser for CLI, environment, config, and prompts." lead="Integration packages are parser wrappers. Stack them and the priority is just the wrapping order: CLI over environment over config over an interactive prompt." tint moreHref="/why#integration-packages" moreText="How integration packages stack">
 
 ~~~~ ts twoslash
 import { z } from "zod";
@@ -305,10 +305,10 @@ const host = prompt(
 ~~~~
 
 </LandingSection>
-<LandingSection eyebrow="From the cookbook" title="The awkward parts of real CLIs, already solved." lead="Mutually exclusive modes, options that gate others, key–value pairs, pass-through, verbosity, negatable flags. Each hard requirement is a small composition, and each one has a recipe in the cookbook.">
+<LandingSection eyebrow="From the cookbook" title="The awkward parts of real CLIs, already solved." lead="Mutually exclusive modes, options that gate others, key–value pairs, pass-through, verbosity, negatable flags. Each hard requirement is a small composition, and each one has a recipe in the cookbook." moreHref="/cookbook" moreText="Browse the full cookbook">
 <PatternShowcase />
 </LandingSection>
-<LandingSection eyebrow="Batteries included" title="Reach for a parser before you write one." lead="Forty built-in value parsers, from <code>integer()</code> and <code>ip()</code> to Temporal dates and async Git refs, plus the combinators that assemble them. Every one returns an ordinary parser that composes with the rest.">
+<LandingSection eyebrow="Batteries included" title="Reach for a parser before you write one." lead="Forty built-in value parsers, from <code>integer()</code> and <code>ip()</code> to Temporal dates and async Git refs, plus the combinators that assemble them. Every one returns an ordinary parser that composes with the rest." moreHref="/concepts/valueparsers" moreText="The value parser reference">
 <ParserCatalog />
 <PackageGrid />
 </LandingSection>
