@@ -28,7 +28,7 @@ description: >-
 ~~~~ ts twoslash
 import { object, or } from "@optique/core/constructs";
 import { constant, option } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { firstOf, hostname, ip, port, string } from "@optique/core/valueparser";
 // ---cut-before---
 const auth = object({
   mode: constant("auth"),
@@ -38,8 +38,8 @@ const auth = object({
 
 const config = object({
   mode: constant("config"),
-  host: option("--host", string()),
-  port: option("--port", integer()),
+  host: option("--host", firstOf(ip(), hostname())),
+  port: option("--port", port()),
 });
 
 const deploy = or(auth, config);
@@ -92,6 +92,12 @@ bun add @optique/core @optique/run
 <RunsOn />
 
 </div>
+
+<LandingSection eyebrow="See it refuse" title="Don't take our word for it." lead="This is the exact <code>deploy</code> parser from above, not a mockup. Mix the two modes, pass an out-of-range port, or drop a required option, and it refuses each one at runtime with the same typed errors your users would see. (It runs right here because <code>@optique/core</code> is dependency-free ECMAScript.)">
+
+<RunDemo />
+
+</LandingSection>
 
 <div class="ol-strip"><p class="ol-strip__line">Not a friendlier option builder. A <em>parser-combinator library</em> whose result types are the grammar of your command line.</p><CommandGrammar /></div>
 

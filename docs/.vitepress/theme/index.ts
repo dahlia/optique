@@ -19,6 +19,7 @@ import OptiquePrism from "./components/OptiquePrism.vue";
 import PackageGrid from "./components/PackageGrid.vue";
 import ParserCatalog from "./components/ParserCatalog.vue";
 import PatternShowcase from "./components/PatternShowcase.vue";
+import RunDemo from "./components/RunDemo.vue";
 import RunsOn from "./components/RunsOn.vue";
 import SurfaceTabs from "./components/SurfaceTabs.vue";
 
@@ -37,6 +38,7 @@ export default {
     app.component("PackageGrid", PackageGrid);
     app.component("ParserCatalog", ParserCatalog);
     app.component("PatternShowcase", PatternShowcase);
+    app.component("RunDemo", RunDemo);
     app.component("RunsOn", RunsOn);
     app.component("SurfaceTabs", SurfaceTabs);
   },

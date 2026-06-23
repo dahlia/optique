@@ -1,5 +1,6 @@
 /.claude/settings.local.json
 /.playwright-mcp/
+/docs/.vitepress/.temp/
 /example.ts
 /examples/*/dist/
 /examples/*/node_modules/
