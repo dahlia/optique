@@ -171,6 +171,43 @@ const deployParser = merge(CommonOptions, DeployOptions);
 
 </LandingSection>
 
+<LandingSection eyebrow="Command structure" title="Subcommands become a union you can narrow." lead="Branch between subcommands with <a href='/concepts/constructs#command-alternatives'><code>or()</code></a>, and each <a href='/concepts/primitives#command-parser'><code>command()</code></a> becomes one arm of a discriminated union. TypeScript narrows every branch by its tag, so a handler only ever sees the options that subcommand actually defines.">
+
+<Cols center>
+
+~~~~ ts twoslash
+import { object, or } from "@optique/core/constructs";
+import { withDefault } from "@optique/core/modifiers";
+import type { InferValue } from "@optique/core/parser";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+// ---cut-before---
+const cli = or(
+  command("create", object({
+    action: constant("create"),
+    name: argument(string()),
+    role: option("--role", string()),
+  })),
+  command("list", object({
+    action: constant("list"),
+    limit: withDefault(option("--limit", integer()), 10),
+  })),
+  command("delete", object({
+    action: constant("delete"),
+    id: argument(integer()),
+    force: option("--force"),
+  })),
+);
+
+type Command = InferValue<typeof cli>;
+~~~~
+
+<CommandFork />
+
+</Cols>
+
+</LandingSection>
+
 <LandingSection eyebrow="Inter-option dependencies" title="Options can depend on values, not just presence." lead="When one option's valid values depend on another, Optique resolves that relationship after parsing, then uses the very same graph to power context-aware completion. The values <kbd>Tab</kbd> offers are the values your parser will accept.">
 
 <Cols>
