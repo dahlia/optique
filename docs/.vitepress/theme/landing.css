@@ -52,20 +52,19 @@
 
 .optique-landing .ol-hero {
   position: relative;
-  padding: 48px 24px 16px;
-  text-align: center;
+  padding: 40px 24px 56px;
   overflow: hidden;
 }
 
 .optique-landing .ol-hero__glow {
   position: absolute;
-  inset: -20% 0 auto;
-  height: 460px;
+  inset: -22% 0 auto;
+  height: 540px;
   background:
     radial-gradient(
-      60% 60% at 50% 30%,
+      56% 58% at 36% 24%,
       var(--vp-c-brand-soft),
-      transparent 70%
+      transparent 72%
     );
   pointer-events: none;
   z-index: 0;
@@ -76,12 +75,28 @@
   z-index: 1;
 }
 
-.optique-landing .ol-hero__prism {
-  margin: 0 auto 8px;
+/* Pitch on the left, a live proof on the right, so the thing that makes
+   Optique distinctive is on screen before any scrolling. */
+.optique-landing .ol-hero__split {
+  max-width: 1160px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+  gap: 32px 52px;
+  align-items: center;
+}
+
+.optique-landing .ol-hero__pitch {
+  text-align: left;
+}
+
+.optique-landing .ol-hero .ol-hero__prism {
+  margin: 0 0 22px;
+  max-width: 150px;
 }
 
 .optique-landing .ol-hero__eyebrow {
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   font-family: var(--vp-font-family-mono);
   font-size: 13px;
   font-weight: 500;
@@ -91,34 +106,43 @@
 }
 
 .optique-landing .ol-hero__title {
-  margin: 0 auto;
-  max-width: 20ch;
+  margin: 0;
+  max-width: none;
+  text-wrap: balance;
   font-family: var(--optique-font-display);
-  font-size: clamp(2.1rem, 1.2rem + 4vw, 3.85rem);
+  font-size: clamp(2.1rem, 1.1rem + 2.7vw, 3.35rem);
   font-weight: 600;
-  line-height: 1.06;
+  line-height: 1.04;
   letter-spacing: -0.02em;
   color: var(--vp-c-text-1);
 }
 
 .optique-landing .ol-hero__lead {
-  margin: 22px auto 0;
-  max-width: 40rem;
-  font-size: 1.165rem;
-  line-height: 1.6;
+  margin: 20px 0 0;
+  max-width: 36rem;
+  font-size: 1.1rem;
+  line-height: 1.58;
   color: var(--vp-c-text-2);
 }
 
 .optique-landing .ol-hero__actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
-  margin-top: 32px;
+  margin-top: 30px;
+}
+
+/* Right column: stacked proof cards (parser, then the type it infers). */
+.optique-landing .ol-hero__proof {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
 .optique-landing .ol-hero__install {
-  margin: 30px auto 0;
+  margin: 48px auto 0;
   max-width: 480px;
   text-align: left;
 }
@@ -142,8 +166,33 @@
 
 /* "Runs on" runtime badges, below the install command. */
 .optique-landing .ol-hero .ol-runson {
-  margin: 36px auto 0;
+  margin: 32px auto 0;
   max-width: 760px;
+}
+
+/* Stack and re-center the hero on narrower screens. */
+@media (max-width: 920px) {
+  .optique-landing .ol-hero__split {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .optique-landing .ol-hero__pitch {
+    text-align: center;
+  }
+
+  .optique-landing .ol-hero .ol-hero__prism {
+    margin-inline: auto;
+  }
+
+  .optique-landing .ol-hero__title,
+  .optique-landing .ol-hero__lead {
+    margin-inline: auto;
+  }
+
+  .optique-landing .ol-hero__actions {
+    justify-content: center;
+  }
 }
 
 /* ---------------------------------------------------------------- Buttons -- */
@@ -186,19 +235,6 @@
 .optique-landing .ol-btn--alt:hover {
   border-color: var(--vp-c-brand-2);
   color: var(--vp-c-brand-1);
-}
-
-/* ----------------------------------------------------- Before/after proof -- */
-
-.optique-landing .ol-proof {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 56px 24px 64px;
-}
-
-/* The inferred type spans the full width of the before/after row above it. */
-.optique-landing .ol-proof__result {
-  margin: 28px 0 0;
 }
 
 /* --------------------------------------------------------- Labeled code --- */
@@ -396,11 +432,13 @@
   .optique-landing .ol-hero__title,
   .optique-landing .ol-hero__lead,
   .optique-landing .ol-hero__actions,
+  .optique-landing .ol-hero__proof,
   .optique-landing .ol-hero__install,
   .optique-landing .ol-hero .ol-runson {
     animation: ol-rise 0.6s ease-out both;
   }
   .optique-landing .ol-hero__lead { animation-delay: 0.05s; }
+  .optique-landing .ol-hero__proof { animation-delay: 0.12s; }
   .optique-landing .ol-hero__actions { animation-delay: 0.1s; }
   .optique-landing .ol-hero__install { animation-delay: 0.15s; }
   .optique-landing .ol-hero .ol-runson { animation-delay: 0.2s; }

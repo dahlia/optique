@@ -10,11 +10,56 @@ description: >-
 
 <div class="ol-hero">
 <div class="ol-hero__glow"></div>
+
+<div class="ol-hero__split">
+
+<div class="ol-hero__pitch">
 <OptiquePrism class="ol-hero__prism" />
 <p class="ol-hero__eyebrow">Type-safe CLI parser combinators</p>
 <h1 class="ol-hero__title">Make impossible CLI states unrepresentable.</h1>
 <p class="ol-hero__lead">Model your command-line grammar with composable parsers. Mutually exclusive modes, dependent options, inferred result types, and context-aware completion all come from the same structure.</p>
 <div class="ol-hero__actions"><a class="ol-btn ol-btn--brand" href="/install">Get started</a><a class="ol-btn ol-btn--alt" href="/why">Why Optique?</a><a class="ol-btn ol-btn--alt" href="https://github.com/dahlia/optique">GitHub</a></div>
+</div>
+
+<div class="ol-hero__proof">
+
+<CodeCard label="The parser is the rule" tone="after">
+
+~~~~ ts twoslash
+import { object, or } from "@optique/core/constructs";
+import { constant, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+// ---cut-before---
+const auth = object({
+  mode: constant("auth"),
+  token: option("--token", string()),
+  key: option("--key", string()),
+});
+
+const config = object({
+  mode: constant("config"),
+  host: option("--host", string()),
+  port: option("--port", integer()),
+});
+
+const deploy = or(auth, config);
+~~~~
+
+</CodeCard>
+
+<CodeCard label="Inferred type" tone="result">
+
+~~~~ ts
+type Deploy =
+  | { mode: "auth"; token: string; key: string }
+  | { mode: "config"; host: string; port: number };
+~~~~
+
+</CodeCard>
+
+</div>
+
+</div>
 
 <div class="ol-hero__install">
 
@@ -47,73 +92,6 @@ bun add @optique/core @optique/run
 <RunsOn />
 
 </div>
-
-<section class="ol-proof">
-
-<Cols>
-
-<CodeCard label="Without Optique" tone="before">
-
-~~~~ ts
-// Validate the flag combination by hand.
-const hasAuth =
-  f.token && f.key && f.secret;
-const hasConfig =
-  f.file && f.host && f.port;
-
-if (!hasAuth && !hasConfig) {
-  throw new Error("Need auth or config.");
-}
-
-if (hasAuth && hasConfig) {
-  throw new Error("Cannot use both.");
-}
-
-// `f` stays one wide, untyped object.
-~~~~
-
-</CodeCard>
-
-<CodeCard label="With Optique" tone="after">
-
-~~~~ ts twoslash
-import { object, or } from "@optique/core/constructs";
-import { constant, option } from "@optique/core/primitives";
-import { firstOf, hostname, ip, port, string } from "@optique/core/valueparser";
-import { path } from "@optique/run/valueparser";
-// ---cut-before---
-const auth = object({
-  mode: constant("auth"),
-  token: option("--auth-token", string()),
-  key: option("--auth-key", string()),
-  secret: option("--auth-secret", string()),
-});
-
-const config = object({
-  mode: constant("config"),
-  file: option("--config", path()),
-  host: option("--host", firstOf(ip(), hostname())),
-  port: option("--port", port()),
-});
-
-const deploy = or(auth, config);
-~~~~
-
-</CodeCard>
-
-</Cols>
-
-<CodeCard label="Inferred type" tone="result" class="ol-proof__result">
-
-~~~~ ts
-type Deploy =
-  | { mode: "auth"; token: string; key: string; secret: string }
-  | { mode: "config"; file: string; host: string; port: number };
-~~~~
-
-</CodeCard>
-
-</section>
 
 <div class="ol-strip"><p class="ol-strip__line">Not a friendlier option builder. A <em>parser-combinator library</em> whose result types are the grammar of your command line.</p><CommandGrammar /></div>
 
