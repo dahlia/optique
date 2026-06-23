@@ -23,8 +23,9 @@ man pages and runner integration.
 > Command discovery is a runtime feature, not a static registry.  It reads the
 > command directory and imports matching modules dynamically, so bundlers cannot
 > reliably see which command files are used.  If your CLI depends on tree
-> shaking, static bundling, or single-file executable packaging, import command
-> modules manually and pass them to `runProgram()` with `commands`.
+> shaking, static bundling, or single-file executable packaging, use
+> `commandsFromModules()` with a static module map, or import command modules
+> manually and pass them to `runProgram()` with `commands`.
 
 
 Command modules
@@ -135,12 +136,63 @@ await runProgram({
 ~~~~
 
 
-Running statically imported commands
-------------------------------------
+Running with static module maps
+-------------------------------
 
-When command modules need to be visible to a bundler or single-file packager,
-import them manually and pass them as `commands`.  Each command declares its
-own path:
+Bundlers often provide a static module map API for glob imports.  For example,
+Vite and Rollup-based toolchains can statically see `import.meta.glob()` when
+the pattern is literal.  `commandsFromModules()` turns that module map into the
+same command entries that file-system discovery would have produced:
+
+~~~~ typescript twoslash
+declare global {
+  interface ImportMeta {
+    glob(
+      pattern: string,
+      options: { readonly eager: true },
+    ): Record<string, unknown>;
+  }
+}
+// ---cut-before---
+import { message } from "@optique/core/message";
+import { commandsFromModules, runProgram } from "@optique/discover";
+
+const modules = import.meta.glob("./commands/**/*.ts", { eager: true });
+
+await runProgram({
+  commands: commandsFromModules(modules, {
+    base: "./commands",
+    extensions: [".ts"],
+  }),
+  metadata: {
+    name: "admin",
+    version: "1.0.0",
+    brief: message`Administrative command-line tools.`,
+  },
+});
+~~~~
+
+Each module value must expose a default export created with
+`defineCommand()`.  The module map key is treated like a file path relative to
+`base`, so *./commands/user/add.ts* becomes `user add`.  Entry files keep the
+same meaning as runtime discovery: *./commands/index.ts* defines the root
+command, and *./commands/user/index.ts* defines `user`.
+
+Pass `extensions` when the module map keys keep source file suffixes such as
+*.ts* after bundling.  Compound suffixes are matched with the same precedence
+as dynamic discovery, and TypeScript declaration files such as *.d.ts*,
+*.d.mts*, and *.d.cts* are ignored.
+
+The returned entries can also be passed to `createProgramParser()` when you
+want to build the parser directly instead of using `runProgram()`.
+
+
+Running manually imported commands
+----------------------------------
+
+For a small static command registry, or when you want to assign command paths
+manually, import modules yourself and pass commands as `commands`.  Each
+command declares its own path:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -175,14 +227,17 @@ await runProgram({
 
 `commands` and `dir` are mutually exclusive.  Use `commands` when static
 imports matter; use `dir` when the runtime file layout is the command registry.
+Prefer `commandsFromModules()` when you want to keep deriving paths from a
+command directory layout.
 
 
 File names and extensions
 -------------------------
 
 The relative file path becomes the command path after removing the configured
-suffix.  Compound suffixes are supported, so *user/add.cmd.ts* can become
-`user add` when *.cmd.ts* is listed before *.ts*.
+suffix.  `commandsFromModules()` applies the same rule to module map keys after
+stripping its `base` option.  Compound suffixes are supported, so
+*user/add.cmd.ts* can become `user add` when *.cmd.ts* is listed before *.ts*.
 
 By default, an entry file named *index* maps to its containing command path:
 
@@ -284,8 +339,16 @@ Use *@optique/discover* when:
 Use static `commands` with manually imported command modules when:
 
  -  You need tree shaking, static bundling, or single-file executable
+    packaging, and your toolchain does not provide a static module map
+ -  You want to assign command paths by hand instead of deriving them from
+    module paths
+
+Use `commandsFromModules()` with a static module map when:
+
+ -  You need tree shaking, static bundling, or single-file executable
     packaging
- -  You want command modules to be visible through ordinary static imports
+ -  You want command modules to be visible to the bundler while keeping the
+    file layout as the command registry
 
 Use plain *@optique/core* and *@optique/run* when:
 

@@ -27,7 +27,7 @@ import { type HiddenVisibility, mergeHidden } from "@optique/core/usage";
 import { runAsync } from "@optique/run";
 import type { RunOptions } from "@optique/run";
 import { readdir, realpath, stat } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { posix, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -75,11 +75,32 @@ export interface ProgramInvocation {
 }
 
 /**
+ * A command paired with its command path.
+ *
+ * `createProgramParser()` accepts command entries directly, and
+ * `runProgram({ commands })` accepts them alongside commands that declare
+ * their own `path` field.
+ *
+ * @since 1.2.0
+ */
+export interface CommandEntry {
+  /**
+   * Command path used to place the command in the program tree.
+   */
+  readonly path: CommandPath;
+
+  /**
+   * The command definition.
+   */
+  readonly command: AnyCommand;
+}
+
+/**
  * A command found on disk.
  *
  * @since 1.1.0
  */
-export interface DiscoveredCommand {
+export interface DiscoveredCommand extends CommandEntry {
   /**
    * Command path derived from the module's relative path.
    */
@@ -95,6 +116,28 @@ export interface DiscoveredCommand {
    */
   readonly command: AnyCommand;
 }
+
+/**
+ * A command loaded from a static module map.
+ *
+ * @since 1.2.0
+ */
+export interface ModuleCommand extends CommandEntry {
+  /**
+   * Module map key used to derive the command path.
+   */
+  readonly modulePath: string;
+}
+
+/**
+ * Static module map accepted by {@link commandsFromModules}.
+ *
+ * This matches eager glob import APIs such as Vite's
+ * `import.meta.glob(..., { eager: true })`.
+ *
+ * @since 1.2.0
+ */
+export type ModuleMap = Readonly<Record<string, unknown>>;
 
 /**
  * Options for {@link discoverCommands}.
@@ -123,6 +166,38 @@ export interface DiscoverCommandsOptions {
    *
    * @default `"index"`
    * @since 1.2.0
+   */
+  readonly entryFileName?: string | false;
+}
+
+/**
+ * Options for {@link commandsFromModules}.
+ *
+ * @since 1.2.0
+ */
+export interface CommandsFromModulesOptions {
+  /**
+   * Base module path to strip before deriving command paths.
+   *
+   * @default `"."`
+   */
+  readonly base?: string;
+
+  /**
+   * Module suffixes to include.  Compound suffixes such as `.cmd.ts` are
+   * supported.
+   *
+   * @default Runtime-aware extension defaults from {@link getDefaultExtensions}
+   */
+  readonly extensions?: readonly string[];
+
+  /**
+   * File name that maps to the containing command path after extension
+   * stripping.  For example, `stash/index.ts` maps to `stash`, and root
+   * `index.ts` maps to the root command.  Pass `false` to treat matching files
+   * as ordinary command names.
+   *
+   * @default `"index"`
    */
   readonly entryFileName?: string | false;
 }
@@ -234,8 +309,11 @@ export interface RunProgramDiscoveryOptions extends RunProgramBaseOptions {
 export interface RunProgramStaticOptions extends RunProgramBaseOptions {
   /**
    * Commands to compose without file-system discovery.
+   *
+   * Pass commands that declare their own `path`, or command entries returned
+   * by {@link commandsFromModules}.
    */
-  readonly commands: readonly AnyStaticCommand[];
+  readonly commands: readonly (AnyStaticCommand | CommandEntry)[];
 
   /**
    * File-system discovery cannot be used together with `commands`.
@@ -329,25 +407,93 @@ export async function discoverCommands(
     const mod = await import(pathToFileURL(filePath).href) as {
       readonly default?: unknown;
     };
-    const commandDefinition = unwrapCommandExport(mod.default);
-    if (commandDefinition == null) {
-      throw new TypeError(
-        `Module ${filePath} default export must be created with defineCommand().`,
-      );
-    }
-    if (
-      commandDefinition.path != null &&
-      commandPathKey(commandDefinition.path) !== commandPathKey(path)
-    ) {
-      throw new TypeError(
-        `Module ${filePath} declares command path "${
-          displayCommandPath(commandDefinition.path)
-        }" but file path defines "${displayCommandPath(path)}".`,
-      );
-    }
+    const commandDefinition = commandFromModuleExport(filePath, mod.default);
+    validateDeclaredCommandPath(
+      commandDefinition,
+      path,
+      filePath,
+      "file path",
+    );
     discovered.push({ path, filePath, command: commandDefinition });
   }
 
+  return sortCommands(discovered);
+}
+
+/**
+ * Converts a static module map into command entries.
+ *
+ * This is useful for bundlers and single-file packagers that can statically
+ * see module maps, such as `import.meta.glob(..., { eager: true })`, while
+ * still deriving command paths from file-like module keys.
+ *
+ * @param modules Static module map keyed by module path.
+ * @param options Module path derivation options.
+ * @returns Command entries sorted by command path.
+ * @throws {TypeError} If options are invalid, no command modules are found,
+ *         command paths are duplicated, a module does not default-export a
+ *         command created with `defineCommand()`, or an explicit command
+ *         `path` does not match the module-derived path.
+ * @since 1.2.0
+ */
+export function commandsFromModules(
+  modules: ModuleMap,
+  options: CommandsFromModulesOptions = {},
+): readonly ModuleCommand[] {
+  if (modules == null || typeof modules !== "object") {
+    throw new TypeError("commandsFromModules() requires a module map object.");
+  }
+  const base = normalizeModuleBase(options.base);
+  const extensions = normalizeExtensions(
+    options.extensions ?? getDefaultExtensions(),
+  );
+  const entryFileName = normalizeEntryFileName(options.entryFileName);
+  const modulePaths = Object.keys(modules).toSorted((a, b) =>
+    a.localeCompare(b)
+  );
+
+  const seen = new Map<string, string>();
+  const discovered: ModuleCommand[] = [];
+  for (const modulePath of modulePaths) {
+    if (
+      isDeclarationFile(posix.basename(modulePath)) ||
+      !extensions.some((ext) => modulePath.endsWith(ext))
+    ) {
+      continue;
+    }
+
+    const path = commandPathFromModulePath(
+      base,
+      modulePath,
+      extensions,
+      entryFileName,
+    );
+    const key = commandPathKey(path);
+    const previous = seen.get(key);
+    if (previous != null) {
+      const displayPath = displayCommandPath(path);
+      throw new TypeError(
+        `Duplicate command path "${displayPath}" from ${previous} and ${modulePath}.`,
+      );
+    }
+    seen.set(key, modulePath);
+
+    const commandDefinition = commandFromModuleExport(
+      modulePath,
+      modules[modulePath],
+    );
+    validateDeclaredCommandPath(
+      commandDefinition,
+      path,
+      modulePath,
+      "module path",
+    );
+    discovered.push({ path, modulePath, command: commandDefinition });
+  }
+
+  if (discovered.length < 1) {
+    throw new TypeError("No command modules found in module map.");
+  }
   return sortCommands(discovered);
 }
 
@@ -362,7 +508,7 @@ export async function discoverCommands(
  * @since 1.1.0
  */
 export function createProgramParser(
-  commands: readonly Pick<DiscoveredCommand, "path" | "command">[],
+  commands: readonly CommandEntry[],
   metadata: ProgramHelpMetadata = {},
 ): Parser<Mode, ProgramInvocation, unknown> {
   if (commands.length < 1) {
@@ -509,6 +655,14 @@ function normalizeEntryFileName(
   return normalized;
 }
 
+function normalizeModuleBase(base: string | undefined): string {
+  if (base === undefined) return ".";
+  if (typeof base !== "string" || base.length < 1) {
+    throw new TypeError(`Module base path must be a non-empty string: ${base}`);
+  }
+  return normalizeModulePath(base);
+}
+
 async function collectCommandFiles(
   dir: string,
   extensions: readonly string[],
@@ -572,15 +726,66 @@ function commandPathFromFile(
   extensions: readonly string[],
   entryFileName: string | false,
 ): CommandPath {
-  const matchedExtension = extensions.find((ext) => filePath.endsWith(ext));
-  if (matchedExtension == null) {
-    throw new TypeError(`No configured extension matches ${filePath}.`);
-  }
-  const withoutExtension = filePath.slice(0, -matchedExtension.length);
+  const withoutExtension = stripCommandExtension(filePath, extensions);
   const relativePath = relative(rootDir, withoutExtension);
   const path = relativePath.split(sep).filter((segment) => segment.length > 0);
+  return commandPathFromSegments(path, filePath, entryFileName);
+}
+
+function commandPathFromModulePath(
+  base: string,
+  modulePath: string,
+  extensions: readonly string[],
+  entryFileName: string | false,
+): CommandPath {
+  const withoutExtension = stripCommandExtension(modulePath, extensions);
+  const relativePath = relativeModulePath(base, withoutExtension, modulePath);
+  const path = relativePath.split("/").filter((segment) => segment.length > 0);
+  return commandPathFromSegments(path, modulePath, entryFileName);
+}
+
+function stripCommandExtension(
+  path: string,
+  extensions: readonly string[],
+): string {
+  const matchedExtension = extensions.find((ext) => path.endsWith(ext));
+  if (matchedExtension == null) {
+    throw new TypeError(`No configured extension matches ${path}.`);
+  }
+  return path.slice(0, -matchedExtension.length);
+}
+
+function relativeModulePath(
+  base: string,
+  modulePath: string,
+  originalModulePath: string,
+): string {
+  const normalizedPath = normalizeModulePath(modulePath);
+  const relativePath = posix.relative(base, normalizedPath);
+  if (
+    relativePath.length < 1 ||
+    relativePath === ".." ||
+    relativePath.startsWith("../") ||
+    posix.isAbsolute(relativePath)
+  ) {
+    throw new TypeError(
+      `Module path ${originalModulePath} is not under base path ${base}.`,
+    );
+  }
+  return relativePath;
+}
+
+function normalizeModulePath(path: string): string {
+  return posix.normalize(path.replaceAll("\\", "/"));
+}
+
+function commandPathFromSegments(
+  path: readonly string[],
+  source: string,
+  entryFileName: string | false,
+): CommandPath {
   if (path.length < 1) {
-    throw new TypeError(`Command file ${filePath} does not define a path.`);
+    throw new TypeError(`Command module ${source} does not define a path.`);
   }
   if (entryFileName !== false && path[path.length - 1] === entryFileName) {
     return path.slice(0, -1);
@@ -640,37 +845,76 @@ function isStaticRunProgramOptions(
 }
 
 function staticCommandsToEntries(
-  commands: readonly AnyStaticCommand[],
-): readonly Pick<DiscoveredCommand, "path" | "command">[] {
-  return commands.map((command) => {
-    if (!isCommand(command)) {
+  commands: readonly (AnyStaticCommand | CommandEntry)[],
+): readonly CommandEntry[] {
+  return commands.map((entry) => {
+    if (isCommandEntry(entry)) return entry;
+    if (!isCommand(entry)) {
       throw new TypeError(
         "Static command entries must be created with defineCommand().",
       );
     }
-    if (!isCommandPath(command.path)) {
+    if (!isCommandPath(entry.path)) {
       throw new TypeError(
         "Static command entries must declare a path.",
       );
     }
     return {
-      path: command.path,
-      command,
+      path: entry.path,
+      command: entry,
     };
   });
 }
 
+function isCommandEntry(value: unknown): value is CommandEntry {
+  return value != null &&
+    typeof value === "object" &&
+    isCommandPath((value as { readonly path?: unknown }).path) &&
+    isCommand((value as { readonly command?: unknown }).command);
+}
+
 function unwrapCommandExport(value: unknown): AnyCommand | undefined {
-  if (isCommand(value)) return value;
-  if (value != null && typeof value === "object") {
-    const nestedDefault = (value as { readonly default?: unknown }).default;
-    if (isCommand(nestedDefault)) return nestedDefault;
+  let current = value;
+  for (let depth = 0; depth < 3; depth++) {
+    if (isCommand(current)) return current;
+    if (current == null || typeof current !== "object") return undefined;
+    const nestedDefault = (current as { readonly default?: unknown }).default;
+    if (Object.is(nestedDefault, current)) return undefined;
+    current = nestedDefault;
   }
   return undefined;
 }
 
+function commandFromModuleExport(source: string, value: unknown): AnyCommand {
+  const commandDefinition = unwrapCommandExport(value);
+  if (commandDefinition == null) {
+    throw new TypeError(
+      `Module ${source} default export must be created with defineCommand().`,
+    );
+  }
+  return commandDefinition;
+}
+
+function validateDeclaredCommandPath(
+  commandDefinition: AnyCommand,
+  path: CommandPath,
+  source: string,
+  sourcePathLabel: "file path" | "module path",
+): void {
+  if (
+    commandDefinition.path != null &&
+    commandPathKey(commandDefinition.path) !== commandPathKey(path)
+  ) {
+    throw new TypeError(
+      `Module ${source} declares command path "${
+        displayCommandPath(commandDefinition.path)
+      }" but ${sourcePathLabel} defines "${displayCommandPath(path)}".`,
+    );
+  }
+}
+
 function buildCommandTree(
-  commands: readonly Pick<DiscoveredCommand, "path" | "command">[],
+  commands: readonly CommandEntry[],
 ): CommandTreeNode {
   const root: CommandTreeNode = { children: new Map() };
   for (const entry of commands) {
@@ -1342,7 +1586,7 @@ function createLeafParser(
 
 function withRootDocs(
   parser: Parser<Mode, ProgramInvocation, unknown>,
-  commands: readonly Pick<DiscoveredCommand, "path" | "command">[],
+  commands: readonly CommandEntry[],
   metadata: ProgramHelpMetadata,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const rootState = parser.initialState;
