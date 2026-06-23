@@ -16,6 +16,7 @@ import CompletionDemo from "./components/CompletionDemo.vue";
 import LandingSection from "./components/LandingSection.vue";
 import OptiquePrism from "./components/OptiquePrism.vue";
 import PackageGrid from "./components/PackageGrid.vue";
+import ParserCatalog from "./components/ParserCatalog.vue";
 import RunsOn from "./components/RunsOn.vue";
 import SurfaceTabs from "./components/SurfaceTabs.vue";
 
@@ -31,6 +32,7 @@ export default {
     app.component("LandingSection", LandingSection);
     app.component("OptiquePrism", OptiquePrism);
     app.component("PackageGrid", PackageGrid);
+    app.component("ParserCatalog", ParserCatalog);
     app.component("RunsOn", RunsOn);
     app.component("SurfaceTabs", SurfaceTabs);
   },

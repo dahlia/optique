@@ -250,8 +250,8 @@ const host = prompt(
 ~~~~
 
 </LandingSection>
-<LandingSection eyebrow="Batteries included" title="A mature ecosystem, not a single package." lead="Thirty-plus built-in value parsers, schema validation through Zod or Valibot, async Git references, and Temporal dates. Every integration returns an ordinary parser that composes with the rest.">
-<div class="ol-runtimes"><span class="ol-chip"><b>Deno</b></span><span class="ol-chip"><b>Node.js</b></span><span class="ol-chip"><b>Bun</b></span><span class="ol-chip">JSR&nbsp; <b>+</b> &nbsp;npm</span></div>
+<LandingSection eyebrow="Batteries included" title="Reach for a parser before you write one." lead="Forty built-in value parsers, from <code>integer()</code> and <code>ip()</code> to Temporal dates and async Git refs, plus the combinators that assemble them. Every one returns an ordinary parser that composes with the rest.">
+<ParserCatalog />
 <PackageGrid />
 </LandingSection>
 <div class="ol-closing"><h2 class="ol-closing__title">Start modeling your CLI.</h2><div class="ol-hero__actions"><a class="ol-btn ol-btn--brand" href="/tutorial">Start the tutorial</a><a class="ol-btn ol-btn--alt" href="/why">Why Optique?</a><a class="ol-btn ol-btn--alt" href="/cookbook">Cookbook</a><a class="ol-btn ol-btn--alt" href="https://github.com/dahlia/optique">GitHub</a></div><a class="ol-sponsor" href="https://github.com/sponsors/dahlia" target="_blank" rel="noopener"><svg class="ol-sponsor__heart" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 0 0 8 13.393a20.561 20.561 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.75.75 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z"></path></svg>Sponsor Optique on GitHub</a></div>

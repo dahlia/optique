@@ -392,6 +392,7 @@
 }
 
 .optique-landing .ol-closing .ol-hero__actions {
+  justify-content: center;
   margin-top: 30px;
 }
 
