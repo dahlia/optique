@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isMainModule } from "#src/main-check.ts";
+import { isMainModule, isMainModuleUrl } from "#src/main-check.ts";
 
 describe("isMainModule()", () => {
   it("should use import.meta.main when the runtime provides it", () => {
@@ -44,6 +44,32 @@ describe("isMainModule()", () => {
     assert.ok(
       !isMainModule({
         modulePath: "/real/cli.js",
+      }),
+    );
+  });
+
+  it("should use import.meta.main before converting remote module URLs", () => {
+    assert.ok(
+      isMainModuleUrl({
+        importMetaMain: true,
+        moduleUrl: "https://jsr.io/@optique/discover/1.2.0/src/cli.ts",
+        argvEntry: "/real/cli.js",
+      }),
+    );
+    assert.ok(
+      !isMainModuleUrl({
+        importMetaMain: false,
+        moduleUrl: "file:///real/cli.js",
+        argvEntry: "/real/cli.js",
+      }),
+    );
+  });
+
+  it("should return false for non-file module URLs without import.meta.main", () => {
+    assert.ok(
+      !isMainModuleUrl({
+        moduleUrl: "https://jsr.io/@optique/discover/1.2.0/src/cli.ts",
+        argvEntry: "/real/cli.js",
       }),
     );
   });

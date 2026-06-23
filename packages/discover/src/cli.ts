@@ -10,9 +10,8 @@ import { defineProgram } from "@optique/core/program";
 import { string } from "@optique/core/valueparser";
 import { printError, runSync } from "@optique/run";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { watchCommandsModule, writeCommandsModule } from "./generator.ts";
-import { isMainModule } from "./main-check.ts";
+import { isMainModuleUrl } from "./main-check.ts";
 // @ts-ignore: JSON import
 import denoJson from "../deno.json" with { type: "json" };
 
@@ -131,9 +130,9 @@ function writeGeneratedMessage(count: number): void {
   console.log(`Generated ${count} ${noun}.`);
 }
 
-const isMain = isMainModule({
+const isMain = isMainModuleUrl({
   importMetaMain: "main" in import.meta ? import.meta.main : undefined,
-  modulePath: fileURLToPath(import.meta.url),
+  moduleUrl: import.meta.url,
   argvEntry: process.argv[1],
 });
 if (isMain) {
