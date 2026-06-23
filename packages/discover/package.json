@@ -58,6 +58,18 @@
       },
       "import": "./dist/command.js",
       "require": "./dist/command.cjs"
+    },
+    "./generator": {
+      "types": {
+        "import": "./dist/generator.d.ts",
+        "require": "./dist/generator.d.cts"
+      },
+      "import": "./dist/generator.js",
+      "require": "./dist/generator.cjs"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
     }
   },
   "imports": {
@@ -67,6 +79,9 @@
     }
   },
   "sideEffects": false,
+  "bin": {
+    "optique-discover": "./dist/cli.js"
+  },
   "dependencies": {
     "@optique/core": "workspace:*",
     "@optique/run": "workspace:*"

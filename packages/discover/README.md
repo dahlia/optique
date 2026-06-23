@@ -110,6 +110,33 @@ the module list visible to bundlers.  For smaller registries, you can also
 import commands manually, declare `path` in each `defineCommand()` call, and
 pass those commands to `runProgram({ commands })`.
 
+If you do not want to maintain the static module map by hand, generate one:
+
+~~~~ bash
+optique-discover ./commands --output ./commands.generated.ts --extension .ts
+~~~~
+
+Then import the generated module from your CLI entry point:
+
+~~~~ typescript
+// cli.ts
+import { runProgram } from "@optique/discover";
+import { message } from "@optique/core/message";
+import commands from "./commands.generated.ts";
+
+await runProgram({
+  commands,
+  metadata: {
+    name: "admin",
+    version: "1.0.0",
+    brief: message`Administrative command-line tools.`,
+  },
+});
+~~~~
+
+Use `--watch` during development to regenerate only when command files are
+added, removed, or renamed.
+
 By default, Deno and Bun discover `.ts`, `.mts`, `.js`, and `.mjs` files.
 Node.js discovers `.js`, `.mjs`, and `.cjs` files, plus `.ts`, `.mts`, and
 `.cts` when it reports native TypeScript support or runs with a recognized
