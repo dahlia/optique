@@ -1,0 +1,85 @@
+{
+  "name": "@optique/clack",
+  "version": "1.2.0",
+  "description": "Interactive prompt support for Optique via Clack",
+  "keywords": [
+    "CLI",
+    "command-line",
+    "commandline",
+    "parser",
+    "prompt",
+    "interactive",
+    "clack"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Hong Minhee",
+    "email": "hong@minhee.org",
+    "url": "https://hongminhee.org/"
+  },
+  "homepage": "https://optique.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dahlia/optique.git",
+    "directory": "packages/clack/"
+  },
+  "bugs": {
+    "url": "https://github.com/dahlia/optique/issues"
+  },
+  "funding": [
+    "https://github.com/sponsors/dahlia"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.2.0",
+    "deno": ">=2.3.0"
+  },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md"
+  ],
+  "type": "module",
+  "module": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "imports": {
+    "#src/*.ts": {
+      "node": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@clack/prompts": "catalog:",
+    "@optique/core": "workspace:*",
+    "@optique/prompt": "workspace:*"
+  },
+  "devDependencies": {
+    "@optique/env": "workspace:*",
+    "@optique/run": "workspace:*",
+    "@types/node": "catalog:",
+    "fast-check": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown",
+    "prepublish": "tsdown",
+    "test": "node --test",
+    "test:bun": "bun test",
+    "test:deno": "deno test --allow-env",
+    "test-all": "tsdown && node --test && bun test && deno test --allow-env"
+  }
+}
