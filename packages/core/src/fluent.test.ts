@@ -1,9 +1,9 @@
-import { object } from "@optique/core/constructs";
 import {
   concat,
   group,
   longestMatch,
   merge,
+  object,
   or,
   seq,
   tuple,

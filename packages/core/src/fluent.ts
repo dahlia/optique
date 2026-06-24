@@ -106,6 +106,7 @@ export type FluentParser<
  *
  * @param parser The parser to decorate.
  * @returns The same parser object with fluent modifier methods.
+ * @throws {TypeError} If the parser object is frozen and cannot be decorated.
  * @since 1.2.0
  */
 export function fluent<M extends Mode, TValue, TState>(
