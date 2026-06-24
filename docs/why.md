@@ -484,8 +484,12 @@ integration packages extend it for common use cases:
  -  *[@optique/config](./integrations/config.md)*: Loads default values from
     configuration files, with schema validation via any Standard Schema-
     compatible library (Zod, Valibot, ArkType).
+ -  *[@optique/clack](./integrations/clack.md)*: Falls back to an interactive
+    Clack prompt when a CLI argument is not provided.
  -  *[@optique/inquirer](./integrations/inquirer.md)*: Falls back to an
     interactive Inquirer.js prompt when a CLI argument is not provided.
+ -  *[@optique/prompt](./integrations/prompt.md)*: Provides the generic
+    adapter foundation for prompt-library integrations.
  -  *[@optique/zod](./integrations/zod.md)* and
     *[@optique/valibot](./integrations/valibot.md)*: Use Zod or Valibot
     schemas directly as value parsers.

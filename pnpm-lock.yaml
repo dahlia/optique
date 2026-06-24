@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@clack/prompts':
+      specifier: ^1.6.0
+      version: 1.6.0
     '@inquirer/prompts':
       specifier: ^8.3.0
       version: 8.3.0
@@ -63,6 +66,9 @@ importers:
       '@logtape/logtape':
         specifier: 'catalog:'
         version: 2.0.4
+      '@optique/clack':
+        specifier: 'workspace:'
+        version: link:../packages/clack
       '@optique/config':
         specifier: 'workspace:'
         version: link:../packages/config
@@ -87,6 +93,9 @@ importers:
       '@optique/man':
         specifier: 'workspace:'
         version: link:../packages/man
+      '@optique/prompt':
+        specifier: 'workspace:'
+        version: link:../packages/prompt
       '@optique/run':
         specifier: 'workspace:'
         version: link:../packages/run
@@ -148,6 +157,37 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  packages/clack:
+    dependencies:
+      '@clack/prompts':
+        specifier: 'catalog:'
+        version: 1.6.0
+      '@optique/core':
+        specifier: workspace:*
+        version: link:../core
+      '@optique/prompt':
+        specifier: workspace:*
+        version: link:../prompt
+    devDependencies:
+      '@optique/env':
+        specifier: workspace:*
+        version: link:../env
+      '@optique/run':
+        specifier: workspace:*
+        version: link:../run
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      fast-check:
+        specifier: 'catalog:'
+        version: 4.7.0
       tsdown:
         specifier: 'catalog:'
         version: 0.13.0(typescript@5.8.3)
@@ -272,6 +312,9 @@ importers:
       '@optique/core':
         specifier: workspace:*
         version: link:../core
+      '@optique/prompt':
+        specifier: workspace:*
+        version: link:../prompt
     devDependencies:
       '@optique/config':
         specifier: workspace:*
@@ -483,6 +526,14 @@ packages:
   '@babel/types@7.29.7':
     resolution: {integrity: sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA==}
     engines: {node: '>=6.9.0'}
+
+  '@clack/core@1.4.2':
+    resolution: {integrity: sha512-0Ty/1Gfm+Kb07sXcuESjyKfwEhSy4Ns1AgeEisHb/bDY5fWme0tTeTkU14T1Gmcs17YIjB/teiDe4uaCghbYqQ==}
+    engines: {node: '>= 20.12.0'}
+
+  '@clack/prompts@1.6.0':
+    resolution: {integrity: sha512-EYlRokl8szrP9Z25qT5aepMdBjzBvHF9ZEhzIiUBc9guz/T31EqRgvD0QSgZcpE93xiwrr+OkB4nz0BZyF6fSA==}
+    engines: {node: '>= 20.12.0'}
 
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
@@ -2401,6 +2452,9 @@ packages:
   simple-get@4.0.1:
     resolution: {integrity: sha512-brv7p5WgH0jmQJr1ZDDfKDOSeWWg+OVypG99A/5vYGPqJ6pxiaHLy8nxtFjBA7oMa01ebA9gfh1uMCFqOuXxvA==}
 
+  sisteransi@1.0.5:
+    resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -2752,6 +2806,18 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@clack/core@1.4.2':
+    dependencies:
+      fast-wrap-ansi: 0.2.0
+      sisteransi: 1.0.5
+
+  '@clack/prompts@1.6.0':
+    dependencies:
+      '@clack/core': 1.4.2
+      fast-string-width: 3.0.2
+      fast-wrap-ansi: 0.2.0
+      sisteransi: 1.0.5
 
   '@cloudflare/kv-asset-handler@0.5.0': {}
 
@@ -4659,6 +4725,8 @@ snapshots:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
+
+  sisteransi@1.0.5: {}
 
   source-map-js@1.2.1: {}
 

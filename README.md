@@ -69,8 +69,9 @@ Features
     more
  -  *Environment variable support*: Bind options to environment variables
     with type-safe parsing and fallback behavior (via *@optique/env*)
- -  *Interactive prompts*: Prompt users for missing values via Inquirer.js
-    with parser-integrated fallback flows (via *@optique/inquirer*)
+ -  *Interactive prompts*: Prompt users for missing values via Inquirer.js or
+    Clack with parser-integrated fallback flows (via *@optique/inquirer* and
+    *@optique/clack*)
  -  *Inter-option dependencies*: Options whose valid values depend on other
     options, with dynamic validation and context-aware shell completion
  -  *Async parser support*: Type-safe sync/async mode distinction for parsers
@@ -182,20 +183,22 @@ Optique is a monorepo which contains multiple packages.  The main package is
 *@optique/core*, which provides the shared types and parser combinators.
 The following is a list of the available packages:
 
-| Package                                  | JSR                          | npm                          | Description                                  |
-| ---------------------------------------- | ---------------------------- | ---------------------------- | -------------------------------------------- |
-| [@optique/core](/packages/core/)         | [JSR][jsr:@optique/core]     | [npm][npm:@optique/core]     | Shared types and parser combinators          |
-| [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun                  |
-| [@optique/discover](/packages/discover/) | [JSR][jsr:@optique/discover] | [npm][npm:@optique/discover] | Runtime-aware command discovery              |
-| [@optique/config](/packages/config/)     | [JSR][jsr:@optique/config]   | [npm][npm:@optique/config]   | Config file support with [Standard Schema]   |
-| [@optique/env](/packages/env/)           | [JSR][jsr:@optique/env]      | [npm][npm:@optique/env]      | Environment variable integration             |
-| [@optique/git](/packages/git/)           | [JSR][jsr:@optique/git]      | [npm][npm:@optique/git]      | Git reference parsers (branches, tags, etc)  |
-| [@optique/logtape](/packages/logtape/)   | [JSR][jsr:@optique/logtape]  | [npm][npm:@optique/logtape]  | [LogTape] logging integration                |
-| [@optique/man](/packages/man/)           | [JSR][jsr:@optique/man]      | [npm][npm:@optique/man]      | Man page generation from parsers             |
-| [@optique/temporal](/packages/temporal/) | [JSR][jsr:@optique/temporal] | [npm][npm:@optique/temporal] | [Temporal] value parsers (date and time)     |
-| [@optique/valibot](/packages/valibot/)   | [JSR][jsr:@optique/valibot]  | [npm][npm:@optique/valibot]  | [Valibot] schema integration for validation  |
-| [@optique/zod](/packages/zod/)           | [JSR][jsr:@optique/zod]      | [npm][npm:@optique/zod]      | [Zod] schema integration for validation      |
-| [@optique/inquirer](/packages/inquirer/) | [JSR][jsr:@optique/inquirer] | [npm][npm:@optique/inquirer] | Interactive prompt support via [Inquirer.js] |
+| Package                                  | JSR                          | npm                          | Description                                 |
+| ---------------------------------------- | ---------------------------- | ---------------------------- | ------------------------------------------- |
+| [@optique/core](/packages/core/)         | [JSR][jsr:@optique/core]     | [npm][npm:@optique/core]     | Shared types and parser combinators         |
+| [@optique/run](/packages/run/)           | [JSR][jsr:@optique/run]      | [npm][npm:@optique/run]      | Runner for Node.js/Deno/Bun                 |
+| [@optique/discover](/packages/discover/) | [JSR][jsr:@optique/discover] | [npm][npm:@optique/discover] | Runtime-aware command discovery             |
+| [@optique/config](/packages/config/)     | [JSR][jsr:@optique/config]   | [npm][npm:@optique/config]   | Config file support with [Standard Schema]  |
+| [@optique/clack](/packages/clack/)       | [JSR][jsr:@optique/clack]    | [npm][npm:@optique/clack]    | [Clack] prompt support                      |
+| [@optique/env](/packages/env/)           | [JSR][jsr:@optique/env]      | [npm][npm:@optique/env]      | Environment variable integration            |
+| [@optique/git](/packages/git/)           | [JSR][jsr:@optique/git]      | [npm][npm:@optique/git]      | Git reference parsers (branches, tags, etc) |
+| [@optique/logtape](/packages/logtape/)   | [JSR][jsr:@optique/logtape]  | [npm][npm:@optique/logtape]  | [LogTape] logging integration               |
+| [@optique/man](/packages/man/)           | [JSR][jsr:@optique/man]      | [npm][npm:@optique/man]      | Man page generation from parsers            |
+| [@optique/temporal](/packages/temporal/) | [JSR][jsr:@optique/temporal] | [npm][npm:@optique/temporal] | [Temporal] value parsers (date and time)    |
+| [@optique/valibot](/packages/valibot/)   | [JSR][jsr:@optique/valibot]  | [npm][npm:@optique/valibot]  | [Valibot] schema integration for validation |
+| [@optique/zod](/packages/zod/)           | [JSR][jsr:@optique/zod]      | [npm][npm:@optique/zod]      | [Zod] schema integration for validation     |
+| [@optique/inquirer](/packages/inquirer/) | [JSR][jsr:@optique/inquirer] | [npm][npm:@optique/inquirer] | [Inquirer.js] prompt support                |
+| [@optique/prompt](/packages/prompt/)     | [JSR][jsr:@optique/prompt]   | [npm][npm:@optique/prompt]   | Generic prompt adapter foundation           |
 
 [jsr:@optique/core]: https://jsr.io/@optique/core
 [npm:@optique/core]: https://www.npmjs.com/package/@optique/core
@@ -206,6 +209,9 @@ The following is a list of the available packages:
 [jsr:@optique/config]: https://jsr.io/@optique/config
 [npm:@optique/config]: https://www.npmjs.com/package/@optique/config
 [Standard Schema]: https://standardschema.dev/
+[jsr:@optique/clack]: https://jsr.io/@optique/clack
+[npm:@optique/clack]: https://www.npmjs.com/package/@optique/clack
+[Clack]: https://github.com/bombshell-dev/clack
 [jsr:@optique/env]: https://jsr.io/@optique/env
 [npm:@optique/env]: https://www.npmjs.com/package/@optique/env
 [jsr:@optique/git]: https://jsr.io/@optique/git
@@ -226,6 +232,8 @@ The following is a list of the available packages:
 [jsr:@optique/inquirer]: https://jsr.io/@optique/inquirer
 [npm:@optique/inquirer]: https://www.npmjs.com/package/@optique/inquirer
 [Inquirer.js]: https://github.com/SBoudrias/Inquirer.js
+[jsr:@optique/prompt]: https://jsr.io/@optique/prompt
+[npm:@optique/prompt]: https://www.npmjs.com/package/@optique/prompt
 
 
 Contributing

@@ -1375,7 +1375,7 @@ See the [config file guide](./integrations/config.md) for more details.
 
 [Standard Schema]: https://standardschema.dev/
 
-### Interactive prompts with *@optique/inquirer*
+### Inquirer.js prompts with *@optique/inquirer*
 
 Use `prompt()` to show an interactive prompt when a value is not provided on
 the command line:
@@ -1403,9 +1403,9 @@ await run(parser);
 ~~~~
 
 When `--name` and `--port` are provided, the prompts are skipped. Otherwise,
-the user sees interactive prompts.
+the user sees Inquirer.js prompts.
 
-See the [interactive prompt guide](./integrations/inquirer.md) for more
+See the [Inquirer.js prompt guide](./integrations/inquirer.md) for more
 details.
 
 ### Composing multiple sources
@@ -1438,7 +1438,7 @@ Here are some directions to explore next:
  -  Integration packages:
     [environment variables](./integrations/env.md),
     [config files](./integrations/config.md),
-    [interactive prompts](./integrations/inquirer.md),
+    [Inquirer.js prompts](./integrations/inquirer.md),
     [Zod](./integrations/zod.md)/[Valibot](./integrations/valibot.md),
     [Git references](./integrations/git.md),
     [Temporal dates](./integrations/temporal.md)

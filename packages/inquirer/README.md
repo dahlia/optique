@@ -1,18 +1,18 @@
 @optique/inquirer
 =================
 
-Interactive prompt support for [Optique] via [Inquirer.js].
+[Inquirer.js] prompt support for [Optique].
 
 This package wraps any Optique parser with an interactive prompt that fires
 when no CLI value is provided.  The fallback priority is:
 
-CLI arguments > interactive prompt.
+CLI arguments > Inquirer.js prompt.
 
 Because interactive prompts are inherently asynchronous, the returned parser
 always has `mode: "async"`.
 
-[Optique]: https://optique.dev/
 [Inquirer.js]: https://github.com/SBoudrias/Inquirer.js
+[Optique]: https://optique.dev/
 
 
 Installation
@@ -53,7 +53,7 @@ await run(parser);
 ~~~~
 
 When `--name` and `--port` are provided on the command line, the prompts are
-skipped.  When they are absent, the user sees interactive prompts.
+skipped.  When they are absent, the user sees Inquirer.js prompts.
 
 
 Features

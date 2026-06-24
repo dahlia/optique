@@ -2257,7 +2257,7 @@ CLI argument > environment variable > config file > interactive prompt
 For more details, see the
 [environment variable guide](./integrations/env.md),
 [config file integration guide](./integrations/config.md), and
-[interactive prompt guide](./integrations/inquirer.md).
+[Inquirer.js prompt guide](./integrations/inquirer.md).
 
 ### Config-only and env-only values with `fail()`
 

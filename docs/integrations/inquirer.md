@@ -1,10 +1,9 @@
 ---
 description: >-
-  Add interactive prompts as fallback for missing CLI arguments using
-  Inquirer.js.
+  Add Inquirer.js prompts as fallback for missing CLI arguments.
 ---
 
-Interactive prompts
+Inquirer.js prompts
 ===================
 
 *This API is available since Optique 1.0.0.*
@@ -14,12 +13,16 @@ The *@optique/inquirer* package wraps any Optique parser with an interactive
 used directly.  When the argument is absent, an interactive prompt is shown
 instead of failing.
 
+This package is built on the shared *@optique/prompt* adapter foundation.  If
+you want to connect another prompt library, see
+[prompt adapters](./prompt.md).
+
 The fallback priority is:
 
 1.  *CLI argument*
-2.  *Interactive prompt*
+2.  *Inquirer.js prompt*
 
-Because interactive prompts are inherently asynchronous, the returned parser
+Because Inquirer.js prompts are inherently asynchronous, the returned parser
 always has `mode: "async"`.
 
 ::: code-group
@@ -77,7 +80,7 @@ await run(parser);
 ~~~~
 
 When `--name` and `--port` are provided on the command line, the prompts are
-skipped.  When they are absent, the user sees interactive prompts.
+skipped.  When they are absent, the user sees Inquirer.js prompts.
 
 
 Prompt types
@@ -462,7 +465,7 @@ await run(parser, { contexts: [envContext] });
 
 This gives the priority:
 
-CLI argument > Environment variable > Interactive prompt
+CLI argument > Environment variable > Inquirer.js prompt
 
 
 Testing
@@ -494,7 +497,7 @@ API reference
 
 ### `prompt(parser, config)`
 
-Wraps a parser with an interactive prompt fallback.
+Wraps a parser with an Inquirer.js prompt fallback.
 
 Parameters
 :    -  `parser`: The inner parser.  CLI tokens consumed by this parser
@@ -503,7 +506,7 @@ Parameters
         and its options.
 
 Returns
-:   A new parser with `mode: "async"` and interactive prompt fallback.
+:   A new parser with `mode: "async"` and Inquirer.js prompt fallback.
     The `usage` is wrapped in an `optional` term since the prompt handles
     the missing-value case.
 
