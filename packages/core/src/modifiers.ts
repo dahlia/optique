@@ -38,6 +38,7 @@ import {
   defineSourceBindingOnlyAnnotationCompletionParser,
   unmatchedNonCliDependencySourceStateMarker,
 } from "./internal/parser.ts";
+import { fluent, type FluentParser } from "./fluent.ts";
 import type {
   DocState,
   ExecutionContext,
@@ -670,7 +671,7 @@ function normalizeOptionalLikeSuggestState<TState>(
  */
 export function optional<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
-): Parser<M, TValue | undefined, [TState] | undefined> {
+): FluentParser<M, TValue | undefined, [TState] | undefined> {
   // Cast to sync for implementation
   const syncParser = parser as Parser<"sync", TValue, TState>;
 
@@ -958,7 +959,7 @@ export function optional<M extends Mode, TValue, TState>(
   }
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
-  return optionalParser;
+  return fluent(optionalParser);
 }
 
 /**
@@ -1043,7 +1044,7 @@ export function withDefault<
 >(
   parser: Parser<M, TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
-): Parser<M, TValue | TDefault, [TState] | undefined>;
+): FluentParser<M, TValue | TDefault, [TState] | undefined>;
 
 /**
  * Creates a parser that makes another parser use a default value when it fails
@@ -1073,7 +1074,7 @@ export function withDefault<
   parser: Parser<M, TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
   options?: WithDefaultOptions,
-): Parser<M, TValue | TDefault, [TState] | undefined>;
+): FluentParser<M, TValue | TDefault, [TState] | undefined>;
 
 export function withDefault<
   M extends Mode,
@@ -1084,7 +1085,7 @@ export function withDefault<
   parser: Parser<M, TValue, TState>,
   defaultValue: TDefault | (() => TDefault),
   options?: WithDefaultOptions,
-): Parser<M, TValue | TDefault, [TState] | undefined> {
+): FluentParser<M, TValue | TDefault, [TState] | undefined> {
   // Cast to sync for implementation
   const syncParser = parser as Parser<"sync", TValue, TState>;
   const getDocDefaultValue = (
@@ -1503,7 +1504,7 @@ export function withDefault<
   }
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
-  return withDefaultParser;
+  return fluent(withDefaultParser);
 }
 
 /**
@@ -1584,7 +1585,7 @@ export function withDefault<
 export function map<M extends Mode, T, U, TState>(
   parser: Parser<M, T, TState>,
   transform: (value: T) => U,
-): Parser<M, U, TState> {
+): FluentParser<M, U, TState> {
   const complete = (
     state: TState,
     exec?: ExecutionContext,
@@ -1751,7 +1752,7 @@ export function map<M extends Mode, T, U, TState>(
         composed;
     }
   }
-  return mappedParser;
+  return fluent(mappedParser);
 }
 
 /**
@@ -1815,7 +1816,7 @@ export interface MultipleErrorOptions {
 export function multiple<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   options: MultipleOptions = {},
-): Parser<M, readonly TValue[], readonly TState[]> {
+): FluentParser<M, readonly TValue[], readonly TState[]> {
   // Cast to sync for sync operations
   const syncParser = parser as Parser<"sync", TValue, TState>;
 
@@ -2972,7 +2973,7 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
-  return resultParser;
+  return fluent(resultParser);
 }
 
 /**
@@ -3014,7 +3015,7 @@ export function multiple<M extends Mode, TValue, TState>(
  */
 export function nonEmpty<M extends Mode, T, TState>(
   parser: Parser<M, T, TState>,
-): Parser<M, T, TState> {
+): FluentParser<M, T, TState> {
   const syncParser = parser as Parser<"sync", T, TState>;
   const initialState = parser.initialState;
 
@@ -3135,5 +3136,5 @@ export function nonEmpty<M extends Mode, T, TState>(
       enumerable: false,
     });
   }
-  return nonEmptyParser;
+  return fluent(nonEmptyParser);
 }

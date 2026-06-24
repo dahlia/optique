@@ -13,6 +13,7 @@
     "./doc": "./src/doc.ts",
     "./extension": "./src/extension.ts",
     "./facade": "./src/facade.ts",
+    "./fluent": "./src/fluent.ts",
     "./message": "./src/message.ts",
     "./modifiers": "./src/modifiers.ts",
     "./nonempty": "./src/nonempty.ts",
