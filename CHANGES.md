@@ -8,6 +8,19 @@ Version 1.2.0
 
 To be released.
 
+### @optique/core
+
+ -  Added fluent modifier methods for parsers returned by Optique's built-in
+    parser factories and first-party parser wrappers.  Modifiers such as
+    `map()`, `optional()`, `withDefault()`, `multiple()`, and `nonEmpty()` can
+    now also be called as methods, while the standalone functions remain the
+    base style for arbitrary `Parser` implementations.  The new
+    `@optique/core/fluent` subpath exports `fluent()` for custom parsers that
+    want to opt into the same method-style modifier surface.  [[#842], [#843]]
+
+[#842]: https://github.com/dahlia/optique/issues/842
+[#843]: https://github.com/dahlia/optique/pull/843
+
 ### @optique/discover
 
  -  Added `commandsFromModules()` for bundler-friendly command discovery from
