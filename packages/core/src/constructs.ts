@@ -5708,15 +5708,9 @@ export function object<
   maybeParsersOrOptions?: T | ObjectOptions,
   maybeOptions?: ObjectOptions,
 ): FluentParser<
-  CombineObjectModes<T>,
-  {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
-      : never;
-  },
-  {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
-      : never;
-  }
+  Mode,
+  { readonly [K in keyof T]: unknown },
+  { readonly [K in keyof T]: unknown }
 > {
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
@@ -6920,21 +6914,7 @@ export function object<
   }
 
   defineInheritedAnnotationParser(objectParser);
-  return fluent(
-    objectParser as Parser<
-      CombineObjectModes<T>,
-      {
-        readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U)
-          ? U
-          : never;
-      },
-      {
-        readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2)
-          ? U2
-          : never;
-      }
-    >,
-  );
+  return fluent(objectParser);
 }
 
 /**
@@ -8249,15 +8229,9 @@ export function tuple<
   maybeParsersOrOptions?: T | TupleOptions,
   maybeOptions?: TupleOptions,
 ): FluentParser<
-  CombineTupleModes<T>,
-  {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
-      : never;
-  },
-  {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
-      : never;
-  }
+  Mode,
+  { readonly [K in keyof T]: unknown },
+  { readonly [K in keyof T]: unknown }
 > {
   const label: string | undefined = typeof labelOrParsers === "string"
     ? labelOrParsers
@@ -9065,21 +9039,7 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
-  return fluent(
-    tupleParser as Parser<
-      CombineTupleModes<T>,
-      {
-        readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U)
-          ? U
-          : never;
-      },
-      {
-        readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2)
-          ? U2
-          : never;
-      }
-    >,
-  );
+  return fluent(tupleParser);
 }
 
 /**
@@ -9185,7 +9145,7 @@ export function seq<
   const T extends readonly Parser<Mode, unknown, unknown>[],
 >(
   ...rawArgs: readonly unknown[]
-): FluentParser<Mode, { readonly [K in keyof T]: unknown }, SeqState> {
+): FluentParser<Mode, readonly unknown[], SeqState> {
   const label = typeof rawArgs[0] === "string" ? rawArgs[0] : undefined;
   if (label != null) validateLabel(label);
 
@@ -9812,13 +9772,7 @@ export function seq<
   }
 
   defineInheritedAnnotationParser(seqParser);
-  return fluent(
-    seqParser as Parser<
-      CombineModes<{ readonly [K in keyof T]: ExtractMode<T[K]> }>,
-      { readonly [K in keyof T]: unknown },
-      SeqState
-    >,
-  );
+  return fluent(seqParser);
 }
 
 /**
