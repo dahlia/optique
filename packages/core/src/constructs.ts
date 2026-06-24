@@ -12689,13 +12689,7 @@ export function concat(
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
-  return fluent(
-    concatParser as Parser<
-      Mode,
-      readonly unknown[],
-      readonly unknown[]
-    >,
-  );
+  return fluent(concatParser);
 }
 
 /**
