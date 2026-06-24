@@ -62,7 +62,8 @@
   "sideEffects": false,
   "dependencies": {
     "@inquirer/prompts": "catalog:",
-    "@optique/core": "workspace:*"
+    "@optique/core": "workspace:*",
+    "@optique/prompt": "workspace:*"
   },
   "devDependencies": {
     "@optique/config": "workspace:*",
