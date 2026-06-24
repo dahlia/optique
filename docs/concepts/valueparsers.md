@@ -39,6 +39,7 @@ with Optique's type system.
 | `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
 | `firstOf()`                      | *@optique/core*     | union of constituent types     | First-match union of value parsers                  |
 | `json()`                         | *@optique/core*     | `Json`                         | Any JSON value, with optional root type restriction |
+| `cron()`                         | *@optique/core*     | `CronExpression`               | Cron schedule expression                            |
 | `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
 | `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
 | `uuid()`                         | *@optique/core*     | `string`                       | UUID with RFC 9562 validation                       |
@@ -881,6 +882,154 @@ The parser uses `"JSON"` as its default metavar.
 > [!TIP]
 > For schema-validated JSON with complex shapes, consider the
 > *@optique/zod* or *@optique/valibot* integrations instead.
+
+
+`cron()` parser
+---------------
+
+*This API is available since Optique 1.2.0.*
+
+The `cron()` parser validates cron schedule expressions and returns a
+`CronExpression` object with one property per field.  By default it accepts
+standard five-field cron expressions: minute, hour, day of month, month, and
+day of week.
+
+~~~~ typescript twoslash
+import { cron } from "@optique/core/valueparser";
+
+const schedule = cron();
+
+const result = schedule.parse("*/5 9-17 * JAN MON-FRI");
+if (result.success) {
+  result.value;
+  //     ^?
+}
+~~~~
+
+The parser validates values, ranges, lists, and intervals in each field:
+
+~~~~ typescript twoslash
+import { cron } from "@optique/core/valueparser";
+const schedule = cron();
+// ---cut-before---
+schedule.parse("0,15,30,45 9-17/2 1,15 JAN,MAR MON-FRI");
+schedule.parse("60 * * * *");   // Error: minute is out of range
+schedule.parse("* 23-0 * * *"); // Error: descending range
+schedule.parse("*/0 * * * *");  // Error: interval must be positive
+~~~~
+
+Month and weekday names are accepted case-insensitively.  The original field
+text is preserved in the returned object:
+
+~~~~ typescript twoslash
+import { cron } from "@optique/core/valueparser";
+
+const result = cron().parse("0 0 * jan mon-fri");
+if (result.success) {
+  result.value.month;     // "jan"
+  result.value.dayOfWeek; // "mon-fri"
+}
+~~~~
+
+### Seconds and years
+
+Use `seconds: true` to require a leading seconds field, and `years: true` to
+require a trailing year field.  When both are enabled, the parser expects
+seven fields:
+
+~~~~ typescript twoslash
+import { cron } from "@optique/core/valueparser";
+
+const withSeconds = cron({ seconds: true });
+withSeconds.parse("0 */5 9-17 * * MON-FRI");
+
+const withYears = cron({ years: true });
+withYears.parse("*/5 9-17 * * MON-FRI 2026");
+
+const withSecondsAndYears = cron({ seconds: true, years: true });
+withSecondsAndYears.parse("0 */5 9-17 * * MON-FRI 2026");
+~~~~
+
+The `year` field accepts years from 1970 through 2099.
+
+### Return value
+
+The returned `CronExpression` stores each validated field expression as a
+string.  Its `second` and `year` properties are optional in the general type,
+but the parser result type preserves the options passed to `cron()`: when
+`seconds: true` is set, `second` is required, and when `years: true` is set,
+`year` is required.
+
+~~~~ typescript
+interface CronExpression {
+  readonly second?: string;
+  readonly minute: string;
+  readonly hour: string;
+  readonly dayOfMonth: string;
+  readonly month: string;
+  readonly dayOfWeek: string;
+  readonly year?: string;
+}
+~~~~
+
+`format()` joins the fields back in the order configured by the parser:
+
+~~~~ typescript twoslash
+import { cron } from "@optique/core/valueparser";
+
+const parser = cron({ seconds: true, years: true });
+
+parser.format({
+  second: "0",
+  minute: "*/10",
+  hour: "9-17",
+  dayOfMonth: "*",
+  month: "*",
+  dayOfWeek: "MON-FRI",
+  year: "2026",
+});
+// "0 */10 9-17 * * MON-FRI 2026"
+~~~~
+
+### Quartz extensions
+
+By default, Quartz-only day-field tokens are rejected.  Set `quartz: true` to
+allow common Quartz day-of-month and day-of-week extensions:
+
+~~~~ typescript twoslash
+import { cron } from "@optique/core/valueparser";
+
+const schedule = cron({ quartz: true });
+
+schedule.parse("0 0 ? * MON");   // no specific day of month
+schedule.parse("0 0 L * *");     // last day of month
+schedule.parse("0 0 LW * *");    // last weekday of month
+schedule.parse("0 0 15W * *");   // weekday nearest the 15th
+schedule.parse("0 0 ? * MON#2"); // second Monday
+schedule.parse("0 0 ? * 5L");    // last Friday
+~~~~
+
+Quartz tokens remain limited to day fields.  Tokens such as `?` in the minute
+field or `L` in the month field are still rejected.  Day-of-week suffixes such
+as `5L` and `MON#2` accept weekday names or numeric days from `1` to `7`.
+
+### Error messages
+
+The `invalidCron` error can be customized with a static message or a callback:
+
+~~~~ typescript twoslash
+import { text } from "@optique/core/message";
+import { cron } from "@optique/core/valueparser";
+
+const schedule = cron({
+  metavar: "SCHEDULE",
+  errors: {
+    invalidCron: [text("Schedule must be a valid cron expression.")],
+  },
+});
+~~~~
+
+The parser uses `"CRON"` as its default metavar.
 
 
 `url()` parser

@@ -5,6 +5,8 @@ import {
   cidr,
   type Color,
   color,
+  cron,
+  type CronExpression,
   domain,
   email,
   fileSize,
@@ -17697,6 +17699,373 @@ describe("color()", () => {
     it("no suggestions for unmatched prefix", () => {
       const suggestions = [...color().suggest!("zzz")];
       assert.deepEqual(suggestions, []);
+    });
+  });
+});
+
+describe("cron()", () => {
+  describe("constructor", () => {
+    it("default mode is sync", () => {
+      assert.equal(cron().mode, "sync");
+    });
+
+    it("default metavar is CRON", () => {
+      assert.equal(cron().metavar, "CRON");
+    });
+
+    it("custom metavar is respected", () => {
+      assert.equal(cron({ metavar: "SCHEDULE" }).metavar, "SCHEDULE");
+    });
+
+    it("empty metavar throws TypeError", () => {
+      assert.throws(
+        () => cron({ metavar: "" as NonEmptyString }),
+        {
+          name: "TypeError",
+          message: "Expected a non-empty string.",
+        },
+      );
+    });
+
+    it("non-boolean seconds throws TypeError", () => {
+      assert.throws(
+        () => cron({ seconds: "yes" as never }),
+        {
+          name: "TypeError",
+          message: "Expected seconds to be a boolean, but got string: yes.",
+        },
+      );
+    });
+
+    it("non-boolean years throws TypeError", () => {
+      assert.throws(
+        () => cron({ years: "yes" as never }),
+        {
+          name: "TypeError",
+          message: "Expected years to be a boolean, but got string: yes.",
+        },
+      );
+    });
+
+    it("non-boolean quartz throws TypeError", () => {
+      assert.throws(
+        () => cron({ quartz: "yes" as never }),
+        {
+          name: "TypeError",
+          message: "Expected quartz to be a boolean, but got string: yes.",
+        },
+      );
+    });
+
+    it("default placeholder is midnight daily", () => {
+      assert.deepEqual(cron().placeholder, {
+        minute: "0",
+        hour: "0",
+        dayOfMonth: "*",
+        month: "*",
+        dayOfWeek: "*",
+      });
+    });
+  });
+
+  describe("parse()", () => {
+    it("parses a standard five-field expression", () => {
+      const result = cron().parse("*/5 0-23 * JAN MON-FRI");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        minute: "*/5",
+        hour: "0-23",
+        dayOfMonth: "*",
+        month: "JAN",
+        dayOfWeek: "MON-FRI",
+      });
+    });
+
+    it("rejects six fields by default", () => {
+      const result = cron().parse("0 */5 0-23 * JAN MON-FRI");
+
+      assert.ok(!result.success);
+    });
+
+    it("parses a leading seconds field when seconds is true", () => {
+      const result = cron({ seconds: true }).parse("0 */5 0-23 * JAN MON-FRI");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        second: "0",
+        minute: "*/5",
+        hour: "0-23",
+        dayOfMonth: "*",
+        month: "JAN",
+        dayOfWeek: "MON-FRI",
+      });
+    });
+
+    it("parses a trailing year field when years is true", () => {
+      const result = cron({ years: true }).parse("*/5 0-23 * JAN MON-FRI 2026");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        minute: "*/5",
+        hour: "0-23",
+        dayOfMonth: "*",
+        month: "JAN",
+        dayOfWeek: "MON-FRI",
+        year: "2026",
+      });
+    });
+
+    it("parses both seconds and years when enabled", () => {
+      const result = cron({ seconds: true, years: true }).parse(
+        "0 */5 0-23 * JAN MON-FRI 2026",
+      );
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        second: "0",
+        minute: "*/5",
+        hour: "0-23",
+        dayOfMonth: "*",
+        month: "JAN",
+        dayOfWeek: "MON-FRI",
+        year: "2026",
+      });
+    });
+
+    it("accepts lists, ranges, and intervals", () => {
+      const result = cron().parse("0,15,30,45 9-17/2 1,15 JAN,MAR MON-FRI/2");
+
+      assert.ok(result.success);
+    });
+
+    it("accepts numeric Sunday at weekday range ends", () => {
+      assert.ok(cron().parse("0 0 * * MON-0").success);
+      assert.ok(cron().parse("0 0 * * 1-0").success);
+    });
+
+    it("rejects field values outside their range", () => {
+      assert.ok(!cron().parse("60 * * * *").success);
+      assert.ok(!cron().parse("* 24 * * *").success);
+      assert.ok(!cron().parse("* * 32 * *").success);
+      assert.ok(!cron().parse("* * * 13 *").success);
+      assert.ok(!cron().parse("* * * * 8").success);
+    });
+
+    it("rejects descending ranges", () => {
+      const result = cron().parse("* 23-0 * * *");
+
+      assert.ok(!result.success);
+    });
+
+    it("rejects empty list members", () => {
+      const result = cron().parse("0,,15 * * * *");
+
+      assert.ok(!result.success);
+    });
+
+    it("rejects zero intervals", () => {
+      const result = cron().parse("*/0 * * * *");
+
+      assert.ok(!result.success);
+    });
+
+    it("accepts month and weekday names case-insensitively", () => {
+      const result = cron().parse("0 0 * jan mon-fri");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        minute: "0",
+        hour: "0",
+        dayOfMonth: "*",
+        month: "jan",
+        dayOfWeek: "mon-fri",
+      });
+    });
+
+    it("accepts names that contain Quartz marker letters", () => {
+      const result = cron().parse("0 0 * JUL WED");
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, {
+        minute: "0",
+        hour: "0",
+        dayOfMonth: "*",
+        month: "JUL",
+        dayOfWeek: "WED",
+      });
+    });
+
+    it("rejects Quartz tokens by default", () => {
+      assert.ok(!cron().parse("0 0 ? * MON").success);
+      assert.ok(!cron().parse("0 0 L * *").success);
+      assert.ok(!cron().parse("0 0 15W * *").success);
+      assert.ok(!cron().parse("0 0 ? * MON#2").success);
+    });
+
+    it("accepts Quartz day tokens when quartz is true", () => {
+      assert.ok(cron({ quartz: true }).parse("0 0 ? * MON").success);
+      assert.ok(cron({ quartz: true }).parse("0 0 L * *").success);
+      assert.ok(cron({ quartz: true }).parse("0 0 LW * *").success);
+      assert.ok(cron({ quartz: true }).parse("0 0 15W * *").success);
+      assert.ok(cron({ quartz: true }).parse("0 0 ? * MON#2").success);
+      assert.ok(cron({ quartz: true }).parse("0 0 ? * 5L").success);
+      assert.ok(cron({ quartz: true }).parse("0 0 ? * 7#2").success);
+    });
+
+    it("rejects Quartz expressions with both day fields unspecified", () => {
+      const result = cron({ quartz: true }).parse("0 0 ? * ?");
+
+      assert.ok(!result.success);
+    });
+
+    it("rejects zero in Quartz day-of-week suffixes", () => {
+      assert.ok(!cron({ quartz: true }).parse("0 0 ? * 0L").success);
+      assert.ok(!cron({ quartz: true }).parse("0 0 ? * 0#2").success);
+    });
+
+    it("rejects Quartz tokens in non-day fields", () => {
+      assert.ok(!cron({ quartz: true }).parse("? 0 * * *").success);
+      assert.ok(!cron({ quartz: true }).parse("0 L * * *").success);
+      assert.ok(!cron({ quartz: true }).parse("0 0 * L *").success);
+    });
+
+    it("uses a custom invalidCron error", () => {
+      const result = cron({
+        errors: { invalidCron: [text("bad schedule")] },
+      }).parse("not cron");
+
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, [{ type: "text", text: "bad schedule" }]);
+    });
+
+    it("passes input to invalidCron callback", () => {
+      const result = cron({
+        errors: {
+          invalidCron: (input) => message`Bad cron: ${input}`,
+        },
+      }).parse("not cron");
+
+      assert.ok(!result.success);
+      assert.equal(formatMessage(result.error), 'Bad cron: "not cron"');
+    });
+  });
+
+  describe("format()", () => {
+    it("formats a five-field expression", () => {
+      const parser = cron();
+      const expression: CronExpression = {
+        minute: "*/10",
+        hour: "9-17",
+        dayOfMonth: "*",
+        month: "*",
+        dayOfWeek: "MON-FRI",
+      };
+
+      assert.equal(parser.format(expression), "*/10 9-17 * * MON-FRI");
+    });
+
+    it("formats expressions with seconds and years", () => {
+      const parser = cron({ seconds: true, years: true });
+      const expression = {
+        second: "0",
+        minute: "*/10",
+        hour: "9-17",
+        dayOfMonth: "*",
+        month: "*",
+        dayOfWeek: "MON-FRI",
+        year: "2026",
+      };
+
+      assert.equal(
+        parser.format(expression),
+        "0 */10 9-17 * * MON-FRI 2026",
+      );
+    });
+
+    it("round-trips parsed expressions", () => {
+      const parser = cron({ seconds: true, years: true });
+      const result = parser.parse("0 0/15 9-17 * JAN MON-FRI 2026");
+
+      assert.ok(result.success);
+      const roundTrip = parser.parse(parser.format(result.value));
+      assert.ok(roundTrip.success);
+      assert.deepEqual(roundTrip.value, result.value);
+    });
+  });
+
+  describe("validate()", () => {
+    it("rejects unsupported seconds and years fields", () => {
+      const withSecond = cron().validate?.({
+        second: "30",
+        minute: "*/10",
+        hour: "9-17",
+        dayOfMonth: "*",
+        month: "*",
+        dayOfWeek: "MON-FRI",
+      } as never);
+      assert.ok(withSecond != null);
+      assert.ok(!withSecond.success);
+
+      const withYear = cron().validate?.({
+        minute: "*/10",
+        hour: "9-17",
+        dayOfMonth: "*",
+        month: "*",
+        dayOfWeek: "MON-FRI",
+        year: "2026",
+      } as never);
+      assert.ok(withYear != null);
+      assert.ok(!withYear.success);
+    });
+
+    it("rejects missing required seconds and years fields", () => {
+      const expression: CronExpression = {
+        minute: "*/10",
+        hour: "9-17",
+        dayOfMonth: "*",
+        month: "*",
+        dayOfWeek: "MON-FRI",
+      };
+
+      const secondsResult = cron({ seconds: true }).validate?.(
+        expression as never,
+      );
+      assert.ok(secondsResult != null);
+      assert.ok(!secondsResult.success);
+
+      const yearsResult = cron({ years: true }).validate?.(
+        expression as never,
+      );
+      assert.ok(yearsResult != null);
+      assert.ok(!yearsResult.success);
+
+      const parser = cron({ seconds: true, years: true });
+      const result = parser.validate?.(expression as never);
+      assert.ok(result != null);
+      assert.ok(!result.success);
+    });
+  });
+
+  describe("type inference", () => {
+    it("infers CronExpression", () => {
+      const result = cron().parse("0 0 * * *");
+      if (result.success) {
+        const _v: CronExpression = result.value;
+        assert.equal(_v.minute, "0");
+      }
+    });
+
+    it("infers configured seconds and years as required fields", () => {
+      const result = cron({ seconds: true, years: true }).parse(
+        "0 0 0 * * * 2026",
+      );
+      if (result.success) {
+        const second: string = result.value.second;
+        const year: string = result.value.year;
+        assert.equal(second, "0");
+        assert.equal(year, "2026");
+      }
     });
   });
 });

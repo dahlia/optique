@@ -149,6 +149,13 @@ Released on June 16, 2026.
     the TypeScript return type accordingly.  Also exports the `Json` type
     representing any JSON-serializable value.  [[#811], [#817]]
 
+ -  Added `cron()` value parser for validating cron schedule expressions.
+    The parser returns a `CronExpression` object with one property per field,
+    validates ranges, lists, intervals, month names, and weekday names, and
+    supports optional leading seconds and trailing year fields.  A `quartz`
+    option enables common Quartz day-field tokens such as `?`, `L`, `W`, and
+    `#`.  [[#809]]
+
  -  Added `seq()` as an ordered construct combinator for CLI grammars where
     child parsers must run in declaration order instead of shared-buffer
     priority order.  It returns a tuple of child values, preserves declaration
@@ -204,6 +211,7 @@ Released on June 16, 2026.
 [#805]: https://github.com/dahlia/optique/pull/805
 [#807]: https://github.com/dahlia/optique/issues/807
 [#808]: https://github.com/dahlia/optique/issues/808
+[#809]: https://github.com/dahlia/optique/issues/809
 [#810]: https://github.com/dahlia/optique/issues/810
 [#811]: https://github.com/dahlia/optique/issues/811
 [#814]: https://github.com/dahlia/optique/pull/814

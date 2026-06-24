@@ -9618,6 +9618,402 @@ function findNonFiniteNumber(root: Json): number | undefined {
 }
 
 /**
+ * A validated cron schedule expression split into cron fields.
+ *
+ * The `second` field is present when {@link cron} is configured with
+ * `seconds: true`, and the `year` field is present when it is configured
+ * with `years: true`.
+ *
+ * @since 1.2.0
+ */
+export interface CronExpression {
+  /** Seconds field, when enabled via `seconds: true`. */
+  readonly second?: string;
+
+  /** Minutes field. */
+  readonly minute: string;
+
+  /** Hours field. */
+  readonly hour: string;
+
+  /** Day-of-month field. */
+  readonly dayOfMonth: string;
+
+  /** Month field. */
+  readonly month: string;
+
+  /** Day-of-week field. */
+  readonly dayOfWeek: string;
+
+  /** Year field, when enabled via `years: true`. */
+  readonly year?: string;
+}
+
+/**
+ * Options for creating a {@link cron} value parser.
+ *
+ * @since 1.2.0
+ */
+export interface CronOptions {
+  /**
+   * The metavariable name for this parser.
+   * @default `"CRON"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Whether to require a leading seconds field.
+   * @default `false`
+   */
+  readonly seconds?: boolean;
+
+  /**
+   * Whether to require a trailing year field.
+   * @default `false`
+   */
+  readonly years?: boolean;
+
+  /**
+   * Whether to allow common Quartz day-field extensions such as `?`, `L`,
+   * `W`, and `#`.
+   * @default `false`
+   */
+  readonly quartz?: boolean;
+
+  /**
+   * Custom error messages for cron parsing failures.
+   *
+   * @since 1.2.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when the input is not a valid cron expression.
+     * Can be a static message or a function that receives the raw input.
+     */
+    readonly invalidCron?: Message | ((input: string) => Message);
+  };
+}
+
+/**
+ * Cron expression result type for a specific {@link cron} option set.
+ *
+ * When `seconds: true` is configured, the `second` field is required in the
+ * parser result.  When `years: true` is configured, the `year` field is
+ * required in the parser result.
+ *
+ * @since 1.2.0
+ */
+export type CronExpressionForOptions<O extends CronOptions> =
+  & Omit<CronExpression, "second" | "year">
+  & (O["seconds"] extends true ? { readonly second: string }
+    : { readonly second?: string })
+  & (O["years"] extends true ? { readonly year: string }
+    : { readonly year?: string });
+
+type CronFieldKind =
+  | "second"
+  | "minute"
+  | "hour"
+  | "dayOfMonth"
+  | "month"
+  | "dayOfWeek"
+  | "year";
+
+interface CronFieldSpec {
+  readonly kind: CronFieldKind;
+  readonly min: number;
+  readonly max: number;
+  readonly names?: ReadonlyMap<string, number>;
+}
+
+const CRON_MONTH_NAMES = new Map<string, number>([
+  ["JAN", 1],
+  ["FEB", 2],
+  ["MAR", 3],
+  ["APR", 4],
+  ["MAY", 5],
+  ["JUN", 6],
+  ["JUL", 7],
+  ["AUG", 8],
+  ["SEP", 9],
+  ["OCT", 10],
+  ["NOV", 11],
+  ["DEC", 12],
+]);
+
+const CRON_DAY_NAMES = new Map<string, number>([
+  ["SUN", 0],
+  ["MON", 1],
+  ["TUE", 2],
+  ["WED", 3],
+  ["THU", 4],
+  ["FRI", 5],
+  ["SAT", 6],
+]);
+
+const CRON_FIELD_SPECS = {
+  second: { kind: "second", min: 0, max: 59 },
+  minute: { kind: "minute", min: 0, max: 59 },
+  hour: { kind: "hour", min: 0, max: 23 },
+  dayOfMonth: { kind: "dayOfMonth", min: 1, max: 31 },
+  month: {
+    kind: "month",
+    min: 1,
+    max: 12,
+    names: CRON_MONTH_NAMES,
+  },
+  dayOfWeek: {
+    kind: "dayOfWeek",
+    min: 0,
+    max: 7,
+    names: CRON_DAY_NAMES,
+  },
+  year: { kind: "year", min: 1970, max: 2099 },
+} as const satisfies Record<CronFieldKind, CronFieldSpec>;
+
+/**
+ * Creates a {@link ValueParser} for cron schedule expressions.
+ *
+ * By default, the parser accepts standard five-field cron expressions:
+ * minute, hour, day of month, month, and day of week.  Enable
+ * {@link CronOptions.seconds} to require a leading seconds field, and
+ * {@link CronOptions.years} to require a trailing year field.  Successful
+ * parses return a {@link CronExpression} object whose fields preserve the
+ * validated cron field expressions.
+ *
+ * The standard syntax supports `*`, numeric values, ranges (`1-5`), lists
+ * (`1,2,3`), intervals (for example every five units or `1-10/2`), and
+ * month/day names such as
+ * `JAN` and `MON`.  Enable {@link CronOptions.quartz} to allow common Quartz
+ * day-field tokens: `?`, `L`, `LW`, `nW`, `nL`, and `n#k`.
+ *
+ * @param options Configuration options.
+ * @returns A sync value parser producing {@link CronExpressionForOptions}
+ * objects for the configured options.
+ * @throws {TypeError} If `options.metavar` is an empty string.
+ * @throws {TypeError} If `seconds`, `years`, or `quartz` is not a boolean.
+ * @since 1.2.0
+ */
+export function cron(): ValueParser<"sync", CronExpression>;
+export function cron<const O extends CronOptions>(
+  options: O,
+): ValueParser<"sync", CronExpressionForOptions<O>>;
+export function cron(
+  options: CronOptions = {},
+): ValueParser<"sync", CronExpression> {
+  const metavar = options.metavar ?? "CRON";
+  ensureNonEmptyString(metavar);
+  checkBooleanOption(options, "seconds");
+  checkBooleanOption(options, "years");
+  checkBooleanOption(options, "quartz");
+
+  const seconds = options.seconds ?? false;
+  const years = options.years ?? false;
+  const quartz = options.quartz ?? false;
+  const invalidCronError = options.errors?.invalidCron;
+  const expectedFieldCount = 5 + (seconds ? 1 : 0) + (years ? 1 : 0);
+
+  function makeError(input: string): ValueParserResult<never> {
+    const error = invalidCronError instanceof Function
+      ? invalidCronError(input)
+      : invalidCronError ??
+        message`Expected a valid cron expression, but got ${input}.`;
+    return { success: false, error };
+  }
+
+  function parseCron(input: string): ValueParserResult<CronExpression> {
+    const fields = input.trim() === "" ? [] : input.trim().split(/\s+/u);
+    if (fields.length !== expectedFieldCount) return makeError(input);
+
+    let index = 0;
+    const second = seconds ? fields[index++] : undefined;
+    const minute = fields[index++]!;
+    const hour = fields[index++]!;
+    const dayOfMonth = fields[index++]!;
+    const month = fields[index++]!;
+    const dayOfWeek = fields[index++]!;
+    const year = years ? fields[index++] : undefined;
+
+    const fieldChecks: readonly [
+      readonly [string | undefined, CronFieldSpec],
+      ...Array<readonly [string | undefined, CronFieldSpec]>,
+    ] = [
+      [second, CRON_FIELD_SPECS.second],
+      [minute, CRON_FIELD_SPECS.minute],
+      [hour, CRON_FIELD_SPECS.hour],
+      [dayOfMonth, CRON_FIELD_SPECS.dayOfMonth],
+      [month, CRON_FIELD_SPECS.month],
+      [dayOfWeek, CRON_FIELD_SPECS.dayOfWeek],
+      [year, CRON_FIELD_SPECS.year],
+    ];
+
+    for (const [field, spec] of fieldChecks) {
+      if (
+        field !== undefined &&
+        !isValidCronField(field, spec, { quartz })
+      ) {
+        return makeError(input);
+      }
+    }
+    if (quartz && dayOfMonth === "?" && dayOfWeek === "?") {
+      return makeError(input);
+    }
+
+    return {
+      success: true,
+      value: {
+        ...(second !== undefined ? { second } : {}),
+        minute,
+        hour,
+        dayOfMonth,
+        month,
+        dayOfWeek,
+        ...(year !== undefined ? { year } : {}),
+      },
+    };
+  }
+
+  return {
+    mode: "sync",
+    metavar,
+    placeholder: {
+      ...(seconds ? { second: "0" } : {}),
+      minute: "0",
+      hour: "0",
+      dayOfMonth: "*",
+      month: "*",
+      dayOfWeek: "*",
+      ...(years ? { year: "1970" } : {}),
+    },
+    parse: parseCron,
+    format(value: CronExpression): string {
+      return [
+        ...(seconds ? [value.second ?? "0"] : []),
+        value.minute,
+        value.hour,
+        value.dayOfMonth,
+        value.month,
+        value.dayOfWeek,
+        ...(years ? [value.year ?? "1970"] : []),
+      ].join(" ");
+    },
+    validate(value: CronExpression): ValueParserResult<CronExpression> {
+      if ((seconds && value.second == null) || (years && value.year == null)) {
+        return makeError(this.format(value));
+      }
+      if (
+        (!seconds && value.second != null) || (!years && value.year != null)
+      ) {
+        return makeError(this.format(value));
+      }
+      const result = parseCron(this.format(value));
+      return result.success ? { success: true, value: result.value } : result;
+    },
+  };
+}
+
+function isValidCronField(
+  field: string,
+  spec: CronFieldSpec,
+  options: { readonly quartz: boolean },
+): boolean {
+  if (field === "") return false;
+  const parts = field.split(",");
+  const standard = !parts.some((part) => part === "") &&
+    parts.every((part) => isValidCronFieldPart(part, spec));
+  return standard || isQuartzCronField(field, spec, options.quartz);
+}
+
+function isQuartzCronField(
+  field: string,
+  spec: CronFieldSpec,
+  quartz: boolean,
+): boolean {
+  if (!quartz) return false;
+  const upper = field.toUpperCase();
+  if (upper === "?") {
+    return spec.kind === "dayOfMonth" || spec.kind === "dayOfWeek";
+  }
+  if (spec.kind === "dayOfMonth") {
+    if (upper === "L" || upper === "LW") return true;
+    const match = /^(?<day>\d{1,2})W$/u.exec(upper);
+    return match != null && isCronValueInRange(match.groups!.day, spec);
+  }
+  if (spec.kind === "dayOfWeek") {
+    if (upper === "L") return true;
+    const lastMatch = /^(?<day>[A-Z]{3}|\d)L$/u.exec(upper);
+    if (lastMatch != null) {
+      return parseQuartzDayOfWeekSuffixValue(lastMatch.groups!.day);
+    }
+    const nthMatch = /^(?<day>[A-Z]{3}|\d)#(?<nth>[1-5])$/u.exec(upper);
+    if (nthMatch != null) {
+      return parseQuartzDayOfWeekSuffixValue(nthMatch.groups!.day);
+    }
+  }
+  return false;
+}
+
+function parseQuartzDayOfWeekSuffixValue(value: string): boolean {
+  if (/^[1-7]$/u.test(value)) return true;
+  if (!/^[A-Z]{3}$/u.test(value)) return false;
+  return CRON_DAY_NAMES.has(value);
+}
+
+function isValidCronFieldPart(part: string, spec: CronFieldSpec): boolean {
+  const stepParts = part.split("/");
+  if (stepParts.length > 2) return false;
+  const [base, step] = stepParts as [string, string | undefined];
+  if (base === "") return false;
+  if (step !== undefined && !isPositiveCronStep(step)) return false;
+
+  if (base === "*") return true;
+  const rangeParts = base.split("-");
+  if (rangeParts.length === 1) {
+    return parseCronValue(base, spec) !== undefined;
+  }
+  if (rangeParts.length !== 2) return false;
+  const [rawStart, rawEnd] = rangeParts as [string, string];
+  if (rawStart === "" || rawEnd === "") return false;
+  const start = parseCronValue(rawStart, spec);
+  const end = parseCronRangeEnd(rawStart, rawEnd, spec);
+  return start !== undefined && end !== undefined && start <= end;
+}
+
+function isPositiveCronStep(step: string): boolean {
+  return /^\d+$/u.test(step) && Number.parseInt(step, 10) > 0;
+}
+
+function isCronValueInRange(value: string, spec: CronFieldSpec): boolean {
+  return parseCronValue(value, spec) !== undefined;
+}
+
+function parseCronRangeEnd(
+  start: string,
+  end: string,
+  spec: CronFieldSpec,
+): number | undefined {
+  if (
+    spec.kind === "dayOfWeek" &&
+    start.toUpperCase() !== "SUN" &&
+    (end.toUpperCase() === "SUN" || end === "0")
+  ) {
+    return 7;
+  }
+  return parseCronValue(end, spec);
+}
+
+function parseCronValue(
+  value: string,
+  spec: CronFieldSpec,
+): number | undefined {
+  const named = spec.names?.get(value.toUpperCase());
+  if (named !== undefined) return named;
+  if (!/^\d+$/u.test(value)) return undefined;
+  const number = Number.parseInt(value, 10);
+  return number >= spec.min && number <= spec.max ? number : undefined;
+}
+
+/**
  * Options for the {@link firstOf} combinator.
  * @since 1.1.0
  */

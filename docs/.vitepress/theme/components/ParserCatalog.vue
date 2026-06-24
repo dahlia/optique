@@ -50,6 +50,7 @@ const valueParsers = [
       ["color", "color-parser"],
       ["locale", "locale-parser"],
       ["json", "json-parser"],
+      ["cron", "cron-parser"],
     ],
   },
   {
