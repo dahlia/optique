@@ -790,6 +790,21 @@ describe("commandsFromModules()", () => {
 });
 
 describe("createProgramParser()", () => {
+  it("returns a fluent parser", () => {
+    const parser = createProgramParser([
+      {
+        path: ["build"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Build the project.` },
+          handler() {},
+        }),
+      },
+    ]).map((value) => value);
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   it("dispatches to the matched command handler with parsed values", async () => {
     const calls: unknown[] = [];
     const parser = createProgramParser([

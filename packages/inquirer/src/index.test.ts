@@ -76,6 +76,16 @@ async function withPromptFunctionsOverride<T>(
 }
 
 describe("prompt()", () => {
+  it("returns a fluent parser", () => {
+    const parser = prompt(option("--name", string()), {
+      type: "input",
+      message: "Name:",
+      prompter: () => Promise.resolve("prompted"),
+    }).map((value) => value.toUpperCase());
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   interface PromptConfigData {
     readonly apiKey?: string;
   }

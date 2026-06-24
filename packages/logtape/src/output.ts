@@ -1,13 +1,14 @@
 import { basename } from "node:path";
 import { option } from "@optique/core/primitives";
 import { optional } from "@optique/core/modifiers";
+import type { FluentParser } from "@optique/core/fluent";
 import { ensureNonEmptyString } from "@optique/core/nonempty";
 import type {
   NonEmptyString,
   ValueParser,
   ValueParserResult,
 } from "@optique/core/valueparser";
-import type { Parser, Suggestion } from "@optique/core/parser";
+import type { Suggestion } from "@optique/core/parser";
 import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import type { LogLevel, LogRecord, Sink } from "@logtape/logtape";
@@ -172,7 +173,7 @@ function logOutputValueParser(
  */
 export function logOutput(
   options: LogOutputOptions = {},
-): Parser<"sync", LogOutput | undefined, unknown> {
+): FluentParser<"sync", LogOutput | undefined, unknown> {
   const long = (options.long ?? "--log-output") as OptionName;
   const valueParser = logOutputValueParser(options);
   const description = options.description ??

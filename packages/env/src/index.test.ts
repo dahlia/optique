@@ -383,6 +383,20 @@ describe("bool()", () => {
 });
 
 describe("bindEnv()", () => {
+  it("should return a fluent parser", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+    });
+    const parser = bindEnv(option("--name", string()), {
+      context,
+      key: "NAME",
+      parser: string(),
+      default: "env",
+    }).map((value) => value.toUpperCase());
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   describe("type constraints", () => {
     it("accepts only sync env parsers for sync bindEnv, but both for async bindEnv", () => {
       const context = createEnvContext();

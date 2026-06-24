@@ -15,6 +15,7 @@ import {
   type ParserSourceMetadata,
   wrapForMode,
 } from "@optique/core/extension";
+import { fluent, type FluentParser } from "@optique/core/fluent";
 import { envVar, type Message, message, valueSet } from "@optique/core/message";
 import type {
   ExecutionContext,
@@ -683,7 +684,7 @@ export function bindEnv<
 >(
   parser: Parser<M, TValue, TState>,
   options: BindEnvOptions<M, TValue>,
-): Parser<M, TValue, TState> {
+): FluentParser<M, TValue, TState> {
   if (typeof options.key !== "string") {
     throw new TypeError(
       `Expected key to be a string, but got: ${
@@ -973,7 +974,7 @@ export function bindEnv<
       enumerable: false,
     });
   }
-  return boundParser;
+  return fluent(boundParser);
 }
 
 /**

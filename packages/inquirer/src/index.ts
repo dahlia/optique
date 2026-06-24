@@ -28,6 +28,7 @@ import {
   unwrapInjectedAnnotationState,
   withAnnotationView,
 } from "@optique/core/extension";
+import { fluent, type FluentParser } from "@optique/core/fluent";
 import type {
   ExecutionContext,
   Mode,
@@ -635,7 +636,7 @@ type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
 export function prompt<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   config: PromptConfig<TValue>,
-): Parser<"async", TValue, TState> {
+): FluentParser<"async", TValue, TState> {
   const promptBindStateKey: unique symbol = Symbol(
     "@optique/inquirer/promptState",
   );
@@ -1360,7 +1361,7 @@ export function prompt<M extends Mode, TValue, TState>(
     });
   }
 
-  return promptedParser;
+  return fluent(promptedParser);
 }
 
 // ---- Helpers ----
