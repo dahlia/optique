@@ -12,6 +12,7 @@ import {
   mapModeValue,
   wrapForMode,
 } from "@optique/core/extension";
+import { fluent, type FluentParser } from "@optique/core/fluent";
 import { map } from "@optique/core/modifiers";
 import type { Message } from "@optique/core/message";
 import type {
@@ -510,7 +511,7 @@ export function commandsFromModules(
 export function createProgramParser(
   commands: readonly CommandEntry[],
   metadata: ProgramHelpMetadata = {},
-): Parser<Mode, ProgramInvocation, unknown> {
+): FluentParser<Mode, ProgramInvocation, unknown> {
   if (commands.length < 1) {
     throw new TypeError("createProgramParser() requires at least one command.");
   }
@@ -523,7 +524,7 @@ export function createProgramParser(
   );
   const rootNode = buildCommandTree(sortedCommands);
   const parser = buildNodeParser(rootNode);
-  return withRootDocs(parser, sortedCommands, metadata);
+  return fluent(withRootDocs(parser, sortedCommands, metadata));
 }
 
 /**

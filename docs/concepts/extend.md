@@ -265,6 +265,10 @@ Optique exposes a few low-level helper modules for custom parser authors:
     `withAnnotationView()`, `dispatchByMode()`, `mapModeValue()`,
     `wrapForMode()`, `delegateSuggestNodes()`, and
     `mapSourceMetadata()`.
+ -  `@optique/core/fluent`: Decorate a custom parser with method-style
+    modifier helpers using `fluent()` when you want it to support calls such as
+    `.map()` and `.optional()` without making those methods part of the base
+    `Parser` contract.
 
 Most custom parsers only need `annotations` and `context`.  The
 `extension` helpers are intended for parser wrappers that need to preserve

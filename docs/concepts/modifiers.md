@@ -27,6 +27,41 @@ modified parsers integrate seamlessly with Optique's priority system and help
 text generation.
 
 
+Fluent modifier style
+---------------------
+
+*This API is available since Optique 1.2.0.*
+
+Modifier functions can also be called as methods on parsers returned by
+Optique's built-in parser factories.  This is an alternative style for the same
+operations: method calls delegate to the standalone modifier functions, and the
+standalone form remains the common denominator for every `Parser`.
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+
+const port = option("--port", integer())
+  .map((value) => value + 1)
+  .withDefault(3001);
+~~~~
+
+Use the standalone functions when you are working with an arbitrary parser
+whose type is only known as `Parser`, or when you prefer the explicit wrapper
+style:
+
+~~~~ typescript twoslash
+import { map, withDefault } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+
+const port = withDefault(
+  map(option("--port", integer()), (value) => value + 1),
+  3001,
+);
+~~~~
+
+
 `optional()` parser
 -------------------
 

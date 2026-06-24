@@ -8,6 +8,7 @@ export * from "./constructs.ts";
 export * from "./dependency.ts";
 export * from "./doc.ts";
 export * from "./facade.ts";
+export * from "./fluent.ts";
 export {
   commandLine,
   envVar,

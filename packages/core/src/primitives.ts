@@ -38,6 +38,7 @@ import {
   type HiddenCommandAliasOptions,
 } from "./internal/command-alias.ts";
 import type { TraceEntry } from "./input-trace.ts";
+import { fluent, type FluentParser } from "./fluent.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import { validateCommandNames, validateOptionNames } from "./validate.ts";
 
@@ -261,7 +262,7 @@ import {
  * produces a constant value of the type {@link T}.
  * @template T The type of the constant value produced by the parser.
  */
-export function constant<const T>(value: T): Parser<"sync", T, T> {
+export function constant<const T>(value: T): FluentParser<"sync", T, T> {
   const result: Parser<"sync", T, T> = {
     $valueType: [],
     $stateType: [],
@@ -293,7 +294,7 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
     enumerable: false,
     writable: false,
   });
-  return result;
+  return fluent(result);
 }
 
 /**
@@ -315,8 +316,8 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
  *          complete time.
  * @since 1.0.0
  */
-export function fail<T>(): Parser<"sync", T, undefined> {
-  return {
+export function fail<T>(): FluentParser<"sync", T, undefined> {
+  return fluent({
     $valueType: [],
     $stateType: [],
     mode: "sync",
@@ -347,7 +348,7 @@ export function fail<T>(): Parser<"sync", T, undefined> {
     getDocFragments(_state, _defaultValue?) {
       return { fragments: [] };
     },
-  };
+  });
 }
 
 /**
@@ -847,7 +848,7 @@ async function* suggestArgumentAsync<T>(
  */
 export function option<M extends Mode, T>(
   ...args: readonly [OptionName, ...readonly OptionName[], ValueParser<M, T>]
-): Parser<M, T, ValueParserResult<T> | undefined>;
+): FluentParser<M, T, ValueParserResult<T> | undefined>;
 
 /**
  * Creates a parser for various styles of command-line options that take an
@@ -869,7 +870,7 @@ export function option<M extends Mode, T>(
     ValueParser<M, T>,
     OptionOptions,
   ]
-): Parser<M, T, ValueParserResult<T> | undefined>;
+): FluentParser<M, T, ValueParserResult<T> | undefined>;
 
 /**
  * Creates a parser for various styles of command-line options that do not
@@ -880,7 +881,7 @@ export function option<M extends Mode, T>(
  */
 export function option(
   ...optionNames: readonly [OptionName, ...readonly OptionName[]]
-): Parser<"sync", boolean, ValueParserResult<boolean> | undefined>;
+): FluentParser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
 /**
  * Creates a parser for various styles of command-line options that take an
@@ -894,7 +895,7 @@ export function option(
  */
 export function option(
   ...args: readonly [OptionName, ...readonly OptionName[], OptionOptions]
-): Parser<"sync", boolean, ValueParserResult<boolean> | undefined>;
+): FluentParser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
 export function option<M extends Mode, T>(
   ...args:
@@ -907,7 +908,7 @@ export function option<M extends Mode, T>(
     | readonly [OptionName, ...readonly OptionName[], ValueParser<M, T>]
     | readonly [OptionName, ...readonly OptionName[], OptionOptions]
     | readonly [OptionName, ...readonly OptionName[]]
-): Parser<M, T | boolean, ValueParserResult<T | boolean> | undefined> {
+): FluentParser<M, T | boolean, ValueParserResult<T | boolean> | undefined> {
   const lastArg = args.at(-1);
   const secondLastArg = args.at(-2);
   let valueParser: ValueParser<M, T> | undefined;
@@ -1528,11 +1529,13 @@ export function option<M extends Mode, T>(
   // At runtime, the isAsync flag ensures correct behavior:
   // - When M = "sync": parse() returns ParserResult directly
   // - When M = "async": parse() returns Promise<ParserResult>
-  return result as unknown as Parser<
-    M,
-    T | boolean,
-    ValueParserResult<T | boolean> | undefined
-  >;
+  return fluent(
+    result as unknown as Parser<
+      M,
+      T | boolean,
+      ValueParserResult<T | boolean> | undefined
+    >,
+  );
 }
 
 /**
@@ -1638,7 +1641,7 @@ export function flag(
   ...args:
     | readonly [OptionName, ...readonly OptionName[], FlagOptions]
     | readonly [OptionName, ...readonly OptionName[]]
-): Parser<"sync", true, ValueParserResult<true> | undefined> {
+): FluentParser<"sync", true, ValueParserResult<true> | undefined> {
   const lastArg = args.at(-1);
   let optionNames: readonly OptionName[];
   let options: FlagOptions = {};
@@ -1892,7 +1895,7 @@ export function flag(
     enumerable: false,
     writable: false,
   });
-  return result;
+  return fluent(result);
 }
 
 /**
@@ -2129,7 +2132,7 @@ function parseMatchedNegatableFlag(
 export function negatableFlag(
   names: NegatableFlagNames,
   options: NegatableFlagOptions = {},
-): Parser<"sync", boolean, NegatableFlagState | undefined> {
+): FluentParser<"sync", boolean, NegatableFlagState | undefined> {
   const positiveNames = normalizeNegatableFlagNameList(names.positive);
   const negativeNames = normalizeNegatableFlagNameList(names.negative);
   validateOptionNames(positiveNames, "Positive flag");
@@ -2355,7 +2358,7 @@ export function negatableFlag(
     enumerable: false,
     writable: false,
   });
-  return result;
+  return fluent(result);
 }
 
 /**
@@ -2425,7 +2428,7 @@ export interface ArgumentErrorOptions {
 export function argument<M extends Mode, T>(
   valueParser: ValueParser<M, T>,
   options: ArgumentOptions = {},
-): Parser<M, T, ValueParserResult<T> | undefined> {
+): FluentParser<M, T, ValueParserResult<T> | undefined> {
   const isAsync = valueParser.mode === "async";
   const syncValueParser = valueParser as ValueParser<"sync", T>;
   const dependencyMetadata = extractDependencyMetadata(valueParser);
@@ -2768,7 +2771,9 @@ export function argument<M extends Mode, T>(
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  return result as unknown as Parser<M, T, ValueParserResult<T> | undefined>;
+  return fluent(
+    result as unknown as Parser<M, T, ValueParserResult<T> | undefined>,
+  );
 }
 
 /**
@@ -3116,7 +3121,7 @@ export function command<M extends Mode, T, TState>(
   name: string,
   parser: Parser<M, T, TState>,
   options: CommandOptions = {},
-): Parser<M, T, CommandState<TState>> {
+): FluentParser<M, T, CommandState<TState>> {
   const commandNames = getCommandNames(name, options);
   const aliases = getVisibleCommandAliases(options);
   const hiddenAliases = getHiddenCommandAliases(options);
@@ -3573,7 +3578,7 @@ export function command<M extends Mode, T, TState>(
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  return result as unknown as Parser<M, T, CommandState<TState>>;
+  return fluent(result as unknown as Parser<M, T, CommandState<TState>>);
 }
 
 /**
@@ -3669,12 +3674,12 @@ export interface PassThroughOptions {
  */
 export function passThrough(
   options: PassThroughOptions = {},
-): Parser<"sync", readonly string[], readonly string[]> {
+): FluentParser<"sync", readonly string[], readonly string[]> {
   const format = options.format ?? "equalsOnly";
   const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
   const equalsOptionPattern = /^--[a-z0-9-]+=/i;
 
-  return {
+  const result: Parser<"sync", readonly string[], readonly string[]> = {
     $valueType: [],
     $stateType: [],
     mode: "sync",
@@ -3845,4 +3850,5 @@ export function passThrough(
       return `passThrough(${format})`;
     },
   };
+  return fluent(result);
 }

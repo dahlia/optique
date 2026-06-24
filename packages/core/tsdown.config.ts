@@ -16,6 +16,7 @@ export default defineConfig({
     "src/execution-context.ts",
     "src/extension.ts",
     "src/facade.ts",
+    "src/fluent.ts",
     "src/input-trace.ts",
     "src/internal/annotations.ts",
     "src/internal/dependency.ts",

@@ -1,6 +1,7 @@
 import { option } from "@optique/core/primitives";
 import { group, object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
+import type { FluentParser } from "@optique/core/fluent";
 import type { Parser } from "@optique/core/parser";
 import type { OptionName } from "@optique/core/usage";
 import type { Config, LogLevel } from "@logtape/logtape";
@@ -246,7 +247,7 @@ export type LoggingOptionsConfig =
  */
 export function loggingOptions(
   config: LoggingOptionsConfig,
-): Parser<"sync", LoggingOptionsResult, unknown> {
+): FluentParser<"sync", LoggingOptionsResult, unknown> {
   const groupLabel = config.groupLabel ?? "Logging options";
   const outputEnabled = config.output?.enabled !== false;
   const outputLong = config.output?.long ?? "--log-output";

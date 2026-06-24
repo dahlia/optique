@@ -1,6 +1,6 @@
 import { flag } from "@optique/core/primitives";
 import { map, multiple } from "@optique/core/modifiers";
-import type { Parser } from "@optique/core/parser";
+import type { FluentParser } from "@optique/core/fluent";
 import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import type { LogLevel } from "@logtape/logtape";
@@ -96,7 +96,7 @@ const VERBOSITY_LEVELS: readonly LogLevel[] = [
  */
 export function verbosity(
   options: VerbosityOptions = {},
-): Parser<"sync", LogLevel, unknown> {
+): FluentParser<"sync", LogLevel, unknown> {
   const short = (options.short ?? "-v") as OptionName;
   const long = (options.long ?? "--verbose") as OptionName;
   const baseLevel = options.baseLevel ?? "warning";

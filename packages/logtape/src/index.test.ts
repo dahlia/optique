@@ -129,6 +129,12 @@ describe("logLevel()", () => {
 });
 
 describe("verbosity()", () => {
+  it("should return a fluent parser", () => {
+    const parser = verbosity().map((level) => level);
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   it("should return base level with no flags", () => {
     const parser = object({
       level: verbosity(),
@@ -207,6 +213,12 @@ describe("verbosity()", () => {
 });
 
 describe("debug()", () => {
+  it("should return a fluent parser", () => {
+    const parser = debug().map((level) => level);
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   it("should return normal level without flag", () => {
     const parser = object({
       level: debug(),
@@ -279,6 +291,12 @@ describe("debug()", () => {
 });
 
 describe("logOutput()", () => {
+  it("should return a fluent parser", () => {
+    const parser = logOutput().map((output) => output);
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   it("should parse - as console output", () => {
     const parser = object({
       output: logOutput(),
@@ -482,6 +500,12 @@ describe("logOutput()", () => {
 });
 
 describe("loggingOptions()", () => {
+  it("should return a fluent parser", () => {
+    const parser = loggingOptions({ level: "option" }).map((value) => value);
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   describe("with level option", () => {
     it("should parse log level option", () => {
       const parser = object({

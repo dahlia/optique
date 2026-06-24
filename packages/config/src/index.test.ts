@@ -191,6 +191,19 @@ describe("createConfigContext", () => {
 });
 
 describe("bindConfig", () => {
+  test("returns a fluent parser", () => {
+    const context = createConfigContext({
+      schema: z.object({ name: z.string().optional() }),
+    });
+    const parser = bindConfig(option("--name", string()), {
+      context,
+      key: "name",
+      default: "config",
+    }).map((value) => value.toUpperCase());
+
+    assert.equal(typeof parser.map, "function");
+  });
+
   describe("key validation", () => {
     test("throws TypeError when key is an object", () => {
       const context = createConfigContext({

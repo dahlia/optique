@@ -1,6 +1,7 @@
 import * as annotations from "@optique/core/annotations";
 import * as dependency from "@optique/core/dependency";
 import * as extension from "@optique/core/extension";
+import * as fluent from "@optique/core/fluent";
 import * as parser from "@optique/core/parser";
 import * as root from "@optique/core";
 import assert from "node:assert/strict";
@@ -44,6 +45,7 @@ test("package manifests expose only supported public subpaths", () => {
     "./doc",
     "./extension",
     "./facade",
+    "./fluent",
     "./message",
     "./modifiers",
     "./nonempty",
@@ -70,6 +72,7 @@ test("package manifests expose only supported public subpaths", () => {
     "src/execution-context.ts",
     "src/extension.ts",
     "src/facade.ts",
+    "src/fluent.ts",
     "src/index.ts",
     "src/input-trace.ts",
     "src/internal/annotations.ts",
@@ -112,6 +115,10 @@ test("extension module exposes the supported extension helpers", () => {
   ]);
 });
 
+test("fluent module exposes fluent parser helpers", () => {
+  assert.deepEqual(Object.keys(fluent).sort(), ["fluent"]);
+});
+
 test("dependency module hides internal replay machinery", () => {
   assert.deepEqual(Object.keys(dependency).sort(), [
     "dependency",
@@ -145,6 +152,7 @@ test("root module keeps user-facing APIs but not internal machinery", () => {
   assert.equal(typeof root.negatableFlag, "function");
   assert.equal(typeof root.parse, "function");
   assert.equal(typeof root.dependency, "function");
+  assert.equal(typeof root.fluent, "function");
   assert.ok(!Object.hasOwn(root, "annotationKey"));
   assert.ok(!Object.hasOwn(root, "dependencyId"));
   assert.ok(!Object.hasOwn(root, "getParserSuggestRuntimeNodes"));

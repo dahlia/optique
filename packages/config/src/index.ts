@@ -36,6 +36,7 @@ import {
   withAnnotationView,
   wrapForMode,
 } from "@optique/core/extension";
+import { fluent, type FluentParser } from "@optique/core/fluent";
 import { message } from "@optique/core/message";
 import type { ValueParserResult } from "@optique/core/valueparser";
 
@@ -666,7 +667,7 @@ export function bindConfig<
 >(
   parser: Parser<M, TValue, TState>,
   options: BindConfigOptions<T, TValue, TConfigMeta>,
-): Parser<M, TValue, TState> {
+): FluentParser<M, TValue, TState> {
   const keyType = typeof options.key;
   if (
     keyType !== "string" && keyType !== "number" && keyType !== "symbol" &&
@@ -980,7 +981,7 @@ export function bindConfig<
       enumerable: false,
     });
   }
-  return boundParser;
+  return fluent(boundParser);
 }
 
 /**

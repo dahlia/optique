@@ -47,6 +47,7 @@ import {
   extractPhase2SeedKey,
   phase2SeedFromValueResult,
 } from "./phase2-seed.ts";
+import { fluent, type FluentParser } from "./fluent.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import {
   deduplicateDocFragments,
@@ -1738,7 +1739,7 @@ export function or<
 >(
   a: Parser<MA, TA, TStateA>,
   b: Parser<MB, TB, TStateB>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB]>,
   TA | TB,
   undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
@@ -1778,7 +1779,7 @@ export function or<
   a: Parser<MA, TA, TStateA>,
   b: Parser<MB, TB, TStateB>,
   c: Parser<MC, TC, TStateC>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC]>,
   TA | TB | TC,
   | undefined
@@ -1829,7 +1830,7 @@ export function or<
   b: Parser<MB, TB, TStateB>,
   c: Parser<MC, TC, TStateC>,
   d: Parser<MD, TD, TStateD>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD]>,
   TA | TB | TC | TD,
   | undefined
@@ -1888,7 +1889,7 @@ export function or<
   c: Parser<MC, TC, TStateC>,
   d: Parser<MD, TD, TStateD>,
   e: Parser<ME, TE, TStateE>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME]>,
   TA | TB | TC | TD | TE,
   | undefined
@@ -1957,7 +1958,7 @@ export function or<
   d: Parser<MD, TD, TStateD>,
   e: Parser<ME, TE, TStateE>,
   f: Parser<MF, TF, TStateF>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME, MF]>,
   TA | TB | TC | TD | TE | TF,
   | undefined
@@ -2035,7 +2036,7 @@ export function or<
   e: Parser<ME, TE, TStateE>,
   f: Parser<MF, TF, TStateF>,
   g: Parser<MG, TG, TStateG>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG]>,
   TA | TB | TC | TD | TE | TF | TG,
   | undefined
@@ -2122,7 +2123,7 @@ export function or<
   f: Parser<MF, TF, TStateF>,
   g: Parser<MG, TG, TStateG>,
   h: Parser<MH, TH, TStateH>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH]>,
   TA | TB | TC | TD | TE | TF | TG | TH,
   | undefined
@@ -2218,7 +2219,7 @@ export function or<
   g: Parser<MG, TG, TStateG>,
   h: Parser<MH, TH, TStateH>,
   i: Parser<MI, TI, TStateI>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI]>,
   TA | TB | TC | TD | TE | TF | TG | TH | TI,
   | undefined
@@ -2323,7 +2324,7 @@ export function or<
   h: Parser<MH, TH, TStateH>,
   i: Parser<MI, TI, TStateI>,
   j: Parser<MJ, TJ, TStateJ>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ]>,
   TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ,
   | undefined
@@ -2437,7 +2438,7 @@ export function or<
   i: Parser<MI, TI, TStateI>,
   j: Parser<MJ, TJ, TStateJ>,
   k: Parser<MK, TK, TStateK>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK]>,
   TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK,
   | undefined
@@ -2560,7 +2561,7 @@ export function or<
   j: Parser<MJ, TJ, TStateJ>,
   k: Parser<MK, TK, TStateK>,
   l: Parser<ML, TL, TStateL>,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML]>,
   TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK | TL,
   | undefined
@@ -2692,7 +2693,7 @@ export function or<
   k: Parser<MK, TK, TStateK>,
   l: Parser<ML, TL, TStateL>,
   m: Parser<MM, TM, TStateM>,
-): Parser<
+): FluentParser<
   CombineModes<
     readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML, MM]
   >,
@@ -2835,7 +2836,7 @@ export function or<
   l: Parser<ML, TL, TStateL>,
   m: Parser<MM, TM, TStateM>,
   n: Parser<MN, TN, TStateN>,
-): Parser<
+): FluentParser<
   CombineModes<
     readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML, MM, MN]
   >,
@@ -2987,7 +2988,7 @@ export function or<
   m: Parser<MM, TM, TStateM>,
   n: Parser<MN, TN, TStateN>,
   o: Parser<MO, TO, TStateO>,
-): Parser<
+): FluentParser<
   CombineModes<
     readonly [
       MA,
@@ -3054,7 +3055,7 @@ export function or<
   a: Parser<MA, TA, TStateA>,
   b: Parser<MB, TB, TStateB>,
   options: OrOptions,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB]>,
   TA | TB,
   undefined | [0, ParserResult<TStateA>] | [1, ParserResult<TStateB>]
@@ -3096,7 +3097,7 @@ export function or<
   b: Parser<MB, TB, TStateB>,
   c: Parser<MC, TC, TStateC>,
   options: OrOptions,
-): Parser<
+): FluentParser<
   CombineModes<readonly [MA, MB, MC]>,
   TA | TB | TC,
   | undefined
@@ -3120,7 +3121,7 @@ export function or<
   ...rest:
     & [...parsers: TParsers, options: OrTailOptions]
     & OrArityGuard<TParsers>
-): Parser<
+): FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
   undefined | [number, ParserResult<unknown>]
@@ -3137,7 +3138,7 @@ export function or<
   const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
   ...parsers: TParsers & OrArityGuard<TParsers>
-): Parser<
+): FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
   undefined | [number, ParserResult<unknown>]
@@ -3147,7 +3148,7 @@ export function or<
  */
 export function or(
   ...args: Array<Parser<Mode, unknown, unknown> | OrOptions>
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
+): FluentParser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
   // Extract parsers and options from arguments
   let parsers: Parser<Mode, unknown, unknown>[];
   let options: OrOptions | undefined;
@@ -4077,11 +4078,13 @@ export function or(
   // reasoning applies to validateValue (#414): a fallback value may
   // belong to any branch, so revalidating through a single arbitrary
   // branch would reject values that another branch would accept.
-  return singleResult as Parser<
-    Mode,
-    unknown,
-    [number, ParserResult<unknown>] | undefined
-  >;
+  return fluent(
+    singleResult as Parser<
+      Mode,
+      unknown,
+      [number, ParserResult<unknown>] | undefined
+    >,
+  );
 }
 
 /**
@@ -4215,7 +4218,7 @@ export function longestMatch<
   const TParsers extends readonly Parser<"sync", unknown, unknown>[],
 >(
   ...parsers: TParsers & LongestMatchArityGuard<TParsers>
-): Parser<
+): FluentParser<
   "sync",
   InferValue<TParsers[number]>,
   LongestMatchState<TParsers>
@@ -4240,7 +4243,7 @@ export function longestMatch<
   ...rest:
     & [...parsers: TParsers, options: LongestMatchTailOptions]
     & LongestMatchArityGuard<TParsers>
-): Parser<
+): FluentParser<
   "sync",
   InferValue<TParsers[number]>,
   LongestMatchState<TParsers>
@@ -4262,7 +4265,7 @@ export function longestMatch<
   ...rest:
     & [...parsers: TParsers, options: LongestMatchTailOptions]
     & LongestMatchArityGuard<TParsers>
-): Parser<
+): FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
   LongestMatchState<TParsers>
@@ -4284,7 +4287,7 @@ export function longestMatch<
   const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
   ...parsers: TParsers & LongestMatchArityGuard<TParsers>
-): Parser<
+): FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
   LongestMatchState<TParsers>
@@ -4308,7 +4311,7 @@ export function longestMatch<
   const TParsers extends readonly Parser<M, TValue, TState>[],
 >(
   ...parsers: TParsers & LongestMatchArityGuard<TParsers>
-): Parser<M, TValue, unknown>;
+): FluentParser<M, TValue, unknown>;
 
 /**
  * Creates a parser that selects the successful branch that consumed
@@ -4328,19 +4331,19 @@ export function longestMatch<
   ...rest:
     & [...parsers: TParsers, options: LongestMatchTailOptions]
     & LongestMatchArityGuard<TParsers>
-): Parser<M, TValue, unknown>;
+): FluentParser<M, TValue, unknown>;
 /**
  * @since 0.5.0
  */
 export function longestMatch(
   ...args: Array<Parser<Mode, unknown, unknown> | LongestMatchOptions>
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
+): FluentParser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
   return createLongestMatch(...args);
 }
 
 function createLongestMatch(
   ...args: Array<Parser<Mode, unknown, unknown> | LongestMatchOptions>
-): Parser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
+): FluentParser<Mode, unknown, undefined | [number, ParserResult<unknown>]> {
   // Extract parsers and options from arguments
   let parsers: Parser<Mode, unknown, unknown>[];
   let options: InternalLongestMatchOptions | undefined;
@@ -4661,11 +4664,13 @@ function createLongestMatch(
   // branch is unknown at default time—normalizing through the wrong
   // branch would produce values that differ from what parse() returns.
   // The same reasoning applies to validateValue (#414).
-  return multiResult as Parser<
-    Mode,
-    unknown,
-    [number, ParserResult<unknown>] | undefined
-  >;
+  return fluent(
+    multiResult as Parser<
+      Mode,
+      unknown,
+      [number, ParserResult<unknown>] | undefined
+    >,
+  );
 }
 
 /**
@@ -5585,7 +5590,7 @@ export function object<
   T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
 >(
   parsers: T,
-): Parser<
+): FluentParser<
   CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -5616,7 +5621,7 @@ export function object<
 >(
   parsers: T,
   options: ObjectOptions,
-): Parser<
+): FluentParser<
   CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -5647,7 +5652,7 @@ export function object<
 >(
   label: string,
   parsers: T,
-): Parser<
+): FluentParser<
   CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -5682,7 +5687,7 @@ export function object<
   label: string,
   parsers: T,
   options: ObjectOptions,
-): Parser<
+): FluentParser<
   CombineObjectModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -5702,7 +5707,7 @@ export function object<
   labelOrParsers: string | T,
   maybeParsersOrOptions?: T | ObjectOptions,
   maybeOptions?: ObjectOptions,
-): Parser<
+): FluentParser<
   Mode,
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
@@ -6909,7 +6914,7 @@ export function object<
   }
 
   defineInheritedAnnotationParser(objectParser);
-  return objectParser;
+  return fluent(objectParser);
 }
 
 /**
@@ -8172,7 +8177,7 @@ export function tuple<
 >(
   parsers: T,
   options?: TupleOptions,
-): Parser<
+): FluentParser<
   CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -8205,7 +8210,7 @@ export function tuple<
   label: string,
   parsers: T,
   options?: TupleOptions,
-): Parser<
+): FluentParser<
   CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -8223,7 +8228,7 @@ export function tuple<
   labelOrParsers: string | T,
   maybeParsersOrOptions?: T | TupleOptions,
   maybeOptions?: TupleOptions,
-): Parser<
+): FluentParser<
   Mode,
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
@@ -9034,7 +9039,7 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
-  return tupleParser;
+  return fluent(tupleParser);
 }
 
 /**
@@ -9054,7 +9059,7 @@ export function seq<
   const T extends readonly Parser<Mode, unknown, unknown>[],
 >(
   ...parsers: T
-): Parser<
+): FluentParser<
   CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -9079,7 +9084,7 @@ export function seq<
 >(
   label: string,
   ...parsers: T
-): Parser<
+): FluentParser<
   CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -9101,7 +9106,7 @@ export function seq<
   const T extends readonly Parser<Mode, unknown, unknown>[],
 >(
   ...args: readonly [...T, SeqTailOptions]
-): Parser<
+): FluentParser<
   CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -9127,7 +9132,7 @@ export function seq<
 >(
   label: string,
   ...args: readonly [...T, SeqTailOptions]
-): Parser<
+): FluentParser<
   CombineTupleModes<T>,
   {
     readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
@@ -9140,7 +9145,7 @@ export function seq<
   const T extends readonly Parser<Mode, unknown, unknown>[],
 >(
   ...rawArgs: readonly unknown[]
-): Parser<Mode, { readonly [K in keyof T]: unknown }, SeqState> {
+): FluentParser<Mode, readonly unknown[], SeqState> {
   const label = typeof rawArgs[0] === "string" ? rawArgs[0] : undefined;
   if (label != null) validateLabel(label);
 
@@ -9767,7 +9772,7 @@ export function seq<
   }
 
   defineInheritedAnnotationParser(seqParser);
-  return seqParser;
+  return fluent(seqParser);
 }
 
 /**
@@ -9850,7 +9855,7 @@ type IntersectMergeValues<TParsers extends MergeParsers> = TParsers extends
 type MergeValues<TParsers extends MergeParsers> = IsTuple<TParsers> extends true
   ? IntersectMergeValues<TParsers>
   : Record<string | symbol, unknown>;
-type MergeReturnType<TParsers extends MergeParsers> = Parser<
+type MergeReturnType<TParsers extends MergeParsers> = FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   MergeValues<TParsers>,
   Record<string | symbol, unknown>
@@ -9934,7 +9939,7 @@ export function merge<const TParsers extends MergeParsers>(
 
 export function merge(
   ...args: readonly unknown[]
-): Parser<
+): FluentParser<
   Mode,
   Record<string | symbol, unknown>,
   Record<string | symbol, unknown>
@@ -11329,7 +11334,7 @@ export function merge(
   // The same reasoning applies to validateValue (#414): composite-key
   // ownership cannot be resolved from the value alone.
   defineInheritedAnnotationParser(mergeParser);
-  return mergeParser;
+  return fluent(mergeParser);
 }
 
 type ConcatParserArity =
@@ -11895,7 +11900,7 @@ function tryParseSuggestList(
  */
 export function concat<const TParsers extends ConcatParsers>(
   ...parsers: TParsers & ConcatArityGuard<TParsers>
-): Parser<
+): FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   ConcatValues<TParsers>,
   ConcatStates<TParsers>
@@ -11903,7 +11908,7 @@ export function concat<const TParsers extends ConcatParsers>(
 
 export function concat(
   ...parsers: Parser<Mode, readonly unknown[], unknown>[]
-): Parser<Mode, readonly unknown[], readonly unknown[]> {
+): FluentParser<Mode, readonly unknown[], readonly unknown[]> {
   if (parsers.length < 1) {
     throw new TypeError("concat() requires at least one parser argument.");
   }
@@ -12684,7 +12689,7 @@ export function concat(
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
-  return concatParser;
+  return fluent(concatParser);
 }
 
 /**
@@ -12747,7 +12752,7 @@ export function group<M extends Mode, TValue, TState>(
   label: string,
   parser: Parser<M, TValue, TState>,
   options: GroupOptions = {},
-): Parser<M, TValue, TState> {
+): FluentParser<M, TValue, TState> {
   validateLabel(label);
   const groupParser: Parser<M, TValue, TState> = {
     mode: parser.mode,
@@ -12921,7 +12926,7 @@ export function group<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
-  return groupParser;
+  return fluent(groupParser);
 }
 
 /**
@@ -13035,7 +13040,7 @@ export function conditional<
 >(
   discriminator: TD,
   branches: TBranches,
-): Parser<
+): FluentParser<
   CombineModes<
     readonly [
       ExtractMode<TD>,
@@ -13072,7 +13077,7 @@ export function conditional<
   branches: TBranches,
   defaultBranch: TDefault,
   options?: ConditionalOptions,
-): Parser<
+): FluentParser<
   CombineModes<
     readonly [
       ExtractMode<TD>,
@@ -13147,7 +13152,7 @@ export function conditional(
   branches: Record<string, Parser<Mode, unknown, unknown>>,
   defaultBranch?: Parser<Mode, unknown, unknown>,
   options?: ConditionalOptions,
-): Parser<
+): FluentParser<
   Mode,
   readonly [string | undefined, unknown],
   ConditionalState<string>
@@ -15387,5 +15392,5 @@ export function conditional(
     ConditionalState<string>
   >;
   defineInheritedAnnotationParser(conditionalParser);
-  return conditionalParser;
+  return fluent(conditionalParser);
 }

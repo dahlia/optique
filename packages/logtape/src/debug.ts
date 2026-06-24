@@ -1,6 +1,6 @@
 import { flag } from "@optique/core/primitives";
 import { map, optional } from "@optique/core/modifiers";
-import type { Parser } from "@optique/core/parser";
+import type { FluentParser } from "@optique/core/fluent";
 import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import type { LogLevel } from "@logtape/logtape";
@@ -82,7 +82,7 @@ export interface DebugOptions {
  */
 export function debug(
   options: DebugOptions = {},
-): Parser<"sync", LogLevel, unknown> {
+): FluentParser<"sync", LogLevel, unknown> {
   const short = (options.short ?? "-d") as OptionName;
   const long = (options.long ?? "--debug") as OptionName;
   const debugLevel = options.debugLevel ?? "debug";

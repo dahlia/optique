@@ -123,6 +123,14 @@
       "import": "./dist/facade.js",
       "require": "./dist/facade.cjs"
     },
+    "./fluent": {
+      "types": {
+        "import": "./dist/fluent.d.ts",
+        "require": "./dist/fluent.d.cts"
+      },
+      "import": "./dist/fluent.js",
+      "require": "./dist/fluent.cjs"
+    },
     "./message": {
       "types": {
         "import": "./dist/message.d.ts",
