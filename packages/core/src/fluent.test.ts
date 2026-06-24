@@ -29,7 +29,7 @@ describe("fluent", () => {
 
     assert.equal(decorated, parser);
     assert.equal(typeof decorated.map, "function");
-    assert.equal(Object.keys(decorated).includes("map"), false);
+    assert.ok(!Object.keys(decorated).includes("map"));
   });
 
   it("should replace unrelated parser methods with fluent helpers", () => {
