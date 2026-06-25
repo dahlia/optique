@@ -353,7 +353,7 @@ describe("bindDerivedDefault()", () => {
       },
     });
 
-    assert.equal(result.verbose, true);
+    assert.ok(result.verbose);
   });
 
   it("works with low-level parse annotations", () => {

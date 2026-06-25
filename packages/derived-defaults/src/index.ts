@@ -182,6 +182,8 @@ function validateFallbackValue<M extends Mode, TValue>(
  *
  * @param resolvers Resolver map keyed by derived value name.
  * @returns A derived-default context bundle.
+ * @throws {TypeError} If `resolvers` is not an object or contains a
+ * non-function resolver.
  * @since 1.2.0
  */
 export function createDerivedDefaults<const TResolvers extends object>(
@@ -212,9 +214,7 @@ export function createDerivedDefaults<const TResolvers extends object>(
       if (request.phase === "phase1") {
         return { [contextId]: phase1DerivedDefaultAnnotationMarker };
       }
-      return Object.getOwnPropertySymbols(annotations).includes(contextId)
-        ? undefined
-        : { [contextId]: undefined };
+      return contextId in annotations ? undefined : { [contextId]: undefined };
     },
     getAnnotations(
       request?: SourceContextRequest,
@@ -265,6 +265,7 @@ export function createDerivedDefaults<const TResolvers extends object>(
  * @param parser Parser that reads the CLI value.
  * @param options Derived default binding options.
  * @returns A parser with derived fallback behavior.
+ * @throws {TypeError} If `options.key` is not a property key.
  * @since 1.2.0
  */
 export function bindDerivedDefault<
