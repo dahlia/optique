@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { formatDocPage } from "@optique/core/doc";
 import { message, optionName } from "@optique/core/message";
 import { object } from "@optique/core/constructs";
+import { withDefault } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { getDocPage, parse } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
@@ -124,6 +125,28 @@ describe("bindDerivedDefault()", () => {
     });
 
     assert.equal(result.workspaceRoot, "/static");
+  });
+
+  it("falls through from undefined to an inner parser fallback", async () => {
+    const derived = createDerivedDefaults({
+      workspaceRoot: () => undefined,
+    });
+    const parser = object({
+      workspaceRoot: bindDerivedDefault(
+        withDefault(option("--workspace-root", string()), "/inner"),
+        {
+          context: derived.context,
+          key: "workspaceRoot",
+        },
+      ),
+    });
+
+    const result = await runAsync(parser, {
+      args: [],
+      contexts: [derived.context],
+    });
+
+    assert.equal(result.workspaceRoot, "/inner");
   });
 
   it("fails when no CLI, derived, or static default value exists", async () => {

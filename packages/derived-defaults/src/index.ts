@@ -351,6 +351,7 @@ export function bindDerivedDefault<
   function getDerivedOrDefault(
     state: unknown,
     mode: M,
+    exec: ExecutionContext | undefined,
     innerParser?: Parser<M, TValue, unknown>,
   ): ModeValue<M, Result<TValue>> {
     const annotations = getAnnotations(state);
@@ -362,6 +363,26 @@ export function bindDerivedDefault<
     }
     if (options.default !== undefined) {
       return validateFallbackValue(mode, innerParser, options.default);
+    }
+    if (innerParser?.canSkip?.(getInnerState(state as TState), exec) === true) {
+      return mapModeValue(
+        mode,
+        innerParser.complete(getInnerState(state as TState), exec),
+        (result) => {
+          if (result.success) return result;
+          if (contextAbsent) {
+            return {
+              success: false as const,
+              error:
+                message`Derived default value could not be read: the derived default context was not passed to run()'s contexts option.`,
+            };
+          }
+          return {
+            success: false as const,
+            error: message`Missing required derived default value.`,
+          };
+        },
+      );
     }
     if (contextAbsent) {
       return wrapForMode(mode, {
@@ -498,7 +519,7 @@ export function bindDerivedDefault<
       if (isBindState(state) && state.hasCliValue) {
         return parser.complete(state.cliState!, exec);
       }
-      return getDerivedOrDefault(state, parser.mode, parser);
+      return getDerivedOrDefault(state, parser.mode, exec, parser);
     },
     suggest(context, prefix) {
       const innerState = getInnerState(context.state);
