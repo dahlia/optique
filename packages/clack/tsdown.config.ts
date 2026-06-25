@@ -5,6 +5,9 @@ export default defineConfig({
     "src/index.ts",
   ],
   dts: true,
-  format: ["esm"],
+  format: ["esm", "cjs"],
   platform: "node",
+  deps: {
+    alwaysBundle: ["@clack/prompts"],
+  },
 });
