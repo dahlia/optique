@@ -86,7 +86,7 @@ skipped.  When they are absent, the user sees Inquirer.js prompts.
 Prompt types
 ------------
 
-### `input` — free-text string
+### `input`—free-text string
 
 Prompts the user for an arbitrary string value:
 
@@ -115,7 +115,7 @@ const name = prompt(option("--name", string()), {
 :   Function called when the user submits.  Return `true` to accept or
     a string error message to reject and re-prompt.
 
-### `confirm` — Boolean yes/no
+### `confirm`—Boolean yes/no
 
 Prompts the user with a yes/no question:
 
@@ -138,7 +138,7 @@ const verbose = prompt(flag("--verbose"), {
 `default`
 :   Default answer when the user presses Enter without typing.
 
-### `number` — numeric input
+### `number`—numeric input
 
 Prompts the user for a number:
 
@@ -174,7 +174,7 @@ const port = prompt(option("--port", integer()), {
 > If the user submits the prompt without entering a number (leaving it blank),
 > the result is a parse failure rather than `undefined`.
 
-### `password` — masked input
+### `password`—masked input
 
 Prompts for a secret value without displaying the characters:
 
@@ -202,7 +202,7 @@ const apiKey = prompt(option("--api-key", string()), {
 `validate`
 :   Same as `input`.
 
-### `editor` — multi-line text
+### `editor`—multi-line text
 
 Opens the user's `$VISUAL` or `$EDITOR` for multi-line input:
 
@@ -230,7 +230,7 @@ const message = prompt(option("--message", string()), {
 `validate`
 :   Same as `input`.
 
-### `select` — arrow-key single-select
+### `select`—arrow-key single-select
 
 Shows a scrollable list where the user selects one option using arrow keys:
 
@@ -280,7 +280,7 @@ const color = prompt(option("--color", string()), {
 
 [`Choice`]: #choice
 
-### `rawlist` — numbered list
+### `rawlist`—numbered list
 
 Shows a numbered list and prompts the user to type a number:
 
@@ -307,7 +307,7 @@ const format = prompt(option("--format", string()), {
 `default`
 :   Pre-selected choice value.
 
-### `expand` — keyboard shortcut single-select
+### `expand`—keyboard shortcut single-select
 
 Prompts the user to press a single key to select an option:
 
@@ -341,7 +341,7 @@ const action = prompt(option("--action", string()), {
 
 [`ExpandChoice`]: #expandchoice
 
-### `checkbox` — multi-select
+### `checkbox`—multi-select
 
 Shows a scrollable list where the user toggles multiple options with Space:
 
@@ -517,20 +517,20 @@ Returns
 A conditional type that maps a parser's value type `T` to the appropriate
 prompt configuration union:
 
-| Value type          | Accepted config type                                                                                                                                                                                                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `boolean`           | [`ConfirmConfig`]                                                                                                                                                                                                                                                              |
-| `number`            | [`NumberPromptConfig`]                                                                                                                                                                                                                                                         |
-| `string`            | [`InputConfig`] \| [`PasswordConfig`](#password--masked-input) \| [`EditorConfig`](#editor--multi-line-text) \| [`SelectConfig`](#select--arrow-key-single-select) \| [`RawlistConfig`](#rawlist--numbered-list) \| [`ExpandConfig`](#expand--keyboard-shortcut-single-select) |
-| `readonly string[]` | [`CheckboxConfig`]                                                                                                                                                                                                                                                             |
+| Value type          | Accepted config type                                                                                                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `boolean`           | [`ConfirmConfig`]                                                                                                                                                                                                                                                         |
+| `number`            | [`NumberPromptConfig`]                                                                                                                                                                                                                                                    |
+| `string`            | [`InputConfig`] \| [`PasswordConfig`](#password—masked-input) \| [`EditorConfig`](#editor—multi-line-text) \| [`SelectConfig`](#select—arrow-key-single-select) \| [`RawlistConfig`](#rawlist—numbered-list) \| [`ExpandConfig`](#expand—keyboard-shortcut-single-select) |
+| `readonly string[]` | [`CheckboxConfig`]                                                                                                                                                                                                                                                        |
 
 Optional variants (`boolean | undefined`, `string | undefined`, etc.) map
 to the same config types as their non-optional counterparts.
 
-[`ConfirmConfig`]: #confirm--boolean-yesno
-[`NumberPromptConfig`]: #number--numeric-input
-[`InputConfig`]: #input--free-text-string
-[`CheckboxConfig`]: #checkbox--multi-select
+[`ConfirmConfig`]: #confirm—boolean-yes-no
+[`NumberPromptConfig`]: #number—numeric-input
+[`InputConfig`]: #input—free-text-string
+[`CheckboxConfig`]: #checkbox—multi-select
 
 ### `Choice`
 

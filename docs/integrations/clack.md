@@ -451,20 +451,20 @@ Returns
 A conditional type that maps a parser's value type `T` to the appropriate
 prompt configuration union:
 
-| Value type          | Accepted config type                                                                                                |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `boolean`           | [`ConfirmConfig`]                                                                                                   |
-| `number`            | [`NumberPromptConfig`]                                                                                              |
-| `string`            | [`TextConfig`] \| [`PasswordConfig`](#password--masked-input) \| [`SelectConfig`](#select--arrow-key-single-select) |
-| `readonly string[]` | [`MultiselectConfig`]                                                                                               |
+| Value type          | Accepted config type                                                                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `boolean`           | [`ConfirmConfig`]                                                                                                 |
+| `number`            | [`NumberPromptConfig`]                                                                                            |
+| `string`            | [`TextConfig`] \| [`PasswordConfig`](#password—masked-input) \| [`SelectConfig`](#select—arrow-key-single-select) |
+| `readonly string[]` | [`MultiselectConfig`]                                                                                             |
 
 Optional variants (`boolean | undefined`, `string | undefined`, etc.) map
 to the same config types as their non-optional counterparts.
 
-[`ConfirmConfig`]: #confirm--boolean-yesno
-[`NumberPromptConfig`]: #number--numeric-input
-[`TextConfig`]: #text--free-text-string
-[`MultiselectConfig`]: #multiselect--multi-select
+[`ConfirmConfig`]: #confirm—boolean-yes-no
+[`NumberPromptConfig`]: #number—numeric-input
+[`TextConfig`]: #text—free-text-string
+[`MultiselectConfig`]: #multiselect—multi-select
 
 ### `Option`
 
