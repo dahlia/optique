@@ -239,6 +239,81 @@ describe("createPromptAdapter()", () => {
     assert.deepEqual(calls, []);
   });
 
+  it("prompts when source completion unwraps to undefined", async () => {
+    const annotationKey = Symbol("prompt-test");
+    const annotations: Annotations = { [annotationKey]: "present" };
+    const innerParser: Parser<"sync", unknown, undefined> = {
+      mode: "sync",
+      $valueType: [],
+      $stateType: [],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return { success: true, next: context, consumed: [] };
+      },
+      complete(state) {
+        return { success: true, value: state };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineTraits(innerParser, { inheritsAnnotations: true });
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(innerParser, { value: "prompted" });
+
+    const result = await parseAsync(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.equal(result.value, "prompted");
+    assert.deepEqual(calls, [{ value: "prompted" }]);
+  });
+
+  it("prompts when deferred source completion unwraps to undefined", async () => {
+    const annotationKey = Symbol("prompt-test");
+    const annotations: Annotations = { [annotationKey]: "present" };
+    const innerParser: Parser<"sync", unknown, undefined> = {
+      mode: "sync",
+      $valueType: [],
+      $stateType: [],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return { success: true, next: context, consumed: [] };
+      },
+      complete(state) {
+        return { success: true, value: state };
+      },
+      shouldDeferCompletion() {
+        return false;
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineTraits(innerParser, { inheritsAnnotations: true });
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(innerParser, { value: "prompted" });
+
+    const result = await parseAsync(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.equal(result.value, "prompted");
+    assert.deepEqual(calls, [{ value: "prompted" }]);
+  });
+
   it("passes annotations to primitive inner states", async () => {
     const annotationKey = Symbol("prompt-test");
     const annotations: Annotations = { [annotationKey]: "present" };

@@ -448,15 +448,18 @@ export function createPromptAdapter<TConfig>(
           const handleCompleteResult = (
             res: ValueParserResult<TValue>,
           ): Promise<ValueParserResult<TValue>> => {
+            const unwrapped = unwrapCompleteResult(res);
             if (
-              res.success && res.value === undefined && cliStateIsInjected
+              unwrapped.success &&
+              unwrapped.value === undefined &&
+              cliStateIsInjected
             ) {
               return finalizePrompt();
             }
-            if (!res.success) {
+            if (!unwrapped.success) {
               return finalizePrompt();
             }
-            return Promise.resolve(unwrapCompleteResult(res));
+            return Promise.resolve(unwrapped);
           };
           if (innerR instanceof Promise) {
             return (innerR as Promise<ValueParserResult<TValue>>).then(
@@ -476,13 +479,14 @@ export function createPromptAdapter<TConfig>(
           const handleDeferHookResult = (
             res: ValueParserResult<TValue>,
           ): Promise<ValueParserResult<TValue>> => {
-            if (res.success && res.value === undefined) {
+            const unwrapped = unwrapCompleteResult(res);
+            if (unwrapped.success && unwrapped.value === undefined) {
               return finalizePrompt();
             }
-            if (!res.success) {
+            if (!unwrapped.success) {
               return finalizePrompt();
             }
-            return Promise.resolve(unwrapCompleteResult(res));
+            return Promise.resolve(unwrapped);
           };
           if (innerR instanceof Promise) {
             return (innerR as Promise<ValueParserResult<TValue>>).then(
