@@ -573,9 +573,14 @@ export function bindDerivedDefault<
             exec?: ExecutionContext,
           ) => ModeValue<M, unknown>;
         })[extractPhase2SeedKey];
-        return extractInnerPhase2Seed?.(getInnerState(state), exec) ?? null;
+        return extractInnerPhase2Seed == null
+          ? wrapForMode(parser.mode, null)
+          : extractInnerPhase2Seed(getInnerState(state), exec);
       }
-      return { value: undefined as TValue, deferred: true as const };
+      return wrapForMode(parser.mode, {
+        value: undefined as TValue,
+        deferred: true as const,
+      });
     },
     configurable: true,
   });

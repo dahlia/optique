@@ -6,12 +6,29 @@ import { object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { getDocPage, parse } from "@optique/core/parser";
-import { integer, string } from "@optique/core/valueparser";
+import { integer, string, type ValueParser } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { bindConfig, createConfigContext } from "@optique/config";
-import { extractPhase2SeedKey } from "@optique/core/extension";
+import {
+  extractPhase2SeedKey,
+  injectAnnotations,
+} from "@optique/core/extension";
 import { run, runAsync, runSync } from "@optique/run";
 import { bindDerivedDefault, createDerivedDefaults } from "./index.ts";
+
+function asyncString(): ValueParser<"async", string> {
+  return {
+    mode: "async",
+    metavar: "STRING",
+    placeholder: "",
+    parse(input) {
+      return Promise.resolve({ success: true, value: input });
+    },
+    format(value) {
+      return value;
+    },
+  };
+}
 
 async function captureRunFailure(
   callback: (options: {
@@ -387,6 +404,35 @@ describe("bindDerivedDefault()", () => {
     })[extractPhase2SeedKey];
 
     assert.deepEqual(extractor(parser.initialState), { value: "inner" });
+  });
+
+  it("wraps phase-two seed fallbacks in async mode", async () => {
+    const derived = createDerivedDefaults({
+      token: () => "fallback",
+    });
+    const parser = bindDerivedDefault(option("--token", asyncString()), {
+      context: derived.context,
+      key: "token",
+    });
+    const extractor = (parser as typeof parser & {
+      readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
+    })[extractPhase2SeedKey];
+
+    const emptySeed = extractor(parser.initialState);
+    assert.ok(emptySeed instanceof Promise);
+    assert.equal(await emptySeed, null);
+
+    const phase1Annotations = derived.context.getInternalAnnotations?.(
+      { phase: "phase1" },
+      {},
+    );
+    assert.ok(phase1Annotations != null);
+    const deferredSeed = extractor(injectAnnotations({}, phase1Annotations));
+    assert.ok(deferredSeed instanceof Promise);
+    assert.deepEqual(await deferredSeed, {
+      value: undefined,
+      deferred: true,
+    });
   });
 
   it("uses defaultDescription for help without resolving fallback", () => {
