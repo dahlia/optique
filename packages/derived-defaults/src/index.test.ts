@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import { formatDocPage } from "@optique/core/doc";
-import { message, optionName } from "@optique/core/message";
+import { formatMessage, message, optionName } from "@optique/core/message";
 import { object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
@@ -265,6 +265,53 @@ describe("bindDerivedDefault()", () => {
     });
 
     assert.equal(result.workspaceRoot, "/inner");
+  });
+
+  it("preserves inner fallback errors after derived fallback misses", () => {
+    const env = createEnvContext({
+      prefix: "APP_",
+      source: (key) => key === "APP_PORT" ? "invalid" : undefined,
+    });
+    const derived = createDerivedDefaults({
+      port: () => undefined,
+      token: () => "secret",
+    });
+    const parser = bindDerivedDefault(
+      bindEnv(option("--port", integer()), {
+        context: env,
+        key: "PORT",
+        parser: integer(),
+      }),
+      {
+        context: derived.context,
+        key: "port",
+      },
+    );
+
+    const envAnnotations = env.getAnnotations();
+    if (envAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous env annotations.");
+    }
+    const derivedAnnotations = derived.context.getAnnotations({
+      phase: "phase2",
+      parsed: {},
+    });
+    if (derivedAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous derived annotations.");
+    }
+    const annotations = {
+      ...envAnnotations,
+      ...derivedAnnotations,
+    };
+    const result = parse(parser, [], { annotations });
+
+    assert.ok(!result.success);
+    const error = formatMessage(result.error);
+    assert.match(error, /Expected a valid integer/u);
+    assert.doesNotMatch(
+      error,
+      /Missing required derived default value/u,
+    );
   });
 
   it("fails when no CLI, derived, or static default value exists", async () => {

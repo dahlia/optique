@@ -393,10 +393,7 @@ export function bindDerivedDefault<
                 message`Derived default value could not be read: the derived default context was not passed to run()'s contexts option.`,
             };
           }
-          return {
-            success: false as const,
-            error: message`Missing required derived default value.`,
-          };
+          return result;
         },
       );
     }
