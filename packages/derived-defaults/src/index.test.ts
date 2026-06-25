@@ -88,6 +88,18 @@ describe("createDerivedDefaults()", () => {
 });
 
 describe("bindDerivedDefault()", () => {
+  it("rejects derived values that do not match the parser value type", () => {
+    const derived = createDerivedDefaults({
+      port: () => "5432",
+    });
+
+    void bindDerivedDefault(option("--port", integer()), {
+      context: derived.context,
+      // @ts-expect-error: derived strings cannot default an integer parser.
+      key: "port",
+    });
+  });
+
   it("prefers CLI input over a derived fallback", async () => {
     const derived = createDerivedDefaults({
       workspaceRoot: () => "/derived",

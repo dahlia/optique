@@ -50,6 +50,7 @@ const parser = object({
 });
 
 const result = await runAsync(parser, {
+  args: ["--service-root", "/srv/app"],
   contexts: [derived.context],
 });
 

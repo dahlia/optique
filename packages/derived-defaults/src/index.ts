@@ -58,6 +58,15 @@ export type DerivedDefaultValues<TResolvers> = {
 };
 
 /**
+ * Keys whose derived default values are assignable to a parser value type.
+ *
+ * @since 1.2.0
+ */
+export type DerivedDefaultKey<TValues extends object, TValue> = {
+  readonly [K in keyof TValues]: TValues[K] extends TValue ? K : never;
+}[keyof TValues];
+
+/**
  * Source context for derived defaults.
  *
  * @since 1.2.0
@@ -84,8 +93,8 @@ export interface DerivedDefaults<TValues extends object> {
  */
 export interface BindDerivedDefaultOptions<
   TValues extends object,
-  TKey extends keyof TValues,
   TValue,
+  TKey extends DerivedDefaultKey<TValues, TValue>,
 > {
   readonly context: DerivedDefaultsContext<TValues>;
   readonly key: TKey;
@@ -263,10 +272,10 @@ export function bindDerivedDefault<
   TValue,
   TState,
   TValues extends object,
-  TKey extends keyof TValues,
+  TKey extends DerivedDefaultKey<TValues, TValue>,
 >(
   parser: Parser<M, TValue, TState>,
-  options: BindDerivedDefaultOptions<TValues, TKey, TValue>,
+  options: BindDerivedDefaultOptions<TValues, TValue, TKey>,
 ): FluentParser<M, TValue, TState> {
   const keyType = typeof options.key;
   if (
