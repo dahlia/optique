@@ -6,7 +6,7 @@ import { defineTraits, getTraits } from "@optique/core/extension";
 import { message } from "@optique/core/message";
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { parseAsync, type Parser } from "@optique/core/parser";
-import { fail, option } from "@optique/core/primitives";
+import { constant, fail, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, createEnvContext } from "@optique/env";
 import { createPromptAdapter } from "@optique/prompt";
@@ -166,7 +166,77 @@ describe("createPromptAdapter()", () => {
       { value: "PromptName" },
     ).map((value) => value.toUpperCase());
 
-    assert.equal(getTraits(parser).completesFromSource, true);
+    assert.ok(getTraits(parser).completesFromSource);
+  });
+
+  it("propagates consumed inner parse failures", async () => {
+    const innerParser: Parser<"sync", string, undefined> = {
+      mode: "sync",
+      $valueType: [],
+      $stateType: [],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(["--name"]),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        if (context.buffer[0] === "--name") {
+          return {
+            success: false,
+            consumed: 1,
+            error: message`Missing value for ${"--name"}.`,
+          };
+        }
+        return {
+          success: false,
+          consumed: 0,
+          error: message`Missing name.`,
+        };
+      },
+      complete() {
+        return { success: false, error: message`Missing name.` };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(innerParser, { value: "prompted" });
+
+    const result = await parseAsync(parser, ["--name"]);
+
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, message`Missing value for ${"--name"}.`);
+    assert.deepEqual(calls, []);
+  });
+
+  it("preserves primitive fallback values from source wrappers", async () => {
+    const envContext = createEnvContext({
+      source: () => undefined,
+      prefix: "MYAPP_",
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(
+      bindEnv(constant("fallback"), {
+        context: envContext,
+        key: "NAME",
+        parser: string(),
+      }),
+      { value: "prompted" },
+    );
+
+    const result = await parseAsync(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.equal(result.value, "fallback");
+    assert.deepEqual(calls, []);
   });
 
   it("passes annotations to primitive inner states", async () => {

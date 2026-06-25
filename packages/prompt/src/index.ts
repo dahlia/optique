@@ -145,6 +145,16 @@ function readDefaultValue<TConfig>(
   return undefined;
 }
 
+function unwrapCompleteResult<TValue>(
+  result: ValueParserResult<TValue>,
+): ValueParserResult<TValue> {
+  if (!result.success) return result;
+  return {
+    ...result,
+    value: unwrapInjectedAnnotationState(result.value),
+  };
+}
+
 /**
  * Creates a `prompt()` parser wrapper for a prompt library adapter.
  *
@@ -358,9 +368,13 @@ export function createPromptAdapter<TConfig>(
             parserInheritsAnnotations,
           );
           if (r instanceof Promise) {
-            return r as Promise<ValueParserResult<TValue>>;
+            return (r as Promise<ValueParserResult<TValue>>).then(
+              unwrapCompleteResult,
+            );
           }
-          return Promise.resolve(r as ValueParserResult<TValue>);
+          return Promise.resolve(
+            unwrapCompleteResult(r as ValueParserResult<TValue>),
+          );
         }
 
         const isProbe = exec != null && exec.phase !== "complete";
@@ -442,7 +456,7 @@ export function createPromptAdapter<TConfig>(
             if (!res.success) {
               return finalizePrompt();
             }
-            return Promise.resolve(res);
+            return Promise.resolve(unwrapCompleteResult(res));
           };
           if (innerR instanceof Promise) {
             return (innerR as Promise<ValueParserResult<TValue>>).then(
@@ -468,7 +482,7 @@ export function createPromptAdapter<TConfig>(
             if (!res.success) {
               return finalizePrompt();
             }
-            return Promise.resolve(res);
+            return Promise.resolve(unwrapCompleteResult(res));
           };
           if (innerR instanceof Promise) {
             return (innerR as Promise<ValueParserResult<TValue>>).then(
