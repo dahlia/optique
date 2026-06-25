@@ -25,7 +25,9 @@ bun add @optique/prompt
 Documentation
 -------------
 
-For full documentation, visit <https://optique.dev/integrations/prompt>.
+For full documentation, visit the [prompt integration docs].
+
+[prompt integration docs]: https://optique.dev/integrations/prompt
 
 
 Quick start
@@ -56,4 +58,6 @@ const name = prompt(option("--name", string()), {
 License
 -------
 
-MIT License. See [LICENSE](../../LICENSE) for details.
+MIT License. See [LICENSE] for details.
+
+[LICENSE]: ../../LICENSE
