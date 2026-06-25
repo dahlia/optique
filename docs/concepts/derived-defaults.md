@@ -309,8 +309,9 @@ Composing with other sources
 
 `bindDerivedDefault()` composes with other source wrappers.  The outermost
 wrapper decides the higher-priority source, but wrapper-specific missing-value
-semantics still apply.  For example, put `bindDerivedDefault()` outside
-`bindEnv()` when an environment variable should override the derived value:
+semantics still apply.  For example, put `bindEnv()` outside
+`bindDerivedDefault()` when an environment variable should override the derived
+value:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -334,16 +335,16 @@ const derived = createDerivedDefaults({
 
 const parser = object({
   profile: option("--profile", string()),
-  port: bindDerivedDefault(
-    bindEnv(option("--port", integer()), {
-      context: env,
-      key: "PORT",
-      parser: integer(),
-    }),
-    {
+  port: bindEnv(
+    bindDerivedDefault(option("--port", integer()), {
       context: derived.context,
       key: "port",
       default: 3000,
+    }),
+    {
+      context: env,
+      key: "PORT",
+      parser: integer(),
     },
   ),
 });

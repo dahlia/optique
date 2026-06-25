@@ -131,6 +131,24 @@ describe("createDerivedDefaults()", () => {
     assert.ok(!called);
     assert.match(failure.stderr, /No matching option found\./u);
   });
+
+  it("does not call resolvers with a null phase-two seed", () => {
+    let called = false;
+    const derived = createDerivedDefaults({
+      workspaceRoot: (parsed: { readonly serviceRoot: string }) => {
+        called = true;
+        return `${parsed.serviceRoot}/workspace`;
+      },
+    });
+
+    const annotations = derived.context.getAnnotations({
+      phase: "phase2",
+      parsed: null,
+    });
+
+    assert.ok(!called);
+    assert.deepEqual(annotations, {});
+  });
 });
 
 describe("bindDerivedDefault()", () => {

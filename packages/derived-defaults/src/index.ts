@@ -232,7 +232,7 @@ export function createDerivedDefaults<const TResolvers extends object>(
           ];
         // Resolvers that declare a parsed-value parameter depend on a seed.
         // Zero-argument resolvers can still provide global defaults.
-        if (request.parsed === undefined && resolver.length > 0) {
+        if (request.parsed == null && resolver.length > 0) {
           continue;
         }
         const resolved = resolver(request.parsed);
