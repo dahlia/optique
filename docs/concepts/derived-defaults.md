@@ -308,15 +308,14 @@ Composing with other sources
 ----------------------------
 
 `bindDerivedDefault()` composes with other source wrappers.  The outermost
-wrapper decides the higher-priority source.  For example, this parser resolves
-values in this order: CLI, then environment variable, then config file, then
-derived default, then static default.
+wrapper decides the higher-priority source, but wrapper-specific missing-value
+semantics still apply.  For example, put `bindDerivedDefault()` outside
+`bindEnv()` when an environment variable should override the derived value:
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
-import { bindConfig, createConfigContext } from "@optique/config";
 import { bindEnv, createEnvContext } from "@optique/env";
 import {
   bindDerivedDefault,
@@ -324,41 +323,34 @@ import {
 } from "@optique/derived-defaults";
 
 const env = createEnvContext({ prefix: "APP_" });
-const config = createConfigContext({
-  schema: {
-    "~standard": {
-      version: 1,
-      vendor: "example",
-      validate: (input) => ({
-        value: input as { readonly port?: number },
-      }),
-    },
-  },
-});
 const derived = createDerivedDefaults({
-  port: (parsed: { readonly profile: string }) =>
-    parsed.profile === "public" ? 443 : 8080,
+  port: (parsed: { readonly profile?: string }) =>
+    parsed.profile == null
+      ? undefined
+      : parsed.profile === "public"
+      ? 443
+      : 8080,
 });
 
 const parser = object({
   profile: option("--profile", string()),
-  port: bindEnv(
-    bindConfig(
-      bindDerivedDefault(option("--port", integer()), {
-        context: derived.context,
-        key: "port",
-        default: 3000,
-      }),
-      {
-        context: config,
-        key: "port",
-      },
-    ),
-    {
+  port: bindDerivedDefault(
+    bindEnv(option("--port", integer()), {
       context: env,
       key: "PORT",
       parser: integer(),
+    }),
+    {
+      context: derived.context,
+      key: "port",
+      default: 3000,
     },
   ),
 });
 ~~~~
+
+This parser resolves `port` as CLI > environment variable > derived default >
+static default.  If you also use `bindConfig()`, place the default on the
+config wrapper when the configuration layer owns the missing-value fallback,
+or keep the wrappers separate for options whose fallback source should remain
+independent.
