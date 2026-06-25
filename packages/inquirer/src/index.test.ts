@@ -679,6 +679,18 @@ describe("prompt()", () => {
       );
     });
 
+    it("stringifies symbol prompt types in runtime errors", async () => {
+      const parser = prompt(fail<string>(), {
+        type: Symbol("mystery") as never,
+        message: "x",
+      });
+
+      await assert.rejects(
+        () => parseAsync(parser, []),
+        new TypeError("Unsupported prompt type: Symbol(mystery)."),
+      );
+    });
+
     it("rejects unsupported prompt type even with prompter override", async () => {
       const parser = prompt(fail<string>(), {
         type: "mystery" as never,
@@ -3466,6 +3478,37 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.deepEqual(result.value, ["typescript", "deno"]);
+    });
+
+    it("preserves checked checkbox choices", async () => {
+      const calls: Array<Record<string, unknown>> = [];
+      await withPromptFunctionsOverride(
+        {
+          checkbox: (config: Record<string, unknown>) => {
+            calls.push(config);
+            return [];
+          },
+        },
+        async () => {
+          const parser = prompt(fail<readonly string[]>(), {
+            type: "checkbox",
+            message: "Select tags:",
+            choices: [
+              { value: "typescript", name: "TypeScript", checked: true },
+              { value: "deno", name: "Deno", checked: false },
+            ],
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(result.success);
+          assert.deepEqual(result.value, []);
+        },
+      );
+
+      assert.deepEqual(calls[0]?.choices, [
+        { value: "typescript", name: "TypeScript", checked: true },
+        { value: "deno", name: "Deno", checked: false },
+      ]);
     });
 
     it("passes an empty choices array through unchanged", async () => {

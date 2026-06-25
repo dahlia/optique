@@ -139,13 +139,17 @@ Architecture
     Provides `createConfigContext()` and `bindConfig()` for config fallbacks.
  -  *@optique/env* (*packages/env/*): Environment variable integration.
     Provides `createEnvContext()`, `bindEnv()`, and `bool()`.
+ -  *@optique/prompt* (*packages/prompt/*): Generic prompt adapter foundation.
+    Provides `createPromptAdapter()` for prompt-library integrations.
+ -  *@optique/clack* (*packages/clack/*): Interactive prompt integration for
+    Clack.  Provides `prompt()` for interactive fallback using Clack prompts.
  -  *@optique/temporal* (*packages/temporal/*): Temporal/Date parsers.
     Provides parsers for date and time values.
  -  *@optique/git* (*packages/git/*): Git reference parsers. Provides async
     value parsers for validating Git references (branches, tags, commits,
     remotes) using isomorphic-git.
- -  *@optique/inquirer* (*packages/inquirer/*): Interactive prompt integration.
-    Provides `prompt()` for interactive fallback when CLI values are absent.
+ -  *@optique/inquirer* (*packages/inquirer/*): Inquirer.js prompt integration.
+    Provides `prompt()` for interactive fallback using Inquirer.js prompts.
 
 ### Dual publishing
 

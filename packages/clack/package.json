@@ -1,7 +1,7 @@
 {
-  "name": "@optique/inquirer",
+  "name": "@optique/clack",
   "version": "1.2.0",
-  "description": "Inquirer.js prompt support for Optique",
+  "description": "Interactive prompt support for Optique via Clack",
   "keywords": [
     "CLI",
     "command-line",
@@ -9,7 +9,7 @@
     "parser",
     "prompt",
     "interactive",
-    "inquirer"
+    "clack"
   ],
   "license": "MIT",
   "author": {
@@ -21,7 +21,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dahlia/optique.git",
-    "directory": "packages/inquirer/"
+    "directory": "packages/clack/"
   },
   "bugs": {
     "url": "https://github.com/dahlia/optique/issues"
@@ -30,7 +30,7 @@
     "https://github.com/sponsors/dahlia"
   ],
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=20.12.0",
     "bun": ">=1.2.0",
     "deno": ">=2.3.0"
   },
@@ -61,12 +61,11 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "@inquirer/prompts": "catalog:",
+    "@clack/prompts": "catalog:",
     "@optique/core": "workspace:*",
     "@optique/prompt": "workspace:*"
   },
   "devDependencies": {
-    "@optique/config": "workspace:*",
     "@optique/env": "workspace:*",
     "@optique/run": "workspace:*",
     "@types/node": "catalog:",
@@ -80,7 +79,7 @@
     "prepublish": "tsdown",
     "test": "node --test",
     "test:bun": "bun test",
-    "test:deno": "deno test",
-    "test-all": "tsdown && node --test && bun test && deno test"
+    "test:deno": "deno test --allow-env",
+    "test-all": "tsdown && node --test && bun test && deno test --allow-env"
   }
 }

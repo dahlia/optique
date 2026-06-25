@@ -1,10 +1,9 @@
 ---
 description: >-
-  Add interactive prompts as fallback for missing CLI arguments using
-  Inquirer.js.
+  Add Inquirer.js prompts as fallback for missing CLI arguments.
 ---
 
-Interactive prompts
+Inquirer.js prompts
 ===================
 
 *This API is available since Optique 1.0.0.*
@@ -14,12 +13,16 @@ The *@optique/inquirer* package wraps any Optique parser with an interactive
 used directly.  When the argument is absent, an interactive prompt is shown
 instead of failing.
 
+This package is built on the shared *@optique/prompt* adapter foundation.  If
+you want to connect another prompt library, see
+[prompt adapters](./prompt.md).
+
 The fallback priority is:
 
 1.  *CLI argument*
-2.  *Interactive prompt*
+2.  *Inquirer.js prompt*
 
-Because interactive prompts are inherently asynchronous, the returned parser
+Because Inquirer.js prompts are inherently asynchronous, the returned parser
 always has `mode: "async"`.
 
 ::: code-group
@@ -77,13 +80,13 @@ await run(parser);
 ~~~~
 
 When `--name` and `--port` are provided on the command line, the prompts are
-skipped.  When they are absent, the user sees interactive prompts.
+skipped.  When they are absent, the user sees Inquirer.js prompts.
 
 
 Prompt types
 ------------
 
-### `input` — free-text string
+### `input`—free-text string
 
 Prompts the user for an arbitrary string value:
 
@@ -112,7 +115,7 @@ const name = prompt(option("--name", string()), {
 :   Function called when the user submits.  Return `true` to accept or
     a string error message to reject and re-prompt.
 
-### `confirm` — Boolean yes/no
+### `confirm`—Boolean yes/no
 
 Prompts the user with a yes/no question:
 
@@ -135,7 +138,7 @@ const verbose = prompt(flag("--verbose"), {
 `default`
 :   Default answer when the user presses Enter without typing.
 
-### `number` — numeric input
+### `number`—numeric input
 
 Prompts the user for a number:
 
@@ -171,7 +174,7 @@ const port = prompt(option("--port", integer()), {
 > If the user submits the prompt without entering a number (leaving it blank),
 > the result is a parse failure rather than `undefined`.
 
-### `password` — masked input
+### `password`—masked input
 
 Prompts for a secret value without displaying the characters:
 
@@ -199,7 +202,7 @@ const apiKey = prompt(option("--api-key", string()), {
 `validate`
 :   Same as `input`.
 
-### `editor` — multi-line text
+### `editor`—multi-line text
 
 Opens the user's `$VISUAL` or `$EDITOR` for multi-line input:
 
@@ -227,7 +230,7 @@ const message = prompt(option("--message", string()), {
 `validate`
 :   Same as `input`.
 
-### `select` — arrow-key single-select
+### `select`—arrow-key single-select
 
 Shows a scrollable list where the user selects one option using arrow keys:
 
@@ -277,7 +280,7 @@ const color = prompt(option("--color", string()), {
 
 [`Choice`]: #choice
 
-### `rawlist` — numbered list
+### `rawlist`—numbered list
 
 Shows a numbered list and prompts the user to type a number:
 
@@ -304,7 +307,7 @@ const format = prompt(option("--format", string()), {
 `default`
 :   Pre-selected choice value.
 
-### `expand` — keyboard shortcut single-select
+### `expand`—keyboard shortcut single-select
 
 Prompts the user to press a single key to select an option:
 
@@ -338,7 +341,7 @@ const action = prompt(option("--action", string()), {
 
 [`ExpandChoice`]: #expandchoice
 
-### `checkbox` — multi-select
+### `checkbox`—multi-select
 
 Shows a scrollable list where the user toggles multiple options with Space:
 
@@ -462,7 +465,7 @@ await run(parser, { contexts: [envContext] });
 
 This gives the priority:
 
-CLI argument > Environment variable > Interactive prompt
+CLI argument > Environment variable > Inquirer.js prompt
 
 
 Testing
@@ -494,7 +497,7 @@ API reference
 
 ### `prompt(parser, config)`
 
-Wraps a parser with an interactive prompt fallback.
+Wraps a parser with an Inquirer.js prompt fallback.
 
 Parameters
 :    -  `parser`: The inner parser.  CLI tokens consumed by this parser
@@ -503,7 +506,7 @@ Parameters
         and its options.
 
 Returns
-:   A new parser with `mode: "async"` and interactive prompt fallback.
+:   A new parser with `mode: "async"` and Inquirer.js prompt fallback.
     The `usage` is wrapped in an `optional` term since the prompt handles
     the missing-value case.
 
@@ -514,20 +517,20 @@ Returns
 A conditional type that maps a parser's value type `T` to the appropriate
 prompt configuration union:
 
-| Value type          | Accepted config type                                                                                                                                                                                                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `boolean`           | [`ConfirmConfig`]                                                                                                                                                                                                                                                              |
-| `number`            | [`NumberPromptConfig`]                                                                                                                                                                                                                                                         |
-| `string`            | [`InputConfig`] \| [`PasswordConfig`](#password--masked-input) \| [`EditorConfig`](#editor--multi-line-text) \| [`SelectConfig`](#select--arrow-key-single-select) \| [`RawlistConfig`](#rawlist--numbered-list) \| [`ExpandConfig`](#expand--keyboard-shortcut-single-select) |
-| `readonly string[]` | [`CheckboxConfig`]                                                                                                                                                                                                                                                             |
+| Value type          | Accepted config type                                                                                                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `boolean`           | [`ConfirmConfig`]                                                                                                                                                                                                                                                         |
+| `number`            | [`NumberPromptConfig`]                                                                                                                                                                                                                                                    |
+| `string`            | [`InputConfig`] \| [`PasswordConfig`](#password—masked-input) \| [`EditorConfig`](#editor—multi-line-text) \| [`SelectConfig`](#select—arrow-key-single-select) \| [`RawlistConfig`](#rawlist—numbered-list) \| [`ExpandConfig`](#expand—keyboard-shortcut-single-select) |
+| `readonly string[]` | [`CheckboxConfig`]                                                                                                                                                                                                                                                        |
 
 Optional variants (`boolean | undefined`, `string | undefined`, etc.) map
 to the same config types as their non-optional counterparts.
 
-[`ConfirmConfig`]: #confirm--boolean-yesno
-[`NumberPromptConfig`]: #number--numeric-input
-[`InputConfig`]: #input--free-text-string
-[`CheckboxConfig`]: #checkbox--multi-select
+[`ConfirmConfig`]: #confirm—boolean-yes-no
+[`NumberPromptConfig`]: #number—numeric-input
+[`InputConfig`]: #input—free-text-string
+[`CheckboxConfig`]: #checkbox—multi-select
 
 ### `Choice`
 

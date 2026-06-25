@@ -49,6 +49,31 @@ To be released.
 [#840]: https://github.com/dahlia/optique/pull/840
 [#841]: https://github.com/dahlia/optique/pull/841
 
+### @optique/prompt
+
+ -  Added the new *@optique/prompt* package for building prompt-library
+    integrations.  `createPromptAdapter()` provides the shared parser wrapper
+    machinery for interactive fallback flows, including CLI priority, source
+    binding integration, deferred completion, usage forwarding, suggestions,
+    and dependency metadata preservation.  [[#837], [#844]]
+
+[#837]: https://github.com/dahlia/optique/issues/837
+[#844]: https://github.com/dahlia/optique/pull/844
+
+### @optique/clack
+
+ -  Added the new *@optique/clack* package for interactive fallback prompts via
+    Clack.  It supports `text`, `password`, `confirm`, `number`, `select`, and
+    `multiselect` prompt configs, uses Clack-style option naming, converts
+    Clack cancellations into `Prompt cancelled.` parse failures, and composes
+    with the same source-binding behavior as *@optique/inquirer*.
+    [[#837], [#844]]
+
+### @optique/inquirer
+
+ -  Refactored `prompt()` to use *@optique/prompt* internally while preserving
+    the existing public API and Inquirer.js config types.  [[#837], [#844]]
+
 
 Version 1.1.0
 -------------
