@@ -436,7 +436,7 @@ async function executePromptRaw<TValue>(
   try {
     if (!validPromptTypes.has(cfg.type)) {
       throw new TypeError(
-        `Unsupported prompt type: ${cfg.type}`,
+        `Unsupported prompt type: ${String(cfg.type)}.`,
       );
     }
 

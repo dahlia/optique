@@ -121,6 +121,19 @@ describe("prompt()", () => {
     assert.equal(result.value, 3000);
   });
 
+  it("rejects non-finite number prompt values", async () => {
+    const parser = prompt(option("--port", integer()), {
+      type: "number",
+      message: "Port:",
+      prompter: () => Promise.resolve(Infinity),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, message`No number provided.`);
+  });
+
   it("runs select prompts when CLI value is absent", async () => {
     const parser = prompt(option("--env", string()), {
       type: "select",

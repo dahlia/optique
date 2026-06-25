@@ -679,6 +679,18 @@ describe("prompt()", () => {
       );
     });
 
+    it("stringifies symbol prompt types in runtime errors", async () => {
+      const parser = prompt(fail<string>(), {
+        type: Symbol("mystery") as never,
+        message: "x",
+      });
+
+      await assert.rejects(
+        () => parseAsync(parser, []),
+        new TypeError("Unsupported prompt type: Symbol(mystery)."),
+      );
+    });
+
     it("rejects unsupported prompt type even with prompter override", async () => {
       const parser = prompt(fail<string>(), {
         type: "mystery" as never,

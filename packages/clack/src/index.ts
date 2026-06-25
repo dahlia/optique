@@ -336,8 +336,8 @@ async function executePromptRaw<TValue>(
 
   if ("prompter" in cfg && cfg.prompter != null) {
     const value = await cfg.prompter();
-    if (cfg.type === "number" && value === undefined) {
-      return { success: false, error: message`No number provided.` };
+    if (cfg.type === "number") {
+      return normalizeNumberResult(value);
     }
     return { success: true, value: value as TValue };
   }
@@ -432,7 +432,7 @@ function executeClackPrompt(
 function normalizeNumberResult<TValue>(
   result: unknown,
 ): ValueParserResult<TValue> {
-  const parsed = typeof result === "number"
+  const parsed = typeof result === "number" && Number.isFinite(result)
     ? result
     : typeof result === "string"
     ? parseNumberPromptValue(result)
