@@ -4,8 +4,8 @@ description: >-
   arguments as the highest-priority source.
 ---
 
-Derived default support
-=======================
+Derived defaults
+================
 
 *This API is available since Optique 1.2.0.*
 

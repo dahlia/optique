@@ -1742,6 +1742,76 @@ sensible fallbacks and [`optional()`](./concepts/modifiers.md#optional-parser)
 when absence is meaningful.
 
 
+Default value patterns
+----------------------
+
+These recipes cover fallback values that are computed from parsed input or
+runtime state.
+
+### Derived defaults from parsed options
+
+*This API is available since Optique 1.2.0.*
+
+Sometimes one option has a natural fallback based on another option.  For
+example, a build tool might require a project root, then default its cache
+directory to a path inside that root unless the user overrides it explicitly.
+
+Use `createDerivedDefaults()` to compute those fallback values from the
+first-pass parse result, then wrap the option that should receive the fallback
+with `bindDerivedDefault()`:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { optional } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import {
+  bindDerivedDefault,
+  createDerivedDefaults,
+} from "@optique/derived-defaults";
+import { runAsync } from "@optique/run";
+
+const derived = createDerivedDefaults({
+  cacheDir: (parsed: {
+    readonly projectRoot: string;
+    readonly profile?: string;
+  }) => {
+    const profile = parsed.profile ?? "default";
+    return `${parsed.projectRoot}/.cache/${profile}`;
+  },
+});
+
+const parser = object({
+  projectRoot: option("--project-root", string({ metavar: "DIR" })),
+  profile: optional(option("--profile", string({ metavar: "NAME" }))),
+  cacheDir: bindDerivedDefault(
+    option("--cache-dir", string({ metavar: "DIR" })),
+    {
+      context: derived.context,
+      key: "cacheDir",
+      defaultDescription: message`derived from --project-root`,
+    },
+  ),
+});
+
+const result = await runAsync(parser, {
+  args: ["--project-root", "/work/api", "--profile", "ci"],
+  contexts: [derived.context],
+});
+
+console.log(result.cacheDir); // "/work/api/.cache/ci"
+~~~~
+
+The priority order is: CLI argument > derived default > static default >
+error.  In this example, `--cache-dir /tmp/cache` would win over the computed
+path.  The `defaultDescription` option only affects help text; the actual
+fallback value still comes from the resolver.
+
+For more details, see
+[derived defaults](./concepts/derived-defaults.md).
+
+
 Application structure patterns
 ------------------------------
 

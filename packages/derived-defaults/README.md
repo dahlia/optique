@@ -72,7 +72,7 @@ Documentation
 -------------
 
 For full documentation, visit
-<https://optique.dev/integrations/derived-defaults>.
+<https://optique.dev/concepts/derived-defaults>.
 
 
 License

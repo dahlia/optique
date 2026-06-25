@@ -57,6 +57,7 @@ const CONCEPTS = {
     { text: "Modifying combinators", link: "/concepts/modifiers" },
     { text: "Construct combinators", link: "/concepts/constructs" },
     { text: "Inter-option dependencies", link: "/concepts/dependencies" },
+    { text: "Derived defaults", link: "/concepts/derived-defaults" },
     { text: "Shell completion", link: "/concepts/completion" },
     { text: "Man pages", link: "/concepts/man" },
     { text: "Command discovery", link: "/concepts/discover" },
@@ -70,7 +71,6 @@ const INTEGRATIONS = {
   text: "Integrations",
   items: [
     { text: "Config files", link: "/integrations/config" },
-    { text: "Derived defaults", link: "/integrations/derived-defaults" },
     { text: "Environment variables", link: "/integrations/env" },
     { text: "Clack prompts", link: "/integrations/clack" },
     { text: "Inquirer.js prompts", link: "/integrations/inquirer" },
