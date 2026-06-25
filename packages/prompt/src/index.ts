@@ -104,13 +104,15 @@ function withAnnotatedInnerState<TState, TResult>(
   sourceState: unknown,
   innerState: TState,
   run: (annotatedState: TState) => TResult,
+  inheritPrimitiveAnnotations = false,
 ): TResult {
   const annotations = getAnnotations(sourceState);
+  const innerStateIsObject = innerState != null &&
+    typeof innerState === "object";
   if (
     annotations == null ||
-    innerState == null ||
-    typeof innerState !== "object" ||
-    getAnnotations(innerState) != null
+    getAnnotations(innerState) != null ||
+    (!innerStateIsObject && !inheritPrimitiveAnnotations)
   ) {
     return run(innerState);
   }
@@ -120,7 +122,9 @@ function withAnnotatedInnerState<TState, TResult>(
     return run(inheritedState);
   }
 
-  return run(withAnnotationView(innerState, annotations));
+  return innerStateIsObject
+    ? run(withAnnotationView(innerState, annotations))
+    : run(innerState);
 }
 
 function hasSourceBindingMarker(state: unknown): boolean {
@@ -238,6 +242,9 @@ export function createPromptAdapter<TConfig>(
       return adapter.execute<TValue>(config);
     }
 
+    const parserInheritsAnnotations = getTraits(parser).inheritsAnnotations ===
+      true;
+
     const promptedParser: Parser<"async", TValue, TState> = {
       mode: "async",
       $valueType: parser.$valueType,
@@ -283,7 +290,7 @@ export function createPromptAdapter<TConfig>(
           : context;
         const effectiveInnerState = annotations != null &&
             innerState == null &&
-            getTraits(parser).inheritsAnnotations === true
+            parserInheritsAnnotations
           ? injectAnnotations(innerState, annotations)
           : innerState;
         const processResult = (
@@ -334,6 +341,7 @@ export function createPromptAdapter<TConfig>(
               : context;
             return parser.parse(innerContext);
           },
+          parserInheritsAnnotations,
         );
         if (result instanceof Promise) {
           return result.then(processResult);
@@ -347,6 +355,7 @@ export function createPromptAdapter<TConfig>(
             state,
             state.cliState!,
             (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
+            parserInheritsAnnotations,
           );
           if (r instanceof Promise) {
             return r as Promise<ValueParserResult<TValue>>;
@@ -358,7 +367,9 @@ export function createPromptAdapter<TConfig>(
         const annotations = getAnnotations(state);
         const innerInitialState = parser.initialState;
         const shouldInheritInitialStateAnnotations = annotations != null &&
-          (innerInitialState == null || typeof innerInitialState === "object");
+          (innerInitialState == null ||
+            typeof innerInitialState === "object" ||
+            parserInheritsAnnotations);
         const effectiveInitialState = shouldInheritInitialStateAnnotations
           ? inheritAnnotations(state, innerInitialState)
           : innerInitialState;
@@ -379,6 +390,7 @@ export function createPromptAdapter<TConfig>(
             effectiveInitialState,
             (annotatedInnerState) =>
               shouldDeferPrompt(parser, annotatedInnerState, exec),
+            parserInheritsAnnotations,
           );
           if (shouldDefer) {
             return Promise.resolve(
@@ -445,6 +457,7 @@ export function createPromptAdapter<TConfig>(
             state,
             effectiveInitialState,
             (annotatedInnerState) => parser.complete(annotatedInnerState, exec),
+            parserInheritsAnnotations,
           );
           const handleDeferHookResult = (
             res: ValueParserResult<TValue>,
@@ -475,6 +488,7 @@ export function createPromptAdapter<TConfig>(
               optionsTerminated: false,
               usage: parser.usage,
             }),
+          parserInheritsAnnotations,
         );
         if (simParseR instanceof Promise) {
           return (simParseR as Promise<ParserResult<TState>>).then(
@@ -509,7 +523,12 @@ export function createPromptAdapter<TConfig>(
         return parser.getDocFragments(state, defaultValue as TValue);
       },
     };
-    defineTraits(promptedParser, { inheritsAnnotations: true });
+    defineTraits(promptedParser, {
+      inheritsAnnotations: true,
+      ...(getTraits(parser).completesFromSource === true
+        ? { completesFromSource: true as const }
+        : {}),
+    });
 
     if ("placeholder" in parser) {
       Object.defineProperty(promptedParser, "placeholder", {

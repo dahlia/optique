@@ -33,12 +33,16 @@ Quick start
 
 ~~~~ typescript
 import { option } from "@optique/core/primitives";
+import { message } from "@optique/core/message";
 import { string } from "@optique/core/valueparser";
 import { createPromptAdapter } from "@optique/prompt";
 
 const prompt = createPromptAdapter<{ readonly message: string }>({
   async execute<TValue>(config) {
-    const value = globalThis.prompt?.(config.message) ?? "";
+    const value = globalThis.prompt?.(config.message);
+    if (value == null) {
+      return { success: false, error: message`Prompt cancelled.` };
+    }
     return { success: true, value: value as TValue };
   },
 });

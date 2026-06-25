@@ -61,8 +61,10 @@ const defaultPromptFunctions: PromptFunctions = {
   checkbox,
 };
 
-function promptFunctionKeys(): ReadonlyArray<keyof PromptFunctions> {
-  return Object.keys(defaultPromptFunctions) as Array<keyof PromptFunctions>;
+function promptFunctionKeys(): readonly (keyof PromptFunctions)[] {
+  return Object.keys(
+    defaultPromptFunctions,
+  ) as readonly (keyof PromptFunctions)[];
 }
 
 function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
@@ -149,6 +151,16 @@ export interface Choice {
    * If truthy, the choice cannot be selected. A string explains why.
    */
   readonly disabled?: boolean | string;
+}
+
+/**
+ * A choice item for the `checkbox` prompt type.
+ *
+ * @since 1.2.0
+ */
+export interface CheckboxChoice extends Choice {
+  /** Whether the choice is initially selected. */
+  readonly checked?: boolean;
 }
 
 /**
@@ -332,7 +344,7 @@ export interface CheckboxConfig {
   /** The question to display to the user. */
   readonly message: string;
   /** Available choices. */
-  readonly choices: readonly (string | Choice | Separator)[];
+  readonly choices: readonly (string | CheckboxChoice | Separator)[];
   /** Override the prompt execution. Useful for testing. */
   readonly prompter?: () => Promise<readonly string[]>;
 }
@@ -424,7 +436,7 @@ async function executePromptRaw<TValue>(
   try {
     if (!validPromptTypes.has(cfg.type)) {
       throw new TypeError(
-        `Unsupported prompt type: ${(cfg as { readonly type: string }).type}`,
+        `Unsupported prompt type: ${cfg.type}`,
       );
     }
 
@@ -545,7 +557,8 @@ async function executePromptRaw<TValue>(
 
 /** Normalize choices to the format Inquirer.js expects. */
 function normalizeChoices(
-  choices: readonly (string | Choice | ExpandChoice | Separator)[],
+  choices:
+    readonly (string | Choice | CheckboxChoice | ExpandChoice | Separator)[],
 ): Array<
   {
     value: string;
@@ -553,6 +566,7 @@ function normalizeChoices(
     description?: string;
     short?: string;
     disabled?: boolean | string;
+    checked?: boolean;
   } | Separator
 > {
   return choices.map((c) => {
@@ -567,6 +581,9 @@ function normalizeChoices(
       ...("short" in c && c.short !== undefined ? { short: c.short } : {}),
       ...("disabled" in c && c.disabled !== undefined
         ? { disabled: c.disabled }
+        : {}),
+      ...("checked" in c && c.checked !== undefined
+        ? { checked: c.checked }
         : {}),
     };
   });

@@ -48,8 +48,10 @@ const defaultPromptFunctions: PromptFunctions = {
   isCancel,
 };
 
-function promptFunctionKeys(): ReadonlyArray<keyof PromptFunctions> {
-  return Object.keys(defaultPromptFunctions) as Array<keyof PromptFunctions>;
+function promptFunctionKeys(): readonly (keyof PromptFunctions)[] {
+  return Object.keys(
+    defaultPromptFunctions,
+  ) as readonly (keyof PromptFunctions)[];
 }
 
 function assignPromptFunctionOverride<K extends keyof PromptFunctions>(
@@ -326,7 +328,7 @@ async function executePromptRaw<TValue>(
   config: PromptConfig<TValue>,
 ): Promise<ValueParserResult<TValue>> {
   const cfg = config as RuntimePromptConfig;
-  const type = (config as { readonly type?: unknown }).type;
+  const type = cfg.type;
   if (!isPromptType(type)) {
     throw new TypeError(`Unsupported prompt type: ${String(type)}.`);
   }
@@ -447,7 +449,9 @@ function parseNumberPromptValue(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeOptions(options: readonly (string | Option)[]): Option[] {
+function normalizeOptions(
+  options: readonly (string | Option)[],
+): readonly Option[] {
   return options.map((option) => {
     if (typeof option === "string") {
       return { value: option, label: option };

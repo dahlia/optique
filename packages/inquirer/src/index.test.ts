@@ -3468,6 +3468,37 @@ describe("prompt()", () => {
       assert.deepEqual(result.value, ["typescript", "deno"]);
     });
 
+    it("preserves checked checkbox choices", async () => {
+      const calls: Array<Record<string, unknown>> = [];
+      await withPromptFunctionsOverride(
+        {
+          checkbox: (config: Record<string, unknown>) => {
+            calls.push(config);
+            return [];
+          },
+        },
+        async () => {
+          const parser = prompt(fail<readonly string[]>(), {
+            type: "checkbox",
+            message: "Select tags:",
+            choices: [
+              { value: "typescript", name: "TypeScript", checked: true },
+              { value: "deno", name: "Deno", checked: false },
+            ],
+          });
+
+          const result = await parseAsync(parser, []);
+          assert.ok(result.success);
+          assert.deepEqual(result.value, []);
+        },
+      );
+
+      assert.deepEqual(calls[0]?.choices, [
+        { value: "typescript", name: "TypeScript", checked: true },
+        { value: "deno", name: "Deno", checked: false },
+      ]);
+    });
+
     it("passes an empty choices array through unchanged", async () => {
       const calls: Array<Record<string, unknown>> = [];
       await withPromptFunctionsOverride(

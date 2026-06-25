@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { type Annotations, getAnnotations } from "@optique/core/annotations";
 import { object } from "@optique/core/constructs";
+import { defineTraits, getTraits } from "@optique/core/extension";
 import { message } from "@optique/core/message";
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
-import { parseAsync } from "@optique/core/parser";
+import { parseAsync, type Parser } from "@optique/core/parser";
 import { fail, option } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, createEnvContext } from "@optique/env";
@@ -147,6 +149,65 @@ describe("createPromptAdapter()", () => {
     assert.ok(result.success);
     assert.equal(result.value, "EnvName");
     assert.deepEqual(calls, []);
+  });
+
+  it("preserves source-completion traits through map()", () => {
+    const envContext = createEnvContext({
+      source: (key) => ({ MYAPP_NAME: "EnvName" })[key],
+      prefix: "MYAPP_",
+    });
+    const { prompt } = createTestPrompt();
+    const parser = prompt(
+      bindEnv(option("--name", string()), {
+        context: envContext,
+        key: "NAME",
+        parser: string(),
+      }),
+      { value: "PromptName" },
+    ).map((value) => value.toUpperCase());
+
+    assert.equal(getTraits(parser).completesFromSource, true);
+  });
+
+  it("passes annotations to primitive inner states", async () => {
+    const annotationKey = Symbol("prompt-test");
+    const annotations: Annotations = { [annotationKey]: "present" };
+    const seenAnnotations: boolean[] = [];
+    const innerParser: Parser<"sync", string, string> = {
+      mode: "sync",
+      $valueType: [],
+      $stateType: [],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: "initial",
+      parse(context) {
+        seenAnnotations.push(
+          getAnnotations(context.state)?.[annotationKey] === "present",
+        );
+        return { success: false, consumed: 0, error: message`Missing.` };
+      },
+      complete() {
+        return { success: true, value: "inner" };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    defineTraits(innerParser, { inheritsAnnotations: true });
+    const { prompt } = createTestPrompt();
+    const parser = prompt(innerParser, { value: "prompted" });
+
+    const result = await parseAsync(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.equal(result.value, "prompted");
+    assert.ok(seenAnnotations.length > 0);
+    assert.ok(seenAnnotations.every(Boolean));
   });
 
   it("propagates adapter parse failures", async () => {

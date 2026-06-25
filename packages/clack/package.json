@@ -30,7 +30,7 @@
     "https://github.com/sponsors/dahlia"
   ],
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=20.12.0",
     "bun": ">=1.2.0",
     "deno": ">=2.3.0"
   },
