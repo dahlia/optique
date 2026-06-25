@@ -75,6 +75,9 @@ importers:
       '@optique/core':
         specifier: 'workspace:'
         version: link:../packages/core
+      '@optique/derived-defaults':
+        specifier: 'workspace:'
+        version: link:../packages/derived-defaults
       '@optique/discover':
         specifier: 'workspace:'
         version: link:../packages/discover

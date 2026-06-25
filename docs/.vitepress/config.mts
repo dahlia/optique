@@ -70,6 +70,7 @@ const INTEGRATIONS = {
   text: "Integrations",
   items: [
     { text: "Config files", link: "/integrations/config" },
+    { text: "Derived defaults", link: "/integrations/derived-defaults" },
     { text: "Environment variables", link: "/integrations/env" },
     { text: "Clack prompts", link: "/integrations/clack" },
     { text: "Inquirer.js prompts", link: "/integrations/inquirer" },
@@ -94,6 +95,10 @@ const REFERENCES = {
     { text: "@optique/man", link: "https://jsr.io/@optique/man/doc" },
     { text: "@optique/env", link: "https://jsr.io/@optique/env/doc" },
     { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },
+    {
+      text: "@optique/derived-defaults",
+      link: "https://jsr.io/@optique/derived-defaults/doc",
+    },
     { text: "@optique/clack", link: "https://jsr.io/@optique/clack/doc" },
     {
       text: "@optique/inquirer",
