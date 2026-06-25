@@ -175,7 +175,7 @@ function validateFallbackValue<M extends Mode, TValue>(
       value,
     });
   }
-  return innerParser.validateValue(value) as ModeValue<M, Result<TValue>>;
+  return wrapForMode(mode, innerParser.validateValue(value));
 }
 
 /**

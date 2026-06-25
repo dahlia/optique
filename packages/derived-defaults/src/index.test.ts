@@ -318,6 +318,31 @@ describe("bindDerivedDefault()", () => {
     assert.match(failure.stderr, /Expected a value less than or equal to/u);
   });
 
+  it("rejects async fallback validation in sync mode", () => {
+    const derived = createDerivedDefaults({
+      token: () => "secret",
+    });
+    const annotations = derived.context.getAnnotations({
+      phase: "phase2",
+      parsed: {},
+    });
+    assert.ok(!(annotations instanceof Promise));
+    const innerParser = { ...option("--token", string()) };
+    Object.defineProperty(innerParser, "validateValue", {
+      value: () => Promise.resolve({ success: true, value: "secret" }),
+      configurable: true,
+    });
+    const parser = bindDerivedDefault(innerParser, {
+      context: derived.context,
+      key: "token",
+    });
+
+    assert.throws(
+      () => parse(parser, [], { annotations }),
+      /Synchronous mode cannot wrap Promise value/u,
+    );
+  });
+
   it("uses defaultDescription for help without resolving fallback", () => {
     let called = false;
     const derived = createDerivedDefaults({
