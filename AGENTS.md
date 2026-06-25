@@ -137,6 +137,10 @@ Architecture
     command modules with handler dispatch.
  -  *@optique/config* (*packages/config/*): Configuration file integration.
     Provides `createConfigContext()` and `bindConfig()` for config fallbacks.
+ -  *@optique/derived-defaults* (*packages/derived-defaults/*): Derived
+    default integration. Provides `createDerivedDefaults()` and
+    `bindDerivedDefault()` for computing fallback values from first-pass parse
+    results.
  -  *@optique/env* (*packages/env/*): Environment variable integration.
     Provides `createEnvContext()`, `bindEnv()`, and `bool()`.
  -  *@optique/prompt* (*packages/prompt/*): Generic prompt adapter foundation.

@@ -21,6 +21,20 @@ To be released.
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
 
+### @optique/derived-defaults
+
+ -  Added the new *@optique/derived-defaults* package for computing fallback
+    values from the first-pass parse result.  `createDerivedDefaults()` creates
+    a two-pass source context, and `bindDerivedDefault()` binds an option to
+    one of the derived values while preserving the priority order of CLI
+    argument, then derived default, then static default.  The wrapper
+    revalidates derived values through the wrapped parser and exposes
+    `defaultDescription` for help text when the actual value is computed at
+    runtime.  [[#845], [#847]]
+
+[#845]: https://github.com/dahlia/optique/issues/845
+[#847]: https://github.com/dahlia/optique/pull/847
+
 ### @optique/discover
 
  -  Added `commandsFromModules()` for bundler-friendly command discovery from
