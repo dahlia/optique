@@ -9,6 +9,7 @@ import { getDocPage, parse } from "@optique/core/parser";
 import { integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { bindConfig, createConfigContext } from "@optique/config";
+import { extractPhase2SeedKey } from "@optique/core/extension";
 import { run, runAsync, runSync } from "@optique/run";
 import { bindDerivedDefault, createDerivedDefaults } from "./index.ts";
 
@@ -341,6 +342,51 @@ describe("bindDerivedDefault()", () => {
       () => parse(parser, [], { annotations }),
       /Synchronous mode cannot wrap Promise value/u,
     );
+  });
+
+  it("rejects async CLI completion in sync mode", () => {
+    const derived = createDerivedDefaults({
+      token: () => "fallback",
+    });
+    const innerParser = { ...option("--token", string()) };
+    Object.defineProperty(innerParser, "complete", {
+      value: () => Promise.resolve({ success: true, value: "cli" }),
+      configurable: true,
+    });
+    const parser = bindDerivedDefault(innerParser, {
+      context: derived.context,
+      key: "token",
+    });
+    const annotations = derived.context.getAnnotations({
+      phase: "phase2",
+      parsed: {},
+    });
+    assert.ok(!(annotations instanceof Promise));
+
+    assert.throws(
+      () => parse(parser, ["--token", "cli"], { annotations }),
+      /Synchronous mode cannot wrap Promise value/u,
+    );
+  });
+
+  it("delegates phase-two seeds to wrapped parsers", () => {
+    const derived = createDerivedDefaults({
+      token: () => "fallback",
+    });
+    const innerParser = { ...option("--token", string()) };
+    Object.defineProperty(innerParser, extractPhase2SeedKey, {
+      value: () => ({ value: "inner" }),
+      configurable: true,
+    });
+    const parser = bindDerivedDefault(innerParser, {
+      context: derived.context,
+      key: "token",
+    });
+    const extractor = (parser as typeof parser & {
+      readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
+    })[extractPhase2SeedKey];
+
+    assert.deepEqual(extractor(parser.initialState), { value: "inner" });
   });
 
   it("uses defaultDescription for help without resolving fallback", () => {

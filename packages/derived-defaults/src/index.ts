@@ -528,7 +528,10 @@ export function bindDerivedDefault<
     },
     complete(state, exec) {
       if (isBindState(state) && state.hasCliValue) {
-        return parser.complete(state.cliState!, exec);
+        return wrapForMode(
+          parser.mode,
+          parser.complete(state.cliState!, exec),
+        );
       }
       return getDerivedOrDefault(state, parser.mode, exec, parser);
     },
@@ -558,13 +561,19 @@ export function bindDerivedDefault<
     },
   };
   Object.defineProperty(boundParser, extractPhase2SeedKey, {
-    value(state: TState) {
+    value(state: TState, exec?: ExecutionContext) {
       const annotations = getAnnotations(state);
       if (
         annotations?.[options.context.id] !==
           phase1DerivedDefaultAnnotationMarker
       ) {
-        return null;
+        const extractInnerPhase2Seed = (parser as typeof parser & {
+          readonly [extractPhase2SeedKey]?: (
+            state: TState,
+            exec?: ExecutionContext,
+          ) => ModeValue<M, unknown>;
+        })[extractPhase2SeedKey];
+        return extractInnerPhase2Seed?.(getInnerState(state), exec) ?? null;
       }
       return { value: undefined as TValue, deferred: true as const };
     },
