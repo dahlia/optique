@@ -85,7 +85,7 @@ skipped.  Otherwise Clack asks for the missing values.
 Prompt types
 ------------
 
-### `text` — free-text string
+### `text`—free-text string
 
 Prompts the user for an arbitrary string value:
 
@@ -118,7 +118,7 @@ const name = prompt(option("--name", string()), {
 :   Function called when the user submits.  Return a string error message
     to reject and re-prompt, or `undefined`/`void` to accept.
 
-### `confirm` — Boolean yes/no
+### `confirm`—Boolean yes/no
 
 Prompts the user with a yes/no question:
 
@@ -141,7 +141,7 @@ const verbose = prompt(flag("--verbose"), {
 `initialValue`
 :   Initial Boolean value.
 
-### `number` — numeric input
+### `number`—numeric input
 
 Prompts the user for a number:
 
@@ -187,7 +187,7 @@ blank or non-finite values.
 > `No number provided.` is used when a test `prompter` returns `undefined`,
 > or when an overridden Clack function returns an invalid final value.
 
-### `password` — masked input
+### `password`—masked input
 
 Prompts for a secret value without displaying the characters:
 
@@ -216,7 +216,7 @@ const apiKey = prompt(option("--api-key", string()), {
 `validate`
 :   Same as `text`.
 
-### `select` — arrow-key single-select
+### `select`—arrow-key single-select
 
 Shows a list where the user selects one option:
 
@@ -264,7 +264,7 @@ const color = prompt(option("--color", string()), {
 
 [`Option`]: #option
 
-### `multiselect` — multi-select
+### `multiselect`—multi-select
 
 Shows a list where the user selects multiple options:
 
