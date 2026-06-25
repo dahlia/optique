@@ -177,6 +177,24 @@ describe("prompt()", () => {
     assert.deepEqual(result.error, message`No option selected.`);
   });
 
+  it("rejects missing required multiselect prompt values", async () => {
+    await withPromptFunctionsOverride({
+      multiselect: () => Promise.resolve(undefined),
+    }, async () => {
+      const parser = prompt(multiple(option("--tag", string())), {
+        type: "multiselect",
+        message: "Tags:",
+        options: ["a", "b", "c"],
+        required: true,
+      });
+
+      const result = await parseAsync(parser, []);
+
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, message`No option selected.`);
+    });
+  });
+
   it("supports prompt-only values with fail()", async () => {
     const parser = prompt(fail<string>(), {
       type: "text",

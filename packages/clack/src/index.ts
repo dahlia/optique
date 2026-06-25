@@ -456,10 +456,11 @@ function normalizeMultiselectResult<TValue>(
   result: unknown,
   config: MultiselectConfig,
 ): ValueParserResult<TValue> {
-  if (config.required === true && Array.isArray(result) && result.length < 1) {
+  const values = Array.isArray(result) ? result : [];
+  if (config.required === true && values.length < 1) {
     return { success: false, error: message`No option selected.` };
   }
-  return { success: true, value: result as TValue };
+  return { success: true, value: values as TValue };
 }
 
 function parseNumberPromptValue(value: string): number | null {
