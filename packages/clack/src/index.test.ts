@@ -264,6 +264,23 @@ describe("prompt()", () => {
     });
   });
 
+  it("converts custom prompter cancellation into a parse failure", async () => {
+    await withPromptFunctionsOverride({
+      isCancel: (value: unknown) => value === Symbol.for("clack:cancel"),
+    }, async () => {
+      const parser = prompt(option("--name", string()), {
+        type: "text",
+        message: "Name:",
+        prompter: () => Promise.resolve(Symbol.for("clack:cancel") as never),
+      });
+
+      const result = await parseAsync(parser, []);
+
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, message`Prompt cancelled.`);
+    });
+  });
+
   it("rejects unsupported prompt types at runtime", async () => {
     const parser = prompt(option("--name", string()), {
       // @ts-expect-error This verifies the runtime guard for JavaScript users.

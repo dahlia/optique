@@ -336,6 +336,9 @@ async function executePromptRaw<TValue>(
 
   if ("prompter" in cfg && cfg.prompter != null) {
     const value = await cfg.prompter();
+    if (prompts.isCancel(value)) {
+      return { success: false, error: message`Prompt cancelled.` };
+    }
     if (cfg.type === "number") {
       return normalizeNumberResult(value);
     }
