@@ -1774,9 +1774,10 @@ import { runAsync } from "@optique/run";
 
 const derived = createDerivedDefaults({
   cacheDir: (parsed: {
-    readonly projectRoot: string;
+    readonly projectRoot?: string;
     readonly profile?: string;
   }) => {
+    if (parsed.projectRoot == null) return undefined;
     const profile = parsed.profile ?? "default";
     return `${parsed.projectRoot}/.cache/${profile}`;
   },

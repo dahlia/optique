@@ -37,8 +37,10 @@ import {
 } from "@optique/derived-defaults";
 
 const derived = createDerivedDefaults({
-  workspaceRoot: (parsed: { readonly serviceRoot: string }) =>
-    `${parsed.serviceRoot}/workspace`,
+  workspaceRoot: (parsed: { readonly serviceRoot?: string }) =>
+    parsed.serviceRoot == null
+      ? undefined
+      : `${parsed.serviceRoot}/workspace`,
 });
 
 const parser = object({

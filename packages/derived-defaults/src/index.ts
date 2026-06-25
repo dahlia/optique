@@ -230,6 +230,11 @@ export function createDerivedDefaults<const TResolvers extends object>(
           (resolvers as Record<PropertyKey, (parsed: unknown) => unknown>)[
             key
           ];
+        // Resolvers that declare a parsed-value parameter depend on a seed.
+        // Zero-argument resolvers can still provide global defaults.
+        if (request.parsed === undefined && resolver.length > 0) {
+          continue;
+        }
         const resolved = resolver(request.parsed);
         if (isPromiseLike(resolved)) {
           pending.push(

@@ -52,15 +52,22 @@ Basic usage
 ### 1. Create a derived-default context
 
 Call `createDerivedDefaults()` with resolver functions.  Each resolver receives
-the first-pass parse result and returns either a fallback value or `undefined`
+the first-pass parse seed and returns either a fallback value or `undefined`
 when it has no value to provide.
+
+The seed is best-effort: it is available only after Optique can produce a
+phase-two value, and some fields may still be missing while required options
+are unresolved.  Write resolvers to check the fields they depend on and return
+`undefined` when the dependency is absent.
 
 ~~~~ typescript twoslash
 import { createDerivedDefaults } from "@optique/derived-defaults";
 
 const derived = createDerivedDefaults({
-  workspaceRoot: (parsed: { readonly serviceRoot: string }) =>
-    `${parsed.serviceRoot}/workspace`,
+  workspaceRoot: (parsed: { readonly serviceRoot?: string }) =>
+    parsed.serviceRoot == null
+      ? undefined
+      : `${parsed.serviceRoot}/workspace`,
 });
 ~~~~
 
@@ -79,8 +86,10 @@ import {
 } from "@optique/derived-defaults";
 
 const derived = createDerivedDefaults({
-  workspaceRoot: (parsed: { readonly serviceRoot: string }) =>
-    `${parsed.serviceRoot}/workspace`,
+  workspaceRoot: (parsed: { readonly serviceRoot?: string }) =>
+    parsed.serviceRoot == null
+      ? undefined
+      : `${parsed.serviceRoot}/workspace`,
 });
 
 const parser = object({
@@ -115,8 +124,10 @@ import {
 } from "@optique/derived-defaults";
 
 const derived = createDerivedDefaults({
-  workspaceRoot: (parsed: { readonly serviceRoot: string }) =>
-    `${parsed.serviceRoot}/workspace`,
+  workspaceRoot: (parsed: { readonly serviceRoot?: string }) =>
+    parsed.serviceRoot == null
+      ? undefined
+      : `${parsed.serviceRoot}/workspace`,
 });
 
 const parser = object({
@@ -199,8 +210,12 @@ import {
 } from "@optique/derived-defaults";
 
 const derived = createDerivedDefaults({
-  port: (parsed: { readonly profile: string }) =>
-    parsed.profile === "public" ? 443 : 8080,
+  port: (parsed: { readonly profile?: string }) =>
+    parsed.profile == null
+      ? undefined
+      : parsed.profile === "public"
+      ? 443
+      : 8080,
 });
 
 const parser = object({
@@ -232,7 +247,8 @@ import {
 declare function loadToken(service: string): Promise<string>;
 
 const derived = createDerivedDefaults({
-  token: (parsed: { readonly service: string }) => loadToken(parsed.service),
+  token: (parsed: { readonly service?: string }) =>
+    parsed.service == null ? undefined : loadToken(parsed.service),
 });
 
 const parser = object({
@@ -269,8 +285,10 @@ import {
 } from "@optique/derived-defaults";
 
 const derived = createDerivedDefaults({
-  workspaceRoot: (parsed: { readonly serviceRoot: string }) =>
-    `${parsed.serviceRoot}/workspace`,
+  workspaceRoot: (parsed: { readonly serviceRoot?: string }) =>
+    parsed.serviceRoot == null
+      ? undefined
+      : `${parsed.serviceRoot}/workspace`,
 });
 
 const parser = object({

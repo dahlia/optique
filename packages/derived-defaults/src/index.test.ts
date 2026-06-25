@@ -103,6 +103,34 @@ describe("createDerivedDefaults()", () => {
 
     assert.deepEqual(calls, ["api"]);
   });
+
+  it("does not call resolvers without a phase-two seed", async () => {
+    let called = false;
+    const derived = createDerivedDefaults({
+      workspaceRoot: (parsed: { readonly serviceRoot: string }) => {
+        called = true;
+        return `${parsed.serviceRoot}/workspace`;
+      },
+    });
+    const parser = object({
+      serviceRoot: option("--service-root", string()),
+      workspaceRoot: bindDerivedDefault(option("--workspace-root", string()), {
+        context: derived.context,
+        key: "workspaceRoot",
+      }),
+    });
+
+    const failure = await captureRunFailure((options) =>
+      runAsync(parser, {
+        args: [],
+        contexts: [derived.context],
+        ...options,
+      })
+    );
+
+    assert.ok(!called);
+    assert.match(failure.stderr, /No matching option found\./u);
+  });
 });
 
 describe("bindDerivedDefault()", () => {
