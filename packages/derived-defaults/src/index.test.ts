@@ -149,6 +149,26 @@ describe("createDerivedDefaults()", () => {
     assert.ok(!called);
     assert.deepEqual(annotations, {});
   });
+
+  it("passes undefined to default-parameter resolvers for null seeds", () => {
+    let called = false;
+    const derived = createDerivedDefaults({
+      workspaceRoot: (
+        { serviceRoot }: { readonly serviceRoot?: string } = {},
+      ) => {
+        called = true;
+        return serviceRoot == null ? undefined : `${serviceRoot}/workspace`;
+      },
+    });
+
+    const annotations = derived.context.getAnnotations({
+      phase: "phase2",
+      parsed: null,
+    });
+
+    assert.ok(called);
+    assert.deepEqual(annotations, {});
+  });
 });
 
 describe("bindDerivedDefault()", () => {

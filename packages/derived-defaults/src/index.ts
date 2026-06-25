@@ -235,7 +235,7 @@ export function createDerivedDefaults<const TResolvers extends object>(
         if (request.parsed == null && resolver.length > 0) {
           continue;
         }
-        const resolved = resolver(request.parsed);
+        const resolved = resolver(request.parsed ?? undefined);
         if (isPromiseLike(resolved)) {
           pending.push(
             Promise.resolve(resolved).then((value) => {
