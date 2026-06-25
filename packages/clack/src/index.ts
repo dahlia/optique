@@ -339,6 +339,9 @@ async function executePromptRaw<TValue>(
     if (cfg.type === "number") {
       return normalizeNumberResult(value);
     }
+    if (cfg.type === "multiselect") {
+      return normalizeMultiselectResult(value, cfg);
+    }
     return { success: true, value: value as TValue };
   }
 
@@ -348,6 +351,9 @@ async function executePromptRaw<TValue>(
   }
   if (cfg.type === "number") {
     return normalizeNumberResult(result);
+  }
+  if (cfg.type === "multiselect") {
+    return normalizeMultiselectResult(result, cfg);
   }
   return { success: true, value: result as TValue };
 }
@@ -441,6 +447,16 @@ function normalizeNumberResult<TValue>(
     return { success: false, error: message`No number provided.` };
   }
   return { success: true, value: parsed as TValue };
+}
+
+function normalizeMultiselectResult<TValue>(
+  result: unknown,
+  config: MultiselectConfig,
+): ValueParserResult<TValue> {
+  if (config.required === true && Array.isArray(result) && result.length < 1) {
+    return { success: false, error: message`No option selected.` };
+  }
+  return { success: true, value: result as TValue };
 }
 
 function parseNumberPromptValue(value: string): number | null {
