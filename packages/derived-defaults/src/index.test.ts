@@ -119,6 +119,28 @@ describe("bindDerivedDefault()", () => {
     assert.equal(result.workspaceRoot, "/cli");
   });
 
+  it("preserves invalid explicit CLI input over derived fallback", async () => {
+    const derived = createDerivedDefaults({
+      port: () => 5432,
+    });
+    const parser = object({
+      port: bindDerivedDefault(option("--port", integer()), {
+        context: derived.context,
+        key: "port",
+      }),
+    });
+
+    const failure = await captureRunFailure((options) =>
+      runAsync(parser, {
+        args: ["--port", "invalid"],
+        contexts: [derived.context],
+        ...options,
+      })
+    );
+
+    assert.match(failure.stderr, /Expected a valid integer/u);
+  });
+
   it("falls through from undefined to a static default", async () => {
     const derived = createDerivedDefaults({
       workspaceRoot: () => undefined,
@@ -181,6 +203,25 @@ describe("bindDerivedDefault()", () => {
     );
 
     assert.match(failure.stderr, /No matching option found\./u);
+  });
+
+  it("derives all fields when no CLI input seeds phase two", async () => {
+    const derived = createDerivedDefaults({
+      token: () => "secret",
+    });
+    const parser = object({
+      token: bindDerivedDefault(option("--token", string()), {
+        context: derived.context,
+        key: "token",
+      }),
+    });
+
+    const result = await runAsync(parser, {
+      args: [],
+      contexts: [derived.context],
+    });
+
+    assert.deepEqual(result, { token: "secret" });
   });
 
   it("supports async resolvers with async runners", async () => {

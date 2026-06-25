@@ -11,6 +11,7 @@ import type { DocFragment } from "@optique/core/doc";
 import {
   defineTraits,
   delegateSuggestNodes,
+  extractPhase2SeedKey,
   inheritAnnotations,
   injectAnnotations,
   mapModeValue,
@@ -556,6 +557,19 @@ export function bindDerivedDefault<
       };
     },
   };
+  Object.defineProperty(boundParser, extractPhase2SeedKey, {
+    value(state: TState) {
+      const annotations = getAnnotations(state);
+      if (
+        annotations?.[options.context.id] !==
+          phase1DerivedDefaultAnnotationMarker
+      ) {
+        return null;
+      }
+      return { value: undefined as TValue, deferred: true as const };
+    },
+    configurable: true,
+  });
   defineTraits(boundParser, {
     inheritsAnnotations: true,
     completesFromSource: true,
