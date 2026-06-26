@@ -1966,22 +1966,27 @@ export function deferredValue<M extends Mode, T, S, C = void>(
     state: [S] | undefined,
     exec?: ExecutionContext,
   ): ModeValue<M, ValueParserResult<DeferredValue<T, C>>> =>
-    mapModeValue(
+    // wrapForMode() guards the boundary so a synchronous caller never silently
+    // receives a Promise when the wrapped parser is asynchronous.
+    wrapForMode<M, ValueParserResult<DeferredValue<T, C>>>(
       base.mode,
-      base.complete(state, exec),
-      (result): ValueParserResult<DeferredValue<T, C>> => {
-        if (!result.success) return result;
-        // Any value the wrapped parser produced (from the CLI or a source such
-        // as bindEnv()/bindConfig()) selects "specified".  optional() collapses
-        // a genuinely produced `undefined` into the same absence as "no value",
-        // so such a value selects the fallback resolver.
-        const value = result.value === undefined
-          ? makeFallbackDeferredValue<T, C>(fallback, memoize)
-          : makeSpecifiedDeferredValue<T, C>(result.value);
-        return result.deferred
-          ? { success: true, value, deferred: true }
-          : { success: true, value };
-      },
+      mapModeValue(
+        base.mode,
+        base.complete(state, exec),
+        (result): ValueParserResult<DeferredValue<T, C>> => {
+          if (!result.success) return result;
+          // Any value the wrapped parser produced (from the CLI or a source
+          // such as bindEnv()/bindConfig()) selects "specified".  optional()
+          // collapses a genuinely produced `undefined` into the same absence as
+          // "no value", so such a value selects the fallback resolver.
+          const value = result.value === undefined
+            ? makeFallbackDeferredValue<T, C>(fallback, memoize)
+            : makeSpecifiedDeferredValue<T, C>(result.value);
+          return result.deferred
+            ? { success: true, value, deferred: true }
+            : { success: true, value };
+        },
+      ),
     );
   // Clone optional()'s parser so every own property, including the
   // non-enumerable annotation markers an object spread would lose, is
