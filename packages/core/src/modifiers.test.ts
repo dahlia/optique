@@ -8245,6 +8245,44 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.deepEqual(inner.receivedStates[0], otherState);
     });
   });
+
+  describe("deferredValue() shouldDeferCompletion", () => {
+    it("should unwrap outer state before delegating to inner hook", () => {
+      const inner = createDeferrableParser(true);
+      const outer = deferredValue(inner, () => "fallback");
+
+      assert.ok(typeof outer.shouldDeferCompletion === "function");
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "hello",
+      };
+      outer.shouldDeferCompletion!([innerState]);
+
+      assert.equal(inner.receivedStates.length, 1);
+      assert.deepEqual(inner.receivedStates[0], innerState);
+    });
+
+    it("should return false when outer state is undefined", () => {
+      const inner = createDeferrableParser(true);
+      const outer = deferredValue(inner, () => "fallback");
+
+      const result = outer.shouldDeferCompletion!(undefined);
+      assert.ok(!result);
+      assert.equal(inner.receivedStates.length, 0);
+    });
+
+    it("should propagate inner hook's return value", () => {
+      const inner = createDeferrableParser(false);
+      const outer = deferredValue(inner, () => "fallback");
+
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "test",
+      };
+      const result = outer.shouldDeferCompletion!([innerState]);
+      assert.ok(!result);
+    });
+  });
 });
 
 describe(
@@ -12432,6 +12470,25 @@ describe("deferredValue", () => {
     if (omitted.success) {
       assert.equal(omitted.value.x.source, "fallback");
       assert.equal(omitted.value.x(), "fallback");
+    }
+  });
+
+  it("treats a value produced during completion as 'specified'", () => {
+    // constant() yields its value during completion without consuming a CLI
+    // token, the same path bindEnv()/bindConfig() take when they resolve a
+    // value from a non-CLI source.  The map() widens the literal to string so
+    // the fallback can differ from the produced value.
+    const parser = object({
+      region: deferredValue(
+        map(constant("us-east-1"), (value): string => value),
+        () => "fallback-region",
+      ),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.region.source, "specified");
+      assert.equal(result.value.region(), "us-east-1");
     }
   });
 

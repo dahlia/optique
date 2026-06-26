@@ -1757,7 +1757,8 @@ export function map<M extends Mode, T, U, TState>(
 /**
  * Identifies which branch a {@link DeferredValue} resolved from.
  *
- *  -  `"specified"` means the wrapped parser produced a value from CLI input.
+ *  -  `"specified"` means the wrapped parser produced a value, whether from
+ *     CLI input or another source such as `bindEnv()`/`bindConfig()`.
  *  -  `"fallback"` means {@link deferredValue} selected the fallback resolver.
  *
  * @since 1.2.0
