@@ -519,6 +519,29 @@ describe("bindDerivedDefault()", () => {
     assert.deepEqual(extractor(parser.initialState), { value: "inner" });
   });
 
+  it("rejects async inner phase-two seeds in sync mode", () => {
+    const derived = createDerivedDefaults({
+      token: () => "fallback",
+    });
+    const innerParser = { ...option("--token", string()) };
+    Object.defineProperty(innerParser, extractPhase2SeedKey, {
+      value: () => Promise.resolve({ value: "inner" }),
+      configurable: true,
+    });
+    const parser = bindDerivedDefault(innerParser, {
+      context: derived.context,
+      key: "token",
+    });
+    const extractor = (parser as typeof parser & {
+      readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
+    })[extractPhase2SeedKey];
+
+    assert.throws(
+      () => extractor(parser.initialState),
+      /Synchronous mode cannot wrap Promise value/u,
+    );
+  });
+
   it("wraps phase-two seed fallbacks in async mode", async () => {
     const derived = createDerivedDefaults({
       token: () => "fallback",

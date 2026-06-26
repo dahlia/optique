@@ -577,7 +577,10 @@ export function bindDerivedDefault<
         })[extractPhase2SeedKey];
         return extractInnerPhase2Seed == null
           ? wrapForMode(parser.mode, null)
-          : extractInnerPhase2Seed(getInnerState(state), exec);
+          : wrapForMode(
+            parser.mode,
+            extractInnerPhase2Seed(getInnerState(state), exec),
+          );
       }
       return wrapForMode(parser.mode, {
         value: undefined as TValue,
