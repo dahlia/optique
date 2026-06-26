@@ -3472,6 +3472,7 @@ export interface ParserModifiers<
    * @param fallback A resolver run at handler time when no value was specified.
    * @param options Optional {@link DeferredValueOptions}.
    * @returns A parser whose value is a {@link DeferredValue}.
+   * @since 1.2.0
    */
   deferredValue(
     fallback: () => TValue | Promise<TValue>,
