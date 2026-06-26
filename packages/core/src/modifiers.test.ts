@@ -12535,6 +12535,18 @@ describe("deferredValue", () => {
     }
   });
 
+  it("marks a wrapped dependency source as transformed", () => {
+    // The produced value is a function, so deferredValue() must not register it
+    // as a dependency source value.  Its metadata is marked transformed (as
+    // map() does), so the dependency runtime uses the raw inner value instead
+    // of the produced DeferredValue.
+    const source = dependency(choice(["dev", "prod"] as const));
+    const deferred = deferredValue(option("--mode", source), () => "dev");
+    assert.ok(deferred.dependencyMetadata?.source != null);
+    assert.ok(!deferred.dependencyMetadata?.source?.preservesSourceValue);
+    assert.ok(deferred.dependencyMetadata?.transform?.transformsSourceValue);
+  });
+
   it("propagates a parse error when a specified value is invalid", () => {
     const parser = object({
       token: deferredValue(

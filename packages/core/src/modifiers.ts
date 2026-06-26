@@ -2007,6 +2007,20 @@ export function deferredValue<M extends Mode, T, S, C = void>(
   delete descriptors.normalizeValue;
   delete descriptors.validateValue;
   delete descriptors[fluentParserMarker];
+  // The produced value is a function, so if the wrapped parser is a dependency
+  // source, mark its metadata as transformed (as map() does).  Otherwise the
+  // dependency runtime would register this wrapper's DeferredValue function as
+  // the source value, and derived parsers would validate against a function
+  // instead of the raw inner value.
+  if (descriptors.dependencyMetadata?.value != null) {
+    descriptors.dependencyMetadata = {
+      ...descriptors.dependencyMetadata,
+      value: composeDependencyMetadata(
+        descriptors.dependencyMetadata.value,
+        "map",
+      ),
+    };
+  }
   const deferredParser = Object.create(
     Object.getPrototypeOf(base),
     descriptors,
