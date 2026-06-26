@@ -3416,6 +3416,22 @@ export interface ParserModifiers<
   ): FluentParser<M, TValue | TDefault, [TState] | undefined>;
 
   /**
+   * Defers this parser's value so the command handler resolves it.
+   *
+   * @param fallback A resolver run at handler time when no value was specified.
+   * @param options Optional {@link DeferredValueOptions}.
+   * @returns A parser whose value is a {@link DeferredValue}.
+   */
+  deferredValue(
+    fallback: () => TValue | Promise<TValue>,
+    options?: DeferredValueOptions,
+  ): FluentParser<M, DeferredValue<TValue>, [TState] | undefined>;
+  deferredValue<C>(
+    fallback: (ctx: C) => TValue | Promise<TValue>,
+    options?: DeferredValueOptions,
+  ): FluentParser<M, DeferredValue<TValue, C>, [TState] | undefined>;
+
+  /**
    * Allows this parser to match multiple times.
    *
    * @param options Optional occurrence constraints.
@@ -3506,6 +3522,16 @@ export function fluent<M extends Mode, TValue, TState>(
     nonEmpty: {
       value() {
         return nonEmpty(parser);
+      },
+      configurable: true,
+      enumerable: false,
+    },
+    deferredValue: {
+      value<C = void>(
+        fallback: (ctx: C) => TValue | Promise<TValue>,
+        options?: DeferredValueOptions,
+      ) {
+        return deferredValue(parser, fallback, options);
       },
       configurable: true,
       enumerable: false,

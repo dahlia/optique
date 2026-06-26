@@ -12615,6 +12615,42 @@ describe("deferredValue", () => {
       }
     });
   });
+
+  describe("fluent method", () => {
+    it("is available as a fluent method", () => {
+      const parser = object({
+        token: option("--token", string()).deferredValue(() => "fb"),
+      });
+      const provided = parse(parser, ["--token", "abc"]);
+      assert.ok(provided.success);
+      if (provided.success) {
+        assert.ok(isDeferredValue(provided.value.token));
+        assert.equal(provided.value.token.source, "specified");
+        assert.equal(provided.value.token(), "abc");
+      }
+      const omitted = parse(parser, []);
+      assert.ok(omitted.success);
+      if (omitted.success) {
+        assert.equal(omitted.value.token.source, "fallback");
+        assert.equal(omitted.value.token(), "fb");
+      }
+    });
+
+    it("forwards the inferred context type and options", () => {
+      const parser = object({
+        token: option("--token", string()).deferredValue(
+          ({ id }: { readonly id: string }) => `token-${id}`,
+          { memoize: true },
+        ),
+      });
+      const omitted = parse(parser, []);
+      assert.ok(omitted.success);
+      if (omitted.success) {
+        assert.equal(omitted.value.token.source, "fallback");
+        assert.equal(omitted.value.token({ id: "x" }), "token-x");
+      }
+    });
+  });
 });
 
 describe("isDeferredValue", () => {
