@@ -31,6 +31,7 @@ export {
   mapModeValue,
   wrapForMode,
 } from "./internal/mode-dispatch.ts";
+export { extractPhase2SeedKey } from "./phase2-seed.ts";
 
 /**
  * Stable trait flags for custom parser extensions.

@@ -5,6 +5,7 @@
     "@optique/config": "workspace:",
     "@optique/core": "workspace:",
     "@optique/clack": "workspace:",
+    "@optique/derived-defaults": "workspace:",
     "@optique/discover": "workspace:",
     "@optique/env": "workspace:",
     "@optique/git": "workspace:",

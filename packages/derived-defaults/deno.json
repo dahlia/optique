@@ -1,0 +1,43 @@
+{
+  "name": "@optique/derived-defaults",
+  "version": "1.2.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "#src/": "./src/",
+    "@optique/config": "../config/src/index.ts",
+    "@optique/core": "../core/src/index.ts",
+    "@optique/env": "../env/src/index.ts",
+    "@optique/run": "../run/src/index.ts"
+  },
+  "exclude": [
+    "dist/",
+    "node_modules",
+    "tsdown.config.ts"
+  ],
+  "tasks": {
+    "build": "pnpm build",
+    "test": "deno test",
+    "test:node": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "node --test"
+    },
+    "test:bun": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "bun test"
+    },
+    "test-all": {
+      "dependencies": [
+        "test",
+        "test:node",
+        "test:bun"
+      ]
+    }
+  }
+}

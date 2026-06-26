@@ -57,6 +57,7 @@ const CONCEPTS = {
     { text: "Modifying combinators", link: "/concepts/modifiers" },
     { text: "Construct combinators", link: "/concepts/constructs" },
     { text: "Inter-option dependencies", link: "/concepts/dependencies" },
+    { text: "Derived defaults", link: "/concepts/derived-defaults" },
     { text: "Shell completion", link: "/concepts/completion" },
     { text: "Man pages", link: "/concepts/man" },
     { text: "Command discovery", link: "/concepts/discover" },
@@ -94,6 +95,10 @@ const REFERENCES = {
     { text: "@optique/man", link: "https://jsr.io/@optique/man/doc" },
     { text: "@optique/env", link: "https://jsr.io/@optique/env/doc" },
     { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },
+    {
+      text: "@optique/derived-defaults",
+      link: "https://jsr.io/@optique/derived-defaults/doc",
+    },
     { text: "@optique/clack", link: "https://jsr.io/@optique/clack/doc" },
     {
       text: "@optique/inquirer",

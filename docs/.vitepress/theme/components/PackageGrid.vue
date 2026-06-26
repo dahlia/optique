@@ -6,6 +6,7 @@ const packages = [
   { name: "@optique/run", desc: "Process runner for Node.js, Deno, and Bun.", link: "https://jsr.io/@optique/run/doc", core: true },
   { name: "@optique/discover", desc: "File-based command discovery and dispatch.", link: "/concepts/discover" },
   { name: "@optique/config", desc: "Config-file values via Standard Schema.", link: "/integrations/config" },
+  { name: "@optique/derived-defaults", desc: "Defaults derived from parsed values.", link: "/concepts/derived-defaults" },
   { name: "@optique/clack", desc: "Interactive prompt fallback via Clack.", link: "/integrations/clack" },
   { name: "@optique/env", desc: "Environment-variable fallbacks.", link: "/integrations/env" },
   { name: "@optique/inquirer", desc: "Inquirer.js prompt fallback.", link: "/integrations/inquirer" },

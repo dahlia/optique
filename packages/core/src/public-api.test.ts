@@ -103,6 +103,7 @@ test("extension module exposes the supported extension helpers", () => {
     "defineTraits",
     "delegateSuggestNodes",
     "dispatchByMode",
+    "extractPhase2SeedKey",
     "getTraits",
     "inheritAnnotations",
     "injectAnnotations",
