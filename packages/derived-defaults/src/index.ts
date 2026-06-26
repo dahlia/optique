@@ -383,7 +383,10 @@ export function bindDerivedDefault<
     if (innerParser?.canSkip?.(getInnerState(state as TState), exec) === true) {
       return mapModeValue(
         mode,
-        innerParser.complete(getInnerState(state as TState), exec),
+        wrapForMode(
+          mode,
+          innerParser.complete(getInnerState(state as TState), exec),
+        ),
         (result) => {
           if (result.success) return result;
           if (contextAbsent) {
@@ -413,6 +416,7 @@ export function bindDerivedDefault<
   function getDerivedSourceValue(
     state: unknown,
     innerState: unknown,
+    mode: M,
     extractInnerSourceValue: (
       state: unknown,
     ) =>
@@ -436,20 +440,29 @@ export function bindDerivedDefault<
       ) {
         return parsed;
       }
-      return innerParser.validateValue(parsed.value) as
-        | ValueParserResult<unknown>
-        | Promise<ValueParserResult<unknown>>;
+      return wrapForMode(
+        mode,
+        innerParser.validateValue(parsed.value) as
+          | ValueParserResult<unknown>
+          | Promise<ValueParserResult<unknown>>,
+      );
     };
     if (derivedValue !== undefined) {
-      return validateFallback({ success: true as const, value: derivedValue });
+      return wrapForMode(
+        mode,
+        validateFallback({ success: true as const, value: derivedValue }),
+      );
     }
     if (options.default !== undefined) {
-      return validateFallback({
-        success: true as const,
-        value: options.default,
-      });
+      return wrapForMode(
+        mode,
+        validateFallback({
+          success: true as const,
+          value: options.default,
+        }),
+      );
     }
-    return extractInnerSourceValue(innerState);
+    return wrapForMode(mode, extractInnerSourceValue(innerState));
   }
 
   const boundParser: Parser<M, TValue, TState> = {
@@ -524,7 +537,7 @@ export function bindDerivedDefault<
       };
       return mapModeValue(
         parser.mode,
-        parser.parse(innerContext),
+        wrapForMode(parser.mode, parser.parse(innerContext)),
         processResult,
       );
     },
@@ -624,11 +637,17 @@ export function bindDerivedDefault<
           options.default !== undefined
         ? () => {
           if (typeof parser.validateValue === "function") {
-            return parser.validateValue(options.default!) as
-              | ValueParserResult<unknown>
-              | Promise<ValueParserResult<unknown>>;
+            return wrapForMode(
+              parser.mode,
+              parser.validateValue(options.default!) as
+                | ValueParserResult<unknown>
+                | Promise<ValueParserResult<unknown>>,
+            );
           }
-          return { success: true as const, value: options.default };
+          return wrapForMode(parser.mode, {
+            success: true as const,
+            value: options.default,
+          });
         }
         : undefined,
       extractSourceValue: (state: unknown) => {
@@ -637,22 +656,33 @@ export function bindDerivedDefault<
             return getDerivedSourceValue(
               state,
               state,
+              parser.mode,
               sourceMetadata.extractSourceValue,
               parser,
             );
           }
-          return sourceMetadata.extractSourceValue(state);
+          return wrapForMode(
+            parser.mode,
+            sourceMetadata.extractSourceValue(state),
+          );
         }
         if (state.hasCliValue) {
-          return sourceMetadata.extractSourceValue(state.cliState);
+          return wrapForMode(
+            parser.mode,
+            sourceMetadata.extractSourceValue(state.cliState),
+          );
         }
         const fallbackState = state.cliState ?? state;
         if (!sourceMetadata.preservesSourceValue) {
-          return sourceMetadata.extractSourceValue(fallbackState);
+          return wrapForMode(
+            parser.mode,
+            sourceMetadata.extractSourceValue(fallbackState),
+          );
         }
         return getDerivedSourceValue(
           state,
           fallbackState,
+          parser.mode,
           sourceMetadata.extractSourceValue,
           parser,
         );

@@ -6,7 +6,11 @@
     ".": "./src/index.ts"
   },
   "imports": {
-    "#src/": "./src/"
+    "#src/": "./src/",
+    "@optique/config": "../config/src/index.ts",
+    "@optique/core": "../core/src/index.ts",
+    "@optique/env": "../env/src/index.ts",
+    "@optique/run": "../run/src/index.ts"
   },
   "exclude": [
     "dist/",

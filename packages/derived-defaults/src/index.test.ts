@@ -5,8 +5,13 @@ import { formatMessage, message, optionName } from "@optique/core/message";
 import { object } from "@optique/core/constructs";
 import { withDefault } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
-import { getDocPage, parse } from "@optique/core/parser";
-import { integer, string, type ValueParser } from "@optique/core/valueparser";
+import { getDocPage, parse, type Parser } from "@optique/core/parser";
+import {
+  integer,
+  string,
+  type ValueParser,
+  type ValueParserResult,
+} from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
 import { bindConfig, createConfigContext } from "@optique/config";
 import {
@@ -28,6 +33,59 @@ function asyncString(): ValueParser<"async", string> {
       return value;
     },
   };
+}
+
+function dependencySourceParser(options: {
+  readonly validateValue?: () =>
+    | ValueParserResult<string>
+    | Promise<ValueParserResult<string>>;
+  readonly extractSourceValue?: (
+    state: unknown,
+  ) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>>;
+} = {}): Parser<"sync", string, unknown> {
+  const sourceId = Symbol("@optique/derived-defaults/test-source");
+  const parser: Parser<"sync", string, unknown> = {
+    mode: "sync",
+    $valueType: [] as readonly string[],
+    $stateType: [] as readonly unknown[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set<string>(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true as const,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete() {
+      return { success: false as const, error: message`Missing value.` };
+    },
+    suggest() {
+      return [];
+    },
+    getDocFragments() {
+      return { fragments: [] };
+    },
+    dependencyMetadata: {
+      source: {
+        kind: "source",
+        sourceId,
+        preservesSourceValue: true,
+        extractSourceValue: options.extractSourceValue ??
+          (() => ({ success: true as const, value: "source" })),
+      },
+    },
+  };
+  if (options.validateValue != null) {
+    Object.defineProperty(parser, "validateValue", {
+      value: options.validateValue,
+      configurable: true,
+    });
+  }
+  return parser;
 }
 
 async function captureRunFailure(
@@ -495,6 +553,89 @@ describe("bindDerivedDefault()", () => {
 
     assert.throws(
       () => parse(parser, ["--token", "cli"], { annotations }),
+      /Synchronous mode cannot wrap Promise value/u,
+    );
+  });
+
+  it("rejects async missing source defaults in sync mode", () => {
+    const derived = createDerivedDefaults({
+      token: () => undefined,
+    });
+    const parser = bindDerivedDefault(
+      dependencySourceParser({
+        validateValue: () =>
+          Promise.resolve({ success: true as const, value: "default" }),
+      }),
+      {
+        context: derived.context,
+        key: "token",
+        default: "default",
+      },
+    );
+    const getMissingSourceValue = parser.dependencyMetadata?.source
+      ?.getMissingSourceValue;
+    assert.ok(getMissingSourceValue != null);
+
+    assert.throws(
+      () => getMissingSourceValue(),
+      /Synchronous mode cannot wrap Promise value/u,
+    );
+  });
+
+  it("rejects async derived source validation in sync mode", () => {
+    const derived = createDerivedDefaults({
+      token: () => "derived",
+    });
+    const annotations = derived.context.getAnnotations({
+      phase: "phase2",
+      parsed: {},
+    });
+    assert.ok(!(annotations instanceof Promise));
+    const parser = bindDerivedDefault(
+      dependencySourceParser({
+        validateValue: () =>
+          Promise.resolve({ success: true as const, value: "derived" }),
+      }),
+      {
+        context: derived.context,
+        key: "token",
+      },
+    );
+    const extractSourceValue = parser.dependencyMetadata?.source
+      ?.extractSourceValue;
+    assert.ok(extractSourceValue != null);
+
+    assert.throws(
+      () => extractSourceValue(injectAnnotations({}, annotations)),
+      /Synchronous mode cannot wrap Promise value/u,
+    );
+  });
+
+  it("rejects async delegated source extraction in sync mode", () => {
+    const derived = createDerivedDefaults({
+      token: () => undefined,
+    });
+    const annotations = derived.context.getAnnotations({
+      phase: "phase2",
+      parsed: {},
+    });
+    assert.ok(!(annotations instanceof Promise));
+    const parser = bindDerivedDefault(
+      dependencySourceParser({
+        extractSourceValue: () =>
+          Promise.resolve({ success: true as const, value: "source" }),
+      }),
+      {
+        context: derived.context,
+        key: "token",
+      },
+    );
+    const extractSourceValue = parser.dependencyMetadata?.source
+      ?.extractSourceValue;
+    assert.ok(extractSourceValue != null);
+
+    assert.throws(
+      () => extractSourceValue(injectAnnotations({}, annotations)),
       /Synchronous mode cannot wrap Promise value/u,
     );
   });
