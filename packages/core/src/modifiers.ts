@@ -1755,6 +1755,237 @@ export function map<M extends Mode, T, U, TState>(
 }
 
 /**
+ * Identifies which branch a {@link DeferredValue} resolved from.
+ *
+ *  -  `"specified"` means the wrapped parser produced a value from CLI input.
+ *  -  `"fallback"` means {@link deferredValue} selected the fallback resolver.
+ *
+ * @since 1.2.0
+ */
+export type DeferredValueSource = "specified" | "fallback";
+
+/**
+ * A handler-time value produced by {@link deferredValue}.
+ *
+ * It is a value-producing function rather than a scalar value.  When the
+ * wrapped parser produced a value, calling it returns that value.  Otherwise
+ * calling it runs the fallback resolver.  The {@link DeferredValue.source}
+ * property tells which branch was selected without invoking the function.
+ *
+ * The call signature returns `T | Promise<T>` regardless of the wrapped
+ * parser's mode, so a synchronous parser may still pair with an asynchronous
+ * fallback resolver.
+ *
+ * @template T The resolved value type.
+ * @template C The handler-time context type passed to the fallback resolver.
+ * @since 1.2.0
+ */
+export type DeferredValue<T, C = void> =
+  & ([C] extends [void] ? (() => T | Promise<T>)
+    : ((ctx: C) => T | Promise<T>))
+  & {
+    /**
+     * Which branch produced this value: `"specified"` when the wrapped parser
+     * produced a value, `"fallback"` when the fallback resolver was selected.
+     */
+    readonly source: DeferredValueSource;
+  };
+
+/**
+ * Options for {@link deferredValue}.
+ * @since 1.2.0
+ */
+export interface DeferredValueOptions {
+  /**
+   * When `true`, a fallback-backed {@link DeferredValue} caches its first
+   * resolved value (or in-flight promise) and reuses it on later calls.
+   * A rejected fallback is not cached, so the next call retries it.  Defaults
+   * to `false`, meaning every call re-runs the fallback resolver.
+   */
+  readonly memoize?: boolean;
+}
+
+const deferredValueBrand: unique symbol = Symbol.for(
+  "@optique/core/deferredValue",
+);
+
+/**
+ * Brands a value-producing function as a {@link DeferredValue}.
+ *
+ * The brand is a hidden, non-enumerable symbol so {@link isDeferredValue} can
+ * recognize the value while object inspection only sees `source`.  The `source`
+ * property is enumerable but readonly and non-configurable.
+ *
+ * @param call The value-producing function.
+ * @param source The branch that produced the value.
+ * @returns The same function decorated as a {@link DeferredValue}.
+ */
+function brandDeferredValue<T, C>(
+  call: (ctx: C) => T | Promise<T>,
+  source: DeferredValueSource,
+): DeferredValue<T, C> {
+  Object.defineProperties(call, {
+    [deferredValueBrand]: {
+      value: true,
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    },
+    source: {
+      value: source,
+      enumerable: true,
+      writable: false,
+      configurable: false,
+    },
+  });
+  return call as DeferredValue<T, C>;
+}
+
+/**
+ * Builds the `"specified"` branch: a function that returns the parsed value
+ * and ignores any handler-time context.
+ */
+function makeSpecifiedDeferredValue<T, C>(value: T): DeferredValue<T, C> {
+  return brandDeferredValue<T, C>((_ctx: C) => value, "specified");
+}
+
+/**
+ * Builds the `"fallback"` branch: a function that runs the fallback resolver,
+ * optionally memoizing the resolved value or in-flight promise.
+ */
+function makeFallbackDeferredValue<T, C>(
+  fallback: (ctx: C) => T | Promise<T>,
+  memoize: boolean,
+): DeferredValue<T, C> {
+  if (!memoize) {
+    return brandDeferredValue<T, C>((ctx: C) => fallback(ctx), "fallback");
+  }
+  let settled = false;
+  let settledValue: T;
+  let inFlight: Promise<T> | undefined;
+  const call = (ctx: C): T | Promise<T> => {
+    if (settled) return settledValue;
+    if (inFlight != null) return inFlight;
+    const result = fallback(ctx);
+    if (!isPromiseLike<T>(result)) {
+      settled = true;
+      settledValue = result;
+      return result;
+    }
+    const promise = Promise.resolve(result).then(
+      (resolved) => {
+        settled = true;
+        settledValue = resolved;
+        inFlight = undefined;
+        return resolved;
+      },
+      (error) => {
+        // Do not cache rejections: clearing the in-flight slot lets the next
+        // call retry the fallback.
+        inFlight = undefined;
+        throw error;
+      },
+    );
+    inFlight = promise;
+    return promise;
+  };
+  return brandDeferredValue<T, C>(call, "fallback");
+}
+
+/**
+ * Wraps a parser so its value is resolved by the command handler instead of
+ * during parsing.
+ *
+ * The parsed field becomes a {@link DeferredValue}: a value-producing function.
+ * When the wrapped parser produced a value, calling the function returns that
+ * value and {@link DeferredValue.source} is `"specified"`.  When the wrapped
+ * parser did not produce a value, calling the function runs `fallback` and
+ * `source` is `"fallback"`.  The fallback runs at handler time, so its errors
+ * are handler errors rather than parser errors.  A value that is specified but
+ * invalid still fails during parsing.
+ *
+ * Like {@link optional}, the wrapped parser keeps its place in usage and help;
+ * only the result type changes.  The fallback context type `C` is inferred from
+ * the `fallback` parameter.
+ *
+ * @example
+ * ```typescript
+ * const parser = object({
+ *   serviceName: option("--service-name", string()),
+ *   apiToken: deferredValue(
+ *     option("--api-token", string()),
+ *     ({ serviceName }: { readonly serviceName: string }) =>
+ *       promptForApiToken(serviceName),
+ *   ),
+ * });
+ *
+ * const parsed = parse(parser, argv);
+ * // The prompt only runs if this branch is reached.
+ * const apiToken = await parsed.apiToken({
+ *   serviceName: parsed.serviceName,
+ * });
+ * ```
+ *
+ * @template M The execution mode of the wrapped parser.
+ * @template T The resolved value type.
+ * @template S The state type of the wrapped parser.
+ * @param parser The parser that reads the CLI value.
+ * @param fallback A resolver run at handler time when no value was specified.
+ * @param options Optional {@link DeferredValueOptions}.
+ * @returns A parser whose value is a {@link DeferredValue}.
+ * @since 1.2.0
+ */
+export function deferredValue<M extends Mode, T, S>(
+  parser: Parser<M, T, S>,
+  fallback: () => T | Promise<T>,
+  options?: DeferredValueOptions,
+): FluentParser<M, DeferredValue<T>, [S] | undefined>;
+export function deferredValue<M extends Mode, T, S, C>(
+  parser: Parser<M, T, S>,
+  fallback: (ctx: C) => T | Promise<T>,
+  options?: DeferredValueOptions,
+): FluentParser<M, DeferredValue<T, C>, [S] | undefined>;
+export function deferredValue<M extends Mode, T, S, C = void>(
+  parser: Parser<M, T, S>,
+  fallback: (ctx: C) => T | Promise<T>,
+  options?: DeferredValueOptions,
+): FluentParser<M, DeferredValue<T, C>, [S] | undefined> {
+  const memoize = options?.memoize ?? false;
+  // Tag the produced value before optional() collapses "not matched" and a
+  // legitimately produced `undefined` into the same `undefined`.  After
+  // tagging, optional() yields the wrapper object when the wrapped parser
+  // produced a value (even `undefined`), or `undefined` when it did not.
+  return map(
+    optional(map(parser, (value: T): { readonly value: T } => ({ value }))),
+    (matched: { readonly value: T } | undefined): DeferredValue<T, C> =>
+      matched === undefined
+        ? makeFallbackDeferredValue<T, C>(fallback, memoize)
+        : makeSpecifiedDeferredValue<T, C>(matched.value),
+  );
+}
+
+/**
+ * Checks whether a value is a {@link DeferredValue} produced by
+ * {@link deferredValue}.
+ *
+ * Useful for tests, generic result walkers, and debugging code that only has an
+ * `unknown` value.  In ordinary code the static type already indicates whether a
+ * field is a {@link DeferredValue}.
+ *
+ * @param value The value to check.
+ * @returns `true` if `value` is a {@link DeferredValue}.
+ * @since 1.2.0
+ */
+export function isDeferredValue(
+  value: unknown,
+): value is DeferredValue<unknown> {
+  return typeof value === "function" &&
+    (value as { readonly [deferredValueBrand]?: unknown })[
+        deferredValueBrand
+      ] === true;
+}
+
+/**
  * Options for the {@link multiple} parser.
  */
 export interface MultipleOptions {
