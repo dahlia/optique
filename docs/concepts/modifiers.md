@@ -618,9 +618,11 @@ too.
 ### Knowing which branch was taken
 
 A `source` property records the branch without running the function. It is
-`"specified"` when the wrapped parser produced a value, including an explicit
-`undefined`, and `"fallback"` otherwise. This is useful in tests, logs, and
-diagnostics.
+`"specified"` when the wrapped parser produced a value, whether from the command
+line or a source such as `bindEnv()`/`bindConfig()`, and `"fallback"` otherwise.
+Because a missing value is reported as `undefined`, a wrapped parser that yields
+`undefined` is treated as having produced no value and selects the fallback.
+This is useful in tests, logs, and diagnostics.
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
