@@ -1812,6 +1812,66 @@ fallback value still comes from the resolver.
 For more details, see
 [derived defaults](./concepts/derived-defaults.md).
 
+### Deferred handler-time values
+
+*This API is available since Optique 1.2.0.*
+
+The fallbacks above run while parsing.  Some values should wait.  A token might
+come from an interactive prompt, or a lookup that only the deployment branch of
+a command ever reaches.
+[`deferredValue()`](./concepts/modifiers.md#deferredvalue-parser) keeps the
+value the wrapped parser produces, but leaves the fallback unresolved until the
+handler calls for it.
+
+The parsed field becomes a function.  Calling it returns the value the wrapped
+parser produced, or runs the fallback when it produced none.  Because the
+fallback runs at handler time, a failing prompt is a handler error rather than a
+parse error, and a branch that never asks for the value never pays for it.
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { deferredValue, withDefault } from "@optique/core/modifiers";
+import { message } from "@optique/core/message";
+import { flag, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { print, run } from "@optique/run";
+declare function promptForApiToken(serviceName: string): Promise<string>;
+declare function deploy(serviceName: string, apiToken: string): Promise<void>;
+// ---cut-before---
+const parser = object({
+  deploy: withDefault(flag("--deploy"), false),
+  serviceName: option("--service-name", string({ metavar: "NAME" })),
+  apiToken: deferredValue(
+    option("--api-token", string({ metavar: "TOKEN" })),
+    ({ serviceName }: { readonly serviceName: string }) =>
+      promptForApiToken(serviceName),
+    { memoize: true },
+  ),
+});
+
+const result = run(parser);
+
+// Parsing never runs the fallback; apiToken is a function, not a string.
+if (result.deploy) {
+  // Resolve the token only on this branch and pass it on; never log a secret.
+  const apiToken = await result.apiToken({ serviceName: result.serviceName });
+  await deploy(result.serviceName, apiToken);
+  print(message`Deployed ${result.serviceName}.`);
+}
+~~~~
+
+A readonly `source` property on the field reports whether the value was
+`"specified"` or came from the `"fallback"`, without running the function.
+Pass `{ memoize: true }` to reuse the first resolved fallback value across
+calls; a rejected fallback is retried rather than cached.
+
+This differs from the derived defaults above: a derived default is computed
+during a second parse pass and the field stays a plain value, while a deferred
+value is resolved by the handler and the field is a function.  The repository
+includes a runnable version of this pattern in
+`examples/patterns/deferred-values.ts`.  For more details, see the
+[`deferredValue()`](./concepts/modifiers.md#deferredvalue-parser) modifier.
+
 
 Application structure patterns
 ------------------------------
