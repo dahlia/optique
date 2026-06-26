@@ -12450,6 +12450,24 @@ describe("deferredValue", () => {
     }
   });
 
+  it("supports a fallback with an optional context parameter", () => {
+    // A fallback whose parameter is optional must not collapse to the
+    // no-argument form: the deferred value stays callable with and without the
+    // context argument.
+    const parser = object({
+      token: deferredValue(
+        option("--token", string()),
+        (ctx?: { readonly id: string }) => ctx?.id ?? "anon",
+      ),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.token(), "anon");
+      assert.equal(result.value.token({ id: "abc" }), "abc");
+    }
+  });
+
   it("ignores the context argument in the specified branch", () => {
     const parser = object({
       token: deferredValue(

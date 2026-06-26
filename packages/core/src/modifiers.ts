@@ -1934,22 +1934,16 @@ function makeFallbackDeferredValue<T, C>(
  * @template M The execution mode of the wrapped parser.
  * @template T The resolved value type.
  * @template S The state type of the wrapped parser.
+ * @template C The handler-time context type, inferred from `fallback`.  A
+ *             fallback without a parameter yields a no-argument
+ *             {@link DeferredValue}; one whose parameter is optional or includes
+ *             `undefined` stays callable with no argument.
  * @param parser The parser that reads the CLI value.
  * @param fallback A resolver run at handler time when no value was specified.
  * @param options Optional {@link DeferredValueOptions}.
  * @returns A parser whose value is a {@link DeferredValue}.
  * @since 1.2.0
  */
-export function deferredValue<M extends Mode, T, S>(
-  parser: Parser<M, T, S>,
-  fallback: () => T | Promise<T>,
-  options?: DeferredValueOptions,
-): FluentParser<M, DeferredValue<T>, [S] | undefined>;
-export function deferredValue<M extends Mode, T, S, C>(
-  parser: Parser<M, T, S>,
-  fallback: (ctx: C) => T | Promise<T>,
-  options?: DeferredValueOptions,
-): FluentParser<M, DeferredValue<T, C>, [S] | undefined>;
 export function deferredValue<M extends Mode, T, S, C = void>(
   parser: Parser<M, T, S>,
   fallback: (ctx: C) => T | Promise<T>,
@@ -3474,16 +3468,13 @@ export interface ParserModifiers<
   /**
    * Defers this parser's value so the command handler resolves it.
    *
+   * @template C The handler-time context type, inferred from `fallback`.
    * @param fallback A resolver run at handler time when no value was specified.
    * @param options Optional {@link DeferredValueOptions}.
    * @returns A parser whose value is a {@link DeferredValue}.
    * @since 1.2.0
    */
-  deferredValue(
-    fallback: () => TValue | Promise<TValue>,
-    options?: DeferredValueOptions,
-  ): FluentParser<M, DeferredValue<TValue>, [TState] | undefined>;
-  deferredValue<C>(
+  deferredValue<C = void>(
     fallback: (ctx: C) => TValue | Promise<TValue>,
     options?: DeferredValueOptions,
   ): FluentParser<M, DeferredValue<TValue, C>, [TState] | undefined>;
