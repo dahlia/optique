@@ -12434,6 +12434,22 @@ describe("deferredValue", () => {
     }
   });
 
+  it("is callable without arguments when the context includes undefined", () => {
+    const parser = object({
+      token: deferredValue(
+        option("--token", string()),
+        (ctx: { readonly id: string } | undefined) => ctx?.id ?? "anon",
+      ),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // C includes undefined, so the deferred value is callable with no args.
+      assert.equal(result.value.token(), "anon");
+      assert.equal(result.value.token({ id: "abc" }), "abc");
+    }
+  });
+
   it("ignores the context argument in the specified branch", () => {
     const parser = object({
       token: deferredValue(

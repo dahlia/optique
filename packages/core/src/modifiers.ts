@@ -1783,6 +1783,7 @@ export type DeferredValueSource = "specified" | "fallback";
  */
 export type DeferredValue<T, C = void> =
   & ([C] extends [void] ? (() => T | Promise<T>)
+    : [undefined] extends [C] ? ((ctx?: C) => T | Promise<T>)
     : ((ctx: C) => T | Promise<T>))
   & {
     /**
