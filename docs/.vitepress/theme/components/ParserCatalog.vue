@@ -118,6 +118,7 @@ const combinators = [
     items: [
       ["optional", "optional-parser"],
       ["withDefault", "withdefault-parser"],
+      ["deferredValue", "deferredvalue-parser"],
       ["multiple", "multiple-parser"],
       ["map", "map-parser"],
     ],

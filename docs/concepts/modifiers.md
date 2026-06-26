@@ -556,6 +556,144 @@ if (result.success) {
 ~~~~
 
 
+`deferredValue()` parser
+------------------------
+
+*This API is available since Optique 1.2.0.*
+
+`withDefault()` resolves its fallback while parsing. Sometimes that is too
+early. A value might come from an interactive prompt, a network call, or a
+lookup that only one branch of the command ever reaches. `deferredValue()`
+keeps the value the wrapped parser produces, usually from the command line, but
+leaves the fallback unresolved until the handler asks for it.
+
+The wrapped field becomes a function instead of a scalar. Calling it returns the
+value the wrapped parser produced, or runs the fallback resolver when the
+wrapped parser produced none. Because the fallback runs at handler time, a
+failing prompt or a failed lookup is a handler error rather than a parse error.
+A value that is specified but invalid still fails during parsing, the same as
+any other option.
+
+~~~~ typescript twoslash
+declare function deploy(options: { readonly apiToken: string }): Promise<void>;
+declare function promptForApiToken(serviceName: string): Promise<string>;
+const argv: string[] = [];
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { deferredValue } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { flag, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  deploy: flag("--deploy"),
+  serviceName: option("--service-name", string()),
+  apiToken: deferredValue(
+    option("--api-token", string()),
+    ({ serviceName }: { readonly serviceName: string }) =>
+      promptForApiToken(serviceName),
+  ),
+});
+
+const result = parse(parser, argv);
+if (result.success && result.value.deploy) {
+  // The prompt only runs on the deployment branch.
+  const apiToken = await result.value.apiToken({
+    serviceName: result.value.serviceName,
+  });
+  await deploy({ apiToken });
+}
+~~~~
+
+The wrapped option keeps its place in usage and help, exactly like `optional()`.
+Only the result type changes: `apiToken` is a
+`DeferredValue<string, { serviceName: string }>` rather than a `string`.
+
+Optique infers the fallback's argument type and makes it the argument the
+handler must pass. The call stays type-checked, and the fallback can be
+synchronous or asynchronous regardless of whether the wrapped parser is. When
+the fallback takes no argument, the deferred value is callable with no argument
+too.
+
+### Knowing which branch was taken
+
+A `source` property records the branch without running the function. It is
+`"specified"` when the wrapped parser produced a value, including an explicit
+`undefined`, and `"fallback"` otherwise. This is useful in tests, logs, and
+diagnostics.
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { deferredValue } from "@optique/core/modifiers";
+import { parse } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  apiToken: deferredValue(
+    option("--api-token", string()),
+    () => "from-keychain",
+  ),
+});
+
+const provided = parse(parser, ["--api-token", "abc"]);
+if (provided.success) {
+  provided.value.apiToken.source; // "specified"
+  await provided.value.apiToken(); // "abc"
+}
+
+const omitted = parse(parser, []);
+if (omitted.success) {
+  omitted.value.apiToken.source; // "fallback"
+  await omitted.value.apiToken(); // runs the resolver
+}
+~~~~
+
+### Memoizing the fallback
+
+Every call runs the fallback again by default, which matches the fact that the
+result is a function. For a prompt or an expensive lookup, pass
+`{ memoize: true }` to reuse the first resolved value, or the in-flight promise
+when calls overlap. A rejected fallback is never cached, so the next call
+retries it. The `"specified"` branch is already a constant function, so
+memoization only affects the fallback branch.
+
+~~~~ typescript twoslash
+declare function promptForApiToken(): Promise<string>;
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { deferredValue } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const parser = object({
+  apiToken: deferredValue(
+    option("--api-token", string()),
+    () => promptForApiToken(),
+    { memoize: true },
+  ),
+});
+~~~~
+
+### Identifying deferred values
+
+In ordinary code the static type already tells you whether a field is a
+`DeferredValue`. When you only have an `unknown` value, such as inside a generic
+result walker or a test helper, `isDeferredValue()` recognizes the values
+`deferredValue()` produces.
+
+~~~~ typescript twoslash
+import { isDeferredValue } from "@optique/core/modifiers";
+
+function describe(value: unknown): string {
+  if (isDeferredValue(value)) {
+    return `deferred (${value.source})`;
+  }
+  return String(value);
+}
+~~~~
+
+
 `map()` parser
 --------------
 
