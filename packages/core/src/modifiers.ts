@@ -1900,11 +1900,14 @@ function makeFallbackDeferredValue<T, C>(
  *
  * The parsed field becomes a {@link DeferredValue}: a value-producing function.
  * When the wrapped parser produced a value, calling the function returns that
- * value and {@link DeferredValue.source} is `"specified"`.  When the wrapped
- * parser did not produce a value, calling the function runs `fallback` and
- * `source` is `"fallback"`.  The fallback runs at handler time, so its errors
- * are handler errors rather than parser errors.  A value that is specified but
- * invalid still fails during parsing.
+ * value and {@link DeferredValue.source} is `"specified"`.  A value resolved
+ * from a source such as `bindEnv()`/`bindConfig()` counts as produced.  When
+ * the wrapped parser did not produce a value, calling the function runs
+ * `fallback` and `source` is `"fallback"`.  Because a missing value is reported
+ * as `undefined`, a wrapped parser that yields `undefined` is treated as having
+ * produced no value and selects the fallback.  The fallback runs at handler
+ * time, so its errors are handler errors rather than parser errors.  A value
+ * that is specified but invalid still fails during parsing.
  *
  * Like {@link optional}, the wrapped parser keeps its place in usage and help;
  * only the result type changes.  The fallback context type `C` is inferred from
@@ -1953,17 +1956,63 @@ export function deferredValue<M extends Mode, T, S, C = void>(
   options?: DeferredValueOptions,
 ): FluentParser<M, DeferredValue<T, C>, [S] | undefined> {
   const memoize = options?.memoize ?? false;
-  // Tag the produced value before optional() collapses "not matched" and a
-  // legitimately produced `undefined` into the same `undefined`.  After
-  // tagging, optional() yields the wrapper object when the wrapped parser
-  // produced a value (even `undefined`), or `undefined` when it did not.
-  return map(
-    optional(map(parser, (value: T): { readonly value: T } => ({ value }))),
-    (matched: { readonly value: T } | undefined): DeferredValue<T, C> =>
-      matched === undefined
-        ? makeFallbackDeferredValue<T, C>(fallback, memoize)
-        : makeSpecifiedDeferredValue<T, C>(matched.value),
-  );
+  // Build on optional() rather than map(): map()'s object spread drops the
+  // non-enumerable annotation markers that route bindEnv()/bindConfig() values,
+  // which would make a source-bound value look absent and wrongly select the
+  // fallback.  optional() already resolves CLI, environment, and config values
+  // and reports a missing value as `undefined`.
+  const base = optional(parser);
+  const complete = (
+    state: [S] | undefined,
+    exec?: ExecutionContext,
+  ): ModeValue<M, ValueParserResult<DeferredValue<T, C>>> =>
+    mapModeValue(
+      base.mode,
+      base.complete(state, exec),
+      (result): ValueParserResult<DeferredValue<T, C>> => {
+        if (!result.success) return result;
+        // Any value the wrapped parser produced (from the CLI or a source such
+        // as bindEnv()/bindConfig()) selects "specified".  optional() collapses
+        // a genuinely produced `undefined` into the same absence as "no value",
+        // so such a value selects the fallback resolver.
+        const value = result.value === undefined
+          ? makeFallbackDeferredValue<T, C>(fallback, memoize)
+          : makeSpecifiedDeferredValue<T, C>(result.value);
+        return result.deferred
+          ? { success: true, value, deferred: true }
+          : { success: true, value };
+      },
+    );
+  // Clone optional()'s parser so every own property, including the
+  // non-enumerable annotation markers an object spread would lose, is
+  // preserved.  Only the completion and the value-type tag are overridden.  The
+  // inner value hooks operate on T, not on the produced function, so they are
+  // removed, and the fluent marker is removed so fluent() rebinds its methods
+  // to this object instead of the optional() base.
+  const descriptors = Object.getOwnPropertyDescriptors(base) as Record<
+    PropertyKey,
+    PropertyDescriptor
+  >;
+  descriptors.complete = {
+    value: complete,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  };
+  descriptors.$valueType = {
+    value: [] as readonly DeferredValue<T, C>[],
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  };
+  delete descriptors.normalizeValue;
+  delete descriptors.validateValue;
+  delete descriptors[fluentParserMarker];
+  const deferredParser = Object.create(
+    Object.getPrototypeOf(base),
+    descriptors,
+  ) as Parser<M, DeferredValue<T, C>, [S] | undefined>;
+  return fluent(deferredParser);
 }
 
 /**

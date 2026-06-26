@@ -29,7 +29,14 @@ import {
   suggestAsync,
   suggestSync,
 } from "@optique/core/parser";
-import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import {
+  deferredValue,
+  isDeferredValue,
+  map,
+  multiple,
+  optional,
+  withDefault,
+} from "@optique/core/modifiers";
 import {
   argument,
   command,
@@ -724,6 +731,73 @@ describe("bindEnv()", () => {
     const result = parse(parser, []);
     assert.ok(result.success);
     assert.equal(result.value, 3000);
+  });
+
+  it("preserves source-bound values through deferredValue()", () => {
+    const context = createEnvContext({
+      source: (key) => key === "APP_TOKEN" ? "env-token" : undefined,
+      prefix: "APP_",
+    });
+    const parser = object({
+      token: deferredValue(
+        bindEnv(option("--token", string()), {
+          context,
+          key: "TOKEN",
+          parser: string(),
+        }),
+        () => "fallback-token",
+      ),
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    // Env value present, no CLI: the deferred value reports "specified" and
+    // resolves to the environment value, not the fallback.
+    const fromEnv = parse(parser, [], { annotations });
+    assert.ok(fromEnv.success);
+    if (fromEnv.success) {
+      assert.ok(isDeferredValue(fromEnv.value.token));
+      assert.equal(fromEnv.value.token.source, "specified");
+      assert.equal(fromEnv.value.token(), "env-token");
+    }
+
+    // CLI value wins over the environment value.
+    const fromCli = parse(parser, ["--token", "cli-token"], { annotations });
+    assert.ok(fromCli.success);
+    if (fromCli.success) {
+      assert.equal(fromCli.value.token.source, "specified");
+      assert.equal(fromCli.value.token(), "cli-token");
+    }
+  });
+
+  it("falls back through deferredValue() when no source has a value", () => {
+    const context = createEnvContext({
+      source: () => undefined,
+      prefix: "APP_",
+    });
+    const parser = object({
+      token: deferredValue(
+        bindEnv(option("--token", string()), {
+          context,
+          key: "TOKEN",
+          parser: string(),
+        }),
+        () => "fallback-token",
+      ),
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.token.source, "fallback");
+      assert.equal(result.value.token(), "fallback-token");
+    }
   });
 
   it("lets seq skip env-bound positional defaults before commands", () => {

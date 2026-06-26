@@ -12465,7 +12465,10 @@ describe("deferredValue", () => {
     }
   });
 
-  it("treats an explicitly produced undefined value as 'specified'", () => {
+  it("treats an explicitly produced undefined value as a fallback", () => {
+    // optional() reports a missing value as undefined, so a wrapped parser that
+    // yields undefined is indistinguishable from "no value" and selects the
+    // fallback resolver.
     const parser = object({
       x: deferredValue(
         map(
@@ -12478,8 +12481,14 @@ describe("deferredValue", () => {
     const explicitUndefined = parse(parser, ["--value", "none"]);
     assert.ok(explicitUndefined.success);
     if (explicitUndefined.success) {
-      assert.equal(explicitUndefined.value.x.source, "specified");
-      assert.equal(explicitUndefined.value.x(), undefined);
+      assert.equal(explicitUndefined.value.x.source, "fallback");
+      assert.equal(explicitUndefined.value.x(), "fallback");
+    }
+    const provided = parse(parser, ["--value", "real"]);
+    assert.ok(provided.success);
+    if (provided.success) {
+      assert.equal(provided.value.x.source, "specified");
+      assert.equal(provided.value.x(), "real");
     }
     const omitted = parse(parser, []);
     assert.ok(omitted.success);
