@@ -1396,7 +1396,7 @@ A typo now produces:
 $ myapp --mode devo
 Error: Expected one of dev, staging, and prod, but got devo.
 
-Did you mean `dev`?
+Did you mean "dev"?
 ~~~~
 
 #### Custom filtering with the function form

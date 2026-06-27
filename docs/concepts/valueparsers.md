@@ -680,7 +680,7 @@ With this option, the same error becomes:
 $ myapp --mode devo
 Error: Expected one of dev and prod, but got devo.
 
-Did you mean `dev`?
+Did you mean "dev"?
 ~~~~
 
 The `suggest` option accepts:
