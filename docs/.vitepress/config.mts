@@ -113,11 +113,15 @@ const REFERENCES = {
   ],
 };
 
-const TOP_NAV = [
-  { text: "Why Optique?", link: "/why" },
-  { text: "Tutorial", link: "/tutorial" },
-  { text: "Cookbook", link: "/cookbook" },
-];
+const GUIDE = {
+  text: "Guide",
+  items: [
+    { text: "Why Optique?", link: "/why" },
+    { text: "Tutorial", link: "/tutorial" },
+    { text: "Cookbook", link: "/cookbook" },
+    { text: "Common pitfalls", link: "/pitfalls" },
+  ],
+};
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
@@ -128,7 +132,7 @@ export default defineConfig({
     logo: "/optique.svg",
     nav: [
       { text: "Home", link: "/" },
-      ...TOP_NAV,
+      GUIDE,
       CONCEPTS,
       INTEGRATIONS,
       REFERENCES,
@@ -136,7 +140,7 @@ export default defineConfig({
     ],
 
     sidebar: [
-      ...TOP_NAV,
+      GUIDE,
       CONCEPTS,
       INTEGRATIONS,
       REFERENCES,
