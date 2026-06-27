@@ -1879,6 +1879,46 @@ describe("choice", () => {
         { name: "TypeError", message: /Expected suggest to be/i },
       );
     });
+
+    it("should throw TypeError for negative maxDistance", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxDistance: -1 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxDistance.*non-negative integer/i,
+        },
+      );
+    });
+
+    it("should throw TypeError for fractional maxDistance", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxDistance: 1.5 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxDistance.*non-negative integer/i,
+        },
+      );
+    });
+
+    it("should throw TypeError for zero maxSuggestions", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxSuggestions: 0 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxSuggestions.*positive integer/i,
+        },
+      );
+    });
+
+    it("should throw TypeError for fractional maxSuggestions", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxSuggestions: 1.5 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxSuggestions.*positive integer/i,
+        },
+      );
+    });
   });
 
   describe("number choices", () => {
