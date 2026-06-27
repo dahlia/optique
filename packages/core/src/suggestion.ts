@@ -468,9 +468,10 @@ export function appendValueHint(
       : undefined,
   );
   const suggestionMsg = createSuggestionMessage(suggestions);
-  return suggestionMsg.length > 0
+  if (suggestionMsg.length === 0) return base;
+  return base.length > 0
     ? [...base, lineBreak(), lineBreak(), ...suggestionMsg]
-    : base;
+    : suggestionMsg;
 }
 
 /**

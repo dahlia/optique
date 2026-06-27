@@ -1051,11 +1051,11 @@ describe("appendValueHint()", () => {
   });
 
   it("should append Did you mean hint when input is close to a candidate", () => {
-    const base = message`Expected one of dev or prod, but got devo.`;
+    const base = message`Invalid environment.`;
     const result = appendValueHint(base, "devo", ["dev", "prod"]);
     const str = formatMessage(result);
     assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
-    assert.ok(str.includes("dev"), `Expected "dev" in: ${str}`);
+    assert.ok(str.includes("`dev`"), `Expected suggested value in: ${str}`);
   });
 
   it("should respect custom maxDistance option", () => {
@@ -1089,5 +1089,12 @@ describe("appendValueHint()", () => {
     const base = message`Error.`;
     const result = appendValueHint(base, "devo", []);
     assert.deepEqual(result, base);
+  });
+
+  it("should return only the hint when base is empty and input is close", () => {
+    const result = appendValueHint([], "devo", ["dev", "prod"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(!str.startsWith("\n"), `Should not start with newline: ${str}`);
   });
 });
