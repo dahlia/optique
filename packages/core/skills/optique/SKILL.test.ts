@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-const root = new URL("../../../../", new URL(".", import.meta.url)).pathname;
+const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const packageJsonPath = join(root, "packages/core/package.json");
-const skillPath = new URL("SKILL.md", import.meta.url).pathname;
+const skillPath = fileURLToPath(new URL("SKILL.md", import.meta.url));
 const compilerOptions: ts.CompilerOptions = {
   allowImportingTsExtensions: true,
   lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
@@ -188,10 +189,15 @@ function typeCheckSnippets(
   workspaceExports: ReadonlyMap<string, string>,
 ): readonly ts.Diagnostic[] {
   const snippets = new Map<string, string>();
-  snippets.set(join(root, "tmp/skill-snippets/node-stubs.d.ts"), nodeStubs);
+  snippets.set(
+    normalizePath(join(root, "tmp/skill-snippets/node-stubs.d.ts")),
+    nodeStubs,
+  );
   for (const [index, block] of blocks.entries()) {
     snippets.set(
-      join(root, "tmp/skill-snippets", `snippet-${index + 1}.ts`),
+      normalizePath(
+        join(root, "tmp/skill-snippets", `snippet-${index + 1}.ts`),
+      ),
       `${block}\n`,
     );
   }
@@ -201,9 +207,9 @@ function typeCheckSnippets(
   const defaultReadFile = host.readFile.bind(host);
 
   host.fileExists = (fileName) =>
-    snippets.has(fileName) || defaultFileExists(fileName);
+    snippets.has(normalizePath(fileName)) || defaultFileExists(fileName);
   host.readFile = (fileName) =>
-    snippets.get(fileName) ?? defaultReadFile(fileName);
+    snippets.get(normalizePath(fileName)) ?? defaultReadFile(fileName);
   host.resolveModuleNames = (moduleNames, containingFile) =>
     moduleNames.map((moduleName) => {
       const workspaceFile = workspaceExports.get(moduleName);
@@ -224,6 +230,10 @@ function typeCheckSnippets(
   return ts.getPreEmitDiagnostics(program);
 }
 
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
 function formatDiagnostic(diagnostic: ts.Diagnostic): string {
   const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
   if (diagnostic.file == null || diagnostic.start == null) return message;
@@ -231,8 +241,10 @@ function formatDiagnostic(diagnostic: ts.Diagnostic): string {
   const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(
     diagnostic.start,
   );
-  const relativePath = diagnostic.file.fileName.startsWith(root)
-    ? diagnostic.file.fileName.slice(root.length)
+  const normalizedFileName = normalizePath(diagnostic.file.fileName);
+  const normalizedRoot = normalizePath(root);
+  const relativePath = normalizedFileName.startsWith(normalizedRoot)
+    ? normalizedFileName.slice(normalizedRoot.length)
     : diagnostic.file.fileName;
   return `${relativePath}:${line + 1}:${character + 1}: ${message}`;
 }
