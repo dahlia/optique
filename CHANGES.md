@@ -29,10 +29,21 @@ To be released.
     while still retrying after a rejection.  A matching `.deferredValue()`
     fluent method is also available.  [[#846], [#848]]
 
+ -  Added `suggest` option to `choice()` for “Did you mean?” hints on invalid
+    values.  Set `suggest: "nearest"` to append a Levenshtein-based hint to
+    the error message, `{ maxDistance?, maxSuggestions? }` to tune the
+    thresholds, or a custom `(input, choices) => string[] | undefined`
+    function for domain-specific logic.  The default remains `"never"` for
+    backward compatibility.  A new `appendValueHint()` helper is exported
+    from the new `@optique/core/suggestion` subpath so custom value parsers
+    can reuse the same hint logic without re-implementing distance
+    calculation.  [[#849]]
+
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
 [#846]: https://github.com/dahlia/optique/issues/846
 [#848]: https://github.com/dahlia/optique/pull/848
+[#849]: https://github.com/dahlia/optique/pull/849
 
 ### @optique/derived-defaults
 
