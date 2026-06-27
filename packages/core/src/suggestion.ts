@@ -426,14 +426,48 @@ export function createErrorWithSuggestions(
 }
 
 /**
+ * Appends a "Did you mean …?" hint to a base message from a pre-filtered list
+ * of suggestion strings.
+ *
+ * Unlike {@link appendValueHint}, this function accepts suggestions that have
+ * already been selected by the caller—it only handles formatting and
+ * appending.  Useful when the caller provides its own distance logic (e.g.,
+ * the custom-function form of `choice()`'s `suggest` option).
+ *
+ * @param base The base error message.
+ * @param suggestions The already-filtered suggestion strings to display.
+ * @returns `base` with a "Did you mean …?" line appended, or `base` unchanged
+ *   when `suggestions` is empty.
+ * @since 1.2.0
+ */
+export function appendValueSuggestions(
+  base: Message,
+  suggestions: readonly string[],
+): Message {
+  if (suggestions.length === 0) return base;
+  let suggestionMsg: Message;
+  if (suggestions.length === 1) {
+    suggestionMsg = message`Did you mean ${value(suggestions[0])}?`;
+  } else {
+    const parts: MessageTerm[] = [text("Did you mean one of these?")];
+    for (const suggestion of suggestions) {
+      parts.push(lineBreak(), text("  "), value(suggestion));
+    }
+    suggestionMsg = parts;
+  }
+  return base.length > 0
+    ? [...base, lineBreak(), lineBreak(), ...suggestionMsg]
+    : suggestionMsg;
+}
+
+/**
  * Appends a "Did you mean …?" hint to a base error message when the input
  * is close to one of the candidate values.
  *
  * This helper is meant for closed-set value parsers (e.g. `choice()`) that
  * want to surface near-match suggestions without re-implementing distance
- * logic themselves.  It wraps {@link findSimilar} and
- * {@link createSuggestionMessage} and returns the `base` message unchanged
- * when no candidates are close enough.
+ * logic themselves.  It wraps {@link findSimilar} and returns the `base`
+ * message unchanged when no candidates are close enough.
  *
  * @param base The base error message to display.
  * @param input The invalid input the user typed.
@@ -447,7 +481,7 @@ export function createErrorWithSuggestions(
  * ```typescript
  * const base = message`Invalid color: ${input}.`;
  * appendValueHint(base, input, ["red", "green", "blue"]);
- * // → "Invalid color: redd.\n\nDid you mean `red`?"
+ * // → "Invalid color: redd.\n\nDid you mean \"red\"?"
  * ```
  *
  * @since 1.2.0
@@ -473,20 +507,7 @@ export function appendValueHint(
       }
       : undefined,
   );
-  if (suggestions.length === 0) return base;
-  let suggestionMsg: Message;
-  if (suggestions.length === 1) {
-    suggestionMsg = message`Did you mean ${value(suggestions[0])}?`;
-  } else {
-    const parts: MessageTerm[] = [text("Did you mean one of these?")];
-    for (const suggestion of suggestions) {
-      parts.push(text("\n  "), value(suggestion));
-    }
-    suggestionMsg = parts;
-  }
-  return base.length > 0
-    ? [...base, lineBreak(), lineBreak(), ...suggestionMsg]
-    : suggestionMsg;
+  return appendValueSuggestions(base, suggestions);
 }
 
 /**

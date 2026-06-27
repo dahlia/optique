@@ -6,7 +6,6 @@ import {
   type MessageTerm,
   metavar as metavarTerm,
   text,
-  value as valueTerm,
   valueSet,
 } from "./message.ts";
 import { isDerivedValueParser } from "./internal/dependency.ts";
@@ -14,6 +13,7 @@ import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
 import type { Mode, ModeIterable, ModeValue, Suggestion } from "./parser.ts";
 import {
   appendValueHint,
+  appendValueSuggestions,
   deduplicateSuggestions,
   type FindSimilarOptions,
 } from "./suggestion.ts";
@@ -899,18 +899,8 @@ function formatStringChoiceError(
 
   if (typeof suggest === "function") {
     const hints = suggest(input, choices);
-    if (!Array.isArray(hints) || hints.length === 0) return base;
-    let suggestionMsg: Message;
-    if (hints.length === 1) {
-      suggestionMsg = message`Did you mean ${valueTerm(hints[0])}?`;
-    } else {
-      const parts: MessageTerm[] = [text("Did you mean one of these?")];
-      for (const hint of hints) {
-        parts.push(text("\n  "), valueTerm(hint));
-      }
-      suggestionMsg = parts;
-    }
-    return [...base, lineBreak(), lineBreak(), ...suggestionMsg];
+    if (!Array.isArray(hints)) return base;
+    return appendValueSuggestions(base, hints);
   }
 
   // Object form: { maxDistance?, maxSuggestions? }

@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   appendValueHint,
+  appendValueSuggestions,
   createErrorWithSuggestions,
   createSuggestionMessage,
   deduplicateSuggestions,
@@ -1106,5 +1107,41 @@ describe("appendValueHint()", () => {
       !str.includes("``"),
       `Should not produce broken backtick pair in: ${str}`,
     );
+  });
+});
+
+describe("appendValueSuggestions()", () => {
+  it("should return base unchanged when suggestions is empty", () => {
+    const base = message`Error.`;
+    assert.deepEqual(appendValueSuggestions(base, []), base);
+  });
+
+  it("should format a single suggestion as Did you mean X?", () => {
+    const base = message`Error.`;
+    const result = appendValueSuggestions(base, ["dev"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(str.includes('"dev"'), `Expected quoted value in: ${str}`);
+  });
+
+  it("should list multiple suggestions on separate lines", () => {
+    const base = message`Error.`;
+    const result = appendValueSuggestions(base, ["dev", "prod"]);
+    const str = formatMessage(result);
+    assert.ok(
+      str.includes("Did you mean one of these?"),
+      `Expected header in: ${str}`,
+    );
+    const lines = str.split("\n");
+    const devLine = lines.find((l) => l.includes('"dev"'));
+    const prodLine = lines.find((l) => l.includes('"prod"'));
+    assert.ok(devLine != null, `Expected "dev" on its own line in: ${str}`);
+    assert.ok(prodLine != null, `Expected "prod" on its own line in: ${str}`);
+  });
+
+  it("should not prepend newlines when base is empty", () => {
+    const result = appendValueSuggestions([], ["dev"]);
+    const str = formatMessage(result);
+    assert.ok(!str.startsWith("\n"), `Should not start with newline: ${str}`);
   });
 });
