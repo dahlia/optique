@@ -2263,6 +2263,161 @@ The repository also includes a runnable version of this pattern in
 `examples/patterns/command-discovery.ts`.  For the full API details, see
 [command discovery](./concepts/discover.md).
 
+### Program-level lifecycle hooks
+
+*This API is available since Optique 1.2.0.*
+
+`runProgram()` dispatches straight to the matched command's handler.  When a
+whole family of commands needs the same *around-handler* behavior — opening a
+log scope, starting a tracing span, lazily booting a resource, printing a
+“finished in *X*ms” line, reporting failures — that logic should not be copied
+into every handler or smuggled into a parser.  Pass a `hooks` object to
+`runProgram()` instead.  Hooks are opt-in: a `runProgram()` call without them
+behaves exactly as before.
+
+The `beforeEach` hook runs before each handler and returns a
+`ProgramHookContext`.  It receives the invocation, including the resolved
+command `path` (populated even when a discovered command omits an explicit
+`path`).  Whatever it stores in `resource` is threaded forward to `afterEach`,
+to `onError`, and to the handler's second parameter, so the resource never has
+to live in a module-level variable:
+
+~~~~ typescript twoslash
+import { getLogger } from "@logtape/logtape";
+import { runProgram } from "@optique/discover";
+
+// A minimal tracing span, standing in for an OpenTelemetry or Sentry span.
+interface Span {
+  end(): void;
+  recordException(error: unknown): void;
+}
+declare function startSpan(name: string): Span;
+
+interface Telemetry {
+  readonly logger: ReturnType<typeof getLogger>;
+  readonly span: Span;
+}
+// ---cut-before---
+await runProgram({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: { name: "tasks", version: "1.0.0" },
+  hooks: {
+    beforeEach({ path }) {
+      const name = path.length > 0 ? path.join(" ") : "tasks";
+      const logger = getLogger(["tasks", name]);
+      logger.info("Command started.");
+      const resource: Telemetry = { logger, span: startSpan(name) };
+      return { resource };
+    },
+    afterEach(context) {
+      const { logger, span } = context.resource as Telemetry;
+      logger.info("Command finished.");
+      span.end();
+    },
+    onError(context, error) {
+      const { logger, span } = context.resource as Telemetry;
+      logger.error("Command failed.", { error });
+      span.recordException(error);
+      span.end();
+    },
+  },
+});
+~~~~
+
+A handler reads the resource through its second parameter.  Existing
+single-argument handlers keep working unchanged; only the ones that need the
+resource declare it:
+
+~~~~ typescript twoslash
+import { getLogger } from "@logtape/logtape";
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { withDefault } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand } from "@optique/discover/command";
+
+interface Telemetry {
+  readonly logger: ReturnType<typeof getLogger>;
+}
+// ---cut-before---
+export default defineCommand({
+  parser: object({
+    target: withDefault(option("--target", string()), "app"),
+  }),
+  metadata: { brief: message`Build the project.` },
+  handler(value, context) {
+    const { logger } = context?.resource as Telemetry;
+    logger.info("Building {target}.", { target: value.target });
+  },
+});
+~~~~
+
+#### Per-command preflight
+
+When only one command needs its own setup — for example, a `deploy` command that
+always refreshes an auth token — put the hooks on the command definition instead
+of the program.  Command-level hooks nest inside the program-level ones, so the
+program hook still wraps every command:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { defineCommand } from "@optique/discover/command";
+
+interface TokenRefresher {
+  release(): void;
+}
+declare function refreshAuthToken(): TokenRefresher;
+// ---cut-before---
+export default defineCommand({
+  parser: object({
+    environment: option("--env", choice(["staging", "production"])),
+  }),
+  metadata: { brief: message`Deploy the project.` },
+  hooks: {
+    beforeEach() {
+      return { resource: refreshAuthToken() };
+    },
+    afterEach(context) {
+      (context.resource as TokenRefresher).release();
+    },
+  },
+  handler(value) {
+    console.log(`Deploying to ${value.environment}.`);
+  },
+});
+~~~~
+
+Because this command defines its own `beforeEach`, its handler receives the
+command-level resource; a command without command-level hooks receives the
+program-level one.  The execution order when both levels are present is:
+
+~~~~ mermaid
+flowchart TB
+  pb["program.beforeEach"] --> cb["command.beforeEach"] --> h["handler"]
+  h -- success --> ca["command.afterEach"] --> pa["program.afterEach"]
+  h -- failure --> ce["command.onError"] --> pe["program.onError"]
+~~~~
+
+#### Parser errors versus handler errors
+
+Hooks wrap the *handler*, not the parser.  A *parser error* — a missing option
+or a bad value — is detected before any handler runs and is printed by
+*@optique/run*'s error display; `beforeEach` never fires for it.  A *handler
+error* — anything the handler, `beforeEach`, or `afterEach` throws or rejects —
+is passed to `onError`.  `onError` is for observation and cleanup only:
+`runProgram()` re-throws the original error after it resolves, so the process
+still exits with the same non-zero code it would without hooks.  Command-level
+hooks run before program-level hooks on the way out, so the most specific
+cleanup happens first.
+
+The repository includes a runnable version of this pattern in
+`examples/patterns/program-hooks.ts`.  For the hook contract and ordering, see
+[lifecycle hooks](./concepts/discover.md#lifecycle-hooks).
+
 
 Integration patterns
 --------------------

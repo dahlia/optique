@@ -32,11 +32,13 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { defineCommand } from "#src/command.ts";
 import {
+  type AnyStaticCommand,
   type CommandPath,
   commandsFromModules,
   createProgramParser,
   discoverCommands,
   getDefaultExtensions,
+  type ProgramHooks,
   runProgram,
 } from "#src/index.ts";
 
@@ -127,6 +129,55 @@ describe("defineCommand()", () => {
         message: "Command path must be an array of non-empty strings.",
       },
     );
+    assert.throws(
+      () =>
+        defineCommand({
+          parser: object({}),
+          hooks: "nope" as never,
+          handler() {},
+        }),
+      { name: "TypeError", message: "Command hooks must be an object." },
+    );
+    assert.throws(
+      () =>
+        defineCommand({
+          parser: object({}),
+          hooks: [] as never,
+          handler() {},
+        }),
+      {
+        name: "TypeError",
+        message: "Command hooks must be an object, not an array.",
+      },
+    );
+    assert.throws(
+      () =>
+        defineCommand({
+          parser: object({}),
+          hooks: { beforeEach: "nope" as never },
+          handler() {},
+        }),
+      {
+        name: "TypeError",
+        message: 'Command hook "beforeEach" must be a function.',
+      },
+    );
+  });
+
+  it("accepts a command with lifecycle hooks", () => {
+    const order: string[] = [];
+    const cmd = defineCommand({
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          order.push("before");
+          return { resource: order };
+        },
+      },
+      handler() {},
+    });
+    assert.equal(typeof cmd.hooks?.beforeEach, "function");
+    assert.deepEqual(order, []);
   });
 });
 
@@ -2008,6 +2059,494 @@ describe("runProgram()", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("runProgram() lifecycle hooks", () => {
+  function runHooked(
+    commands: readonly AnyStaticCommand[],
+    args: readonly string[],
+    hooks?: ProgramHooks,
+  ): Promise<void> {
+    return runProgram({
+      commands,
+      metadata: { name: "tool", version: "1.0.0" },
+      args,
+      hooks,
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new ExitSignal(exitCode);
+      },
+    });
+  }
+
+  it("produces identical handler output with and without hooks", async () => {
+    const calls: unknown[] = [];
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({ name: option("--name", string()) }),
+      handler(value) {
+        calls.push(value);
+      },
+    });
+
+    await runHooked([greet], ["greet", "--name", "world"]);
+    await runHooked([greet], ["greet", "--name", "world"], {});
+
+    assert.deepEqual(calls, [{ name: "world" }, { name: "world" }]);
+  });
+
+  it("calls the handler with one argument unless a beforeEach runs", async () => {
+    const argCounts: number[] = [];
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler(...args: unknown[]) {
+        argCounts.push(args.length);
+      },
+    });
+
+    await runHooked([greet], ["greet"]);
+    await runHooked([greet], ["greet"], {});
+    await runHooked([greet], ["greet"], { afterEach() {} });
+    await runHooked([greet], ["greet"], {
+      beforeEach: () => ({ resource: 1 }),
+    });
+
+    assert.deepEqual(argCounts, [1, 1, 1, 2]);
+  });
+
+  it("forwards the beforeEach resource to the handler", async () => {
+    const scope = { id: "log-scope" };
+    let received: unknown;
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler(_value, context) {
+        received = context?.resource;
+      },
+    });
+
+    await runHooked([greet], ["greet"], {
+      beforeEach: () => ({ resource: scope }),
+    });
+
+    assert.equal(received, scope);
+  });
+
+  it("runs afterEach after a successful handler with the same context", async () => {
+    const order: string[] = [];
+    const scope = { id: "scope" };
+    let afterContext: unknown;
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler() {
+        order.push("handler");
+      },
+    });
+
+    await runHooked([greet], ["greet"], {
+      beforeEach() {
+        order.push("before");
+        return { resource: scope };
+      },
+      afterEach(context) {
+        order.push("after");
+        afterContext = context.resource;
+      },
+    });
+
+    assert.deepEqual(order, ["before", "handler", "after"]);
+    assert.equal(afterContext, scope);
+  });
+
+  it("invokes onError and re-throws the original handler error", async () => {
+    const error = new Error("boom");
+    let observed: unknown;
+    let afterEachRan = false;
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      handler() {
+        throw error;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          afterEach() {
+            afterEachRan = true;
+          },
+          onError(_context, caught) {
+            observed = caught;
+          },
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.equal(observed, error);
+    assert.ok(!afterEachRan);
+  });
+
+  it("re-throws the same handler error with and without onError", async () => {
+    const error = new Error("boom");
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      handler() {
+        throw error;
+      },
+    });
+
+    // Without hooks: the error propagates out of runProgram untouched, and the
+    // error-exit path (onExit) is never reached.  Asserting the rejection is the
+    // original error proves onExit was not triggered, so exit-code behavior is
+    // identical with hooks installed.
+    await assert.rejects(
+      () => runHooked([fail], ["fail"]),
+      (caught) => caught === error,
+    );
+    await assert.rejects(
+      () => runHooked([fail], ["fail"], { onError() {} }),
+      (caught) => caught === error,
+    );
+  });
+
+  it("rejects with an async handler rejection and runs onError", async () => {
+    const error = new Error("async boom");
+    let observed: unknown;
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      async handler() {
+        await Promise.resolve();
+        throw error;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          onError(_context, caught) {
+            observed = caught;
+          },
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.equal(observed, error);
+  });
+
+  it("skips the handler and invokes onError when beforeEach rejects", async () => {
+    const error = new Error("preflight failed");
+    let handlerRan = false;
+    let observed: unknown;
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler() {
+        handlerRan = true;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([greet], ["greet"], {
+          beforeEach() {
+            throw error;
+          },
+          onError(_context, caught) {
+            observed = caught;
+          },
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.ok(!handlerRan);
+    assert.equal(observed, error);
+  });
+
+  it("treats an afterEach rejection as a handler error", async () => {
+    const error = new Error("teardown failed");
+    let observed: unknown;
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler() {},
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([greet], ["greet"], {
+          afterEach() {
+            throw error;
+          },
+          onError(_context, caught) {
+            observed = caught;
+          },
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.equal(observed, error);
+  });
+
+  it("awaits asynchronous hooks around the handler", async () => {
+    const order: string[] = [];
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      async handler() {
+        await Promise.resolve();
+        order.push("handler");
+      },
+    });
+
+    await runHooked([greet], ["greet"], {
+      async beforeEach() {
+        await Promise.resolve();
+        order.push("before");
+        return {};
+      },
+      async afterEach() {
+        await Promise.resolve();
+        order.push("after");
+      },
+    });
+
+    assert.deepEqual(order, ["before", "handler", "after"]);
+  });
+
+  it("composes program-level and command-level hooks in order", async () => {
+    const order: string[] = [];
+    const deploy = defineCommand({
+      path: ["deploy"],
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          order.push("command.before");
+          return { resource: "command" };
+        },
+        afterEach() {
+          order.push("command.after");
+        },
+      },
+      handler(_value, context) {
+        order.push(`handler:${String(context?.resource)}`);
+      },
+    });
+
+    await runHooked([deploy], ["deploy"], {
+      beforeEach() {
+        order.push("program.before");
+        return { resource: "program" };
+      },
+      afterEach() {
+        order.push("program.after");
+      },
+    });
+
+    assert.deepEqual(order, [
+      "program.before",
+      "command.before",
+      "handler:command",
+      "command.after",
+      "program.after",
+    ]);
+  });
+
+  it("threads the program context to the handler without command beforeEach", async () => {
+    let received: unknown;
+    const deploy = defineCommand({
+      path: ["deploy"],
+      parser: object({}),
+      hooks: {
+        afterEach() {},
+      },
+      handler(_value, context) {
+        received = context?.resource;
+      },
+    });
+
+    await runHooked([deploy], ["deploy"], {
+      beforeEach: () => ({ resource: "program" }),
+    });
+
+    assert.equal(received, "program");
+  });
+
+  it("runs command onError before program onError on failure", async () => {
+    const order: string[] = [];
+    const error = new Error("boom");
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      hooks: {
+        onError() {
+          order.push("command.error");
+        },
+      },
+      handler() {
+        throw error;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          onError() {
+            order.push("program.error");
+          },
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.deepEqual(order, ["command.error", "program.error"]);
+  });
+
+  it("does not let a throwing onError mask the original error", async () => {
+    const original = new Error("handler boom");
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      handler() {
+        throw original;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          onError() {
+            throw new Error("onError boom");
+          },
+        }),
+      (caught) => caught === original,
+    );
+  });
+
+  it("keeps the original error when a command onError throws", async () => {
+    const original = new Error("handler boom");
+    let programObserved: unknown;
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      hooks: {
+        onError() {
+          throw new Error("command onError boom");
+        },
+      },
+      handler() {
+        throw original;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          onError(_context, caught) {
+            programObserved = caught;
+          },
+        }),
+      (caught) => caught === original,
+    );
+
+    // The program-level onError still observes the original handler error,
+    // not the command-level onError's own failure.
+    assert.equal(programObserved, original);
+  });
+
+  it("rejects malformed program-level hooks", async () => {
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler() {},
+    });
+
+    await assert.rejects(
+      () => runHooked([greet], ["greet"], "nope" as never),
+      { name: "TypeError", message: "Program hooks must be an object." },
+    );
+    await assert.rejects(
+      () => runHooked([greet], ["greet"], [] as never),
+      {
+        name: "TypeError",
+        message: "Program hooks must be an object, not an array.",
+      },
+    );
+    await assert.rejects(
+      () => runHooked([greet], ["greet"], { afterEach: "nope" as never }),
+      {
+        name: "TypeError",
+        message: 'Program hook "afterEach" must be a function.',
+      },
+    );
+  });
+
+  it("defaults a nullish beforeEach result to an empty context", async () => {
+    let afterContext: unknown = "unset";
+    let handlerContext: unknown = "unset";
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler(_value, context) {
+        handlerContext = context;
+      },
+    });
+
+    await runHooked([greet], ["greet"], {
+      // beforeEach may omit a return; the dispatcher substitutes an empty
+      // context for the nullish result.
+      beforeEach() {},
+      afterEach(context) {
+        afterContext = context;
+      },
+    });
+
+    assert.deepEqual(afterContext, {});
+    assert.deepEqual(handlerContext, {});
+  });
+
+  it("exposes the resolved command path to hooks", async () => {
+    const invocationPaths: (readonly string[])[] = [];
+    const commandPaths: unknown[] = [];
+    // commandsFromModules derives the path from the module key while the
+    // command definition omits an explicit path, mirroring file-based
+    // discovery.
+    const commands = commandsFromModules({
+      "./commands/user/add.ts": {
+        default: defineCommand({
+          parser: object({}),
+          handler() {},
+        }),
+      },
+    }, { base: "./commands", extensions: [".ts"] });
+
+    await runProgram({
+      commands,
+      metadata: { name: "tool", version: "1.0.0" },
+      args: ["user", "add"],
+      hooks: {
+        beforeEach(invocation) {
+          invocationPaths.push(invocation.path);
+          commandPaths.push(invocation.command.path);
+          return {};
+        },
+      },
+      stdout() {},
+      stderr() {},
+      onExit(exitCode): never {
+        throw new ExitSignal(exitCode);
+      },
+    });
+
+    // The resolved path identifies the command even though the definition
+    // itself declared no path.
+    assert.deepEqual(invocationPaths, [["user", "add"]]);
+    assert.deepEqual(commandPaths, [undefined]);
   });
 });
 
