@@ -1377,7 +1377,7 @@ The `passThrough()` parser supports three capture formats:
 
 *This feature is available since Optique 1.2.0.*
 
-When a user mistypes an option value — `--mode devo` instead of `dev` — the
+When a user mistypes an option value—`--mode devo` instead of `dev`—the
 default error only lists valid choices.  The `suggest` option on `choice()`
 appends a “Did you mean?” hint using the existing Levenshtein distance
 machinery, without any extra dependencies.
@@ -1402,7 +1402,7 @@ Did you mean `dev`?
 #### Custom filtering with the function form
 
 The function form gives full control.  It receives the raw input and the full
-choices array, so you can apply domain-specific logic — for example, only
+choices array, so you can apply domain-specific logic—for example, only
 suggest choices that share a prefix with the input:
 
 ~~~~ typescript twoslash
