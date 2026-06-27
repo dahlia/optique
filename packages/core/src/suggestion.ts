@@ -1,5 +1,5 @@
 import type { Message, MessageTerm } from "./message.ts";
-import { message, optionName, text } from "./message.ts";
+import { lineBreak, message, optionName, text } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
 import type { Usage } from "./usage.ts";
 import {
@@ -423,6 +423,54 @@ export function createErrorWithSuggestions(
   return suggestionMsg.length > 0
     ? [...baseError, text("\n\n"), ...suggestionMsg]
     : baseError;
+}
+
+/**
+ * Appends a "Did you mean …?" hint to a base error message when the input
+ * is close to one of the candidate values.
+ *
+ * This helper is meant for closed-set value parsers (e.g. `choice()`) that
+ * want to surface near-match suggestions without re-implementing distance
+ * logic themselves.  It wraps {@link findSimilar} and
+ * {@link createSuggestionMessage} and returns the `base` message unchanged
+ * when no candidates are close enough.
+ *
+ * @param base The base error message to display.
+ * @param input The invalid input the user typed.
+ * @param candidates The list of valid candidate strings to suggest from.
+ * @param options Optional thresholds; defaults to
+ *   {@link DEFAULT_FIND_SIMILAR_OPTIONS}.
+ * @returns `base` with a "Did you mean …?" line appended when a close
+ *   candidate is found, or `base` unchanged when none are found.
+ *
+ * @example
+ * ```typescript
+ * const base = message`Invalid color: ${input}.`;
+ * appendValueHint(base, input, ["red", "green", "blue"]);
+ * // → "Invalid color: redd.\n\nDid you mean `red`?"
+ * ```
+ *
+ * @since 1.2.0
+ */
+export function appendValueHint(
+  base: Message,
+  input: string,
+  candidates: readonly string[],
+  options?: Readonly<
+    Pick<FindSimilarOptions, "maxDistance" | "maxSuggestions">
+  >,
+): Message {
+  const suggestions = findSimilar(
+    input,
+    candidates,
+    options != null
+      ? { ...DEFAULT_FIND_SIMILAR_OPTIONS, ...options }
+      : undefined,
+  );
+  const suggestionMsg = createSuggestionMessage(suggestions);
+  return suggestionMsg.length > 0
+    ? [...base, lineBreak(), lineBreak(), ...suggestionMsg]
+    : base;
 }
 
 /**

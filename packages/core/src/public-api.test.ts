@@ -52,6 +52,7 @@ test("package manifests expose only supported public subpaths", () => {
     "./parser",
     "./primitives",
     "./program",
+    "./suggestion",
     "./usage",
     "./valueparser",
   ].sort();

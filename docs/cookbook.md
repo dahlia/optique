@@ -1373,6 +1373,108 @@ The `passThrough()` parser supports three capture formats:
 > The `"greedy"` format can shadow explicit parsers. Place it carefully,
 > typically as the last field in a subcommand-specific `object()`.
 
+### “Did you mean?” for value typos
+
+*This feature is available since Optique 1.2.0.*
+
+When a user mistypes an option value — `--mode devo` instead of `dev` — the
+default error only lists valid choices.  The `suggest` option on `choice()`
+appends a “Did you mean?” hint using the existing Levenshtein distance
+machinery, without any extra dependencies.
+
+#### Basic usage with `suggest: "nearest"`
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+// ---cut-before---
+const mode = choice(["dev", "staging", "prod"], { suggest: "nearest" });
+~~~~
+
+A typo now produces:
+
+~~~~ bash
+$ myapp --mode devo
+Error: Expected one of dev, staging, and prod, but got devo.
+
+Did you mean `dev`?
+~~~~
+
+#### Custom filtering with the function form
+
+The function form gives full control.  It receives the raw input and the full
+choices array, so you can apply domain-specific logic — for example, only
+suggest choices that share a prefix with the input:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+// ---cut-before---
+const env = choice(["development", "staging", "production"], {
+  suggest(input, choices) {
+    // Only suggest choices that start with the same first letter.
+    return choices.filter((c) => c[0] === input[0]);
+  },
+});
+~~~~
+
+Return `undefined` or an empty array to suppress the hint entirely.
+
+#### Custom value parsers using `appendValueHint`
+
+If you build a value parser with its own closed candidate set, you can add
+the same hint without re-implementing distance logic.  Import
+`appendValueHint` from `@optique/core/suggestion`:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import { appendValueHint } from "@optique/core/suggestion";
+import { message } from "@optique/core/message";
+
+const PALETTE = ["crimson", "emerald", "sapphire", "amber"] as const;
+
+function paletteColor(): ValueParser<"sync", string> {
+  return {
+    mode: "sync",
+    metavar: "COLOR",
+    placeholder: "crimson",
+    parse(input: string): ValueParserResult<string> {
+      if ((PALETTE as readonly string[]).includes(input)) {
+        return { success: true, value: input };
+      }
+      const base = message`Unknown color: ${input}.`;
+      return {
+        success: false,
+        error: appendValueHint(base, input, PALETTE),
+      };
+    },
+    format(value: string): string {
+      return value;
+    },
+  };
+}
+~~~~
+
+`appendValueHint(base, input, candidates, options?)` returns `base` unchanged
+when no candidate is close enough, so there is no need for an extra
+conditional.
+
+#### When not to use suggestions
+
+Very large candidate sets can produce noisy suggestions.  If your enum has
+dozens or hundreds of entries, set tight thresholds to keep the output clean:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+// ---cut-before---
+// Only suggest when distance ≤ 1 and cap at 2 hints.
+const lang = choice(
+  ["en", "es", "fr", "de", "zh", "ja", "ko"],
+  { suggest: { maxDistance: 1, maxSuggestions: 2 } },
+);
+~~~~
+
+Or keep the default `suggest: "never"` and rely on the choices list in the
+error message instead.
+
 ### Shell completion patterns
 
 *This API is available since Optique 0.6.0.*

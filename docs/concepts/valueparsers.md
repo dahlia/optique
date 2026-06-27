@@ -654,6 +654,53 @@ const depth = choice([8, 10, 12]);
 > The `caseInsensitive` option is only available for string choices.
 > TypeScript will report an error if you try to use it with number choices.
 
+### “Did you mean?” hints
+
+*This feature is available since Optique 1.2.0.*
+
+By default, an invalid choice produces a plain error:
+
+~~~~ bash
+$ myapp --mode devo
+Error: Expected one of dev and prod, but got devo.
+~~~~
+
+Add `suggest: "nearest"` to append a hint when the input is close to a valid
+choice:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+// ---cut-before---
+const mode = choice(["dev", "prod"], { suggest: "nearest" });
+~~~~
+
+With this option, the same error becomes:
+
+~~~~ bash
+$ myapp --mode devo
+Error: Expected one of dev and prod, but got devo.
+
+Did you mean `dev`?
+~~~~
+
+The `suggest` option accepts:
+
+`"nearest"`
+:   Use Levenshtein distance with default thresholds to find the closest
+    valid choice.
+
+`{ maxDistance?, maxSuggestions? }`
+:   Same as `"nearest"` with custom limits.  `maxDistance` caps how far
+    apart two strings can be (default 3); `maxSuggestions` caps the number
+    of hints shown (default 3).
+
+`"never"` *(default)*
+:   Disable suggestions; preserve the plain error message.
+
+`(input, choices) => readonly string[] | undefined`
+:   Custom suggestion logic.  Return `undefined` or an empty array to
+    suppress the hint, or a list of strings to show as suggestions.
+
 > [!TIP]
 > You can display valid choices in help text by enabling the `showChoices`
 > option in your runner configuration.  See the

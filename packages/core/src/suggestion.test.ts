@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  appendValueHint,
   createErrorWithSuggestions,
   createSuggestionMessage,
   deduplicateSuggestions,
@@ -1039,5 +1040,54 @@ describe("property-based tests", () => {
       ),
       propertyParameters,
     );
+  });
+});
+
+describe("appendValueHint()", () => {
+  it("should return base message unchanged when no close candidate exists", () => {
+    const base = message`Expected one of dev or prod, but got xyz.`;
+    const result = appendValueHint(base, "xyz", ["dev", "prod"]);
+    assert.deepEqual(result, base);
+  });
+
+  it("should append Did you mean hint when input is close to a candidate", () => {
+    const base = message`Expected one of dev or prod, but got devo.`;
+    const result = appendValueHint(base, "devo", ["dev", "prod"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(str.includes("dev"), `Expected "dev" in: ${str}`);
+  });
+
+  it("should respect custom maxDistance option", () => {
+    const base = message`Error.`;
+    const result = appendValueHint(base, "devoxxx", ["dev", "prod"], {
+      maxDistance: 1,
+    });
+    assert.deepEqual(result, base);
+  });
+
+  it("should respect custom maxSuggestions option", () => {
+    const base = message`Error.`;
+    const candidates = ["dev", "dew", "den"];
+    const result = appendValueHint(base, "devo", candidates, {
+      maxSuggestions: 1,
+    });
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    // Should only show one suggestion due to maxSuggestions: 1
+    const matches = str.match(/`[^`]+`/g) ?? [];
+    assert.equal(matches.length, 1);
+  });
+
+  it("should return base message for empty input", () => {
+    const base = message`Error.`;
+    const result = appendValueHint(base, "", ["dev", "prod"]);
+    assert.deepEqual(result, base);
+  });
+
+  it("should return base message for empty candidates", () => {
+    const base = message`Error.`;
+    const result = appendValueHint(base, "devo", []);
+    assert.deepEqual(result, base);
   });
 });

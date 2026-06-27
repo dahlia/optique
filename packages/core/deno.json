@@ -20,6 +20,7 @@
     "./parser": "./src/parser.ts",
     "./primitives": "./src/primitives.ts",
     "./program": "./src/program.ts",
+    "./suggestion": "./src/suggestion.ts",
     "./usage": "./src/usage.ts",
     "./valueparser": "./src/valueparser.ts"
   },
