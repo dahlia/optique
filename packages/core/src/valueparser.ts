@@ -298,6 +298,21 @@ export interface ChoiceOptionsBase {
    * @default `"TYPE"`
    */
   readonly metavar?: NonEmptyString;
+}
+
+/**
+ * Options for creating a {@link choice} parser with string values.
+ * @since 0.9.0
+ */
+export interface ChoiceOptionsString extends ChoiceOptionsBase {
+  /**
+   * If `true`, the parser will perform case-insensitive matching
+   * against the enumerated values. This means that input like "value",
+   * "Value", or "VALUE" will all match the same enumerated value.
+   * If `false`, the matching will be case-sensitive.
+   * @default `false`
+   */
+  readonly caseInsensitive?: boolean;
 
   /**
    * Controls whether the error message for an invalid value includes a
@@ -325,21 +340,6 @@ export interface ChoiceOptionsBase {
       input: string,
       choices: readonly string[],
     ) => readonly string[] | undefined);
-}
-
-/**
- * Options for creating a {@link choice} parser with string values.
- * @since 0.9.0
- */
-export interface ChoiceOptionsString extends ChoiceOptionsBase {
-  /**
-   * If `true`, the parser will perform case-insensitive matching
-   * against the enumerated values. This means that input like "value",
-   * "Value", or "VALUE" will all match the same enumerated value.
-   * If `false`, the matching will be case-sensitive.
-   * @default `false`
-   */
-  readonly caseInsensitive?: boolean;
 
   /**
    * Custom error messages for choice parsing failures.
@@ -837,7 +837,7 @@ function formatStringChoiceError(
     | Message
     | ((input: string, choices: readonly string[]) => Message)
     | undefined,
-  suggest: ChoiceOptionsBase["suggest"],
+  suggest: ChoiceOptionsString["suggest"],
 ): Message {
   const base = invalidChoice
     ? (typeof invalidChoice === "function"
