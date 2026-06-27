@@ -1454,6 +1454,77 @@ function logLevel(): ValueParser<"sync", string> {
 }
 ~~~~
 
+#### Async completion sources
+
+When completion candidates must be fetched at runtime—Docker tags,
+Kubernetes resources, GitHub issues, or remote config values—implement
+`suggest()` as an async generator:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type { Suggestion } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+// ---cut-before---
+function dockerTag(image: string): ValueParser<"async", string> {
+  return {
+    mode: "async",
+    metavar: "TAG",
+    placeholder: "latest",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      if (!/^[\w][\w.-]{0,127}$/.test(input)) {
+        return { success: false, error: message`Invalid tag: ${input}.` };
+      }
+      return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
+    },
+    async *suggest(prefix: string): AsyncIterable<Suggestion> {
+      try {
+        // Guard against path-traversal: require exactly namespace/repository;
+        // encodeURIComponent does not encode dots so "." and ".." must be
+        // rejected explicitly.
+        const imageSegments = image.split("/");
+        if (
+          imageSegments.length !== 2 ||
+          imageSegments.some((s) => s === "" || s === "." || s === "..")
+        ) return;
+        const [ns, name] = imageSegments.map(encodeURIComponent);
+        const resp = await fetch(
+          `https://hub.docker.com/v2/repositories/${ns}/${name}/tags/`,
+        );
+        if (!resp.ok) return;
+        const { results } = await resp.json() as {
+          readonly results: { readonly name: string }[];
+        };
+        for (const { name } of results) {
+          if (name.startsWith(prefix)) {
+            yield { kind: "literal", text: name };
+          }
+        }
+      } catch {
+        // Swallow errors — completion is best-effort.
+      }
+    },
+  };
+}
+~~~~
+
+Key rules for async suggesters:
+
+ -  Wrap the entire body in `try`/`catch`.  Network failures must never
+    propagate as uncaught exceptions into the user's shell.
+ -  Only yield items whose `text.startsWith(prefix)`.
+ -  Add a `description` field for richer shells (zsh, fish, PowerShell,
+    Nushell).
+
+For a real-world reference, see the
+[Git integration](./integrations/git.md), which uses async suggestion for
+branches, tags, commits, and remotes.  The full contract—combining
+sources, bounding lookups, and enriching descriptions—is documented in
+the
+[completion concepts guide](./concepts/completion.md#async-completion-sources).
+
 #### Multi-command CLI with rich completion
 
 Complex CLI tools with subcommands benefit greatly from completion:

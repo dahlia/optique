@@ -124,9 +124,20 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
    * Provides completion suggestions for values of this type.
    * This is optional and used for shell completion functionality.
    *
-   * @param prefix The current input prefix to complete.
-   * @returns An iterable of suggestion objects.
-   *          In async mode, returns an AsyncIterable.
+   * In `"sync"` mode, returns an `Iterable<Suggestion>`.  In `"async"`
+   * mode, returns an `AsyncIterable<Suggestion>`; the runtime consumes
+   * it with `for await`.  Sleeping or yielding in multiple batches is
+   * acceptable.
+   *
+   * For async suggesters, failures must be swallowed and logged rather
+   * than propagated as exceptions, because completion is best-effort.
+   * An exception that escapes the generator will surface as broken
+   * completion in the user's shell.
+   *
+   * @param prefix The current input prefix to complete.  Only yield
+   *   items whose `text` starts with this prefix.
+   * @returns An iterable (or async iterable in async mode) of
+   *   suggestion objects.
    * @since 0.6.0
    */
   suggest?(prefix: string): ModeIterable<M, Suggestion>;

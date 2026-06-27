@@ -291,6 +291,194 @@ function customParser(): ValueParser<"sync", string> {
 }
 ~~~~
 
+### Async completion sources
+
+When the candidate set for completions depends on network I/O, filesystem
+reads, a remote API, or any other source that requires `await`, implement
+`suggest()` as an `async` generator.  The runtime consumes it with
+`for await` transparently; the sync and async completion paths stay
+separated at the top level.
+
+#### The async suggest contract
+
+ -  Only yield items whose `text` starts with `prefix`.  Shells do not
+    always re-filter the result, so filtering is the generator's
+    responsibility.
+ -  Wrap the entire generator body in `try`/`catch`.  Completion is
+    best-effort: a network failure must never propagate as an uncaught
+    exception, because that would break the user's shell session.  Log
+    the error and return whatever has been yielded so far.
+ -  Yielding in multiple batches is fine.  Do not rely on side effects
+    from later yields—the runtime may stop consuming the generator early.
+
+#### Example: GitHub issue number parser
+
+The example below parses a GitHub issue number (such as `#42`) and
+provides async completion by fetching open issues from the GitHub API:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type { Suggestion } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+import { getLogger } from "@logtape/logtape";
+
+const logger = getLogger(["myapp", "parsers"]);
+// ---cut-before---
+function issueNumber(repo: string): ValueParser<"async", number> {
+  return {
+    mode: "async",
+    metavar: "ISSUE",
+    placeholder: 0,
+    async parse(input: string): Promise<ValueParserResult<number>> {
+      if (!/^#?\d+$/.test(input)) {
+        return {
+          success: false,
+          error: message`Expected a GitHub issue number, got ${input}.`,
+        };
+      }
+      return { success: true, value: Number(input.replace(/^#/, "")) };
+    },
+    format(value: number): string {
+      return `#${value}`;
+    },
+    async *suggest(prefix: string): AsyncIterable<Suggestion> {
+      const q = prefix.replace(/^#/, "");
+      if (!/^\d*$/.test(q)) return;
+      // Normalize so that typing "42" suggests "#42" just like typing "#4" would.
+      const normalizedPrefix = prefix.startsWith("#") ? prefix : `#${prefix}`;
+      // Guard against path-traversal: require exactly owner/repo with no empty,
+      // ".", or ".." segments (encodeURIComponent does not encode dots).
+      const repoSegments = repo.split("/");
+      if (
+        repoSegments.length !== 2 ||
+        repoSegments.some((s) => s === "" || s === "." || s === "..")
+      ) return;
+      const repoPath = repoSegments.map(encodeURIComponent).join("/");
+      try {
+        const resp = await fetch(
+          `https://api.github.com/repos/${repoPath}/issues?state=open&per_page=30`,
+        );
+        if (!resp.ok) return;
+        const issues = await resp.json() as ReadonlyArray<{
+          readonly number: number;
+          readonly title: string;
+          readonly pull_request?: unknown;
+        }>;
+        for (const issue of issues) {
+          if (issue.pull_request != null) continue; // GitHub /issues also returns PRs
+          const text = `#${issue.number}`;
+          if (!text.startsWith(normalizedPrefix)) continue;
+          yield {
+            kind: "literal",
+            text,
+            description: message`${issue.title}`,
+          };
+        }
+      } catch (error) {
+        logger.debug("GitHub issue suggestion failed.", { repo, error });
+      }
+    },
+  };
+}
+~~~~
+
+Four things to notice:
+
+ -  The `try`/`catch` wraps the entire generator body.  An unreachable
+    API produces an empty completion list, not a crash.
+ -  `pull_request != null` skips pull requests, because the GitHub
+    `/issues` endpoint returns both issues and PRs.
+ -  The prefix is normalized to start with `#` before filtering, so that
+    a user typing `42` gets the same suggestions as one typing `#42`.
+ -  The `description` field uses `` message`…` `` so richer shells (zsh,
+    fish, PowerShell, Nushell) display the issue title alongside the
+    number.  Plain Bash ignores it.
+
+#### Combining multiple sources
+
+When completions span multiple backends, merge them in one generator with
+a dedup `Set` and yield in priority order.  The *@optique/git* package's
+`gitRef` parser demonstrates this pattern—it yields branches first, then
+tags, then commits, deduplicating by name:
+
+~~~~ typescript twoslash
+import type { Suggestion } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+
+async function* listBranches(prefix: string): AsyncIterable<string> {
+  yield "main"; yield "develop";
+}
+async function* listTags(prefix: string): AsyncIterable<string> {
+  yield "v1.0.0"; yield "v2.0.0";
+}
+// ---cut-before---
+async function* suggestRef(prefix: string): AsyncIterable<Suggestion> {
+  const seen = new Set<string>();
+  for await (const name of listBranches(prefix)) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    yield { kind: "literal", text: name, description: message`branch` };
+  }
+  for await (const name of listTags(prefix)) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    yield { kind: "literal", text: name, description: message`tag` };
+  }
+}
+~~~~
+
+#### Bounding expensive lookups
+
+Pass a depth or page-size limit via constructor options and validate it
+at parser-construction time.  The *@optique/git* package uses
+`suggestionDepth` as the canonical option name; following the same name
+makes your parsers consistent with the existing ecosystem:
+
+~~~~ typescript twoslash
+import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
+import type { Suggestion } from "@optique/core/parser";
+// ---cut-before---
+function remoteParser(
+  endpoint: string,
+  options?: { readonly suggestionDepth?: number },
+): ValueParser<"async", string> {
+  const depth = options?.suggestionDepth ?? 50;
+  if (!Number.isInteger(depth) || depth < 1) {
+    throw new RangeError("suggestionDepth must be a positive integer.");
+  }
+  return {
+    mode: "async",
+    metavar: "VALUE",
+    placeholder: "",
+    async parse(input: string): Promise<ValueParserResult<string>> {
+      return { success: true, value: input };
+    },
+    format(value: string): string {
+      return value;
+    },
+    async *suggest(prefix: string): AsyncIterable<Suggestion> {
+      try {
+        const resp = await fetch(
+          `${endpoint}?q=${encodeURIComponent(prefix)}&limit=${depth}`,
+        );
+        if (!resp.ok) return;
+        const items = await resp.json() as readonly string[];
+        for (const item of items) {
+          if (item.startsWith(prefix)) {
+            yield { kind: "literal", text: item };
+          }
+        }
+      } catch {
+        // Swallow errors — log via your logger in production.
+      }
+    },
+  };
+}
+~~~~
+
+See [Git integration](../integrations/git.md) for a complete real-world
+example backed by an actual Git repository.
+
 
 Shell script generation
 -----------------------
