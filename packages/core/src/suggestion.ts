@@ -1,5 +1,5 @@
 import type { Message, MessageTerm } from "./message.ts";
-import { lineBreak, message, optionName, text } from "./message.ts";
+import { lineBreak, message, optionName, text, value } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
 import type { Usage } from "./usage.ts";
 import {
@@ -464,11 +464,26 @@ export function appendValueHint(
     input,
     candidates,
     options != null
-      ? { ...DEFAULT_FIND_SIMILAR_OPTIONS, ...options }
+      ? {
+        maxDistance: options.maxDistance ??
+          DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance,
+        maxDistanceRatio: DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio,
+        maxSuggestions: options.maxSuggestions ??
+          DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions,
+      }
       : undefined,
   );
-  const suggestionMsg = createSuggestionMessage(suggestions);
-  if (suggestionMsg.length === 0) return base;
+  if (suggestions.length === 0) return base;
+  let suggestionMsg: Message;
+  if (suggestions.length === 1) {
+    suggestionMsg = message`Did you mean ${value(suggestions[0])}?`;
+  } else {
+    const parts: MessageTerm[] = [text("Did you mean one of these?")];
+    for (const suggestion of suggestions) {
+      parts.push(text("\n  "), value(suggestion));
+    }
+    suggestionMsg = parts;
+  }
   return base.length > 0
     ? [...base, lineBreak(), lineBreak(), ...suggestionMsg]
     : suggestionMsg;

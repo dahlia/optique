@@ -1055,7 +1055,7 @@ describe("appendValueHint()", () => {
     const result = appendValueHint(base, "devo", ["dev", "prod"]);
     const str = formatMessage(result);
     assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
-    assert.ok(str.includes("`dev`"), `Expected suggested value in: ${str}`);
+    assert.ok(str.includes('"dev"'), `Expected suggested value in: ${str}`);
   });
 
   it("should respect custom maxDistance option", () => {
@@ -1075,7 +1075,7 @@ describe("appendValueHint()", () => {
     const str = formatMessage(result);
     assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
     // Should only show one suggestion due to maxSuggestions: 1
-    const matches = str.match(/`[^`]+`/g) ?? [];
+    const matches = str.match(/"[^"]+"/g) ?? [];
     assert.equal(matches.length, 1);
   });
 
@@ -1096,5 +1096,15 @@ describe("appendValueHint()", () => {
     const str = formatMessage(result);
     assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
     assert.ok(!str.startsWith("\n"), `Should not start with newline: ${str}`);
+  });
+
+  it("should safely format candidates that contain backticks", () => {
+    const result = appendValueHint([], "foo`bar", ["foo`bar"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(
+      !str.includes("``"),
+      `Should not produce broken backtick pair in: ${str}`,
+    );
   });
 });
