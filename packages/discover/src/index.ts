@@ -607,7 +607,11 @@ async function runHookScope(
 ): Promise<unknown> {
   let context: ProgramHookContext = {};
   try {
-    if (hooks?.beforeEach != null) context = await hooks.beforeEach(invocation);
+    // Default a nullish beforeEach result to an empty context so afterEach,
+    // onError, and the handler never receive null/undefined.
+    if (hooks?.beforeEach != null) {
+      context = (await hooks.beforeEach(invocation)) ?? {};
+    }
     const result = await inner(context);
     if (hooks?.afterEach != null) await hooks.afterEach(context, result);
     return result;

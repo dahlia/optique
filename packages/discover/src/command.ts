@@ -353,6 +353,9 @@ export function validateHooks(
   hooks: unknown,
   scope: "Command" | "Program",
 ): asserts hooks is ProgramHooks {
+  if (Array.isArray(hooks)) {
+    throw new TypeError(`${scope} hooks must be an object, not an array.`);
+  }
   if (typeof hooks !== "object" || hooks == null) {
     throw new TypeError(`${scope} hooks must be an object.`);
   }

@@ -142,6 +142,18 @@ describe("defineCommand()", () => {
       () =>
         defineCommand({
           parser: object({}),
+          hooks: [] as never,
+          handler() {},
+        }),
+      {
+        name: "TypeError",
+        message: "Command hooks must be an object, not an array.",
+      },
+    );
+    assert.throws(
+      () =>
+        defineCommand({
+          parser: object({}),
           hooks: { beforeEach: "nope" as never },
           handler() {},
         }),
@@ -2459,12 +2471,43 @@ describe("runProgram() lifecycle hooks", () => {
       { name: "TypeError", message: "Program hooks must be an object." },
     );
     await assert.rejects(
+      () => runHooked([greet], ["greet"], [] as never),
+      {
+        name: "TypeError",
+        message: "Program hooks must be an object, not an array.",
+      },
+    );
+    await assert.rejects(
       () => runHooked([greet], ["greet"], { afterEach: "nope" as never }),
       {
         name: "TypeError",
         message: 'Program hook "afterEach" must be a function.',
       },
     );
+  });
+
+  it("defaults a nullish beforeEach result to an empty context", async () => {
+    let afterContext: unknown = "unset";
+    let handlerContext: unknown = "unset";
+    const greet = defineCommand({
+      path: ["greet"],
+      parser: object({}),
+      handler(_value, context) {
+        handlerContext = context;
+      },
+    });
+
+    await runHooked([greet], ["greet"], {
+      // Simulate a loosely typed caller whose beforeEach returns nothing; the
+      // dispatcher must substitute an empty context.
+      beforeEach: (() => undefined) as never,
+      afterEach(context) {
+        afterContext = context;
+      },
+    });
+
+    assert.deepEqual(afterContext, {});
+    assert.deepEqual(handlerContext, {});
   });
 
   it("exposes the resolved command path to hooks", async () => {
