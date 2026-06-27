@@ -296,6 +296,74 @@ Prefer `commandsFromModules()` when you want to keep deriving paths from a
 command directory layout.
 
 
+Lifecycle hooks
+---------------
+
+*This API is available since Optique 1.2.0.*
+
+`runProgram()` normally dispatches straight to the matched command's handler.
+A `hooks` option wraps every handler with `beforeEach`, `afterEach`, and
+`onError`, so cross-cutting concerns such as log scopes, tracing spans, lazy
+resource setup, and failure reporting can live in one place instead of inside
+every command.  Hooks are opt-in: a `runProgram()` call without them behaves
+exactly as before.
+
+~~~~ typescript twoslash
+import { runProgram } from "@optique/discover";
+
+await runProgram({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: { name: "admin", version: "1.0.0" },
+  hooks: {
+    beforeEach({ path }) {
+      const label = path.length > 0 ? path.join(" ") : "admin";
+      return { resource: { label, startedAt: Date.now() } };
+    },
+    afterEach(context) {
+      const { label, startedAt } = context.resource as {
+        label: string;
+        startedAt: number;
+      };
+      console.log(`${label} finished in ${Date.now() - startedAt}ms.`);
+    },
+    onError(_context, error) {
+      console.error("Handler failed:", error);
+    },
+  },
+});
+~~~~
+
+`beforeEach` receives the invocation: the matched command, its resolved command
+`path` (always populated, even when a discovered command omits an explicit
+`path`), the parsed value, and the handler.  It returns a context object whose
+`resource` is threaded forward to the handler's second parameter and to
+`afterEach`/`onError`, so handlers and later hooks reach the resource without
+global state.  Each hook may be synchronous or return a promise; `runProgram()`
+awaits it.
+
+Hooks can also be attached to a single command through
+`defineCommand({ hooks })` for a per-command preflight.  Command-level hooks
+nest inside the program-level ones, and teardown unwinds in reverse:
+
+~~~~ mermaid
+flowchart TB
+  pb["program.beforeEach"] --> cb["command.beforeEach"] --> h["handler"]
+  h -- success --> ca["command.afterEach"] --> pa["program.afterEach"]
+  h -- failure --> ce["command.onError"] --> pe["program.onError"]
+~~~~
+
+A *parse error*, such as a missing option or an invalid value, is handled by
+*@optique/run*'s error display before any handler or hook runs; `beforeEach`
+does not fire for it.  A *handler error*, anything the handler, `beforeEach`, or
+`afterEach` throws or rejects, is passed to `onError`.  `onError` observes and
+cleans up but does not swallow the error: `runProgram()` re-throws it afterward,
+so process exit codes are unchanged.
+
+For a worked example with LogTape scopes and tracing spans, plus a per-command
+preflight, see the [program-level lifecycle hooks
+recipe](../cookbook.md#program-level-lifecycle-hooks) in the cookbook.
+
+
 File names and extensions
 -------------------------
 
