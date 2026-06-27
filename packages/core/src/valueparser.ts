@@ -680,16 +680,44 @@ export function choice<const T extends string | number>(
   if (stringSuggest !== undefined) {
     const isValidString = stringSuggest === "nearest" ||
       stringSuggest === "never";
+    const isArray = Array.isArray(stringSuggest);
     const isValidObject = typeof stringSuggest === "object" &&
-      stringSuggest !== null;
+      stringSuggest !== null && !isArray;
     const isValidFunction = typeof stringSuggest === "function";
     if (!isValidString && !isValidObject && !isValidFunction) {
+      const actualType = isArray
+        ? "array"
+        : stringSuggest === null
+        ? "null"
+        : typeof stringSuggest;
       throw new TypeError(
         `Expected suggest to be "nearest", "never", an object, or a ` +
-          `function, but got ${typeof stringSuggest}: ${
-            String(stringSuggest)
-          }.`,
+          `function, but got ${actualType}: ${String(stringSuggest)}.`,
       );
+    }
+    if (isValidObject) {
+      const obj = stringSuggest as Readonly<
+        Pick<FindSimilarOptions, "maxDistance" | "maxSuggestions">
+      >;
+      if (
+        obj.maxDistance !== undefined &&
+        (typeof obj.maxDistance !== "number" || !isFinite(obj.maxDistance))
+      ) {
+        throw new TypeError(
+          `Expected suggest.maxDistance to be a finite number, but got ` +
+            `${typeof obj.maxDistance}: ${String(obj.maxDistance)}.`,
+        );
+      }
+      if (
+        obj.maxSuggestions !== undefined &&
+        (typeof obj.maxSuggestions !== "number" ||
+          !isFinite(obj.maxSuggestions))
+      ) {
+        throw new TypeError(
+          `Expected suggest.maxSuggestions to be a finite number, but got ` +
+            `${typeof obj.maxSuggestions}: ${String(obj.maxSuggestions)}.`,
+        );
+      }
     }
   }
   return {
@@ -868,7 +896,7 @@ function formatStringChoiceError(
 
   if (typeof suggest === "function") {
     const hints = suggest(input, choices);
-    if (!hints || hints.length === 0) return base;
+    if (!Array.isArray(hints) || hints.length === 0) return base;
     const suggestionMsg = createSuggestionMessage(hints);
     return suggestionMsg.length > 0
       ? [...base, lineBreak(), lineBreak(), ...suggestionMsg]
