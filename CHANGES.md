@@ -18,8 +18,21 @@ To be released.
     `@optique/core/fluent` subpath exports `fluent()` for custom parsers that
     want to opt into the same method-style modifier surface.  [[#842], [#843]]
 
+ -  Added `deferredValue()` and `isDeferredValue()` for deferred handler-time
+    values.  `deferredValue()` wraps a parser so its parsed field becomes a
+    `DeferredValue`, a value-producing function that returns the wrapped
+    parser's value when it produced one, or runs a fallback resolver otherwise.
+    The fallback runs when the command handler calls the value rather than
+    during parsing, so its errors are handler errors.  The readonly `source`
+    property reports whether the value was `"specified"` or came from the
+    `"fallback"`, and an optional `memoize` flag reuses the resolved fallback
+    while still retrying after a rejection.  A matching `.deferredValue()`
+    fluent method is also available.  [[#846], [#848]]
+
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
+[#846]: https://github.com/dahlia/optique/issues/846
+[#848]: https://github.com/dahlia/optique/pull/848
 
 ### @optique/derived-defaults
 

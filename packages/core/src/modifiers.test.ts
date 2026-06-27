@@ -21,6 +21,9 @@ import {
   url,
 } from "@optique/core/message";
 import {
+  type DeferredValue,
+  deferredValue,
+  isDeferredValue,
   map,
   multiple,
   nonEmpty,
@@ -8242,6 +8245,44 @@ describe("shouldDeferCompletion forwarding", () => {
       assert.deepEqual(inner.receivedStates[0], otherState);
     });
   });
+
+  describe("deferredValue() shouldDeferCompletion", () => {
+    it("should unwrap outer state before delegating to inner hook", () => {
+      const inner = createDeferrableParser(true);
+      const outer = deferredValue(inner, () => "fallback");
+
+      assert.ok(typeof outer.shouldDeferCompletion === "function");
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "hello",
+      };
+      outer.shouldDeferCompletion!([innerState]);
+
+      assert.equal(inner.receivedStates.length, 1);
+      assert.deepEqual(inner.receivedStates[0], innerState);
+    });
+
+    it("should return false when outer state is undefined", () => {
+      const inner = createDeferrableParser(true);
+      const outer = deferredValue(inner, () => "fallback");
+
+      const result = outer.shouldDeferCompletion!(undefined);
+      assert.ok(!result);
+      assert.equal(inner.receivedStates.length, 0);
+    });
+
+    it("should propagate inner hook's return value", () => {
+      const inner = createDeferrableParser(false);
+      const outer = deferredValue(inner, () => "fallback");
+
+      const innerState: ValueParserResult<string> = {
+        success: true,
+        value: "test",
+      };
+      const result = outer.shouldDeferCompletion!([innerState]);
+      assert.ok(!result);
+    });
+  });
 });
 
 describe(
@@ -12325,5 +12366,435 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       );
       assert.equal(parser.validateValue, undefined);
     });
+  });
+});
+
+describe("deferredValue", () => {
+  it("returns the CLI value with source 'specified' when provided", () => {
+    const parser = object({
+      token: deferredValue(option("--token", string()), () => "fallback-token"),
+    });
+    const result = parse(parser, ["--token", "cli-token"]);
+    assert.ok(result.success);
+    if (result.success) {
+      const token: DeferredValue<string> = result.value.token;
+      assert.ok(isDeferredValue(token));
+      assert.equal(token.source, "specified");
+      assert.equal(token(), "cli-token");
+    }
+  });
+
+  it("runs the fallback with source 'fallback' when omitted", () => {
+    let called = 0;
+    const parser = object({
+      token: deferredValue(option("--token", string()), () => {
+        called++;
+        return "fallback-token";
+      }),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      const token = result.value.token;
+      assert.equal(token.source, "fallback");
+      assert.equal(called, 0);
+      assert.equal(token(), "fallback-token");
+      assert.equal(called, 1);
+    }
+  });
+
+  it("does not run the fallback during parsing", () => {
+    let called = 0;
+    const parser = object({
+      token: deferredValue(option("--token", string()), () => {
+        called++;
+        return "x";
+      }),
+    });
+    parse(parser, []);
+    assert.equal(called, 0);
+  });
+
+  it("passes handler-time context to the fallback", () => {
+    const parser = object({
+      service: option("--service", string()),
+      token: deferredValue(
+        option("--token", string()),
+        ({ service }: { readonly service: string }) => `token-for-${service}`,
+      ),
+    });
+    const result = parse(parser, ["--service", "api"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.token.source, "fallback");
+      assert.equal(
+        result.value.token({ service: result.value.service }),
+        "token-for-api",
+      );
+    }
+  });
+
+  it("is callable without arguments when the context includes undefined", () => {
+    const parser = object({
+      token: deferredValue(
+        option("--token", string()),
+        (ctx: { readonly id: string } | undefined) => ctx?.id ?? "anon",
+      ),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      // C includes undefined, so the deferred value is callable with no args.
+      assert.equal(result.value.token(), "anon");
+      assert.equal(result.value.token({ id: "abc" }), "abc");
+    }
+  });
+
+  it("supports a fallback with an optional context parameter", () => {
+    // A fallback whose parameter is optional must not collapse to the
+    // no-argument form: the deferred value stays callable with and without the
+    // context argument.
+    const parser = object({
+      token: deferredValue(
+        option("--token", string()),
+        (ctx?: { readonly id: string }) => ctx?.id ?? "anon",
+      ),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.token(), "anon");
+      assert.equal(result.value.token({ id: "abc" }), "abc");
+    }
+  });
+
+  it("ignores the context argument in the specified branch", () => {
+    const parser = object({
+      token: deferredValue(
+        option("--token", string()),
+        ({ service }: { readonly service: string }) => `token-for-${service}`,
+      ),
+    });
+    const result = parse(parser, ["--token", "abc"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.token.source, "specified");
+      assert.equal(result.value.token({ service: "ignored" }), "abc");
+    }
+  });
+
+  it("treats an explicitly produced undefined value as a fallback", () => {
+    // optional() reports a missing value as undefined, so a wrapped parser that
+    // yields undefined is indistinguishable from "no value" and selects the
+    // fallback resolver.
+    const parser = object({
+      x: deferredValue(
+        map(
+          option("--value", string()),
+          (value): string | undefined => value === "none" ? undefined : value,
+        ),
+        () => "fallback",
+      ),
+    });
+    const explicitUndefined = parse(parser, ["--value", "none"]);
+    assert.ok(explicitUndefined.success);
+    if (explicitUndefined.success) {
+      assert.equal(explicitUndefined.value.x.source, "fallback");
+      assert.equal(explicitUndefined.value.x(), "fallback");
+    }
+    const provided = parse(parser, ["--value", "real"]);
+    assert.ok(provided.success);
+    if (provided.success) {
+      assert.equal(provided.value.x.source, "specified");
+      assert.equal(provided.value.x(), "real");
+    }
+    const omitted = parse(parser, []);
+    assert.ok(omitted.success);
+    if (omitted.success) {
+      assert.equal(omitted.value.x.source, "fallback");
+      assert.equal(omitted.value.x(), "fallback");
+    }
+  });
+
+  it("treats a value produced during completion as 'specified'", () => {
+    // constant() yields its value during completion without consuming a CLI
+    // token, the same path bindEnv()/bindConfig() take when they resolve a
+    // value from a non-CLI source.  The map() widens the literal to string so
+    // the fallback can differ from the produced value.
+    const parser = object({
+      region: deferredValue(
+        map(constant("us-east-1"), (value): string => value),
+        () => "fallback-region",
+      ),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value.region.source, "specified");
+      assert.equal(result.value.region(), "us-east-1");
+    }
+  });
+
+  it("marks a wrapped dependency source as transformed", () => {
+    // The produced value is a function, so deferredValue() must not register it
+    // as a dependency source value.  Its metadata is marked transformed (as
+    // map() does), so the dependency runtime uses the raw inner value instead
+    // of the produced DeferredValue.
+    const source = dependency(choice(["dev", "prod"] as const));
+    const deferred = deferredValue(option("--mode", source), () => "dev");
+    assert.ok(deferred.dependencyMetadata?.source != null);
+    assert.ok(!deferred.dependencyMetadata?.source?.preservesSourceValue);
+    assert.ok(deferred.dependencyMetadata?.transform?.transformsSourceValue);
+  });
+
+  it("propagates a parse error when a specified value is invalid", () => {
+    const parser = object({
+      token: deferredValue(
+        option("--token", choice(["a", "b"] as const)),
+        () => "a" as const,
+      ),
+    });
+    const result = parse(parser, ["--token", "zzz"]);
+    assert.ok(!result.success);
+  });
+
+  it("exposes source as an enumerable, readonly, non-writable property", () => {
+    const parser = object({
+      token: deferredValue(option("--token", string()), () => "fb"),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) {
+      const token = result.value.token;
+      const descriptor = Object.getOwnPropertyDescriptor(token, "source");
+      assert.ok(descriptor);
+      assert.ok(descriptor.enumerable);
+      assert.ok(!descriptor.writable);
+      assert.ok(!descriptor.configurable);
+      assert.ok(Object.keys(token).includes("source"));
+    }
+  });
+
+  it("preserves the wrapped parser's usage like optional()", () => {
+    const wrapped = option("--token", string());
+    const deferred = deferredValue(wrapped, () => "fb");
+    assert.deepEqual(deferred.usage, optional(wrapped).usage);
+  });
+
+  it("preserves the wrapped parser's documentation like optional()", () => {
+    const wrapped = option("--token", string());
+    const deferred = deferredValue(wrapped, () => "fb");
+    assert.deepEqual(
+      deferred.getDocFragments({ kind: "available", state: undefined }),
+      optional(wrapped).getDocFragments({
+        kind: "available",
+        state: undefined,
+      }),
+    );
+  });
+
+  describe("memoize", () => {
+    it("re-runs the fallback on every call by default", () => {
+      let called = 0;
+      const parser = object({
+        token: deferredValue(option("--token", string()), () => {
+          called++;
+          return `t${called}`;
+        }),
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.token(), "t1");
+        assert.equal(result.value.token(), "t2");
+        assert.equal(called, 2);
+      }
+    });
+
+    it("reuses the resolved value when memoize is true", () => {
+      let called = 0;
+      const parser = object({
+        token: deferredValue(
+          option("--token", string()),
+          () => {
+            called++;
+            return `t${called}`;
+          },
+          { memoize: true },
+        ),
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.token(), "t1");
+        assert.equal(result.value.token(), "t1");
+        assert.equal(called, 1);
+      }
+    });
+
+    it("reuses the in-flight promise for concurrent async calls", async () => {
+      let called = 0;
+      const parser = object({
+        token: deferredValue(
+          option("--token", asyncChoice(["a", "b"] as const)),
+          () => {
+            called++;
+            return Promise.resolve("resolved");
+          },
+          { memoize: true },
+        ),
+      });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        const first = result.value.token();
+        const second = result.value.token();
+        assert.equal(await first, "resolved");
+        assert.equal(await second, "resolved");
+        assert.equal(called, 1);
+      }
+    });
+
+    it("retries after a rejected fallback (does not cache rejection)", async () => {
+      let called = 0;
+      const parser = object({
+        token: deferredValue(
+          option("--token", asyncChoice(["a", "b"] as const)),
+          () => {
+            called++;
+            return called === 1
+              ? Promise.reject(new Error("boom"))
+              : Promise.resolve("second");
+          },
+          { memoize: true },
+        ),
+      });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        await assert.rejects(Promise.resolve(result.value.token()));
+        assert.equal(await result.value.token(), "second");
+        assert.equal(called, 2);
+      }
+    });
+  });
+
+  describe("async", () => {
+    it("works with an async wrapped parser (specified branch)", async () => {
+      const parser = object({
+        token: deferredValue(
+          option("--token", asyncChoice(["a", "b"] as const)),
+          () => Promise.resolve("fb" as const),
+        ),
+      });
+      const result = await parseAsync(parser, ["--token", "a"]);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.token.source, "specified");
+        assert.equal(await result.value.token(), "a");
+      }
+    });
+
+    it("works with an async wrapped parser (fallback branch)", async () => {
+      const parser = object({
+        token: deferredValue(
+          option("--token", asyncChoice(["a", "b"] as const)),
+          () => Promise.resolve("fb"),
+        ),
+      });
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.token.source, "fallback");
+        assert.equal(await result.value.token(), "fb");
+      }
+    });
+
+    it("allows an async fallback even when the wrapped parser is sync", async () => {
+      const parser = object({
+        token: deferredValue(
+          option("--token", string()),
+          () => Promise.resolve("async-fb"),
+        ),
+      });
+      const result = parse(parser, []);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.token.source, "fallback");
+        const value = result.value.token();
+        assert.ok(value instanceof Promise);
+        assert.equal(await value, "async-fb");
+      }
+    });
+  });
+
+  describe("fluent method", () => {
+    it("is available as a fluent method", () => {
+      const parser = object({
+        token: option("--token", string()).deferredValue(() => "fb"),
+      });
+      const provided = parse(parser, ["--token", "abc"]);
+      assert.ok(provided.success);
+      if (provided.success) {
+        assert.ok(isDeferredValue(provided.value.token));
+        assert.equal(provided.value.token.source, "specified");
+        assert.equal(provided.value.token(), "abc");
+      }
+      const omitted = parse(parser, []);
+      assert.ok(omitted.success);
+      if (omitted.success) {
+        assert.equal(omitted.value.token.source, "fallback");
+        assert.equal(omitted.value.token(), "fb");
+      }
+    });
+
+    it("forwards the inferred context type and options", () => {
+      const parser = object({
+        token: option("--token", string()).deferredValue(
+          ({ id }: { readonly id: string }) => `token-${id}`,
+          { memoize: true },
+        ),
+      });
+      const omitted = parse(parser, []);
+      assert.ok(omitted.success);
+      if (omitted.success) {
+        assert.equal(omitted.value.token.source, "fallback");
+        assert.equal(omitted.value.token({ id: "x" }), "token-x");
+      }
+    });
+  });
+});
+
+describe("isDeferredValue", () => {
+  it("returns true for a deferred value from the specified branch", () => {
+    const parser = object({
+      token: deferredValue(option("--token", string()), () => "fb"),
+    });
+    const result = parse(parser, ["--token", "x"]);
+    assert.ok(result.success);
+    if (result.success) assert.ok(isDeferredValue(result.value.token));
+  });
+
+  it("returns true for a deferred value from the fallback branch", () => {
+    const parser = object({
+      token: deferredValue(option("--token", string()), () => "fb"),
+    });
+    const result = parse(parser, []);
+    assert.ok(result.success);
+    if (result.success) assert.ok(isDeferredValue(result.value.token));
+  });
+
+  it("returns false for a plain function", () => {
+    assert.ok(!isDeferredValue(() => "x"));
+    const fnWithSource = Object.assign(() => "x", { source: "specified" });
+    assert.ok(!isDeferredValue(fnWithSource));
+  });
+
+  it("returns false for non-function values", () => {
+    assert.ok(!isDeferredValue("x"));
+    assert.ok(!isDeferredValue(undefined));
+    assert.ok(!isDeferredValue(null));
+    assert.ok(!isDeferredValue(42));
+    assert.ok(!isDeferredValue({ source: "specified" }));
   });
 });
