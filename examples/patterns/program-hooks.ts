@@ -72,9 +72,16 @@ const deploy = defineCommand({
       scope.log("refreshed auth token");
       return { resource: scope };
     },
+    // Release the token on both the success and failure paths, the same way a
+    // try/finally would: afterEach runs after a successful handler, onError
+    // after a failing one.
     afterEach(context) {
       const scope = context.resource as Scope;
       scope.log("released auth token");
+    },
+    onError(context) {
+      const scope = context.resource as Scope | undefined;
+      scope?.log("released auth token");
     },
   },
   handler(value, context) {
@@ -110,8 +117,11 @@ await runProgram({
       );
     },
     onError(context, error) {
-      const scope = context.resource as Scope;
-      print(message`✘ ${text(scope.label)} failed: ${text(String(error))}`);
+      // beforeEach may have failed before opening a scope, so the resource can
+      // be absent here.
+      const scope = context.resource as Scope | undefined;
+      const label = scope?.label ?? "tasks";
+      print(message`✘ ${text(label)} failed: ${text(String(error))}`);
     },
   },
 });
