@@ -114,7 +114,9 @@ export interface ProgramHooks {
    *
    * The returned {@link ProgramHookContext} is threaded forward as the second
    * argument to the command handler (when this is the most specific hook scope)
-   * and to {@link afterEach} and {@link onError}.
+   * and to {@link afterEach} and {@link onError}.  Returning a context is
+   * optional: omit the return or return `null`, and an empty context is
+   * threaded forward instead.
    *
    * Returning a promise is supported; the dispatcher awaits it.  A rejected
    * promise (or a thrown error) aborts the command before the handler runs and
@@ -122,7 +124,11 @@ export interface ProgramHooks {
    */
   readonly beforeEach?: (
     invocation: ProgramInvocation,
-  ) => ProgramHookContext | Promise<ProgramHookContext>;
+  ) =>
+    | ProgramHookContext
+    | null
+    | void
+    | Promise<ProgramHookContext | null | void>;
 
   /**
    * Called after the handler returns successfully, receiving the context from

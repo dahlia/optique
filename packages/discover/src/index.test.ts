@@ -2498,9 +2498,9 @@ describe("runProgram() lifecycle hooks", () => {
     });
 
     await runHooked([greet], ["greet"], {
-      // Simulate a loosely typed caller whose beforeEach returns nothing; the
-      // dispatcher must substitute an empty context.
-      beforeEach: (() => undefined) as never,
+      // beforeEach may omit a return; the dispatcher substitutes an empty
+      // context for the nullish result.
+      beforeEach() {},
       afterEach(context) {
         afterContext = context;
       },
