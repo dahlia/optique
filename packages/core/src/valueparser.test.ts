@@ -1858,6 +1858,27 @@ describe("choice", () => {
         );
       }
     });
+
+    it("should throw TypeError for invalid suggest value like true", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: true as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for suggest string typo like nearset", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: "nearset" as never }),
+        TypeError,
+      );
+    });
+
+    it("should throw TypeError for suggest: 0", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: 0 as never }),
+        TypeError,
+      );
+    });
   });
 
   describe("number choices", () => {

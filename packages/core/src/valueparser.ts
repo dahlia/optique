@@ -677,6 +677,21 @@ export function choice<const T extends string | number>(
   }
   const stringInvalidChoice = stringOptions.errors?.invalidChoice;
   const stringSuggest = stringOptions.suggest;
+  if (stringSuggest !== undefined) {
+    const isValidString = stringSuggest === "nearest" ||
+      stringSuggest === "never";
+    const isValidObject = typeof stringSuggest === "object" &&
+      stringSuggest !== null;
+    const isValidFunction = typeof stringSuggest === "function";
+    if (!isValidString && !isValidObject && !isValidFunction) {
+      throw new TypeError(
+        `Expected suggest to be "nearest", "never", an object, or a ` +
+          `function, but got ${typeof stringSuggest}: ${
+            String(stringSuggest)
+          }.`,
+      );
+    }
+  }
   return {
     mode: "sync",
     metavar,
