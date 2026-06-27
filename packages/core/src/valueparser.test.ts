@@ -1727,6 +1727,215 @@ describe("choice", () => {
     });
   });
 
+  describe("suggest option", () => {
+    it("should parse valid choice successfully even with suggest: nearest", () => {
+      const parser = choice(["dev", "prod"], { suggest: "nearest" });
+      const result = parser.parse("dev");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value, "dev");
+      }
+    });
+
+    it("should append Did you mean hint with suggest: nearest", () => {
+      const parser = choice(["dev", "prod"], { suggest: "nearest" });
+      const result = parser.parse("devo");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorStr = result.error.map((t) => {
+          if (t.type === "text") return t.text;
+          if (t.type === "value") return t.value;
+          if (t.type === "optionName") return t.optionName;
+          if (t.type === "lineBreak") return "\n";
+          return "";
+        }).join("");
+        assert.ok(
+          errorStr.includes("Did you mean"),
+          `Expected "Did you mean" in error: ${errorStr}`,
+        );
+        assert.ok(
+          errorStr.includes("dev"),
+          `Expected "dev" suggestion in error: ${errorStr}`,
+        );
+      }
+    });
+
+    it("should not append hint with default (no suggest option)", () => {
+      const parser = choice(["dev", "prod"]);
+      const result = parser.parse("devo");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorStr = result.error.map((t) => {
+          if (t.type === "text") return t.text;
+          if (t.type === "value") return t.value;
+          if (t.type === "optionName") return t.optionName;
+          if (t.type === "lineBreak") return "\n";
+          return "";
+        }).join("");
+        assert.ok(
+          !errorStr.includes("Did you mean"),
+          `Should not contain "Did you mean": ${errorStr}`,
+        );
+      }
+    });
+
+    it("should not append hint with suggest: never", () => {
+      const parser = choice(["dev", "prod"], { suggest: "never" });
+      const result = parser.parse("devo");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorStr = result.error.map((t) => {
+          if (t.type === "text") return t.text;
+          if (t.type === "value") return t.value;
+          if (t.type === "optionName") return t.optionName;
+          if (t.type === "lineBreak") return "\n";
+          return "";
+        }).join("");
+        assert.ok(
+          !errorStr.includes("Did you mean"),
+          `Should not contain "Did you mean": ${errorStr}`,
+        );
+      }
+    });
+
+    it("should suppress hint with suggest object when distance is too large", () => {
+      const parser = choice(["dev", "prod"], { suggest: { maxDistance: 1 } });
+      const result = parser.parse("devoxxx");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorStr = result.error.map((t) => {
+          if (t.type === "text") return t.text;
+          if (t.type === "value") return t.value;
+          if (t.type === "optionName") return t.optionName;
+          if (t.type === "lineBreak") return "\n";
+          return "";
+        }).join("");
+        assert.ok(
+          !errorStr.includes("Did you mean"),
+          `Should not contain "Did you mean" for distant input: ${errorStr}`,
+        );
+      }
+    });
+
+    it("should use custom hint list with function form", () => {
+      const parser = choice(["dev", "prod", "staging"], {
+        suggest: (_input, _choices) => ["customHint"],
+      });
+      const result = parser.parse("devo");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorStr = result.error.map((t) => {
+          if (t.type === "text") return t.text;
+          if (t.type === "value") return t.value;
+          if (t.type === "optionName") return t.optionName;
+          if (t.type === "lineBreak") return "\n";
+          return "";
+        }).join("");
+        assert.ok(
+          errorStr.includes("customHint"),
+          `Expected "customHint" in error: ${errorStr}`,
+        );
+      }
+    });
+
+    it("should suppress hint when function form returns undefined", () => {
+      const parser = choice(["dev", "prod"], {
+        suggest: () => undefined,
+      });
+      const result = parser.parse("devo");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const errorStr = result.error.map((t) => {
+          if (t.type === "text") return t.text;
+          if (t.type === "value") return t.value;
+          if (t.type === "optionName") return t.optionName;
+          if (t.type === "lineBreak") return "\n";
+          return "";
+        }).join("");
+        assert.ok(
+          !errorStr.includes("Did you mean"),
+          `Should not contain "Did you mean": ${errorStr}`,
+        );
+      }
+    });
+
+    it("should throw TypeError for invalid suggest value like true", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: true as never }),
+        { name: "TypeError", message: /Expected suggest to be/i },
+      );
+    });
+
+    it("should throw TypeError for suggest string typo like nearset", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: "nearset" as never }),
+        { name: "TypeError", message: /Expected suggest to be/i },
+      );
+    });
+
+    it("should throw TypeError for suggest: 0", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: 0 as never }),
+        { name: "TypeError", message: /Expected suggest to be/i },
+      );
+    });
+
+    it("should throw TypeError for negative maxDistance", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxDistance: -1 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxDistance.*non-negative integer/i,
+        },
+      );
+    });
+
+    it("should throw TypeError for fractional maxDistance", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxDistance: 1.5 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxDistance.*non-negative integer/i,
+        },
+      );
+    });
+
+    it("should throw TypeError for zero maxSuggestions", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxSuggestions: 0 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxSuggestions.*positive integer/i,
+        },
+      );
+    });
+
+    it("should throw TypeError for fractional maxSuggestions", () => {
+      assert.throws(
+        () => choice(["dev", "prod"], { suggest: { maxSuggestions: 1.5 } }),
+        {
+          name: "TypeError",
+          message: /suggest\.maxSuggestions.*positive integer/i,
+        },
+      );
+    });
+
+    it("should snapshot suggest object so later mutations are ignored", () => {
+      const suggestObj = { maxDistance: 3 };
+      const parser = choice(["dev", "prod"], { suggest: suggestObj });
+      (suggestObj as Record<string, unknown>).maxDistance = 0;
+      const result = parser.parse("devo");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const str = formatMessage(result.error);
+        assert.ok(
+          str.includes("Did you mean"),
+          `Hint should appear with original maxDistance: ${str}`,
+        );
+      }
+    });
+  });
+
   describe("number choices", () => {
     it("should parse valid number values from the choice list", () => {
       const parser = choice([8, 10, 12]);

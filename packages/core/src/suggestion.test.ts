@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  appendValueHint,
+  appendValueSuggestions,
   createErrorWithSuggestions,
   createSuggestionMessage,
   deduplicateSuggestions,
@@ -1039,5 +1041,107 @@ describe("property-based tests", () => {
       ),
       propertyParameters,
     );
+  });
+});
+
+describe("appendValueHint()", () => {
+  it("should return base message unchanged when no close candidate exists", () => {
+    const base = message`Expected one of dev or prod, but got xyz.`;
+    const result = appendValueHint(base, "xyz", ["dev", "prod"]);
+    assert.deepEqual(result, base);
+  });
+
+  it("should append Did you mean hint when input is close to a candidate", () => {
+    const base = message`Invalid environment.`;
+    const result = appendValueHint(base, "devo", ["dev", "prod"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(str.includes('"dev"'), `Expected suggested value in: ${str}`);
+  });
+
+  it("should respect custom maxDistance option", () => {
+    const base = message`Error.`;
+    const result = appendValueHint(base, "devoxxx", ["dev", "prod"], {
+      maxDistance: 1,
+    });
+    assert.deepEqual(result, base);
+  });
+
+  it("should respect custom maxSuggestions option", () => {
+    const base = message`Error.`;
+    const candidates = ["dev", "dew", "den"];
+    const result = appendValueHint(base, "devo", candidates, {
+      maxSuggestions: 1,
+    });
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    // Should only show one suggestion due to maxSuggestions: 1
+    const matches = str.match(/"[^"]+"/g) ?? [];
+    assert.equal(matches.length, 1);
+  });
+
+  it("should return base message for empty input", () => {
+    const base = message`Error.`;
+    const result = appendValueHint(base, "", ["dev", "prod"]);
+    assert.deepEqual(result, base);
+  });
+
+  it("should return base message for empty candidates", () => {
+    const base = message`Error.`;
+    const result = appendValueHint(base, "devo", []);
+    assert.deepEqual(result, base);
+  });
+
+  it("should return only the hint when base is empty and input is close", () => {
+    const result = appendValueHint([], "devo", ["dev", "prod"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(!str.startsWith("\n"), `Should not start with newline: ${str}`);
+  });
+
+  it("should safely format candidates that contain backticks", () => {
+    const result = appendValueHint([], "foo`bar", ["foo`bar"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(
+      !str.includes("``"),
+      `Should not produce broken backtick pair in: ${str}`,
+    );
+  });
+});
+
+describe("appendValueSuggestions()", () => {
+  it("should return base unchanged when suggestions is empty", () => {
+    const base = message`Error.`;
+    assert.deepEqual(appendValueSuggestions(base, []), base);
+  });
+
+  it("should format a single suggestion as Did you mean X?", () => {
+    const base = message`Error.`;
+    const result = appendValueSuggestions(base, ["dev"]);
+    const str = formatMessage(result);
+    assert.ok(str.includes("Did you mean"), `Expected hint in: ${str}`);
+    assert.ok(str.includes('"dev"'), `Expected quoted value in: ${str}`);
+  });
+
+  it("should list multiple suggestions on separate lines", () => {
+    const base = message`Error.`;
+    const result = appendValueSuggestions(base, ["dev", "prod"]);
+    const str = formatMessage(result);
+    assert.ok(
+      str.includes("Did you mean one of these?"),
+      `Expected header in: ${str}`,
+    );
+    const lines = str.split("\n");
+    const devLine = lines.find((l) => l.includes('"dev"'));
+    const prodLine = lines.find((l) => l.includes('"prod"'));
+    assert.ok(devLine != null, `Expected "dev" on its own line in: ${str}`);
+    assert.ok(prodLine != null, `Expected "prod" on its own line in: ${str}`);
+  });
+
+  it("should not prepend newlines when base is empty", () => {
+    const result = appendValueSuggestions([], ["dev"]);
+    const str = formatMessage(result);
+    assert.ok(!str.startsWith("\n"), `Should not start with newline: ${str}`);
   });
 });

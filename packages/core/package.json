@@ -179,6 +179,14 @@
       "import": "./dist/program.js",
       "require": "./dist/program.cjs"
     },
+    "./suggestion": {
+      "types": {
+        "import": "./dist/suggestion.d.ts",
+        "require": "./dist/suggestion.d.cts"
+      },
+      "import": "./dist/suggestion.js",
+      "require": "./dist/suggestion.cjs"
+    },
     "./usage": {
       "types": {
         "import": "./dist/usage.d.ts",

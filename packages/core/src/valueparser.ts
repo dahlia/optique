@@ -11,7 +11,12 @@ import {
 import { isDerivedValueParser } from "./internal/dependency.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
 import type { Mode, ModeIterable, ModeValue, Suggestion } from "./parser.ts";
-import { deduplicateSuggestions } from "./suggestion.ts";
+import {
+  appendValueHint,
+  appendValueSuggestions,
+  deduplicateSuggestions,
+  type FindSimilarOptions,
+} from "./suggestion.ts";
 
 export {
   ensureNonEmptyString,
@@ -308,6 +313,33 @@ export interface ChoiceOptionsString extends ChoiceOptionsBase {
    * @default `false`
    */
   readonly caseInsensitive?: boolean;
+
+  /**
+   * Controls whether the error message for an invalid value includes a
+   * "Did you mean …?" hint based on Levenshtein distance.
+   *
+   * - `"nearest"`: append a hint with the closest valid choice(s) using
+   *   default distance thresholds.  Recommended for small-to-medium
+   *   enumeration sets.
+   * - `{ maxDistance?, maxSuggestions? }`: same as `"nearest"` but with
+   *   custom thresholds.
+   * - `"never"`: disable hints; emit the plain "not one of" error message
+   *   unchanged.
+   * - A function `(input, choices) => readonly string[] | undefined`:
+   *   custom suggestion logic.  Return `undefined` to suppress the hint,
+   *   or a non-empty array of strings to display as suggestions.
+   *
+   * @default `"never"` (backward-compatible: no hint is appended)
+   * @since 1.2.0
+   */
+  readonly suggest?:
+    | "nearest"
+    | "never"
+    | Readonly<Pick<FindSimilarOptions, "maxDistance" | "maxSuggestions">>
+    | ((
+      input: string,
+      choices: readonly string[],
+    ) => readonly string[] | undefined);
 
   /**
    * Custom error messages for choice parsing failures.
@@ -644,6 +676,60 @@ export function choice<const T extends string | number>(
     }
   }
   const stringInvalidChoice = stringOptions.errors?.invalidChoice;
+  const stringSuggest = stringOptions.suggest;
+  if (stringSuggest !== undefined) {
+    const isValidString = stringSuggest === "nearest" ||
+      stringSuggest === "never";
+    const isArray = Array.isArray(stringSuggest);
+    const isValidObject = typeof stringSuggest === "object" &&
+      stringSuggest !== null && !isArray;
+    const isValidFunction = typeof stringSuggest === "function";
+    if (!isValidString && !isValidObject && !isValidFunction) {
+      const actualType = isArray
+        ? "array"
+        : stringSuggest === null
+        ? "null"
+        : typeof stringSuggest;
+      throw new TypeError(
+        `Expected suggest to be "nearest", "never", an object, or a ` +
+          `function, but got ${actualType}: ${String(stringSuggest)}.`,
+      );
+    }
+    if (isValidObject) {
+      const obj = stringSuggest as Readonly<
+        Pick<FindSimilarOptions, "maxDistance" | "maxSuggestions">
+      >;
+      if (
+        obj.maxDistance !== undefined &&
+        (typeof obj.maxDistance !== "number" ||
+          !Number.isInteger(obj.maxDistance) ||
+          obj.maxDistance < 0)
+      ) {
+        throw new TypeError(
+          `Expected suggest.maxDistance to be a non-negative integer, but ` +
+            `got ${typeof obj.maxDistance}: ${String(obj.maxDistance)}.`,
+        );
+      }
+      if (
+        obj.maxSuggestions !== undefined &&
+        (typeof obj.maxSuggestions !== "number" ||
+          !Number.isInteger(obj.maxSuggestions) ||
+          obj.maxSuggestions < 1)
+      ) {
+        throw new TypeError(
+          `Expected suggest.maxSuggestions to be a positive integer, but ` +
+            `got ${typeof obj.maxSuggestions}: ${String(obj.maxSuggestions)}.`,
+        );
+      }
+    }
+  }
+  const snapshotSuggest =
+    typeof stringSuggest === "object" && stringSuggest !== null
+      ? {
+        maxDistance: stringSuggest.maxDistance,
+        maxSuggestions: stringSuggest.maxSuggestions,
+      }
+      : stringSuggest;
   return {
     mode: "sync",
     metavar,
@@ -659,6 +745,7 @@ export function choice<const T extends string | number>(
             input,
             stringChoices,
             stringInvalidChoice,
+            snapshotSuggest,
           ),
         };
       }
@@ -803,13 +890,28 @@ function formatStringChoiceError(
     | Message
     | ((input: string, choices: readonly string[]) => Message)
     | undefined,
+  suggest: ChoiceOptionsString["suggest"],
 ): Message {
-  if (invalidChoice) {
-    return typeof invalidChoice === "function"
+  const base = invalidChoice
+    ? (typeof invalidChoice === "function"
       ? invalidChoice(input, choices)
-      : invalidChoice;
+      : invalidChoice)
+    : formatDefaultChoiceError(input, choices);
+
+  if (suggest == null || suggest === "never") return base;
+
+  if (suggest === "nearest") {
+    return appendValueHint(base, input, choices);
   }
-  return formatDefaultChoiceError(input, choices);
+
+  if (typeof suggest === "function") {
+    const hints = suggest(input, choices);
+    if (!Array.isArray(hints)) return base;
+    return appendValueSuggestions(base, hints);
+  }
+
+  // Object form: { maxDistance?, maxSuggestions? }
+  return appendValueHint(base, input, choices, suggest);
 }
 
 /**
