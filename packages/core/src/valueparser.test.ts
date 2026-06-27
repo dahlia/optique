@@ -1919,6 +1919,21 @@ describe("choice", () => {
         },
       );
     });
+
+    it("should snapshot suggest object so later mutations are ignored", () => {
+      const suggestObj = { maxDistance: 3 };
+      const parser = choice(["dev", "prod"], { suggest: suggestObj });
+      (suggestObj as Record<string, unknown>).maxDistance = 0;
+      const result = parser.parse("devo");
+      assert.ok(!result.success);
+      if (!result.success) {
+        const str = formatMessage(result.error);
+        assert.ok(
+          str.includes("Did you mean"),
+          `Hint should appear with original maxDistance: ${str}`,
+        );
+      }
+    });
   });
 
   describe("number choices", () => {

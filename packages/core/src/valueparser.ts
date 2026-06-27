@@ -723,6 +723,13 @@ export function choice<const T extends string | number>(
       }
     }
   }
+  const snapshotSuggest =
+    typeof stringSuggest === "object" && stringSuggest !== null
+      ? {
+        maxDistance: stringSuggest.maxDistance,
+        maxSuggestions: stringSuggest.maxSuggestions,
+      }
+      : stringSuggest;
   return {
     mode: "sync",
     metavar,
@@ -738,7 +745,7 @@ export function choice<const T extends string | number>(
             input,
             stringChoices,
             stringInvalidChoice,
-            stringSuggest,
+            snapshotSuggest,
           ),
         };
       }
