@@ -37,6 +37,10 @@ import {
   type CommandMetadata,
   type CommandPath,
   isCommand,
+  type ProgramHookContext,
+  type ProgramHooks,
+  type ProgramInvocation,
+  validateHooks,
 } from "./command.ts";
 
 export { defineCommand, isCommand } from "./command.ts";
@@ -47,33 +51,11 @@ export type {
   CommandDefinition,
   CommandMetadata,
   CommandPath,
+  ProgramHookContext,
+  ProgramHooks,
+  ProgramInvocation,
   StaticCommand,
 } from "./command.ts";
-
-/**
- * The parsed command selected by a discovered command parser.
- *
- * Most applications receive this only indirectly through {@link runProgram},
- * which calls the handler automatically.
- *
- * @since 1.1.0
- */
-export interface ProgramInvocation {
-  /**
-   * The command definition that matched the input.
-   */
-  readonly command: AnyCommand;
-
-  /**
-   * Parsed value produced by the command parser.
-   */
-  readonly value: unknown;
-
-  /**
-   * Handler to call with {@link ProgramInvocation.value}.
-   */
-  readonly handler: (value: unknown) => void | Promise<void>;
-}
 
 /**
  * A command paired with its command path.
@@ -269,6 +251,19 @@ interface RunProgramBaseOptions extends
    * @default `"both"`
    */
   readonly completion?: RunOptions["completion"] | false;
+
+  /**
+   * Lifecycle hooks invoked around each command handler.
+   *
+   * Use these for cross-cutting concerns such as opening a log scope, starting
+   * a tracing span, or reporting handler failures, without duplicating the
+   * logic in every command.  Hooks are opt-in: omitting this field keeps the
+   * exact behavior of a plain `runProgram()` call.  Command-level hooks defined
+   * on {@link CommandDefinition.hooks} nest inside these.
+   *
+   * @since 1.2.0
+   */
+  readonly hooks?: ProgramHooks;
 }
 
 /**
@@ -533,10 +528,12 @@ export function createProgramParser(
  * @param options Program options.
  * @returns A promise that resolves after the selected command handler
  *          completes.
- * @throws {TypeError} If discovery or command loading fails.
+ * @throws {TypeError} If discovery or command loading fails, or `hooks` is
+ *         malformed.
  * @since 1.1.0
  */
 export async function runProgram(options: RunProgramOptions): Promise<void> {
+  if (options.hooks != null) validateHooks(options.hooks, "Program");
   let commands: readonly Pick<DiscoveredCommand, "path" | "command">[];
   if (isStaticRunProgramOptions(options)) {
     commands = staticCommandsToEntries(options.commands);
@@ -549,7 +546,83 @@ export async function runProgram(options: RunProgramOptions): Promise<void> {
   }
   const parser = createProgramParser(commands, options.metadata);
   const invocation = await runAsync(parser, buildRunOptions(options));
-  await invocation.handler(invocation.value);
+  await dispatchInvocation(invocation, options.hooks);
+}
+
+/**
+ * Runs a command handler wrapped in the program-level and command-level
+ * lifecycle hooks.
+ *
+ * The hooks nest: the program-level `beforeEach` runs first, then the command's
+ * `beforeEach`, then the handler; `afterEach` and `onError` unwind in reverse,
+ * with the command-level hook running before the program-level one.
+ *
+ * @param invocation The selected command invocation.
+ * @param programHooks Program-level hooks, if any.
+ * @returns A promise that resolves after the handler and matching hooks
+ *          complete.
+ * @throws The original error thrown by `beforeEach`, the handler, or
+ *         `afterEach`, re-thrown after the `onError` hooks run.
+ */
+async function dispatchInvocation(
+  invocation: ProgramInvocation,
+  programHooks: ProgramHooks | undefined,
+): Promise<void> {
+  const commandHooks = invocation.command.hooks;
+  await runHookScope(
+    programHooks,
+    invocation,
+    (programContext) =>
+      runHookScope(commandHooks, invocation, (commandContext) => {
+        // Pass the hook context only when a beforeEach actually produced one,
+        // using the most specific scope.  When no beforeEach ran, call the
+        // handler with just the value so handlers see the exact single-argument
+        // call shape of a plain runProgram() without hooks.
+        if (commandHooks?.beforeEach != null) {
+          return invocation.handler(invocation.value, commandContext);
+        }
+        if (programHooks?.beforeEach != null) {
+          return invocation.handler(invocation.value, programContext);
+        }
+        return invocation.handler(invocation.value);
+      }),
+  );
+}
+
+/**
+ * Runs an inner step wrapped in a single set of lifecycle hooks.
+ *
+ * @param hooks The hooks for this scope, if any.
+ * @param invocation The selected command invocation passed to `beforeEach`.
+ * @param inner The step to wrap; receives the context from `beforeEach`.
+ * @returns The value returned by `inner`.
+ * @throws The original error thrown by `beforeEach`, `inner`, or `afterEach`,
+ *         re-thrown after `onError` runs.  An error thrown by `onError` itself
+ *         is suppressed so it cannot mask the original failure.
+ */
+async function runHookScope(
+  hooks: ProgramHooks | undefined,
+  invocation: ProgramInvocation,
+  inner: (context: ProgramHookContext) => unknown | Promise<unknown>,
+): Promise<unknown> {
+  let context: ProgramHookContext = {};
+  try {
+    if (hooks?.beforeEach != null) context = await hooks.beforeEach(invocation);
+    const result = await inner(context);
+    if (hooks?.afterEach != null) await hooks.afterEach(context, result);
+    return result;
+  } catch (error) {
+    if (hooks?.onError != null) {
+      try {
+        await hooks.onError(context, error);
+      } catch {
+        // An onError hook that itself throws must not replace the original
+        // failure: runProgram() always re-throws the original error so the
+        // process exit code stays tied to the real cause.
+      }
+    }
+    throw error;
+  }
 }
 
 /**
@@ -577,6 +650,7 @@ export interface ProgramHelpMetadata {
 interface CommandTreeNode {
   readonly children: Map<string, CommandTreeNode>;
   command?: AnyCommand;
+  path?: CommandPath;
 }
 
 type MutableSourceContext = {
@@ -929,6 +1003,7 @@ function buildCommandTree(
       current = child;
     }
     current.command = entry.command;
+    current.path = entry.path;
   }
   return root;
 }
@@ -939,10 +1014,16 @@ function buildNodeParser(
 ): Parser<Mode, ProgramInvocation, unknown> {
   const childParser = buildChildrenParser(node, inheritedHidden);
   if (childParser != null && node.command != null) {
-    return createExecutableNodeParser(childParser, node.command);
+    return createExecutableNodeParser(
+      childParser,
+      node.command,
+      node.path ?? [],
+    );
   }
   if (childParser != null) return childParser;
-  if (node.command != null) return createLeafParser(node.command);
+  if (node.command != null) {
+    return createLeafParser(node.command, node.path ?? []);
+  }
   throw new TypeError("Command tree node must contain a command.");
 }
 
@@ -957,8 +1038,9 @@ type ExecutableNodeParserState = ExecutableNodeState | undefined;
 function createExecutableNodeParser(
   childParser: Parser<Mode, ProgramInvocation, unknown>,
   commandDefinition: AnyCommand,
+  path: CommandPath,
 ): Parser<Mode, ProgramInvocation, ExecutableNodeParserState> {
-  const leafParser = createLeafParser(commandDefinition, true);
+  const leafParser = createLeafParser(commandDefinition, path, true);
   const branchParsers = [childParser, leafParser] as const;
   const parser = longestMatch(
     childParser,
@@ -1566,13 +1648,16 @@ function commandMetadataWithInheritedHidden(
 
 function createLeafParser(
   commandDefinition: AnyCommand,
+  path: CommandPath,
   includeMetadata = false,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const parser = map(commandDefinition.parser, (value): ProgramInvocation => ({
     command: commandDefinition,
+    path,
     value,
     handler: commandDefinition.handler as (
       value: unknown,
+      context?: ProgramHookContext,
     ) => void | Promise<void>,
   })) as Parser<Mode, ProgramInvocation, unknown>;
   if (!includeMetadata) return parser;
@@ -1662,6 +1747,7 @@ function buildRunOptions(options: RunProgramOptions): RunOptions {
     extensions: _extensions,
     entryFileName: _entryFileName,
     metadata: _metadata,
+    hooks: _hooks,
     help,
     version,
     completion,

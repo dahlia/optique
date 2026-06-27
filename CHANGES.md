@@ -61,6 +61,19 @@ To be released.
 
 ### @optique/discover
 
+ -  Added lifecycle hooks to `runProgram()` for cross-cutting around-handler
+    behavior such as log scopes, tracing spans, lazy resource setup, and
+    failure reporting.  The new `hooks` option takes `beforeEach`, `afterEach`,
+    and `onError` callbacks; `beforeEach` returns a `ProgramHookContext` whose
+    `resource` is threaded forward to the handler's new second argument and to
+    `afterEach`/`onError`.  Hooks may be synchronous or asynchronous, and
+    `onError` observes failures without swallowing them, so `runProgram()`
+    re-throws the original error and process exit codes are unchanged.
+    `defineCommand()` gains a matching per-command `hooks` field that nests
+    inside the program-level hooks (`program.beforeEach` →
+    `command.beforeEach` → handler, unwinding in reverse).  The new
+    `ProgramHooks` and `ProgramHookContext` types are exported.  [[#851]]
+
  -  Added `commandsFromModules()` for bundler-friendly command discovery from
     static module maps such as eager `import.meta.glob()` results.  The helper
     derives command paths with the same extension, entry-file, duplicate-path,
@@ -86,6 +99,7 @@ To be released.
 [#839]: https://github.com/dahlia/optique/pull/839
 [#840]: https://github.com/dahlia/optique/pull/840
 [#841]: https://github.com/dahlia/optique/pull/841
+[#851]: https://github.com/dahlia/optique/pull/851
 
 ### @optique/prompt
 
