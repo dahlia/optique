@@ -144,6 +144,101 @@ if (result.action === "add") {
 This pattern scales well because adding new subcommands only requires extending
 the `or()` combinator with new command parsers.
 
+### Shared options across subcommands
+
+Real-world CLIs almost always have a handful of flags that apply to every
+subcommand: `--verbose`, `--config`, `--dry-run`, and so on. Duplicating them
+into each `or()` branch is error-prone and makes the help output harder to
+maintain. The canonical solution is to lift the shared options into their own
+`object()` and compose it with the subcommand dispatcher using `merge()`:
+
+~~~~ typescript twoslash
+import { merge, object, or } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { argument, command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+// ---cut-before---
+const globals = object({
+  verbose: option("-v", "--verbose"),
+  config: optional(option("-c", "--config", string({ metavar: "FILE" }))),
+});
+
+const buildCommand = command(
+  "build",
+  object({
+    action: constant("build"),
+    target: argument(string({ metavar: "TARGET" })),
+  }),
+);
+
+const deployCommand = command(
+  "deploy",
+  object({
+    action: constant("deploy"),
+    environment: argument(string({ metavar: "ENV" })),
+    force: option("--force"),
+  }),
+);
+
+const parser = merge(globals, or(buildCommand, deployCommand));
+
+const result = run(parser);
+//    ^?
+
+
+
+
+// verbose and config are always present; action, target, environment,
+// and force depend on which subcommand was invoked.
+~~~~
+
+The result type *flattens* the shared fields alongside the command-specific
+ones. `result.verbose` and `result.config` are always present regardless of
+which subcommand was invoked. Switching on `result.action` narrows the
+branch-specific fields:
+
+~~~~ typescript twoslash
+const result = 0 as unknown as {
+    readonly verbose: boolean;
+    readonly config: string | undefined;
+    readonly action: "build";
+    readonly target: string;
+} | {
+    readonly verbose: boolean;
+    readonly config: string | undefined;
+    readonly action: "deploy";
+    readonly environment: string;
+    readonly force: boolean;
+};
+// ---cut-before---
+if (result.action === "build") {
+  // TypeScript knows: result.target is available
+  console.log(`Building ${result.target}${result.verbose ? " (verbose)" : ""}.`);
+} else {
+  // TypeScript knows: result.environment and result.force are available
+  console.log(`Deploying to ${result.environment}${result.force ? " (forced)" : ""}.`);
+}
+~~~~
+
+A few things to note about this pattern:
+
+ -  *`group()` for help text*: Wrap `globals` with
+    `group("Global options", globals)` to place the shared options under a
+    labeled section in the help output. See the
+    [grouped mutually exclusive options](#grouped-mutually-exclusive-options)
+    recipe for an example of `group()` in action.
+
+ -  *Config-file defaults*: When `--config` should supply defaults from a
+    file via `@optique/config`, the same `merge(globals, or(...))` shape
+    plugs directly into the `contexts:` option of `runAsync()`. See the
+    [config file integration](#config-file-integration) recipe.
+
+ -  *When this pattern is not the right fit*: If the shared options need
+    different defaults per command, this idiom does not help. Reach for
+    `@optique/discover` instead; it lets each command module declare its
+    own defaults while sharing a common entry point.
+
 ### Positional prefixes before subcommands
 
 Some tools accept a small positional prefix before the subcommand itself. For

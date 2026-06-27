@@ -462,6 +462,11 @@ const gitLike = or(
 // myapp push --remote upstream --force
 ~~~~
 
+When a CLI needs flags that apply to every subcommand, combine `or()` with
+[`merge()`](#merge-parser) to lift those options out of each branch. See the
+[*Shared options across subcommands*](../cookbook.md#shared-options-across-subcommands)
+recipe for a worked example.
+
 ### Alternative parsing strategies
 
 You can also use `or()` for different parsing approaches of the same logical
@@ -679,6 +684,11 @@ While originally designed for `object()` parsers, it now accepts any parser
 that produces object-like values, including `withDefault()`, `map()`, and other
 transformative parsers. This is essential for building maintainable applications
 where related options can be shared across different commands or modes.
+
+A common composition is `merge(globals, or(...))`: define shared options as a
+standalone `object()` and merge them alongside the subcommand dispatcher. See
+[*Shared options across subcommands*](../cookbook.md#shared-options-across-subcommands)
+in the cookbook for a worked example.
 
 > [!IMPORTANT]
 > TypeScript overload inference for `merge()` supports up to 15 parser

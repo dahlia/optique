@@ -27,6 +27,7 @@
     ".agents/",
     ".claude/",
     ".github/",
+    ".issues/",
     "docs"
   ],
   "fmt": {
