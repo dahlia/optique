@@ -9,6 +9,7 @@ import {
   groupIconVitePlugin,
 } from "vitepress-plugin-group-icons";
 import llmstxt from "vitepress-plugin-llms";
+import { withMermaid } from "vitepress-plugin-mermaid";
 
 let extraNav: { text: string; link: string }[] = [];
 if (process.env.EXTRA_NAV_TEXT && process.env.EXTRA_NAV_LINK) {
@@ -120,7 +121,7 @@ const TOP_NAV = [
 ];
 
 // https://vitepress.dev/reference/site-config
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: "Optique",
   description: "Type-safe combinatorial CLI parser for TypeScript",
   themeConfig: {
@@ -266,4 +267,4 @@ export default defineConfig({
       ],
     ];
   },
-});
+}));
