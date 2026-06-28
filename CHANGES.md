@@ -39,11 +39,19 @@ To be released.
     can reuse the same hint logic without re-implementing distance
     calculation.  [[#849]]
 
+ -  Added an official Agent Skill under *skills/optique/* in *@optique/core*,
+    declared through the package's `agents.skills` metadata.  The skill gives
+    AI coding agents concise guidance for using Optique correctly, links to
+    maintained reference pages for API details, and keeps its inline TypeScript
+    examples covered by a snippet type-checking test.  [[#850], [#852]]
+
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
 [#846]: https://github.com/dahlia/optique/issues/846
 [#848]: https://github.com/dahlia/optique/pull/848
 [#849]: https://github.com/dahlia/optique/pull/849
+[#850]: https://github.com/dahlia/optique/issues/850
+[#852]: https://github.com/dahlia/optique/pull/852
 
 ### @optique/derived-defaults
 

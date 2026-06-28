@@ -200,6 +200,26 @@ Reference anchors come from the concept-page heading slug: the `string()`
 parser heading becomes `#string-parser`, and `gitBranch()` becomes
 `#gitbranch`.  Verify anchors against the built docs.
 
+### Keeping agent guidance in sync
+
+The official Optique Agent Skill is maintained at
+*packages/core/skills/optique/SKILL.md*.  Update it alongside documentation
+when a change affects how agents should use the library:
+
+ -  *New feature or parser*: mention it when the skill's concise rules,
+    examples, reference links, or integration package table would otherwise
+    become incomplete.
+ -  *API contract change*: update affected examples and guidance so agents do
+    not keep producing stale imports, option shapes, return types, or usage
+    patterns.
+ -  *New common pitfall*: add a short warning to the skill only when it belongs
+    in the quick checklist; otherwise update *docs/pitfalls.md* and keep the
+    skill pointing to that maintained guide.
+
+When editing the skill, keep it concise and run the colocated
+*packages/core/skills/optique/SKILL.test.ts* checks so its TypeScript examples
+and package metadata stay valid.
+
 
 Development practices
 ---------------------

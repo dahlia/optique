@@ -31,9 +31,14 @@
     "dist/",
     "tsdown.config.ts"
   ],
+  "publish": {
+    "exclude": [
+      "skills/optique/SKILL.test.ts"
+    ]
+  },
   "tasks": {
     "build": "pnpm build",
-    "test": "deno test",
+    "test": "deno test --allow-read --allow-env",
     "test:node": {
       "dependencies": [
         "build"
