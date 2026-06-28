@@ -327,7 +327,7 @@ describe("Optique agent skill", () => {
       lineCount <= 300,
       `Expected SKILL.md to be concise, got ${lineCount} lines.`,
     );
-    assert.match(skill, /^---\nname: optique\n/);
+    assert.match(skill, /^---\r?\nname: optique\r?\n/);
     assert.match(skill, /https:\/\/optique\.dev\/llms\.txt/);
     assert.match(skill, /https:\/\/optique\.dev\/pitfalls\.md/);
     assert.match(skill, /https:\/\/optique\.dev\/concepts\/valueparsers\.md/);
