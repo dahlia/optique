@@ -19,9 +19,13 @@ const compilerOptions: ts.CompilerOptions = {
   target: ts.ScriptTarget.ES2022,
 };
 
-type PackageManifest = {
+type DenoManifest = {
   readonly name?: string;
-  readonly exports?: Record<string, string>;
+  readonly exports?: string | Record<string, string>;
+};
+
+type PackageManifest = {
+  readonly exports?: string | Record<string, unknown>;
 };
 
 const nodeStubs = `
@@ -155,27 +159,53 @@ async function readWorkspaceExports(): Promise<ReadonlyMap<string, string>> {
     if (!entry.isDirectory()) continue;
 
     const packageDir = join(packagesDir, entry.name);
-    let manifest: PackageManifest;
+    let denoManifest: DenoManifest;
     try {
-      manifest = JSON.parse(
+      denoManifest = JSON.parse(
         await readFile(join(packageDir, "deno.json"), "utf-8"),
-      ) as PackageManifest;
+      ) as DenoManifest;
     } catch (error) {
       if (isFileNotFoundError(error)) continue;
       throw error;
     }
 
-    if (manifest.name == null || manifest.exports == null) continue;
+    if (denoManifest.name == null || denoManifest.exports == null) continue;
 
-    for (const [subpath, target] of Object.entries(manifest.exports)) {
+    const packageManifest = JSON.parse(
+      await readFile(join(packageDir, "package.json"), "utf-8"),
+    ) as PackageManifest;
+    const denoExports = normalizeDenoExports(denoManifest.exports);
+
+    for (const [subpath, target] of Object.entries(denoExports)) {
+      if (!hasPackageExport(packageManifest.exports, subpath)) {
+        throw new Error(
+          `${denoManifest.name} exports ${subpath} from deno.json but not package.json.`,
+        );
+      }
+
       const specifier = subpath === "."
-        ? manifest.name
-        : `${manifest.name}${subpath.slice(1)}`;
+        ? denoManifest.name
+        : `${denoManifest.name}${subpath.slice(1)}`;
       result.set(specifier, join(packageDir, target));
     }
   }
 
   return result;
+}
+
+function normalizeDenoExports(
+  exports: string | Record<string, string>,
+): Record<string, string> {
+  return typeof exports === "string" ? { ".": exports } : exports;
+}
+
+function hasPackageExport(
+  exports: string | Record<string, unknown> | undefined,
+  subpath: string,
+): boolean {
+  if (exports == null) return false;
+  if (typeof exports === "string") return subpath === ".";
+  return Object.hasOwn(exports, subpath);
 }
 
 function isFileNotFoundError(error: unknown): boolean {
@@ -297,7 +327,7 @@ describe("Optique agent skill", () => {
       lineCount <= 300,
       `Expected SKILL.md to be concise, got ${lineCount} lines.`,
     );
-    assert.match(skill, /^---\nname: optique\n/m);
+    assert.match(skill, /^---\nname: optique\n/);
     assert.match(skill, /https:\/\/optique\.dev\/llms\.txt/);
     assert.match(skill, /https:\/\/optique\.dev\/pitfalls\.md/);
     assert.match(skill, /https:\/\/optique\.dev\/concepts\/valueparsers\.md/);
