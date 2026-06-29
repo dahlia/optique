@@ -53,6 +53,8 @@ Core rules
     discriminated union.
  -  Enable completion through `run(parser, { completion: "both" })` for CLI
     apps. Do not hand-write completion scripts from parser metadata.
+ -  Use `showUsage: false` in runner options when full help should show the
+    brief and command or option sections without the `Usage:` synopsis.
 
 
 Canonical app shape

@@ -130,10 +130,16 @@ await runProgram({
     brief: message`Administrative command-line tools.`,
   },
   help: { option: true },
+  showUsage: false,
   version: false,
   completion: false,
 });
 ~~~~
+
+`showUsage: false` is useful for larger command trees because root help can
+act as a compact command menu: the program brief and command list remain, but
+the expanded `Usage:` synopsis is omitted.  The same setting applies when
+`aboveError: "help"` renders a full help page above a parse error.
 
 
 Running with static module maps

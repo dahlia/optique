@@ -1759,6 +1759,44 @@ describe("runProgram()", () => {
     assert.match(stdout, /user remove\s+Remove a user\./);
   });
 
+  it("omits usage from statically registered root help when showUsage is false", async () => {
+    const addCommand = defineCommand({
+      path: ["user", "add"],
+      parser: object({}),
+      metadata: { brief: message`Add a user.` },
+      handler() {},
+    });
+    const removeCommand = defineCommand({
+      path: ["user", "remove"],
+      parser: object({}),
+      metadata: { brief: message`Remove a user.` },
+      handler() {},
+    });
+    let stdout = "";
+
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [addCommand, removeCommand],
+          metadata: { name: "tool", version: "1.0.0" },
+          args: ["--help"],
+          showUsage: false,
+          stdout(text) {
+            stdout += `${text}\n`;
+          },
+          stderr() {},
+          onExit(exitCode): never {
+            throw new ExitSignal(exitCode);
+          },
+        }),
+      ExitSignal,
+    );
+
+    assert.doesNotMatch(stdout, /Usage:/);
+    assert.match(stdout, /user add\s+Add a user\./);
+    assert.match(stdout, /user remove\s+Remove a user\./);
+  });
+
   it("passes static command values to phase-two source contexts", async () => {
     const phase2Values: unknown[] = [];
     const context: SourceContext = {
