@@ -295,10 +295,11 @@ Beyond the three scenarios
     shell completion needs a third-party package and there is no man-page
     support. Optique drives `--help`, completion for five shells, and man
     pages (via *@optique/man*) from the one parser definition.
- -  *Schema validation.* Optique can use Zod or Valibot as a value parser, and
-    any Standard Schema validator to validate config files; Commander.js leaves
-    value validation to you (the Commander.js + Zod pairing is a community
-    pattern, not built in).
+ -  *Schema validation.* Optique can use any Standard Schema-compatible
+    validator as a value parser, keeps richer Zod and Valibot adapters, and
+    validates config files with any Standard Schema validator; Commander.js
+    leaves value validation to you (the Commander.js + Zod pairing is a
+    community pattern, not built in).
  -  *Maturity.* This is Commander.js's strongest card: it has been around
     since the early 2010s, is one of the most-downloaded packages on npm, and
     has examples for nearly every situation. Optique is far younger.

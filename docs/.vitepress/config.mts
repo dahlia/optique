@@ -78,6 +78,7 @@ const INTEGRATIONS = {
     { text: "Prompt adapters", link: "/integrations/prompt" },
     { text: "Git", link: "/integrations/git" },
     { text: "LogTape", link: "/integrations/logtape" },
+    { text: "Standard Schema", link: "/integrations/standard-schema" },
     { text: "Temporal", link: "/integrations/temporal" },
     { text: "Valibot", link: "/integrations/valibot" },
     { text: "Zod", link: "/integrations/zod" },
@@ -108,6 +109,10 @@ const REFERENCES = {
     { text: "@optique/prompt", link: "https://jsr.io/@optique/prompt/doc" },
     { text: "@optique/git", link: "https://jsr.io/@optique/git/doc" },
     { text: "@optique/logtape", link: "https://jsr.io/@optique/logtape/doc" },
+    {
+      text: "@optique/standard-schema",
+      link: "https://jsr.io/@optique/standard-schema/doc",
+    },
     { text: "@optique/temporal", link: "https://jsr.io/@optique/temporal/doc" },
     { text: "@optique/valibot", link: "https://jsr.io/@optique/valibot/doc" },
     { text: "@optique/zod", link: "https://jsr.io/@optique/zod/doc" },

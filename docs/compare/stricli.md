@@ -259,9 +259,10 @@ Beyond the three scenarios
     (*@stricli/auto-complete*) targets Bash today; Optique's built-in
     completion covers five shells with async, context-aware suggestions, and
     Optique also generates man pages.
- -  *Schema validation.* Optique integrates Zod and Valibot as value parsers
-    (and any Standard Schema validator for config); Stricli relies on
-    TypeScript's types and leaves runtime validation to you.
+ -  *Schema validation.* Optique uses Standard Schema-compatible validators as
+    value parsers, keeps richer Zod and Valibot adapters, and validates config
+    files with any Standard Schema validator; Stricli relies on TypeScript's
+    types and leaves runtime validation to you.
  -  *Philosophy.* Stricli's no-magic, dependency-injection model is a
     deliberate strength for teams that want value resolution kept explicit
     and predictable.

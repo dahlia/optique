@@ -102,6 +102,9 @@ importers:
       '@optique/run':
         specifier: 'workspace:'
         version: link:../packages/run
+      '@optique/standard-schema':
+        specifier: 'workspace:'
+        version: link:../packages/standard-schema
       '@optique/temporal':
         specifier: 'workspace:'
         version: link:../packages/temporal
@@ -114,6 +117,9 @@ importers:
       '@shikijs/vitepress-twoslash':
         specifier: ^3.20.0
         version: 3.20.0(typescript@5.8.3)
+      '@standard-schema/spec':
+        specifier: 'catalog:'
+        version: 1.1.0
       '@types/node':
         specifier: ^20.19.9
         version: 20.19.41
@@ -465,6 +471,25 @@ importers:
       fast-check:
         specifier: 'catalog:'
         version: 4.7.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  packages/standard-schema:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../core
+    devDependencies:
+      '@standard-schema/spec':
+        specifier: 'catalog:'
+        version: 1.1.0
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
       tsdown:
         specifier: 'catalog:'
         version: 0.13.0(typescript@5.8.3)

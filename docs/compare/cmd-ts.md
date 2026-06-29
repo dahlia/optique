@@ -276,9 +276,10 @@ Beyond the three scenarios
  -  *Completion and man pages.* cmd-ts has neither; Optique generates
     completion for five shells (with async suggestions) and man pages.
  -  *Validation abstraction.* Both are type-first but validate differently:
-    cmd-ts centers on its own `Type` abstraction, while Optique uses value
-    parsers (Zod and Valibot) plus any Standard Schema validator for config
-    files.
+    cmd-ts centers on its own `Type` abstraction, while Optique uses Standard
+    Schema-compatible validators as value parsers, keeps richer Zod and
+    Valibot adapters, and validates config files with any Standard Schema
+    validator.
  -  *Maturity.* Both are niche, type-first libraries with smaller communities
     than the mainstream builders.
 

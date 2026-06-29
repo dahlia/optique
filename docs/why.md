@@ -484,6 +484,8 @@ integration packages extend it for common use cases:
  -  *[@optique/config](./integrations/config.md)*: Loads default values from
     configuration files, with schema validation via any Standard Schema-
     compatible library (Zod, Valibot, ArkType).
+ -  *[@optique/standard-schema](./integrations/standard-schema.md)*: Uses any
+    Standard Schema-compatible validator as a value parser.
  -  *[@optique/clack](./integrations/clack.md)*: Falls back to an interactive
     Clack prompt when a CLI argument is not provided.
  -  *[@optique/inquirer](./integrations/inquirer.md)*: Falls back to an

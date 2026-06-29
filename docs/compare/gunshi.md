@@ -266,9 +266,10 @@ Beyond the three scenarios
     in an official plugin (*@gunshi/plugin-completion*, Bash and zsh);
     Optique's completion is built in and spans five shells with async
     suggestions.
- -  *Man pages and schema.* Optique generates man pages (*@optique/man*) and
-    integrates Zod and Valibot as value parsers (plus any Standard Schema
-    validator for config); Gunshi does neither.
+ -  *Man pages and schema.* Optique generates man pages (*@optique/man*), uses
+    Standard Schema-compatible validators as value parsers, keeps richer Zod
+    and Valibot adapters, and validates config files with any Standard Schema
+    validator; Gunshi does neither.
  -  *Plugin system.* Gunshi's plugin architecture and lazy-loaded subcommands
     are a genuine strength for larger, modular CLIs.
  -  *Maturity.* Both are relatively young and still building out adoption.

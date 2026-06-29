@@ -224,4 +224,11 @@ The Zod integration provides a powerful way to reuse validation logic across
 your entire application while maintaining full type safety and excellent error
 messages.
 
+If you only need the portable Standard Schema validation contract, you can also
+use Zod schemas with
+[*@optique/standard-schema*](./standard-schema.md). The dedicated
+*@optique/zod* package remains the better choice when you want Zod-specific
+metavar inference, choices, suggestions, Boolean CLI literals, and Zod error
+formatting.
+
 <!-- cSpell: ignore coerce -->

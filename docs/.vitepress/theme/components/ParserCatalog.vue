@@ -153,7 +153,8 @@ const combinatorCount = count(combinators);
       </div>
       <p class="ol-catalog__note">
         …plus any <a href="/integrations/zod">Zod</a>,
-        <a href="/integrations/valibot">Valibot</a>, or Standard Schema validator,
+        <a href="/integrations/valibot">Valibot</a>, or
+        <a href="/integrations/standard-schema">Standard Schema</a> validator,
         reused as a value parser.
       </p>
     </div>
