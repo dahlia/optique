@@ -3696,6 +3696,64 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     );
   });
 
+  it("should scope nested subcommand help with completion option enabled", () => {
+    const parser = or(
+      command(
+        "group",
+        or(
+          command("sub", object({ action: constant("sub") })),
+          command("other", object({ action: constant("other") })),
+        ),
+      ),
+    );
+
+    for (
+      const completion of [
+        { option: true },
+        { command: true, option: true },
+      ] as const
+    ) {
+      let helpOutput = "";
+      const result = runParser(parser, "demo", ["group", "sub", "--help"], {
+        help: {
+          command: true,
+          option: true,
+          onShow: () => "help-shown",
+        },
+        completion: {
+          ...completion,
+          onShow: () => "completion-shown",
+        },
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "help-shown");
+      assert.ok(helpOutput.includes("Usage: demo group sub"));
+      assert.ok(
+        !helpOutput.includes("demo group other"),
+        `Help output should not contain sibling usage but got:\n${helpOutput}`,
+      );
+      assert.ok(
+        !helpOutput.includes("demo help"),
+        `Help output should not contain help command usage but got:\n${helpOutput}`,
+      );
+      assert.ok(
+        !helpOutput.includes("demo completion"),
+        `Help output should not contain completion command usage but got:\n${helpOutput}`,
+      );
+      assert.ok(
+        !helpOutput.includes("demo --completion"),
+        `Help output should not contain completion option usage but got:\n${helpOutput}`,
+      );
+      assert.ok(
+        !helpOutput.includes("--completion SHELL"),
+        `Help output should not contain completion option docs but got:\n${helpOutput}`,
+      );
+    }
+  });
+
   describe("completion functionality", () => {
     it("should generate bash completion script when completion command is used", () => {
       const parser = object({
