@@ -400,6 +400,14 @@ export interface DocPageFormatOptions {
   maxWidth?: number;
 
   /**
+   * Whether to include the usage synopsis in the output.
+   *
+   * @default `true`
+   * @since 1.2.0
+   */
+  showUsage?: boolean;
+
+  /**
    * Whether and how to display default values for options and arguments.
    *
    * - `boolean`: When `true`, displays defaults using format `[value]`
@@ -558,6 +566,7 @@ export function formatDocPage(
   validateProgramName(programName);
   const termIndent = options.termIndent ?? 2;
   const termWidth = options.termWidth ?? 26;
+  const showUsage = options.showUsage ?? true;
   if (
     options.maxWidth != null &&
     (!Number.isFinite(options.maxWidth) || !Number.isInteger(options.maxWidth))
@@ -672,7 +681,7 @@ export function formatDocPage(
     // the 7 matches the continuation indent, so terms fitting within
     // the first line's total width are guaranteed not to overflow.
     const programNameWidth = getDisplayWidth(programName);
-    const usageMin = page.usage != null
+    const usageMin = page.usage != null && showUsage
       ? 7 + Math.max(
         programNameWidth,
         Math.min(
@@ -736,7 +745,7 @@ export function formatDocPage(
     });
     output += "\n";
   }
-  if (page.usage != null) {
+  if (page.usage != null && showUsage) {
     const usageLabel = options.colors ? "\x1b[1;2mUsage:\x1b[0m " : "Usage: ";
     output += usageLabel;
     output += indentLines(

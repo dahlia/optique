@@ -126,8 +126,8 @@ Architecture
 ### Package structure
 
  -  *@optique/core* (*packages/core/*): Core parsing library.  Contains parser
-    combinators (`parser.ts`), value parsers (`valueparser.ts`), help text
-    generation (`usage.ts`), and error handling (`message.ts`).
+    combinators (*parser.ts*), value parsers (*valueparser.ts*), help text
+    generation (*usage.ts*), and error handling (*message.ts*).
     This package is pure TypeScript and works in any JavaScript environment.
  -  *@optique/run* (*packages/run/*): CLI integration wrapper.  Provides
     process-integrated `run()` function, argument reading from `process.argv`
@@ -476,11 +476,12 @@ documentation:
 
 ### Text formatting
 
- -  *Italics* (`*text*`): Use for package names (*@optique/core*,
-    *@optique/run*), emphasis, and to distinguish concepts
+ -  *Italics* (`*text*`): Use for file paths, file names, file extensions,
+    package names (*@optique/core*, *@optique/run*), emphasis, and to
+    distinguish concepts
  -  *Bold* (`**text**`): Use sparingly for strong emphasis
  -  *Inline code* (`` `code` ``): Use for code spans, function names,
-    filenames, and command-line options
+    and command-line options
 
 ### Lists
 
@@ -660,7 +661,7 @@ pnpm add @optique/run
     the *docs/* directory, use inline link syntax (e.g.,
     `[text](./path/to/file.md)`) instead of reference-style links.
  -  *Relative paths*: Always use relative paths for internal links.
- -  *File extensions*: Include the `.md` extension in internal link paths.
+ -  *File extensions*: Include the *.md* extension in internal link paths.
 
 ### Building documentation
 

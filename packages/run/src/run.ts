@@ -110,6 +110,18 @@ export interface RunOptions {
   readonly showChoices?: boolean | ShowChoicesOptions;
 
   /**
+   * Whether to include the usage synopsis in full help output.
+   *
+   * This affects help pages produced by `--help`, the help command, and
+   * `aboveError: "help"`.  It does not suppress usage-only error preambles
+   * from `aboveError: "usage"`.
+   *
+   * @default `true`
+   * @since 1.2.0
+   */
+  readonly showUsage?: boolean;
+
+  /**
    * A custom comparator function to control the order of sections in the
    * help output.  When provided, it is used instead of the default smart
    * sort (command-only sections first, then mixed, then option/argument-only
@@ -824,6 +836,7 @@ function buildCoreOptions(
   const maxWidth = options.maxWidth ?? process.stdout.columns;
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;
+  const showUsage = options.showUsage;
   const sectionOrder = options.sectionOrder;
   const help = options.help;
   const version = options.version;
@@ -888,6 +901,7 @@ function buildCoreOptions(
     maxWidth,
     showDefault,
     showChoices,
+    showUsage,
     sectionOrder,
     help: helpConfig,
     version: versionConfig,
@@ -921,6 +935,7 @@ const knownRunOptionsKeyList = [
   "maxWidth",
   "showDefault",
   "showChoices",
+  "showUsage",
   "sectionOrder",
   "help",
   "version",

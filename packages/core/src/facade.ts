@@ -1339,6 +1339,18 @@ export interface RunOptions<THelp, TError> {
   readonly showChoices?: boolean | ShowChoicesOptions;
 
   /**
+   * Whether to include the usage synopsis in full help output.
+   *
+   * This affects help pages produced by `--help`, the help command, and
+   * `aboveError: "help"`.  It does not suppress usage-only error preambles
+   * from `aboveError: "usage"`.
+   *
+   * @default `true`
+   * @since 1.2.0
+   */
+  readonly showUsage?: boolean;
+
+  /**
    * A custom comparator function to control the order of sections in the
    * help output.  When provided, it is used instead of the default smart
    * sort (command-only sections first, then mixed, then option/argument-only
@@ -1527,6 +1539,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   completionOptionDisplayName?: string,
   isOptionMode?: boolean,
   sectionOrder?: (a: DocSection, b: DocSection) => number,
+  showUsage?: boolean,
   rootOptionSuggestions: readonly LiteralSuggestion[] = [],
 ): ModeValue<M, THelp | TError> {
   const shellName = completionArgs[0] || "";
@@ -1548,7 +1561,12 @@ function handleCompletion<M extends Mode, THelp, TError>(
       const doc = getDocPage(completionParser, [displayName]);
       if (doc) {
         stderr(
-          formatDocPage(programName, doc, { colors, maxWidth, sectionOrder }),
+          formatDocPage(programName, doc, {
+            colors,
+            maxWidth,
+            sectionOrder,
+            showUsage,
+          }),
         );
       }
     }
@@ -2346,6 +2364,7 @@ export function runParser<
     showDefault,
     showChoices,
     sectionOrder,
+    showUsage,
     aboveError = "usage",
     onError = () => {
       throw new RunParserError("Failed to parse command line arguments.");
@@ -2558,6 +2577,7 @@ export function runParser<
           completionOptionNames[0],
           classified.source === "option",
           sectionOrder,
+          showUsage,
           rootOptionSuggestions,
         ) as InferValue<TParser>;
 
@@ -2809,6 +2829,7 @@ export function runParser<
               showDefault,
               showChoices,
               sectionOrder,
+              showUsage,
             }));
           }
           return onHelp(0);
@@ -2924,6 +2945,8 @@ export function runParser<
                 maxWidth,
                 showDefault,
                 showChoices,
+                sectionOrder,
+                showUsage,
               }));
             }
           }

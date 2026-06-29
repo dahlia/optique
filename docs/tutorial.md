@@ -55,7 +55,7 @@ and produces either a successfully parsed value or an error. The key insight
 is that these parsers can be composed and combined to create more sophisticated
 argument handling without losing type information.
 
-### Your first CLI: Single option
+### Your first CLI: single option
 
 Let's start with the simplest possible CLI—a greeting program that accepts a
 name. This example demonstrates the core concepts of value parsers and type
@@ -785,7 +785,7 @@ const config = run(parser, {
 });
 ~~~~
 
-### Real-world example: Deployment tool CLI
+### Real-world example: deployment tool CLI
 
 Let's build a comprehensive deployment tool that demonstrates all the features
 we've learned:

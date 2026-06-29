@@ -54,7 +54,7 @@ console.log(manPage);
 API
 ---
 
-### Low-level: Message to roff conversion
+### Low-level: message to roff conversion
 
 ~~~~ typescript
 import { formatMessageAsRoff, escapeRoff } from "@optique/man/roff";
@@ -85,7 +85,7 @@ const manPage = formatDocPageAsMan(docPage, {
 });
 ~~~~
 
-### High-level: Parser to man page
+### High-level: parser to man page
 
 ~~~~ typescript
 import { generateManPage } from "@optique/man";

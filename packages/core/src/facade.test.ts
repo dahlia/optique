@@ -1937,6 +1937,83 @@ describe("runParser", () => {
       assert.ok(errorOutput.includes("Error:"));
     });
 
+    it("should omit usage from help above error when showUsage is false", () => {
+      const parser = object({
+        port: argument(integer({ metavar: "PORT" })),
+      });
+
+      let errorOutput = "";
+
+      runParser(parser, "test", ["not-a-number"], {
+        aboveError: "help",
+        showUsage: false,
+        onError: () => "handled",
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.ok(!errorOutput.includes("Usage:"));
+      assert.ok(errorOutput.includes("PORT"));
+      assert.ok(errorOutput.includes("Error:"));
+    });
+
+    it("should preserve sectionOrder in help above error", () => {
+      const parser = object({
+        beta: group(
+          "Beta",
+          option("--beta", string(), { description: message`Beta option.` }),
+        ),
+        alpha: group(
+          "Alpha",
+          option("--alpha", string(), { description: message`Alpha option.` }),
+        ),
+        port: argument(integer({ metavar: "PORT" })),
+      });
+
+      let errorOutput = "";
+
+      runParser(parser, "test", ["not-a-number"], {
+        aboveError: "help",
+        sectionOrder: (a: DocSection, b: DocSection): number => {
+          const aTitle = a.title ?? "";
+          const bTitle = b.title ?? "";
+          return aTitle.localeCompare(bTitle);
+        },
+        onError: () => "handled",
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      const alphaIndex = errorOutput.indexOf("Alpha:");
+      const betaIndex = errorOutput.indexOf("Beta:");
+      assert.ok(alphaIndex >= 0, "Alpha section should be present.");
+      assert.ok(betaIndex >= 0, "Beta section should be present.");
+      assert.ok(alphaIndex < betaIndex, "Alpha should appear before Beta.");
+    });
+
+    it("should keep usage-only error output when showUsage is false", () => {
+      const parser = object({
+        port: argument(integer({ metavar: "PORT" })),
+      });
+
+      let errorOutput = "";
+
+      runParser(parser, "test", ["not-a-number"], {
+        aboveError: "usage",
+        showUsage: false,
+        onError: () => "handled",
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.ok(errorOutput.includes("Usage: test"));
+      assert.ok(errorOutput.includes("PORT"));
+      assert.ok(errorOutput.includes("Error:"));
+    });
+
     it("should show nothing above error when aboveError is 'none'", () => {
       const parser = object({
         port: argument(integer()),
@@ -10230,6 +10307,30 @@ describe("runWithAsync", () => {
   });
 
   describe("sectionOrder option", () => {
+    it("should omit usage from help output when showUsage is false", () => {
+      const parser = or(
+        command("build", object({ verbose: flag("--verbose") })),
+        command("deploy", object({ env: option("--env", string()) })),
+      );
+
+      let helpOutput = "";
+      const result = runParser(parser, "myapp", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "shown",
+        },
+        showUsage: false,
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.ok(!helpOutput.includes("Usage:"));
+      assert.ok(helpOutput.includes("build"));
+      assert.ok(helpOutput.includes("deploy"));
+    });
+
     it("should use custom sectionOrder comparator to control section ordering in help output", () => {
       const parser = or(
         command("build", object({ verbose: flag("--verbose") })),
