@@ -557,6 +557,10 @@ Consider alternatives when you're building straightforward, one-off tools, when
 your team strongly prefers configuration over composition, or when you need to
 integrate with existing CLI frameworks that follow different patterns.
 
+For a concrete, side-by-side look at how these trade-offs play out against
+specific libraries—Commander.js, Yargs, Cliffy, Gunshi, Cleye, cmd-ts, Stricli,
+oclif, and Clipanion—see *[How Optique compares](./compare/index.md)*.
+
 
 Starting with Optique
 ---------------------

@@ -124,6 +124,22 @@ const GUIDE = {
   ],
 };
 
+const COMPARE = {
+  text: "Comparison",
+  items: [
+    { text: "Overview", link: "/compare/" },
+    { text: "vs. Commander.js", link: "/compare/commander" },
+    { text: "vs. Yargs", link: "/compare/yargs" },
+    { text: "vs. Cliffy", link: "/compare/cliffy" },
+    { text: "vs. Gunshi", link: "/compare/gunshi" },
+    { text: "vs. Cleye", link: "/compare/cleye" },
+    { text: "vs. cmd-ts", link: "/compare/cmd-ts" },
+    { text: "vs. Stricli", link: "/compare/stricli" },
+    { text: "vs. oclif", link: "/compare/oclif" },
+    { text: "vs. Clipanion", link: "/compare/clipanion" },
+  ],
+};
+
 // https://vitepress.dev/reference/site-config
 export default withMermaid(defineConfig({
   title: "Optique",
@@ -136,6 +152,7 @@ export default withMermaid(defineConfig({
       GUIDE,
       CONCEPTS,
       INTEGRATIONS,
+      COMPARE,
       REFERENCES,
       ...extraNav,
     ],
@@ -144,6 +161,7 @@ export default withMermaid(defineConfig({
       GUIDE,
       CONCEPTS,
       INTEGRATIONS,
+      COMPARE,
       REFERENCES,
       { text: "Changelog", link: "/changelog" },
     ],
@@ -241,6 +259,12 @@ export default withMermaid(defineConfig({
   },
 
   vite: {
+    // Mermaid pulls in dayjs as a CommonJS dependency; pre-bundling them in the
+    // dev server avoids a “does not provide an export named 'default'” interop
+    // error that otherwise leaves every page blank.
+    optimizeDeps: {
+      include: ["mermaid", "dayjs"],
+    },
     plugins: [
       groupIconVitePlugin({
         customIcon: {
