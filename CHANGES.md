@@ -135,6 +135,22 @@ To be released.
     the existing public API and Inquirer.js config types.  [[#837], [#844]]
 
 
+Version 1.1.1
+-------------
+
+Released on June 29, 2026.
+
+### @optique/core
+
+ -  Fixed nested subcommand `--help` output when the completion option is
+    enabled.  Help for commands such as `demo group sub --help` now stays
+    scoped to the selected subcommand instead of also showing sibling commands
+    and top-level meta command or option usage.  [[#855], [#859]]
+
+[#855]: https://github.com/dahlia/optique/issues/855
+[#859]: https://github.com/dahlia/optique/pull/859
+
+
 Version 1.1.0
 -------------
 

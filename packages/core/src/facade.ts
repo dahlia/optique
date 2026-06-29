@@ -2566,6 +2566,7 @@ export function runParser<
         // generation.  Include completion command in help even though it's
         // handled via early return.
         let helpGeneratorParser: Parser<Mode, unknown, unknown>;
+        let docGeneratorParser: Parser<Mode, unknown, unknown>;
         const helpAsCommand = helpCommandConfig != null;
         const versionAsCommand = versionCommandConfig != null;
         const completionAsCommand = completionCommandConfig != null;
@@ -2584,6 +2585,7 @@ export function runParser<
         ) {
           // User wants help for completion command specifically
           helpGeneratorParser = completionParsers.completionCommand;
+          docGeneratorParser = helpGeneratorParser;
         } else if (
           requestedCommand != null &&
           !classified.preferUserCommandDocs &&
@@ -2593,6 +2595,7 @@ export function runParser<
         ) {
           // User wants help for help command specifically
           helpGeneratorParser = helpParsers.helpCommand;
+          docGeneratorParser = helpGeneratorParser;
         } else if (
           requestedCommand != null &&
           !classified.preferUserCommandDocs &&
@@ -2602,6 +2605,7 @@ export function runParser<
         ) {
           // User wants help for version command specifically
           helpGeneratorParser = versionParsers.versionCommand;
+          docGeneratorParser = helpGeneratorParser;
         } else {
           // General help or help for user-defined commands
           // Collect all command parsers to include in help generation
@@ -2724,6 +2728,9 @@ export function runParser<
               ...commandParsers,
             );
           }
+          docGeneratorParser = classified.commands.length > 0
+            ? parser
+            : helpGeneratorParser;
         }
 
         // Helper function to report invalid commands before --help
@@ -2865,7 +2872,7 @@ export function runParser<
                 }
                 // Commands are valid; proceed with help display
                 const docOrPromise = getDocPage(
-                  helpGeneratorParser,
+                  docGeneratorParser,
                   classified.commands,
                 );
                 return docOrPromise instanceof Promise
@@ -2883,7 +2890,7 @@ export function runParser<
 
         // Get doc page - may return Promise for async parsers
         const docOrPromise = getDocPage(
-          helpGeneratorParser,
+          docGeneratorParser,
           classified.commands,
         );
         if (docOrPromise instanceof Promise) {
