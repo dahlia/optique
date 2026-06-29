@@ -1,6 +1,6 @@
 {
   "name": "@optique/discover",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Runtime-aware command discovery for Optique CLI programs",
   "keywords": [
     "CLI",
