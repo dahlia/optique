@@ -73,7 +73,13 @@ function validateOptions<T>(
       `${functionName}() requires an options object, got array.`,
     );
   }
-  if (!("placeholder" in options)) {
+  const prototype = Object.getPrototypeOf(options);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(
+      `${functionName}() requires an options object.`,
+    );
+  }
+  if (!Object.hasOwn(options, "placeholder")) {
     throw new TypeError(
       `${functionName}() options must include a placeholder property.`,
     );

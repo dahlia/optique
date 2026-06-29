@@ -51,6 +51,20 @@ describe("standardSchema()", () => {
       );
     });
 
+    it("should throw TypeError when options is not a plain object", () => {
+      class Options {
+        readonly placeholder = 0;
+      }
+
+      assert.throws(
+        () => standardSchema(integerSchema, new Options()),
+        {
+          name: "TypeError",
+          message: "standardSchema() requires an options object.",
+        },
+      );
+    });
+
     it("should throw TypeError when placeholder is missing from options", () => {
       assert.throws(
         // @ts-expect-error: intentionally omitting placeholder
@@ -61,6 +75,26 @@ describe("standardSchema()", () => {
             "standardSchema() options must include a placeholder property.",
         },
       );
+    });
+
+    it("should throw TypeError when placeholder is inherited", () => {
+      Object.defineProperty(Object.prototype, "placeholder", {
+        configurable: true,
+        value: 0,
+      });
+      try {
+        assert.throws(
+          // @ts-expect-error: intentionally omitting own placeholder
+          () => standardSchema(integerSchema, {}),
+          {
+            name: "TypeError",
+            message:
+              "standardSchema() options must include a placeholder property.",
+          },
+        );
+      } finally {
+        Reflect.deleteProperty(Object.prototype, "placeholder");
+      }
     });
   });
 
