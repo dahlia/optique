@@ -425,8 +425,9 @@ Node.js also includes *.ts*, *.mts*, and *.cts* when it appears to be running
 with native TypeScript support, a TypeScript loader such as `tsx`, `ts-node`,
 `tsimp`, or `jiti`, or Node's built-in type-stripping flags.
 
-TypeScript declaration files (*.d.ts*, *.d.mts*, and *.d.cts*) are ignored even
-when their suffix matches the configured extension list.
+TypeScript declaration files (*.d.ts*, *.d.mts*, and *.d.cts*) and test files
+(*.spec.*, *.test.*) are ignored even when their suffix matches the configured
+extension list.
 
 Pass `extensions` when you want an explicit policy:
 

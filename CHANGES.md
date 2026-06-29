@@ -109,6 +109,13 @@ To be released.
     with nested commands such as `stash list`.  The `entryFileName` option
     customizes or disables the entry-file rule.  [[#838], [#839]]
 
+ -  File-system discovery, `commandsFromModules()`, and `optique-discover` now
+    skip co-located test files by default.  A file whose name ends in *.test*
+    or *.spec* before the configured extension—such as *hello.test.ts* or
+    *hello.spec.js*—is ignored the same way declaration files are, so it no
+    longer registers as a ghost command nor breaks discovery by failing the
+    `defineCommand()` check.  [[#857], [#861] by Lee Hoyeon]
+
  -  `runProgram()` now accepts `showUsage: false` for compact command-list
     help.  The option is forwarded to *@optique/run* so discovered command
     programs can show the brief and command sections without the expanded
@@ -122,7 +129,9 @@ To be released.
 [#841]: https://github.com/dahlia/optique/pull/841
 [#851]: https://github.com/dahlia/optique/pull/851
 [#854]: https://github.com/dahlia/optique/issues/854
+[#857]: https://github.com/dahlia/optique/issues/857
 [#858]: https://github.com/dahlia/optique/pull/858
+[#861]: https://github.com/dahlia/optique/pull/861
 
 ### @optique/run
 
