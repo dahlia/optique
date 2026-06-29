@@ -86,6 +86,31 @@ export default commandsFromModules(
     }
   });
 
+  it("should ignore co-located test and spec files", async () => {
+    const dir = await makeTempDir();
+    try {
+      const commandsDir = join(dir, "commands");
+      const outputFile = join(dir, "generated.ts");
+      await writeText(join(commandsDir, "add.ts"), "");
+      await writeText(join(commandsDir, "add.test.ts"), "");
+      await writeText(join(commandsDir, "add.spec.ts"), "");
+
+      const result = await generateCommandsModule({
+        dir: commandsDir,
+        outputFile,
+        extensions: [".ts"],
+      });
+
+      assert.deepEqual(result.files.map((file) => file.modulePath), [
+        "./commands/add.ts",
+      ]);
+      assert.doesNotMatch(result.code, /add\.test\.ts/);
+      assert.doesNotMatch(result.code, /add\.spec\.ts/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("should include custom entry file options", async () => {
     const dir = await makeTempDir();
     try {

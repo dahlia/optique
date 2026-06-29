@@ -414,6 +414,7 @@ async function collectCommandFiles(
       entryType === "file" &&
       path !== excludedFile &&
       !isDeclarationFile(entry.name) &&
+      !isTestFile(entry.name, extensions) &&
       extensions.some((ext) => entry.name.endsWith(ext))
     ) {
       files.push(path);
@@ -445,6 +446,22 @@ async function getCommandFileEntryType(
 
 function isDeclarationFile(fileName: string): boolean {
   return /\.d\.[cm]?ts$/.test(fileName);
+}
+
+/**
+ * Checks whether a file name belongs to a co-located test or spec module, such
+ * as *hello.test.ts* or *hello.spec.js*.  The `.test`/`.spec` marker is matched
+ * against the suffix that precedes the configured command extension, so a file
+ * named *test.ts* or *latest.ts* stays an ordinary command.
+ */
+function isTestFile(
+  fileName: string,
+  extensions: readonly string[],
+): boolean {
+  const matchedExtension = extensions.find((ext) => fileName.endsWith(ext));
+  if (matchedExtension == null) return false;
+  const base = fileName.slice(0, -matchedExtension.length);
+  return base.endsWith(".test") || base.endsWith(".spec");
 }
 
 function rejectDuplicateCommandPaths(

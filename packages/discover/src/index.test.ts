@@ -591,6 +591,71 @@ describe("discoverCommands()", () => {
     }
   });
 
+  it("skips co-located test and spec files", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["build.ts"], "build");
+      await writeFile(join(dir, "build.test.ts"), "export default {};\n");
+      await writeFile(join(dir, "build.spec.ts"), "export default {};\n");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips test files even when they export a command", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["greet.ts"], "greet");
+      await writeCommand(dir, ["greet.test.ts"], "greet test");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [["greet"]]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips test and spec files for non-TypeScript extensions", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["build.js"], "build");
+      await writeFile(join(dir, "build.test.js"), "export default {};\n");
+      await writeFile(join(dir, "build.spec.js"), "export default {};\n");
+
+      const commands = await discoverCommands({ dir, extensions: [".js"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not skip command files whose names merely contain test or spec", async () => {
+    const dir = await makeTempDir();
+    try {
+      await writeCommand(dir, ["test.ts"], "test");
+      await writeCommand(dir, ["spec.ts"], "spec");
+      await writeCommand(dir, ["latest.ts"], "latest");
+      await writeCommand(dir, ["manifest.ts"], "manifest");
+
+      const commands = await discoverCommands({ dir, extensions: [".ts"] });
+
+      assert.deepEqual(commands.map((command) => command.path), [
+        ["latest"],
+        ["manifest"],
+        ["spec"],
+        ["test"],
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("returns runtime-aware extension defaults", () => {
     const nodeDefaults = getDefaultExtensions({
       runtime: "node",
@@ -699,6 +764,22 @@ describe("commandsFromModules()", () => {
     ]);
     assert.equal(commands[0]?.command, commandCommand);
     assert.equal(commands[1]?.command, zzzCommand);
+  });
+
+  it("ignores co-located test and spec module keys", () => {
+    const buildCommand = makeCommand();
+
+    const commands = commandsFromModules({
+      "./commands/build.ts": { default: buildCommand },
+      "./commands/build.test.ts": { default: makeCommand() },
+      "./commands/build.spec.ts": { default: makeCommand() },
+    }, {
+      base: "./commands",
+      extensions: [".ts"],
+    });
+
+    assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+    assert.equal(commands[0]?.command, buildCommand);
   });
 
   it("supports custom and disabled entry file names", () => {

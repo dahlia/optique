@@ -451,8 +451,10 @@ export function commandsFromModules(
   const seen = new Map<string, string>();
   const discovered: ModuleCommand[] = [];
   for (const modulePath of modulePaths) {
+    const moduleBaseName = posix.basename(modulePath);
     if (
-      isDeclarationFile(posix.basename(modulePath)) ||
+      isDeclarationFile(moduleBaseName) ||
+      isTestFile(moduleBaseName, extensions) ||
       !extensions.some((ext) => modulePath.endsWith(ext))
     ) {
       continue;
@@ -766,6 +768,7 @@ async function collectCommandFiles(
     } else if (
       entryType === "file" &&
       !isDeclarationFile(entry.name) &&
+      !isTestFile(entry.name, extensions) &&
       extensions.some((ext) => entry.name.endsWith(ext))
     ) {
       files.push(path);
@@ -797,6 +800,16 @@ async function getCommandFileEntryType(
 
 function isDeclarationFile(fileName: string): boolean {
   return /\.d\.[cm]?ts$/.test(fileName);
+}
+
+function isTestFile(
+  fileName: string,
+  extensions: readonly string[],
+): boolean {
+  const matchedExtension = extensions.find((ext) => fileName.endsWith(ext));
+  if (matchedExtension == null) return false;
+  const base = fileName.slice(0, -matchedExtension.length);
+  return base.endsWith(".test") || base.endsWith(".spec");
 }
 
 function commandPathFromFile(
