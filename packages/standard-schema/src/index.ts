@@ -59,6 +59,39 @@ export interface StandardSchemaParserOptions<T = unknown> {
   };
 }
 
+function getTypeName(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
+function validateSchema(
+  functionName: string,
+  schema: unknown,
+): asserts schema is StandardSchemaV1 {
+  if (
+    schema == null ||
+    (typeof schema !== "object" && typeof schema !== "function") ||
+    !("~standard" in schema)
+  ) {
+    throw new TypeError(
+      `${functionName}() requires a Standard Schema-compatible validator, ` +
+        `got ${getTypeName(schema)}.`,
+    );
+  }
+  const standard = (schema as Record<PropertyKey, unknown>)["~standard"];
+  if (
+    standard == null ||
+    (typeof standard !== "object" && typeof standard !== "function") ||
+    typeof (standard as Record<string, unknown>).validate !== "function"
+  ) {
+    throw new TypeError(
+      `${functionName}() requires a Standard Schema-compatible validator, ` +
+        `got ${getTypeName(schema)}.`,
+    );
+  }
+}
+
 function validateOptions<T>(
   functionName: string,
   options: unknown,
@@ -171,6 +204,7 @@ export function standardSchema<T>(
   schema: StandardSchemaV1<unknown, T>,
   options: StandardSchemaParserOptions<T>,
 ): ValueParser<"sync", T> {
+  validateSchema("standardSchema", schema);
   validateOptions("standardSchema", options);
   const metavar = options.metavar ?? "VALUE";
   ensureNonEmptyString(metavar);
@@ -222,6 +256,7 @@ export function standardSchemaAsync<T>(
   schema: StandardSchemaV1<unknown, T>,
   options: StandardSchemaParserOptions<T>,
 ): ValueParser<"async", T> {
+  validateSchema("standardSchemaAsync", schema);
   validateOptions("standardSchemaAsync", options);
   const metavar = options.metavar ?? "VALUE";
   ensureNonEmptyString(metavar);

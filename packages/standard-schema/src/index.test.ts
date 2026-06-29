@@ -28,6 +28,63 @@ const integerSchema = schema<unknown, number>((value) => {
 });
 
 describe("standardSchema()", () => {
+  describe("schema validation", () => {
+    it("should throw TypeError when schema is not an object", () => {
+      assert.throws(
+        () => standardSchema("not a schema" as never, { placeholder: 0 }),
+        {
+          name: "TypeError",
+          message:
+            "standardSchema() requires a Standard Schema-compatible validator, got string.",
+        },
+      );
+    });
+
+    it("should throw TypeError when schema is null", () => {
+      assert.throws(
+        () => standardSchema(null as never, { placeholder: 0 }),
+        {
+          name: "TypeError",
+          message:
+            "standardSchema() requires a Standard Schema-compatible validator, got null.",
+        },
+      );
+    });
+
+    it("should throw TypeError when schema is missing ~standard", () => {
+      assert.throws(
+        () => standardSchema({} as never, { placeholder: 0 }),
+        {
+          name: "TypeError",
+          message:
+            "standardSchema() requires a Standard Schema-compatible validator, got object.",
+        },
+      );
+    });
+
+    it("should throw TypeError when schema is an array", () => {
+      assert.throws(
+        () => standardSchema([] as never, { placeholder: 0 }),
+        {
+          name: "TypeError",
+          message:
+            "standardSchema() requires a Standard Schema-compatible validator, got array.",
+        },
+      );
+    });
+
+    it("should throw TypeError when ~standard lacks validate", () => {
+      assert.throws(
+        () => standardSchema({ "~standard": {} } as never, { placeholder: 0 }),
+        {
+          name: "TypeError",
+          message:
+            "standardSchema() requires a Standard Schema-compatible validator, got object.",
+        },
+      );
+    });
+  });
+
   describe("missing placeholder", () => {
     it("should throw TypeError when options are omitted", () => {
       assert.throws(
@@ -53,7 +110,11 @@ describe("standardSchema()", () => {
 
     it("should throw TypeError when options is not a plain object", () => {
       class Options {
-        readonly placeholder = 0;
+        readonly placeholder: number;
+
+        constructor() {
+          this.placeholder = 0;
+        }
       }
 
       assert.throws(
@@ -78,23 +139,15 @@ describe("standardSchema()", () => {
     });
 
     it("should throw TypeError when placeholder is inherited", () => {
-      Object.defineProperty(Object.prototype, "placeholder", {
-        configurable: true,
-        value: 0,
-      });
-      try {
-        assert.throws(
-          // @ts-expect-error: intentionally omitting own placeholder
-          () => standardSchema(integerSchema, {}),
-          {
-            name: "TypeError",
-            message:
-              "standardSchema() options must include a placeholder property.",
-          },
-        );
-      } finally {
-        Reflect.deleteProperty(Object.prototype, "placeholder");
-      }
+      const inheritedOptions = Object.create({ placeholder: 0 }) as never;
+
+      assert.throws(
+        () => standardSchema(integerSchema, inheritedOptions),
+        {
+          name: "TypeError",
+          message: "standardSchema() requires an options object.",
+        },
+      );
     });
   });
 
@@ -356,6 +409,30 @@ describe("standardSchema()", () => {
 });
 
 describe("standardSchemaAsync()", () => {
+  describe("schema validation", () => {
+    it("should throw TypeError when schema is invalid", () => {
+      assert.throws(
+        () => standardSchemaAsync("not a schema" as never, { placeholder: 0 }),
+        {
+          name: "TypeError",
+          message:
+            "standardSchemaAsync() requires a Standard Schema-compatible validator, got string.",
+        },
+      );
+    });
+
+    it("should throw TypeError when options are invalid", () => {
+      assert.throws(
+        () => standardSchemaAsync(integerSchema, [] as never),
+        {
+          name: "TypeError",
+          message:
+            "standardSchemaAsync() requires an options object, got array.",
+        },
+      );
+    });
+  });
+
   it("should also accept a synchronous validator", async () => {
     const parser = standardSchemaAsync(
       schema<unknown, number>((value) => ({ value: Number(value) })),
