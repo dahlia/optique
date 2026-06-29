@@ -12,6 +12,7 @@ import CodeCard from "./components/CodeCard.vue";
 import Cols from "./components/Cols.vue";
 import CommandFork from "./components/CommandFork.vue";
 import CommandGrammar from "./components/CommandGrammar.vue";
+import CompareBand from "./components/CompareBand.vue";
 import CompletionDemo from "./components/CompletionDemo.vue";
 import CompletionShowcase from "./components/CompletionShowcase.vue";
 import LandingSection from "./components/LandingSection.vue";
@@ -32,6 +33,7 @@ export default {
     app.component("Cols", Cols);
     app.component("CommandFork", CommandFork);
     app.component("CommandGrammar", CommandGrammar);
+    app.component("CompareBand", CompareBand);
     app.component("CompletionDemo", CompletionDemo);
     app.component("CompletionShowcase", CompletionShowcase);
     app.component("LandingSection", LandingSection);
