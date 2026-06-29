@@ -61,15 +61,16 @@ export interface StandardSchemaParserOptions<T = unknown> {
 
 function validateOptions<T>(
   functionName: string,
-  options: StandardSchemaParserOptions<T>,
-): void {
-  if (
-    options == null ||
-    typeof options !== "object" ||
-    Array.isArray(options)
-  ) {
+  options: unknown,
+): asserts options is StandardSchemaParserOptions<T> {
+  if (options == null || typeof options !== "object") {
     throw new TypeError(
-      `${functionName}() requires an options object with a placeholder property.`,
+      `${functionName}() requires an options object.`,
+    );
+  }
+  if (Array.isArray(options)) {
+    throw new TypeError(
+      `${functionName}() requires an options object, got array.`,
     );
   }
   if (!("placeholder" in options)) {
@@ -123,7 +124,7 @@ function validationFailure<T>(
   }
   return {
     success: false,
-    error: message`${text(issues[0]?.message ?? "Validation failed")}`,
+    error: message`${text(issues[0]?.message ?? "Validation failed.")}`,
   };
 }
 
@@ -176,6 +177,7 @@ export function standardSchema<T>(
     parse(input: string): ValueParserResult<T> {
       const result = schema["~standard"].validate(input);
       if (isPromiseLike(result)) {
+        void result.then(undefined, () => undefined);
         throw new TypeError(
           "Async Standard Schema validators are not supported by " +
             "standardSchema(). Use standardSchemaAsync() instead.",

@@ -4,6 +4,7 @@ import { parseAsync, parseSync } from "@optique/core/parser";
 import { standardSchema, standardSchemaAsync } from "@optique/standard-schema";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import assert from "node:assert/strict";
+import process from "node:process";
 import { describe, it } from "node:test";
 
 function schema<Input, Output>(
@@ -34,8 +35,18 @@ describe("standardSchema()", () => {
         () => standardSchema(integerSchema),
         {
           name: "TypeError",
-          message:
-            "standardSchema() requires an options object with a placeholder property.",
+          message: "standardSchema() requires an options object.",
+        },
+      );
+    });
+
+    it("should throw TypeError when options is an array", () => {
+      assert.throws(
+        // @ts-expect-error: intentionally passing an array
+        () => standardSchema(integerSchema, []),
+        {
+          name: "TypeError",
+          message: "standardSchema() requires an options object, got array.",
         },
       );
     });
@@ -78,7 +89,7 @@ describe("standardSchema()", () => {
       const result = parser.parse("hello");
 
       assert.ok(!result.success);
-      assert.deepEqual(result.error, message`Validation failed`);
+      assert.deepEqual(result.error, message`Validation failed.`);
     });
   });
 
@@ -231,6 +242,70 @@ describe("standardSchema()", () => {
       );
     });
 
+    it("should observe rejected async validation results", async () => {
+      const asyncSchema = schema<unknown, string>(async () => {
+        await Promise.resolve();
+        throw new Error("Validation crashed.");
+      });
+      const parser = standardSchema(asyncSchema, { placeholder: "" });
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => {
+        unhandled.push(reason);
+      };
+      process.on("unhandledRejection", onUnhandled);
+
+      try {
+        assert.throws(
+          () => parser.parse("hello"),
+          {
+            name: "TypeError",
+            message:
+              "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
+          },
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      } finally {
+        process.off("unhandledRejection", onUnhandled);
+      }
+
+      assert.deepEqual(unhandled, []);
+    });
+
+    it("should attach a rejection handler to async validation results", () => {
+      let handled = false;
+      const result = Promise.reject<StandardSchemaV1.Result<string>>(
+        new Error("Validation crashed."),
+      );
+      const originalThen = result.then.bind(result);
+      Object.defineProperty(result, "then", {
+        value<TResult1 = StandardSchemaV1.Result<string>, TResult2 = never>(
+          onFulfilled?:
+            | ((
+              value: StandardSchemaV1.Result<string>,
+            ) => TResult1 | PromiseLike<TResult1>)
+            | null,
+          onRejected?:
+            | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
+            | null,
+        ): Promise<TResult1 | TResult2> {
+          handled = onRejected != null;
+          return originalThen(onFulfilled, onRejected);
+        },
+      });
+      const asyncSchema = schema<unknown, string>(() => result);
+      const parser = standardSchema(asyncSchema, { placeholder: "" });
+
+      assert.throws(
+        () => parser.parse("hello"),
+        {
+          name: "TypeError",
+          message:
+            "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
+        },
+      );
+      assert.ok(handled);
+    });
+
     it("should work with parseSync()", () => {
       const parser = option(
         "--count",
@@ -247,6 +322,18 @@ describe("standardSchema()", () => {
 });
 
 describe("standardSchemaAsync()", () => {
+  it("should also accept a synchronous validator", async () => {
+    const parser = standardSchemaAsync(
+      schema<unknown, number>((value) => ({ value: Number(value) })),
+      { placeholder: 0 },
+    );
+
+    const result = await parser.parse("42");
+
+    assert.ok(result.success);
+    assert.equal(result.value, 42);
+  });
+
   it("should parse with an async validator", async () => {
     const parser = standardSchemaAsync(
       schema<unknown, string>(async (value) => {
