@@ -93,7 +93,8 @@ To be released.
     modules for bundlers and single-file CLI packaging.  The generated module
     imports discovered command files and default-exports the
     `commandsFromModules()` result, with `--watch` support for regenerating
-    when command files are added, removed, or renamed.  [[#835], [#841]]
+    when command files are added, removed, or renamed.
+    [[#835], [#841], [#854], [#858]]
 
  -  Added executable parent commands to file-system discovery.  Entry files
     such as *stash/index.ts* now map to the containing command path (`stash`),
@@ -108,6 +109,8 @@ To be released.
 [#840]: https://github.com/dahlia/optique/pull/840
 [#841]: https://github.com/dahlia/optique/pull/841
 [#851]: https://github.com/dahlia/optique/pull/851
+[#854]: https://github.com/dahlia/optique/issues/854
+[#858]: https://github.com/dahlia/optique/pull/858
 
 ### @optique/prompt
 

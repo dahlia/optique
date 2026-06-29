@@ -116,6 +116,13 @@ If you do not want to maintain the static module map by hand, generate one:
 optique-discover ./commands --output ./commands.generated.ts --extension .ts
 ~~~~
 
+The generated module starts with a fixed generated-file marker plus lint,
+formatter, and TypeScript check suppression comments for tools that support
+file-level comments.  Command module exports are still validated at runtime by
+`commandsFromModules()`.  Prettier and Oxfmt users should exclude the
+generated module through formatter configuration, such as *.prettierignore* or
+Oxfmt ignore paths.
+
 Then import the generated module from your CLI entry point:
 
 ~~~~ typescript
