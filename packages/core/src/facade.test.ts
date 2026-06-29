@@ -1958,6 +1958,41 @@ describe("runParser", () => {
       assert.ok(errorOutput.includes("Error:"));
     });
 
+    it("should preserve sectionOrder in help above error", () => {
+      const parser = object({
+        beta: group(
+          "Beta",
+          option("--beta", string(), { description: message`Beta option.` }),
+        ),
+        alpha: group(
+          "Alpha",
+          option("--alpha", string(), { description: message`Alpha option.` }),
+        ),
+        port: argument(integer({ metavar: "PORT" })),
+      });
+
+      let errorOutput = "";
+
+      runParser(parser, "test", ["not-a-number"], {
+        aboveError: "help",
+        sectionOrder: (a: DocSection, b: DocSection): number => {
+          const aTitle = a.title ?? "";
+          const bTitle = b.title ?? "";
+          return aTitle.localeCompare(bTitle);
+        },
+        onError: () => "handled",
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      const alphaIndex = errorOutput.indexOf("Alpha:");
+      const betaIndex = errorOutput.indexOf("Beta:");
+      assert.ok(alphaIndex >= 0, "Alpha section should be present.");
+      assert.ok(betaIndex >= 0, "Beta section should be present.");
+      assert.ok(alphaIndex < betaIndex, "Alpha should appear before Beta.");
+    });
+
     it("should keep usage-only error output when showUsage is false", () => {
       const parser = object({
         port: argument(integer({ metavar: "PORT" })),

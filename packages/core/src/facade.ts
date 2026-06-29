@@ -2945,6 +2945,7 @@ export function runParser<
                 maxWidth,
                 showDefault,
                 showChoices,
+                sectionOrder,
                 showUsage,
               }));
             }
