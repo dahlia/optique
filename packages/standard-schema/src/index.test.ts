@@ -286,6 +286,16 @@ describe("standardSchema()", () => {
         "[object Object]",
       );
     });
+
+    it("should handle objects with null prototype", () => {
+      const value = Object.create(null) as object;
+      const parser = standardSchema(
+        schema<unknown, object>(() => ({ value })),
+        { placeholder: value },
+      );
+
+      assert.equal(parser.format(value), "{}");
+    });
   });
 
   describe("validation", () => {

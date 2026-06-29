@@ -126,15 +126,25 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     typeof (value as Record<string, unknown>).then === "function";
 }
 
+function safeString(value: unknown): string {
+  try {
+    return String(value);
+  } catch {
+    return "[object Object]";
+  }
+}
+
 function formatValue<T>(value: T, format?: (value: T) => string): string {
   if (format) return format(value);
 
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? String(value) : value.toISOString();
+    return Number.isNaN(value.getTime())
+      ? safeString(value)
+      : value.toISOString();
   }
-  if (typeof value !== "object" || value === null) return String(value);
-  if (Array.isArray(value)) return String(value);
-  const str = String(value);
+  if (typeof value !== "object" || value === null) return safeString(value);
+  if (Array.isArray(value)) return safeString(value);
+  const str = safeString(value);
   if (str !== "[object Object]") return str;
   const proto = Object.getPrototypeOf(value);
   if (proto === Object.prototype || proto === null) {
