@@ -114,7 +114,7 @@ To be released.
     or *.spec* before the configured extension—such as *hello.test.ts* or
     *hello.spec.js*—is ignored the same way declaration files are, so it no
     longer registers as a ghost command nor breaks discovery by failing the
-    `defineCommand()` check.  [[#857]]
+    `defineCommand()` check.  [[#857], [#861] by Lee Hoyeon]
 
  -  `runProgram()` now accepts `showUsage: false` for compact command-list
     help.  The option is forwarded to *@optique/run* so discovered command
@@ -131,6 +131,7 @@ To be released.
 [#854]: https://github.com/dahlia/optique/issues/854
 [#857]: https://github.com/dahlia/optique/issues/857
 [#858]: https://github.com/dahlia/optique/pull/858
+[#861]: https://github.com/dahlia/optique/pull/861
 
 ### @optique/run
 
