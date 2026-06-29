@@ -44,7 +44,7 @@ Patch releases
 Patch releases (e.g., 1.2.3) are for bug fixes and small improvements.
 They are created from `X.Y-maintenance` branches.
 
-### Step 1: Prepare the release
+### Step 1: prepare the release
 
 1.  Check out the maintenance branch:
 
@@ -78,7 +78,7 @@ They are created from `X.Y-maintenance` branches.
     git tag -m "Optique 1.2.3" 1.2.3
     ~~~~
 
-### Step 2: Prepare next version
+### Step 2: prepare next version
 
 1.  Add a new section at the top of *CHANGES.md* for the next patch version:
 
@@ -114,7 +114,7 @@ They are created from `X.Y-maintenance` branches.
     [ci skip]"
     ~~~~
 
-### Step 3: Push
+### Step 3: push
 
 Push the tag and branch to the remote:
 
@@ -122,7 +122,7 @@ Push the tag and branch to the remote:
 git push origin 1.2.3 1.2-maintenance
 ~~~~
 
-### Step 4: Cascade merges
+### Step 4: cascade merges
 
 After creating a patch release, you must merge it forward to newer maintenance
 branches and eventually to `main`.
@@ -247,7 +247,7 @@ Major/minor releases
 Major/minor releases (e.g., 1.3.0, 2.0.0) introduce new features or breaking
 changes.  They are always created from the `main` branch with patch version 0.
 
-### Step 1: Prepare the release on main
+### Step 1: prepare the release on main
 
 1.  Check out and update main:
 
@@ -281,7 +281,7 @@ changes.  They are always created from the `main` branch with patch version 0.
     git tag -m "Optique 1.3.0" 1.3.0
     ~~~~
 
-### Step 2: Prepare next version on main
+### Step 2: prepare next version on main
 
 1.  Add a new section at the top of *CHANGES.md* for the next minor version:
 
@@ -317,13 +317,13 @@ changes.  They are always created from the `main` branch with patch version 0.
     [ci skip]"
     ~~~~
 
-### Step 3: Push main and tag
+### Step 3: push main and tag
 
 ~~~~ bash
 git push origin 1.3.0 main
 ~~~~
 
-### Step 4: Create maintenance branch
+### Step 4: create maintenance branch
 
 1.  Create the maintenance branch from the release tag:
 

@@ -22,7 +22,7 @@ they cover the parts agents most often get wrong.
 Core rules
 ----------
 
- -  Use `run()` from `@optique/run` for real CLI applications. It reads
+ -  Use `run()` from *@optique/run* for real CLI applications. It reads
     `process.argv`/`Deno.args`, handles help, version output, errors, exit
     codes, colors, terminal width, and shell completion. Use `parse()` from
     `@optique/core/parser` or `runParser()` from `@optique/core/facade` when
@@ -37,7 +37,7 @@ Core rules
     `undefined`; `withDefault(p, value)` yields a fallback value. For Boolean
     flags, use `withDefault(flag("--name"), false)` when absence should mean
     `false`.
- -  Use `message` from `@optique/core/message` for descriptions, help text, and
+ -  Use `message` from *@optique/core/message* for descriptions, help text, and
     custom errors. Prefer semantic message helpers such as `optionName()` and
     `metavar()` over string concatenation when naming CLI elements.
  -  Use value parsers such as `integer()`, `choice()`, `url()`, and `uuid()`
@@ -46,7 +46,7 @@ Core rules
     `{ mode, metavar, parse, format }` value parser only when the catalog does
     not cover the domain.
  -  Async value parsers make the containing parser async. If you use packages
-    such as `@optique/git`, remember to `await run(...)`, `await parse(...)`, or
+    such as *@optique/git*, remember to `await run(...)`, `await parse(...)`, or
     `await runParser(...)` as appropriate.
  -  Build subcommands with `command()` combined by `or()`. Put a literal field
     such as `command: constant("serve")` in each branch when you want a

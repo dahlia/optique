@@ -199,7 +199,7 @@ const config = object({
 Version compatibility
 ---------------------
 
-The `@optique/zod` package supports both Zod v3 (3.25.0+) and Zod v4 (4.0.0+):
+The *@optique/zod* package supports both Zod v3 (3.25.0+) and Zod v4 (4.0.0+):
 
  -  **Zod v3**: Uses standard error messages from `error.issues[0].message`
  -  **Zod v4**: Automatically uses `prettifyError()` when available for better

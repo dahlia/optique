@@ -1402,7 +1402,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     scripts.  [[#235], [#568]]
 
  -  Fixed PowerShell file completion stripping directory prefixes from nested
-    path suggestions.  Completing `src/` now returns `src/alpha.txt` instead
+    path suggestions.  Completing `src/` now returns *src/alpha.txt* instead
     of bare `alpha.txt`.  [[#253], [#632]]
 
  -  Fixed Nushell file completion returning an empty list for non-empty path
@@ -1432,7 +1432,7 @@ changes and migration notes carefully when upgrading from 0.x versions.
     encoding.  [[#647], [#650]]
 
  -  Fixed generated shell completion scripts not stripping leading dots from
-    extension filters, so that dot-prefixed extensions (e.g., `.json`) in the
+    extension filters, so that dot-prefixed extensions (e.g., *.json*) in the
     transport protocol are handled correctly in Bash, fish, Nushell, and
     PowerShell.  Also fixed a `Split-Path` error in PowerShell that caused
     extension filtering to silently fail when the completion prefix was empty,
@@ -2790,8 +2790,8 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 
 #### Path parser fixes
 
- -  Fixed `path()` extension validation for dotfiles (e.g., `.env`,
-    `.gitignore`) and multi-part extensions (e.g., `.tar.gz`, `.d.ts`).
+ -  Fixed `path()` extension validation for dotfiles (e.g., *.env*,
+    *.gitignore*) and multi-part extensions (e.g., *.tar.gz*, *.d.ts*).
     Previously, `extname()` only returned the last extension segment, so
     these cases were incorrectly rejected.  [[#309], [#530]]
 
@@ -2935,7 +2935,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     [[#273], [#544]]
 
  -  Fixed `formatDocPageAsMan()` emitting `literal` usage/doc terms without
-    roff line-start escaping.  Values starting with `.` or `'` (e.g., `.env`)
+    roff line-start escaping.  Values starting with `.` or `'` (e.g., *.env*)
     were interpreted by roff as requests instead of visible text.
     [[#297], [#559]]
 
@@ -2968,7 +2968,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     `--version-string`, and `--manual` options instead of generating malformed
     `.TH` header lines.  [[#283], [#532]]
 
- -  Fixed `optique-man` not recognizing `.tsx` and `.jsx` input files as
+ -  Fixed `optique-man` not recognizing *.tsx* and *.jsx* input files as
     needing the `tsx` loader on Node.js, causing `ERR_UNKNOWN_FILE_EXTENSION`
     errors instead of the intended TypeScript-handling flow.  [[#280], [#534]]
 
@@ -3903,7 +3903,7 @@ Released on February 15, 2026.
     ~~~~
 
  -  Removed deprecated `run` export. Use `runParser()` instead. The old name
-    was deprecated in v0.9.0 due to naming conflicts with `@optique/run`'s
+    was deprecated in v0.9.0 due to naming conflicts with *@optique/run*'s
     `run()` function. [[#65]]
 
  -  Removed deprecated `RunError` export. Use `RunParserError` instead.
@@ -4486,7 +4486,7 @@ Released on January 6, 2026.
     suggests using tools like *safe-regex* to validate patterns before use.
 
  -  Renamed `run()` function to `runParser()` to avoid naming conflict with
-    `@optique/run`'s `run()` function.  IDE autocomplete was suggesting both
+    *@optique/run*'s `run()` function.  IDE autocomplete was suggesting both
     functions when typing `run`, causing confusion.  The old `run()` export
     is still available but deprecated and will be removed in a future major
     version.  [[#54]]
@@ -6770,7 +6770,7 @@ Released on August 29, 2025.
 
  -  The `run()` function now provides context-aware help behavior,
     automatically inheriting the improvements from `@optique/core/facade`.
-    Applications using `@optique/run` will see the same enhanced help system
+    Applications using *@optique/run* will see the same enhanced help system
     where `subcommand --help` shows command-specific help instead of global
     help.
 

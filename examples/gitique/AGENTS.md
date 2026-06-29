@@ -50,23 +50,23 @@ examples/gitique/
 
 ### Key source files
 
- -  **`src/index.ts`**: Sets up the CLI with `run()` from *@optique/run*,
+ -  ***src/index.ts***: Sets up the CLI with `run()` from *@optique/run*,
     combines command parsers using `or()`, and implements type-safe command
     dispatch using switch/case with discriminated unions.  Demonstrates
     `showDefault`, `brief`, and `footer` options.
 
- -  **`src/commands/*.ts`**: Each file exports a command parser and an
+ -  ***src/commands/*.ts**\*: Each file exports a command parser and an
     `execute*()` function.  Commands demonstrate various Optique features:
      -  `group()` and `merge()` for organizing help text
      -  `choice()` for enumerated values
      -  `withDefault()` for default values
      -  `map()` for transforming parser results
 
- -  **`src/utils/git.ts`**: Wraps es-git library for repository operations
+ -  ***src/utils/git.ts***: Wraps es-git library for repository operations
     including `getRepository()`, `addFile()`, `createCommit()`,
     `getCommitHistory()`, `getStatus()`, and `getDiff()`.
 
- -  **`src/utils/formatters.ts`**: Provides ANSI color formatting functions
+ -  ***src/utils/formatters.ts***: Provides ANSI color formatting functions
     for terminal output (`formatCommitOneline()`, `formatError()`,
     `formatSuccess()`, `formatStatusShort()`, `formatDiffStats()`, etc.).
 

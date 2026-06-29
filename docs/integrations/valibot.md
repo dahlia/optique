@@ -254,7 +254,7 @@ const config = object({
 Version compatibility
 ---------------------
 
-The `@optique/valibot` package currently targets Valibot 1.x.
+The *@optique/valibot* package currently targets Valibot 1.x.
 
 
 Limitations

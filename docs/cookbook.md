@@ -230,13 +230,13 @@ A few things to note about this pattern:
     recipe for an example of `group()` in action.
 
  -  *Config-file defaults*: When `--config` should supply defaults from a
-    file via `@optique/config`, the same `merge(globals, or(...))` shape
+    file via *@optique/config*, the same `merge(globals, or(...))` shape
     plugs directly into the `contexts:` option of `runAsync()`. See the
     [config file integration](#config-file-integration) recipe.
 
  -  *When this pattern is not the right fit*: If the shared options need
     different defaults per command, this idiom does not help. Reach for
-    `@optique/discover` instead; it lets each command module declare its
+    *@optique/discover* instead; it lets each command module declare its
     own defaults while sharing a common entry point.
 
 ### Positional prefixes before subcommands
@@ -2137,7 +2137,7 @@ This differs from the derived defaults above: a derived default is computed
 during a second parse pass and the field stays a plain value, while a deferred
 value is resolved by the handler and the field is a function.  The repository
 includes a runnable version of this pattern in
-`examples/patterns/deferred-values.ts`.  For more details, see the
+*examples/patterns/deferred-values.ts*.  For more details, see the
 [`deferredValue()`](./concepts/modifiers.md#deferredvalue-parser) modifier.
 
 
@@ -2260,7 +2260,7 @@ value.  The discovered program still gets the usual *@optique/run* help,
 version, and shell completion behavior.
 
 The repository also includes a runnable version of this pattern in
-`examples/patterns/command-discovery.ts`.  For the full API details, see
+*examples/patterns/command-discovery.ts*.  For the full API details, see
 [command discovery](./concepts/discover.md).
 
 ### Program-level lifecycle hooks
@@ -2268,9 +2268,9 @@ The repository also includes a runnable version of this pattern in
 *This API is available since Optique 1.2.0.*
 
 `runProgram()` dispatches straight to the matched command's handler.  When a
-whole family of commands needs the same *around-handler* behavior — opening a
+whole family of commands needs the same *around-handler* behavior—opening a
 log scope, starting a tracing span, lazily booting a resource, printing a
-“finished in *X*ms” line, reporting failures — that logic should not be copied
+“finished in *X*ms” line, reporting failures—that logic should not be copied
 into every handler or smuggled into a parser.  Pass a `hooks` object to
 `runProgram()` instead.  Hooks are opt-in: a `runProgram()` call without them
 behaves exactly as before.
@@ -2355,7 +2355,7 @@ export default defineCommand({
 
 #### Per-command preflight
 
-When only one command needs its own setup — for example, a `deploy` command that
+When only one command needs its own setup—for example, a `deploy` command that
 always refreshes an auth token — put the hooks on the command definition instead
 of the program.  Command-level hooks nest inside the program-level ones, so the
 program hook still wraps every command:
@@ -2404,10 +2404,10 @@ flowchart TB
 
 #### Parser errors versus handler errors
 
-Hooks wrap the *handler*, not the parser.  A *parser error* — a missing option
-or a bad value — is detected before any handler runs and is printed by
+Hooks wrap the *handler*, not the parser.  A *parser error*—a missing option
+or a bad value—is detected before any handler runs and is printed by
 *@optique/run*'s error display; `beforeEach` never fires for it.  A *handler
-error* — anything the handler, `beforeEach`, or `afterEach` throws or rejects —
+error*—anything the handler, `beforeEach`, or `afterEach` throws or rejects—
 is passed to `onError`.  `onError` is for observation and cleanup only:
 `runProgram()` re-throws the original error after it resolves, so the process
 still exits with the same non-zero code it would without hooks.  Command-level
@@ -2415,7 +2415,7 @@ hooks run before program-level hooks on the way out, so the most specific
 cleanup happens first.
 
 The repository includes a runnable version of this pattern in
-`examples/patterns/program-hooks.ts`.  For the hook contract and ordering, see
+*examples/patterns/program-hooks.ts*.  For the hook contract and ordering, see
 [lifecycle hooks](./concepts/discover.md#lifecycle-hooks).
 
 

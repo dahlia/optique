@@ -53,7 +53,7 @@ bun add @optique/git
 Getting started
 ---------------
 
-Import the parsers from `@optique/git` and use them with Optique primitives:
+Import the parsers from *@optique/git* and use them with Optique primitives:
 
 ~~~~ typescript twoslash
 import { gitBranch } from "@optique/git";
