@@ -54,6 +54,30 @@ const valueParsers = [
     ],
   },
   {
+    group: "Schema",
+    base: "/integrations/standard-schema",
+    items: [
+      ["standardSchema", "standard-schema-integration"],
+      ["standardSchemaAsync", "async-schemas"],
+    ],
+  },
+  {
+    group: "Zod",
+    base: "/integrations/zod",
+    items: [
+      ["zod", "zod-integration"],
+      ["zodAsync", "async-schemas"],
+    ],
+  },
+  {
+    group: "Valibot",
+    base: "/integrations/valibot",
+    items: [
+      ["valibot", "valibot-integration"],
+      ["valibotAsync", "async-schemas"],
+    ],
+  },
+  {
     group: "Filesystem",
     base: "/concepts/valueparsers",
     items: [["path", "path-parser"]],
