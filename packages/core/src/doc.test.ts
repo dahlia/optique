@@ -86,6 +86,56 @@ describe("formatDocPage", () => {
     assert.equal(result, expected);
   });
 
+  it("should omit usage when showUsage is false", () => {
+    const page: DocPage = {
+      brief: message`Project tools.`,
+      usage: [{ type: "command", name: "build" }],
+      description: message`Run project automation commands.`,
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "build" },
+          description: message`Build the project.`,
+        }],
+      }],
+    };
+
+    const result = formatDocPage("myapp", page, { showUsage: false });
+
+    assert.ok(!result.includes("Usage:"));
+    assert.ok(result.includes("Project tools."));
+    assert.ok(result.includes("Run project automation commands."));
+    assert.ok(result.includes("build"));
+    assert.ok(result.includes("Build the project."));
+  });
+
+  it("should ignore suppressed usage when validating maxWidth", () => {
+    const page: DocPage = {
+      usage: [{
+        type: "command",
+        name: "very-long-command-name-that-would-not-fit",
+      }],
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "run" },
+          description: message`Run.`,
+        }],
+      }],
+    };
+
+    assert.throws(
+      () => formatDocPage("myapp", page, { maxWidth: 10 }),
+      RangeError,
+    );
+
+    const result = formatDocPage("myapp", page, {
+      maxWidth: 10,
+      showUsage: false,
+    });
+
+    assert.ok(!result.includes("Usage:"));
+    assert.ok(result.includes("run"));
+  });
+
   it("should format a page with description", () => {
     const page: DocPage = {
       description: [{ type: "text", text: "This is a detailed description" }],

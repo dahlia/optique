@@ -1937,6 +1937,48 @@ describe("runParser", () => {
       assert.ok(errorOutput.includes("Error:"));
     });
 
+    it("should omit usage from help above error when showUsage is false", () => {
+      const parser = object({
+        port: argument(integer({ metavar: "PORT" })),
+      });
+
+      let errorOutput = "";
+
+      runParser(parser, "test", ["not-a-number"], {
+        aboveError: "help",
+        showUsage: false,
+        onError: () => "handled",
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.ok(!errorOutput.includes("Usage:"));
+      assert.ok(errorOutput.includes("PORT"));
+      assert.ok(errorOutput.includes("Error:"));
+    });
+
+    it("should keep usage-only error output when showUsage is false", () => {
+      const parser = object({
+        port: argument(integer({ metavar: "PORT" })),
+      });
+
+      let errorOutput = "";
+
+      runParser(parser, "test", ["not-a-number"], {
+        aboveError: "usage",
+        showUsage: false,
+        onError: () => "handled",
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.ok(errorOutput.includes("Usage: test"));
+      assert.ok(errorOutput.includes("PORT"));
+      assert.ok(errorOutput.includes("Error:"));
+    });
+
     it("should show nothing above error when aboveError is 'none'", () => {
       const parser = object({
         port: argument(integer()),
@@ -10230,6 +10272,30 @@ describe("runWithAsync", () => {
   });
 
   describe("sectionOrder option", () => {
+    it("should omit usage from help output when showUsage is false", () => {
+      const parser = or(
+        command("build", object({ verbose: flag("--verbose") })),
+        command("deploy", object({ env: option("--env", string()) })),
+      );
+
+      let helpOutput = "";
+      const result = runParser(parser, "myapp", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "shown",
+        },
+        showUsage: false,
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.ok(!helpOutput.includes("Usage:"));
+      assert.ok(helpOutput.includes("build"));
+      assert.ok(helpOutput.includes("deploy"));
+    });
+
     it("should use custom sectionOrder comparator to control section ordering in help output", () => {
       const parser = or(
         command("build", object({ verbose: flag("--verbose") })),

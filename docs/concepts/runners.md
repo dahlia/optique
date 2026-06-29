@@ -298,6 +298,7 @@ const prog = defineProgram({
 const result = runParser(prog, ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
+  showUsage: false,      // Hide Usage: in full help pages
   showDefault: true,     // Show default values in help text
   help: {                // Grouped help API
     option: true,        // Only --help option, no help command
@@ -322,6 +323,12 @@ const result = runParser(prog, ["--name", "test"], {
 Use this approach when you need automatic help and error handling but want
 control over process behavior, or when integrating with frameworks that
 manage process lifecycle.
+
+Pass `showUsage: false` when a command menu should show the brief,
+description, and generated sections without the `Usage:` synopsis.  The
+setting applies to full help pages, including help rendered above parse
+errors with `aboveError: "help"`.  It does not change the explicit
+usage-only preamble from `aboveError: "usage"`.
 
 ### Explicit sync/async variants
 

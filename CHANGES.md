@@ -45,6 +45,11 @@ To be released.
     maintained reference pages for API details, and keeps its inline TypeScript
     examples covered by a snippet type-checking test.  [[#850], [#852]]
 
+ -  Added `showUsage` to `DocPageFormatOptions` and the core runner
+    `RunOptions`.  Passing `showUsage: false` omits the `Usage:` synopsis
+    from full help pages, including `aboveError: "help"` output, while leaving
+    explicit usage-only error preambles unchanged.  [[#856], [#860]]
+
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
 [#846]: https://github.com/dahlia/optique/issues/846
@@ -52,6 +57,8 @@ To be released.
 [#849]: https://github.com/dahlia/optique/pull/849
 [#850]: https://github.com/dahlia/optique/issues/850
 [#852]: https://github.com/dahlia/optique/pull/852
+[#856]: https://github.com/dahlia/optique/issues/856
+[#860]: https://github.com/dahlia/optique/pull/860
 
 ### @optique/derived-defaults
 
@@ -101,6 +108,11 @@ To be released.
     with nested commands such as `stash list`.  The `entryFileName` option
     customizes or disables the entry-file rule.  [[#838], [#839]]
 
+ -  `runProgram()` now accepts `showUsage: false` for compact command-list
+    help.  The option is forwarded to *@optique/run* so discovered command
+    programs can show the brief and command sections without the expanded
+    `Usage:` synopsis.  [[#856], [#860]]
+
 [#830]: https://github.com/dahlia/optique/issues/830
 [#835]: https://github.com/dahlia/optique/issues/835
 [#838]: https://github.com/dahlia/optique/issues/838
@@ -108,6 +120,13 @@ To be released.
 [#840]: https://github.com/dahlia/optique/pull/840
 [#841]: https://github.com/dahlia/optique/pull/841
 [#851]: https://github.com/dahlia/optique/pull/851
+
+### @optique/run
+
+ -  Added `showUsage` to `RunOptions`.  Passing `showUsage: false` omits the
+    `Usage:` synopsis from full help pages produced by `run()`, `runSync()`,
+    and `runAsync()`, while usage-only error output remains unchanged.
+    [[#856], [#860]]
 
 ### @optique/prompt
 

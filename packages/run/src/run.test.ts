@@ -1667,6 +1667,36 @@ describe("runAsync", () => {
       assert.ok(typeof helpOutput === "string");
     });
 
+    it("should omit usage from help output when showUsage is false", () => {
+      const parser = or(
+        command("build", object({})),
+        command("deploy", object({})),
+      );
+
+      let helpOutput = "";
+
+      try {
+        run(parser, {
+          args: ["--help"],
+          programName: "myapp",
+          help: "option",
+          showUsage: false,
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: () => {
+            throw new Error("EXIT");
+          },
+        });
+      } catch (err) {
+        if ((err as Error).message !== "EXIT") throw err;
+      }
+
+      assert.ok(!helpOutput.includes("Usage:"));
+      assert.ok(helpOutput.includes("build"));
+      assert.ok(helpOutput.includes("deploy"));
+    });
+
     it("preserves positional values that match built-in help commands", async () => {
       const parser = object({ value: argument(string()) });
       let exited = false;
