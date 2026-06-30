@@ -14,6 +14,7 @@ const packages = [
   { name: "@optique/git", desc: "Git reference value parsers.", link: "/integrations/git" },
   { name: "@optique/logtape", desc: "Log-level options for LogTape.", link: "/integrations/logtape" },
   { name: "@optique/man", desc: "Unix man pages from parsers.", link: "/concepts/man" },
+  { name: "@optique/standard-schema", desc: "Portable schema-backed value parsers.", link: "/integrations/standard-schema" },
   { name: "@optique/temporal", desc: "Temporal date and time parsers.", link: "/integrations/temporal" },
   { name: "@optique/valibot", desc: "Valibot schemas as value parsers.", link: "/integrations/valibot" },
   { name: "@optique/zod", desc: "Zod schemas as value parsers.", link: "/integrations/zod" },

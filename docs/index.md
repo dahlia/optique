@@ -308,7 +308,16 @@ const host = prompt(
 <LandingSection eyebrow="From the cookbook" title="The awkward parts of real CLIs, already solved." lead="Mutually exclusive modes, options that gate others, key–value pairs, pass-through, verbosity, negatable flags. Each hard requirement is a small composition, and each one has a recipe in the cookbook." moreHref="/cookbook" moreText="Browse the full cookbook">
 <PatternShowcase />
 </LandingSection>
-<LandingSection eyebrow="Batteries included" title="Reach for a parser before you write one." lead="Forty-one built-in value parsers, from <code>integer()</code> and <code>ip()</code> to Temporal dates and async Git refs, plus the combinators that assemble them. Every one returns an ordinary parser that composes with the rest." moreHref="/concepts/valueparsers" moreText="The value parser reference">
+<LandingSection
+  eyebrow="Batteries included"
+  title="Reach for a parser before you write one."
+  lead="Forty-seven built-in value parsers, from <code>integer()</code> and
+  <code>ip()</code> to schema validators, Temporal dates, and async Git refs,
+  plus the combinators that assemble them. Every one returns an ordinary parser
+  that composes with the rest."
+  moreHref="/concepts/valueparsers"
+  moreText="The value parser reference"
+>
 <ParserCatalog />
 <PackageGrid />
 </LandingSection>

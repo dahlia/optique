@@ -269,4 +269,11 @@ The Valibot integration provides a lightweight yet powerful way to reuse
 validation logic across your entire application while maintaining full type
 safety, excellent error messages, and minimal bundle size.
 
+If you only need the portable Standard Schema validation contract, you can also
+use Valibot schemas with
+[*@optique/standard-schema*](./standard-schema.md). The dedicated
+*@optique/valibot* package remains the better choice when you want
+Valibot-specific metavar inference, choices, suggestions, and Valibot issue
+callbacks.
+
 <!-- cSpell: ignore valibot picklist -->

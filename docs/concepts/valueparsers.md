@@ -28,38 +28,39 @@ with Optique's type system.
 
 ### Parser catalog
 
-| Parser                           | Module              | Return type                    | Description                                         |
-| -------------------------------- | ------------------- | ------------------------------ | --------------------------------------------------- |
-| `string()`                       | *@optique/core*     | `string`                       | Any string, with optional pattern validation        |
-| `keyValue()`                     | *@optique/core*     | readonly `[key, value]`        | Key–value pair such as `KEY=VALUE`                  |
-| `integer()`                      | *@optique/core*     | `number` or `bigint`           | Integer with range validation                       |
-| `float()`                        | *@optique/core*     | `number`                       | Floating-point number                               |
-| `fileSize()`                     | *@optique/core*     | `number` or `bigint`           | Human-readable data size (bytes)                    |
-| `color()`                        | *@optique/core*     | `Color`                        | CSS color (hex, rgb, hsl, or named)                 |
-| `choice()`                       | *@optique/core*     | string or number literal union | Enumerated values                                   |
-| `firstOf()`                      | *@optique/core*     | union of constituent types     | First-match union of value parsers                  |
-| `json()`                         | *@optique/core*     | `Json`                         | Any JSON value, with optional root type restriction |
-| `cron()`                         | *@optique/core*     | `CronExpression`               | Cron schedule expression                            |
-| `url()`                          | *@optique/core*     | `URL`                          | URL with protocol filtering                         |
-| `locale()`                       | *@optique/core*     | `Intl.Locale`                  | BCP 47 locale identifier                            |
-| `uuid()`                         | *@optique/core*     | `string`                       | UUID with RFC 9562 validation                       |
-| `semVer()`                       | *@optique/core*     | `SemVerString` or `SemVer`     | Semantic Versioning 2.0.0                           |
-| `port()`                         | *@optique/core*     | `number` or `bigint`           | TCP/UDP port number                                 |
-| `ipv4()`                         | *@optique/core*     | `string`                       | IPv4 address with restrictions                      |
-| `ipv6()`                         | *@optique/core*     | `string`                       | IPv6 address                                        |
-| `ip()`                           | *@optique/core*     | `string`                       | IPv4 or IPv6 address                                |
-| `cidr()`                         | *@optique/core*     | `string`                       | CIDR notation                                       |
-| `hostname()`                     | *@optique/core*     | `string`                       | DNS hostname                                        |
-| `domain()`                       | *@optique/core*     | `string`                       | DNS domain with TLD validation                      |
-| `email()`                        | *@optique/core*     | `string`                       | Email address                                       |
-| `socketAddress()`                | *@optique/core*     | `{ host, port }`               | Host:port pair                                      |
-| `portRange()`                    | *@optique/core*     | `{ start, end }`               | Port range                                          |
-| `macAddress()`                   | *@optique/core*     | `string`                       | MAC-48 address                                      |
-| `path()`                         | *@optique/run*      | `string`                       | File/directory path with existence checks           |
-| `gitBranch()`, `gitTag()`, etc.  | *@optique/git*      | `string`                       | [Git references](../integrations/git.md)            |
-| `instant()`, `plainDate()`, etc. | *@optique/temporal* | Temporal types                 | [Temporal dates/times](../integrations/temporal.md) |
-| `zod()`                          | *@optique/zod*      | schema output                  | [Zod schema](../integrations/zod.md)                |
-| `valibot()`                      | *@optique/valibot*  | schema output                  | [Valibot schema](../integrations/valibot.md)        |
+| Parser                           | Module                     | Return type                    | Description                                           |
+| -------------------------------- | -------------------------- | ------------------------------ | ----------------------------------------------------- |
+| `string()`                       | *@optique/core*            | `string`                       | Any string, with optional pattern validation          |
+| `keyValue()`                     | *@optique/core*            | readonly `[key, value]`        | Key–value pair such as `KEY=VALUE`                    |
+| `integer()`                      | *@optique/core*            | `number` or `bigint`           | Integer with range validation                         |
+| `float()`                        | *@optique/core*            | `number`                       | Floating-point number                                 |
+| `fileSize()`                     | *@optique/core*            | `number` or `bigint`           | Human-readable data size (bytes)                      |
+| `color()`                        | *@optique/core*            | `Color`                        | CSS color (hex, rgb, hsl, or named)                   |
+| `choice()`                       | *@optique/core*            | string or number literal union | Enumerated values                                     |
+| `firstOf()`                      | *@optique/core*            | union of constituent types     | First-match union of value parsers                    |
+| `json()`                         | *@optique/core*            | `Json`                         | Any JSON value, with optional root type restriction   |
+| `cron()`                         | *@optique/core*            | `CronExpression`               | Cron schedule expression                              |
+| `url()`                          | *@optique/core*            | `URL`                          | URL with protocol filtering                           |
+| `locale()`                       | *@optique/core*            | `Intl.Locale`                  | BCP 47 locale identifier                              |
+| `uuid()`                         | *@optique/core*            | `string`                       | UUID with RFC 9562 validation                         |
+| `semVer()`                       | *@optique/core*            | `SemVerString` or `SemVer`     | Semantic Versioning 2.0.0                             |
+| `port()`                         | *@optique/core*            | `number` or `bigint`           | TCP/UDP port number                                   |
+| `ipv4()`                         | *@optique/core*            | `string`                       | IPv4 address with restrictions                        |
+| `ipv6()`                         | *@optique/core*            | `string`                       | IPv6 address                                          |
+| `ip()`                           | *@optique/core*            | `string`                       | IPv4 or IPv6 address                                  |
+| `cidr()`                         | *@optique/core*            | `string`                       | CIDR notation                                         |
+| `hostname()`                     | *@optique/core*            | `string`                       | DNS hostname                                          |
+| `domain()`                       | *@optique/core*            | `string`                       | DNS domain with TLD validation                        |
+| `email()`                        | *@optique/core*            | `string`                       | Email address                                         |
+| `socketAddress()`                | *@optique/core*            | `{ host, port }`               | Host:port pair                                        |
+| `portRange()`                    | *@optique/core*            | `{ start, end }`               | Port range                                            |
+| `macAddress()`                   | *@optique/core*            | `string`                       | MAC-48 address                                        |
+| `path()`                         | *@optique/run*             | `string`                       | File/directory path with existence checks             |
+| `gitBranch()`, `gitTag()`, etc.  | *@optique/git*             | `string`                       | [Git references](../integrations/git.md)              |
+| `instant()`, `plainDate()`, etc. | *@optique/temporal*        | Temporal types                 | [Temporal dates/times](../integrations/temporal.md)   |
+| `standardSchema()`               | *@optique/standard-schema* | schema output                  | [Standard Schema](../integrations/standard-schema.md) |
+| `zod()`                          | *@optique/zod*             | schema output                  | [Zod schema](../integrations/zod.md)                  |
+| `valibot()`                      | *@optique/valibot*         | schema output                  | [Valibot schema](../integrations/valibot.md)          |
 
 
 `string()` parser
@@ -3794,6 +3795,13 @@ Temporal integration
 
 See the [Temporal integration](../integrations/temporal.md) page for
 documentation on using Temporal API parsers with Optique.
+
+
+Standard Schema integration
+---------------------------
+
+See the [Standard Schema integration](../integrations/standard-schema.md) page
+for documentation on using Standard Schema-compatible validators with Optique.
 
 
 Zod integration

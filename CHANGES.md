@@ -60,6 +60,21 @@ To be released.
 [#856]: https://github.com/dahlia/optique/issues/856
 [#860]: https://github.com/dahlia/optique/pull/860
 
+### @optique/standard-schema
+
+ -  Added the new *@optique/standard-schema* package for using any Standard
+    Schema-compatible validator as a value parser.  `standardSchema()` provides
+    a synchronous adapter, while `standardSchemaAsync()` accepts validators
+    whose `~standard.validate()` method returns a promise.  The package keeps
+    the generic Standard Schema path conservative: callers provide
+    `placeholder`, may override `metavar`, `format`, and `errors.schemaError`,
+    and should still prefer *@optique/zod* or *@optique/valibot* when they want
+    richer schema-specific CLI behavior such as inferred choices and
+    suggestions.  [[#862], [#863]]
+
+[#862]: https://github.com/dahlia/optique/issues/862
+[#863]: https://github.com/dahlia/optique/pull/863
+
 ### @optique/derived-defaults
 
  -  Added the new *@optique/derived-defaults* package for computing fallback

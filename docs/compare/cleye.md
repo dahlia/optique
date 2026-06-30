@@ -252,9 +252,9 @@ Beyond the three scenarios
     Node.js, and Bun.
  -  *Completion, man pages, schema.* Cleye does one job—parsing argv—so it
     has no completion, man-page, or schema features. Optique generates
-    completion for five shells and man pages, integrates Zod and Valibot as
-    value parsers, and validates config files with any Standard Schema
-    validator.
+    completion for five shells and man pages, uses Standard Schema-compatible
+    validators as value parsers, keeps richer Zod and Valibot adapters, and
+    validates config files with any Standard Schema validator.
  -  *Simplicity.* Cleye's single-call API is hard to beat when you just need
     typed flags and good `--help` for a small Node.js script.
 

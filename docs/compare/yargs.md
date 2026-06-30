@@ -253,8 +253,9 @@ Beyond the three scenarios
  -  *Completion and man pages.* Both generate shell completion—Yargs for Bash
     and zsh; Optique for those plus PowerShell and Nushell, with context-aware
     and async suggestions. Only Optique also generates man pages.
- -  *Schema validation.* Optique integrates Zod and Valibot as value parsers
-    (and any Standard Schema validator for config); Yargs has no equivalent.
+ -  *Schema validation.* Optique uses Standard Schema-compatible validators as
+    value parsers, keeps richer Zod and Valibot adapters, and validates config
+    files with any Standard Schema validator; Yargs has no equivalent.
  -  *Maturity.* Yargs has a decade of adoption and a huge user base that
     Optique cannot match yet—worth weighing if longevity and familiarity
     matter more than the composition model.

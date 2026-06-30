@@ -62,8 +62,9 @@ Features
     compositions with compile-time validation
  -  *Rich value parsers*: Built-in parsers for strings, numbers, URLs, locales,
     UUIDs, networking types (`port()`, `ipv4()`, `hostname()`, `email()`, etc.),
-    Temporal types (via *@optique/temporal*), Zod schemas (via *@optique/zod*),
-    and Valibot schemas (via *@optique/valibot*)
+    Temporal types (via *@optique/temporal*), Standard Schema validators (via
+    *@optique/standard-schema*), Zod schemas (via *@optique/zod*), and Valibot
+    schemas (via *@optique/valibot*)
  -  *Config file support*: Load config from files with Standard Schema
     validation (via *@optique/config*), supporting Zod, Valibot, ArkType, and
     more
@@ -197,6 +198,7 @@ The following is a list of the available packages:
 | [@optique/git](/packages/git/)                           | [JSR][jsr:@optique/git]              | [npm][npm:@optique/git]              | Git reference parsers (branches, tags, etc) |
 | [@optique/logtape](/packages/logtape/)                   | [JSR][jsr:@optique/logtape]          | [npm][npm:@optique/logtape]          | [LogTape] logging integration               |
 | [@optique/man](/packages/man/)                           | [JSR][jsr:@optique/man]              | [npm][npm:@optique/man]              | Man page generation from parsers            |
+| [@optique/standard-schema](/packages/standard-schema/)   | [JSR][jsr:@optique/standard-schema]  | [npm][npm:@optique/standard-schema]  | [Standard Schema] value parser integration  |
 | [@optique/temporal](/packages/temporal/)                 | [JSR][jsr:@optique/temporal]         | [npm][npm:@optique/temporal]         | [Temporal] value parsers (date and time)    |
 | [@optique/valibot](/packages/valibot/)                   | [JSR][jsr:@optique/valibot]          | [npm][npm:@optique/valibot]          | [Valibot] schema integration for validation |
 | [@optique/zod](/packages/zod/)                           | [JSR][jsr:@optique/zod]              | [npm][npm:@optique/zod]              | [Zod] schema integration for validation     |
@@ -226,6 +228,8 @@ The following is a list of the available packages:
 [LogTape]: https://logtape.org/
 [jsr:@optique/man]: https://jsr.io/@optique/man
 [npm:@optique/man]: https://www.npmjs.com/package/@optique/man
+[jsr:@optique/standard-schema]: https://jsr.io/@optique/standard-schema
+[npm:@optique/standard-schema]: https://www.npmjs.com/package/@optique/standard-schema
 [jsr:@optique/temporal]: https://jsr.io/@optique/temporal
 [npm:@optique/temporal]: https://www.npmjs.com/package/@optique/temporal
 [Temporal]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal

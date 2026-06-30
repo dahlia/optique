@@ -255,8 +255,9 @@ Beyond the three scenarios
  -  *Batteries included.* Cliffy bundles far more than parsing—prompts,
     tables, ANSI helpers, and more—which is a real convenience if you want
     one dependency for a whole Deno CLI.
- -  *Schema validation.* Optique integrates Zod and Valibot as value parsers
-    (and any Standard Schema validator for config); Cliffy does not.
+ -  *Schema validation.* Optique uses Standard Schema-compatible validators as
+    value parsers, keeps richer Zod and Valibot adapters, and validates config
+    files with any Standard Schema validator; Cliffy does not.
 
 
 When Cliffy is the better choice

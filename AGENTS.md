@@ -152,6 +152,10 @@ Architecture
  -  *@optique/git* (*packages/git/*): Git reference parsers. Provides async
     value parsers for validating Git references (branches, tags, commits,
     remotes) using isomorphic-git.
+ -  *@optique/standard-schema* (*packages/standard-schema/*): Standard Schema
+    value parser integration. Provides `standardSchema()` and
+    `standardSchemaAsync()` for using any Standard Schema-compatible validator
+    as a value parser.
  -  *@optique/inquirer* (*packages/inquirer/*): Inquirer.js prompt integration.
     Provides `prompt()` for interactive fallback using Inquirer.js prompts.
 

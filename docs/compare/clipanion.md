@@ -261,9 +261,10 @@ Beyond the three scenarios
  -  *Completion and man pages.* Optique generates completion for five shells
     (with async suggestions) and man pages; Clipanion does neither, though it
     can emit its command definitions as JSON for external tooling to consume.
- -  *Validation.* Clipanion validates with Typanion; Optique uses value
-    parsers (Zod and Valibot) plus any Standard Schema validator for config
-    files.
+ -  *Validation.* Clipanion validates with Typanion; Optique uses Standard
+    Schema-compatible validators as value parsers, keeps richer Zod and
+    Valibot adapters, and validates config files with any Standard Schema
+    validator.
  -  *Track record.* Clipanion powers Yarn, a strong real-world endorsement—
     weigh that against v4 still being a release candidate.
 

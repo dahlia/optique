@@ -113,18 +113,18 @@ Beyond the three scenarios
 The scenarios above are where the parsing *models* diverge most, but a CLI
 library is more than its parser. A few other dimensions are worth weighing:
 
-| Library        | Runtime deps | Shell completion                           | Man pages      | Schema integration |
-| -------------- | ------------ | ------------------------------------------ | -------------- | ------------------ |
-| *Optique*      | 0 (core)     | Built in: Bash/zsh/fish/PowerShell/Nushell | *@optique/man* | Zod/Valibot        |
-| *Commander.js* | 0            | None built in                              | No             | No                 |
-| *Yargs*        | 6            | Built in: Bash/zsh                         | No             | No                 |
-| *Cliffy*       | JSR suite    | Built in: Bash/zsh/fish                    | No             | No                 |
-| *Gunshi*       | 0 (core)     | Plugin: Bash/zsh                           | No             | No                 |
-| *Cleye*        | 2            | None                                       | No             | No                 |
-| *cmd-ts*       | 4            | None                                       | No             | Custom `Type` only |
-| *Stricli*      | 0 (core)     | Add-on: Bash                               | No             | No                 |
-| *oclif*        | 18           | Plugin: Bash/zsh/PowerShell                | No             | No                 |
-| *Clipanion*    | 1            | None built in                              | No             | Typanion only      |
+| Library        | Runtime deps | Shell completion                           | Man pages      | Schema integration            |
+| -------------- | ------------ | ------------------------------------------ | -------------- | ----------------------------- |
+| *Optique*      | 0 (core)     | Built in: Bash/zsh/fish/PowerShell/Nushell | *@optique/man* | Standard Schema + Zod/Valibot |
+| *Commander.js* | 0            | None built in                              | No             | No                            |
+| *Yargs*        | 6            | Built in: Bash/zsh                         | No             | No                            |
+| *Cliffy*       | JSR suite    | Built in: Bash/zsh/fish                    | No             | No                            |
+| *Gunshi*       | 0 (core)     | Plugin: Bash/zsh                           | No             | No                            |
+| *Cleye*        | 2            | None                                       | No             | No                            |
+| *cmd-ts*       | 4            | None                                       | No             | Custom `Type` only            |
+| *Stricli*      | 0 (core)     | Add-on: Bash                               | No             | No                            |
+| *oclif*        | 18           | Plugin: Bash/zsh/PowerShell                | No             | No                            |
+| *Clipanion*    | 1            | None built in                              | No             | Typanion only                 |
 
 A few things stand out:
 
@@ -132,18 +132,19 @@ A few things stand out:
     trait it shares with Commander.js, Gunshi, and Stricli; Cleye and Clipanion
     are nearly there. Yargs, cmd-ts, and especially oclif pull in more.
     Optique's integration packages add dependencies only when you use them
-    (*@optique/clack* brings in Clack, *@optique/config* the Standard Schema
-    spec), so
-    the base stays minimal.
+    (*@optique/clack* brings in Clack, *@optique/config* and
+    *@optique/standard-schema* bring in the Standard Schema spec), so the base
+    stays minimal.
  -  *One definition, many outputs.* This is Optique's strongest structural
     advantage. The same parser drives argument parsing, `--help`, shell
     completion across five shells (with context-aware and async suggestions),
     and Unix man pages via *@optique/man*. Several libraries generate completion
     scripts, but Optique covers the most shells and is the only one here that
     also generates man pages.
- -  *Schema integration.* Optique integrates Zod and Valibot as value parsers
-    (*@optique/zod*, *@optique/valibot*) and validates config files with any
-    Standard Schema validator (Zod, Valibot, ArkType) via *@optique/config*.
+ -  *Schema integration.* Optique integrates any Standard Schema-compatible
+    validator as a value parser via *@optique/standard-schema*, keeps richer
+    Zod and Valibot adapters for schema-specific CLI behavior, and validates
+    config files with any Standard Schema validator via *@optique/config*.
     None of the others integrate Standard Schema; cmd-ts and Clipanion ship
     their own validation abstractions, and the rest leave value validation to
     you.
