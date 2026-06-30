@@ -69,6 +69,7 @@ await runProgram({
     version: "1.0.0",
     brief: message`Administrative command-line tools.`,
   },
+  commandList: "top-level",
 });
 ~~~~
 
@@ -156,6 +157,9 @@ Entry files named `index` map to their containing command path, so
 defines `user`.  Use `entryFileName` to choose another entry name or disable
 this rule.  `commandsFromModules()` applies the same path rules to module map
 keys after stripping its `base` option.
+For large command trees, pass `commandList: "top-level"` to keep root help
+focused on first-level command groups while subcommand help remains available
+through `<command> --help`.
 
 For more resources, see the [docs] and the [*examples/*](/examples/)
 directory.

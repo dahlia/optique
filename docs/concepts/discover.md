@@ -131,6 +131,7 @@ await runProgram({
   },
   help: { option: true },
   showUsage: false,
+  commandList: "top-level",
   version: false,
   completion: false,
 });
@@ -139,7 +140,9 @@ await runProgram({
 `showUsage: false` is useful for larger command trees because root help can
 act as a compact command menu: the program brief and command list remain, but
 the expanded `Usage:` synopsis is omitted.  The same setting applies when
-`aboveError: "help"` renders a full help page above a parse error.
+`aboveError: "help"` renders a full help page above a parse error.  Pass
+`commandList: "top-level"` when the root command menu should list only
+first-level command groups and let users drill down with `<command> --help`.
 
 
 Running with static module maps

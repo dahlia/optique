@@ -299,6 +299,7 @@ const result = runParser(prog, ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
   showUsage: false,      // Hide Usage: in full help pages
+  commandList: "top-level", // Show only first-level commands
   showDefault: true,     // Show default values in help text
   help: {                // Grouped help API
     option: true,        // Only --help option, no help command
@@ -329,6 +330,12 @@ description, and generated sections without the `Usage:` synopsis.  The
 setting applies to full help pages, including help rendered above parse
 errors with `aboveError: "help"`.  It does not change the explicit
 usage-only preamble from `aboveError: "usage"`.
+
+Pass `commandList: "top-level"` when a top-level command menu should show
+only first-level commands instead of recursively listing every nested leaf
+command.  The default, `commandList: "recursive"`, preserves the full command
+list.  The setting does not change subcommand help pages, so users can still
+drill down with `<command> --help`.
 
 ### Explicit sync/async variants
 

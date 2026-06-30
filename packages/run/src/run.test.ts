@@ -13,6 +13,7 @@ import {
   fail,
   option,
 } from "@optique/core/primitives";
+import type { Parser } from "@optique/core/parser";
 import type { Program } from "@optique/core/program";
 import type { OptionName } from "@optique/core/usage";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
@@ -65,6 +66,62 @@ function createPassthroughConfigSchema<T>(): Parameters<
       validate(input: unknown) {
         return { value: input as T };
       },
+    },
+  };
+}
+
+function createFlatCommandDocParser(): Parser<"sync", undefined, undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly undefined[],
+    $stateType: [] as readonly undefined[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true as const,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete() {
+      return {
+        success: true as const,
+        value: undefined,
+      };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return {
+        fragments: [{
+          type: "section",
+          entries: [
+            {
+              term: { type: "command", name: "remote" },
+              description: message`Manage remotes.`,
+            },
+            {
+              term: { type: "command", name: "remote add" },
+              description: message`Add a remote.`,
+            },
+            {
+              term: { type: "command", name: "remote remove" },
+              description: message`Remove a remote.`,
+            },
+            {
+              term: { type: "command", name: "config" },
+              description: message`Manage configuration.`,
+            },
+            {
+              term: { type: "command", name: "config get" },
+              description: message`Read configuration.`,
+            },
+          ],
+        }],
+      };
     },
   };
 }
@@ -1695,6 +1752,35 @@ describe("runAsync", () => {
       assert.ok(!helpOutput.includes("Usage:"));
       assert.ok(helpOutput.includes("build"));
       assert.ok(helpOutput.includes("deploy"));
+    });
+
+    it("should list only top-level commands when commandList is top-level", () => {
+      const parser = createFlatCommandDocParser();
+      let helpOutput = "";
+
+      try {
+        run(parser, {
+          args: ["--help"],
+          commandList: "top-level",
+          help: "option",
+          programName: "myapp",
+          showUsage: false,
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: () => {
+            throw new Error("EXIT");
+          },
+        });
+      } catch (err) {
+        if ((err as Error).message !== "EXIT") throw err;
+      }
+
+      assert.match(helpOutput, /remote\s+Manage remotes\./);
+      assert.match(helpOutput, /config\s+Manage configuration\./);
+      assert.doesNotMatch(helpOutput, /remote add/);
+      assert.doesNotMatch(helpOutput, /remote remove/);
+      assert.doesNotMatch(helpOutput, /config get/);
     });
 
     it("preserves positional values that match built-in help commands", async () => {

@@ -55,6 +55,8 @@ Core rules
     apps. Do not hand-write completion scripts from parser metadata.
  -  Use `showUsage: false` in runner options when full help should show the
     brief and command or option sections without the `Usage:` synopsis.
+    For deeply nested command trees, add `commandList: "top-level"` when root
+    help should list only first-level command groups.
 
 
 Canonical app shape

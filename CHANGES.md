@@ -50,6 +50,11 @@ To be released.
     from full help pages, including `aboveError: "help"` output, while leaving
     explicit usage-only error preambles unchanged.  [[#856], [#860]]
 
+ -  Added `commandList` to the core runner `RunOptions`.  The default
+    `"recursive"` mode keeps the existing flattened command list, while
+    `"top-level"` makes top-level help pages list only first-level commands so
+    users can drill down with `<command> --help`.  [[#864], [#865]]
+
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
 [#846]: https://github.com/dahlia/optique/issues/846
@@ -59,6 +64,8 @@ To be released.
 [#852]: https://github.com/dahlia/optique/pull/852
 [#856]: https://github.com/dahlia/optique/issues/856
 [#860]: https://github.com/dahlia/optique/pull/860
+[#864]: https://github.com/dahlia/optique/issues/864
+[#865]: https://github.com/dahlia/optique/pull/865
 
 ### @optique/standard-schema
 
@@ -136,6 +143,12 @@ To be released.
     programs can show the brief and command sections without the expanded
     `Usage:` synopsis.  [[#856], [#860]]
 
+ -  `runProgram()` and `createProgramParser()` now accept
+    `commandList: "top-level"` for compact root command menus.  The default
+    remains recursive, while the new mode lists first-level command groups and
+    leaves nested command help available through `<command> --help`.
+    [[#864], [#865]]
+
 [#830]: https://github.com/dahlia/optique/issues/830
 [#835]: https://github.com/dahlia/optique/issues/835
 [#838]: https://github.com/dahlia/optique/issues/838
@@ -154,6 +167,11 @@ To be released.
     `Usage:` synopsis from full help pages produced by `run()`, `runSync()`,
     and `runAsync()`, while usage-only error output remains unchanged.
     [[#856], [#860]]
+
+ -  Added `commandList` to `RunOptions`.  Passing
+    `commandList: "top-level"` makes top-level help pages list only
+    first-level commands; the default `"recursive"` mode preserves the
+    existing full command list.  [[#864], [#865]]
 
 ### @optique/prompt
 
