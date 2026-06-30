@@ -24,7 +24,11 @@ import type {
 } from "@optique/core/parser";
 import type { ProgramMetadata } from "@optique/core/program";
 import { command } from "@optique/core/primitives";
-import { type HiddenVisibility, mergeHidden } from "@optique/core/usage";
+import {
+  type HiddenVisibility,
+  isDocHidden,
+  mergeHidden,
+} from "@optique/core/usage";
 import { runAsync } from "@optique/run";
 import type { RunOptions } from "@optique/run";
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -507,7 +511,7 @@ export function commandsFromModules(
  */
 export function createProgramParser(
   commands: readonly CommandEntry[],
-  metadata: ProgramHelpMetadata = {},
+  options: CreateProgramParserOptions = {},
 ): FluentParser<Mode, ProgramInvocation, unknown> {
   if (commands.length < 1) {
     throw new TypeError("createProgramParser() requires at least one command.");
@@ -521,7 +525,7 @@ export function createProgramParser(
   );
   const rootNode = buildCommandTree(sortedCommands);
   const parser = buildNodeParser(rootNode);
-  return fluent(withRootDocs(parser, sortedCommands, metadata));
+  return fluent(withRootDocs(parser, sortedCommands, options));
 }
 
 /**
@@ -546,7 +550,10 @@ export async function runProgram(options: RunProgramOptions): Promise<void> {
       entryFileName: options.entryFileName,
     });
   }
-  const parser = createProgramParser(commands, options.metadata);
+  const parser = createProgramParser(commands, {
+    ...options.metadata,
+    commandList: options.commandList,
+  });
   const invocation = await runAsync(parser, buildRunOptions(options));
   await dispatchInvocation(invocation, options.hooks);
 }
@@ -651,6 +658,20 @@ export interface ProgramHelpMetadata {
    * Footer text shown after the command list.
    */
   readonly footer?: Message;
+}
+
+/**
+ * Options for {@link createProgramParser}.
+ *
+ * @since 1.2.0
+ */
+export interface CreateProgramParserOptions extends ProgramHelpMetadata {
+  /**
+   * How to render command lists in top-level help pages.
+   *
+   * @default `"recursive"`
+   */
+  readonly commandList?: RunOptions["commandList"];
 }
 
 interface CommandTreeNode {
@@ -1690,13 +1711,17 @@ function createLeafParser(
 function withRootDocs(
   parser: Parser<Mode, ProgramInvocation, unknown>,
   commands: readonly CommandEntry[],
-  metadata: ProgramHelpMetadata,
+  metadata: CreateProgramParserOptions,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const rootState = parser.initialState;
   const rootCommand = commands.find((entry) => entry.path.length < 1);
-  const listedCommands = commands.filter((entry) => entry.path.length > 0);
   const commandsByPath = new Map(
     commands.map((entry) => [commandPathKey(entry.path), entry.command]),
+  );
+  const listedCommands = rootListedCommands(
+    commands,
+    commandsByPath,
+    metadata.commandList ?? "recursive",
   );
   const rootDocs = (): DocFragments => {
     const fragments: DocFragment[] = [
@@ -1738,6 +1763,48 @@ function withRootDocs(
       }
       return parser.getDocFragments(state, defaultValue);
     },
+  };
+}
+
+function rootListedCommands(
+  commands: readonly CommandEntry[],
+  commandsByPath: ReadonlyMap<string, AnyCommand>,
+  commandList: RunOptions["commandList"],
+): readonly CommandEntry[] {
+  const listedCommands = commands.filter((entry) => entry.path.length > 0);
+  if (commandList !== "top-level" || listedCommands.length < 1) {
+    return listedCommands;
+  }
+
+  const topLevelEntries = new Map<string, CommandEntry>();
+  for (const entry of listedCommands) {
+    const segment = entry.path[0];
+    if (segment == null) continue;
+    const path = [segment];
+    const key = commandPathKey(path);
+    if (topLevelEntries.has(key)) continue;
+
+    const command = commandsByPath.get(key);
+    if (command != null) {
+      topLevelEntries.set(key, { path, command });
+    } else if (!isDocHidden(commandPathHidden(entry.path, commandsByPath))) {
+      topLevelEntries.set(key, {
+        path,
+        command: withoutCommandDocs(entry.command),
+      });
+    }
+  }
+
+  return [...topLevelEntries.values()];
+}
+
+function withoutCommandDocs(commandDefinition: AnyCommand): AnyCommand {
+  if (commandDefinition.metadata == null) return commandDefinition;
+  const { brief: _brief, description: _description, ...metadata } =
+    commandDefinition.metadata;
+  return {
+    ...commandDefinition,
+    metadata,
   };
 }
 

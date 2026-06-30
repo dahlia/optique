@@ -1122,6 +1122,45 @@ describe("createProgramParser()", () => {
     ]);
   });
 
+  it("lists only top-level commands in root docs when commandList is top-level", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["user"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Manage users.` },
+          handler() {},
+        }),
+      },
+      {
+        path: ["user", "add"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Add a user.` },
+          handler() {},
+        }),
+      },
+      {
+        path: ["user", "remove"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Remove a user.` },
+          handler() {},
+        }),
+      },
+    ], {
+      commandList: "top-level",
+    });
+
+    const page = await getDocPageAsync(parser);
+    assert.ok(page);
+    const output = formatDocPage("tool", page, { showUsage: false });
+
+    assert.match(output, /user\s+Manage users\./);
+    assert.doesNotMatch(output, /user add/);
+    assert.doesNotMatch(output, /user remove/);
+  });
+
   it("preserves source annotations for executable parent commands", async () => {
     const sourceId = Symbol("source");
     const context = createStringSourceContext(sourceId, "from-source");
@@ -1876,6 +1915,73 @@ describe("runProgram()", () => {
     assert.doesNotMatch(stdout, /Usage:/);
     assert.match(stdout, /user add\s+Add a user\./);
     assert.match(stdout, /user remove\s+Remove a user\./);
+  });
+
+  it("lists only top-level commands in root help when commandList is top-level", async () => {
+    const userCommand = defineCommand({
+      path: ["user"],
+      parser: object({}),
+      metadata: { brief: message`Manage users.` },
+      handler() {},
+    });
+    const addCommand = defineCommand({
+      path: ["user", "add"],
+      parser: object({}),
+      metadata: { brief: message`Add a user.` },
+      handler() {},
+    });
+    const removeCommand = defineCommand({
+      path: ["user", "remove"],
+      parser: object({}),
+      metadata: { brief: message`Remove a user.` },
+      handler() {},
+    });
+    let rootStdout = "";
+    let userStdout = "";
+
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [userCommand, addCommand, removeCommand],
+          metadata: { name: "tool", version: "1.0.0" },
+          args: ["--help"],
+          commandList: "top-level",
+          showUsage: false,
+          stdout(text) {
+            rootStdout += `${text}\n`;
+          },
+          stderr() {},
+          onExit(exitCode): never {
+            throw new ExitSignal(exitCode);
+          },
+        }),
+      ExitSignal,
+    );
+
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [userCommand, addCommand, removeCommand],
+          metadata: { name: "tool", version: "1.0.0" },
+          args: ["user", "--help"],
+          commandList: "top-level",
+          showUsage: false,
+          stdout(text) {
+            userStdout += `${text}\n`;
+          },
+          stderr() {},
+          onExit(exitCode): never {
+            throw new ExitSignal(exitCode);
+          },
+        }),
+      ExitSignal,
+    );
+
+    assert.match(rootStdout, /user\s+Manage users\./);
+    assert.doesNotMatch(rootStdout, /user add/);
+    assert.doesNotMatch(rootStdout, /user remove/);
+    assert.match(userStdout, /add\s+Add a user\./);
+    assert.match(userStdout, /remove\s+Remove a user\./);
   });
 
   it("passes static command values to phase-two source contexts", async () => {

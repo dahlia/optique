@@ -13,6 +13,7 @@ import {
   object,
 } from "./constructs.ts";
 import {
+  type DocEntry,
   type DocPage,
   type DocSection,
   formatDocPage,
@@ -743,6 +744,18 @@ interface MetaParseResult {
 }
 
 /**
+ * Controls how command lists are rendered in top-level help pages.
+ *
+ * - `"recursive"`: Shows the full flattened command list, including nested
+ *   leaf commands such as `remote add`.
+ * - `"top-level"`: Shows only first-level command names such as `remote`,
+ *   letting users drill down with `remote --help`.
+ *
+ * @since 1.2.0
+ */
+export type CommandListMode = "recursive" | "top-level";
+
+/**
  * Sub-configuration for a meta command's command form.
  *
  * @since 1.0.0
@@ -925,7 +938,11 @@ type ParsedResult =
     readonly commandPath?: readonly string[];
     readonly args: readonly string[];
   }
-  | { readonly type: "error"; readonly error: Message };
+  | {
+    readonly type: "error";
+    readonly error: Message;
+    readonly commandPath: readonly string[];
+  };
 
 /**
  * Systematically combines the original parser with help, version, and completion parsers.
@@ -1191,7 +1208,11 @@ function classifyParseFailure(
   completionCommandNames: readonly string[],
 ): Exclude<ParsedResult, { readonly type: "success" }> {
   if (failure.remainingArgs.length < 1) {
-    return { type: "error", error: failure.error };
+    return {
+      type: "error",
+      error: failure.error,
+      commandPath: failure.commandPath,
+    };
   }
 
   const hasConsumedPrefix = failure.consumedCount > 0;
@@ -1240,7 +1261,11 @@ function classifyParseFailure(
     ) {
       return { type: "version" };
     }
-    return { type: "error", error: failure.error };
+    return {
+      type: "error",
+      error: failure.error,
+      commandPath: failure.commandPath,
+    };
   }
 
   let commandAction: MetaAction | undefined;
@@ -1286,7 +1311,11 @@ function classifyParseFailure(
     };
   }
 
-  return { type: "error", error: failure.error };
+  return {
+    type: "error",
+    error: failure.error,
+    commandPath: failure.commandPath,
+  };
 }
 
 /**
@@ -1349,6 +1378,17 @@ export interface RunOptions<THelp, TError> {
    * @since 1.2.0
    */
   readonly showUsage?: boolean;
+
+  /**
+   * How to render command lists in top-level help pages.
+   *
+   * Pass `"top-level"` to show only first-level commands in the command menu
+   * while keeping nested command help available through `<command> --help`.
+   *
+   * @default `"recursive"`
+   * @since 1.2.0
+   */
+  readonly commandList?: CommandListMode;
 
   /**
    * A custom comparator function to control the order of sections in the
@@ -2365,6 +2405,7 @@ export function runParser<
     showChoices,
     sectionOrder,
     showUsage,
+    commandList = "recursive",
     aboveError = "usage",
     onError = () => {
       throw new RunParserError("Failed to parse command line arguments.");
@@ -2803,26 +2844,30 @@ export function runParser<
             // so that operators can add global footer notes across all help
             // pages.
             const shouldOverride = !isMetaCommandHelp && !isSubcommandHelp;
-            const augmentedDoc = {
-              ...doc,
-              brief: shouldOverride ? (brief ?? doc.brief) : doc.brief,
-              description: shouldOverride
-                ? (description ?? doc.description)
-                : doc.description,
-              // Only show examples, author, and bugs for top-level help
-              examples: isTopLevel && !isMetaCommandHelp
-                ? (examples ?? doc.examples)
-                : undefined,
-              author: isTopLevel && !isMetaCommandHelp
-                ? (author ?? doc.author)
-                : undefined,
-              bugs: isTopLevel && !isMetaCommandHelp
-                ? (bugs ?? doc.bugs)
-                : undefined,
-              footer: shouldOverride
-                ? (footer ?? doc.footer)
-                : (doc.footer ?? footer),
-            };
+            const augmentedDoc = maybeCollapseCommandList(
+              {
+                ...doc,
+                brief: shouldOverride ? (brief ?? doc.brief) : doc.brief,
+                description: shouldOverride
+                  ? (description ?? doc.description)
+                  : doc.description,
+                // Only show examples, author, and bugs for top-level help
+                examples: isTopLevel && !isMetaCommandHelp
+                  ? (examples ?? doc.examples)
+                  : undefined,
+                author: isTopLevel && !isMetaCommandHelp
+                  ? (author ?? doc.author)
+                  : undefined,
+                bugs: isTopLevel && !isMetaCommandHelp
+                  ? (bugs ?? doc.bugs)
+                  : undefined,
+                footer: shouldOverride
+                  ? (footer ?? doc.footer)
+                  : (doc.footer ?? footer),
+              },
+              commandList,
+              isTopLevel,
+            );
             stdout(formatDocPage(programName, augmentedDoc, {
               colors,
               maxWidth,
@@ -2931,15 +2976,19 @@ export function runParser<
             if (doc == null) effectiveAboveError = "usage";
             else {
               // Augment the doc page with provided options
-              const augmentedDoc = {
-                ...doc,
-                brief: brief ?? doc.brief,
-                description: description ?? doc.description,
-                examples: examples ?? doc.examples,
-                author: author ?? doc.author,
-                bugs: bugs ?? doc.bugs,
-                footer: footer ?? doc.footer,
-              };
+              const augmentedDoc = maybeCollapseCommandList(
+                {
+                  ...doc,
+                  brief: brief ?? doc.brief,
+                  description: description ?? doc.description,
+                  examples: examples ?? doc.examples,
+                  author: author ?? doc.author,
+                  bugs: bugs ?? doc.bugs,
+                  footer: footer ?? doc.footer,
+                },
+                commandList,
+                classified.commandPath.length < 1,
+              );
               stderr(formatDocPage(programName, augmentedDoc, {
                 colors,
                 maxWidth,
@@ -3102,6 +3151,54 @@ export function runParserAsync<
 ): Promise<InferValue<TParser>> {
   const result = runParser(parser, programName, args, options);
   return Promise.resolve(result) as Promise<InferValue<TParser>>;
+}
+
+function maybeCollapseCommandList(
+  doc: DocPage,
+  commandList: CommandListMode,
+  isTopLevel: boolean,
+): DocPage {
+  if (commandList !== "top-level" || !isTopLevel) return doc;
+  return {
+    ...doc,
+    sections: doc.sections.map((section) => ({
+      ...section,
+      entries: collapseTopLevelCommandEntries(section.entries),
+    })),
+  };
+}
+
+function collapseTopLevelCommandEntries(
+  entries: readonly DocEntry[],
+): readonly DocEntry[] {
+  const collapsed: DocEntry[] = [];
+  const commandIndexes = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.term.type !== "command") {
+      collapsed.push(entry);
+      continue;
+    }
+
+    const topLevelName = getTopLevelCommandName(entry.term.name);
+    const existingIndex = commandIndexes.get(topLevelName);
+    const isTopLevel = entry.term.name === topLevelName;
+    if (existingIndex == null) {
+      commandIndexes.set(topLevelName, collapsed.length);
+      collapsed.push(
+        isTopLevel ? entry : {
+          term: { ...entry.term, name: topLevelName },
+        },
+      );
+      continue;
+    }
+
+    if (isTopLevel) collapsed[existingIndex] = entry;
+  }
+  return collapsed;
+}
+
+function getTopLevelCommandName(name: string): string {
+  return name.split(" ", 1)[0] ?? name;
 }
 
 /**

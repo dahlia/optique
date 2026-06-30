@@ -136,6 +136,86 @@ function createPhaseTwoSeedParser(
   };
 }
 
+function createFlatCommandDocParser(): Parser<"sync", undefined, undefined> {
+  return {
+    mode: "sync",
+    $valueType: [] as readonly undefined[],
+    $stateType: [] as readonly undefined[],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse(context) {
+      return {
+        success: true as const,
+        next: context,
+        consumed: [],
+      };
+    },
+    complete() {
+      return {
+        success: true as const,
+        value: undefined,
+      };
+    },
+    *suggest() {},
+    getDocFragments() {
+      return {
+        fragments: [{
+          type: "section",
+          entries: [
+            {
+              term: { type: "command", name: "remote" },
+              description: message`Manage remotes.`,
+            },
+            {
+              term: { type: "command", name: "remote add" },
+              description: message`Add a remote.`,
+            },
+            {
+              term: { type: "command", name: "remote remove" },
+              description: message`Remove a remote.`,
+            },
+            {
+              term: { type: "command", name: "config" },
+              description: message`Manage configuration.`,
+            },
+            {
+              term: { type: "command", name: "config get" },
+              description: message`Read configuration.`,
+            },
+          ],
+        }],
+      };
+    },
+  };
+}
+
+function createFailingFlatCommandDocParser(): Parser<
+  "sync",
+  undefined,
+  undefined
+> {
+  const parser = createFlatCommandDocParser();
+  return {
+    ...parser,
+    parse() {
+      return {
+        success: false as const,
+        consumed: 0,
+        error: message`Unknown option.`,
+      };
+    },
+    complete() {
+      return {
+        success: false as const,
+        error: message`Unknown option.`,
+      };
+    },
+  };
+}
+
 function createSyncStallingPhaseTwoParser(
   tokenKey: symbol,
 ): Parser<"sync", string, string | undefined> {
@@ -10329,6 +10409,74 @@ describe("runWithAsync", () => {
       assert.ok(!helpOutput.includes("Usage:"));
       assert.ok(helpOutput.includes("build"));
       assert.ok(helpOutput.includes("deploy"));
+    });
+
+    it("should list only top-level commands when commandList is top-level", () => {
+      const parser = createFlatCommandDocParser();
+      let helpOutput = "";
+
+      const result = runParser(parser, "myapp", ["--help"], {
+        commandList: "top-level",
+        help: {
+          option: true,
+          onShow: () => "shown",
+        },
+        showUsage: false,
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.match(helpOutput, /remote\s+Manage remotes\./);
+      assert.match(helpOutput, /config\s+Manage configuration\./);
+      assert.doesNotMatch(helpOutput, /remote add/);
+      assert.doesNotMatch(helpOutput, /remote remove/);
+      assert.doesNotMatch(helpOutput, /config get/);
+    });
+
+    it("should list only top-level commands in help above root errors", () => {
+      const parser = createFailingFlatCommandDocParser();
+      let errorOutput = "";
+
+      const result = runParser(parser, "myapp", ["--bad"], {
+        aboveError: "help",
+        commandList: "top-level",
+        onError: () => "handled",
+        showUsage: false,
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      });
+
+      assert.equal(result, "handled");
+      assert.match(errorOutput, /remote\s+Manage remotes\./);
+      assert.match(errorOutput, /config\s+Manage configuration\./);
+      assert.doesNotMatch(errorOutput, /remote add/);
+      assert.doesNotMatch(errorOutput, /remote remove/);
+      assert.doesNotMatch(errorOutput, /config get/);
+      assert.match(errorOutput, /Error:/);
+    });
+
+    it("should recursively list commands by default", () => {
+      const parser = createFlatCommandDocParser();
+      let helpOutput = "";
+
+      const result = runParser(parser, "myapp", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "shown",
+        },
+        showUsage: false,
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.match(helpOutput, /remote add\s+Add a remote\./);
+      assert.match(helpOutput, /remote remove\s+Remove a remote\./);
+      assert.match(helpOutput, /config get\s+Read configuration\./);
     });
 
     it("should use custom sectionOrder comparator to control section ordering in help output", () => {

@@ -2,6 +2,7 @@ import type { ShellCompletion } from "@optique/core/completion";
 import type { SourceContext } from "@optique/core/context";
 import { runParser, runWith, runWithSync } from "@optique/core/facade";
 import type {
+  CommandListMode,
   CommandSubConfig,
   ContextOptionsParam,
   OptionSubConfig,
@@ -120,6 +121,17 @@ export interface RunOptions {
    * @since 1.2.0
    */
   readonly showUsage?: boolean;
+
+  /**
+   * How to render command lists in top-level help pages.
+   *
+   * Pass `"top-level"` to show only first-level commands in the command menu
+   * while keeping nested command help available through `<command> --help`.
+   *
+   * @default `"recursive"`
+   * @since 1.2.0
+   */
+  readonly commandList?: CommandListMode;
 
   /**
    * A custom comparator function to control the order of sections in the
@@ -837,6 +849,7 @@ function buildCoreOptions(
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;
   const showUsage = options.showUsage;
+  const commandList = options.commandList;
   const sectionOrder = options.sectionOrder;
   const help = options.help;
   const version = options.version;
@@ -902,6 +915,7 @@ function buildCoreOptions(
     showDefault,
     showChoices,
     showUsage,
+    commandList,
     sectionOrder,
     help: helpConfig,
     version: versionConfig,
@@ -936,6 +950,7 @@ const knownRunOptionsKeyList = [
   "showDefault",
   "showChoices",
   "showUsage",
+  "commandList",
   "sectionOrder",
   "help",
   "version",
