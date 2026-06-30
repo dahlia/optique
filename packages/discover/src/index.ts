@@ -1772,7 +1772,9 @@ function rootListedCommands(
   commandList: RunOptions["commandList"],
 ): readonly CommandEntry[] {
   const listedCommands = commands.filter((entry) => entry.path.length > 0);
-  if (commandList !== "top-level") return listedCommands;
+  if (commandList !== "top-level" || listedCommands.length < 1) {
+    return listedCommands;
+  }
 
   const topLevelEntries = new Map<string, CommandEntry>();
   for (const entry of listedCommands) {
@@ -1780,26 +1782,20 @@ function rootListedCommands(
     if (segment == null) continue;
     const path = [segment];
     const key = commandPathKey(path);
+    if (topLevelEntries.has(key)) continue;
+
     const command = commandsByPath.get(key);
     if (command != null) {
       topLevelEntries.set(key, { path, command });
-    } else if (
-      !topLevelEntries.has(key) &&
-      !isDocHidden(commandPathHidden(entry.path, commandsByPath))
-    ) {
+    } else if (!isDocHidden(commandPathHidden(entry.path, commandsByPath))) {
       topLevelEntries.set(key, {
         path,
-        command: entry.command,
+        command: withoutCommandDocs(entry.command),
       });
     }
   }
 
-  return [...topLevelEntries.values()].map((entry) => {
-    const command = commandsByPath.get(commandPathKey(entry.path));
-    return command == null
-      ? { ...entry, command: withoutCommandDocs(entry.command) }
-      : entry;
-  });
+  return [...topLevelEntries.values()];
 }
 
 function withoutCommandDocs(commandDefinition: AnyCommand): AnyCommand {
