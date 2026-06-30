@@ -180,8 +180,10 @@ When adding a new package to the monorepo, update the following files:
  -  *AGENTS.md*: Add the package to the Package structure list (if applicable)
  -  *docs/package.json*: Add `"@optique/<name>": "workspace:"` to
     `devDependencies` (required for Twoslash type checking in documentation)
- -  *docs/.vitepress/theme/components/PackageGrid.vue*: Add a card so the
-    package shows up in the landing page's package grid
+ -  *docs/.vitepress/theme/components/PackageGrid.vue*: Add a card to the
+    matching role group (Foundation, Value parsers, Value sources, or
+    Surfaces & tooling) so the package shows up in the landing page's
+    ecosystem grid
 
 ### Keeping the landing page in sync
 
@@ -197,8 +199,8 @@ hand-maintained catalogs.  Update them whenever that surface grows:
  -  *New combinator* (a primitive, construct, or modifier): add a chip to the
     matching group (Primitives, Constructs, or Modifiers) in
     *ParserCatalog.vue*.
- -  *New package*: add a card to *PackageGrid.vue*, as also noted under
-    *Adding new packages* above.
+ -  *New package*: add a card to the matching role group in *PackageGrid.vue*,
+    as also noted under *Adding new packages* above.
 
 Reference anchors come from the concept-page heading slug: the `string()`
 parser heading becomes `#string-parser`, and `gitBranch()` becomes

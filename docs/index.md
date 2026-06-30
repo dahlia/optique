@@ -317,8 +317,18 @@ const host = prompt(
   that composes with the rest."
   moreHref="/concepts/valueparsers"
   moreText="The value parser reference"
+  tint
 >
 <ParserCatalog />
+</LandingSection>
+<LandingSection
+  eyebrow="The ecosystem"
+  title="One dependency-free core. Everything else is opt-in."
+  lead="Past <code>@optique/core</code> and <code>@optique/run</code>, every
+  package is a small, self-contained integration. They group by the role they
+  play: extra value types to parse, alternative sources a value can come from,
+  and the surfaces a parser drives. Add only the ones your CLI reaches for."
+>
 <PackageGrid />
 </LandingSection>
 <CompareBand />
