@@ -2771,6 +2771,65 @@ describe("transform", () => {
     assert.deepEqual(suggestions, [{ kind: "literal", text: "x-value" }]);
   });
 
+  it("should reject promises from sync inner parsers", () => {
+    const inner: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "WORD",
+      placeholder: "foo",
+      parse(input: string): ValueParserResult<string> {
+        return Promise.resolve({ success: true, value: input }) as never;
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const parser = transform(inner, {
+      map: (value) => value.length,
+      unmap: (value) => "x".repeat(value),
+    });
+
+    assert.throws(
+      () => parser.parse("abcd"),
+      {
+        name: "TypeError",
+        message: "Synchronous mode cannot wrap Promise value.",
+      },
+    );
+  });
+
+  it("should not map missing placeholders", () => {
+    const inner: ValueParser<"sync", string | undefined> = {
+      mode: "sync",
+      metavar: "WORD",
+      placeholder: undefined,
+      parse(input: string): ValueParserResult<string | undefined> {
+        return { success: true, value: input };
+      },
+      format(value: string | undefined): string {
+        return value ?? "";
+      },
+    };
+    const parser = transform(inner, {
+      map: (value) => ({ value }),
+      unmap: (value: { readonly value: string | undefined }) => value.value,
+    });
+
+    assert.equal(parser.placeholder, undefined);
+  });
+
+  it("should keep transformed placeholders enumerable for dependencies", () => {
+    const transformed = dependency(
+      transform(choice(["dev", "prod"] as const), {
+        map: (value) => value.toUpperCase() as "DEV" | "PROD",
+        unmap: (value) => value.toLowerCase() as "dev" | "prod",
+      }),
+    );
+    const mapped = dependency(biject({ dev: "DEV", prod: "PROD" } as const));
+
+    assert.ok(isValueParser(transformed));
+    assert.ok(isValueParser(mapped));
+  });
+
   it("should lazily map dependency-derived placeholders", () => {
     const mode = dependency(choice(["dev", "prod"] as const));
     const level = mode.derive({
@@ -2990,7 +3049,7 @@ describe("biject", () => {
       },
       {
         name: "TypeError",
-        message: "Expected biject mapping to be a non-array object.",
+        message: "Expected object, got array.",
       },
     );
   });

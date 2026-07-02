@@ -126,10 +126,12 @@ export function wrapIterableForMode<M extends Mode, T>(
   mode: M,
   value: Iterable<T> | AsyncIterable<T>,
 ): ModeIterable<M, T> {
+  const canCheckAsyncIterator = value != null &&
+    (typeof value === "object" || typeof value === "function");
   return dispatchIterableByMode(
     mode,
     () => {
-      if (Symbol.asyncIterator in value) {
+      if (canCheckAsyncIterator && Symbol.asyncIterator in value) {
         throw new TypeError(
           "Synchronous mode cannot wrap AsyncIterable value.",
         );
@@ -137,7 +139,7 @@ export function wrapIterableForMode<M extends Mode, T>(
       return value;
     },
     () => {
-      if (Symbol.asyncIterator in value) return value;
+      if (canCheckAsyncIterator && Symbol.asyncIterator in value) return value;
       return (async function* () {
         yield* value;
       })();

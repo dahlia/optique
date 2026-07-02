@@ -23,7 +23,6 @@ import {
 } from "./internal/dependency.ts";
 import {
   mapMaybePromiseByMode,
-  mapModeValue,
   wrapIterableForMode,
 } from "./internal/mode-dispatch.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
@@ -877,7 +876,7 @@ export function biject<const T extends object>(
   mapping: T,
 ): ValueParser<"sync", BijectValue<T>> {
   if (Array.isArray(mapping)) {
-    throw new TypeError("Expected biject mapping to be a non-array object.");
+    throw new TypeError("Expected object, got array.");
   }
   const keys: StringKeyOf<T>[] = [];
   for (const key in mapping) {
@@ -978,7 +977,7 @@ export function transform<M extends Mode, T, U>(
     placeholder: undefined as U,
     ...(transformedChoices == null ? {} : { choices: transformedChoices }),
     parse(input: string): ModeValue<M, ValueParserResult<U>> {
-      return mapModeValue(
+      return mapMaybePromiseByMode(
         parser.mode,
         parser.parse(input),
         (result) => transformValueParserResult(result, mapping),
@@ -1000,6 +999,7 @@ export function transform<M extends Mode, T, U>(
   };
   Object.defineProperty(transformed, "placeholder", {
     get() {
+      if (parser.placeholder === undefined) return undefined;
       try {
         return mapping.map(parser.placeholder);
       } catch {
@@ -1007,7 +1007,7 @@ export function transform<M extends Mode, T, U>(
       }
     },
     configurable: true,
-    enumerable: false,
+    enumerable: true,
   });
   if (typeof parser.validate === "function") {
     const validate = parser.validate.bind(parser);
