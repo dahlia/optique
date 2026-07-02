@@ -331,6 +331,7 @@ describe("Optique agent skill", () => {
     assert.match(skill, /https:\/\/optique\.dev\/llms\.txt/);
     assert.match(skill, /https:\/\/optique\.dev\/pitfalls\.md/);
     assert.match(skill, /https:\/\/optique\.dev\/concepts\/valueparsers\.md/);
+    assert.match(skill, /LogTape levels and textFormatter\(\)/);
   });
 
   it("should type-check TypeScript examples in the skill", async () => {

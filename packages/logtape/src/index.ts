@@ -45,6 +45,9 @@ export type { LogLevel, LogRecord, Sink } from "@logtape/logtape";
 // Log level value parser
 export { LOG_LEVELS, logLevel, type LogLevelOptions } from "./loglevel.ts";
 
+// Text formatter value parser
+export { textFormatter, type TextFormatterName } from "./textformatter.ts";
+
 // Verbosity parser
 export { verbosity, type VerbosityOptions } from "./verbosity.ts";
 

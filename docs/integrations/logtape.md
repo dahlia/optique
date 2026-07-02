@@ -114,6 +114,48 @@ const level = logLevel({
 ~~~~
 
 
+Text formatter value parser
+---------------------------
+
+*This API is available since Optique 1.2.0.*
+
+The `textFormatter()` function creates a value parser for LogTape formatter
+functions. It accepts `"jsonl"`, `"logfmt"`, `"color"`, and `"plain"` and maps
+them to LogTape's built-in formatter functions.
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { parse } from "@optique/core/parser";
+import { textFormatter } from "@optique/logtape";
+
+const parser = object({
+  formatter: option("--log-format", textFormatter()),
+});
+
+const result = parse(parser, ["--log-format=logfmt"]);
+~~~~
+
+### Formats
+
+`"jsonl"`
+:   [JSON Lines][LogTape JSON Lines formatter] output
+
+`"logfmt"`
+:   [logfmt][LogTape logfmt formatter] key-value output
+
+`"color"`
+:   [ANSI-colored][LogTape ANSI color formatter] console output
+
+`"plain"`
+:   [LogTape's default text][LogTape default text formatter] output
+
+[LogTape JSON Lines formatter]: https://logtape.org/manual/formatters#json-lines-formatter
+[LogTape logfmt formatter]: https://logtape.org/manual/formatters#logfmt-formatter
+[LogTape ANSI color formatter]: https://logtape.org/manual/formatters#ansi-color-formatter
+[LogTape default text formatter]: https://logtape.org/manual/formatters#default-text-formatter
+
+
 Verbosity parser
 ----------------
 

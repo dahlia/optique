@@ -9,7 +9,13 @@ import { runParser } from "@optique/core/facade";
 import { option } from "@optique/core/primitives";
 import { withDefault } from "@optique/core/modifiers";
 import { message } from "@optique/core/message";
-import type { LogLevel } from "@logtape/logtape";
+import {
+  ansiColorFormatter,
+  defaultTextFormatter,
+  jsonLinesFormatter,
+  logfmtFormatter,
+  type LogLevel,
+} from "@logtape/logtape";
 
 import {
   createConsoleSink,
@@ -20,6 +26,7 @@ import {
   loggingOptions,
   logLevel,
   logOutput,
+  textFormatter,
   verbosity,
 } from "#src/index.ts";
 
@@ -125,6 +132,60 @@ describe("logLevel()", () => {
         assert.ok(text.includes("Unknown level:"));
       }
     });
+  });
+});
+
+describe("textFormatter()", () => {
+  it("should parse formatter names", () => {
+    const parser = textFormatter();
+    const testCases = [
+      ["jsonl", jsonLinesFormatter],
+      ["logfmt", logfmtFormatter],
+      ["color", ansiColorFormatter],
+      ["plain", defaultTextFormatter],
+    ] as const;
+
+    for (const [input, expected] of testCases) {
+      const result = parser.parse(input);
+      assert.ok(result.success, `Failed to parse ${input}`);
+      assert.equal(result.value, expected);
+    }
+  });
+
+  it("should reject invalid formatter names", () => {
+    const parser = textFormatter();
+    const invalidNames = ["json", "text", "pretty", ""];
+
+    for (const name of invalidNames) {
+      const result = parser.parse(name);
+      assert.ok(!result.success, `Should have rejected ${name}`);
+    }
+  });
+
+  it("should suggest formatter names", () => {
+    const parser = textFormatter();
+    const suggestions = [...parser.suggest!("lo")];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "logfmt" }]);
+  });
+
+  it("should format formatter values back to names", () => {
+    const parser = textFormatter();
+
+    assert.equal(parser.format(jsonLinesFormatter), "jsonl");
+    assert.equal(parser.format(logfmtFormatter), "logfmt");
+    assert.equal(parser.format(ansiColorFormatter), "color");
+    assert.equal(parser.format(defaultTextFormatter), "plain");
+  });
+
+  it("should work with option parsers", () => {
+    const parser = object({
+      formatter: option("--log-format", textFormatter()),
+    });
+    const result = parse(parser, ["--log-format=logfmt"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.formatter, logfmtFormatter);
   });
 });
 

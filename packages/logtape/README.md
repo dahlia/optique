@@ -70,6 +70,42 @@ Features:
     `"fatal"`
  -  Provides suggestions for shell completion
 
+### `textFormatter()`
+
+A value parser for LogTape text formatters. Parses `"jsonl"`, `"logfmt"`,
+`"color"`, and `"plain"` into LogTape formatter functions.
+
+~~~~ typescript
+import { textFormatter } from "@optique/logtape";
+import { object, option, parse } from "@optique/core";
+
+const parser = object({
+  formatter: option("--log-format", textFormatter()),
+});
+
+const result = parse(parser, ["--log-format=logfmt"]);
+// result.value.formatter is LogTape's logfmtFormatter
+~~~~
+
+Formats:
+
+`"jsonl"`
+:   [JSON Lines][LogTape JSON Lines formatter] output
+
+`"logfmt"`
+:   [logfmt][LogTape logfmt formatter] key-value output
+
+`"color"`
+:   [ANSI-colored][LogTape ANSI color formatter] console output
+
+`"plain"`
+:   [LogTape's default text][LogTape default text formatter] output
+
+[LogTape JSON Lines formatter]: https://logtape.org/manual/formatters#json-lines-formatter
+[LogTape logfmt formatter]: https://logtape.org/manual/formatters#logfmt-formatter
+[LogTape ANSI color formatter]: https://logtape.org/manual/formatters#ansi-color-formatter
+[LogTape default text formatter]: https://logtape.org/manual/formatters#default-text-formatter
+
 ### `verbosity()`
 
 A parser for accumulating `-v` flags to determine log level.

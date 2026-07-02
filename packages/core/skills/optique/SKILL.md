@@ -255,6 +255,6 @@ Integration packages
 | `@optique/valibot`          | Valibot-backed value parsing              | <https://optique.dev/integrations/valibot.md>         |
 | `@optique/temporal`         | Temporal date and time parsers            | <https://optique.dev/integrations/temporal.md>        |
 | `@optique/git`              | Async Git reference validation            | <https://optique.dev/integrations/git.md>             |
-| `@optique/logtape`          | LogTape verbosity and log-level options   | <https://optique.dev/integrations/logtape.md>         |
+| `@optique/logtape`          | LogTape levels and textFormatter()        | <https://optique.dev/integrations/logtape.md>         |
 | `@optique/man`              | Man page generation                       | <https://optique.dev/concepts/man.md>                 |
 | `@optique/discover`         | File-based command discovery              | <https://optique.dev/concepts/discover.md>            |

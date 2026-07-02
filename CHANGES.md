@@ -87,6 +87,9 @@ To be released.
     `ConsoleFormatter` types while preserving Optique's existing stderr/stdout
     stream selection behavior.  [[#867]]
 
+ -  Added `textFormatter()` for parsing `"jsonl"`, `"logfmt"`, `"color"`,
+    and `"plain"` into LogTape's built-in text formatters.  [[#867]]
+
 [#867]: https://github.com/dahlia/optique/pull/867
 
 ### @optique/standard-schema
