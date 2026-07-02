@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { option } from "@optique/core/primitives";
 import { optional } from "@optique/core/modifiers";
+import { object } from "@optique/core/constructs";
 import type { FluentParser } from "@optique/core/fluent";
 import { ensureNonEmptyString } from "@optique/core/nonempty";
 import type {
@@ -18,6 +19,7 @@ import type {
   Sink,
   TextFormatter,
 } from "@logtape/logtape";
+import { textFormatter } from "./textformatter.ts";
 
 /**
  * Represents a log output destination.
@@ -27,8 +29,12 @@ import type {
  * @since 0.8.0
  */
 export type LogOutput =
-  | { readonly type: "console" }
-  | { readonly type: "file"; readonly path: string };
+  | { readonly type: "console"; readonly formatter?: TextFormatter }
+  | {
+    readonly type: "file";
+    readonly path: string;
+    readonly formatter?: TextFormatter;
+  };
 
 /**
  * Options for configuring console sink creation.
@@ -95,6 +101,27 @@ export interface LogOutputOptions {
    * Description to show in help text.
    */
   readonly description?: Message;
+
+  /**
+   * Text formatter to apply to the selected log output, or a long option name
+   * for selecting the text formatter from the command line.
+   *
+   * When a string is specified, this adds an option that accepts `"jsonl"`,
+   * `"logfmt"`, `"color"`, and `"plain"` and stores the selected formatter in
+   * the resulting {@link LogOutput}. If the formatter option is specified
+   * without a log output option, the output defaults to console.
+   *
+   * When a formatter function is specified, it is applied to the resulting
+   * {@link LogOutput} only when the log output option itself is present.
+   *
+   * @example
+   * ```typescript
+   * logOutput({ formatter: "--log-format" })
+   * ```
+   *
+   * @since 1.2.0
+   */
+  readonly formatter?: string | TextFormatter;
 
   /**
    * Custom error messages.
@@ -198,13 +225,40 @@ export function logOutput(
 
   if (options.short) {
     const short = options.short as OptionName;
-    return optional(
+    const outputParser = optional(
       option(short, long, valueParser, { description }),
     );
+    return withFormatter(outputParser, options.formatter);
   }
-  return optional(
+  const outputParser = optional(
     option(long, valueParser, { description }),
   );
+  return withFormatter(outputParser, options.formatter);
+}
+
+function withFormatter(
+  outputParser: FluentParser<"sync", LogOutput | undefined, unknown>,
+  formatter: string | TextFormatter | undefined,
+): FluentParser<"sync", LogOutput | undefined, unknown> {
+  if (formatter == null) return outputParser;
+  if (typeof formatter !== "string") {
+    return outputParser.map((output) =>
+      output == null ? undefined : { ...output, formatter }
+    );
+  }
+
+  const formatterParser = optional(
+    option(formatter as OptionName, textFormatter(), {
+      description: message`Log output format.`,
+    }),
+  );
+  return object({
+    output: outputParser,
+    formatter: formatterParser,
+  }).map(({ output, formatter }) => {
+    if (formatter == null) return output;
+    return { ...(output ?? { type: "console" as const }), formatter };
+  });
 }
 
 /**
@@ -348,10 +402,16 @@ export async function createSink(
   consoleSinkOptions: ConsoleSinkOptions = {},
 ): Promise<Sink> {
   if (output.type === "console") {
-    return createConsoleSink(consoleSinkOptions);
+    return createConsoleSink({
+      ...consoleSinkOptions,
+      formatter: consoleSinkOptions.formatter ?? output.formatter,
+    });
   }
 
-  let getFileSink: (path: string) => Sink;
+  let getFileSink: (
+    path: string,
+    options?: { readonly formatter?: TextFormatter },
+  ) => Sink;
   try {
     ({ getFileSink } = await import("@logtape/file"));
   } catch (e) {
@@ -363,5 +423,10 @@ export async function createSink(
         `Original error: ${e}`,
     );
   }
-  return getFileSink(output.path);
+  return getFileSink(
+    output.path,
+    output.formatter == null ? undefined : {
+      formatter: output.formatter,
+    },
+  );
 }

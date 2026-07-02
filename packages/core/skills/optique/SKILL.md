@@ -242,19 +242,19 @@ Reference links
 Integration packages
 --------------------
 
-| Package                     | Use for                                   | Docs                                                  |
-| --------------------------- | ----------------------------------------- | ----------------------------------------------------- |
-| `@optique/env`              | Environment variable fallbacks            | <https://optique.dev/integrations/env.md>             |
-| `@optique/config`           | Configuration file fallbacks              | <https://optique.dev/integrations/config.md>          |
-| `@optique/derived-defaults` | Defaults computed from first-pass results | <https://optique.dev/concepts/derived-defaults.md>    |
-| `@optique/prompt`           | Generic prompt adapter foundation         | <https://optique.dev/integrations/prompt.md>          |
-| `@optique/clack`            | Clack interactive fallback prompts        | <https://optique.dev/integrations/clack.md>           |
-| `@optique/inquirer`         | Inquirer.js interactive fallback prompts  | <https://optique.dev/integrations/inquirer.md>        |
-| `@optique/standard-schema`  | Portable schema-backed value parsing      | <https://optique.dev/integrations/standard-schema.md> |
-| `@optique/zod`              | Zod-backed value parsing                  | <https://optique.dev/integrations/zod.md>             |
-| `@optique/valibot`          | Valibot-backed value parsing              | <https://optique.dev/integrations/valibot.md>         |
-| `@optique/temporal`         | Temporal date and time parsers            | <https://optique.dev/integrations/temporal.md>        |
-| `@optique/git`              | Async Git reference validation            | <https://optique.dev/integrations/git.md>             |
-| `@optique/logtape`          | LogTape levels and textFormatter()        | <https://optique.dev/integrations/logtape.md>         |
-| `@optique/man`              | Man page generation                       | <https://optique.dev/concepts/man.md>                 |
-| `@optique/discover`         | File-based command discovery              | <https://optique.dev/concepts/discover.md>            |
+| Package                     | Use for                                     | Docs                                                  |
+| --------------------------- | ------------------------------------------- | ----------------------------------------------------- |
+| `@optique/env`              | Environment variable fallbacks              | <https://optique.dev/integrations/env.md>             |
+| `@optique/config`           | Configuration file fallbacks                | <https://optique.dev/integrations/config.md>          |
+| `@optique/derived-defaults` | Defaults computed from first-pass results   | <https://optique.dev/concepts/derived-defaults.md>    |
+| `@optique/prompt`           | Generic prompt adapter foundation           | <https://optique.dev/integrations/prompt.md>          |
+| `@optique/clack`            | Clack interactive fallback prompts          | <https://optique.dev/integrations/clack.md>           |
+| `@optique/inquirer`         | Inquirer.js interactive fallback prompts    | <https://optique.dev/integrations/inquirer.md>        |
+| `@optique/standard-schema`  | Portable schema-backed value parsing        | <https://optique.dev/integrations/standard-schema.md> |
+| `@optique/zod`              | Zod-backed value parsing                    | <https://optique.dev/integrations/zod.md>             |
+| `@optique/valibot`          | Valibot-backed value parsing                | <https://optique.dev/integrations/valibot.md>         |
+| `@optique/temporal`         | Temporal date and time parsers              | <https://optique.dev/integrations/temporal.md>        |
+| `@optique/git`              | Async Git reference validation              | <https://optique.dev/integrations/git.md>             |
+| `@optique/logtape`          | LogTape levels and formatter/output options | <https://optique.dev/integrations/logtape.md>         |
+| `@optique/man`              | Man page generation                         | <https://optique.dev/concepts/man.md>                 |
+| `@optique/discover`         | File-based command discovery                | <https://optique.dev/concepts/discover.md>            |

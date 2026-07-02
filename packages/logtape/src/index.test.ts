@@ -15,6 +15,7 @@ import {
   jsonLinesFormatter,
   logfmtFormatter,
   type LogLevel,
+  type Sink,
 } from "@logtape/logtape";
 
 import {
@@ -384,6 +385,95 @@ describe("logOutput()", () => {
       output: logOutput(),
     });
     const result = parse(parser, []);
+    assert.ok(result.success);
+    assert.equal(result.value.output, undefined);
+  });
+
+  it("should parse formatter option with console output", () => {
+    const parser = object({
+      output: logOutput({ formatter: "--log-format" }),
+    });
+    const result = parse(parser, ["--log-output=-", "--log-format=logfmt"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.output, {
+      type: "console",
+      formatter: logfmtFormatter,
+    });
+  });
+
+  it("should parse formatter option with file output", () => {
+    const parser = object({
+      output: logOutput({ formatter: "--log-format" }),
+    });
+    const result = parse(parser, [
+      "--log-output=/var/log/app.log",
+      "--log-format=jsonl",
+    ]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.output, {
+      type: "file",
+      path: "/var/log/app.log",
+      formatter: jsonLinesFormatter,
+    });
+  });
+
+  it("should default to console output when only formatter is specified", () => {
+    const parser = object({
+      output: logOutput({ formatter: "--log-format" }),
+    });
+    const result = parse(parser, ["--log-format=plain"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.output, {
+      type: "console",
+      formatter: defaultTextFormatter,
+    });
+  });
+
+  it("should suggest formatter names for formatter option", () => {
+    const parser = object({
+      output: logOutput({ formatter: "--log-format" }),
+    });
+    const suggestions = suggestSync(parser, ["--log-format", "lo"]);
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "logfmt" }]);
+  });
+
+  it("should apply fixed formatter to console output", () => {
+    const parser = object({
+      output: logOutput({ formatter: logfmtFormatter }),
+    });
+    const result = parse(parser, ["--log-output=-"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.output, {
+      type: "console",
+      formatter: logfmtFormatter,
+    });
+  });
+
+  it("should apply fixed formatter to file output", () => {
+    const parser = object({
+      output: logOutput({ formatter: jsonLinesFormatter }),
+    });
+    const result = parse(parser, ["--log-output=/var/log/app.log"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.output, {
+      type: "file",
+      path: "/var/log/app.log",
+      formatter: jsonLinesFormatter,
+    });
+  });
+
+  it("should not default to console for fixed formatter alone", () => {
+    const parser = object({
+      output: logOutput({ formatter: logfmtFormatter }),
+    });
+    const result = parse(parser, []);
+
     assert.ok(result.success);
     assert.equal(result.value.output, undefined);
   });
@@ -771,6 +861,72 @@ describe("loggingOptions()", () => {
       assert.deepEqual(result.value.logging.logOutput, {
         type: "file",
         path: "/tmp/custom.log",
+      });
+    });
+
+    it("should parse log output formatter option", () => {
+      const parser = object({
+        logging: loggingOptions({
+          level: "option",
+          formatter: "--log-format",
+        }),
+      });
+      const result = parse(parser, ["--log-format=color"]);
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value.logging.logOutput, {
+        type: "console",
+        formatter: ansiColorFormatter,
+      });
+    });
+
+    it("should apply fixed formatter to default output", () => {
+      const parser = object({
+        logging: loggingOptions({
+          level: "option",
+          formatter: logfmtFormatter,
+        }),
+      });
+      const result = parse(parser, []);
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value.logging.logOutput, {
+        type: "console",
+        formatter: logfmtFormatter,
+      });
+    });
+
+    it("should parse formatter option when output option is disabled", () => {
+      const parser = object({
+        logging: loggingOptions({
+          level: "verbosity",
+          formatter: "--log-format",
+          output: { enabled: false },
+        }),
+      });
+      const result = parse(parser, ["-v", "--log-format=logfmt"]);
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value.logging.logOutput, {
+        type: "console",
+        formatter: logfmtFormatter,
+      });
+    });
+
+    it("should apply fixed formatter when output option is disabled", () => {
+      const parser = object({
+        logging: loggingOptions({
+          level: "verbosity",
+          formatter: jsonLinesFormatter,
+          output: { enabled: false },
+        }),
+      });
+      const result = parse(parser, ["-v"]);
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value.logging.logOutput, {
+        type: "console",
+        formatter: jsonLinesFormatter,
       });
     });
 
@@ -1183,6 +1339,59 @@ describe("createSink()", () => {
     assert.equal(typeof sink, "function");
   });
 
+  it("should use formatter from console log output", async () => {
+    const sink = await createSink({
+      type: "console",
+      formatter: (record) => `formatted ${record.rawMessage}`,
+    }, { stream: "stdout" });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: 1,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.deepEqual(lines, ["formatted hello"]);
+  });
+
+  it("should prefer explicit console sink formatter", async () => {
+    const sink = await createSink({
+      type: "console",
+      formatter: () => "from output",
+    }, {
+      stream: "stdout",
+      formatter: () => "from sink options",
+    });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["test"],
+        level: "info",
+        message: ["hello"],
+        rawMessage: "hello",
+        properties: {},
+        timestamp: 1,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.deepEqual(lines, ["from sink options"]);
+  });
+
   it("should create file sink for file output", async () => {
     const dir = await mkdtemp(join(tmpdir(), "optique-test-"));
     const sink = await createSink({
@@ -1190,6 +1399,27 @@ describe("createSink()", () => {
       path: join(dir, "test-sink.log"),
     });
     assert.equal(typeof sink, "function");
+  });
+
+  it("should use formatter from file log output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "optique-test-"));
+    const path = join(dir, "formatted.log");
+    const sink = await createSink({
+      type: "file",
+      path,
+      formatter: (record) => `formatted ${record.rawMessage}\n`,
+    });
+    sink({
+      category: ["test"],
+      level: "info",
+      message: ["hello"],
+      rawMessage: "hello",
+      properties: {},
+      timestamp: 1,
+    });
+    (sink as Sink & Disposable)[Symbol.dispose]();
+
+    assert.equal(await readFile(path, "utf-8"), "formatted hello\n");
   });
 
   it("should propagate getFileSink() errors as-is", async () => {

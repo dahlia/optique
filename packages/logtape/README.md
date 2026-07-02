@@ -188,6 +188,37 @@ const result2 = parse(parser, ["--log-output=/var/log/app.log"]);
 const sink = await createSink(result1.value.output);
 ~~~~
 
+Use `formatter` to add a text formatter option and wire it through the
+resulting `LogOutput`:
+
+~~~~ typescript
+import { logOutput } from "@optique/logtape";
+import { object, parse } from "@optique/core";
+
+const parser = object({
+  output: logOutput({ formatter: "--log-format" }),
+});
+
+const result = parse(parser, ["--log-format=logfmt"]);
+// result.value.output is a console LogOutput with logfmtFormatter
+~~~~
+
+You can also pass a fixed LogTape text formatter. In that case no additional
+command-line option is added:
+
+~~~~ typescript
+import { logfmtFormatter } from "@logtape/logtape";
+import { logOutput } from "@optique/logtape";
+import { object, parse } from "@optique/core";
+
+const parser = object({
+  output: logOutput({ formatter: logfmtFormatter }),
+});
+
+const result = parse(parser, ["--log-output=/var/log/app.log"]);
+// result.value.output is a file LogOutput with logfmtFormatter
+~~~~
+
 ### `loggingOptions()`
 
 A preset that combines log level and log output options into a single group.
@@ -242,8 +273,20 @@ Common options:
 
  -  `output.enabled`: Whether to enable log output option (default: `true`)
  -  `output.long`: Long option name for output (default: `"--log-output"`)
+ -  `formatter`: Text formatter or long option name for output format
  -  `groupLabel`: Label for option group in help text (default:
     `"Logging options"`)
+
+Set `formatter` at the top level when using the preset:
+
+~~~~ typescript
+const parser = object({
+  logging: loggingOptions({
+    level: "option",
+    formatter: "--log-format",
+  }),
+});
+~~~~
 
 ### `createLoggingConfig()`
 
@@ -311,13 +354,21 @@ const sink5 = createConsoleSink({
 Creates a LogTape sink from a `LogOutput` value.
 
 ~~~~ typescript
+import { logfmtFormatter } from "@logtape/logtape";
 import { createSink, type LogOutput } from "@optique/logtape";
 
-// Console sink
-const consoleSink = await createSink({ type: "console" });
+// Console sink with a formatter selected by logOutput()
+const consoleSink = await createSink({
+  type: "console",
+  formatter: logfmtFormatter,
+});
 
 // File sink (requires @logtape/file package)
-const fileSink = await createSink({ type: "file", path: "/var/log/app.log" });
+const fileSink = await createSink({
+  type: "file",
+  path: "/var/log/app.log",
+  formatter: logfmtFormatter,
+});
 ~~~~
 
 > [!NOTE]

@@ -90,6 +90,10 @@ To be released.
  -  Added `textFormatter()` for parsing `"jsonl"`, `"logfmt"`, `"color"`,
     and `"plain"` into LogTape's built-in text formatters.  [[#867]]
 
+ -  Added a `formatter` option to `logOutput()` and `loggingOptions()` for
+    wiring parsed or fixed text formatters into console and file sinks.
+    [[#867]]
+
 [#867]: https://github.com/dahlia/optique/pull/867
 
 ### @optique/standard-schema

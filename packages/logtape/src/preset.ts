@@ -1,14 +1,16 @@
 import { option } from "@optique/core/primitives";
 import { group, object } from "@optique/core/constructs";
-import { withDefault } from "@optique/core/modifiers";
+import { optional, withDefault } from "@optique/core/modifiers";
 import type { FluentParser } from "@optique/core/fluent";
 import type { Parser } from "@optique/core/parser";
 import type { OptionName } from "@optique/core/usage";
-import type { Config, LogLevel } from "@logtape/logtape";
+import { message } from "@optique/core/message";
+import type { Config, LogLevel, TextFormatter } from "@logtape/logtape";
 
 import { logLevel, validateLogLevel } from "./loglevel.ts";
 import { verbosity, type VerbosityOptions } from "./verbosity.ts";
 import { debug, type DebugOptions } from "./debug.ts";
+import { textFormatter } from "./textformatter.ts";
 import {
   type ConsoleSinkOptions,
   createSink,
@@ -84,6 +86,14 @@ export interface LoggingOptionsWithLevel {
   readonly output?: LogOutputConfig;
 
   /**
+   * Text formatter to apply to the generated sink, or a long option name for
+   * selecting the text formatter from the command line.
+   *
+   * @since 1.2.0
+   */
+  readonly formatter?: string | TextFormatter;
+
+  /**
    * Label for the option group in help text.
    * @default `"Logging options"`
    */
@@ -122,6 +132,14 @@ export interface LoggingOptionsWithVerbosity {
    * Configuration for log output option.
    */
   readonly output?: LogOutputConfig;
+
+  /**
+   * Text formatter to apply to the generated sink, or a long option name for
+   * selecting the text formatter from the command line.
+   *
+   * @since 1.2.0
+   */
+  readonly formatter?: string | TextFormatter;
 
   /**
    * Label for the option group in help text.
@@ -168,6 +186,14 @@ export interface LoggingOptionsWithDebug {
    * Configuration for log output option.
    */
   readonly output?: LogOutputConfig;
+
+  /**
+   * Text formatter to apply to the generated sink, or a long option name for
+   * selecting the text formatter from the command line.
+   *
+   * @since 1.2.0
+   */
+  readonly formatter?: string | TextFormatter;
 
   /**
    * Label for the option group in help text.
@@ -251,6 +277,7 @@ export function loggingOptions(
   const groupLabel = config.groupLabel ?? "Logging options";
   const outputEnabled = config.output?.enabled !== false;
   const outputLong = config.output?.long ?? "--log-output";
+  const outputFormatter = config.formatter;
 
   // Create log level parser based on the configuration
   let levelParser: Parser<"sync", LogLevel, unknown>;
@@ -299,18 +326,27 @@ export function loggingOptions(
   }
 
   // Default log output is console
-  const defaultOutput: LogOutput = { type: "console" };
+  const defaultOutput: LogOutput = typeof outputFormatter === "function"
+    ? { type: "console", formatter: outputFormatter }
+    : { type: "console" };
 
-  // Parser that always produces LogOutput (not undefined)
-  // Use type assertion since withDefault(optional(x), y) guarantees non-undefined
-  const outputParser = withDefault(
-    logOutput({ long: outputLong }),
-    defaultOutput,
-  ) as unknown as Parser<"sync", LogOutput, unknown>;
-
-  // If output is disabled, create a parser that always returns default
-  if (!outputEnabled) {
-    const constantOutputParser: Parser<"sync", LogOutput, unknown> = {
+  let outputParser: Parser<"sync", LogOutput, unknown>;
+  if (outputEnabled) {
+    // Use type assertion since withDefault(optional(x), y) guarantees non-undefined
+    outputParser = withDefault(
+      logOutput({ long: outputLong, formatter: outputFormatter }),
+      defaultOutput,
+    ) as unknown as Parser<"sync", LogOutput, unknown>;
+  } else if (typeof outputFormatter === "string") {
+    outputParser = optional(
+      option(outputFormatter as OptionName, textFormatter(), {
+        description: message`Log output format.`,
+      }),
+    ).map((formatter) =>
+      formatter == null ? defaultOutput : { type: "console", formatter }
+    );
+  } else {
+    outputParser = {
       mode: "sync",
       $valueType: [] as readonly LogOutput[],
       $stateType: [],
@@ -328,14 +364,6 @@ export function loggingOptions(
       *suggest() {},
       getDocFragments: () => ({ fragments: [] }),
     };
-
-    return group(
-      groupLabel,
-      object({
-        logLevel: levelParser,
-        logOutput: constantOutputParser,
-      }),
-    );
   }
 
   // Combine into a grouped parser

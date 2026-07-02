@@ -290,13 +290,51 @@ const none = parse(parser, []);
 ### Options
 
 ~~~~ typescript twoslash
+import { logfmtFormatter } from "@logtape/logtape";
 import { logOutput } from "@optique/logtape";
 // ---cut-before---
 const output = logOutput({
   long: "--log-output",   // Long option (default: "--log-output")
   short: "-o",            // Optional short option
   metavar: "FILE",        // Metavar for help text (default: "FILE")
+  formatter: "--log-format", // Optional text formatter option
+  // formatter: logfmtFormatter, // Or a fixed text formatter
 });
+~~~~
+
+When `formatter` is a string, `logOutput()` also parses LogTape text formatter
+names and stores the selected formatter in the `LogOutput` value. If the
+formatter option is used without `--log-output`, the output defaults to
+console.
+
+~~~~ typescript twoslash
+import { logOutput } from "@optique/logtape";
+import { object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+
+const parser = object({
+  output: logOutput({ formatter: "--log-format" }),
+});
+
+const result = parse(parser, ["--log-format=logfmt"]);
+// result.value.output is a console LogOutput with logfmtFormatter
+~~~~
+
+When `formatter` is a LogTape text formatter, `logOutput()` applies that fixed
+formatter to the selected output without adding another command-line option.
+
+~~~~ typescript twoslash
+import { logfmtFormatter } from "@logtape/logtape";
+import { logOutput } from "@optique/logtape";
+import { object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+
+const parser = object({
+  output: logOutput({ formatter: logfmtFormatter }),
+});
+
+const result = parse(parser, ["--log-output=/var/log/app.log"]);
+// result.value.output is a file LogOutput with logfmtFormatter
 ~~~~
 
 
@@ -386,7 +424,27 @@ All three modes share these options:
 | ---------------- | ------------------- | ---------------------------- |
 | `output.enabled` | `true`              | Enable `--log-output` option |
 | `output.long`    | `"--log-output"`    | Long option name for output  |
+| `formatter`      | `undefined`         | Output formatter or option   |
 | `groupLabel`     | `"Logging options"` | Help text group label        |
+
+Set `formatter` at the top level to share the same formatter behavior as
+`logOutput()` while using the preset:
+
+~~~~ typescript twoslash
+import { loggingOptions } from "@optique/logtape";
+import { object } from "@optique/core/constructs";
+import { parse } from "@optique/core/parser";
+
+const parser = object({
+  logging: loggingOptions({
+    level: "option",
+    formatter: "--log-format",
+  }),
+});
+
+const result = parse(parser, ["--log-format=jsonl"]);
+// result.value.logging.logOutput is a console LogOutput with jsonLinesFormatter
+~~~~
 
 
 Creating LogTape configuration
@@ -510,13 +568,21 @@ const sink5 = createConsoleSink({
 The `createSink()` function creates a LogTape sink from a `LogOutput` value:
 
 ~~~~ typescript twoslash
+import { logfmtFormatter } from "@logtape/logtape";
 import { createSink, type LogOutput } from "@optique/logtape";
 
-// Console sink
-const consoleSink = await createSink({ type: "console" });
+// Console sink with a formatter selected by logOutput()
+const consoleSink = await createSink({
+  type: "console",
+  formatter: logfmtFormatter,
+});
 
 // File sink (requires @logtape/file package)
-const fileSink = await createSink({ type: "file", path: "/var/log/app.log" });
+const fileSink = await createSink({
+  type: "file",
+  path: "/var/log/app.log",
+  formatter: logfmtFormatter,
+});
 ~~~~
 
 > [!NOTE]
