@@ -436,6 +436,13 @@ type BijectKey<T> = Extract<keyof T, string | number>;
 type StringKeyOf<T> = `${BijectKey<T>}`;
 type BijectValue<T> = T[BijectKey<T>];
 
+function transformMappingFailure<T>(): ValueParserResult<T> {
+  return {
+    success: false as const,
+    error: message`Failed to transform value.`,
+  };
+}
+
 function transformValueParserResult<T, U>(
   result: ValueParserResult<T>,
   mapping: TransformMapping<T, U>,
@@ -455,14 +462,17 @@ function transformValueParserResult<T, U>(
         deferred: true as const,
       });
     } catch {
-      return preserveSnapshot({
-        success: true,
-        value: undefined as unknown as U,
-        deferred: true as const,
-      });
+      return preserveSnapshot(transformMappingFailure());
     }
   }
-  return preserveSnapshot({ success: true, value: mapping.map(result.value) });
+  try {
+    return preserveSnapshot({
+      success: true,
+      value: mapping.map(result.value),
+    });
+  } catch {
+    return preserveSnapshot(transformMappingFailure());
+  }
 }
 
 /**
@@ -1016,10 +1026,18 @@ export function transform<M extends Mode, T, U>(
     const validate = parser.validate.bind(parser);
     Object.defineProperty(transformed, "validate", {
       value(value: U): ValueParserResult<U> {
-        const result = validate(mapping.unmap(value));
-        return result.success
-          ? { success: true as const, value: mapping.map(result.value) }
-          : result;
+        let result: ValueParserResult<T>;
+        try {
+          result = validate(mapping.unmap(value));
+        } catch {
+          return { success: true as const, value };
+        }
+        if (!result.success) return result;
+        try {
+          return { success: true as const, value: mapping.map(result.value) };
+        } catch {
+          return transformMappingFailure();
+        }
       },
       configurable: true,
       enumerable: true,
@@ -1034,9 +1052,12 @@ export function transform<M extends Mode, T, U>(
         } catch {
           return { success: true as const, value };
         }
-        return result.success
-          ? { success: true as const, value: mapping.map(result.value) }
-          : result;
+        if (!result.success) return result;
+        try {
+          return { success: true as const, value: mapping.map(result.value) };
+        } catch {
+          return transformMappingFailure();
+        }
       },
       configurable: true,
       enumerable: true,

@@ -2717,6 +2717,54 @@ describe("transform", () => {
     ]);
   });
 
+  it("should reject parsed values when mapping throws", () => {
+    const parser = transform(string(), {
+      map() {
+        throw new TypeError("Cannot map value.");
+      },
+      unmap: () => "foo",
+    });
+
+    const result = parser.parse("foo");
+
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Failed to transform value." },
+    ]);
+  });
+
+  it("should reject validated values when mapping throws", () => {
+    const parser = transform(integer({ min: 1, max: 10 }), {
+      map() {
+        throw new TypeError("Cannot map value.");
+      },
+      unmap: (value: { readonly count: number }) => value.count,
+    });
+
+    const result = parser.validate?.({ count: 3 });
+
+    assert.ok(result != null);
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Failed to transform value." },
+    ]);
+  });
+
+  it("should preserve fallback values when validate unmapping throws", () => {
+    const sentinel = { count: 3 };
+    const parser = transform(integer({ min: 1, max: 10 }), {
+      map: (value) => ({ count: value }),
+      unmap(value: { readonly count: number }) {
+        if (value === sentinel) throw new TypeError("Cannot unmap sentinel.");
+        return value.count;
+      },
+    });
+
+    const result = parser.validate?.(sentinel);
+
+    assert.deepEqual(result, { success: true, value: sentinel });
+  });
+
   it("should preserve fallback values when round-trip validation throws", () => {
     const sentinel = { count: 12 };
     const parser = transform(
