@@ -1025,9 +1025,12 @@ export function transform<M extends Mode, T, U>(
     const syncParser = parser as ValueParser<"sync", T>;
     Object.defineProperty(transformed, "validate", {
       value(value: U): ValueParserResult<U> {
-        const result = syncParser.parse(
-          syncParser.format(mapping.unmap(value)),
-        );
+        let result: ValueParserResult<T>;
+        try {
+          result = syncParser.parse(syncParser.format(mapping.unmap(value)));
+        } catch {
+          return { success: true as const, value };
+        }
         return result.success
           ? { success: true as const, value: mapping.map(result.value) }
           : result;

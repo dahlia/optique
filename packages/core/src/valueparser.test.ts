@@ -2717,6 +2717,32 @@ describe("transform", () => {
     ]);
   });
 
+  it("should preserve fallback values when round-trip validation throws", () => {
+    const sentinel = { count: 12 };
+    const parser = transform(
+      {
+        mode: "sync" as const,
+        metavar: "COUNT",
+        placeholder: 1,
+        parse(input: string): ValueParserResult<number> {
+          return { success: true, value: Number(input) };
+        },
+        format(value: number): string {
+          if (value > 10) throw new TypeError("Cannot format sentinel.");
+          return value.toString();
+        },
+      },
+      {
+        map: (value) => ({ count: value }),
+        unmap: (value: { readonly count: number }) => value.count,
+      },
+    );
+
+    const result = parser.validate?.(sentinel);
+
+    assert.deepEqual(result, { success: true, value: sentinel });
+  });
+
   it("should transform placeholder and choices metadata", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
       map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
@@ -3196,7 +3222,10 @@ describe("biject", () => {
           positiveZero: 0,
           negativeZero: -0,
         }),
-      RangeError,
+      {
+        name: "RangeError",
+        message: 'Duplicate biject value for key "negativeZero".',
+      },
     );
     assert.throws(
       () =>
@@ -3204,7 +3233,10 @@ describe("biject", () => {
           first: NaN,
           second: NaN,
         }),
-      RangeError,
+      {
+        name: "RangeError",
+        message: 'Duplicate biject value for key "second".',
+      },
     );
   });
 
