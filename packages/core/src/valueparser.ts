@@ -1117,7 +1117,7 @@ function preserveTransformedDerivedMetadata<M extends Mode, T, U>(
     suggestWithDependency in parser &&
     parser[suggestWithDependency] != null
   ) {
-    const suggest = parser[suggestWithDependency];
+    const suggest = parser[suggestWithDependency].bind(parser);
     Object.defineProperty(transformed, suggestWithDependency, {
       value(
         prefix: string,

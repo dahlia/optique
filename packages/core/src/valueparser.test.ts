@@ -51,7 +51,14 @@ import {
 } from "@optique/core/message";
 import { object } from "#src/constructs.ts";
 import { dependency } from "#src/dependency.ts";
-import { getSnapshottedDefaultDependencyValues } from "#src/internal/dependency.ts";
+import {
+  dependencyId,
+  type DerivedValueParser,
+  derivedValueParserMarker,
+  getSnapshottedDefaultDependencyValues,
+  parseWithDependency,
+  suggestWithDependency,
+} from "#src/internal/dependency.ts";
 import { argument, option } from "#src/primitives.ts";
 import { withDefault } from "#src/modifiers.ts";
 import { parse, suggestSync } from "#src/parser.ts";
@@ -3109,6 +3116,48 @@ describe("transform", () => {
       ),
       ["warn", "error"],
     );
+  });
+
+  it("should preserve this context for derived suggestions", () => {
+    const derived: DerivedValueParser<"sync", string, unknown> = {
+      mode: "sync",
+      metavar: "LEVEL",
+      placeholder: "debug",
+      [derivedValueParserMarker]: true,
+      [dependencyId]: Symbol("mode"),
+      parse(input: string): ValueParserResult<string> {
+        return { success: true, value: input };
+      },
+      [parseWithDependency](
+        input: string,
+        _dependencyValue: unknown,
+      ): ValueParserResult<string> {
+        return { success: true, value: input };
+      },
+      format(value: string): string {
+        return value;
+      },
+      *[suggestWithDependency](
+        this: { readonly prefix: string },
+        prefix: string,
+      ) {
+        yield { kind: "literal" as const, text: `${this.prefix}-${prefix}` };
+      },
+      prefix: "ctx",
+    } as DerivedValueParser<"sync", string, unknown> & {
+      readonly prefix: string;
+    };
+    const parser = transform(derived, {
+      map: (value) => value.toUpperCase(),
+      unmap: (value) => value.toLowerCase(),
+    });
+
+    const transformed = parser as DerivedValueParser<"sync", string, unknown>;
+    const suggest = transformed[suggestWithDependency];
+    assert.ok(suggest != null);
+    const suggestions = [...suggest("", undefined) as Iterable<unknown>];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "ctx-" }]);
   });
 });
 
