@@ -2772,6 +2772,39 @@ describe("transform", () => {
     assert.deepEqual(result, { success: true, value: sentinel });
   });
 
+  it("should preserve fallback values when validate unmapping throws", () => {
+    const sentinel = { count: 3 };
+    const parser = transform(
+      {
+        mode: "sync" as const,
+        metavar: "COUNT",
+        placeholder: 1,
+        parse(input: string): ValueParserResult<number> {
+          return { success: true, value: Number(input) };
+        },
+        format(value: number): string {
+          return value.toString();
+        },
+        validate(value: number): ValueParserResult<number> {
+          return value < 1
+            ? { success: false, error: message`Expected positive count.` }
+            : { success: true, value };
+        },
+      },
+      {
+        map: (value) => ({ count: value }),
+        unmap(value: { readonly count: number }) {
+          if (value === sentinel) throw new TypeError("Cannot unmap sentinel.");
+          return value.count;
+        },
+      },
+    );
+
+    const result = parser.validate?.(sentinel);
+
+    assert.deepEqual(result, { success: true, value: sentinel });
+  });
+
   it("should preserve fallback values when round-trip formatting throws", () => {
     const sentinel = { count: 12 };
     const parser = transform(

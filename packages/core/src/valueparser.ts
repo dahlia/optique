@@ -1021,9 +1021,15 @@ export function transform<M extends Mode, T, U>(
     const validate = parser.validate.bind(parser);
     Object.defineProperty(transformed, "validate", {
       value(value: U): ValueParserResult<U> {
+        let unmapped: T;
+        try {
+          unmapped = mapping.unmap(value);
+        } catch {
+          return { success: true as const, value };
+        }
         let result: ValueParserResult<T>;
         try {
-          result = validate(mapping.unmap(value));
+          result = validate(unmapped);
         } catch {
           return transformMappingFailure();
         }
