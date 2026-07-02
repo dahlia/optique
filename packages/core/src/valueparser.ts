@@ -1007,9 +1007,9 @@ export function transform<M extends Mode, T, U>(
   };
   Object.defineProperty(transformed, "placeholder", {
     get() {
-      if (parser.placeholder === undefined) return undefined;
       try {
-        return mapping.map(parser.placeholder);
+        const placeholder = parser.placeholder;
+        return placeholder === undefined ? undefined : mapping.map(placeholder);
       } catch {
         return undefined;
       }

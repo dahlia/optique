@@ -2831,6 +2831,28 @@ describe("transform", () => {
     assert.deepEqual(parser.choices, ["FOO", "BAR"]);
   });
 
+  it("should tolerate throwing placeholder getters", () => {
+    const inner: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "WORD",
+      get placeholder(): string {
+        throw new TypeError("Cannot resolve placeholder.");
+      },
+      parse(input: string): ValueParserResult<string> {
+        return { success: true, value: input };
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const parser = transform(inner, {
+      map: (value) => value.toUpperCase(),
+      unmap: (value) => value.toLowerCase(),
+    });
+
+    assert.equal(parser.placeholder, undefined);
+  });
+
   it("should delegate suggestions as input strings", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
       map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
