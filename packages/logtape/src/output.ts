@@ -247,11 +247,7 @@ function withFormatter(
     );
   }
 
-  const formatterParser = optional(
-    option(formatter as OptionName, textFormatter(), {
-      description: message`Log output format.`,
-    }),
-  );
+  const formatterParser = createTextFormatterOption(formatter);
   return object({
     output: outputParser,
     formatter: formatterParser,
@@ -259,6 +255,16 @@ function withFormatter(
     if (formatter == null) return output;
     return { ...(output ?? { type: "console" as const }), formatter };
   });
+}
+
+export function createTextFormatterOption(
+  long: string,
+): FluentParser<"sync", TextFormatter | undefined, unknown> {
+  return optional(
+    option(long as OptionName, textFormatter(), {
+      description: message`Log output format.`,
+    }),
+  );
 }
 
 /**

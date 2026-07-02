@@ -1,19 +1,18 @@
 import { option } from "@optique/core/primitives";
 import { group, object } from "@optique/core/constructs";
-import { optional, withDefault } from "@optique/core/modifiers";
+import { withDefault } from "@optique/core/modifiers";
 import type { FluentParser } from "@optique/core/fluent";
 import type { Parser } from "@optique/core/parser";
 import type { OptionName } from "@optique/core/usage";
-import { message } from "@optique/core/message";
 import type { Config, LogLevel, TextFormatter } from "@logtape/logtape";
 
 import { logLevel, validateLogLevel } from "./loglevel.ts";
 import { verbosity, type VerbosityOptions } from "./verbosity.ts";
 import { debug, type DebugOptions } from "./debug.ts";
-import { textFormatter } from "./textformatter.ts";
 import {
   type ConsoleSinkOptions,
   createSink,
+  createTextFormatterOption,
   type LogOutput,
   logOutput,
 } from "./output.ts";
@@ -338,11 +337,7 @@ export function loggingOptions(
       defaultOutput,
     ) as unknown as Parser<"sync", LogOutput, unknown>;
   } else if (typeof outputFormatter === "string") {
-    outputParser = optional(
-      option(outputFormatter as OptionName, textFormatter(), {
-        description: message`Log output format.`,
-      }),
-    ).map((formatter) =>
+    outputParser = createTextFormatterOption(outputFormatter).map((formatter) =>
       formatter == null ? defaultOutput : { type: "console", formatter }
     );
   } else {

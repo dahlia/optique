@@ -31,6 +31,24 @@ import {
   verbosity,
 } from "#src/index.ts";
 
+function captureConsoleLog(run: () => void): string[] {
+  return captureConsoleLogCalls(run).map((args) => String(args[0]));
+}
+
+function captureConsoleLogCalls(run: () => void): Array<readonly unknown[]> {
+  const originalLog = console.log;
+  const calls: Array<readonly unknown[]> = [];
+  console.log = (...args: readonly unknown[]) => {
+    calls.push(args);
+  };
+  try {
+    run();
+  } finally {
+    console.log = originalLog;
+  }
+  return calls;
+}
+
 describe("logLevel()", () => {
   describe("parsing", () => {
     it("should parse valid log levels", () => {
@@ -998,12 +1016,7 @@ describe("createConsoleSink()", () => {
 
   it("should format timestamp 0 as Unix epoch", () => {
     const sink = createConsoleSink({ stream: "stdout" });
-    const originalLog = console.log;
-    const lines: string[] = [];
-    console.log = (line?: unknown) => {
-      lines.push(String(line));
-    };
-    try {
+    const lines = captureConsoleLog(() => {
       sink({
         category: ["test"],
         level: "info",
@@ -1012,9 +1025,7 @@ describe("createConsoleSink()", () => {
         properties: {},
         timestamp: 0,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.equal(lines.length, 1);
     assert.match(
       lines[0],
@@ -1024,12 +1035,7 @@ describe("createConsoleSink()", () => {
 
   it("should fall back to current time for NaN timestamp", () => {
     const sink = createConsoleSink({ stream: "stdout" });
-    const originalLog = console.log;
-    const lines: string[] = [];
-    console.log = (line?: unknown) => {
-      lines.push(String(line));
-    };
-    try {
+    const lines = captureConsoleLog(() => {
       sink({
         category: ["test"],
         level: "info",
@@ -1038,9 +1044,7 @@ describe("createConsoleSink()", () => {
         properties: {},
         timestamp: NaN,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.equal(lines.length, 1);
     // Should not throw RangeError; should produce a valid ISO timestamp
     assert.match(
@@ -1055,12 +1059,7 @@ describe("createConsoleSink()", () => {
       formatter: (record) =>
         `${record.level}:${record.category.join("/")}:${record.rawMessage}`,
     });
-    const originalLog = console.log;
-    const lines: string[] = [];
-    console.log = (line?: unknown) => {
-      lines.push(String(line));
-    };
-    try {
+    const lines = captureConsoleLog(() => {
       sink({
         category: ["app", "worker"],
         level: "info",
@@ -1069,9 +1068,7 @@ describe("createConsoleSink()", () => {
         properties: {},
         timestamp: 0,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.deepEqual(lines, ["info:app/worker:started"]);
   });
 
@@ -1080,12 +1077,7 @@ describe("createConsoleSink()", () => {
       stream: "stdout",
       formatter: (record) => `${record.level} ${record.rawMessage}\n`,
     });
-    const originalLog = console.log;
-    const lines: string[] = [];
-    console.log = (line?: unknown) => {
-      lines.push(String(line));
-    };
-    try {
+    const lines = captureConsoleLog(() => {
       sink({
         category: ["app", "worker"],
         level: "info",
@@ -1094,9 +1086,7 @@ describe("createConsoleSink()", () => {
         properties: {},
         timestamp: 0,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.deepEqual(lines, ["info started"]);
   });
 
@@ -1109,12 +1099,7 @@ describe("createConsoleSink()", () => {
         { category: record.category, message: record.rawMessage },
       ],
     });
-    const originalLog = console.log;
-    const calls: Array<readonly unknown[]> = [];
-    console.log = (...args: readonly unknown[]) => {
-      calls.push(args);
-    };
-    try {
+    const calls = captureConsoleLogCalls(() => {
       sink({
         category: ["app", "worker"],
         level: "warning",
@@ -1123,9 +1108,7 @@ describe("createConsoleSink()", () => {
         properties: {},
         timestamp: 0,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.deepEqual(calls, [
       [
         "%s %o",
@@ -1276,12 +1259,7 @@ describe("createConsoleSink()", () => {
       stream: "stdrr" as never,
       streamResolver: () => "stdout",
     });
-    const originalLog = console.log;
-    const lines: string[] = [];
-    console.log = (line?: unknown) => {
-      lines.push(String(line));
-    };
-    try {
+    const lines = captureConsoleLog(() => {
       sink({
         category: ["test"],
         level: "info",
@@ -1290,9 +1268,7 @@ describe("createConsoleSink()", () => {
         properties: {},
         timestamp: 1,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.equal(lines.length, 1);
   });
 
@@ -1344,12 +1320,7 @@ describe("createSink()", () => {
       type: "console",
       formatter: (record) => `formatted ${record.rawMessage}`,
     }, { stream: "stdout" });
-    const originalLog = console.log;
-    const lines: string[] = [];
-    console.log = (line?: unknown) => {
-      lines.push(String(line));
-    };
-    try {
+    const lines = captureConsoleLog(() => {
       sink({
         category: ["test"],
         level: "info",
@@ -1358,9 +1329,7 @@ describe("createSink()", () => {
         properties: {},
         timestamp: 1,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.deepEqual(lines, ["formatted hello"]);
   });
 
@@ -1372,12 +1341,7 @@ describe("createSink()", () => {
       stream: "stdout",
       formatter: () => "from sink options",
     });
-    const originalLog = console.log;
-    const lines: string[] = [];
-    console.log = (line?: unknown) => {
-      lines.push(String(line));
-    };
-    try {
+    const lines = captureConsoleLog(() => {
       sink({
         category: ["test"],
         level: "info",
@@ -1386,9 +1350,7 @@ describe("createSink()", () => {
         properties: {},
         timestamp: 1,
       });
-    } finally {
-      console.log = originalLog;
-    }
+    });
     assert.deepEqual(lines, ["from sink options"]);
   });
 
