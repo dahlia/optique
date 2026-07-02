@@ -356,8 +356,10 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
   };
 }
 
-function toConsoleArgs(value: string | readonly unknown[]): readonly unknown[] {
-  return typeof value === "string" ? [value.replace(/\r?\n$/, "")] : value;
+function toConsoleArgs(value: unknown): readonly unknown[] {
+  if (typeof value === "string") return [value.replace(/\r?\n$/, "")];
+  if (Array.isArray(value)) return value;
+  return value == null ? [] : [value];
 }
 
 function defaultConsoleFormatter(record: LogRecord): string {

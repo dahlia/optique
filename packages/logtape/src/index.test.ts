@@ -1118,6 +1118,38 @@ describe("createConsoleSink()", () => {
     ]);
   });
 
+  it("should tolerate invalid custom formatter return values", () => {
+    const objectSink = createConsoleSink({
+      stream: "stdout",
+      formatter: (() => ({ message: "started" })) as never,
+    });
+    const undefinedSink = createConsoleSink({
+      stream: "stdout",
+      formatter: (() => undefined) as never,
+    });
+
+    const calls = captureConsoleLogCalls(() => {
+      objectSink({
+        category: ["app", "worker"],
+        level: "warning",
+        message: ["started"],
+        rawMessage: "started",
+        properties: {},
+        timestamp: 0,
+      });
+      undefinedSink({
+        category: ["app", "worker"],
+        level: "warning",
+        message: ["started"],
+        rawMessage: "started",
+        properties: {},
+        timestamp: 0,
+      });
+    });
+
+    assert.deepEqual(calls, [[{ message: "started" }], []]);
+  });
+
   it("should route by stream resolver", () => {
     const sink = createConsoleSink({
       streamResolver: (level) => level === "error" ? "stderr" : "stdout",
