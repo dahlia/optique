@@ -257,6 +257,15 @@ function withFormatter(
   });
 }
 
+/**
+ * Creates an optional parser for a text formatter option.
+ *
+ * @param long The long option name for selecting the formatter.
+ * @returns A parser that produces the selected {@link TextFormatter}, or
+ *   `undefined` when the option is not present.
+ * @throws {TypeError} If `long` is not a valid option name.
+ * @since 1.2.0
+ */
 export function createTextFormatterOption(
   long: string,
 ): FluentParser<"sync", TextFormatter | undefined, unknown> {
