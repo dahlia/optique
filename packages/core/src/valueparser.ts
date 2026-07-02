@@ -433,6 +433,10 @@ export interface TransformMapping<T, U> {
   unmap(value: U): T;
 }
 
+type BijectKey<T> = Extract<keyof T, string | number>;
+type StringKeyOf<T> = `${BijectKey<T>}`;
+type BijectValue<T> = T[BijectKey<T>];
+
 function transformValueParserResult<T, U>(
   result: ValueParserResult<T>,
   mapping: TransformMapping<T, U>,
@@ -841,6 +845,95 @@ export function choice<const T extends string | number>(
         .map((value) => ({ kind: "literal" as const, text: value }));
     },
   };
+}
+
+/**
+ * Creates a value parser from a one-to-one mapping of CLI spellings to values.
+ *
+ * The mapping's string keys are accepted as command-line input, and each key
+ * is parsed into its corresponding value.  Values must also be unique using
+ * the same equality semantics as `Map` keys, so the parser can format a value
+ * back to the original key.
+ *
+ * This is a convenience wrapper around `choice(Object.keys(mapping))` and
+ * {@link transform}.  It keeps the input-side metadata from `choice()` while
+ * exposing the mapped values as the parser result type.
+ *
+ * @template T The one-to-one mapping from input strings to parsed values.
+ * @param mapping A mapping whose own enumerable string keys are valid inputs.
+ * @returns A value parser that accepts one of the mapping keys and returns the
+ *          corresponding value.
+ * @throws {TypeError} If `mapping` is an array, or if any key is the empty
+ *         string.
+ * @throws {RangeError} If the mapping has no own enumerable string keys, or if
+ *         two keys map to the same value according to `Map` key equality.
+ * @since 1.2.0
+ */
+export function biject<const T extends readonly unknown[]>(mapping: T): never;
+export function biject<const T extends object>(
+  mapping: T,
+): ValueParser<"sync", BijectValue<T>>;
+export function biject<const T extends object>(
+  mapping: T,
+): ValueParser<"sync", BijectValue<T>> {
+  if (Array.isArray(mapping)) {
+    throw new TypeError("Expected biject mapping to be a non-array object.");
+  }
+  const keys: StringKeyOf<T>[] = [];
+  for (const key in mapping) {
+    if (Object.prototype.hasOwnProperty.call(mapping, key)) {
+      keys.push(key as StringKeyOf<T>);
+    }
+  }
+  if (keys.length < 1) {
+    throw new RangeError("Expected at least one biject entry.");
+  }
+  const source = choice(keys);
+  const forward = new Map<StringKeyOf<T>, BijectValue<T>>();
+  const reverse = new Map<BijectValue<T>, StringKeyOf<T>>();
+  for (const key of keys) {
+    const value = mapping[key as BijectKey<T>] as BijectValue<T>;
+    if (reverse.has(value)) {
+      throw new RangeError(
+        `Duplicate biject value for key ${JSON.stringify(key)}.`,
+      );
+    }
+    forward.set(key, value);
+    reverse.set(value, key);
+  }
+  const parser = transform(source, {
+    map(value) {
+      return forward.get(value) as BijectValue<T>;
+    },
+    unmap(value) {
+      const key = reverse.get(value);
+      if (key !== undefined) return key;
+      // Let the wrapped choice parser produce the validation failure for
+      // invalid fallback/default values that are outside the bijection.
+      try {
+        return String(value) as StringKeyOf<T>;
+      } catch {
+        return "" as StringKeyOf<T>;
+      }
+    },
+  });
+  Object.defineProperty(parser, "validate", {
+    value(value: BijectValue<T>): ValueParserResult<BijectValue<T>> {
+      if (reverse.has(value)) return { success: true, value };
+      let input: string;
+      try {
+        input = String(value);
+      } catch {
+        input = "";
+      }
+      const result = source.parse(input);
+      if (!result.success) return result;
+      return { success: false, error: formatDefaultChoiceError(input, keys) };
+    },
+    configurable: true,
+    enumerable: true,
+  });
+  return parser;
 }
 
 /**

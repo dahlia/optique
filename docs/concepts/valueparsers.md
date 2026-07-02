@@ -37,6 +37,7 @@ with Optique's type system.
 | `fileSize()`                     | *@optique/core*            | `number` or `bigint`           | Human-readable data size (bytes)                      |
 | `color()`                        | *@optique/core*            | `Color`                        | CSS color (hex, rgb, hsl, or named)                   |
 | `choice()`                       | *@optique/core*            | string or number literal union | Enumerated values                                     |
+| `biject()`                       | *@optique/core*            | mapped value type              | One-to-one string-to-value choices                    |
 | `transform()`                    | *@optique/core*            | mapped value type              | Reversible value parser transformation                |
 | `firstOf()`                      | *@optique/core*            | union of constituent types     | First-match union of value parsers                    |
 | `json()`                         | *@optique/core*            | `Json`                         | Any JSON value, with optional root type restriction   |
@@ -710,6 +711,84 @@ The `suggest` option accepts:
 > for details.
 
 
+`biject()` parser
+-----------------
+
+*This parser is available since Optique 1.2.0.*
+
+The `biject()` parser accepts one of an object's string keys and returns the
+corresponding value.  It is useful when the CLI spelling is a stable public
+token, but the application wants to work with another value such as a numeric
+code, a symbol, or a domain object.
+
+~~~~ typescript twoslash
+import { biject } from "@optique/core/valueparser";
+
+const status = biject({
+  ok: 0,
+  warning: 1,
+  error: 2,
+});
+
+const result = status.parse("warning");
+if (result.success) {
+  result.value;
+  //     ^?
+
+
+
+
+
+
+
+
+
+
+
+
+  // result.value is inferred as 0 | 1 | 2.
+}
+~~~~
+
+The mapping must be one-to-one: keys are unique by JavaScript object rules,
+and values must also be unique according to the same equality semantics used
+by `Map` and `Set`.  Arrays are rejected; use a plain object so the key set
+matches the CLI tokens.  This lets `format(value)` recover the original CLI
+key:
+
+~~~~ typescript twoslash
+import { biject } from "@optique/core/valueparser";
+
+const status = biject({
+  ok: 0,
+  warning: 1,
+  error: 2,
+});
+
+status.format(2);
+// "error"
+~~~~
+
+Duplicate values and empty mappings are rejected when the parser is created:
+
+~~~~ typescript twoslash
+import { biject } from "@optique/core/valueparser";
+
+biject({});
+// Throws RangeError: Expected at least one biject entry.
+
+biject({
+  foo: "dup",
+  bar: "dup",
+});
+// Throws RangeError: Duplicate biject value for key "bar".
+~~~~
+
+The parser exposes the mapped values through `choices`, while completion
+suggestions remain based on the input keys.  For example, `biject({ ok: 0 })`
+suggests `ok` to the shell but produces the value `0`.
+
+
 `transform()` combinator
 ------------------------
 
@@ -738,6 +817,21 @@ const result = level.parse("debug");
 if (result.success) {
   result.value;
   //     ^?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -788,6 +882,21 @@ const mode = transform(choice(["dev", "prod"] as const), {
 
 const choices = mode.choices;
 //    ^?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

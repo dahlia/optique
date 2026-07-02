@@ -1,4 +1,5 @@
 import {
+  biject,
   checkBooleanOption,
   checkEnumOption,
   choice,
@@ -2918,6 +2919,270 @@ describe("transform", () => {
         suggestion.kind === "literal" ? suggestion.text : suggestion.pattern
       ),
       ["warn", "error"],
+    );
+  });
+});
+
+describe("biject", () => {
+  it("should parse keys into mapped values", () => {
+    const parser = biject({
+      foo: 123,
+      bar: 456,
+      baz: 789,
+    });
+
+    const result = parser.parse("bar");
+
+    assert.ok(result.success);
+    assert.equal(result.value, 456);
+  });
+
+  it("should infer literal value types from inline mappings", () => {
+    const parser = biject({
+      foo: 123,
+      bar: "enabled",
+      baz: true,
+    });
+
+    parser satisfies ValueParser<"sync", 123 | "enabled" | true>;
+  });
+
+  it("should accept typed mappings without string index signatures", () => {
+    interface StatusMap {
+      readonly ok: 0;
+      readonly error: 1;
+    }
+    const mapping: StatusMap = {
+      ok: 0,
+      error: 1,
+    };
+
+    const parser = biject(mapping);
+    const result = parser.parse("ok");
+
+    parser satisfies ValueParser<"sync", 0 | 1>;
+    assert.ok(result.success);
+    assert.equal(result.value, 0);
+  });
+
+  it("should preserve value types for numeric object keys", () => {
+    const parser = biject(
+      {
+        1: "one",
+        2: "two",
+      } as const,
+    );
+
+    const result = parser.parse("1");
+
+    parser satisfies ValueParser<"sync", "one" | "two">;
+    assert.ok(result.success);
+    assert.equal(result.value, "one");
+    assert.equal(parser.format("two"), "2");
+    assert.deepEqual(parser.choices, ["one", "two"]);
+  });
+
+  it("should reject array mappings", () => {
+    assert.throws(
+      () => {
+        const parser = biject(["one", "two"] as const);
+        parser satisfies never;
+      },
+      {
+        name: "TypeError",
+        message: "Expected biject mapping to be a non-array object.",
+      },
+    );
+  });
+
+  it("should reject inputs outside the mapping keys", () => {
+    const parser = biject({
+      foo: 123,
+      bar: 456,
+    });
+
+    const result = parser.parse("baz");
+
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Expected one of " },
+      { type: "value", value: "foo" },
+      { type: "text", text: " and " },
+      { type: "value", value: "bar" },
+      { type: "text", text: ", but got " },
+      { type: "value", value: "baz" },
+      { type: "text", text: "." },
+    ]);
+  });
+
+  it("should format mapped values back to keys", () => {
+    const parser = biject({
+      foo: 123,
+      bar: 456,
+    });
+
+    const formatted = parser.format(456);
+
+    assert.equal(formatted, "bar");
+  });
+
+  it("should expose key-based metadata and suggestions", () => {
+    const parser = biject({
+      foo: 123,
+      bar: 456,
+      baz: 789,
+    });
+
+    const suggestions = [...(parser.suggest?.("ba") ?? [])];
+
+    assert.equal(parser.placeholder, 123);
+    assert.deepEqual(parser.choices, [123, 456, 789]);
+    assert.deepEqual(suggestions, [
+      { kind: "literal", text: "bar" },
+      { kind: "literal", text: "baz" },
+    ]);
+  });
+
+  it("should snapshot mappings at construction time", () => {
+    const mapping = {
+      foo: 123,
+      bar: 456,
+    };
+    const parser = biject(mapping);
+
+    mapping.foo = 456;
+    mapping.bar = 789;
+
+    const result = parser.parse("foo");
+
+    assert.ok(result.success);
+    assert.equal(result.value, 123);
+    assert.deepEqual(parser.choices, [123, 456]);
+    assert.deepEqual(parser.validate?.(123), { success: true, value: 123 });
+    assert.ok(!parser.validate?.(789)?.success);
+  });
+
+  it("should validate mapped values through the reverse mapping", () => {
+    const mapping: Readonly<Record<string, number>> = {
+      foo: 123,
+      bar: 456,
+    };
+    const parser = biject(mapping);
+
+    const valid = parser.validate?.(123);
+    const invalid = parser.validate?.(789);
+
+    assert.deepEqual(valid, { success: true, value: 123 });
+    assert.ok(invalid != null);
+    assert.ok(!invalid.success);
+    assert.deepEqual(invalid.error, [
+      { type: "text", text: "Expected one of " },
+      { type: "value", value: "foo" },
+      { type: "text", text: " and " },
+      { type: "value", value: "bar" },
+      { type: "text", text: ", but got " },
+      { type: "value", value: "789" },
+      { type: "text", text: "." },
+    ]);
+  });
+
+  it("should reject fallback values that stringify to input keys", () => {
+    const parser = biject({
+      foo: 123,
+    });
+
+    const result = parser.validate?.("foo" as never);
+
+    assert.ok(result != null);
+    assert.ok(!result.success);
+  });
+
+  it("should not throw when validating unlisted values that cannot stringify", () => {
+    const listed = { id: "listed" };
+    const parser = biject({
+      listed,
+    });
+    const unlisted = Object.create(null, {
+      toString: {
+        get() {
+          throw new Error("Cannot stringify.");
+        },
+      },
+    });
+
+    const result = parser.validate?.(unlisted);
+
+    assert.ok(result != null);
+    assert.ok(!result.success);
+  });
+
+  it("should throw RangeError for duplicate mapped values", () => {
+    assert.throws(
+      () =>
+        biject({
+          foo: "dup",
+          bar: "dup",
+        }),
+      {
+        name: "RangeError",
+        message: 'Duplicate biject value for key "bar".',
+      },
+    );
+  });
+
+  it("should use Map key equality for duplicate values", () => {
+    assert.throws(
+      () =>
+        biject({
+          positiveZero: 0,
+          negativeZero: -0,
+        }),
+      RangeError,
+    );
+    assert.throws(
+      () =>
+        biject({
+          first: NaN,
+          second: NaN,
+        }),
+      RangeError,
+    );
+  });
+
+  it("should compare object values by identity", () => {
+    const shared = { id: "shared" };
+    const first = { id: "same-shape" };
+    const second = { id: "same-shape" };
+
+    const parser = biject({
+      first,
+      second,
+    });
+
+    assert.equal(parser.format(second), "second");
+    assert.throws(
+      () => biject({ first: shared, second: shared }),
+      RangeError,
+    );
+  });
+
+  it("should throw RangeError for empty mappings", () => {
+    assert.throws(
+      () => biject({}),
+      {
+        name: "RangeError",
+        message: "Expected at least one biject entry.",
+      },
+    );
+  });
+
+  it("should reject empty keys through the choice parser", () => {
+    assert.throws(
+      () => biject({ "": "empty" }),
+      {
+        name: "TypeError",
+        message: "Empty strings are not allowed as choices.",
+      },
     );
   });
 });

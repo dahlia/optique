@@ -10,6 +10,7 @@ const valueParsers = [
     items: [
       ["string", "string-parser"],
       ["choice", "choice-parser"],
+      ["biject", "biject-parser"],
       ["transform", "transform-combinator"],
       ["firstOf", "firstof-combinator"],
       ["keyValue", "keyvalue-parser"],
