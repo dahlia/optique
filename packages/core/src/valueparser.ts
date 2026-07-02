@@ -891,12 +891,7 @@ export function biject<const T extends object>(
   if (Array.isArray(mapping)) {
     throw new TypeError("Expected object, got array.");
   }
-  const keys: StringKeyOf<T>[] = [];
-  for (const key in mapping) {
-    if (Object.prototype.hasOwnProperty.call(mapping, key)) {
-      keys.push(key as StringKeyOf<T>);
-    }
-  }
+  const keys = Object.keys(mapping) as StringKeyOf<T>[];
   if (keys.length < 1) {
     throw new RangeError("Expected at least one biject entry.");
   }
@@ -1006,7 +1001,7 @@ export function transform<M extends Mode, T, U>(
     }),
     ...(suggest == null ? {} : {
       suggest(prefix: string): ModeIterable<M, Suggestion> {
-        return suggest(prefix);
+        return wrapIterableForMode(parser.mode, suggest(prefix));
       },
     }),
   };
@@ -1030,7 +1025,7 @@ export function transform<M extends Mode, T, U>(
         try {
           result = validate(mapping.unmap(value));
         } catch {
-          return { success: true as const, value };
+          return transformMappingFailure();
         }
         if (!result.success) return result;
         try {
@@ -1050,7 +1045,7 @@ export function transform<M extends Mode, T, U>(
         try {
           result = syncParser.parse(syncParser.format(mapping.unmap(value)));
         } catch {
-          return { success: true as const, value };
+          return transformMappingFailure();
         }
         if (!result.success) return result;
         try {

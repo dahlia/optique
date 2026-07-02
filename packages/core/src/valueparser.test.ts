@@ -2750,7 +2750,7 @@ describe("transform", () => {
     ]);
   });
 
-  it("should preserve fallback values when validate unmapping throws", () => {
+  it("should reject fallback values when validate unmapping throws", () => {
     const sentinel = { count: 3 };
     const parser = transform(integer({ min: 1, max: 10 }), {
       map: (value) => ({ count: value }),
@@ -2762,10 +2762,14 @@ describe("transform", () => {
 
     const result = parser.validate?.(sentinel);
 
-    assert.deepEqual(result, { success: true, value: sentinel });
+    assert.ok(result != null);
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Failed to transform value." },
+    ]);
   });
 
-  it("should preserve fallback values when round-trip validation throws", () => {
+  it("should reject fallback values when round-trip validation throws", () => {
     const sentinel = { count: 12 };
     const parser = transform(
       {
@@ -2788,7 +2792,26 @@ describe("transform", () => {
 
     const result = parser.validate?.(sentinel);
 
-    assert.deepEqual(result, { success: true, value: sentinel });
+    assert.ok(result != null);
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Failed to transform value." },
+    ]);
+  });
+
+  it("should reject malformed fallback values", () => {
+    const parser = transform(integer(), {
+      map: (value) => ({ count: value }),
+      unmap: (value: { readonly count: number }) => value.count,
+    });
+
+    const result = parser.validate?.("3" as never);
+
+    assert.ok(result != null);
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Failed to transform value." },
+    ]);
   });
 
   it("should transform placeholder and choices metadata", () => {
@@ -2810,6 +2833,37 @@ describe("transform", () => {
     const suggestions = [...(parser.suggest?.("f") ?? [])];
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "foo" }]);
+  });
+
+  it("should reject async suggestions from sync inner parsers", () => {
+    const inner: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "WORD",
+      placeholder: "foo",
+      parse(input: string): ValueParserResult<string> {
+        return { success: true, value: input };
+      },
+      format(value: string): string {
+        return value;
+      },
+      suggest() {
+        return (async function* () {
+          yield { kind: "literal" as const, text: "foo" };
+        })() as never;
+      },
+    };
+    const parser = transform(inner, {
+      map: (value) => value.length,
+      unmap: (value) => "x".repeat(value),
+    });
+
+    assert.throws(
+      () => [...(parser.suggest?.("f") ?? [])],
+      {
+        name: "TypeError",
+        message: "Synchronous mode cannot wrap AsyncIterable value.",
+      },
+    );
   });
 
   it("should preserve async value parser mode", async () => {
@@ -2902,6 +2956,8 @@ describe("transform", () => {
 
     assert.ok(isValueParser(transformed));
     assert.ok(isValueParser(mapped));
+    assert.ok(Object.keys(transformed).includes("placeholder"));
+    assert.ok(Object.keys(mapped).includes("placeholder"));
   });
 
   it("should lazily map dependency-derived placeholders", () => {
