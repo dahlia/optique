@@ -55,6 +55,12 @@ To be released.
     `"top-level"` makes top-level help pages list only first-level commands so
     users can drill down with `<command> --help`.  [[#864], [#865]]
 
+ -  Added `transform()` to *@optique/core/valueparser* for reversible value
+    parser transformations.  The wrapper maps parsed values to a new type while
+    using the inverse mapping for formatting, fallback validation, choices, and
+    placeholders, and it preserves the wrapped parser's sync or async mode.
+    [[#866]]
+
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
 [#846]: https://github.com/dahlia/optique/issues/846
@@ -66,6 +72,7 @@ To be released.
 [#860]: https://github.com/dahlia/optique/pull/860
 [#864]: https://github.com/dahlia/optique/issues/864
 [#865]: https://github.com/dahlia/optique/pull/865
+[#866]: https://github.com/dahlia/optique/pull/866
 
 ### @optique/standard-schema
 

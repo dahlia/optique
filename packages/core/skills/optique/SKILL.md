@@ -41,10 +41,11 @@ Core rules
     custom errors. Prefer semantic message helpers such as `optionName()` and
     `metavar()` over string concatenation when naming CLI elements.
  -  Use value parsers such as `integer()`, `choice()`, `url()`, and `uuid()`
-    instead of validating raw strings after parsing. Use `path()` from
-    `@optique/run/valueparser` for file-system paths. Write a custom
-    `{ mode, metavar, parse, format }` value parser only when the catalog does
-    not cover the domain.
+    instead of validating raw strings after parsing. Use `transform()` when an
+    existing value parser describes the accepted CLI spelling but your app
+    needs a different result type. Use `path()` from `@optique/run/valueparser`
+    for file-system paths. Write a custom `{ mode, metavar, parse, format }`
+    value parser only when the catalog does not cover the domain.
  -  Async value parsers make the containing parser async. If you use packages
     such as *@optique/git*, remember to `await run(...)`, `await parse(...)`, or
     `await runParser(...)` as appropriate.
@@ -138,9 +139,24 @@ if (result.success) {
 Custom value parsers
 --------------------
 
-Prefer the built-in catalog first. When a custom domain is needed, keep the
-validation in a value parser so help, errors, defaults, prompts, and completion
-all see the same typed value.
+Prefer the built-in catalog first. If an existing parser already accepts the
+right input syntax, wrap it with `transform()` before writing a custom parser:
+
+~~~~ typescript
+import { choice, transform } from "@optique/core/valueparser";
+
+const logLevel = transform(choice(["debug", "info", "warn", "error"] as const), {
+  map(value) {
+    return value.toUpperCase() as "DEBUG" | "INFO" | "WARN" | "ERROR";
+  },
+  unmap(value) {
+    return value.toLowerCase() as "debug" | "info" | "warn" | "error";
+  },
+});
+~~~~
+
+When a custom domain is needed, keep the validation in a value parser so help,
+errors, defaults, prompts, and completion all see the same typed value.
 
 ~~~~ typescript
 import { message } from "@optique/core/message";

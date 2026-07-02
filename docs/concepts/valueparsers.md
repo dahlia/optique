@@ -37,6 +37,7 @@ with Optique's type system.
 | `fileSize()`                     | *@optique/core*            | `number` or `bigint`           | Human-readable data size (bytes)                      |
 | `color()`                        | *@optique/core*            | `Color`                        | CSS color (hex, rgb, hsl, or named)                   |
 | `choice()`                       | *@optique/core*            | string or number literal union | Enumerated values                                     |
+| `transform()`                    | *@optique/core*            | mapped value type              | Reversible value parser transformation                |
 | `firstOf()`                      | *@optique/core*            | union of constituent types     | First-match union of value parsers                    |
 | `json()`                         | *@optique/core*            | `Json`                         | Any JSON value, with optional root type restriction   |
 | `cron()`                         | *@optique/core*            | `CronExpression`               | Cron schedule expression                              |
@@ -707,6 +708,92 @@ The `suggest` option accepts:
 > option in your runner configuration.  See the
 > [choice display](./runners.md#choice-display) section in the runners guide
 > for details.
+
+
+`transform()` combinator
+------------------------
+
+*This combinator is available since Optique 1.2.0.*
+
+The `transform()` combinator wraps an existing value parser and maps its
+successful result to another type.  Use it when the accepted command-line
+spelling is already described by a parser such as `choice()` or `integer()`,
+but your application wants a domain-specific value.
+
+~~~~ typescript twoslash
+import { choice, transform } from "@optique/core/valueparser";
+
+type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
+
+const level = transform(choice(["debug", "info", "warn", "error"] as const), {
+  map(value): LogLevel {
+    return value.toUpperCase() as LogLevel;
+  },
+  unmap(value) {
+    return value.toLowerCase() as "debug" | "info" | "warn" | "error";
+  },
+});
+
+const result = level.parse("debug");
+if (result.success) {
+  result.value;
+  //     ^?
+
+
+
+
+
+  // result.value is inferred as LogLevel.
+}
+~~~~
+
+Unlike parser-level `map()`, `transform()` needs both directions:
+
+`map(value)`
+:   Converts the wrapped parser's result into the public value type.
+
+`unmap(value)`
+:   Converts the public value back to the wrapped parser's type.  This is
+    used by `format()`, fallback validation, default handling, and help text
+    that needs to display a value as command-line input.
+
+The two functions should be inverses for the values your CLI accepts.
+For example, `unmap(map(value))` should still satisfy the wrapped parser,
+and `map(unmap(value))` should preserve valid transformed values.  A lossy
+mapping can still parse CLI input, but formatting and default validation may
+not behave the way users expect.
+
+The wrapped parser's mode is preserved.  If you transform an async value
+parser, the returned parser is async too, but the mapping functions themselves
+must be synchronous.
+
+### Metadata
+
+`transform()` preserves the wrapped parser's metavar and suggestions because
+those describe the accepted input string.  When the wrapped parser exposes
+`choices`, the transformed parser exposes those choices after applying
+`map()`:
+
+~~~~ typescript twoslash
+import { choice, transform } from "@optique/core/valueparser";
+// ---cut-before---
+const mode = transform(choice(["dev", "prod"] as const), {
+  map(value) {
+    return { name: value };
+  },
+  unmap(value: { readonly name: "dev" | "prod" }) {
+    return value.name;
+  },
+});
+
+const choices = mode.choices;
+//    ^?
+
+
+
+
+// choices is inferred from the transformed value type.
+~~~~
 
 
 `firstOf()` combinator

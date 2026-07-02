@@ -8,7 +8,24 @@ import {
   text,
   valueSet,
 } from "./message.ts";
-import { isDerivedValueParser } from "./internal/dependency.ts";
+import {
+  defaultValues,
+  dependencyId,
+  dependencyIds,
+  type DerivedValueParser,
+  derivedValueParserMarker,
+  getSnapshottedDefaultDependencyValues,
+  isDerivedValueParser,
+  parseWithDependency,
+  singleDefaultValue,
+  snapshotDefaultDependencyValues,
+  suggestWithDependency,
+} from "./internal/dependency.ts";
+import {
+  mapMaybePromiseByMode,
+  mapModeValue,
+  wrapIterableForMode,
+} from "./internal/mode-dispatch.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
 import type { Mode, ModeIterable, ModeValue, Suggestion } from "./parser.ts";
 import {
@@ -385,6 +402,65 @@ export interface ChoiceOptionsNumber extends ChoiceOptionsBase {
  *             {@link ChoiceOptionsNumber} for number choices.
  */
 export type ChoiceOptions = ChoiceOptionsString;
+
+/**
+ * Mapping functions for the {@link transform} value parser combinator.
+ *
+ * `map` converts values produced by the wrapped parser into the public result
+ * type.  `unmap` converts public values back to the wrapped parser's type so
+ * `format()`, `validate()`, and default-value handling can keep using the
+ * wrapped parser's own validation and formatting rules.
+ *
+ * The two functions should be inverses for the values your CLI accepts:
+ * `unmap(map(input))` should return a value accepted by the wrapped parser,
+ * and `map(unmap(output))` should preserve valid public values.
+ *
+ * @template T The value type produced by the wrapped parser.
+ * @template U The value type produced by the transformed parser.
+ * @since 1.2.0
+ */
+export interface TransformMapping<T, U> {
+  /**
+   * Converts a value produced by the wrapped parser into the transformed
+   * parser's public value type.
+   */
+  map(value: T): U;
+
+  /**
+   * Converts a public transformed value back into the wrapped parser's value
+   * type for formatting and fallback validation.
+   */
+  unmap(value: U): T;
+}
+
+function transformValueParserResult<T, U>(
+  result: ValueParserResult<T>,
+  mapping: TransformMapping<T, U>,
+): ValueParserResult<U> {
+  if (!result.success) return result;
+  const preserveSnapshot = (mapped: ValueParserResult<U>) => {
+    const snapshot = getSnapshottedDefaultDependencyValues(result);
+    return snapshot == null
+      ? mapped
+      : snapshotDefaultDependencyValues(mapped, snapshot);
+  };
+  if (result.deferred) {
+    try {
+      return preserveSnapshot({
+        success: true,
+        value: mapping.map(result.value),
+        deferred: true as const,
+      });
+    } catch {
+      return preserveSnapshot({
+        success: true,
+        value: undefined as unknown as U,
+        deferred: true as const,
+      });
+    }
+  }
+  return preserveSnapshot({ success: true, value: mapping.map(result.value) });
+}
 
 /**
  * A predicate function that checks if an object is a {@link ValueParser}.
@@ -765,6 +841,181 @@ export function choice<const T extends string | number>(
         .map((value) => ({ kind: "literal" as const, text: value }));
     },
   };
+}
+
+/**
+ * Creates a value parser that transforms the result of another value parser.
+ *
+ * This is useful when an existing value parser already describes the accepted
+ * CLI spelling, suggestions, and error messages, but your application wants a
+ * different result type.  For example, a string `choice()` can be transformed
+ * into an internal enum, tagged object, or other domain type.
+ *
+ * Unlike parser-level `map()`, value parser transformation needs an inverse
+ * mapping.  The `unmap` function lets the transformed parser format values,
+ * validate fallback/default values, and reuse the wrapped parser's metadata
+ * without guessing how to serialize the transformed type.
+ *
+ * Transform functions are synchronous.  If the wrapped parser is async, the
+ * returned parser is async too, but `map` and `unmap` still run synchronously
+ * after the wrapped parser resolves.
+ *
+ * @template M The execution mode of the wrapped parser.
+ * @template T The value type produced by the wrapped parser.
+ * @template U The value type produced by the transformed parser.
+ * @param parser The value parser to transform.
+ * @param mapping Mapping functions between the wrapped and transformed value
+ *                types.
+ * @returns A value parser that accepts the same input as `parser` and produces
+ *          transformed values.
+ * @since 1.2.0
+ */
+export function transform<M extends Mode, T, U>(
+  parser: ValueParser<M, T>,
+  mapping: TransformMapping<T, U>,
+): ValueParser<M, U> {
+  const normalize = parser.normalize?.bind(parser);
+  const suggest = parser.suggest?.bind(parser);
+  const transformedChoices = parser.choices == null
+    ? undefined
+    : Object.freeze(parser.choices.map((choice) => mapping.map(choice)));
+  const transformed: ValueParser<M, U> = {
+    mode: parser.mode,
+    metavar: parser.metavar,
+    placeholder: undefined as U,
+    ...(transformedChoices == null ? {} : { choices: transformedChoices }),
+    parse(input: string): ModeValue<M, ValueParserResult<U>> {
+      return mapModeValue(
+        parser.mode,
+        parser.parse(input),
+        (result) => transformValueParserResult(result, mapping),
+      );
+    },
+    format(value: U): string {
+      return parser.format(mapping.unmap(value));
+    },
+    ...(normalize == null ? {} : {
+      normalize(value: U): U {
+        return mapping.map(normalize(mapping.unmap(value)));
+      },
+    }),
+    ...(suggest == null ? {} : {
+      suggest(prefix: string): ModeIterable<M, Suggestion> {
+        return suggest(prefix);
+      },
+    }),
+  };
+  Object.defineProperty(transformed, "placeholder", {
+    get() {
+      try {
+        return mapping.map(parser.placeholder);
+      } catch {
+        return undefined;
+      }
+    },
+    configurable: true,
+    enumerable: false,
+  });
+  if (typeof parser.validate === "function") {
+    const validate = parser.validate.bind(parser);
+    Object.defineProperty(transformed, "validate", {
+      value(value: U): ValueParserResult<U> {
+        const result = validate(mapping.unmap(value));
+        return result.success
+          ? { success: true as const, value: mapping.map(result.value) }
+          : result;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  } else if (parser.mode === "sync") {
+    const syncParser = parser as ValueParser<"sync", T>;
+    Object.defineProperty(transformed, "validate", {
+      value(value: U): ValueParserResult<U> {
+        const result = syncParser.parse(
+          syncParser.format(mapping.unmap(value)),
+        );
+        return result.success
+          ? { success: true as const, value: mapping.map(result.value) }
+          : result;
+      },
+      configurable: true,
+      enumerable: true,
+    });
+  }
+  if (isDerivedValueParser(parser)) {
+    preserveTransformedDerivedMetadata(transformed, parser, mapping);
+  }
+  return transformed;
+}
+
+function preserveTransformedDerivedMetadata<M extends Mode, T, U>(
+  transformed: ValueParser<M, U>,
+  parser: DerivedValueParser<M, T, unknown>,
+  mapping: TransformMapping<T, U>,
+): void {
+  Object.defineProperties(transformed, {
+    [derivedValueParserMarker]: {
+      value: true,
+      enumerable: true,
+    },
+    [dependencyId]: {
+      value: parser[dependencyId],
+      enumerable: true,
+    },
+    [parseWithDependency]: {
+      value(
+        input: string,
+        dependencyValue: unknown,
+      ): ModeValue<M, ValueParserResult<U>> {
+        return mapMaybePromiseByMode(
+          parser.mode,
+          parser[parseWithDependency](
+            input,
+            dependencyValue,
+          ),
+          (result) => transformValueParserResult(result, mapping),
+        );
+      },
+      enumerable: true,
+    },
+  });
+  if (dependencyIds in parser && parser[dependencyIds] != null) {
+    Object.defineProperty(transformed, dependencyIds, {
+      value: parser[dependencyIds],
+      enumerable: true,
+    });
+  }
+  if (defaultValues in parser && parser[defaultValues] != null) {
+    Object.defineProperty(transformed, defaultValues, {
+      value: parser[defaultValues],
+      enumerable: true,
+    });
+  }
+  if (singleDefaultValue in parser && parser[singleDefaultValue] != null) {
+    Object.defineProperty(transformed, singleDefaultValue, {
+      value: parser[singleDefaultValue],
+      enumerable: true,
+    });
+  }
+  if (
+    suggestWithDependency in parser &&
+    parser[suggestWithDependency] != null
+  ) {
+    const suggest = parser[suggestWithDependency];
+    Object.defineProperty(transformed, suggestWithDependency, {
+      value(
+        prefix: string,
+        dependencyValue: unknown,
+      ): ModeIterable<M, Suggestion> {
+        return wrapIterableForMode(
+          parser.mode,
+          suggest(prefix, dependencyValue),
+        );
+      },
+      enumerable: true,
+    });
+  }
 }
 
 /**

@@ -34,9 +34,11 @@ import {
   type SemVerString,
   socketAddress,
   string,
+  transform,
   url,
   uuid,
   type ValueParser,
+  type ValueParserResult,
 } from "@optique/core/valueparser";
 import {
   formatMessage,
@@ -46,10 +48,12 @@ import {
   text,
   values,
 } from "@optique/core/message";
+import { object } from "#src/constructs.ts";
 import { dependency } from "#src/dependency.ts";
+import { getSnapshottedDefaultDependencyValues } from "#src/internal/dependency.ts";
 import { argument, option } from "#src/primitives.ts";
 import { withDefault } from "#src/modifiers.ts";
-import { parse } from "#src/parser.ts";
+import { parse, suggestSync } from "#src/parser.ts";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
@@ -2644,6 +2648,277 @@ describe("non-choice parsers should not have choices metadata", () => {
   it("float() should not have choices", () => {
     const parser = float({});
     assert.equal(parser.choices, undefined);
+  });
+});
+
+describe("transform", () => {
+  it("should transform parsed values", () => {
+    const parser = transform(choice(["foo", "bar"] as const), {
+      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
+      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+    });
+
+    const result = parser.parse("foo");
+
+    assert.ok(result.success);
+    assert.equal(result.value, "FOO");
+  });
+
+  it("should preserve parse failures from the inner parser", () => {
+    const parser = transform(choice(["foo", "bar"] as const), {
+      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
+      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+    });
+
+    const result = parser.parse("baz");
+
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Expected one of " },
+      { type: "value", value: "foo" },
+      { type: "text", text: " and " },
+      { type: "value", value: "bar" },
+      { type: "text", text: ", but got " },
+      { type: "value", value: "baz" },
+      { type: "text", text: "." },
+    ]);
+  });
+
+  it("should format values through the inverse mapping", () => {
+    const parser = transform(choice(["foo", "bar"] as const), {
+      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
+      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+    });
+
+    const formatted = parser.format("BAR");
+
+    assert.equal(formatted, "bar");
+  });
+
+  it("should validate transformed values through the inner parser", () => {
+    const parser = transform(integer({ min: 1, max: 10 }), {
+      map: (value) => ({ count: value }),
+      unmap: (value: { readonly count: number }) => value.count,
+    });
+
+    const valid = parser.validate?.({ count: 3 });
+    const invalid = parser.validate?.({ count: 12 });
+
+    assert.deepEqual(valid, { success: true, value: { count: 3 } });
+    assert.ok(invalid != null);
+    assert.ok(!invalid.success);
+    assert.deepEqual(invalid.error, [
+      { type: "text", text: "Expected a value less than or equal to " },
+      { type: "text", text: "10" },
+      { type: "text", text: ", but got " },
+      { type: "value", value: "12" },
+      { type: "text", text: "." },
+    ]);
+  });
+
+  it("should transform placeholder and choices metadata", () => {
+    const parser = transform(choice(["foo", "bar"] as const), {
+      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
+      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+    });
+
+    assert.equal(parser.placeholder, "FOO");
+    assert.deepEqual(parser.choices, ["FOO", "BAR"]);
+  });
+
+  it("should delegate suggestions as input strings", () => {
+    const parser = transform(choice(["foo", "bar"] as const), {
+      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
+      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+    });
+
+    const suggestions = [...(parser.suggest?.("f") ?? [])];
+
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "foo" }]);
+  });
+
+  it("should preserve async value parser mode", async () => {
+    const inner: ValueParser<"async", string> = {
+      mode: "async",
+      metavar: "WORD",
+      placeholder: "foo",
+      parse(input: string): Promise<ValueParserResult<string>> {
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value: string): string {
+        return value;
+      },
+      async *suggest(prefix: string) {
+        yield { kind: "literal" as const, text: `${prefix}-value` };
+      },
+    };
+    const parser = transform(inner, {
+      map: (value) => value.length,
+      unmap: (value) => "x".repeat(value),
+    });
+
+    const result = await parser.parse("abcd");
+    const suggestions = [];
+    for await (const suggestion of parser.suggest?.("x") ?? []) {
+      suggestions.push(suggestion);
+    }
+
+    parser satisfies ValueParser<"async", number>;
+    assert.equal(parser.mode, "async");
+    assert.ok(result.success);
+    assert.equal(result.value, 4);
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "x-value" }]);
+  });
+
+  it("should lazily map dependency-derived placeholders", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: () => choice(["debug", "info"] as const),
+      defaultValue() {
+        throw new Error("Default mode is unavailable.");
+      },
+    });
+    const parser = transform(level, {
+      map(value) {
+        return value.toUpperCase() as "DEBUG" | "INFO";
+      },
+      unmap(value) {
+        return value.toLowerCase() as "debug" | "info";
+      },
+    });
+
+    assert.equal(parser.placeholder, undefined);
+    const result = parser.parse("debug");
+
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Derived parser error: " },
+      { type: "value", value: "Default mode is unavailable." },
+    ]);
+  });
+
+  it("should preserve dependency-derived default snapshots", () => {
+    let defaultCalls = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value) =>
+        choice(
+          value === "dev"
+            ? (["debug", "info"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue() {
+        defaultCalls++;
+        return defaultCalls === 1 ? "dev" as const : "prod" as const;
+      },
+    });
+    const parser = transform(level, {
+      map(value) {
+        return value.toUpperCase() as "DEBUG" | "INFO" | "WARN" | "ERROR";
+      },
+      unmap(value) {
+        return value.toLowerCase() as "debug" | "info" | "warn" | "error";
+      },
+    });
+
+    const result = parser.parse("debug");
+
+    assert.ok(result.success);
+    assert.equal(result.value, "DEBUG");
+    assert.deepEqual(
+      getSnapshottedDefaultDependencyValues(result),
+      ["dev"],
+    );
+    assert.equal(defaultCalls, 1);
+  });
+
+  it("should preserve dependency-derived parser replay behavior", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value) =>
+        choice(
+          value === "dev"
+            ? (["debug", "info"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = object({
+      mode: withDefault(option("--mode", mode), "prod" as const),
+      level: option(
+        "--level",
+        transform(level, {
+          map(value) {
+            return value.toUpperCase() as "DEBUG" | "INFO" | "WARN" | "ERROR";
+          },
+          unmap(value) {
+            return value.toLowerCase() as
+              | "debug"
+              | "info"
+              | "warn"
+              | "error";
+          },
+        }),
+      ),
+    });
+
+    const result = parse(parser, ["--mode", "prod", "--level", "warn"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.level, "WARN");
+  });
+
+  it("should preserve dependency-derived suggestion replay behavior", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value) =>
+        choice(
+          value === "dev"
+            ? (["debug", "info"] as const)
+            : (["warn", "error"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = object({
+      mode: withDefault(option("--mode", mode), "prod" as const),
+      level: option(
+        "--level",
+        transform(level, {
+          map(value) {
+            return value.toUpperCase() as "DEBUG" | "INFO" | "WARN" | "ERROR";
+          },
+          unmap(value) {
+            return value.toLowerCase() as
+              | "debug"
+              | "info"
+              | "warn"
+              | "error";
+          },
+        }),
+      ),
+    });
+
+    const suggestions = suggestSync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "",
+    ]);
+
+    assert.deepEqual(
+      suggestions.map((suggestion) =>
+        suggestion.kind === "literal" ? suggestion.text : suggestion.pattern
+      ),
+      ["warn", "error"],
+    );
   });
 });
 
