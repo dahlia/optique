@@ -2846,6 +2846,21 @@ describe("transform", () => {
     ]);
   });
 
+  it("should reject fallback values that format to non-strings", () => {
+    const parser = transform(string(), {
+      map: (value) => ({ value }),
+      unmap: (value: { readonly value: string }) => value.value,
+    });
+
+    const result = parser.validate?.({} as never);
+
+    assert.ok(result != null);
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, [
+      { type: "text", text: "Failed to transform value." },
+    ]);
+  });
+
   it("should transform placeholder and choices metadata", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
       map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
@@ -2972,6 +2987,32 @@ describe("transform", () => {
 
     assert.throws(
       () => parser.parse("abcd"),
+      {
+        name: "TypeError",
+        message: "Synchronous mode cannot wrap Promise value.",
+      },
+    );
+  });
+
+  it("should reject promises from sync inner parser validation", () => {
+    const inner: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "WORD",
+      placeholder: "foo",
+      parse(input: string): ValueParserResult<string> {
+        return Promise.resolve({ success: true, value: input }) as never;
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const parser = transform(inner, {
+      map: (value) => value.length,
+      unmap: (value) => "x".repeat(value),
+    });
+
+    assert.throws(
+      () => parser.validate?.(3),
       {
         name: "TypeError",
         message: "Synchronous mode cannot wrap Promise value.",

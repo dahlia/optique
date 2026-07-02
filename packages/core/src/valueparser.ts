@@ -24,6 +24,7 @@ import {
 } from "./internal/dependency.ts";
 import {
   mapMaybePromiseByMode,
+  wrapForMode,
   wrapIterableForMode,
 } from "./internal/mode-dispatch.ts";
 import { ensureNonEmptyString, type NonEmptyString } from "./nonempty.ts";
@@ -1066,10 +1067,17 @@ export function transform<M extends Mode, T, U>(
           if (unmapped === undefined) return transformMappingFailure();
           return { success: true as const, value };
         }
+        if (typeof formatted !== "string") return transformMappingFailure();
         let result: ValueParserResult<T>;
         try {
-          result = syncParser.parse(formatted);
-        } catch {
+          result = wrapForMode("sync", syncParser.parse(formatted));
+        } catch (error) {
+          if (
+            error instanceof TypeError &&
+            error.message.includes("Promise")
+          ) {
+            throw error;
+          }
           return transformMappingFailure();
         }
         if (!result.success) return result;
