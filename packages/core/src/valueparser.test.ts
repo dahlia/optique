@@ -2757,7 +2757,7 @@ describe("transform", () => {
     ]);
   });
 
-  it("should reject fallback values when validate unmapping throws", () => {
+  it("should preserve fallback values when round-trip unmapping throws", () => {
     const sentinel = { count: 3 };
     const parser = transform(integer({ min: 1, max: 10 }), {
       map: (value) => ({ count: value }),
@@ -2769,14 +2769,10 @@ describe("transform", () => {
 
     const result = parser.validate?.(sentinel);
 
-    assert.ok(result != null);
-    assert.ok(!result.success);
-    assert.deepEqual(result.error, [
-      { type: "text", text: "Failed to transform value." },
-    ]);
+    assert.deepEqual(result, { success: true, value: sentinel });
   });
 
-  it("should reject fallback values when round-trip validation throws", () => {
+  it("should preserve fallback values when round-trip formatting throws", () => {
     const sentinel = { count: 12 };
     const parser = transform(
       {
@@ -2799,11 +2795,7 @@ describe("transform", () => {
 
     const result = parser.validate?.(sentinel);
 
-    assert.ok(result != null);
-    assert.ok(!result.success);
-    assert.deepEqual(result.error, [
-      { type: "text", text: "Failed to transform value." },
-    ]);
+    assert.deepEqual(result, { success: true, value: sentinel });
   });
 
   it("should reject malformed fallback values", () => {
