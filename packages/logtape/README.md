@@ -240,6 +240,7 @@ if (result.success) {
 Creates a console sink with configurable stream selection.
 
 ~~~~ typescript
+import { logfmtFormatter } from "@logtape/logtape";
 import { createConsoleSink } from "@optique/logtape";
 
 // Write to stderr (default)
@@ -252,6 +253,20 @@ const sink2 = createConsoleSink({ stream: "stdout" });
 const sink3 = createConsoleSink({
   streamResolver: (level) =>
     level === "error" || level === "fatal" ? "stderr" : "stdout",
+});
+
+// Structured logfmt output
+const sink4 = createConsoleSink({
+  formatter: logfmtFormatter,
+});
+
+// Custom console formatting with multiple console arguments
+const sink5 = createConsoleSink({
+  formatter: (record) => [
+    "%s %o",
+    record.level.toUpperCase(),
+    record.properties,
+  ],
 });
 ~~~~
 

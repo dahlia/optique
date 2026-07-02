@@ -13,11 +13,11 @@ catalogs:
       specifier: ^8.3.0
       version: 8.3.0
     '@logtape/file':
-      specifier: ^2.0.4
-      version: 2.0.4
+      specifier: ^2.2.2
+      version: 2.2.2
     '@logtape/logtape':
-      specifier: ^2.0.4
-      version: 2.0.4
+      specifier: ^2.2.2
+      version: 2.2.2
     '@standard-schema/spec':
       specifier: ^1.1.0
       version: 1.1.0
@@ -65,7 +65,7 @@ importers:
         version: 5.2.10
       '@logtape/logtape':
         specifier: 'catalog:'
-        version: 2.0.4
+        version: 2.2.2
       '@optique/clack':
         specifier: 'workspace:'
         version: link:../packages/clack
@@ -329,7 +329,7 @@ importers:
     dependencies:
       '@logtape/logtape':
         specifier: 'catalog:'
-        version: 2.0.4
+        version: 2.2.2
       '@optique/core':
         specifier: 'workspace:'
         version: link:../core
@@ -389,10 +389,10 @@ importers:
     devDependencies:
       '@logtape/file':
         specifier: 'catalog:'
-        version: 2.0.4(@logtape/logtape@2.0.4)
+        version: 2.2.2(@logtape/logtape@2.2.2)
       '@logtape/logtape':
         specifier: 'catalog:'
-        version: 2.0.4
+        version: 2.2.2
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
@@ -1172,13 +1172,13 @@ packages:
     resolution: {integrity: sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==}
     engines: {node: '>=12'}
 
-  '@logtape/file@2.0.4':
-    resolution: {integrity: sha512-T4ajSQR19kae/MLic4dLXehsB5nfMSUdNAIgQcdgToog9E8PGaYT0IINw+v4clD25AYogeCmn30V7/s2ieV3GA==}
+  '@logtape/file@2.2.2':
+    resolution: {integrity: sha512-HrK8K/bVh331g2GKm4LWIwBUiuOMQiHXLQjieFAGd0v9qaM+uSj79x0WAZn9wjTFJX8Ih1Q1o/OhQrRkVPaRTw==}
     peerDependencies:
-      '@logtape/logtape': ^2.0.4
+      '@logtape/logtape': ^2.2.2
 
-  '@logtape/logtape@2.0.4':
-    resolution: {integrity: sha512-Z4COeAMdedcBFuFkXaPFvDPOVuHoEom1hwNnPCIkSyojyikuNguplwPoSG+kZthWrS7GiOJo1USQyjWwIFfTKA==}
+  '@logtape/logtape@2.2.2':
+    resolution: {integrity: sha512-4BOSQDaWWWqINO/mcFhZxtJDcnK97I+JxLlcd1Nfjbv74o2JLGeRRnLd62Tz1+Qf9rZ3sGNa5cTBhTWPq6XFzQ==}
 
   '@mermaid-js/mermaid-mindmap@9.3.0':
     resolution: {integrity: sha512-IhtYSVBBRYviH1Ehu8gk69pMDF8DSRqXBRDMWrEfHoaMruHeaP2DXA3PBnuwsMaCdPQhlUUcy/7DBLAEIXvCAw==}
@@ -3685,11 +3685,11 @@ snapshots:
     dependencies:
       jsbi: 4.3.2
 
-  '@logtape/file@2.0.4(@logtape/logtape@2.0.4)':
+  '@logtape/file@2.2.2(@logtape/logtape@2.2.2)':
     dependencies:
-      '@logtape/logtape': 2.0.4
+      '@logtape/logtape': 2.2.2
 
-  '@logtape/logtape@2.0.4': {}
+  '@logtape/logtape@2.2.2': {}
 
   '@mermaid-js/mermaid-mindmap@9.3.0':
     dependencies:

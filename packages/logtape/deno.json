@@ -7,7 +7,7 @@
   },
   "imports": {
     "#src/": "./src/",
-    "@logtape/file": "jsr:@logtape/file@^2.0.4"
+    "@logtape/file": "jsr:@logtape/file@^2.2.2"
   },
   "exclude": [
     "dist/",

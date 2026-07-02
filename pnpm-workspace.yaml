@@ -6,8 +6,8 @@ packages:
 catalog:
   "@clack/prompts": ^1.6.0
   "@inquirer/prompts": ^8.3.0
-  "@logtape/file": ^2.0.4
-  "@logtape/logtape": ^2.0.4
+  "@logtape/file": ^2.2.2
+  "@logtape/logtape": ^2.2.2
   "@standard-schema/spec": ^1.1.0
   "@types/node": ^24.0.0
   fast-check: ^4.7.0

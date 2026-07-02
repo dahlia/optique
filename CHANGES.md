@@ -79,6 +79,16 @@ To be released.
 [#865]: https://github.com/dahlia/optique/pull/865
 [#866]: https://github.com/dahlia/optique/pull/866
 
+### @optique/logtape
+
+ -  Added `ConsoleSinkOptions.formatter` for customizing the output emitted
+    by `createConsoleSink()` and console outputs created through
+    `createSink()`.  The option accepts LogTape's `TextFormatter` and
+    `ConsoleFormatter` types while preserving Optique's existing stderr/stdout
+    stream selection behavior.  [[#867]]
+
+[#867]: https://github.com/dahlia/optique/pull/867
+
 ### @optique/standard-schema
 
  -  Added the new *@optique/standard-schema* package for using any Standard

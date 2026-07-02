@@ -1,13 +1,13 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@logtape/file@*": "2.0.4",
-    "jsr:@logtape/file@^2.0.4": "2.0.4",
-    "jsr:@logtape/logtape@^2.0.4": "2.0.4",
-    "jsr:@std/fs@^1.0.19": "1.0.19",
-    "jsr:@std/internal@^1.0.9": "1.0.9",
-    "jsr:@std/path@^1.1.0": "1.1.1",
-    "jsr:@std/path@^1.1.1": "1.1.1",
+    "jsr:@logtape/file@^2.2.2": "2.2.2",
+    "jsr:@logtape/logtape@^2.2.2": "2.2.2",
+    "jsr:@std/fs@^1.0.19": "1.0.24",
+    "jsr:@std/internal@^1.0.14": "1.0.14",
+    "jsr:@std/path@^1.1.0": "1.1.5",
+    "jsr:@std/path@^1.1.1": "1.1.5",
+    "jsr:@std/path@^1.1.5": "1.1.5",
     "jsr:@valibot/valibot@^1.2.0": "1.2.0",
     "npm:@clack/prompts@^1.6.0": "1.6.0",
     "npm:@inquirer/prompts@^8.3.0": "8.3.0_@types+node@24.12.4",
@@ -47,28 +47,28 @@
     "npm:zod@4.1.12": "4.1.12"
   },
   "jsr": {
-    "@logtape/file@2.0.4": {
-      "integrity": "d75c290a8907fde16e13cb69f6159a14c8fc811c5117bedadcee7af0529c61de",
+    "@logtape/file@2.2.2": {
+      "integrity": "6d4e39c2bcfcd298fe4e92e162d2e6eb5d5dc222886f674bfc8db654dbe55439",
       "dependencies": [
         "jsr:@logtape/logtape",
         "jsr:@std/path@^1.1.0"
       ]
     },
-    "@logtape/logtape@2.0.4": {
-      "integrity": "d4b6e85d82954f3d58014d85e4c0f93d6a836181ef4fbb4a852da7ed47979acb"
+    "@logtape/logtape@2.2.2": {
+      "integrity": "cd588b690ed7d401b9913f54fc39ff5faa955483f14d79c115f487a5a656955e"
     },
-    "@std/fs@1.0.19": {
-      "integrity": "051968c2b1eae4d2ea9f79a08a3845740ef6af10356aff43d3e2ef11ed09fb06",
+    "@std/fs@1.0.24": {
+      "integrity": "f3061b45b81673a2bece689da041df32d174be064c89eb6397fb5718d3fb7877",
       "dependencies": [
         "jsr:@std/internal",
-        "jsr:@std/path@^1.1.1"
+        "jsr:@std/path@^1.1.5"
       ]
     },
-    "@std/internal@1.0.9": {
-      "integrity": "bdfb97f83e4db7a13e8faab26fb1958d1b80cc64366501af78a0aee151696eb8"
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
     },
-    "@std/path@1.1.1": {
-      "integrity": "fe00026bd3a7e6a27f73709b83c607798be40e20c81dde655ce34052fd82ec76",
+    "@std/path@1.1.5": {
+      "integrity": "ccea00982ea28c36becaf6e62f855406c76a8c32d462f66f415bbb7d83a271bc",
       "dependencies": [
         "jsr:@std/internal"
       ]
@@ -2322,8 +2322,8 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@logtape/file@^2.0.4",
-      "jsr:@logtape/logtape@^2.0.4",
+      "jsr:@logtape/file@^2.2.2",
+      "jsr:@logtape/logtape@^2.2.2",
       "jsr:@std/fs@^1.0.19",
       "jsr:@std/path@^1.1.1",
       "jsr:@valibot/valibot@^1.2.0",
@@ -2351,7 +2351,7 @@
       },
       "packages/logtape": {
         "dependencies": [
-          "jsr:@logtape/file@^2.0.4"
+          "jsr:@logtape/file@^2.2.2"
         ]
       },
       "packages/man": {

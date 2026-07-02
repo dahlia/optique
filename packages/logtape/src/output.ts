@@ -11,7 +11,13 @@ import type {
 import type { Suggestion } from "@optique/core/parser";
 import { type Message, message } from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
-import type { LogLevel, LogRecord, Sink } from "@logtape/logtape";
+import type {
+  ConsoleFormatter,
+  LogLevel,
+  LogRecord,
+  Sink,
+  TextFormatter,
+} from "@logtape/logtape";
 
 /**
  * Represents a log output destination.
@@ -50,6 +56,17 @@ export interface ConsoleSinkOptions {
    * ```
    */
   readonly streamResolver?: (level: LogLevel) => "stdout" | "stderr";
+
+  /**
+   * A formatter for converting log records to console output.
+   * Text formatters return one string argument, while console formatters
+   * return the full argument list passed to the selected console method.
+   *
+   * If omitted, records are formatted as
+   * `ISO_TIMESTAMP [LEVEL] category: message`.
+   * @since 1.2.0
+   */
+  readonly formatter?: TextFormatter | ConsoleFormatter;
 }
 
 /**
@@ -226,6 +243,7 @@ export function logOutput(
 export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
   const streamResolver = options.streamResolver;
   const defaultStream = options.stream ?? "stderr";
+  const formatter = options.formatter ?? defaultConsoleFormatter;
 
   const invalidStreamError = (value: unknown): TypeError => {
     let repr: string;
@@ -259,34 +277,39 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
       throw invalidStreamError(stream);
     }
 
-    // Format the message
-    const messageParts: string[] = [];
-    for (let i = 0; i < record.message.length; i++) {
-      const part = record.message[i];
-      if (typeof part === "string") {
-        messageParts.push(part);
-      } else {
-        // It's a placeholder value from template literal
-        messageParts.push(String(part));
-      }
-    }
-    const formattedMessage = messageParts.join("");
-
-    // Format the log line
-    const ts = record.timestamp;
-    const timestamp = new Date(
-      ts != null && !Number.isNaN(ts) ? ts : Date.now(),
-    ).toISOString();
-    const category = record.category.join(".");
-    const level = record.level.toUpperCase().padEnd(7);
-    const line = `${timestamp} [${level}] ${category}: ${formattedMessage}`;
+    const args = toConsoleArgs(formatter(record));
 
     if (stream === "stderr") {
-      console.error(line);
+      console.error(...args);
     } else {
-      console.log(line);
+      console.log(...args);
     }
   };
+}
+
+function toConsoleArgs(value: string | readonly unknown[]): readonly unknown[] {
+  return typeof value === "string" ? [value.replace(/\r?\n$/, "")] : value;
+}
+
+function defaultConsoleFormatter(record: LogRecord): string {
+  const messageParts: string[] = [];
+  for (let i = 0; i < record.message.length; i++) {
+    const part = record.message[i];
+    if (typeof part === "string") {
+      messageParts.push(part);
+    } else {
+      messageParts.push(String(part));
+    }
+  }
+  const formattedMessage = messageParts.join("");
+
+  const ts = record.timestamp;
+  const timestamp = new Date(
+    ts != null && !Number.isNaN(ts) ? ts : Date.now(),
+  ).toISOString();
+  const category = record.category.join(".");
+  const level = record.level.toUpperCase().padEnd(7);
+  return `${timestamp} [${level}] ${category}: ${formattedMessage}`;
 }
 
 /**

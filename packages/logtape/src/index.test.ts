@@ -832,6 +832,92 @@ describe("createConsoleSink()", () => {
     );
   });
 
+  it("should format records with a custom text formatter", () => {
+    const sink = createConsoleSink({
+      stream: "stdout",
+      formatter: (record) =>
+        `${record.level}:${record.category.join("/")}:${record.rawMessage}`,
+    });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["app", "worker"],
+        level: "info",
+        message: ["started"],
+        rawMessage: "started",
+        properties: {},
+        timestamp: 0,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.deepEqual(lines, ["info:app/worker:started"]);
+  });
+
+  it("should trim text formatter line endings before console output", () => {
+    const sink = createConsoleSink({
+      stream: "stdout",
+      formatter: (record) => `${record.level} ${record.rawMessage}\n`,
+    });
+    const originalLog = console.log;
+    const lines: string[] = [];
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      sink({
+        category: ["app", "worker"],
+        level: "info",
+        message: ["started"],
+        rawMessage: "started",
+        properties: {},
+        timestamp: 0,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.deepEqual(lines, ["info started"]);
+  });
+
+  it("should format records with a custom console formatter", () => {
+    const sink = createConsoleSink({
+      stream: "stdout",
+      formatter: (record) => [
+        "%s %o",
+        record.level.toUpperCase(),
+        { category: record.category, message: record.rawMessage },
+      ],
+    });
+    const originalLog = console.log;
+    const calls: Array<readonly unknown[]> = [];
+    console.log = (...args: readonly unknown[]) => {
+      calls.push(args);
+    };
+    try {
+      sink({
+        category: ["app", "worker"],
+        level: "warning",
+        message: ["started"],
+        rawMessage: "started",
+        properties: {},
+        timestamp: 0,
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    assert.deepEqual(calls, [
+      [
+        "%s %o",
+        "WARNING",
+        { category: ["app", "worker"], message: "started" },
+      ],
+    ]);
+  });
+
   it("should route by stream resolver", () => {
     const sink = createConsoleSink({
       streamResolver: (level) => level === "error" ? "stderr" : "stdout",
