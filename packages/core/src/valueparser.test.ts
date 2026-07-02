@@ -2979,6 +2979,39 @@ describe("transform", () => {
     );
   });
 
+  it("should preserve deferred results when mapping throws", () => {
+    const inner: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "WORD",
+      placeholder: "placeholder",
+      parse(): ValueParserResult<string> {
+        return { success: true, value: "placeholder", deferred: true };
+      },
+      format(value: string): string {
+        return value;
+      },
+    };
+    const parser = transform(inner, {
+      map(value) {
+        if (value === "placeholder") {
+          throw new TypeError("Cannot map placeholder.");
+        }
+        return value.toUpperCase();
+      },
+      unmap(value) {
+        return value.toLowerCase();
+      },
+    });
+
+    const result = parser.parse("ignored");
+
+    assert.deepEqual(result, {
+      success: true,
+      value: undefined,
+      deferred: true,
+    });
+  });
+
   it("should not map missing placeholders", () => {
     const inner: ValueParser<"sync", string | undefined> = {
       mode: "sync",
@@ -3012,6 +3045,22 @@ describe("transform", () => {
     assert.ok(isValueParser(mapped));
     assert.ok(Object.keys(transformed).includes("placeholder"));
     assert.ok(Object.keys(mapped).includes("placeholder"));
+  });
+
+  it("should reject direct dependency source transforms", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+
+    assert.throws(
+      () =>
+        transform(mode, {
+          map: (value) => value.toUpperCase() as "DEV" | "PROD",
+          unmap: (value) => value.toLowerCase() as "dev" | "prod",
+        }),
+      {
+        name: "TypeError",
+        message: "Cannot transform a dependency source directly.",
+      },
+    );
   });
 
   it("should lazily map dependency-derived placeholders", () => {

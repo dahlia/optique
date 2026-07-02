@@ -15,6 +15,7 @@ import {
   type DerivedValueParser,
   derivedValueParserMarker,
   getSnapshottedDefaultDependencyValues,
+  isDependencySource,
   isDerivedValueParser,
   parseWithDependency,
   singleDefaultValue,
@@ -462,7 +463,11 @@ function transformValueParserResult<T, U>(
         deferred: true as const,
       });
     } catch {
-      return preserveSnapshot(transformMappingFailure());
+      return preserveSnapshot({
+        success: true,
+        value: undefined as U,
+        deferred: true as const,
+      });
     }
   }
   try {
@@ -933,8 +938,6 @@ export function biject<const T extends object>(
       } catch {
         input = "";
       }
-      const result = source.parse(input);
-      if (!result.success) return result;
       return { success: false, error: formatDefaultChoiceError(input, keys) };
     },
     configurable: true,
@@ -974,6 +977,9 @@ export function transform<M extends Mode, T, U>(
   parser: ValueParser<M, T>,
   mapping: TransformMapping<T, U>,
 ): ValueParser<M, U> {
+  if (isDependencySource(parser)) {
+    throw new TypeError("Cannot transform a dependency source directly.");
+  }
   const normalize = parser.normalize?.bind(parser);
   const suggest = parser.suggest?.bind(parser);
   const transformedChoices = parser.choices == null
