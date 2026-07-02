@@ -311,7 +311,7 @@ const host = prompt(
 <LandingSection
   eyebrow="Batteries included"
   title="Reach for a parser before you write one."
-  lead="Forty-seven built-in value parsers, from <code>integer()</code> and
+  lead="Forty-nine built-in value parsers, from <code>integer()</code> and
   <code>ip()</code> to schema validators, Temporal dates, and async Git refs,
   plus the combinators that assemble them. Every one returns an ordinary parser
   that composes with the rest."

@@ -93,6 +93,63 @@ export function mapModeValue<M extends Mode, T, U>(
 }
 
 /**
+ * Maps a value or promise while preserving the declared execution mode.
+ *
+ * Some internal extension hooks predate `ModeValue` and expose a plain
+ * `T | Promise<T>` return type. This helper adapts those hooks back into the
+ * mode-dispatch boundary before applying a mapping function.
+ *
+ * @param mode The execution mode.
+ * @param value The value or promise to transform.
+ * @param mapFn Mapping function applied to the unwrapped value.
+ * @returns The mapped value with correct mode wrapping.
+ * @internal
+ */
+export function mapMaybePromiseByMode<M extends Mode, T, U>(
+  mode: M,
+  value: T | Promise<T>,
+  mapFn: (value: T) => U,
+): ModeValue<M, U> {
+  return mapModeValue(mode, wrapForMode(mode, value), mapFn);
+}
+
+/**
+ * Adapts an iterable or async iterable to the declared execution mode.
+ *
+ * @param mode The execution mode.
+ * @param value The iterable to adapt.
+ * @returns The iterable with correct mode wrapping.
+ * @throws {TypeError} If a synchronous mode receives an async iterable.
+ * @internal
+ */
+export function wrapIterableForMode<M extends Mode, T>(
+  mode: M,
+  value: Iterable<T> | AsyncIterable<T>,
+): ModeIterable<M, T> {
+  const canCheckAsyncIterator = value != null &&
+    (typeof value === "object" || typeof value === "function");
+  const isAsyncIterable = canCheckAsyncIterator &&
+    Symbol.asyncIterator in value;
+  return dispatchIterableByMode(
+    mode,
+    () => {
+      if (isAsyncIterable) {
+        throw new TypeError(
+          "Synchronous mode cannot wrap AsyncIterable value.",
+        );
+      }
+      return value;
+    },
+    () => {
+      if (isAsyncIterable) return value;
+      return (async function* () {
+        yield* value;
+      })();
+    },
+  );
+}
+
+/**
  * Dispatches iterable to sync or async implementation based on mode.
  *
  * @param mode The execution mode.
