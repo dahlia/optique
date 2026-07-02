@@ -862,8 +862,8 @@ export function choice<const T extends string | number>(
  * @param mapping A mapping whose own enumerable string keys are valid inputs.
  * @returns A value parser that accepts one of the mapping keys and returns the
  *          corresponding value.
- * @throws {TypeError} If `mapping` is an array, or if any key is the empty
- *         string.
+ * @throws {TypeError} If `mapping` is not an object, if it is an array, or if
+ *         any key is the empty string.
  * @throws {RangeError} If the mapping has no own enumerable string keys, or if
  *         two keys map to the same value according to `Map` key equality.
  * @since 1.2.0
@@ -875,6 +875,9 @@ export function biject<const T extends object>(
 export function biject<const T extends object>(
   mapping: T,
 ): ValueParser<"sync", BijectValue<T>> {
+  if (mapping === null || typeof mapping !== "object") {
+    throw new TypeError("Expected object.");
+  }
   if (Array.isArray(mapping)) {
     throw new TypeError("Expected object, got array.");
   }

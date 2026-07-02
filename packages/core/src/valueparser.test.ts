@@ -3080,6 +3080,30 @@ describe("biject", () => {
     );
   });
 
+  it("should reject null or primitive mappings", () => {
+    assert.throws(
+      () => biject(null as never),
+      {
+        name: "TypeError",
+        message: "Expected object.",
+      },
+    );
+    assert.throws(
+      () => biject(42 as never),
+      {
+        name: "TypeError",
+        message: "Expected object.",
+      },
+    );
+    assert.throws(
+      () => biject("abc" as never),
+      {
+        name: "TypeError",
+        message: "Expected object.",
+      },
+    );
+  });
+
   it("should reject inputs outside the mapping keys", () => {
     const parser = biject({
       foo: 123,
