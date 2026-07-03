@@ -70,6 +70,42 @@ Features:
     `"fatal"`
  -  Provides suggestions for shell completion
 
+### `textFormatter()`
+
+A value parser for LogTape text formatters. Parses `"jsonl"`, `"logfmt"`,
+`"color"`, and `"plain"` into LogTape formatter functions.
+
+~~~~ typescript
+import { textFormatter } from "@optique/logtape";
+import { object, option, parse } from "@optique/core";
+
+const parser = object({
+  formatter: option("--log-format", textFormatter()),
+});
+
+const result = parse(parser, ["--log-format=logfmt"]);
+// result.value.formatter is LogTape's logfmtFormatter
+~~~~
+
+Formats:
+
+`"jsonl"`
+:   [JSON Lines][LogTape JSON Lines formatter] output
+
+`"logfmt"`
+:   [logfmt][LogTape logfmt formatter] key-value output
+
+`"color"`
+:   [ANSI-colored][LogTape ANSI color formatter] console output
+
+`"plain"`
+:   [LogTape's default text][LogTape default text formatter] output
+
+[LogTape JSON Lines formatter]: https://logtape.org/manual/formatters#json-lines-formatter
+[LogTape logfmt formatter]: https://logtape.org/manual/formatters#logfmt-formatter
+[LogTape ANSI color formatter]: https://logtape.org/manual/formatters#ansi-color-formatter
+[LogTape default text formatter]: https://logtape.org/manual/formatters#default-text-formatter
+
 ### `verbosity()`
 
 A parser for accumulating `-v` flags to determine log level.
@@ -152,6 +188,37 @@ const result2 = parse(parser, ["--log-output=/var/log/app.log"]);
 const sink = await createSink(result1.value.output);
 ~~~~
 
+Use `formatter` to add a text formatter option and wire it through the
+resulting `LogOutput`:
+
+~~~~ typescript
+import { logOutput } from "@optique/logtape";
+import { object, parse } from "@optique/core";
+
+const parser = object({
+  output: logOutput({ formatter: "--log-format" }),
+});
+
+const result = parse(parser, ["--log-format=logfmt"]);
+// result.value.output is a console LogOutput with logfmtFormatter
+~~~~
+
+You can also pass a fixed LogTape text formatter. In that case no additional
+command-line option is added:
+
+~~~~ typescript
+import { logfmtFormatter } from "@logtape/logtape";
+import { logOutput } from "@optique/logtape";
+import { object, parse } from "@optique/core";
+
+const parser = object({
+  output: logOutput({ formatter: logfmtFormatter }),
+});
+
+const result = parse(parser, ["--log-output=/var/log/app.log"]);
+// result.value.output is a file LogOutput with logfmtFormatter
+~~~~
+
 ### `loggingOptions()`
 
 A preset that combines log level and log output options into a single group.
@@ -206,8 +273,20 @@ Common options:
 
  -  `output.enabled`: Whether to enable log output option (default: `true`)
  -  `output.long`: Long option name for output (default: `"--log-output"`)
+ -  `formatter`: Text formatter or long option name for output format
  -  `groupLabel`: Label for option group in help text (default:
     `"Logging options"`)
+
+Set `formatter` at the top level when using the preset:
+
+~~~~ typescript
+const parser = object({
+  logging: loggingOptions({
+    level: "option",
+    formatter: "--log-format",
+  }),
+});
+~~~~
 
 ### `createLoggingConfig()`
 
@@ -240,6 +319,7 @@ if (result.success) {
 Creates a console sink with configurable stream selection.
 
 ~~~~ typescript
+import { logfmtFormatter } from "@logtape/logtape";
 import { createConsoleSink } from "@optique/logtape";
 
 // Write to stderr (default)
@@ -253,6 +333,20 @@ const sink3 = createConsoleSink({
   streamResolver: (level) =>
     level === "error" || level === "fatal" ? "stderr" : "stdout",
 });
+
+// Structured logfmt output
+const sink4 = createConsoleSink({
+  formatter: logfmtFormatter,
+});
+
+// Custom console formatting with multiple console arguments
+const sink5 = createConsoleSink({
+  formatter: (record) => [
+    "%s %o",
+    record.level.toUpperCase(),
+    record.properties,
+  ],
+});
 ~~~~
 
 ### `createSink()`
@@ -260,13 +354,21 @@ const sink3 = createConsoleSink({
 Creates a LogTape sink from a `LogOutput` value.
 
 ~~~~ typescript
+import { logfmtFormatter } from "@logtape/logtape";
 import { createSink, type LogOutput } from "@optique/logtape";
 
-// Console sink
-const consoleSink = await createSink({ type: "console" });
+// Console sink with a formatter selected by logOutput()
+const consoleSink = await createSink({
+  type: "console",
+  formatter: logfmtFormatter,
+});
 
 // File sink (requires @logtape/file package)
-const fileSink = await createSink({ type: "file", path: "/var/log/app.log" });
+const fileSink = await createSink({
+  type: "file",
+  path: "/var/log/app.log",
+  formatter: logfmtFormatter,
+});
 ~~~~
 
 > [!NOTE]

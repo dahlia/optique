@@ -64,6 +64,11 @@ const valueParsers = [
     ],
   },
   {
+    group: "LogTape",
+    base: "/integrations/logtape",
+    items: [["textFormatter", "text-formatter-value-parser"]],
+  },
+  {
     group: "Zod",
     base: "/integrations/zod",
     items: [
