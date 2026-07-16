@@ -1,0 +1,17 @@
+{
+  "name": "optique",
+  "owner": {
+    "name": "Hong Minhee",
+    "email": "hong@minhee.org"
+  },
+  "description": "Agent tools for building command-line interfaces with Optique",
+  "plugins": [
+    {
+      "name": "optique",
+      "source": "./packages/core",
+      "description": "Agent skill for building command-line interfaces with Optique",
+      "skills": ["./skills/optique"],
+      "strict": false
+    }
+  ]
+}

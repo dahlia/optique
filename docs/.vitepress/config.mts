@@ -123,6 +123,7 @@ const GUIDE = {
   text: "Guide",
   items: [
     { text: "Why Optique?", link: "/why" },
+    { text: "Installation", link: "/install" },
     { text: "Tutorial", link: "/tutorial" },
     { text: "Cookbook", link: "/cookbook" },
     { text: "Common pitfalls", link: "/pitfalls" },

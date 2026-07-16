@@ -5,6 +5,8 @@ description: >-
   Use when releasing a new version, creating a patch release, or creating
   a major/minor release. Handles CHANGES.md updates, version bumping, tagging,
   and branch management.
+metadata:
+  internal: true
 ---
 
 Release skill

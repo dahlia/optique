@@ -39,12 +39,6 @@ To be released.
     can reuse the same hint logic without re-implementing distance
     calculation.  [[#849]]
 
- -  Added an official Agent Skill under *skills/optique/* in *@optique/core*,
-    declared through the package's `agents.skills` metadata.  The skill gives
-    AI coding agents concise guidance for using Optique correctly, links to
-    maintained reference pages for API details, and keeps its inline TypeScript
-    examples covered by a snippet type-checking test.  [[#850], [#852]]
-
  -  Added `showUsage` to `DocPageFormatOptions` and the core runner
     `RunOptions`.  Passing `showUsage: false` omits the `Usage:` synopsis
     from full help pages, including `aboveError: "help"` output, while leaving
@@ -65,6 +59,14 @@ To be released.
     string-to-value dictionaries.  It accepts one of the dictionary's string
     keys, returns the corresponding mapped value, and rejects empty mappings
     or duplicate mapped values at construction time.  [[#866]]
+
+ -  Added an official Agent Skill under *skills/optique/* in *@optique/core*,
+    declared through the package's `agents.skills` metadata for `skills-npm` and
+    exposed through the repository's Claude Code plugin marketplace for
+    installation with the `skills` CLI or Claude Code.  The skill gives AI
+    coding agents concise guidance for using Optique correctly, links to
+    maintained reference pages for API details, and keeps its inline TypeScript
+    examples covered by a snippet type-checking test.  [[#850], [#852]]
 
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843

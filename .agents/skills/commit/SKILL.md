@@ -1,6 +1,8 @@
 ---
 name: commit
 description: Make a commit in Git with an appropriate commit message for the currently staged changes.
+metadata:
+  internal: true
 allowed-tools: Bash(git *)
 ---
 
