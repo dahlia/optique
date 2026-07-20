@@ -677,7 +677,9 @@ async function runHookScope<R>(
   inner: (context: ProgramHookContext<R>) => unknown | Promise<unknown>,
   fallbackContext: ProgramHookContext<R> = {},
 ): Promise<unknown> {
-  let context = fallbackContext;
+  let context: ProgramHookContext<R> = hooks?.beforeEach == null
+    ? fallbackContext
+    : {};
   try {
     // Default a nullish beforeEach result to an empty context so afterEach,
     // onError, and the handler never receive null/undefined.

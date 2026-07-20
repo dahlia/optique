@@ -2910,6 +2910,34 @@ describe("runProgram() lifecycle hooks", () => {
     assert.equal(received, "program");
   });
 
+  it("should isolate command context when command beforeEach rejects", async () => {
+    const error = new Error("preflight failed");
+    let received: unknown;
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          throw error;
+        },
+        onError(context) {
+          received = context.resource;
+        },
+      },
+      handler() {},
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          beforeEach: () => ({ resource: "program" }),
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.equal(received, undefined);
+  });
+
   it("runs command onError before program onError on failure", async () => {
     const order: string[] = [];
     const error = new Error("boom");
