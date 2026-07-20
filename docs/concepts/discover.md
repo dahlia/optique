@@ -377,6 +377,9 @@ awaits it.
 The type argument to `runProgram()` checks the resource returned by
 `beforeEach` and exposes the same type to the later hooks.  The `resource`
 property remains optional because `beforeEach` may return `null` or `void`.
+For statically registered commands, it also checks handlers that receive the
+program-level context; a command whose own `beforeEach` replaces that context
+keeps its independently inferred resource type.
 File-discovered command handlers live in separate modules, so annotate their
 second parameter with `ProgramHookContext<HookResource>` when they consume the
 same program-level resource.

@@ -165,6 +165,24 @@ export interface ProgramHooks<R = unknown> {
 }
 
 /**
+ * Lifecycle hooks that always create their own command context.
+ *
+ * @internal
+ */
+type ProgramHooksWithBeforeEach<R> = ProgramHooks<R> & {
+  readonly beforeEach: NonNullable<ProgramHooks<R>["beforeEach"]>;
+};
+
+/**
+ * Lifecycle hooks that do not replace the program-level command context.
+ *
+ * @internal
+ */
+type ProgramHooksWithoutBeforeEach<R> =
+  & Omit<ProgramHooks<R>, "beforeEach">
+  & { readonly beforeEach?: undefined };
+
+/**
  * Input accepted by {@link defineCommand}.
  *
  * @template M The mode of the command parser.
@@ -260,6 +278,42 @@ export interface StaticCommand<M extends Mode, T, R = unknown>
 }
 
 /**
+ * A command whose hooks always create their own command context.
+ *
+ * @internal
+ */
+type CommandWithBeforeEach<M extends Mode, T, R> = Command<M, T, R> & {
+  readonly hooks: ProgramHooksWithBeforeEach<R>;
+};
+
+/**
+ * A static command whose hooks always create their own command context.
+ *
+ * @internal
+ */
+type StaticCommandWithBeforeEach<M extends Mode, T, R> =
+  & StaticCommand<M, T, R>
+  & CommandWithBeforeEach<M, T, R>;
+
+/**
+ * A command that does not create its own command context.
+ *
+ * @internal
+ */
+type CommandWithoutBeforeEach<M extends Mode, T, R> =
+  & Omit<Command<M, T, R>, "hooks">
+  & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> };
+
+/**
+ * A static command that does not create its own command context.
+ *
+ * @internal
+ */
+type StaticCommandWithoutBeforeEach<M extends Mode, T, R> =
+  & Omit<StaticCommand<M, T, R>, "hooks">
+  & CommandWithoutBeforeEach<M, T, R>;
+
+/**
  * Lifecycle hooks whose caller-defined resource type has been erased.
  *
  * @internal
@@ -268,6 +322,15 @@ interface ErasedProgramHooks {
   readonly beforeEach?: ProgramHooks<unknown>["beforeEach"];
   readonly afterEach?: ProgramHooks<never>["afterEach"];
   readonly onError?: ProgramHooks<never>["onError"];
+}
+
+/**
+ * Erased lifecycle hooks that always create their own command context.
+ *
+ * @internal
+ */
+interface ErasedProgramHooksWithBeforeEach extends ErasedProgramHooks {
+  readonly beforeEach: NonNullable<ErasedProgramHooks["beforeEach"]>;
 }
 
 /**
@@ -320,6 +383,81 @@ export type AnyStaticCommand =
   };
 
 /**
+ * A type-erased command whose handler consumes a program-level resource.
+ *
+ * @internal
+ */
+type ProgramResourceCommand<R> =
+  & Omit<Command<Mode, unknown, R>, "handler">
+  & {
+    readonly handler: (
+      value: never,
+      context?: ProgramHookContext<R>,
+    ) => void | Promise<void>;
+  };
+
+/**
+ * A type-erased command that always creates its own command context.
+ *
+ * @internal
+ */
+type OwnResourceCommand = Omit<AnyCommand, "hooks"> & {
+  readonly hooks: ErasedProgramHooksWithBeforeEach;
+};
+
+/**
+ * A type-erased static command whose handler consumes a program-level
+ * resource.
+ *
+ * @internal
+ */
+type ProgramResourceStaticCommand<R> =
+  & Omit<StaticCommand<Mode, unknown, R>, "handler">
+  & {
+    readonly handler: (
+      value: never,
+      context?: ProgramHookContext<R>,
+    ) => void | Promise<void>;
+  };
+
+/**
+ * A type-erased static command that always creates its own command context.
+ *
+ * @internal
+ */
+type OwnResourceStaticCommand = Omit<AnyStaticCommand, "hooks"> & {
+  readonly hooks: ErasedProgramHooksWithBeforeEach;
+};
+
+/**
+ * A command accepted by `runProgram()` with a program-level resource type.
+ *
+ * Commands without a command-level `beforeEach` must consume `R`.  A command
+ * that always creates its own context may use a different resource type.
+ * Untyped calls retain the fully erased command shape for compatibility.
+ *
+ * @template R The resource made available by program-level lifecycle hooks.
+ * @since 1.2.0
+ */
+export type RunProgramCommand<R = unknown> = unknown extends R ? AnyCommand
+  : ProgramResourceCommand<R> | OwnResourceCommand;
+
+/**
+ * A static command accepted by `runProgram()` with a program-level resource
+ * type.
+ *
+ * Commands without a command-level `beforeEach` must consume `R`.  A command
+ * that always creates its own context may use a different resource type.
+ * Untyped calls retain the fully erased command shape for compatibility.
+ *
+ * @template R The resource made available by program-level lifecycle hooks.
+ * @since 1.2.0
+ */
+export type RunProgramStaticCommand<R = unknown> = unknown extends R
+  ? AnyStaticCommand
+  : ProgramResourceStaticCommand<R> | OwnResourceStaticCommand;
+
+/**
  * Defines a command module for `@optique/discover`.
  *
  * This helper returns its argument unchanged while preserving parser value
@@ -334,6 +472,28 @@ export type AnyStaticCommand =
  *         malformed.
  * @since 1.1.0
  */
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & CommandDefinition<M, T, R>
+    & { readonly path: CommandPath }
+    & { readonly hooks: ProgramHooksWithBeforeEach<R> },
+): StaticCommandWithBeforeEach<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & Omit<CommandDefinition<M, T, R>, "hooks">
+    & { readonly path: CommandPath }
+    & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> },
+): StaticCommandWithoutBeforeEach<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & CommandDefinition<M, T, R>
+    & { readonly hooks: ProgramHooksWithBeforeEach<R> },
+): CommandWithBeforeEach<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & Omit<CommandDefinition<M, T, R>, "hooks">
+    & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> },
+): CommandWithoutBeforeEach<M, T, R>;
 export function defineCommand<M extends Mode, T, R = unknown>(
   command: CommandDefinition<M, T, R> & { readonly path: CommandPath },
 ): StaticCommand<M, T, R>;

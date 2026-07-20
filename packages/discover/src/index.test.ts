@@ -258,6 +258,124 @@ describe("runProgram() hook resource types", () => {
     assert.equal(typeof handle, "function");
   });
 
+  it("should reject mismatched static command handler resources", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    interface OtherResource {
+      readonly count: number;
+    }
+
+    const command = defineCommand({
+      path: ["show"],
+      parser: object({}),
+      handler(
+        _value,
+        context?: ProgramHookContext<OtherResource>,
+      ) {
+        assert.equal(context?.resource?.count, 1);
+      },
+    });
+    const run = () =>
+      runProgram<AppResource>({
+        // @ts-expect-error: the handler must consume AppResource.
+        commands: [command],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+    const runEntry = () =>
+      runProgram<AppResource>({
+        // @ts-expect-error: command entries must preserve AppResource.
+        commands: [{ path: ["show"], command }],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+    const inferredRun = () =>
+      runProgram({
+        // @ts-expect-error: hooks infer AppResource for static handlers.
+        commands: [command],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+
+    assert.equal(typeof run, "function");
+    assert.equal(typeof runEntry, "function");
+    assert.equal(typeof inferredRun, "function");
+  });
+
+  it("should allow a static command to provide its own resource", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    const programCommand = defineCommand({
+      path: ["list"],
+      parser: object({}),
+      handler(
+        _value,
+        context?: ProgramHookContext<AppResource>,
+      ) {
+        assert.equal(context?.resource?.label, "program");
+      },
+    });
+    const contextFreeCommand = defineCommand({
+      path: ["help"],
+      parser: object({}),
+      handler() {},
+    });
+    const commandWithoutBeforeEach = defineCommand({
+      path: ["check"],
+      parser: object({}),
+      hooks: {
+        afterEach() {},
+      },
+      handler() {},
+    });
+    const ownResourceCommand = defineCommand({
+      path: ["show"],
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          return { resource: { count: 1 } };
+        },
+      },
+      handler(_value, context) {
+        const count: number | undefined = context?.resource?.count;
+        assert.equal(count, 1);
+      },
+    });
+    const run = () =>
+      runProgram<AppResource>({
+        commands: [
+          programCommand,
+          contextFreeCommand,
+          commandWithoutBeforeEach,
+          ownResourceCommand,
+        ],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+
+    assert.equal(typeof run, "function");
+  });
+
   it("rejects mismatched program hook resources", () => {
     interface AppResource {
       readonly label: string;

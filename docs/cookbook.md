@@ -2330,7 +2330,10 @@ await runProgram<Telemetry>({
 
 The `Telemetry` type argument checks what `beforeEach` returns and gives
 `afterEach` and `onError` the same resource type.  The property remains optional
-because `beforeEach` may fail or return no context.
+because `beforeEach` may fail or return no context.  When commands are passed
+directly, the type argument also checks handlers that fall back to the
+program-level context; a command with its own `beforeEach` keeps its separately
+inferred resource type.
 
 A handler reads the resource through its second parameter.  Existing
 single-argument handlers keep working unchanged; only the ones that need the

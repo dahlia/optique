@@ -37,13 +37,14 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   type AnyCommand,
-  type AnyStaticCommand,
   type CommandMetadata,
   type CommandPath,
   isCommand,
   type ProgramHookContext,
   type ProgramHooks,
   type ProgramInvocation,
+  type RunProgramCommand,
+  type RunProgramStaticCommand,
   validateHooks,
 } from "./command.ts";
 
@@ -58,6 +59,8 @@ export type {
   ProgramHookContext,
   ProgramHooks,
   ProgramInvocation,
+  RunProgramCommand,
+  RunProgramStaticCommand,
   StaticCommand,
 } from "./command.ts";
 
@@ -81,6 +84,23 @@ export interface CommandEntry {
    */
   readonly command: AnyCommand;
 }
+
+/**
+ * A command entry accepted by `runProgram()` with a program-level resource
+ * type.
+ *
+ * @template R The resource made available by program-level lifecycle hooks.
+ * @since 1.2.0
+ */
+export type RunProgramCommandEntry<R = unknown> =
+  & Omit<CommandEntry, "command">
+  & {
+    /**
+     * A command compatible with the program-level resource, or one that
+     * always creates its own command context.
+     */
+    readonly command: RunProgramCommand<R>;
+  };
 
 /**
  * A command found on disk.
@@ -107,9 +127,16 @@ export interface DiscoveredCommand extends CommandEntry {
 /**
  * A command loaded from a static module map.
  *
+ * @template R The program-level resource used by commands without their own
+ *              `beforeEach` hook.
  * @since 1.2.0
  */
-export interface ModuleCommand extends CommandEntry {
+export interface ModuleCommand<R = unknown> extends CommandEntry {
+  /**
+   * The command definition.
+   */
+  readonly command: RunProgramCommand<R>;
+
   /**
    * Module map key used to derive the command path.
    */
@@ -317,7 +344,10 @@ export interface RunProgramStaticOptions<R = unknown>
    * Pass commands that declare their own `path`, or command entries returned
    * by {@link commandsFromModules}.
    */
-  readonly commands: readonly (AnyStaticCommand | CommandEntry)[];
+  readonly commands: readonly (
+    | RunProgramStaticCommand<NoInfer<R>>
+    | RunProgramCommandEntry<NoInfer<R>>
+  )[];
 
   /**
    * File-system discovery cannot be used together with `commands`.
@@ -432,6 +462,8 @@ export async function discoverCommands(
  * see module maps, such as `import.meta.glob(..., { eager: true })`, while
  * still deriving command paths from file-like module keys.
  *
+ * @template R The program-level resource used by commands without their own
+ *             `beforeEach` hook.
  * @param modules Static module map keyed by module path.
  * @param options Module path derivation options.
  * @returns Command entries sorted by command path.
@@ -441,10 +473,10 @@ export async function discoverCommands(
  *         `path` does not match the module-derived path.
  * @since 1.2.0
  */
-export function commandsFromModules(
+export function commandsFromModules<R = unknown>(
   modules: ModuleMap,
   options: CommandsFromModulesOptions = {},
-): readonly ModuleCommand[] {
+): readonly ModuleCommand<R>[] {
   if (modules == null || typeof modules !== "object") {
     throw new TypeError("commandsFromModules() requires a module map object.");
   }
@@ -458,7 +490,7 @@ export function commandsFromModules(
   );
 
   const seen = new Map<string, string>();
-  const discovered: ModuleCommand[] = [];
+  const discovered: ModuleCommand<R>[] = [];
   for (const modulePath of modulePaths) {
     const moduleBaseName = posix.basename(modulePath);
     if (
@@ -485,10 +517,12 @@ export function commandsFromModules(
     }
     seen.set(key, modulePath);
 
+    // ModuleMap values are opaque at this boundary.  R is the caller's shared
+    // resource contract for commands whose own beforeEach does not replace it.
     const commandDefinition = commandFromModuleExport(
       modulePath,
       modules[modulePath],
-    );
+    ) as RunProgramCommand<R>;
     validateDeclaredCommandPath(
       commandDefinition,
       path,
@@ -970,8 +1004,11 @@ function isStaticRunProgramOptions<R>(
   return hasCommands;
 }
 
-function staticCommandsToEntries(
-  commands: readonly (AnyStaticCommand | CommandEntry)[],
+function staticCommandsToEntries<R>(
+  commands: readonly (
+    | RunProgramStaticCommand<R>
+    | RunProgramCommandEntry<R>
+  )[],
 ): readonly CommandEntry[] {
   return commands.map((entry) => {
     if (isCommandEntry(entry)) return entry;
