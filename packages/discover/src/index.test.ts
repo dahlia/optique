@@ -86,6 +86,17 @@ describe("defineCommand()", () => {
     assert.deepEqual(path, []);
   });
 
+  it("should reject non-object command definitions", () => {
+    assert.throws(
+      () => defineCommand([] as never),
+      { name: "TypeError", message: "Expected object, got array." },
+    );
+    assert.throws(
+      () => defineCommand(null as never),
+      { name: "TypeError", message: "Expected object." },
+    );
+  });
+
   it("rejects malformed command definitions", () => {
     assert.throws(
       () =>
@@ -928,6 +939,17 @@ describe("discoverCommands()", () => {
 });
 
 describe("commandsFromModules()", () => {
+  it("should reject non-object module maps", () => {
+    assert.throws(
+      () => commandsFromModules([] as never),
+      { name: "TypeError", message: "Expected object, got array." },
+    );
+    assert.throws(
+      () => commandsFromModules(null as never),
+      { name: "TypeError", message: "Expected object." },
+    );
+  });
+
   it("derives command paths from static module map keys", () => {
     const buildCommand = makeCommand();
     const addCommand = makeCommand();
@@ -1984,6 +2006,17 @@ describe("createProgramParser()", () => {
 });
 
 describe("runProgram()", () => {
+  it("should reject non-object options", async () => {
+    await assert.rejects(
+      () => runProgram([] as never),
+      { name: "TypeError", message: "Expected object, got array." },
+    );
+    await assert.rejects(
+      () => runProgram(null as never),
+      { name: "TypeError", message: "Expected object." },
+    );
+  });
+
   it("runs statically registered commands and waits for async handlers", async () => {
     const calls: unknown[] = [];
     const writeCommand = defineCommand({

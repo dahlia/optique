@@ -477,8 +477,11 @@ export function commandsFromModules<R = unknown>(
   modules: ModuleMap,
   options: CommandsFromModulesOptions = {},
 ): readonly ModuleCommand<R>[] {
+  if (Array.isArray(modules)) {
+    throw new TypeError("Expected object, got array.");
+  }
   if (modules == null || typeof modules !== "object") {
-    throw new TypeError("commandsFromModules() requires a module map object.");
+    throw new TypeError("Expected object.");
   }
   const base = normalizeModuleBase(options.base);
   const extensions = normalizeExtensions(
@@ -581,6 +584,12 @@ export function createProgramParser(
 export async function runProgram<R = unknown>(
   options: RunProgramOptions<R>,
 ): Promise<void> {
+  if (Array.isArray(options)) {
+    throw new TypeError("Expected object, got array.");
+  }
+  if (options == null || typeof options !== "object") {
+    throw new TypeError("Expected object.");
+  }
   if (options.hooks != null) validateHooks(options.hooks, "Program");
   let commands: readonly Pick<DiscoveredCommand, "path" | "command">[];
   if (isStaticRunProgramOptions(options)) {

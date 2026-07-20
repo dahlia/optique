@@ -503,6 +503,12 @@ export function defineCommand<M extends Mode, T, R = unknown>(
 export function defineCommand<M extends Mode, T, R = unknown>(
   command: CommandDefinition<M, T, R>,
 ): Command<M, T, R> {
+  if (Array.isArray(command)) {
+    throw new TypeError("Expected object, got array.");
+  }
+  if (command == null || typeof command !== "object") {
+    throw new TypeError("Expected object.");
+  }
   if (!isParser(command.parser)) {
     throw new TypeError("Command parser must be an Optique parser.");
   }
