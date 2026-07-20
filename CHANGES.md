@@ -133,7 +133,9 @@ To be released.
     `defineCommand()` gains a matching per-command `hooks` field that nests
     inside the program-level hooks (`program.beforeEach` →
     `command.beforeEach` → handler, unwinding in reverse).  The new
-    `ProgramHooks` and `ProgramHookContext` types are exported.  [[#851]]
+    `ProgramHooks` and `ProgramHookContext` types are exported and generic over
+    the caller-defined resource, so its type flows from `beforeEach` to later
+    hooks and the command handler without casts.  [[#851], [#875], [#876]]
 
  -  `runProgram()` now accepts `showUsage: false` for compact command-list
     help.  The option is forwarded to *@optique/run* so discovered command
@@ -157,6 +159,8 @@ To be released.
 [#857]: https://github.com/dahlia/optique/issues/857
 [#858]: https://github.com/dahlia/optique/pull/858
 [#861]: https://github.com/dahlia/optique/pull/861
+[#875]: https://github.com/dahlia/optique/issues/875
+[#876]: https://github.com/dahlia/optique/pull/876
 
 ### @optique/standard-schema
 

@@ -340,7 +340,12 @@ exactly as before.
 ~~~~ typescript twoslash
 import { runProgram } from "@optique/discover";
 
-await runProgram({
+interface HookResource {
+  readonly label: string;
+  readonly startedAt: number;
+}
+
+await runProgram<HookResource>({
   dir: new URL("./commands/", import.meta.url),
   metadata: { name: "admin", version: "1.0.0" },
   hooks: {
@@ -349,10 +354,9 @@ await runProgram({
       return { resource: { label, startedAt: Date.now() } };
     },
     afterEach(context) {
-      const { label, startedAt } = context.resource as {
-        label: string;
-        startedAt: number;
-      };
+      const resource = context.resource;
+      if (resource == null) return;
+      const { label, startedAt } = resource;
       console.log(`${label} finished in ${Date.now() - startedAt}ms.`);
     },
     onError(_context, error) {
@@ -369,6 +373,13 @@ await runProgram({
 `afterEach`/`onError`, so handlers and later hooks reach the resource without
 global state.  Each hook may be synchronous or return a promise; `runProgram()`
 awaits it.
+
+The type argument to `runProgram()` checks the resource returned by
+`beforeEach` and exposes the same type to the later hooks.  The `resource`
+property remains optional because `beforeEach` may return `null` or `void`.
+File-discovered command handlers live in separate modules, so annotate their
+second parameter with `ProgramHookContext<HookResource>` when they consume the
+same program-level resource.
 
 Hooks can also be attached to a single command through
 `defineCommand({ hooks })` for a per-command preflight.  Command-level hooks

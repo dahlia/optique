@@ -38,6 +38,7 @@ import {
   createProgramParser,
   discoverCommands,
   getDefaultExtensions,
+  type ProgramHookContext,
   type ProgramHooks,
   runProgram,
 } from "#src/index.ts";
@@ -178,6 +179,114 @@ describe("defineCommand()", () => {
     });
     assert.equal(typeof cmd.hooks?.beforeEach, "function");
     assert.deepEqual(order, []);
+  });
+
+  it("infers command hook resources in hooks and handlers", () => {
+    const cmd = defineCommand({
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          return { resource: { label: "command" } };
+        },
+        afterEach(context) {
+          const label: string | undefined = context.resource?.label;
+          assert.equal(label, "command");
+        },
+        onError(context) {
+          const label: string | undefined = context.resource?.label;
+          assert.equal(label, "command");
+        },
+      },
+      handler(_value, context) {
+        const label: string | undefined = context?.resource?.label;
+        assert.equal(label, "command");
+      },
+    });
+
+    assert.equal(typeof cmd.hooks?.beforeEach, "function");
+  });
+
+  it("rejects mismatched command hook resources", () => {
+    interface CommandResource {
+      readonly label: string;
+    }
+
+    const hooks: ProgramHooks<CommandResource> = {
+      // @ts-expect-error: beforeEach must produce CommandResource.
+      beforeEach() {
+        return { resource: { count: 1 } };
+      },
+    };
+
+    assert.equal(typeof hooks.beforeEach, "function");
+  });
+});
+
+describe("runProgram() hook resource types", () => {
+  it("types program hooks and discovered command contexts", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    const run = () =>
+      runProgram<AppResource>({
+        dir: new URL("./commands/", import.meta.url),
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+          afterEach(context) {
+            const label: string | undefined = context.resource?.label;
+            assert.equal(label, "program");
+          },
+          onError(context) {
+            const label: string | undefined = context.resource?.label;
+            assert.equal(label, "program");
+          },
+        },
+      });
+    const handle = (
+      _value: unknown,
+      context?: ProgramHookContext<AppResource>,
+    ) => {
+      const label: string | undefined = context?.resource?.label;
+      assert.equal(label, "program");
+    };
+
+    assert.equal(typeof run, "function");
+    assert.equal(typeof handle, "function");
+  });
+
+  it("rejects mismatched program hook resources", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    interface OtherResource {
+      readonly count: number;
+    }
+
+    const run = () =>
+      runProgram<AppResource>({
+        dir: new URL("./commands/", import.meta.url),
+        metadata: { name: "tasks" },
+        hooks: {
+          // @ts-expect-error: beforeEach must produce AppResource.
+          beforeEach() {
+            return { resource: { count: 1 } };
+          },
+        },
+      });
+    const hooks: ProgramHooks<AppResource> = {
+      // @ts-expect-error: later hooks must consume AppResource.
+      afterEach(context: ProgramHookContext<OtherResource>) {
+        assert.equal(context.resource?.count, 1);
+      },
+    };
+
+    assert.equal(typeof run, "function");
+    assert.equal(typeof hooks.afterEach, "function");
   });
 });
 

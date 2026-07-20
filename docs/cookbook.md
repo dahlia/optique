@@ -2298,7 +2298,7 @@ interface Telemetry {
   readonly span: Span;
 }
 // ---cut-before---
-await runProgram({
+await runProgram<Telemetry>({
   dir: new URL("./commands/", import.meta.url),
   metadata: { name: "tasks", version: "1.0.0" },
   hooks: {
@@ -2310,12 +2310,16 @@ await runProgram({
       return { resource };
     },
     afterEach(context) {
-      const { logger, span } = context.resource as Telemetry;
+      const resource = context.resource;
+      if (resource == null) return;
+      const { logger, span } = resource;
       logger.info("Command finished.");
       span.end();
     },
     onError(context, error) {
-      const { logger, span } = context.resource as Telemetry;
+      const resource = context.resource;
+      if (resource == null) return;
+      const { logger, span } = resource;
       logger.error("Command failed.", { error });
       span.recordException(error);
       span.end();
@@ -2323,6 +2327,10 @@ await runProgram({
   },
 });
 ~~~~
+
+The `Telemetry` type argument checks what `beforeEach` returns and gives
+`afterEach` and `onError` the same resource type.  The property remains optional
+because `beforeEach` may fail or return no context.
 
 A handler reads the resource through its second parameter.  Existing
 single-argument handlers keep working unchanged; only the ones that need the
@@ -2335,7 +2343,10 @@ import { message } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
-import { defineCommand } from "@optique/discover/command";
+import {
+  defineCommand,
+  type ProgramHookContext,
+} from "@optique/discover/command";
 
 interface Telemetry {
   readonly logger: ReturnType<typeof getLogger>;
@@ -2346,9 +2357,10 @@ export default defineCommand({
     target: withDefault(option("--target", string()), "app"),
   }),
   metadata: { brief: message`Build the project.` },
-  handler(value, context) {
-    const { logger } = context?.resource as Telemetry;
-    logger.info("Building {target}.", { target: value.target });
+  handler(value, context?: ProgramHookContext<Telemetry>) {
+    context?.resource?.logger.info("Building {target}.", {
+      target: value.target,
+    });
   },
 });
 ~~~~
@@ -2382,7 +2394,7 @@ export default defineCommand({
       return { resource: refreshAuthToken() };
     },
     afterEach(context) {
-      (context.resource as TokenRefresher).release();
+      context.resource?.release();
     },
   },
   handler(value) {
