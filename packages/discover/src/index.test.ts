@@ -38,6 +38,7 @@ import {
   createProgramParser,
   discoverCommands,
   getDefaultExtensions,
+  type ProgramHookContext,
   type ProgramHooks,
   runProgram,
 } from "#src/index.ts";
@@ -83,6 +84,17 @@ describe("defineCommand()", () => {
 
     const path: CommandPath = staticCommand.path;
     assert.deepEqual(path, []);
+  });
+
+  it("should reject non-object command definitions", () => {
+    assert.throws(
+      () => defineCommand([] as never),
+      { name: "TypeError", message: "Expected object, got array." },
+    );
+    assert.throws(
+      () => defineCommand(null as never),
+      { name: "TypeError", message: "Expected object." },
+    );
   });
 
   it("rejects malformed command definitions", () => {
@@ -178,6 +190,232 @@ describe("defineCommand()", () => {
     });
     assert.equal(typeof cmd.hooks?.beforeEach, "function");
     assert.deepEqual(order, []);
+  });
+
+  it("infers command hook resources in hooks and handlers", () => {
+    const cmd = defineCommand({
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          return { resource: { label: "command" } };
+        },
+        afterEach(context) {
+          const label: string | undefined = context.resource?.label;
+          assert.equal(label, "command");
+        },
+        onError(context) {
+          const label: string | undefined = context.resource?.label;
+          assert.equal(label, "command");
+        },
+      },
+      handler(_value, context) {
+        const label: string | undefined = context?.resource?.label;
+        assert.equal(label, "command");
+      },
+    });
+
+    assert.equal(typeof cmd.hooks?.beforeEach, "function");
+  });
+
+  it("rejects mismatched command hook resources", () => {
+    interface CommandResource {
+      readonly label: string;
+    }
+
+    const hooks: ProgramHooks<CommandResource> = {
+      // @ts-expect-error: beforeEach must produce CommandResource.
+      beforeEach() {
+        return { resource: { count: 1 } };
+      },
+    };
+
+    assert.equal(typeof hooks.beforeEach, "function");
+  });
+});
+
+describe("runProgram() hook resource types", () => {
+  it("types program hooks and discovered command contexts", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    const run = () =>
+      runProgram<AppResource>({
+        dir: new URL("./commands/", import.meta.url),
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+          afterEach(context) {
+            const label: string | undefined = context.resource?.label;
+            assert.equal(label, "program");
+          },
+          onError(context) {
+            const label: string | undefined = context.resource?.label;
+            assert.equal(label, "program");
+          },
+        },
+      });
+    const handle = (
+      _value: unknown,
+      context?: ProgramHookContext<AppResource>,
+    ) => {
+      const label: string | undefined = context?.resource?.label;
+      assert.equal(label, "program");
+    };
+
+    assert.equal(typeof run, "function");
+    assert.equal(typeof handle, "function");
+  });
+
+  it("should reject mismatched static command handler resources", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    interface OtherResource {
+      readonly count: number;
+    }
+
+    const command = defineCommand({
+      path: ["show"],
+      parser: object({}),
+      handler(
+        _value,
+        context?: ProgramHookContext<OtherResource>,
+      ) {
+        assert.equal(context?.resource?.count, 1);
+      },
+    });
+    const run = () =>
+      runProgram<AppResource>({
+        // @ts-expect-error: the handler must consume AppResource.
+        commands: [command],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+    const runEntry = () =>
+      runProgram<AppResource>({
+        // @ts-expect-error: command entries must preserve AppResource.
+        commands: [{ path: ["show"], command }],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+    const inferredRun = () =>
+      runProgram({
+        // @ts-expect-error: hooks infer AppResource for static handlers.
+        commands: [command],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+
+    assert.equal(typeof run, "function");
+    assert.equal(typeof runEntry, "function");
+    assert.equal(typeof inferredRun, "function");
+  });
+
+  it("should allow a static command to provide its own resource", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    const programCommand = defineCommand({
+      path: ["list"],
+      parser: object({}),
+      handler(
+        _value,
+        context?: ProgramHookContext<AppResource>,
+      ) {
+        assert.equal(context?.resource?.label, "program");
+      },
+    });
+    const contextFreeCommand = defineCommand({
+      path: ["help"],
+      parser: object({}),
+      handler() {},
+    });
+    const commandWithoutBeforeEach = defineCommand({
+      path: ["check"],
+      parser: object({}),
+      hooks: {
+        afterEach() {},
+      },
+      handler() {},
+    });
+    const ownResourceCommand = defineCommand({
+      path: ["show"],
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          return { resource: { count: 1 } };
+        },
+      },
+      handler(_value, context) {
+        const count: number | undefined = context?.resource?.count;
+        assert.equal(count, 1);
+      },
+    });
+    const run = () =>
+      runProgram<AppResource>({
+        commands: [
+          programCommand,
+          contextFreeCommand,
+          commandWithoutBeforeEach,
+          ownResourceCommand,
+        ],
+        metadata: { name: "tasks" },
+        hooks: {
+          beforeEach() {
+            return { resource: { label: "program" } };
+          },
+        },
+      });
+
+    assert.equal(typeof run, "function");
+  });
+
+  it("rejects mismatched program hook resources", () => {
+    interface AppResource {
+      readonly label: string;
+    }
+
+    interface OtherResource {
+      readonly count: number;
+    }
+
+    const run = () =>
+      runProgram<AppResource>({
+        dir: new URL("./commands/", import.meta.url),
+        metadata: { name: "tasks" },
+        hooks: {
+          // @ts-expect-error: beforeEach must produce AppResource.
+          beforeEach() {
+            return { resource: { count: 1 } };
+          },
+        },
+      });
+    const hooks: ProgramHooks<AppResource> = {
+      // @ts-expect-error: later hooks must consume AppResource.
+      afterEach(context: ProgramHookContext<OtherResource>) {
+        assert.equal(context.resource?.count, 1);
+      },
+    };
+
+    assert.equal(typeof run, "function");
+    assert.equal(typeof hooks.afterEach, "function");
   });
 });
 
@@ -701,6 +939,17 @@ describe("discoverCommands()", () => {
 });
 
 describe("commandsFromModules()", () => {
+  it("should reject non-object module maps", () => {
+    assert.throws(
+      () => commandsFromModules([] as never),
+      { name: "TypeError", message: "Expected object, got array." },
+    );
+    assert.throws(
+      () => commandsFromModules(null as never),
+      { name: "TypeError", message: "Expected object." },
+    );
+  });
+
   it("derives command paths from static module map keys", () => {
     const buildCommand = makeCommand();
     const addCommand = makeCommand();
@@ -1757,6 +2006,17 @@ describe("createProgramParser()", () => {
 });
 
 describe("runProgram()", () => {
+  it("should reject non-object options", async () => {
+    await assert.rejects(
+      () => runProgram([] as never),
+      { name: "TypeError", message: "Expected object, got array." },
+    );
+    await assert.rejects(
+      () => runProgram(null as never),
+      { name: "TypeError", message: "Expected object." },
+    );
+  });
+
   it("runs statically registered commands and waits for async handlers", async () => {
     const calls: unknown[] = [];
     const writeCommand = defineCommand({
@@ -2601,6 +2861,81 @@ describe("runProgram() lifecycle hooks", () => {
     });
 
     assert.equal(received, "program");
+  });
+
+  it("should pass program context to command afterEach without beforeEach", async () => {
+    let received: unknown;
+    const deploy = defineCommand({
+      path: ["deploy"],
+      parser: object({}),
+      hooks: {
+        afterEach(context) {
+          received = context.resource;
+        },
+      },
+      handler() {},
+    });
+
+    await runHooked([deploy], ["deploy"], {
+      beforeEach: () => ({ resource: "program" }),
+    });
+
+    assert.equal(received, "program");
+  });
+
+  it("should pass program context to command onError without beforeEach", async () => {
+    const error = new Error("boom");
+    let received: unknown;
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      hooks: {
+        onError(context) {
+          received = context.resource;
+        },
+      },
+      handler() {
+        throw error;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          beforeEach: () => ({ resource: "program" }),
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.equal(received, "program");
+  });
+
+  it("should isolate command context when command beforeEach rejects", async () => {
+    const error = new Error("preflight failed");
+    let received: unknown;
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      hooks: {
+        beforeEach() {
+          throw error;
+        },
+        onError(context) {
+          received = context.resource;
+        },
+      },
+      handler() {},
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          beforeEach: () => ({ resource: "program" }),
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.equal(received, undefined);
   });
 
   it("runs command onError before program onError on failure", async () => {

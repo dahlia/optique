@@ -39,16 +39,6 @@ To be released.
     can reuse the same hint logic without re-implementing distance
     calculation.  [[#849]]
 
- -  Added `showUsage` to `DocPageFormatOptions` and the core runner
-    `RunOptions`.  Passing `showUsage: false` omits the `Usage:` synopsis
-    from full help pages, including `aboveError: "help"` output, while leaving
-    explicit usage-only error preambles unchanged.  [[#856], [#860]]
-
- -  Added `commandList` to the core runner `RunOptions`.  The default
-    `"recursive"` mode keeps the existing flattened command list, while
-    `"top-level"` makes top-level help pages list only first-level commands so
-    users can drill down with `<command> --help`.  [[#864], [#865]]
-
  -  Added `transform()` to *@optique/core/valueparser* for reversible value
     parser transformations.  It maps parsed values to a new type while using
     the inverse mapping for formatting, fallback validation, choices, and
@@ -59,6 +49,16 @@ To be released.
     string-to-value dictionaries.  It accepts one of the dictionary's string
     keys, returns the corresponding mapped value, and rejects empty mappings
     or duplicate mapped values at construction time.  [[#866]]
+
+ -  Added `showUsage` to `DocPageFormatOptions` and the core runner
+    `RunOptions`.  Passing `showUsage: false` omits the `Usage:` synopsis
+    from full help pages, including `aboveError: "help"` output, while leaving
+    explicit usage-only error preambles unchanged.  [[#856], [#860]]
+
+ -  Added `commandList` to the core runner `RunOptions`.  The default
+    `"recursive"` mode keeps the existing flattened command list, while
+    `"top-level"` makes top-level help pages list only first-level commands so
+    users can drill down with `<command> --help`.  [[#864], [#865]]
 
  -  Added an official Agent Skill under *skills/optique/* in *@optique/core*,
     declared through the package's `agents.skills` metadata for `skills-npm` and
@@ -81,22 +81,86 @@ To be released.
 [#865]: https://github.com/dahlia/optique/pull/865
 [#866]: https://github.com/dahlia/optique/pull/866
 
-### @optique/logtape
+### @optique/run
 
- -  Added `ConsoleSinkOptions.formatter` for customizing the output emitted
-    by `createConsoleSink()` and console outputs created through
-    `createSink()`.  The option accepts LogTape's `TextFormatter` and
-    `ConsoleFormatter` types while preserving Optique's existing stderr/stdout
-    stream selection behavior.  [[#867]]
+ -  Added `showUsage` to `RunOptions`.  Passing `showUsage: false` omits the
+    `Usage:` synopsis from full help pages produced by `run()`, `runSync()`,
+    and `runAsync()`, while usage-only error output remains unchanged.
+    [[#856], [#860]]
 
- -  Added `textFormatter()` for parsing `"jsonl"`, `"logfmt"`, `"color"`,
-    and `"plain"` into LogTape's built-in text formatters.  [[#867]]
+ -  Added `commandList` to `RunOptions`.  Passing
+    `commandList: "top-level"` makes top-level help pages list only
+    first-level commands; the default `"recursive"` mode preserves the
+    existing full command list.  [[#864], [#865]]
 
- -  Added a `formatter` option to `logOutput()` and `loggingOptions()` for
-    wiring parsed or fixed text formatters into console and file sinks.
-    [[#867]]
+### @optique/discover
 
-[#867]: https://github.com/dahlia/optique/pull/867
+ -  Added `commandsFromModules()` for bundler-friendly command discovery from
+    static module maps such as eager `import.meta.glob()` results.  The helper
+    derives command paths with the same extension, entry-file, duplicate-path,
+    and explicit `path` validation rules as file-system discovery, and returns
+    command entries that can be passed directly to
+    `runProgram({ commands })`.  [[#830], [#840]]
+
+ -  Added the `optique-discover` command to generate static TypeScript command
+    modules for bundlers and single-file CLI packaging.  The generated module
+    imports discovered command files and default-exports the
+    `commandsFromModules()` result, with `--watch` support for regenerating
+    when command files are added, removed, or renamed.
+    [[#835], [#841], [#854], [#858]]
+
+ -  Added executable parent commands to file-system discovery.  Entry files
+    such as *stash/index.ts* now map to the containing command path (`stash`),
+    root *index.ts* defines the root command, and parent commands can coexist
+    with nested commands such as `stash list`.  The `entryFileName` option
+    customizes or disables the entry-file rule.  [[#838], [#839]]
+
+ -  File-system discovery, `commandsFromModules()`, and `optique-discover` now
+    skip co-located test files by default.  A file whose name ends in *.test*
+    or *.spec* before the configured extension—such as *hello.test.ts* or
+    *hello.spec.js*—is ignored the same way declaration files are, so it no
+    longer registers as a ghost command nor breaks discovery by failing the
+    `defineCommand()` check.  [[#857], [#861] by Lee Hoyeon]
+
+ -  Added lifecycle hooks to `runProgram()` for cross-cutting around-handler
+    behavior such as log scopes, tracing spans, lazy resource setup, and
+    failure reporting.  The new `hooks` option takes `beforeEach`, `afterEach`,
+    and `onError` callbacks; `beforeEach` returns a `ProgramHookContext` whose
+    `resource` is threaded forward to the handler's new second argument and to
+    `afterEach`/`onError`.  Hooks may be synchronous or asynchronous, and
+    `onError` observes failures without swallowing them, so `runProgram()`
+    re-throws the original error and process exit codes are unchanged.
+    `defineCommand()` gains a matching per-command `hooks` field that nests
+    inside the program-level hooks (`program.beforeEach` →
+    `command.beforeEach` → handler, unwinding in reverse).  The new
+    `ProgramHooks` and `ProgramHookContext` types are exported and generic over
+    the caller-defined resource, so its type flows from `beforeEach` to later
+    hooks and the command handler without casts.  [[#851], [#875], [#876]]
+
+ -  `runProgram()` now accepts `showUsage: false` for compact command-list
+    help.  The option is forwarded to *@optique/run* so discovered command
+    programs can show the brief and command sections without the expanded
+    `Usage:` synopsis.  [[#856], [#860]]
+
+ -  `runProgram()` and `createProgramParser()` now accept
+    `commandList: "top-level"` for compact root command menus.  The default
+    remains recursive, while the new mode lists first-level command groups and
+    leaves nested command help available through `<command> --help`.
+    [[#864], [#865]]
+
+[#830]: https://github.com/dahlia/optique/issues/830
+[#835]: https://github.com/dahlia/optique/issues/835
+[#838]: https://github.com/dahlia/optique/issues/838
+[#839]: https://github.com/dahlia/optique/pull/839
+[#840]: https://github.com/dahlia/optique/pull/840
+[#841]: https://github.com/dahlia/optique/pull/841
+[#851]: https://github.com/dahlia/optique/pull/851
+[#854]: https://github.com/dahlia/optique/issues/854
+[#857]: https://github.com/dahlia/optique/issues/857
+[#858]: https://github.com/dahlia/optique/pull/858
+[#861]: https://github.com/dahlia/optique/pull/861
+[#875]: https://github.com/dahlia/optique/issues/875
+[#876]: https://github.com/dahlia/optique/pull/876
 
 ### @optique/standard-schema
 
@@ -127,83 +191,6 @@ To be released.
 [#845]: https://github.com/dahlia/optique/issues/845
 [#847]: https://github.com/dahlia/optique/pull/847
 
-### @optique/discover
-
- -  Added lifecycle hooks to `runProgram()` for cross-cutting around-handler
-    behavior such as log scopes, tracing spans, lazy resource setup, and
-    failure reporting.  The new `hooks` option takes `beforeEach`, `afterEach`,
-    and `onError` callbacks; `beforeEach` returns a `ProgramHookContext` whose
-    `resource` is threaded forward to the handler's new second argument and to
-    `afterEach`/`onError`.  Hooks may be synchronous or asynchronous, and
-    `onError` observes failures without swallowing them, so `runProgram()`
-    re-throws the original error and process exit codes are unchanged.
-    `defineCommand()` gains a matching per-command `hooks` field that nests
-    inside the program-level hooks (`program.beforeEach` →
-    `command.beforeEach` → handler, unwinding in reverse).  The new
-    `ProgramHooks` and `ProgramHookContext` types are exported.  [[#851]]
-
- -  Added `commandsFromModules()` for bundler-friendly command discovery from
-    static module maps such as eager `import.meta.glob()` results.  The helper
-    derives command paths with the same extension, entry-file, duplicate-path,
-    and explicit `path` validation rules as file-system discovery, and returns
-    command entries that can be passed directly to
-    `runProgram({ commands })`.  [[#830], [#840]]
-
- -  Added the `optique-discover` command to generate static TypeScript command
-    modules for bundlers and single-file CLI packaging.  The generated module
-    imports discovered command files and default-exports the
-    `commandsFromModules()` result, with `--watch` support for regenerating
-    when command files are added, removed, or renamed.
-    [[#835], [#841], [#854], [#858]]
-
- -  Added executable parent commands to file-system discovery.  Entry files
-    such as *stash/index.ts* now map to the containing command path (`stash`),
-    root *index.ts* defines the root command, and parent commands can coexist
-    with nested commands such as `stash list`.  The `entryFileName` option
-    customizes or disables the entry-file rule.  [[#838], [#839]]
-
- -  File-system discovery, `commandsFromModules()`, and `optique-discover` now
-    skip co-located test files by default.  A file whose name ends in *.test*
-    or *.spec* before the configured extension—such as *hello.test.ts* or
-    *hello.spec.js*—is ignored the same way declaration files are, so it no
-    longer registers as a ghost command nor breaks discovery by failing the
-    `defineCommand()` check.  [[#857], [#861] by Lee Hoyeon]
-
- -  `runProgram()` now accepts `showUsage: false` for compact command-list
-    help.  The option is forwarded to *@optique/run* so discovered command
-    programs can show the brief and command sections without the expanded
-    `Usage:` synopsis.  [[#856], [#860]]
-
- -  `runProgram()` and `createProgramParser()` now accept
-    `commandList: "top-level"` for compact root command menus.  The default
-    remains recursive, while the new mode lists first-level command groups and
-    leaves nested command help available through `<command> --help`.
-    [[#864], [#865]]
-
-[#830]: https://github.com/dahlia/optique/issues/830
-[#835]: https://github.com/dahlia/optique/issues/835
-[#838]: https://github.com/dahlia/optique/issues/838
-[#839]: https://github.com/dahlia/optique/pull/839
-[#840]: https://github.com/dahlia/optique/pull/840
-[#841]: https://github.com/dahlia/optique/pull/841
-[#851]: https://github.com/dahlia/optique/pull/851
-[#854]: https://github.com/dahlia/optique/issues/854
-[#857]: https://github.com/dahlia/optique/issues/857
-[#858]: https://github.com/dahlia/optique/pull/858
-[#861]: https://github.com/dahlia/optique/pull/861
-
-### @optique/run
-
- -  Added `showUsage` to `RunOptions`.  Passing `showUsage: false` omits the
-    `Usage:` synopsis from full help pages produced by `run()`, `runSync()`,
-    and `runAsync()`, while usage-only error output remains unchanged.
-    [[#856], [#860]]
-
- -  Added `commandList` to `RunOptions`.  Passing
-    `commandList: "top-level"` makes top-level help pages list only
-    first-level commands; the default `"recursive"` mode preserves the
-    existing full command list.  [[#864], [#865]]
-
 ### @optique/prompt
 
  -  Added the new *@optique/prompt* package for building prompt-library
@@ -228,6 +215,20 @@ To be released.
 
  -  Refactored `prompt()` to use *@optique/prompt* internally while preserving
     the existing public API and Inquirer.js config types.  [[#837], [#844]]
+
+### @optique/logtape
+
+ -  Added formatter support to *@optique/logtape*.  The new
+    `ConsoleSinkOptions.formatter` option customizes output from
+    `createConsoleSink()` and console outputs created through `createSink()`
+    using LogTape's `TextFormatter` or `ConsoleFormatter` types.  The new
+    `textFormatter()` parses `"jsonl"`, `"logfmt"`, `"color"`, and `"plain"`
+    into LogTape's built-in text formatters, while the new `formatter` option
+    on `logOutput()` and `loggingOptions()` wires parsed or fixed text
+    formatters into console and file sinks.  Existing stderr/stdout stream
+    selection behavior remains unchanged.  [[#867]]
+
+[#867]: https://github.com/dahlia/optique/pull/867
 
 
 Version 1.1.1

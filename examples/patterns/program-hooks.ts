@@ -3,7 +3,11 @@ import { message, text } from "@optique/core/message";
 import { withDefault } from "@optique/core/modifiers";
 import { option } from "@optique/core/primitives";
 import { choice, string } from "@optique/core/valueparser";
-import { defineCommand, runProgram } from "@optique/discover";
+import {
+  defineCommand,
+  type ProgramHookContext,
+  runProgram,
+} from "@optique/discover";
 import { print } from "@optique/run";
 import process from "node:process";
 
@@ -48,9 +52,8 @@ const build = defineCommand({
   metadata: { brief: message`Build the project.` },
   // build has no command-level hooks, so its handler receives the program-level
   // scope opened by the program beforeEach below.
-  handler(value, context) {
-    const scope = context?.resource as Scope;
-    scope.log(`compiling ${value.target}`);
+  handler(value, context?: ProgramHookContext<Scope>) {
+    context?.resource?.log(`compiling ${value.target}`);
   },
 });
 
@@ -76,22 +79,19 @@ const deploy = defineCommand({
     // try/finally would: afterEach runs after a successful handler, onError
     // after a failing one.
     afterEach(context) {
-      const scope = context.resource as Scope;
-      scope.log("released auth token");
+      context.resource?.log("released auth token");
     },
     onError(context) {
-      const scope = context.resource as Scope | undefined;
-      scope?.log("released auth token");
+      context.resource?.log("released auth token");
     },
   },
   handler(value, context) {
-    const scope = context?.resource as Scope;
     const action = value.dryRun ? "planning" : "deploying";
-    scope.log(`${action} ${value.environment}`);
+    context?.resource?.log(`${action} ${value.environment}`);
   },
 });
 
-await runProgram({
+await runProgram<Scope>({
   commands: [build, deploy],
   metadata: {
     name: "tasks",
@@ -109,7 +109,8 @@ await runProgram({
       return { resource: openScope(label) };
     },
     afterEach(context) {
-      const scope = context.resource as Scope;
+      const scope = context.resource;
+      if (scope == null) return;
       print(
         message`✔ ${text(scope.label)} finished in ${
           text(`${Date.now() - scope.startedAt}ms`)
@@ -119,7 +120,7 @@ await runProgram({
     onError(context, error) {
       // beforeEach may have failed before opening a scope, so the resource can
       // be absent here.
-      const scope = context.resource as Scope | undefined;
+      const scope = context.resource;
       const label = scope?.label ?? "tasks";
       print(message`✘ ${text(label)} failed: ${text(String(error))}`);
     },

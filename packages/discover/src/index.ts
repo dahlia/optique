@@ -37,13 +37,14 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   type AnyCommand,
-  type AnyStaticCommand,
   type CommandMetadata,
   type CommandPath,
   isCommand,
   type ProgramHookContext,
   type ProgramHooks,
   type ProgramInvocation,
+  type RunProgramCommand,
+  type RunProgramStaticCommand,
   validateHooks,
 } from "./command.ts";
 
@@ -58,6 +59,8 @@ export type {
   ProgramHookContext,
   ProgramHooks,
   ProgramInvocation,
+  RunProgramCommand,
+  RunProgramStaticCommand,
   StaticCommand,
 } from "./command.ts";
 
@@ -81,6 +84,23 @@ export interface CommandEntry {
    */
   readonly command: AnyCommand;
 }
+
+/**
+ * A command entry accepted by `runProgram()` with a program-level resource
+ * type.
+ *
+ * @template R The resource made available by program-level lifecycle hooks.
+ * @since 1.2.0
+ */
+export type RunProgramCommandEntry<R = unknown> =
+  & Omit<CommandEntry, "command">
+  & {
+    /**
+     * A command compatible with the program-level resource, or one that
+     * always creates its own command context.
+     */
+    readonly command: RunProgramCommand<R>;
+  };
 
 /**
  * A command found on disk.
@@ -107,9 +127,16 @@ export interface DiscoveredCommand extends CommandEntry {
 /**
  * A command loaded from a static module map.
  *
+ * @template R The program-level resource used by commands without their own
+ *              `beforeEach` hook.
  * @since 1.2.0
  */
-export interface ModuleCommand extends CommandEntry {
+export interface ModuleCommand<R = unknown> extends CommandEntry {
+  /**
+   * The command definition.
+   */
+  readonly command: RunProgramCommand<R>;
+
   /**
    * Module map key used to derive the command path.
    */
@@ -217,7 +244,7 @@ export interface RuntimeExtensionOptions {
   readonly nodeTypeScriptSupport?: boolean;
 }
 
-interface RunProgramBaseOptions extends
+interface RunProgramBaseOptions<R = unknown> extends
   Omit<
     RunOptions,
     "help" | "version" | "completion" | "programName"
@@ -267,15 +294,17 @@ interface RunProgramBaseOptions extends
    *
    * @since 1.2.0
    */
-  readonly hooks?: ProgramHooks;
+  readonly hooks?: ProgramHooks<R>;
 }
 
 /**
  * Options for {@link runProgram} when discovering commands from files.
  *
+ * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.1.0
  */
-export interface RunProgramDiscoveryOptions extends RunProgramBaseOptions {
+export interface RunProgramDiscoveryOptions<R = unknown>
+  extends RunProgramBaseOptions<R> {
   /**
    * Directory containing command modules.
    */
@@ -304,16 +333,21 @@ export interface RunProgramDiscoveryOptions extends RunProgramBaseOptions {
 /**
  * Options for {@link runProgram} when commands are imported manually.
  *
+ * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.1.0
  */
-export interface RunProgramStaticOptions extends RunProgramBaseOptions {
+export interface RunProgramStaticOptions<R = unknown>
+  extends RunProgramBaseOptions<R> {
   /**
    * Commands to compose without file-system discovery.
    *
    * Pass commands that declare their own `path`, or command entries returned
    * by {@link commandsFromModules}.
    */
-  readonly commands: readonly (AnyStaticCommand | CommandEntry)[];
+  readonly commands: readonly (
+    | RunProgramStaticCommand<NoInfer<R>>
+    | RunProgramCommandEntry<NoInfer<R>>
+  )[];
 
   /**
    * File-system discovery cannot be used together with `commands`.
@@ -334,11 +368,12 @@ export interface RunProgramStaticOptions extends RunProgramBaseOptions {
 /**
  * Options for {@link runProgram}.
  *
+ * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.1.0
  */
-export type RunProgramOptions =
-  | RunProgramDiscoveryOptions
-  | RunProgramStaticOptions;
+export type RunProgramOptions<R = unknown> =
+  | RunProgramDiscoveryOptions<R>
+  | RunProgramStaticOptions<R>;
 
 /**
  * Returns runtime-aware command module suffixes.
@@ -427,6 +462,8 @@ export async function discoverCommands(
  * see module maps, such as `import.meta.glob(..., { eager: true })`, while
  * still deriving command paths from file-like module keys.
  *
+ * @template R The program-level resource used by commands without their own
+ *             `beforeEach` hook.
  * @param modules Static module map keyed by module path.
  * @param options Module path derivation options.
  * @returns Command entries sorted by command path.
@@ -436,12 +473,15 @@ export async function discoverCommands(
  *         `path` does not match the module-derived path.
  * @since 1.2.0
  */
-export function commandsFromModules(
+export function commandsFromModules<R = unknown>(
   modules: ModuleMap,
   options: CommandsFromModulesOptions = {},
-): readonly ModuleCommand[] {
+): readonly ModuleCommand<R>[] {
+  if (Array.isArray(modules)) {
+    throw new TypeError("Expected object, got array.");
+  }
   if (modules == null || typeof modules !== "object") {
-    throw new TypeError("commandsFromModules() requires a module map object.");
+    throw new TypeError("Expected object.");
   }
   const base = normalizeModuleBase(options.base);
   const extensions = normalizeExtensions(
@@ -453,7 +493,7 @@ export function commandsFromModules(
   );
 
   const seen = new Map<string, string>();
-  const discovered: ModuleCommand[] = [];
+  const discovered: ModuleCommand<R>[] = [];
   for (const modulePath of modulePaths) {
     const moduleBaseName = posix.basename(modulePath);
     if (
@@ -480,10 +520,12 @@ export function commandsFromModules(
     }
     seen.set(key, modulePath);
 
+    // ModuleMap values are opaque at this boundary.  R is the caller's shared
+    // resource contract for commands whose own beforeEach does not replace it.
     const commandDefinition = commandFromModuleExport(
       modulePath,
       modules[modulePath],
-    );
+    ) as RunProgramCommand<R>;
     validateDeclaredCommandPath(
       commandDefinition,
       path,
@@ -531,6 +573,7 @@ export function createProgramParser(
 /**
  * Discovers and runs a command program.
  *
+ * @template R The resource made available by program-level lifecycle hooks.
  * @param options Program options.
  * @returns A promise that resolves after the selected command handler
  *          completes.
@@ -538,7 +581,15 @@ export function createProgramParser(
  *         malformed.
  * @since 1.1.0
  */
-export async function runProgram(options: RunProgramOptions): Promise<void> {
+export async function runProgram<R = unknown>(
+  options: RunProgramOptions<R>,
+): Promise<void> {
+  if (Array.isArray(options)) {
+    throw new TypeError("Expected object, got array.");
+  }
+  if (options == null || typeof options !== "object") {
+    throw new TypeError("Expected object.");
+  }
   if (options.hooks != null) validateHooks(options.hooks, "Program");
   let commands: readonly Pick<DiscoveredCommand, "path" | "command">[];
   if (isStaticRunProgramOptions(options)) {
@@ -573,28 +624,38 @@ export async function runProgram(options: RunProgramOptions): Promise<void> {
  * @throws The original error thrown by `beforeEach`, the handler, or
  *         `afterEach`, re-thrown after the `onError` hooks run.
  */
-async function dispatchInvocation(
+async function dispatchInvocation<R>(
   invocation: ProgramInvocation,
-  programHooks: ProgramHooks | undefined,
+  programHooks: ProgramHooks<R> | undefined,
 ): Promise<void> {
-  const commandHooks = invocation.command.hooks;
+  // Command collections erase each command's resource type because commands
+  // may use different resources.  The dispatcher only forwards the value
+  // between callbacks from the same hook scope.
+  const commandHooks = invocation.command.hooks as
+    | ProgramHooks<unknown>
+    | undefined;
   await runHookScope(
     programHooks,
     invocation,
     (programContext) =>
-      runHookScope(commandHooks, invocation, (commandContext) => {
-        // Pass the hook context only when a beforeEach actually produced one,
-        // using the most specific scope.  When no beforeEach ran, call the
-        // handler with just the value so handlers see the exact single-argument
-        // call shape of a plain runProgram() without hooks.
-        if (commandHooks?.beforeEach != null) {
-          return invocation.handler(invocation.value, commandContext);
-        }
-        if (programHooks?.beforeEach != null) {
-          return invocation.handler(invocation.value, programContext);
-        }
-        return invocation.handler(invocation.value);
-      }),
+      runHookScope(
+        commandHooks,
+        invocation,
+        (commandContext) => {
+          // Pass the hook context only when a beforeEach actually produced one,
+          // using the most specific scope.  When no beforeEach ran, call the
+          // handler with just the value so handlers see the exact single-argument
+          // call shape of a plain runProgram() without hooks.
+          if (commandHooks?.beforeEach != null) {
+            return invocation.handler(invocation.value, commandContext);
+          }
+          if (programHooks?.beforeEach != null) {
+            return invocation.handler(invocation.value, programContext);
+          }
+          return invocation.handler(invocation.value);
+        },
+        programContext,
+      ),
   );
 }
 
@@ -604,17 +665,21 @@ async function dispatchInvocation(
  * @param hooks The hooks for this scope, if any.
  * @param invocation The selected command invocation passed to `beforeEach`.
  * @param inner The step to wrap; receives the context from `beforeEach`.
+ * @param fallbackContext The context used when `beforeEach` is absent.
  * @returns The value returned by `inner`.
  * @throws The original error thrown by `beforeEach`, `inner`, or `afterEach`,
  *         re-thrown after `onError` runs.  An error thrown by `onError` itself
  *         is suppressed so it cannot mask the original failure.
  */
-async function runHookScope(
-  hooks: ProgramHooks | undefined,
+async function runHookScope<R>(
+  hooks: ProgramHooks<R> | undefined,
   invocation: ProgramInvocation,
-  inner: (context: ProgramHookContext) => unknown | Promise<unknown>,
+  inner: (context: ProgramHookContext<R>) => unknown | Promise<unknown>,
+  fallbackContext: ProgramHookContext<R> = {},
 ): Promise<unknown> {
-  let context: ProgramHookContext = {};
+  let context: ProgramHookContext<R> = hooks?.beforeEach == null
+    ? fallbackContext
+    : {};
   try {
     // Default a nullish beforeEach result to an empty context so afterEach,
     // onError, and the handler never receive null/undefined.
@@ -944,9 +1009,9 @@ function sortCommands<T extends Pick<DiscoveredCommand, "path">>(
   );
 }
 
-function isStaticRunProgramOptions(
-  options: RunProgramOptions,
-): options is RunProgramStaticOptions {
+function isStaticRunProgramOptions<R>(
+  options: RunProgramOptions<R>,
+): options is RunProgramStaticOptions<R> {
   const hasCommands = "commands" in options && options.commands != null;
   const hasDir = "dir" in options && options.dir != null;
   if (hasCommands === hasDir) {
@@ -957,8 +1022,11 @@ function isStaticRunProgramOptions(
   return hasCommands;
 }
 
-function staticCommandsToEntries(
-  commands: readonly (AnyStaticCommand | CommandEntry)[],
+function staticCommandsToEntries<R>(
+  commands: readonly (
+    | RunProgramStaticCommand<R>
+    | RunProgramCommandEntry<R>
+  )[],
 ): readonly CommandEntry[] {
   return commands.map((entry) => {
     if (isCommandEntry(entry)) return entry;
@@ -1823,7 +1891,7 @@ function commandPathHidden(
   return hidden;
 }
 
-function buildRunOptions(options: RunProgramOptions): RunOptions {
+function buildRunOptions<R>(options: RunProgramOptions<R>): RunOptions {
   const metadata = options.metadata;
   const {
     dir: _dir,

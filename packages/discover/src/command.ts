@@ -32,14 +32,15 @@ export type CommandPath = readonly string[];
  * {@link ProgramHooks.afterEach} and {@link ProgramHooks.onError} hooks.  This
  * threads handler-time resources without global state.
  *
+ * @template R The caller-defined resource stored in the context.
  * @since 1.2.0
  */
-export interface ProgramHookContext {
+export interface ProgramHookContext<R = unknown> {
   /**
    * Caller-defined resource.  Common shapes include a database pool, a logger
    * scope, or a tracing span.
    */
-  readonly resource?: unknown;
+  readonly resource?: R;
 }
 
 /**
@@ -104,9 +105,10 @@ export interface ProgramInvocation {
  * program.onError    ← command.onError    ← on failure
  * ```
  *
+ * @template R The resource returned by `beforeEach` and passed to later hooks.
  * @since 1.2.0
  */
-export interface ProgramHooks {
+export interface ProgramHooks<R = unknown> {
   /**
    * Called before the command handler runs, receiving the matched command, its
    * resolved {@link ProgramInvocation.path}, the parsed value, and the handler
@@ -125,10 +127,10 @@ export interface ProgramHooks {
   readonly beforeEach?: (
     invocation: ProgramInvocation,
   ) =>
-    | ProgramHookContext
+    | ProgramHookContext<R>
     | null
     | void
-    | Promise<ProgramHookContext | null | void>;
+    | Promise<ProgramHookContext<R> | null | void>;
 
   /**
    * Called after the handler returns successfully, receiving the context from
@@ -140,7 +142,7 @@ export interface ProgramHooks {
    * invokes {@link onError} with the thrown error.
    */
   readonly afterEach?: (
-    context: ProgramHookContext,
+    context: ProgramHookContext<R>,
     result: unknown,
   ) => void | Promise<void>;
 
@@ -157,19 +159,38 @@ export interface ProgramHooks {
    * Returning a promise is supported; the dispatcher awaits it.
    */
   readonly onError?: (
-    context: ProgramHookContext,
+    context: ProgramHookContext<R>,
     error: unknown,
   ) => void | Promise<void>;
 }
+
+/**
+ * Lifecycle hooks that always create their own command context.
+ *
+ * @internal
+ */
+type ProgramHooksWithBeforeEach<R> = ProgramHooks<R> & {
+  readonly beforeEach: NonNullable<ProgramHooks<R>["beforeEach"]>;
+};
+
+/**
+ * Lifecycle hooks that do not replace the program-level command context.
+ *
+ * @internal
+ */
+type ProgramHooksWithoutBeforeEach<R> =
+  & Omit<ProgramHooks<R>, "beforeEach">
+  & { readonly beforeEach?: undefined };
 
 /**
  * Input accepted by {@link defineCommand}.
  *
  * @template M The mode of the command parser.
  * @template T The parsed value passed to the command handler.
+ * @template R The resource made available to lifecycle hooks and the handler.
  * @since 1.1.0
  */
-export interface CommandDefinition<M extends Mode, T> {
+export interface CommandDefinition<M extends Mode, T, R = unknown> {
   /**
    * Command path used when commands are passed directly to `runProgram()`.
    * Use an empty path (`[]`) to register the root command.
@@ -200,7 +221,7 @@ export interface CommandDefinition<M extends Mode, T> {
    *
    * @since 1.2.0
    */
-  readonly hooks?: ProgramHooks;
+  readonly hooks?: ProgramHooks<R>;
 
   /**
    * Handles the parsed command value.
@@ -216,7 +237,7 @@ export interface CommandDefinition<M extends Mode, T> {
    */
   readonly handler: (
     value: T,
-    context?: ProgramHookContext,
+    context?: ProgramHookContext<R>,
   ) => void | Promise<void>;
 }
 
@@ -225,9 +246,11 @@ export interface CommandDefinition<M extends Mode, T> {
  *
  * @template M The mode of the command parser.
  * @template T The parsed value passed to the command handler.
+ * @template R The resource made available to lifecycle hooks and the handler.
  * @since 1.1.0
  */
-export interface Command<M extends Mode, T> extends CommandDefinition<M, T> {
+export interface Command<M extends Mode, T, R = unknown>
+  extends CommandDefinition<M, T, R> {
   /**
    * Internal marker used to validate discovered modules.
    *
@@ -243,13 +266,71 @@ export interface Command<M extends Mode, T> extends CommandDefinition<M, T> {
  *
  * @template M The mode of the command parser.
  * @template T The parsed value passed to the command handler.
+ * @template R The resource made available to lifecycle hooks and the handler.
  * @since 1.1.0
  */
-export interface StaticCommand<M extends Mode, T> extends Command<M, T> {
+export interface StaticCommand<M extends Mode, T, R = unknown>
+  extends Command<M, T, R> {
   /**
    * Command path used by static command registration.
    */
   readonly path: CommandPath;
+}
+
+/**
+ * A command whose hooks always create their own command context.
+ *
+ * @internal
+ */
+type CommandWithBeforeEach<M extends Mode, T, R> = Command<M, T, R> & {
+  readonly hooks: ProgramHooksWithBeforeEach<R>;
+};
+
+/**
+ * A static command whose hooks always create their own command context.
+ *
+ * @internal
+ */
+type StaticCommandWithBeforeEach<M extends Mode, T, R> =
+  & StaticCommand<M, T, R>
+  & CommandWithBeforeEach<M, T, R>;
+
+/**
+ * A command that does not create its own command context.
+ *
+ * @internal
+ */
+type CommandWithoutBeforeEach<M extends Mode, T, R> =
+  & Omit<Command<M, T, R>, "hooks">
+  & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> };
+
+/**
+ * A static command that does not create its own command context.
+ *
+ * @internal
+ */
+type StaticCommandWithoutBeforeEach<M extends Mode, T, R> =
+  & Omit<StaticCommand<M, T, R>, "hooks">
+  & CommandWithoutBeforeEach<M, T, R>;
+
+/**
+ * Lifecycle hooks whose caller-defined resource type has been erased.
+ *
+ * @internal
+ */
+interface ErasedProgramHooks {
+  readonly beforeEach?: ProgramHooks<unknown>["beforeEach"];
+  readonly afterEach?: ProgramHooks<never>["afterEach"];
+  readonly onError?: ProgramHooks<never>["onError"];
+}
+
+/**
+ * Erased lifecycle hooks that always create their own command context.
+ *
+ * @internal
+ */
+interface ErasedProgramHooksWithBeforeEach extends ErasedProgramHooks {
+  readonly beforeEach: NonNullable<ErasedProgramHooks["beforeEach"]>;
 }
 
 /**
@@ -261,13 +342,18 @@ export interface StaticCommand<M extends Mode, T> extends Command<M, T> {
  *
  * @since 1.1.0
  */
-export type AnyCommand = Omit<Command<Mode, unknown>, "handler"> & {
+export type AnyCommand = Omit<Command<Mode, unknown>, "handler" | "hooks"> & {
+  /**
+   * Lifecycle hooks with their caller-defined resource type erased.
+   */
+  readonly hooks?: ErasedProgramHooks;
+
   /**
    * Erased command handler.
    */
   readonly handler: (
     value: never,
-    context?: ProgramHookContext,
+    context?: ProgramHookContext<never>,
   ) => void | Promise<void>;
 };
 
@@ -276,15 +362,100 @@ export type AnyCommand = Omit<Command<Mode, unknown>, "handler"> & {
  *
  * @since 1.1.0
  */
-export type AnyStaticCommand = Omit<StaticCommand<Mode, unknown>, "handler"> & {
-  /**
-   * Erased command handler.
-   */
-  readonly handler: (
-    value: never,
-    context?: ProgramHookContext,
-  ) => void | Promise<void>;
+export type AnyStaticCommand =
+  & Omit<
+    StaticCommand<Mode, unknown>,
+    "handler" | "hooks"
+  >
+  & {
+    /**
+     * Lifecycle hooks with their caller-defined resource type erased.
+     */
+    readonly hooks?: ErasedProgramHooks;
+
+    /**
+     * Erased command handler.
+     */
+    readonly handler: (
+      value: never,
+      context?: ProgramHookContext<never>,
+    ) => void | Promise<void>;
+  };
+
+/**
+ * A type-erased command whose handler consumes a program-level resource.
+ *
+ * @internal
+ */
+type ProgramResourceCommand<R> =
+  & Omit<Command<Mode, unknown, R>, "handler">
+  & {
+    readonly handler: (
+      value: never,
+      context?: ProgramHookContext<R>,
+    ) => void | Promise<void>;
+  };
+
+/**
+ * A type-erased command that always creates its own command context.
+ *
+ * @internal
+ */
+type OwnResourceCommand = Omit<AnyCommand, "hooks"> & {
+  readonly hooks: ErasedProgramHooksWithBeforeEach;
 };
+
+/**
+ * A type-erased static command whose handler consumes a program-level
+ * resource.
+ *
+ * @internal
+ */
+type ProgramResourceStaticCommand<R> =
+  & Omit<StaticCommand<Mode, unknown, R>, "handler">
+  & {
+    readonly handler: (
+      value: never,
+      context?: ProgramHookContext<R>,
+    ) => void | Promise<void>;
+  };
+
+/**
+ * A type-erased static command that always creates its own command context.
+ *
+ * @internal
+ */
+type OwnResourceStaticCommand = Omit<AnyStaticCommand, "hooks"> & {
+  readonly hooks: ErasedProgramHooksWithBeforeEach;
+};
+
+/**
+ * A command accepted by `runProgram()` with a program-level resource type.
+ *
+ * Commands without a command-level `beforeEach` must consume `R`.  A command
+ * that always creates its own context may use a different resource type.
+ * Untyped calls retain the fully erased command shape for compatibility.
+ *
+ * @template R The resource made available by program-level lifecycle hooks.
+ * @since 1.2.0
+ */
+export type RunProgramCommand<R = unknown> = unknown extends R ? AnyCommand
+  : ProgramResourceCommand<R> | OwnResourceCommand;
+
+/**
+ * A static command accepted by `runProgram()` with a program-level resource
+ * type.
+ *
+ * Commands without a command-level `beforeEach` must consume `R`.  A command
+ * that always creates its own context may use a different resource type.
+ * Untyped calls retain the fully erased command shape for compatibility.
+ *
+ * @template R The resource made available by program-level lifecycle hooks.
+ * @since 1.2.0
+ */
+export type RunProgramStaticCommand<R = unknown> = unknown extends R
+  ? AnyStaticCommand
+  : ProgramResourceStaticCommand<R> | OwnResourceStaticCommand;
 
 /**
  * Defines a command module for `@optique/discover`.
@@ -294,21 +465,50 @@ export type AnyStaticCommand = Omit<StaticCommand<Mode, unknown>, "handler"> & {
  *
  * @template M The mode of the command parser.
  * @template T The parsed value passed to the command handler.
+ * @template R The resource made available to lifecycle hooks and the handler.
  * @param command The command definition.
  * @returns The same command definition with inferred types.
  * @throws {TypeError} If the parser, path, handler, or hooks are missing or
  *         malformed.
  * @since 1.1.0
  */
-export function defineCommand<M extends Mode, T>(
-  command: CommandDefinition<M, T> & { readonly path: CommandPath },
-): StaticCommand<M, T>;
-export function defineCommand<M extends Mode, T>(
-  command: CommandDefinition<M, T>,
-): Command<M, T>;
-export function defineCommand<M extends Mode, T>(
-  command: CommandDefinition<M, T>,
-): Command<M, T> {
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & CommandDefinition<M, T, R>
+    & { readonly path: CommandPath }
+    & { readonly hooks: ProgramHooksWithBeforeEach<R> },
+): StaticCommandWithBeforeEach<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & Omit<CommandDefinition<M, T, R>, "hooks">
+    & { readonly path: CommandPath }
+    & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> },
+): StaticCommandWithoutBeforeEach<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & CommandDefinition<M, T, R>
+    & { readonly hooks: ProgramHooksWithBeforeEach<R> },
+): CommandWithBeforeEach<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command:
+    & Omit<CommandDefinition<M, T, R>, "hooks">
+    & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> },
+): CommandWithoutBeforeEach<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command: CommandDefinition<M, T, R> & { readonly path: CommandPath },
+): StaticCommand<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command: CommandDefinition<M, T, R>,
+): Command<M, T, R>;
+export function defineCommand<M extends Mode, T, R = unknown>(
+  command: CommandDefinition<M, T, R>,
+): Command<M, T, R> {
+  if (Array.isArray(command)) {
+    throw new TypeError("Expected object, got array.");
+  }
+  if (command == null || typeof command !== "object") {
+    throw new TypeError("Expected object.");
+  }
   if (!isParser(command.parser)) {
     throw new TypeError("Command parser must be an Optique parser.");
   }
