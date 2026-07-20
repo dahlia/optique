@@ -2371,7 +2371,7 @@ export default defineCommand({
 #### Per-command preflight
 
 When only one command needs its own setup—for example, a `deploy` command that
-always refreshes an auth token — put the hooks on the command definition instead
+always refreshes an auth token—put the hooks on the command definition instead
 of the program.  Command-level hooks nest inside the program-level ones, so the
 program hook still wraps every command:
 

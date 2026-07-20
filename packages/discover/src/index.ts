@@ -629,19 +629,24 @@ async function dispatchInvocation<R>(
     programHooks,
     invocation,
     (programContext) =>
-      runHookScope(commandHooks, invocation, (commandContext) => {
-        // Pass the hook context only when a beforeEach actually produced one,
-        // using the most specific scope.  When no beforeEach ran, call the
-        // handler with just the value so handlers see the exact single-argument
-        // call shape of a plain runProgram() without hooks.
-        if (commandHooks?.beforeEach != null) {
-          return invocation.handler(invocation.value, commandContext);
-        }
-        if (programHooks?.beforeEach != null) {
-          return invocation.handler(invocation.value, programContext);
-        }
-        return invocation.handler(invocation.value);
-      }),
+      runHookScope(
+        commandHooks,
+        invocation,
+        (commandContext) => {
+          // Pass the hook context only when a beforeEach actually produced one,
+          // using the most specific scope.  When no beforeEach ran, call the
+          // handler with just the value so handlers see the exact single-argument
+          // call shape of a plain runProgram() without hooks.
+          if (commandHooks?.beforeEach != null) {
+            return invocation.handler(invocation.value, commandContext);
+          }
+          if (programHooks?.beforeEach != null) {
+            return invocation.handler(invocation.value, programContext);
+          }
+          return invocation.handler(invocation.value);
+        },
+        programContext,
+      ),
   );
 }
 
@@ -651,6 +656,7 @@ async function dispatchInvocation<R>(
  * @param hooks The hooks for this scope, if any.
  * @param invocation The selected command invocation passed to `beforeEach`.
  * @param inner The step to wrap; receives the context from `beforeEach`.
+ * @param fallbackContext The context used when `beforeEach` is absent.
  * @returns The value returned by `inner`.
  * @throws The original error thrown by `beforeEach`, `inner`, or `afterEach`,
  *         re-thrown after `onError` runs.  An error thrown by `onError` itself
@@ -660,8 +666,9 @@ async function runHookScope<R>(
   hooks: ProgramHooks<R> | undefined,
   invocation: ProgramInvocation,
   inner: (context: ProgramHookContext<R>) => unknown | Promise<unknown>,
+  fallbackContext: ProgramHookContext<R> = {},
 ): Promise<unknown> {
-  let context: ProgramHookContext<R> = {};
+  let context = fallbackContext;
   try {
     // Default a nullish beforeEach result to an empty context so afterEach,
     // onError, and the handler never receive null/undefined.

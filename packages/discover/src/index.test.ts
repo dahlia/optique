@@ -2830,6 +2830,53 @@ describe("runProgram() lifecycle hooks", () => {
     assert.equal(received, "program");
   });
 
+  it("should pass program context to command afterEach without beforeEach", async () => {
+    let received: unknown;
+    const deploy = defineCommand({
+      path: ["deploy"],
+      parser: object({}),
+      hooks: {
+        afterEach(context) {
+          received = context.resource;
+        },
+      },
+      handler() {},
+    });
+
+    await runHooked([deploy], ["deploy"], {
+      beforeEach: () => ({ resource: "program" }),
+    });
+
+    assert.equal(received, "program");
+  });
+
+  it("should pass program context to command onError without beforeEach", async () => {
+    const error = new Error("boom");
+    let received: unknown;
+    const fail = defineCommand({
+      path: ["fail"],
+      parser: object({}),
+      hooks: {
+        onError(context) {
+          received = context.resource;
+        },
+      },
+      handler() {
+        throw error;
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        runHooked([fail], ["fail"], {
+          beforeEach: () => ({ resource: "program" }),
+        }),
+      (caught) => caught === error,
+    );
+
+    assert.equal(received, "program");
+  });
+
   it("runs command onError before program onError on failure", async () => {
     const order: string[] = [];
     const error = new Error("boom");
