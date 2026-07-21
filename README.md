@@ -248,7 +248,8 @@ The following is a list of the available packages:
 Contributing
 ------------
 
-Contributions are welcome!  Please read our [AI usage policy] before
-submitting a pull request.
+Contributions are welcome!  Read the [contributing guide] before working on a
+change.  If you use an AI tool, also read the [AI usage policy].
 
+[contributing guide]: ./CONTRIBUTING.md
 [AI usage policy]: ./AI_POLICY.md

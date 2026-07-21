@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/javascript-testing-expert/SKILL.md",
       "computedHash": "283ab6afbc474024b955bf2aa3333805fbbbc3b8c91e3074e9fd271b470bbcfb"
+    },
+    "sacho": {
+      "source": "dahlia/sacho",
+      "sourceType": "github",
+      "skillPath": "skills/sacho/SKILL.md",
+      "computedHash": "b0649b5646363db5aa2a7790aa545963bb2bcb246e7d2dd73838b4ab0788cda7"
     }
   }
 }

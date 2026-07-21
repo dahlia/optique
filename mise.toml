@@ -5,6 +5,7 @@ experimental = true
 "aqua:fish-shell/fish-shell" = "latest"
 bun = "1.3"
 deno = "2.8"
+"github:dahlia/sacho" = "0.1.0"
 "github:PowerShell/PowerShell" = "latest"
 "github:nushell/nushell" = "latest"
 "github:pnpm/pnpm" = "11"
@@ -23,12 +24,30 @@ auto = true
 [deps.pnpm]
 auto = true
 
-[hooks]
-postinstall = ["mise deps", "mise generate git-pre-commit --task check --write"]
+[hooks.postinstall]
+shell = "nu -c"
+run = """
+mise deps
+mise generate git-pre-commit --write --task=check
+'#!/bin/sh
+sacho hook-commit-msg "$1"' | save --force .git/hooks/commit-msg
+'#!/bin/sh
+if test "$1" = prepared; then
+  sacho_state=$(git rev-parse --git-path sacho-commit-state) || exit $?
+  if test -f "$sacho_state"; then
+    sacho hook-reference-transaction "$1"
+  fi
+fi' | save --force .git/hooks/reference-transaction
+if $nu.os-info.name != 'windows' {
+  chmod +x .git/hooks/commit-msg .git/hooks/reference-transaction
+}
+sacho init --no-interactive
+"""
 
 [tasks.check]
 description = "Check code formatting, linting, and type checking"
 depends = ["check:*"]
+run = "sacho check"
 
 [tasks."check:versions"]
 description = "Check that all subpackages have matching versions"

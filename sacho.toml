@@ -1,0 +1,99 @@
+[changelog]
+path = "CHANGES.md"
+title = "Optique changelog"
+unreleased-heading = "To be released."
+materialize = true
+region-detection = "heading"
+
+[fragments]
+directory = "changes.d"
+next-file = "next"
+
+[links]
+"#" = "https://github.com/dahlia/optique/issues/{n}"
+
+[vcs]
+preset = "git"
+
+[check]
+paths = []
+
+[[sections]]
+id = "@optique/core"
+directory = "core"
+paths = ["packages/core/**"]
+
+[[sections]]
+id = "@optique/run"
+directory = "run"
+paths = ["packages/run/**"]
+
+[[sections]]
+id = "@optique/discover"
+directory = "discover"
+paths = ["packages/discover/**"]
+
+[[sections]]
+id = "@optique/config"
+directory = "config"
+paths = ["packages/config/**"]
+
+[[sections]]
+id = "@optique/clack"
+directory = "clack"
+paths = ["packages/clack/**"]
+
+[[sections]]
+id = "@optique/derived-defaults"
+directory = "derived-defaults"
+paths = ["packages/derived-defaults/**"]
+
+[[sections]]
+id = "@optique/env"
+directory = "env"
+paths = ["packages/env/**"]
+
+[[sections]]
+id = "@optique/git"
+directory = "git"
+paths = ["packages/git/**"]
+
+[[sections]]
+id = "@optique/logtape"
+directory = "logtape"
+paths = ["packages/logtape/**"]
+
+[[sections]]
+id = "@optique/man"
+directory = "man"
+paths = ["packages/man/**"]
+
+[[sections]]
+id = "@optique/standard-schema"
+directory = "standard-schema"
+paths = ["packages/standard-schema/**"]
+
+[[sections]]
+id = "@optique/temporal"
+directory = "temporal"
+paths = ["packages/temporal/**"]
+
+[[sections]]
+id = "@optique/valibot"
+directory = "valibot"
+paths = ["packages/valibot/**"]
+
+[[sections]]
+id = "@optique/zod"
+directory = "zod"
+paths = ["packages/zod/**"]
+
+[[sections]]
+id = "@optique/inquirer"
+directory = "inquirer"
+paths = ["packages/inquirer/**"]
+
+[[sections]]
+id = "@optique/prompt"
+directory = "prompt"
+paths = ["packages/prompt/**"]
