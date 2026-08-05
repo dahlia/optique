@@ -123,6 +123,18 @@ const upperName = prompt(option("--name", string()), {
 
 upperName.mode;
 //        ^? const upperName: import("@optique/core/fluent").FluentParser<"async", string, unknown>
+
+
+
+
+
+
+
+
+
+
+
+// `upperName` is a fluent async parser
 ~~~~
 
 
