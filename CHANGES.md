@@ -9,6 +9,23 @@ Version 1.3.0
 To be released.
 
 
+Version 1.2.1
+-------------
+
+Released on August 13, 2026.
+
+### @optique/core
+
+ -  Fixed shell completion omitting descriptions for `option()` and `flag()`
+    suggestions.  Descriptions now appear in zsh, fish, PowerShell, and
+    Nushell; command suggestions also prefer `brief` over the longer
+    `description`, matching command lists.  Bash completion remains unchanged
+    because Bash cannot associate descriptions with completion candidates.
+    [[#883]]
+
+[#883]: https://github.com/dahlia/optique/issues/883
+
+
 Version 1.2.0
 -------------
 
@@ -235,6 +252,21 @@ Released on July 21, 2026.
     selection behavior remains unchanged.  [[#867]]
 
 [#867]: https://github.com/dahlia/optique/pull/867
+
+
+Version 1.1.2
+-------------
+
+Released on August 13, 2026.
+
+### @optique/core
+
+ -  Fixed shell completion omitting descriptions for `option()` and `flag()`
+    suggestions.  Descriptions now appear in zsh, fish, PowerShell, and
+    Nushell; command suggestions also prefer `brief` over the longer
+    `description`, matching command lists.  Bash completion remains unchanged
+    because Bash cannot associate descriptions with completion candidates.
+    [[#883]]
 
 
 Version 1.1.1
@@ -498,6 +530,21 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.4
+-------------
+
+Released on August 13, 2026.
+
+### @optique/core
+
+ -  Fixed shell completion omitting descriptions for `option()` and `flag()`
+    suggestions.  Descriptions now appear in zsh, fish, PowerShell, and
+    Nushell; command suggestions also prefer `brief` over the longer
+    `description`, matching command lists.  Bash completion remains unchanged
+    because Bash cannot associate descriptions with completion candidates.
+    [[#883]]
 
 
 Version 1.0.3

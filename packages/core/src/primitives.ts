@@ -501,6 +501,7 @@ function* suggestOptionSync<T>(
   optionNames: readonly string[],
   valueParser: ValueParser<"sync", T> | undefined,
   hidden: boolean,
+  description: Message | undefined,
   context: ParserContext<
     ValueParserResult<T | boolean> | undefined
   >,
@@ -562,7 +563,11 @@ function* suggestOptionSync<T>(
           if (prefix === "-" && optionName.length !== 2) {
             continue;
           }
-          yield { kind: "literal", text: optionName };
+          yield {
+            kind: "literal",
+            text: optionName,
+            ...(description && { description }),
+          };
         }
       }
     }
@@ -682,6 +687,7 @@ async function* suggestOptionAsync<T>(
   optionNames: readonly string[],
   valueParser: ValueParser<Mode, T> | undefined,
   hidden: boolean,
+  description: Message | undefined,
   context: ParserContext<
     ValueParserResult<T | boolean> | undefined
   >,
@@ -742,7 +748,11 @@ async function* suggestOptionAsync<T>(
           if (prefix === "-" && optionName.length !== 2) {
             continue;
           }
-          yield { kind: "literal", text: optionName };
+          yield {
+            kind: "literal",
+            text: optionName,
+            ...(description && { description }),
+          };
         }
       }
     }
@@ -1335,6 +1345,7 @@ export function option<M extends Mode, T>(
           optionNames,
           valueParser,
           isSuggestionHidden(options.hidden),
+          options.description,
           context,
           prefix,
         );
@@ -1343,6 +1354,7 @@ export function option<M extends Mode, T>(
         optionNames,
         valueParser as ValueParser<"sync", T> | undefined,
         isSuggestionHidden(options.hidden),
+        options.description,
         context,
         prefix,
       );
@@ -1859,7 +1871,13 @@ export function flag(
             if (prefix === "-" && optionName.length !== 2) {
               continue;
             }
-            suggestions.push({ kind: "literal", text: optionName });
+            suggestions.push({
+              kind: "literal",
+              text: optionName,
+              ...(options.description && {
+                description: options.description,
+              }),
+            });
           }
         }
       }
@@ -3010,12 +3028,13 @@ function* suggestCommandSync<T, TState>(
   // Handle different command states
   if (state === undefined) {
     // Command not yet matched - suggest command name if it matches prefix
+    const description = options.brief ?? options.description;
     for (const commandName of [name, ...aliases]) {
       if (commandName.startsWith(prefix)) {
         yield {
           kind: "literal",
           text: commandName,
-          ...(options.description && { description: options.description }),
+          ...(description && { description }),
         };
       }
     }
@@ -3061,12 +3080,13 @@ async function* suggestCommandAsync<T, TState>(
   // Handle different command states
   if (state === undefined) {
     // Command not yet matched - suggest command name if it matches prefix
+    const description = options.brief ?? options.description;
     for (const commandName of [name, ...aliases]) {
       if (commandName.startsWith(prefix)) {
         yield {
           kind: "literal",
           text: commandName,
-          ...(options.description && { description: options.description }),
+          ...(description && { description }),
         };
       }
     }
