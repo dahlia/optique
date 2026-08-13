@@ -654,6 +654,25 @@ describe("option", () => {
       }
     });
 
+    it("should include descriptions in option name suggestions", () => {
+      const description = message`Output format`;
+      const parser = option("-f", "--format", choice(["json", "yaml"]), {
+        description,
+      });
+      const suggestions = Array.from(parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "--f"));
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "--format",
+        description,
+      }]);
+    });
+
     it("should suggest only short options for '-' prefix", () => {
       const parser = option("-v", "--verbose", string());
       const suggestions = Array.from(parser.suggest({
@@ -716,6 +735,31 @@ describe("option", () => {
       }, ""));
 
       assert.deepEqual(suggestions, []);
+    });
+
+    it("should include descriptions in async option name suggestions", async () => {
+      const description = message`Log file`;
+      const parser = option("-l", "--log", asyncFileSuggestingParser(), {
+        description,
+      });
+      const suggestions: Suggestion[] = [];
+
+      for await (
+        const suggestion of parser.suggest({
+          buffer: [],
+          state: parser.initialState,
+          usage: parser.usage,
+          optionsTerminated: false,
+        }, "--l")
+      ) {
+        suggestions.push(suggestion);
+      }
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "--log",
+        description,
+      }]);
     });
 
     it("should suggest async values and short-only '-' behavior", async () => {
@@ -1429,6 +1473,25 @@ describe("flag", () => {
       };
       result = parser.parse(context);
       assert.ok(result.success);
+    });
+  });
+
+  describe("suggest", () => {
+    it("should include descriptions in flag suggestions", () => {
+      const description = message`Enable verbose output`;
+      const parser = flag("-v", "--verbose", { description });
+      const suggestions = Array.from(parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "--v"));
+
+      assert.deepEqual(suggestions, [{
+        kind: "literal",
+        text: "--verbose",
+        description,
+      }]);
     });
   });
 
@@ -3692,6 +3755,56 @@ describe("command() error customization", () => {
 });
 
 describe("command() with brief option", () => {
+  it("should include brief in command suggestions", () => {
+    const brief = message`Deploy the application`;
+    const parser = command("deploy", object({}), {
+      brief,
+      description: message`Deploy with full configuration options.`,
+    });
+    const suggestions = Array.from(parser.suggest({
+      buffer: [],
+      state: parser.initialState,
+      usage: parser.usage,
+      optionsTerminated: false,
+    }, "dep"));
+
+    assert.deepEqual(suggestions, [{
+      kind: "literal",
+      text: "deploy",
+      description: brief,
+    }]);
+  });
+
+  it("should include brief in async command suggestions", async () => {
+    const brief = message`Deploy the application`;
+    const parser = command(
+      "deploy",
+      option("--file", asyncFileSuggestingParser()),
+      {
+        brief,
+        description: message`Deploy with full configuration options.`,
+      },
+    );
+    const suggestions: Suggestion[] = [];
+
+    for await (
+      const suggestion of parser.suggest({
+        buffer: [],
+        state: parser.initialState,
+        usage: parser.usage,
+        optionsTerminated: false,
+      }, "dep")
+    ) {
+      suggestions.push(suggestion);
+    }
+
+    assert.deepEqual(suggestions, [{
+      kind: "literal",
+      text: "deploy",
+      description: brief,
+    }]);
+  });
+
   it("should use brief for command list when both brief and description are provided", () => {
     const parser = command(
       "deploy",
