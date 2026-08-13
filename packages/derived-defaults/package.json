@@ -1,6 +1,6 @@
 {
   "name": "@optique/derived-defaults",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Derived default value support for Optique",
   "keywords": [
     "CLI",

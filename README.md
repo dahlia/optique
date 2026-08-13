@@ -175,8 +175,6 @@ API reference documentation for each package is available on JSR (see below).
 [tutorial]: https://optique.dev/tutorial
 [cookbook]: https://optique.dev/cookbook
 [Why Optique?]: https://optique.dev/why
-[Tutorial]: https://optique.dev/tutorial
-[Cookbook]: https://optique.dev/cookbook
 
 
 Packages
