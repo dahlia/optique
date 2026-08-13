@@ -1,6 +1,6 @@
 {
   "name": "@optique/standard-schema",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Standard Schema value parsers for Optique",
   "keywords": [
     "CLI",
