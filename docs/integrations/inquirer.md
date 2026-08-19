@@ -468,6 +468,46 @@ This gives the priority:
 CLI argument > Environment variable > Inquirer.js prompt
 
 
+Conditional prompt skipping
+---------------------------
+
+Use `when` with a matching `otherwise` value when a prompt depends on a
+runtime capability.  This example asks about GitHub CLI integration only when
+the `gh` executable is available:
+
+~~~~ typescript twoslash
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fail } from "@optique/core/primitives";
+import { prompt } from "@optique/inquirer";
+
+const execFileAsync = promisify(execFile);
+
+async function commandExists(command: string): Promise<boolean> {
+  try {
+    await execFileAsync(command, ["--version"]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const useGitHubCli = prompt(fail<boolean>(), {
+  type: "confirm",
+  message: "Use GitHub CLI?",
+  default: true,
+  when: () => commandExists("gh"),
+  otherwise: false,
+});
+~~~~
+
+The condition runs only when an actual parse reaches this fallback.  CLI
+values and configured sources take priority without running it, and Optique
+also skips it while generating help, version output, or shell completion.
+When `when` returns `false`, `otherwise` is returned without opening Inquirer.
+If the condition throws or rejects, the error propagates to the caller.
+
+
 Testing
 -------
 
@@ -515,7 +555,9 @@ Returns
 ### `PromptConfig<T>`
 
 A conditional type that maps a parser's value type `T` to the appropriate
-prompt configuration union:
+prompt configuration union.  Every variant also accepts either both `when`
+and `otherwise`, or neither.  `when` may be synchronous or asynchronous, and
+`otherwise` must match `T`.
 
 | Value type          | Accepted config type                                                                                                                                                                                                                                                      |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

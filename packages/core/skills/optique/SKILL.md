@@ -220,6 +220,10 @@ Common mistakes checklist
     `message` values.
  -  Do not forget to register source contexts when using `bindEnv()`,
     `bindConfig()`, or `bindDerivedDefault()`.
+ -  Do not probe runtime capabilities eagerly before constructing a prompt
+    parser. Put synchronous or asynchronous checks in the prompt config's
+    `when` field and provide a typed `otherwise` value. The check then runs
+    only if parsing reaches the prompt fallback.
 
 For the detailed maintained guide, use <https://optique.dev/pitfalls.md>.
 

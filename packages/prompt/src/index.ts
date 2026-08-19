@@ -27,6 +27,27 @@ import type {
 import type { ValueParserResult } from "@optique/core/valueparser";
 
 /**
+ * Controls whether a prompt fallback runs at runtime.
+ *
+ * When `when` returns `false`, the prompt adapter is skipped and `otherwise`
+ * is returned.  The condition runs only when parsing reaches the prompt
+ * fallback, after CLI values and other configured value sources have been
+ * exhausted.
+ *
+ * @typeParam TValue Value type produced by the wrapped parser.
+ * @since 1.3.0
+ */
+export type PromptCondition<TValue> =
+  | {
+    readonly when?: never;
+    readonly otherwise?: never;
+  }
+  | {
+    readonly when: () => boolean | Promise<boolean>;
+    readonly otherwise: NoInfer<TValue>;
+  };
+
+/**
  * Prompt adapter used by {@link createPromptAdapter}.
  *
  * The adapter owns library-specific prompt execution and maps the result into
@@ -173,11 +194,11 @@ export function createPromptAdapter<TConfig>(
   adapter: PromptAdapter<TConfig>,
 ): <M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
-  config: TConfig,
+  config: TConfig & PromptCondition<TValue>,
 ) => FluentParser<"async", TValue, TState> {
   return function prompt<M extends Mode, TValue, TState>(
     parser: Parser<M, TValue, TState>,
-    config: TConfig,
+    config: TConfig & PromptCondition<TValue>,
   ): FluentParser<"async", TValue, TState> {
     const promptBindStateKey: unique symbol = Symbol(
       "@optique/prompt/promptState",
@@ -248,7 +269,10 @@ export function createPromptAdapter<TConfig>(
         hasNestedSourceBinding;
     }
 
-    function executePrompt(): Promise<ValueParserResult<TValue>> {
+    async function executePrompt(): Promise<ValueParserResult<TValue>> {
+      if (config.when != null && !(await config.when())) {
+        return { success: true, value: config.otherwise };
+      }
       return adapter.execute<TValue>(config);
     }
 

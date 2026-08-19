@@ -16,7 +16,7 @@ import type { FluentParser } from "@optique/core/fluent";
 import { message } from "@optique/core/message";
 import type { Mode, Parser } from "@optique/core/parser";
 import type { ValueParserResult } from "@optique/core/valueparser";
-import { createPromptAdapter } from "@optique/prompt";
+import { createPromptAdapter, type PromptCondition } from "@optique/prompt";
 
 /**
  * Prompt functions used to render Clack prompts.
@@ -244,8 +244,11 @@ export type StringPromptConfig = TextConfig | PasswordConfig | SelectConfig;
  * Type-safe Clack prompt configuration for a given parser value type `T`.
  *
  * @since 1.2.0
+ * @since 1.3.0 Added conditional prompt skipping.
  */
-export type PromptConfig<T> = BasePromptConfig<Exclude<T, null | undefined>>;
+export type PromptConfig<T> =
+  & BasePromptConfig<Exclude<T, null | undefined>>
+  & PromptCondition<T>;
 
 type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
   : T extends number ? NumberPromptConfig
@@ -307,9 +310,8 @@ export function prompt<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   config: PromptConfig<TValue>,
 ): FluentParser<"async", TValue, TState> {
-  const promptWithAdapter = createPromptAdapter<PromptConfig<TValue>>({
-    execute: <TPromptValue>(cfg: PromptConfig<TValue>) =>
-      executePromptRaw<TPromptValue>(cfg as PromptConfig<TPromptValue>),
+  const promptWithAdapter = createPromptAdapter<RuntimePromptConfig>({
+    execute: executePromptRaw,
     getDefaultValue: getConfigDefault,
   });
   return promptWithAdapter(parser, config);
@@ -325,9 +327,9 @@ function getConfigDefault(config: unknown): unknown {
 }
 
 async function executePromptRaw<TValue>(
-  config: PromptConfig<TValue>,
+  config: RuntimePromptConfig,
 ): Promise<ValueParserResult<TValue>> {
-  const cfg = config as RuntimePromptConfig;
+  const cfg = config;
   const type = cfg.type;
   if (!isPromptType(type)) {
     throw new TypeError(`Unsupported prompt type: ${String(type)}.`);

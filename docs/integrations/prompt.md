@@ -305,6 +305,51 @@ This gives the priority:
 
 CLI argument > Environment variable > Prompt adapter
 
+### Runtime conditions can skip prompting
+
+Add `when` and `otherwise` to a prompt config when the fallback depends on a
+runtime capability.  `when` can return a Boolean or a promise of one.  When it
+returns `false`, the adapter is not called and `otherwise` becomes the parsed
+value:
+
+~~~~ typescript twoslash
+declare function canPromptSecurely(): Promise<boolean>;
+// ---cut-before---
+import { parseAsync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { createPromptAdapter } from "@optique/prompt";
+
+interface PromptConfig {
+  readonly value: string;
+}
+
+const prompt = createPromptAdapter<PromptConfig>({
+  async execute<TValue>(config: PromptConfig) {
+    return { success: true, value: config.value as TValue };
+  },
+});
+
+const parser = prompt(option("--token", string()), {
+  value: "prompted token",
+  when: canPromptSecurely,
+  otherwise: "",
+});
+
+const result = await parseAsync(parser, []);
+~~~~
+
+The condition is evaluated only when an actual parse reaches the prompt
+fallback.  CLI values, source bindings, help, version output, completion
+probes, and shell suggestions do not run it.  Each fallback evaluates its
+condition at most once per parse.  A thrown or rejected condition error
+propagates to the caller; it is not treated as prompt cancellation or a parse
+failure.
+
+`otherwise` is a static value with the parser's result type.  It is returned
+as-is, without running the inner parser's validation or normalization, and it
+is not used as a documented default.
+
 ### Missing values run the adapter
 
 If the inner parser does not consume CLI tokens and no source binding supplies
@@ -516,6 +561,8 @@ The core behavior to test is:
  -  CLI values skip prompt execution.
  -  Missing CLI values call `execute()`.
  -  Source bindings such as `bindEnv()` skip prompt execution.
+ -  Runtime conditions run only at the real prompt fallback.
+ -  A false runtime condition returns `otherwise` without calling `execute()`.
  -  Prompt failures are returned as parse failures.
  -  Multiple prompt fields run in parser order.
 
@@ -564,7 +611,20 @@ Parameters
 
 Returns
 :   A function that wraps any parser and always returns a
-    `FluentParser<"async", TValue, TState>`.
+    `FluentParser<"async", TValue, TState>`.  Its config accepts the adapter's
+    fields together with [`PromptCondition<TValue>`](#promptconditiontvalue).
+
+### `PromptCondition<TValue>`
+
+Shared runtime condition fields accepted by every generated prompt wrapper.
+Provide both fields or neither:
+
+`when`
+:   A function returning `boolean` or `Promise<boolean>`.  The prompt runs
+    when the result is `true`.
+
+`otherwise`
+:   The typed value returned when `when` resolves to `false`.
 
 ### `PromptAdapter<TConfig>`
 

@@ -8,6 +8,27 @@ Version 1.3.0
 
 To be released.
 
+### @optique/clack
+
+ -  Added conditional prompt skipping to Clack prompt configurations with
+    `when` and `otherwise`, allowing applications to avoid prompts whose
+    runtime prerequisites are unavailable.  [[#882]]
+
+[#882]: https://github.com/dahlia/optique/issues/882
+
+### @optique/inquirer
+
+ -  Added conditional prompt skipping to Inquirer prompt configurations with
+    `when` and `otherwise`, allowing applications to avoid prompts whose
+    runtime prerequisites are unavailable.  [[#882]]
+
+### @optique/prompt
+
+ -  Added runtime conditions to prompt adapters.  Generated prompt wrappers can
+    now skip a fallback with a synchronous or asynchronous `when` check and
+    return a typed `otherwise` value.  The check runs only when parsing reaches
+    the prompt fallback.  [[#882]]
+
 
 Version 1.2.1
 -------------

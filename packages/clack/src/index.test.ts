@@ -69,6 +69,27 @@ describe("prompt()", () => {
     assert.ok(!promptCalled);
   });
 
+  it("should skip the prompt when the runtime condition is false", async () => {
+    let promptCalled = false;
+    const parser = prompt(flag("--gh").map((): boolean => true), {
+      type: "confirm",
+      message: "Use GitHub CLI?",
+      initialValue: true,
+      when: () => false,
+      otherwise: false,
+      prompter: () => {
+        promptCalled = true;
+        return Promise.resolve(true);
+      },
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.ok(!result.value);
+    assert.ok(!promptCalled);
+  });
+
   it("runs text prompts when CLI value is absent", async () => {
     const parser = prompt(option("--name", string()), {
       type: "text",
