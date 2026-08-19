@@ -22,6 +22,7 @@ import type {
   ShowDefaultOptions,
 } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
+import type { Usage } from "@optique/core/usage";
 import path from "node:path";
 import process from "node:process";
 
@@ -121,6 +122,21 @@ export interface RunOptions {
    * @since 1.2.0
    */
   readonly showUsage?: boolean;
+
+  /**
+   * Usage line override for top-level full help.
+   *
+   * This option customizes the usage shown by `--help`, the root help command,
+   * and `aboveError: "help"` at the root.  It does not affect subcommand help,
+   * parsing, shell completion, or usage-only error preambles from
+   * `aboveError: "usage"`.
+   *
+   * The callback form receives the generated root usage after built-in help,
+   * version, and completion entries have been added.
+   *
+   * @since 1.3.0
+   */
+  readonly usageLine?: Usage | ((defaultUsageLine: Usage) => Usage);
 
   /**
    * How to render command lists in top-level help pages.
@@ -849,6 +865,7 @@ function buildCoreOptions(
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;
   const showUsage = options.showUsage;
+  const usageLine = options.usageLine;
   const commandList = options.commandList;
   const sectionOrder = options.sectionOrder;
   const help = options.help;
@@ -915,6 +932,7 @@ function buildCoreOptions(
     showDefault,
     showChoices,
     showUsage,
+    usageLine,
     commandList,
     sectionOrder,
     help: helpConfig,
@@ -950,6 +968,7 @@ const knownRunOptionsKeyList = [
   "showDefault",
   "showChoices",
   "showUsage",
+  "usageLine",
   "commandList",
   "sectionOrder",
   "help",

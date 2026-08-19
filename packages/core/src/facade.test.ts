@@ -47,7 +47,7 @@ import {
   option,
 } from "@optique/core/primitives";
 import type { Program } from "@optique/core/program";
-import type { OptionName } from "@optique/core/usage";
+import type { OptionName, Usage } from "@optique/core/usage";
 import type { DeferredMap, ValueParser } from "@optique/core/valueparser";
 import { integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
@@ -10383,6 +10383,227 @@ describe("runWithAsync", () => {
         helpOutput.indexOf("lint", utilIndex) > utilIndex,
         "lint should be under Utilities:",
       );
+    });
+  });
+
+  describe("usageLine option", () => {
+    it("should replace top-level option help usage", () => {
+      const parser = or(
+        command("build", object({})),
+        command("deploy", object({})),
+      );
+      let helpOutput = "";
+
+      const result = runParser(parser, "myapp", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "shown",
+        },
+        usageLine: [{ type: "ellipsis" }],
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.match(helpOutput, /^Usage: myapp \.\.\.$/m);
+      assert.doesNotMatch(helpOutput, /^Usage: myapp build$/m);
+      assert.match(helpOutput, /build/);
+      assert.match(helpOutput, /deploy/);
+    });
+
+    it("should pass fully augmented root usage to a callback", () => {
+      const parser = command("build", object({}));
+      let defaultUsageLine: Usage | undefined;
+
+      runParser(parser, "myapp", ["--help"], {
+        help: { command: true, option: true, onShow: () => "shown" },
+        version: {
+          command: true,
+          option: true,
+          value: "1.3.0",
+        },
+        completion: { command: true, option: true },
+        usageLine: (usage) => {
+          defaultUsageLine = usage;
+          return [{ type: "ellipsis" }];
+        },
+        stdout: () => {},
+      });
+
+      assert.ok(defaultUsageLine != null);
+      const serializedUsage = JSON.stringify(defaultUsageLine);
+      assert.match(serializedUsage, /--help/);
+      assert.match(serializedUsage, /"help"/);
+      assert.match(serializedUsage, /--version/);
+      assert.match(serializedUsage, /"version"/);
+      assert.match(serializedUsage, /--completion/);
+      assert.match(serializedUsage, /"completion"/);
+    });
+
+    it("should replace top-level command help usage", () => {
+      const parser = command("build", object({}));
+      let helpOutput = "";
+
+      const result = runParser(parser, "myapp", ["help"], {
+        help: {
+          command: true,
+          onShow: () => "shown",
+        },
+        usageLine: [{ type: "ellipsis" }],
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.match(helpOutput, /^Usage: myapp \.\.\.$/m);
+    });
+
+    it("should replace root help above an error", () => {
+      const parser = object({
+        port: argument(integer({ metavar: "PORT" })),
+      });
+      let errorOutput = "";
+
+      const result = runParser(parser, "myapp", ["invalid"], {
+        aboveError: "help",
+        onError: () => "handled",
+        usageLine: [{ type: "ellipsis" }],
+        stderr: (text) => {
+          errorOutput += `${text}\n`;
+        },
+      });
+
+      assert.equal(result, "handled");
+      assert.match(errorOutput, /^Usage: myapp \.\.\.$/m);
+      assert.match(errorOutput, /Error:/);
+    });
+
+    it("should pass augmented root usage to an error help callback", () => {
+      const parser = object({
+        port: argument(integer({ metavar: "PORT" })),
+      });
+      let defaultUsageLine: Usage | undefined;
+
+      runParser(parser, "myapp", ["invalid"], {
+        aboveError: "help",
+        help: { command: true, option: true },
+        version: {
+          command: true,
+          option: true,
+          value: "1.3.0",
+        },
+        completion: { command: true, option: true },
+        onError: () => "handled",
+        usageLine: (usage) => {
+          defaultUsageLine = usage;
+          return [{ type: "ellipsis" }];
+        },
+        stderr: () => {},
+      });
+
+      assert.ok(defaultUsageLine != null);
+      const serializedUsage = JSON.stringify(defaultUsageLine);
+      assert.match(serializedUsage, /--help/);
+      assert.match(serializedUsage, /"help"/);
+      assert.match(serializedUsage, /--version/);
+      assert.match(serializedUsage, /"version"/);
+      assert.match(serializedUsage, /--completion/);
+      assert.match(serializedUsage, /"completion"/);
+    });
+
+    it("should leave usage-only error output unchanged", () => {
+      const parser = object({
+        port: argument(integer({ metavar: "PORT" })),
+      });
+      let errorOutput = "";
+
+      const result = runParser(parser, "myapp", ["invalid"], {
+        aboveError: "usage",
+        onError: () => "handled",
+        usageLine: [{ type: "ellipsis" }],
+        stderr: (text) => {
+          errorOutput += `${text}\n`;
+        },
+      });
+
+      assert.equal(result, "handled");
+      assert.match(errorOutput, /^Usage: myapp PORT$/m);
+      assert.doesNotMatch(errorOutput, /^Usage: myapp \.\.\.$/m);
+    });
+
+    it("should preserve command usage lines for subcommand help", () => {
+      const parser = command("config", object({}), {
+        usageLine: [{ type: "literal", value: "COMMAND" }],
+      });
+      let helpOutput = "";
+
+      const result = runParser(parser, "myapp", ["config", "--help"], {
+        help: {
+          option: true,
+          onShow: () => "shown",
+        },
+        usageLine: [{ type: "ellipsis" }],
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.match(helpOutput, /^Usage: myapp config COMMAND$/m);
+      assert.doesNotMatch(helpOutput, /^Usage: myapp \.\.\.$/m);
+    });
+
+    it("should leave subcommand error help unchanged", () => {
+      const parser = command(
+        "config",
+        object({ port: argument(integer({ metavar: "PORT" })) }),
+      );
+      let errorOutput = "";
+
+      const result = runParser(parser, "myapp", ["config", "invalid"], {
+        aboveError: "help",
+        onError: () => "handled",
+        usageLine: [{ type: "ellipsis" }],
+        stderr: (text) => {
+          errorOutput += `${text}\n`;
+        },
+      });
+
+      assert.equal(result, "handled");
+      assert.match(errorOutput, /^Usage: myapp config PORT$/m);
+      assert.doesNotMatch(errorOutput, /^Usage: myapp \.\.\.$/m);
+    });
+
+    it("should replace top-level help usage for async parsers", async () => {
+      const asyncStringParser: ValueParser<"async", string> = {
+        mode: "async",
+        metavar: "TEXT",
+        placeholder: "",
+        parse(input: string) {
+          return Promise.resolve({ success: true as const, value: input });
+        },
+        format(value: string) {
+          return value;
+        },
+      };
+      const parser = option("--output", asyncStringParser);
+      let helpOutput = "";
+
+      const result = await runParser(parser, "myapp", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "shown",
+        },
+        usageLine: [{ type: "ellipsis" }],
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.equal(result, "shown");
+      assert.match(helpOutput, /^Usage: myapp \.\.\.$/m);
     });
   });
 

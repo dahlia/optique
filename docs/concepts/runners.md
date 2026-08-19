@@ -298,7 +298,7 @@ const prog = defineProgram({
 const result = runParser(prog, ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
-  showUsage: false,      // Hide Usage: in full help pages
+  usageLine: [{ type: "ellipsis" }], // Show a compact root synopsis
   commandList: "top-level", // Show only first-level commands
   showDefault: true,     // Show default values in help text
   help: {                // Grouped help API
@@ -324,6 +324,17 @@ const result = runParser(prog, ["--name", "test"], {
 Use this approach when you need automatic help and error handling but want
 control over process behavior, or when integrating with frameworks that
 manage process lifecycle.
+
+Pass `usageLine: [{ type: "ellipsis" }]` to replace a large root synopsis
+with a compact line such as `Usage: myapp ...`.  The override applies to
+top-level full help from `--help`, the root help command, and
+`aboveError: "help"`.  Subcommand help continues to use the matching
+`command()` parser's `usageLine`, when present.
+
+`usageLine` also accepts a `(defaultUsageLine: Usage) => Usage` callback.  The
+callback receives the generated root usage after built-in help, version, and
+completion entries have been added.  It changes only help rendering, not
+parsing, suggestions, or shell completion.
 
 Pass `showUsage: false` when a command menu should show the brief,
 description, and generated sections without the `Usage:` synopsis.  The

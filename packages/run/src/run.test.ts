@@ -1754,6 +1754,35 @@ describe("runAsync", () => {
       assert.ok(helpOutput.includes("deploy"));
     });
 
+    it("should replace top-level help usage", () => {
+      const parser = or(
+        command("build", object({})),
+        command("deploy", object({})),
+      );
+      let helpOutput = "";
+
+      assert.throws(
+        () =>
+          run(parser, {
+            args: ["--help"],
+            programName: "myapp",
+            help: "option",
+            usageLine: [{ type: "ellipsis" }],
+            stdout: (text) => {
+              helpOutput += `${text}\n`;
+            },
+            onExit: () => {
+              throw new Error("EXIT");
+            },
+          }),
+        /EXIT/,
+      );
+
+      assert.match(helpOutput, /^Usage: myapp \.\.\.$/m);
+      assert.match(helpOutput, /build/);
+      assert.match(helpOutput, /deploy/);
+    });
+
     it("should list only top-level commands when commandList is top-level", () => {
       const parser = createFlatCommandDocParser();
       let helpOutput = "";

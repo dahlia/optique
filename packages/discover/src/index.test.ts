@@ -2177,6 +2177,44 @@ describe("runProgram()", () => {
     assert.match(stdout, /user remove\s+Remove a user\./);
   });
 
+  it("should replace statically registered root help usage", async () => {
+    const addCommand = defineCommand({
+      path: ["user", "add"],
+      parser: object({}),
+      metadata: { brief: message`Add a user.` },
+      handler() {},
+    });
+    const removeCommand = defineCommand({
+      path: ["user", "remove"],
+      parser: object({}),
+      metadata: { brief: message`Remove a user.` },
+      handler() {},
+    });
+    let stdout = "";
+
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [addCommand, removeCommand],
+          metadata: { name: "tool", version: "1.0.0" },
+          args: ["--help"],
+          usageLine: [{ type: "ellipsis" }],
+          stdout(text) {
+            stdout += `${text}\n`;
+          },
+          stderr() {},
+          onExit(exitCode): never {
+            throw new ExitSignal(exitCode);
+          },
+        }),
+      ExitSignal,
+    );
+
+    assert.match(stdout, /^Usage: tool \.\.\.$/m);
+    assert.match(stdout, /user add\s+Add a user\./);
+    assert.match(stdout, /user remove\s+Remove a user\./);
+  });
+
   it("lists only top-level commands in root help when commandList is top-level", async () => {
     const userCommand = defineCommand({
       path: ["user"],

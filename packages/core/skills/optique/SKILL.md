@@ -56,6 +56,9 @@ Core rules
     discriminated union.
  -  Enable completion through `run(parser, { completion: "both" })` for CLI
     apps. Do not hand-write completion scripts from parser metadata.
+ -  Use `usageLine: [{ type: "ellipsis" }]` in runner options when a large root
+    synopsis should become a compact `Usage: myapp ...` line. This applies only
+    to root full help; use `command()`'s `usageLine` for subcommand help.
  -  Use `showUsage: false` in runner options when full help should show the
     brief and command or option sections without the `Usage:` synopsis.
     For deeply nested command trees, add `commandList: "top-level"` when root

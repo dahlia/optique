@@ -130,17 +130,17 @@ await runProgram({
     brief: message`Administrative command-line tools.`,
   },
   help: { option: true },
-  showUsage: false,
+  usageLine: [{ type: "ellipsis" }],
   commandList: "top-level",
   version: false,
   completion: false,
 });
 ~~~~
 
-`showUsage: false` is useful for larger command trees because root help can
-act as a compact command menu: the program brief and command list remain, but
-the expanded `Usage:` synopsis is omitted.  The same setting applies when
-`aboveError: "help"` renders a full help page above a parse error.  Pass
+`usageLine: [{ type: "ellipsis" }]` keeps a compact `Usage: admin ...`
+synopsis for a large command tree.  Use `showUsage: false` instead when root
+help should omit the synopsis entirely.  Both settings also apply when
+`aboveError: "help"` renders full help above a root parse error.  Pass
 `commandList: "top-level"` when the root command menu should list only
 first-level command groups and let users drill down with `<command> --help`.
 

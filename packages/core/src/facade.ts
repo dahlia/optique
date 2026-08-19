@@ -57,9 +57,11 @@ import { createInputTrace } from "./input-trace.ts";
 import { completeOrExtractPhase2Seed } from "./phase2-seed.ts";
 import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
+  cloneUsage,
   formatUsage,
   type HiddenVisibility,
   isSuggestionHidden,
+  normalizeUsage,
   type OptionName,
   type Usage,
 } from "./usage.ts";
@@ -1380,6 +1382,21 @@ export interface RunOptions<THelp, TError> {
   readonly showUsage?: boolean;
 
   /**
+   * Usage line override for top-level full help.
+   *
+   * This option customizes the usage shown by `--help`, the root help command,
+   * and `aboveError: "help"` at the root.  It does not affect subcommand help,
+   * parsing, shell completion, or usage-only error preambles from
+   * `aboveError: "usage"`.
+   *
+   * The callback form receives the generated root usage after built-in help,
+   * version, and completion entries have been added.
+   *
+   * @since 1.3.0
+   */
+  readonly usageLine?: Usage | ((defaultUsageLine: Usage) => Usage);
+
+  /**
    * How to render command lists in top-level help pages.
    *
    * Pass `"top-level"` to show only first-level commands in the command menu
@@ -2405,6 +2422,7 @@ export function runParser<
     showChoices,
     sectionOrder,
     showUsage,
+    usageLine,
     commandList = "recursive",
     aboveError = "usage",
     onError = () => {
@@ -2575,6 +2593,111 @@ export function runParser<
       },
     );
 
+  const helpAsCommand = helpCommandConfig != null;
+  const versionAsCommand = versionCommandConfig != null;
+  const completionAsCommand = completionCommandConfig != null;
+  const helpAsOption = helpOptionConfig != null;
+  const versionAsOption = versionOptionConfig != null;
+  const completionAsOption = completionOptionConfig != null;
+  let cachedRootHelpGeneratorParser:
+    | Parser<Mode, unknown, unknown>
+    | undefined;
+
+  const getRootHelpGeneratorParser = (): Parser<Mode, unknown, unknown> => {
+    if (cachedRootHelpGeneratorParser != null) {
+      return cachedRootHelpGeneratorParser;
+    }
+
+    const commandParsers: Parser<Mode, unknown, unknown>[] = [parser];
+
+    // Group meta-commands by their group label so that commands sharing the
+    // same group name appear under a single section.
+    const groupedMeta: Record<
+      string,
+      Parser<Mode, unknown, unknown>[]
+    > = {};
+    const ungroupedMeta: Parser<Mode, unknown, unknown>[] = [];
+    const addMeta = (
+      metaParser: Parser<Mode, unknown, unknown>,
+      groupLabel?: string,
+    ): void => {
+      if (groupLabel) {
+        (groupedMeta[groupLabel] ??= []).push(metaParser);
+      } else {
+        ungroupedMeta.push(metaParser);
+      }
+    };
+
+    if (helpAsCommand && helpParsers.helpCommand) {
+      addMeta(helpParsers.helpCommand, helpCommandConfig?.group);
+    }
+    if (versionAsCommand && versionParsers.versionCommand) {
+      addMeta(versionParsers.versionCommand, versionCommandConfig?.group);
+    }
+    if (completionAsCommand && completionParsers.completionCommand) {
+      addMeta(
+        completionParsers.completionCommand,
+        completionCommandConfig?.group,
+      );
+    }
+
+    commandParsers.push(...ungroupedMeta);
+    for (const [label, parsers] of Object.entries(groupedMeta)) {
+      commandParsers.push(
+        group(
+          label,
+          parsers.length === 1 ? parsers[0] : longestMatch(...parsers),
+        ),
+      );
+    }
+
+    // Include meta options so they appear in the root usage line and options
+    // list.  See https://github.com/dahlia/optique/issues/127
+    const groupedMetaOptions: Record<
+      string,
+      Parser<Mode, unknown, unknown>[]
+    > = {};
+    const ungroupedMetaOptions: Parser<Mode, unknown, unknown>[] = [];
+    const addMetaOption = (
+      metaParser: Parser<Mode, unknown, unknown>,
+      groupLabel?: string,
+    ): void => {
+      if (groupLabel) {
+        (groupedMetaOptions[groupLabel] ??= []).push(metaParser);
+      } else {
+        ungroupedMetaOptions.push(metaParser);
+      }
+    };
+
+    if (helpAsOption && helpParsers.helpOption) {
+      addMetaOption(helpParsers.helpOption, helpOptionConfig?.group);
+    }
+    if (versionAsOption && versionParsers.versionOption) {
+      addMetaOption(versionParsers.versionOption, versionOptionConfig?.group);
+    }
+    if (completionAsOption && completionParsers.completionOption) {
+      addMetaOption(
+        completionParsers.completionOption,
+        completionOptionConfig?.group,
+      );
+    }
+
+    commandParsers.push(...ungroupedMetaOptions);
+    for (const [label, parsers] of Object.entries(groupedMetaOptions)) {
+      commandParsers.push(
+        group(
+          label,
+          parsers.length === 1 ? parsers[0] : longestMatch(...parsers),
+        ),
+      );
+    }
+
+    cachedRootHelpGeneratorParser = commandParsers.length === 1
+      ? commandParsers[0]
+      : longestMatchForMetaCommands(...commandParsers);
+    return cachedRootHelpGeneratorParser;
+  };
+
   // Helper function to handle parsed result
   // Return type is InferValue<TParser> but callbacks may return THelp/TError
   // which are typically `never` (via process.exit) or a compatible type
@@ -2628,12 +2751,6 @@ export function runParser<
         // handled via early return.
         let helpGeneratorParser: Parser<Mode, unknown, unknown>;
         let docGeneratorParser: Parser<Mode, unknown, unknown>;
-        const helpAsCommand = helpCommandConfig != null;
-        const versionAsCommand = versionCommandConfig != null;
-        const completionAsCommand = completionCommandConfig != null;
-        const helpAsOption = helpOptionConfig != null;
-        const versionAsOption = versionOptionConfig != null;
-        const completionAsOption = completionOptionConfig != null;
 
         // Check if user is requesting help for a specific meta-command
         const requestedCommand = classified.commands[0];
@@ -2669,126 +2786,7 @@ export function runParser<
           docGeneratorParser = helpGeneratorParser;
         } else {
           // General help or help for user-defined commands
-          // Collect all command parsers to include in help generation
-          const commandParsers: Parser<Mode, unknown, unknown>[] = [parser];
-
-          // Group meta-commands by their group label so that commands
-          // sharing the same group name appear under a single section
-          const groupedMeta: Record<
-            string,
-            Parser<Mode, unknown, unknown>[]
-          > = {};
-          const ungroupedMeta: Parser<Mode, unknown, unknown>[] = [];
-
-          const addMeta = (
-            p: Parser<Mode, unknown, unknown>,
-            groupLabel?: string,
-          ): void => {
-            if (groupLabel) {
-              (groupedMeta[groupLabel] ??= []).push(p);
-            } else {
-              ungroupedMeta.push(p);
-            }
-          };
-
-          if (helpAsCommand && helpParsers.helpCommand) {
-            addMeta(helpParsers.helpCommand, helpCommandConfig?.group);
-          }
-          if (versionAsCommand && versionParsers.versionCommand) {
-            addMeta(versionParsers.versionCommand, versionCommandConfig?.group);
-          }
-          if (completionAsCommand && completionParsers.completionCommand) {
-            addMeta(
-              completionParsers.completionCommand,
-              completionCommandConfig?.group,
-            );
-          }
-
-          // Add ungrouped meta-commands directly
-          commandParsers.push(...ungroupedMeta);
-
-          // Add grouped meta-commands wrapped in group()
-          for (const [label, parsers] of Object.entries(groupedMeta)) {
-            if (parsers.length === 1) {
-              commandParsers.push(group(label, parsers[0]));
-            } else {
-              // Combine multiple commands in the same group with or()
-              commandParsers.push(
-                group(
-                  label,
-                  longestMatch(...parsers),
-                ),
-              );
-            }
-          }
-
-          // Include meta options so they appear in the help page usage line and
-          // options list.  See https://github.com/dahlia/optique/issues/127
-          // Group meta-options by their group label so that options sharing the
-          // same group name appear under a single section
-          const groupedMetaOptions: Record<
-            string,
-            Parser<Mode, unknown, unknown>[]
-          > = {};
-          const ungroupedMetaOptions: Parser<Mode, unknown, unknown>[] = [];
-
-          const addMetaOption = (
-            p: Parser<Mode, unknown, unknown>,
-            groupLabel?: string,
-          ): void => {
-            if (groupLabel) {
-              (groupedMetaOptions[groupLabel] ??= []).push(p);
-            } else {
-              ungroupedMetaOptions.push(p);
-            }
-          };
-
-          if (helpAsOption && helpParsers.helpOption) {
-            addMetaOption(helpParsers.helpOption, helpOptionConfig?.group);
-          }
-
-          if (versionAsOption && versionParsers.versionOption) {
-            addMetaOption(
-              versionParsers.versionOption,
-              versionOptionConfig?.group,
-            );
-          }
-
-          if (completionAsOption && completionParsers.completionOption) {
-            addMetaOption(
-              completionParsers.completionOption,
-              completionOptionConfig?.group,
-            );
-          }
-
-          // Add ungrouped meta-options directly
-          commandParsers.push(...ungroupedMetaOptions);
-
-          // Add grouped meta-options wrapped in group()
-          for (
-            const [label, optParsers] of Object.entries(groupedMetaOptions)
-          ) {
-            if (optParsers.length === 1) {
-              commandParsers.push(group(label, optParsers[0]));
-            } else {
-              // Combine multiple options in the same group with longestMatch
-              commandParsers.push(
-                group(
-                  label,
-                  longestMatch(...optParsers),
-                ),
-              );
-            }
-          }
-
-          // Use longestMatch to combine all parsers
-          if (commandParsers.length === 1) {
-            helpGeneratorParser = commandParsers[0];
-          } else {
-            helpGeneratorParser = longestMatchForMetaCommands(
-              ...commandParsers,
-            );
-          }
+          helpGeneratorParser = getRootHelpGeneratorParser();
           docGeneratorParser = classified.commands.length > 0
             ? parser
             : helpGeneratorParser;
@@ -2868,7 +2866,10 @@ export function runParser<
               commandList,
               isTopLevel,
             );
-            stdout(formatDocPage(programName, augmentedDoc, {
+            const renderedDoc = isTopLevel && usageLine != null
+              ? applyUsageLine(augmentedDoc, usageLine)
+              : augmentedDoc;
+            stdout(formatDocPage(programName, renderedDoc, {
               colors,
               maxWidth,
               showDefault,
@@ -2975,6 +2976,7 @@ export function runParser<
           if (effectiveAboveError === "help") {
             if (doc == null) effectiveAboveError = "usage";
             else {
+              const isTopLevel = classified.commandPath.length < 1;
               // Augment the doc page with provided options
               const augmentedDoc = maybeCollapseCommandList(
                 {
@@ -2987,9 +2989,20 @@ export function runParser<
                   footer: footer ?? doc.footer,
                 },
                 commandList,
-                classified.commandPath.length < 1,
+                isTopLevel,
               );
-              stderr(formatDocPage(programName, augmentedDoc, {
+              const defaultRootUsage = typeof usageLine === "function" &&
+                  (options.help || options.version || options.completion)
+                ? normalizeUsage(getRootHelpGeneratorParser().usage)
+                : augmentedDoc.usage ?? [];
+              const renderedDoc = isTopLevel && usageLine != null
+                ? applyUsageLine(
+                  augmentedDoc,
+                  usageLine,
+                  defaultRootUsage,
+                )
+                : augmentedDoc;
+              stderr(formatDocPage(programName, renderedDoc, {
                 colors,
                 maxWidth,
                 showDefault,
@@ -3151,6 +3164,20 @@ export function runParserAsync<
 ): Promise<InferValue<TParser>> {
   const result = runParser(parser, programName, args, options);
   return Promise.resolve(result) as Promise<InferValue<TParser>>;
+}
+
+function applyUsageLine(
+  doc: DocPage,
+  usageLine: Usage | ((defaultUsageLine: Usage) => Usage),
+  defaultUsageLine: Usage = doc.usage ?? [],
+): DocPage {
+  const customUsageLine = typeof usageLine === "function"
+    ? usageLine(cloneUsage(defaultUsageLine))
+    : usageLine;
+  return {
+    ...doc,
+    usage: normalizeUsage(customUsageLine),
+  };
 }
 
 function maybeCollapseCommandList(

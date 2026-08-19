@@ -8,6 +8,27 @@ Version 1.3.0
 
 To be released.
 
+### @optique/core
+
+ -  Added `usageLine` to the core runner `RunOptions`.  Top-level full help can
+    now replace the generated root synopsis or derive one from a callback,
+    while subcommand help and usage-only error output remain unchanged.
+    [[#879]]
+
+[#879]: https://github.com/dahlia/optique/issues/879
+
+### @optique/run
+
+ -  Added `usageLine` to `RunOptions`.  `run()`, `runSync()`, and `runAsync()`
+    can now replace the root synopsis in full help without changing parsing or
+    subcommand help.  [[#879]]
+
+### @optique/discover
+
+ -  Added `usageLine` to `runProgram()` so large discovered command trees can
+    show a compact root synopsis such as `Usage: my-tool ...` while keeping
+    their full command menu.  [[#879]]
+
 ### @optique/clack
 
  -  Added conditional prompt skipping to Clack prompt configurations with
