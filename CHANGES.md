@@ -3,6 +3,12 @@
 Optique changelog
 =================
 
+Version 1.2.3
+-------------
+
+To be released.
+
+
 Version 1.2.2
 -------------
 
@@ -290,8 +296,6 @@ Released on August 21, 2026.
     greedy `passThrough()` branches can still capture `--`.  Preserving an
     active `or()` branch no longer evaluates defaults in inactive branches.
     [[#884]]
-
-[#884]: https://github.com/dahlia/optique/issues/884
 
 
 Version 1.1.2
