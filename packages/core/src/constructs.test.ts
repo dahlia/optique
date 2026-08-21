@@ -317,6 +317,140 @@ describe("or", () => {
     }
   });
 
+  it("should leave option branches unselected for -- (issue #884)", () => {
+    const optionResult = parseSync(
+      object({
+        selected: optional(
+          or(option("-a", string()), option("-b", string())),
+        ),
+        file: argument(string()),
+      }),
+      ["--", "x"],
+    );
+    assert.deepEqual(optionResult, {
+      success: true,
+      value: { selected: undefined, file: "x" },
+    });
+
+    const flagResult = parseSync(
+      object({
+        selected: optional(or(flag("-a"), flag("-b"))),
+        file: argument(string()),
+      }),
+      ["--", "x"],
+    );
+    assert.deepEqual(flagResult, {
+      success: true,
+      value: { selected: undefined, file: "x" },
+    });
+
+    const objectResult = parseSync(
+      optional(
+        or(
+          object({ a: option("-a", string()) }),
+          object({ b: option("-b", string()) }),
+        ),
+      ),
+      ["--"],
+    );
+    assert.deepEqual(objectResult, { success: true, value: undefined });
+
+    const requiredResult = parseSync(
+      or(option("-a", string()), option("-b", string())),
+      ["--"],
+    );
+    assert.ok(!requiredResult.success);
+    if (!requiredResult.success) {
+      assertErrorIncludes(requiredResult.error, "No matching option found");
+    }
+  });
+
+  it("should use a default when -- leaves all branches unselected", () => {
+    const result = parseSync(
+      withDefault(
+        or(option("-a", string()), option("-b", string())),
+        "default",
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: "default" });
+  });
+
+  it("should preserve a selected branch across --", () => {
+    const result = parseSync(or(option("-a"), option("-b")), ["-a", "--"]);
+
+    assert.deepEqual(result, { success: true, value: true });
+  });
+
+  it("should not evaluate inactive branches after a selected branch handles --", () => {
+    let calls = 0;
+    const parser = or(
+      option("-a"),
+      conditional(
+        withDefault(option("--mode", choice(["x"])), () => {
+          calls++;
+          return "x" as const;
+        }),
+        { x: constant("inactive") },
+      ),
+    );
+
+    assert.deepEqual(parseSync(parser, ["-a", "--"]), {
+      success: true,
+      value: true,
+    });
+    assert.equal(calls, 0);
+  });
+
+  it("should match an argument after -- regardless of branch order", () => {
+    const optionFirst = parseSync(
+      or(option("-a", string()), argument(string())),
+      ["--", "x"],
+    );
+    const argumentFirst = parseSync(
+      or(argument(string()), option("-a", string())),
+      ["--", "x"],
+    );
+
+    assert.deepEqual(optionFirst, { success: true, value: "x" });
+    assert.deepEqual(argumentFirst, { success: true, value: "x" });
+  });
+
+  it("async: should leave option branches unselected for --", async () => {
+    const result = await parseAsync(
+      optional(
+        or(
+          option("-a", asyncStringValue()),
+          option("-b", asyncStringValue()),
+        ),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: undefined });
+  });
+
+  it("async: should not evaluate inactive branches after selected --", async () => {
+    let calls = 0;
+    const parser = or(
+      option("-a"),
+      conditional(
+        withDefault(option("--mode", choice(["x"])), () => {
+          calls++;
+          return "x" as const;
+        }),
+        { x: argument(asyncStringValue()) },
+      ),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["-a", "--"]), {
+      success: true,
+      value: true,
+    });
+    assert.equal(calls, 0);
+  });
+
   it("should fail when no parser matches", () => {
     const parser1 = option("-a");
     const parser2 = option("-b");
@@ -1481,6 +1615,463 @@ describe("longestMatch()", () => {
       assert.equal(result.value.kind, "verbose");
       assert.equal(result.value.enabled, true);
     }
+  });
+
+  it("should leave option branches unselected for -- (issue #884)", () => {
+    const optionResult = parseSync(
+      optional(
+        longestMatch(option("-a", string()), option("-b", string())),
+      ),
+      ["--"],
+    );
+    const flagResult = parseSync(
+      optional(longestMatch(flag("-a"), flag("-b"))),
+      ["--"],
+    );
+
+    assert.deepEqual(optionResult, { success: true, value: undefined });
+    assert.deepEqual(flagResult, { success: true, value: undefined });
+  });
+
+  it("should leave Boolean option branches unselected for --", () => {
+    const parser = optional(
+      longestMatch(option("-a"), option("-b", string())),
+    );
+
+    assert.deepEqual(parseSync(parser, []), {
+      success: true,
+      value: undefined,
+    });
+    assert.deepEqual(parseSync(parser, ["--"]), {
+      success: true,
+      value: undefined,
+    });
+  });
+
+  it("should use a default when -- leaves all branches unselected", () => {
+    const result = parseSync(
+      withDefault(
+        longestMatch(option("-a", string()), option("-b", string())),
+        "default",
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: "default" });
+  });
+
+  it("should consume -- before selecting a zero-length branch", () => {
+    const result = parseSync(
+      longestMatch(option("-a", string()), constant("fallback")),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: "fallback" });
+  });
+
+  it("should not select an object-wrapped required option at --", () => {
+    const result = parseSync(
+      longestMatch(
+        object({ value: option("-a", string()) }),
+        constant("fallback"),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: "fallback" });
+  });
+
+  it("should preserve option-aware zero-length branches across --", () => {
+    const optionalResult = parseSync(
+      longestMatch(optional(option("-a", string())), flag("-b")),
+      ["--"],
+    );
+    const defaultResult = parseSync(
+      longestMatch(
+        withDefault(option("-a", string()), "default"),
+        flag("-b"),
+      ),
+      ["--"],
+    );
+    const multipleResult = parseSync(
+      longestMatch(multiple(option("-a", string())), flag("-b")),
+      ["--"],
+    );
+    const objectResult = parseSync(
+      longestMatch(
+        object({ value: optional(option("-a", string())) }),
+        flag("-b"),
+      ),
+      ["--"],
+    );
+    const tupleResult = parseSync(
+      longestMatch(
+        tuple([optional(option("-a", string()))]),
+        flag("-b"),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(optionalResult, { success: true, value: undefined });
+    assert.deepEqual(defaultResult, { success: true, value: "default" });
+    assert.deepEqual(multipleResult, { success: true, value: [] });
+    assert.deepEqual(objectResult, {
+      success: true,
+      value: { value: undefined },
+    });
+    assert.deepEqual(tupleResult, { success: true, value: [undefined] });
+  });
+
+  it("should evaluate a dynamic default once across --", () => {
+    let calls = 0;
+    const defaults = ["a", "b"] as const;
+    const parser = longestMatch(
+      conditional(
+        withDefault(
+          option("--mode", choice(["a", "b"])),
+          () => defaults[calls++] ?? "b",
+        ),
+        {
+          a: constant("branch-a"),
+          b: constant("branch-b"),
+        },
+      ),
+      flag("--other"),
+    );
+
+    const result = parseSync(parser, ["--"]);
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["a", "branch-a"],
+    });
+    assert.equal(calls, 1);
+  });
+
+  it("should preserve slash and plus option fallbacks across --", () => {
+    const slashResult = parseSync(
+      longestMatch(
+        withDefault(option("/a", string()), "fallback"),
+        flag("/b"),
+      ),
+      ["--"],
+    );
+    const plusResult = parseSync(
+      longestMatch(
+        withDefault(option("+a", string()), "fallback"),
+        flag("+b"),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(slashResult, { success: true, value: "fallback" });
+    assert.deepEqual(plusResult, { success: true, value: "fallback" });
+  });
+
+  it("should preserve a nested fallback branch across --", () => {
+    const parser = longestMatch(
+      longestMatch(
+        withDefault(option("-a", string()), "D"),
+        flag("-b"),
+      ),
+      constant("C"),
+    );
+
+    assert.deepEqual(parseSync(parser, []), {
+      success: true,
+      value: "D",
+    });
+    assert.deepEqual(parseSync(parser, ["--"]), {
+      success: true,
+      value: "D",
+    });
+  });
+
+  it("should not treat a hyphen-prefixed command as an option", () => {
+    const result = parseSync(
+      longestMatch(
+        command("-run", constant("command")),
+        constant("fallback"),
+      ),
+      ["--"],
+    );
+
+    assert.ok(!result.success);
+  });
+
+  it("should let a greedy pass-through branch consume --", () => {
+    const parser = longestMatch(
+      option("-a"),
+      passThrough({ format: "greedy" }),
+    );
+
+    assert.deepEqual(parseSync(parser, ["--"]), {
+      success: true,
+      value: ["--"],
+    });
+    assert.deepEqual(parseSync(parser, ["--", "x"]), {
+      success: true,
+      value: ["--", "x"],
+    });
+  });
+
+  it("should not parse a consuming branch twice after --", () => {
+    const inputs: string[] = [];
+    const valueParser: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "VALUE",
+      placeholder: "",
+      parse(input) {
+        inputs.push(input);
+        if (
+          input === "x" && inputs.filter((value) => value === input).length > 1
+        ) {
+          return { success: false, error: message`Duplicate parse.` };
+        }
+        return { success: true, value: input };
+      },
+      format(value) {
+        return value;
+      },
+    };
+    const parser = longestMatch(
+      option("-a", valueParser),
+      argument(valueParser),
+    );
+
+    assert.deepEqual(parseSync(parser, ["-a", "v", "--", "x"]), {
+      success: true,
+      value: "x",
+    });
+    assert.deepEqual(inputs, ["v", "x"]);
+  });
+
+  it("async: should leave option branches unselected for --", async () => {
+    const result = await parseAsync(
+      optional(
+        longestMatch(
+          option("-a", asyncStringValue()),
+          option("-b", asyncStringValue()),
+        ),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: undefined });
+  });
+
+  it("async: should leave Boolean option branches unselected", async () => {
+    const parser = optional(
+      longestMatch(
+        option("-a"),
+        option("-b", asyncStringValue()),
+      ),
+    );
+
+    assert.deepEqual(await parseAsync(parser, []), {
+      success: true,
+      value: undefined,
+    });
+    assert.deepEqual(await parseAsync(parser, ["--"]), {
+      success: true,
+      value: undefined,
+    });
+  });
+
+  it("async: should consume -- before a zero-length branch", async () => {
+    const result = await parseAsync(
+      longestMatch(
+        option("-a", asyncStringValue()),
+        constant("fallback"),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: "fallback" });
+  });
+
+  it("async: should not select an object-wrapped required option", async () => {
+    const result = await parseAsync(
+      longestMatch(
+        object({ value: option("-a", asyncStringValue()) }),
+        constant("fallback"),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(result, { success: true, value: "fallback" });
+  });
+
+  it("async: should preserve option-aware zero-length branches", async () => {
+    const [
+      optionalResult,
+      defaultResult,
+      multipleResult,
+      objectResult,
+      tupleResult,
+    ] = await Promise.all([
+      parseAsync(
+        longestMatch(
+          optional(option("-a", asyncStringValue())),
+          flag("-b"),
+        ),
+        ["--"],
+      ),
+      parseAsync(
+        longestMatch(
+          withDefault(option("-a", asyncStringValue()), "default"),
+          flag("-b"),
+        ),
+        ["--"],
+      ),
+      parseAsync(
+        longestMatch(
+          multiple(option("-a", asyncStringValue())),
+          flag("-b"),
+        ),
+        ["--"],
+      ),
+      parseAsync(
+        longestMatch(
+          object({
+            value: optional(option("-a", asyncStringValue())),
+          }),
+          flag("-b"),
+        ),
+        ["--"],
+      ),
+      parseAsync(
+        longestMatch(
+          tuple([optional(option("-a", asyncStringValue()))]),
+          flag("-b"),
+        ),
+        ["--"],
+      ),
+    ]);
+
+    assert.deepEqual(optionalResult, { success: true, value: undefined });
+    assert.deepEqual(defaultResult, { success: true, value: "default" });
+    assert.deepEqual(multipleResult, { success: true, value: [] });
+    assert.deepEqual(objectResult, {
+      success: true,
+      value: { value: undefined },
+    });
+    assert.deepEqual(tupleResult, { success: true, value: [undefined] });
+  });
+
+  it("async: should evaluate a dynamic default once across --", async () => {
+    let calls = 0;
+    const defaults = ["a", "b"] as const;
+    const parser = longestMatch(
+      conditional(
+        withDefault(
+          option("--mode", asyncStringValue()),
+          () => defaults[calls++] ?? "b",
+        ),
+        {
+          a: constant("branch-a"),
+          b: constant("branch-b"),
+        },
+      ),
+      flag("--other"),
+    );
+
+    const result = await parseAsync(parser, ["--"]);
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["a", "branch-a"],
+    });
+    assert.equal(calls, 1);
+  });
+
+  it("async: should preserve non-hyphen option fallbacks", async () => {
+    const slashResult = await parseAsync(
+      longestMatch(
+        withDefault(option("/a", asyncStringValue()), "fallback"),
+        flag("/b"),
+      ),
+      ["--"],
+    );
+    const plusResult = await parseAsync(
+      longestMatch(
+        withDefault(option("+a", asyncStringValue()), "fallback"),
+        flag("+b"),
+      ),
+      ["--"],
+    );
+
+    assert.deepEqual(slashResult, { success: true, value: "fallback" });
+    assert.deepEqual(plusResult, { success: true, value: "fallback" });
+  });
+
+  it("async: should preserve a nested fallback branch", async () => {
+    const parser = longestMatch(
+      longestMatch(
+        withDefault(option("-a", asyncStringValue()), "D"),
+        flag("-b"),
+      ),
+      constant("C"),
+    );
+
+    assert.deepEqual(await parseAsync(parser, []), {
+      success: true,
+      value: "D",
+    });
+    assert.deepEqual(await parseAsync(parser, ["--"]), {
+      success: true,
+      value: "D",
+    });
+  });
+
+  it("async: should let a greedy pass-through branch consume --", async () => {
+    const parser = longestMatch(
+      option("-a", asyncStringValue()),
+      passThrough({ format: "greedy" }),
+    );
+
+    assert.deepEqual(await parseAsync(parser, ["--"]), {
+      success: true,
+      value: ["--"],
+    });
+    assert.deepEqual(await parseAsync(parser, ["--", "x"]), {
+      success: true,
+      value: ["--", "x"],
+    });
+  });
+
+  it("async: should not parse a consuming branch twice after --", async () => {
+    const inputs: string[] = [];
+    const valueParser: ValueParser<"async", string> = {
+      mode: "async",
+      metavar: "VALUE",
+      placeholder: "",
+      parse(input) {
+        inputs.push(input);
+        if (
+          input === "x" && inputs.filter((value) => value === input).length > 1
+        ) {
+          return Promise.resolve({
+            success: false,
+            error: message`Duplicate parse.`,
+          });
+        }
+        return Promise.resolve({ success: true, value: input });
+      },
+      format(value) {
+        return value;
+      },
+    };
+    const parser = longestMatch(
+      option("-a", valueParser),
+      argument(valueParser),
+    );
+
+    assert.deepEqual(
+      await parseAsync(parser, ["-a", "v", "--", "x"]),
+      { success: true, value: "x" },
+    );
+    assert.deepEqual(inputs, ["v", "x"]);
   });
 
   it("should prefer the branch consuming more tokens with shared options", () => {
