@@ -8,6 +8,23 @@ Version 1.2.2
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `or()` and `longestMatch()` incorrectly selecting an `option()` or
+    `flag()` branch when consuming the `--` options terminator.  Wrapped
+    `optional()`/`withDefault()` parsers now return their fallback, and
+    positional branches can consume arguments after `--` regardless of branch
+    order without evaluating their value parsers more than once.  Zero-consuming
+    branches such as `constant()` are selected only after the terminator is
+    consumed, without evaluating branch defaults more than once.  Slash- and
+    plus-prefixed options receive the same handling, nested fallback branches
+    retain their selection, unmatched Boolean options remain unselected, and
+    greedy `passThrough()` branches can still capture `--`.  Preserving an
+    active `or()` branch no longer evaluates defaults in inactive branches.
+    [[#884]]
+
+[#884]: https://github.com/dahlia/optique/issues/884
+
 
 Version 1.2.1
 -------------
@@ -252,6 +269,29 @@ Released on July 21, 2026.
     selection behavior remains unchanged.  [[#867]]
 
 [#867]: https://github.com/dahlia/optique/pull/867
+
+
+Version 1.1.3
+-------------
+
+Released on August 21, 2026.
+
+### @optique/core
+
+ -  Fixed `or()` and `longestMatch()` incorrectly selecting an `option()` or
+    `flag()` branch when consuming the `--` options terminator.  Wrapped
+    `optional()`/`withDefault()` parsers now return their fallback, and
+    positional branches can consume arguments after `--` regardless of branch
+    order without evaluating their value parsers more than once.  Zero-consuming
+    branches such as `constant()` are selected only after the terminator is
+    consumed, without evaluating branch defaults more than once.  Slash- and
+    plus-prefixed options receive the same handling, nested fallback branches
+    retain their selection, unmatched Boolean options remain unselected, and
+    greedy `passThrough()` branches can still capture `--`.  Preserving an
+    active `or()` branch no longer evaluates defaults in inactive branches.
+    [[#884]]
+
+[#884]: https://github.com/dahlia/optique/issues/884
 
 
 Version 1.1.2
@@ -530,6 +570,27 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.5
+-------------
+
+Released on August 21, 2026.
+
+### @optique/core
+
+ -  Fixed `or()` and `longestMatch()` incorrectly selecting an `option()` or
+    `flag()` branch when consuming the `--` options terminator.  Wrapped
+    `optional()`/`withDefault()` parsers now return their fallback, and
+    positional branches can consume arguments after `--` regardless of branch
+    order without evaluating their value parsers more than once.  Zero-consuming
+    branches such as `constant()` are selected only after the terminator is
+    consumed, without evaluating branch defaults more than once.  Slash- and
+    plus-prefixed options receive the same handling, nested fallback branches
+    retain their selection, unmatched Boolean options remain unselected, and
+    greedy `passThrough()` branches can still capture `--`.  Preserving an
+    active `or()` branch no longer evaluates defaults in inactive branches.
+    [[#884]]
 
 
 Version 1.0.4
