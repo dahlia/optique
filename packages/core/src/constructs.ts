@@ -1243,6 +1243,51 @@ function createExclusiveState(
 }
 
 /**
+ * Detects a branch result that handled only the global options terminator.
+ * Such a result advances the shared parser context, but does not identify
+ * which exclusive branch matched.
+ * @internal
+ */
+function isOptionsTerminatorOnlyResult<TState>(
+  context: ParserContext<TState>,
+  result: ParserResult<unknown>,
+): result is ParserResult<unknown> & { success: true } {
+  return !context.optionsTerminated && context.buffer[0] === "--" &&
+    result.success &&
+    result.next.optionsTerminated && result.consumed.length === 1 &&
+    result.consumed[0] === "--";
+}
+
+function isUnselectedBooleanOptionState(state: unknown): boolean {
+  return state != null && typeof state === "object" &&
+    "success" in state && state.success === true &&
+    "value" in state && state.value === false;
+}
+
+function preserveExclusiveStateAfterOptionsTerminator(
+  context: ParserContext<ExclusiveState>,
+  result: ParserResult<unknown> & { success: true },
+): ParserResult<ExclusiveState> & { success: true } {
+  const mergedExec = mergeChildExec(context.exec, result.next.exec);
+  return {
+    success: true,
+    next: {
+      ...context,
+      buffer: result.next.buffer,
+      optionsTerminated: true,
+      state: context.state,
+      ...(mergedExec != null
+        ? {
+          exec: mergedExec,
+          dependencyRegistry: mergedExec.dependencyRegistry,
+        }
+        : {}),
+    },
+    consumed: result.consumed,
+  };
+}
+
+/**
  * Creates a complete() method shared by or() and longestMatch().
  * @internal
  */
@@ -3250,6 +3295,9 @@ export function or(
       parser: Parser<"sync", unknown, unknown>;
       result: ParserResult<unknown> & { success: true };
     } | null = null;
+    let optionsTerminatorResult:
+      | (ParserResult<unknown> & { success: true })
+      | null = null;
     let provisionalAmbiguous = false;
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
@@ -3263,6 +3311,17 @@ export function or(
           parser,
         ),
       );
+      if (isOptionsTerminatorOnlyResult(context, result)) {
+        if (
+          activeState?.[0] === i && activeState[1].success &&
+          activeState[1].consumed.length > 0 &&
+          result.next.buffer.length < 1
+        ) {
+          return preserveExclusiveStateAfterOptionsTerminator(context, result);
+        }
+        optionsTerminatorResult ??= result;
+        continue;
+      }
       if (result.success && result.consumed.length > 0) {
         // Provisional consuming results are deferred: continue trying
         // other branches so a definitive result can take priority.
@@ -3612,6 +3671,12 @@ export function or(
         }
       }
     }
+    if (optionsTerminatorResult != null) {
+      return preserveExclusiveStateAfterOptionsTerminator(
+        context,
+        optionsTerminatorResult,
+      );
+    }
     return { ...error, success: false };
   };
 
@@ -3640,6 +3705,9 @@ export function or(
       parser: Parser<Mode, unknown, unknown>;
       result: ParserResult<unknown> & { success: true };
     } | null = null;
+    let optionsTerminatorResult:
+      | (ParserResult<unknown> & { success: true })
+      | null = null;
     let provisionalAmbiguous = false;
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
@@ -3654,6 +3722,17 @@ export function or(
         ),
       );
       const result = await resultOrPromise;
+      if (isOptionsTerminatorOnlyResult(context, result)) {
+        if (
+          activeState?.[0] === i && activeState[1].success &&
+          activeState[1].consumed.length > 0 &&
+          result.next.buffer.length < 1
+        ) {
+          return preserveExclusiveStateAfterOptionsTerminator(context, result);
+        }
+        optionsTerminatorResult ??= result;
+        continue;
+      }
       if (result.success && result.consumed.length > 0) {
         // Provisional consuming results are deferred (see sync counterpart).
         if (result.provisional) {
@@ -3972,6 +4051,12 @@ export function or(
           };
         }
       }
+    }
+    if (optionsTerminatorResult != null) {
+      return preserveExclusiveStateAfterOptionsTerminator(
+        context,
+        optionsTerminatorResult,
+      );
     }
     return { ...error, success: false };
   };
@@ -4389,6 +4474,13 @@ function createLongestMatch(
 
   type LongestMatchState = undefined | [number, ParserResult<unknown>];
   type ParseResult = ParserResult<LongestMatchState>;
+  type SuccessfulResult = ParserResult<unknown> & { success: true };
+  type BranchMatch = {
+    readonly index: number;
+    readonly result: SuccessfulResult;
+    readonly consumed: number;
+    readonly selectedAfterTerminator?: true;
+  };
 
   const getInitialError = (
     context: ParserContext<LongestMatchState>,
@@ -4419,34 +4511,152 @@ function createLongestMatch(
       })(),
   });
 
+  const commitLongestMatch = (
+    context: ParserContext<LongestMatchState>,
+    match: BranchMatch,
+    optionsTerminatorResult?: SuccessfulResult,
+  ): ParseResult => {
+    const selectedResult: SuccessfulResult = optionsTerminatorResult == null
+      ? match.result
+      : {
+        ...match.result,
+        next: {
+          ...match.result.next,
+          buffer: optionsTerminatorResult.next.buffer,
+          optionsTerminated: true,
+        },
+        consumed: [
+          ...optionsTerminatorResult.consumed,
+          ...match.result.consumed,
+        ],
+      };
+    const parser = parsers[match.index];
+    const mergedExec = mergeChildExec(context.exec, selectedResult.next.exec);
+    return {
+      success: true,
+      next: {
+        ...context,
+        buffer: selectedResult.next.buffer,
+        optionsTerminated: selectedResult.next.optionsTerminated,
+        state: createExclusiveState(
+          context.state,
+          match.index,
+          parser,
+          selectedResult,
+        ),
+        ...(mergedExec != null
+          ? {
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
+      },
+      consumed: selectedResult.consumed,
+    };
+  };
+
+  const resolveLongestMatchOptionsTerminator = (
+    context: ParserContext<LongestMatchState>,
+    bestMatch: BranchMatch | null,
+    optionsTerminatorMatches: readonly BranchMatch[],
+  ): ParseResult | null => {
+    if (optionsTerminatorMatches.length < 1) return null;
+
+    // A branch such as argument() or greedy passThrough() may consume input
+    // beyond the terminator.  It remains a genuine longest match and wins
+    // before preserving an already active branch.
+    if (bestMatch != null && bestMatch.consumed > 0) return null;
+
+    const activeState = normalizeExclusiveState(context.state);
+    if (
+      activeState != null && activeState[1].success &&
+      activeState[1].consumed.length > 0
+    ) {
+      return preserveExclusiveStateAfterOptionsTerminator(
+        context,
+        optionsTerminatorMatches[0].result,
+      );
+    }
+
+    let selected:
+      | { readonly match: BranchMatch; readonly fromTerminator: boolean }
+      | null = bestMatch == null
+        ? null
+        : { match: bestMatch, fromTerminator: false };
+    for (const match of optionsTerminatorMatches) {
+      if (
+        !match.selectedAfterTerminator &&
+        (extractRequiredUsage(parsers[match.index].usage).length > 0 ||
+          isUnselectedBooleanOptionState(match.result.next.state))
+      ) {
+        continue;
+      }
+      const selectedIsProvisional = selected != null &&
+        !!selected.match.result.provisional;
+      const matchIsProvisional = !!match.result.provisional;
+      if (
+        selected == null ||
+        (selectedIsProvisional && !matchIsProvisional) ||
+        (selectedIsProvisional === matchIsProvisional &&
+          match.index < selected.match.index)
+      ) {
+        selected = { match, fromTerminator: true };
+      }
+    }
+
+    if (selected != null) {
+      return commitLongestMatch(
+        context,
+        selected.match,
+        selected.fromTerminator
+          ? undefined
+          : optionsTerminatorMatches[0].result,
+      );
+    }
+    return preserveExclusiveStateAfterOptionsTerminator(
+      context,
+      optionsTerminatorMatches[0].result,
+    );
+  };
+
   // Sync parse implementation
-  const parseSync = (
+  const parseSyncBranches = (
     context: ParserContext<LongestMatchState>,
   ): ParseResult => {
     let bestMatch: {
       index: number;
-      parser: Parser<"sync", unknown, unknown>;
-      result: ParserResult<unknown>;
+      result: SuccessfulResult;
       consumed: number;
     } | null = null;
+    const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
     const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
-      const result = parser.parse(
-        withChildContext(
-          context,
-          i,
-          activeState == null || activeState[0] !== i ||
-            !activeState[1].success
-            ? parser.initialState
-            : activeState[1].next.state,
-          parser,
-        ),
+      const childContext = withChildContext(
+        context,
+        i,
+        activeState == null || activeState[0] !== i ||
+          !activeState[1].success
+          ? parser.initialState
+          : activeState[1].next.state,
+        parser,
       );
+      const result = parser.parse(childContext);
 
+      if (isOptionsTerminatorOnlyResult(context, result)) {
+        optionsTerminatorMatches.push({
+          index: i,
+          result,
+          consumed: 1,
+          ...(normalizeExclusiveState(result.next.state) != null
+            ? { selectedAfterTerminator: true as const }
+            : {}),
+        });
+        continue;
+      }
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
@@ -4459,73 +4669,66 @@ function createLongestMatch(
           (consumed === bestMatch.consumed &&
             bestIsProvisional && !result.provisional)
         ) {
-          bestMatch = { index: i, parser, result, consumed };
+          bestMatch = { index: i, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
         error = result;
       }
     }
 
-    if (bestMatch && bestMatch.result.success) {
-      const mergedExec = mergeChildExec(
-        context.exec,
-        bestMatch.result.next.exec,
-      );
-      return {
-        success: true,
-        next: {
-          ...context,
-          buffer: bestMatch.result.next.buffer,
-          optionsTerminated: bestMatch.result.next.optionsTerminated,
-          state: createExclusiveState(
-            context.state,
-            bestMatch.index,
-            bestMatch.parser,
-            bestMatch.result,
-          ),
-          ...(mergedExec != null
-            ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
-            : {}),
-        },
-        consumed: bestMatch.result.consumed,
-      };
+    const optionsTerminatorResolution = resolveLongestMatchOptionsTerminator(
+      context,
+      bestMatch,
+      optionsTerminatorMatches,
+    );
+    if (optionsTerminatorResolution != null) {
+      return optionsTerminatorResolution;
     }
+
+    if (bestMatch != null) return commitLongestMatch(context, bestMatch);
 
     return { ...error, success: false };
   };
 
   // Async parse implementation
-  const parseAsync = async (
+  const parseAsyncBranches = async (
     context: ParserContext<LongestMatchState>,
   ): Promise<ParseResult> => {
     let bestMatch: {
       index: number;
-      parser: Parser<Mode, unknown, unknown>;
-      result: ParserResult<unknown>;
+      result: SuccessfulResult;
       consumed: number;
     } | null = null;
+    const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
     const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
-      const resultOrPromise = parser.parse(
-        withChildContext(
-          context,
-          i,
-          activeState == null || activeState[0] !== i ||
-            !activeState[1].success
-            ? parser.initialState
-            : activeState[1].next.state,
-          parser,
-        ),
+      const childContext = withChildContext(
+        context,
+        i,
+        activeState == null || activeState[0] !== i ||
+          !activeState[1].success
+          ? parser.initialState
+          : activeState[1].next.state,
+        parser,
       );
+      const resultOrPromise = parser.parse(childContext);
       const result = await resultOrPromise;
 
+      if (isOptionsTerminatorOnlyResult(context, result)) {
+        optionsTerminatorMatches.push({
+          index: i,
+          result,
+          consumed: 1,
+          ...(normalizeExclusiveState(result.next.state) != null
+            ? { selectedAfterTerminator: true as const }
+            : {}),
+        });
+        continue;
+      }
       if (result.success) {
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
@@ -4538,40 +4741,23 @@ function createLongestMatch(
           (consumed === bestMatch.consumed &&
             bestIsProvisional && !result.provisional)
         ) {
-          bestMatch = { index: i, parser, result, consumed };
+          bestMatch = { index: i, result, consumed };
         }
       } else if (error.consumed < result.consumed) {
         error = result;
       }
     }
 
-    if (bestMatch && bestMatch.result.success) {
-      const mergedExec = mergeChildExec(
-        context.exec,
-        bestMatch.result.next.exec,
-      );
-      return {
-        success: true,
-        next: {
-          ...context,
-          buffer: bestMatch.result.next.buffer,
-          optionsTerminated: bestMatch.result.next.optionsTerminated,
-          state: createExclusiveState(
-            context.state,
-            bestMatch.index,
-            bestMatch.parser,
-            bestMatch.result,
-          ),
-          ...(mergedExec != null
-            ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
-            : {}),
-        },
-        consumed: bestMatch.result.consumed,
-      };
+    const optionsTerminatorResolution = resolveLongestMatchOptionsTerminator(
+      context,
+      bestMatch,
+      optionsTerminatorMatches,
+    );
+    if (optionsTerminatorResolution != null) {
+      return optionsTerminatorResolution;
     }
+
+    if (bestMatch != null) return commitLongestMatch(context, bestMatch);
 
     return { ...error, success: false };
   };
@@ -4597,8 +4783,8 @@ function createLongestMatch(
     parse(context: ParserContext<LongestMatchState>) {
       return dispatchByMode(
         combinedMode,
-        () => parseSync(context),
-        () => parseAsync(context),
+        () => parseSyncBranches(context),
+        () => parseAsyncBranches(context),
       );
     },
     getSuggestRuntimeNodes(
