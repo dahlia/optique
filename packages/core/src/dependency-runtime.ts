@@ -53,20 +53,6 @@ function stableSymbolKey(sym: symbol): string {
 // =============================================================================
 
 /**
- * The origin of a dependency source value.
- *
- * @internal
- * @since 1.0.0
- */
-export type DependencyValueOrigin =
-  | "cli"
-  | "default"
-  | "config"
-  | "env"
-  | "prompt"
-  | "derived-precomplete";
-
-/**
  * A request to resolve one or more dependency values.
  *
  * @internal
@@ -192,12 +178,8 @@ export interface DependencyRuntimeContext {
   /** The underlying registry (for bridge interop). */
   readonly registry: DependencyRegistryLike;
 
-  /** Register a source value with its origin. */
-  registerSource(
-    sourceId: symbol,
-    value: unknown,
-    origin: DependencyValueOrigin,
-  ): void;
+  /** Register a source value. */
+  registerSource(sourceId: symbol, value: unknown): void;
 
   /** Check if a source has been registered. */
   hasSource(sourceId: symbol): boolean;
@@ -250,11 +232,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
     this.registry = new FailedAwareRegistry(registry, this.#failedSources);
   }
 
-  registerSource(
-    sourceId: symbol,
-    value: unknown,
-    _origin: DependencyValueOrigin,
-  ): void {
+  registerSource(sourceId: symbol, value: unknown): void {
     this.registry.set(sourceId, value);
   }
 
@@ -596,7 +574,7 @@ function registerExplicitSourceValue(
   // { success: true, value } = source value (value may be undefined).
   if (result == null) return;
   if (result.success) {
-    runtime.registerSource(sourceId, result.value, "cli");
+    runtime.registerSource(sourceId, result.value);
   } else {
     // Mark the source as explicitly failed so that derived parsers
     // do not fall back to defaults for this source.
@@ -700,11 +678,7 @@ export function fillMissingSourceDefaults(
       );
     }
     if (result.success) {
-      runtime.registerSource(
-        meta.source.sourceId,
-        result.value,
-        "default",
-      );
+      runtime.registerSource(meta.source.sourceId, result.value);
     } else {
       // Default thunk returned a failure—propagate it.
       failures.push({
@@ -757,11 +731,7 @@ export async function fillMissingSourceDefaultsAsync(
       continue;
     }
     if (result.success) {
-      runtime.registerSource(
-        meta.source.sourceId,
-        result.value,
-        "default",
-      );
+      runtime.registerSource(meta.source.sourceId, result.value);
     } else {
       failures.push({
         sourceId: meta.source.sourceId,
@@ -1042,7 +1012,7 @@ export function collectSourcesFromState(
     if (depId != null && result.success) {
       // Always overwrite so that later values win (e.g., multiple()
       // where the last tag value should be used as the dependency).
-      runtime.registerSource(depId, result.value, "cli");
+      runtime.registerSource(depId, result.value);
     } else if (depId != null) {
       // Mark the source as explicitly failed so that derived parsers
       // do not fall back to defaults for this source.

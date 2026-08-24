@@ -14,8 +14,15 @@ To be released.
     now replace the generated root synopsis or derive one from a callback,
     while subcommand help and usage-only error output remain unchanged.
     [[#879]]
+ -  Removed the unused `DependencyValueOrigin` type and `registerSource()`
+    origin argument from `@optique/core/dependency-runtime`.  Both APIs were
+    marked `@internal`; dependency resolution behavior is unchanged.
+    [[#869], [#874], [#889]]
 
+[#869]: https://github.com/dahlia/optique/issues/869
+[#874]: https://github.com/dahlia/optique/issues/874
 [#879]: https://github.com/dahlia/optique/issues/879
+[#889]: https://github.com/dahlia/optique/pull/889
 
 ### @optique/run
 

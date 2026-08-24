@@ -6742,7 +6742,7 @@ describe("branch coverage: modifiers edge cases", () => {
       async complete(state, exec) {
         started.push(state);
         await gates.get(state)?.promise;
-        exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
+        exec?.dependencyRuntime?.registerSource(sourceId, state);
         return { success: true as const, value: `item-${state}` };
       },
       async *suggest() {},
@@ -6810,7 +6810,7 @@ describe("branch coverage: modifiers edge cases", () => {
       async complete(state, exec) {
         started.push(state);
         await gates.get(state)?.promise;
-        exec?.dependencyRuntime?.registerSource(sourceId, state, "cli");
+        exec?.dependencyRuntime?.registerSource(sourceId, state);
         return { success: true as const, value: `item-${state}` };
       },
       async *suggest(context) {

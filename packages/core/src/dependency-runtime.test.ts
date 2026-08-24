@@ -51,7 +51,7 @@ describe("DependencyRuntimeContext", () => {
   test("registerSource and getSource roundtrip", () => {
     const runtime = createDependencyRuntimeContext();
     const id = Symbol("env");
-    runtime.registerSource(id, "prod", "cli");
+    runtime.registerSource(id, "prod");
     assert.ok(runtime.hasSource(id));
     assert.equal(runtime.getSource(id), "prod");
   });
@@ -66,14 +66,14 @@ describe("DependencyRuntimeContext", () => {
     assert.equal(runtime.getSource(Symbol("missing")), undefined);
   });
 
-  test("registerSource with different origins", () => {
+  test("registerSource registers multiple values", () => {
     const runtime = createDependencyRuntimeContext();
     const id1 = Symbol("a");
     const id2 = Symbol("b");
     const id3 = Symbol("c");
-    runtime.registerSource(id1, "v1", "cli");
-    runtime.registerSource(id2, "v2", "default");
-    runtime.registerSource(id3, "v3", "config");
+    runtime.registerSource(id1, "v1");
+    runtime.registerSource(id2, "v2");
+    runtime.registerSource(id3, "v3");
     assert.equal(runtime.getSource(id1), "v1");
     assert.equal(runtime.getSource(id2), "v2");
     assert.equal(runtime.getSource(id3), "v3");
@@ -83,8 +83,8 @@ describe("DependencyRuntimeContext", () => {
     const runtime = createDependencyRuntimeContext();
     const id1 = Symbol("env");
     const id2 = Symbol("region");
-    runtime.registerSource(id1, "prod", "cli");
-    runtime.registerSource(id2, "us-east", "cli");
+    runtime.registerSource(id1, "prod");
+    runtime.registerSource(id2, "us-east");
     const result = runtime.resolveDependencies({
       dependencyIds: [id1, id2],
     });
@@ -97,7 +97,7 @@ describe("DependencyRuntimeContext", () => {
     const runtime = createDependencyRuntimeContext();
     const id1 = Symbol("env");
     const id2 = Symbol("region");
-    runtime.registerSource(id1, "prod", "cli");
+    runtime.registerSource(id1, "prod");
     // id2 is missing
     const result = runtime.resolveDependencies({
       dependencyIds: [id1, id2],
@@ -123,7 +123,7 @@ describe("DependencyRuntimeContext", () => {
     const runtime = createDependencyRuntimeContext();
     const id1 = Symbol("env");
     const id2 = Symbol("region");
-    runtime.registerSource(id1, "prod", "cli");
+    runtime.registerSource(id1, "prod");
     // id2 missing, no defaults provided for it
     const result = runtime.resolveDependencies({
       dependencyIds: [id1, id2],
@@ -147,7 +147,7 @@ describe("DependencyRuntimeContext", () => {
   test("getSuggestionDependencies mirrors resolveDependencies", () => {
     const runtime = createDependencyRuntimeContext();
     const id = Symbol("env");
-    runtime.registerSource(id, "prod", "cli");
+    runtime.registerSource(id, "prod");
     const result = runtime.getSuggestionDependencies({
       dependencyIds: [id],
     });
@@ -167,7 +167,7 @@ describe("DependencyRuntimeContext", () => {
   test("preserves failed sources when wrapping a cloned registry", () => {
     const sourceId = Symbol("env");
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.registerSource(sourceId, "prod");
     runtime.markSourceFailed(sourceId);
 
     const cloned = createDependencyRuntimeContext(runtime.registry.clone());
@@ -214,7 +214,7 @@ describe("DependencyRuntimeContext", () => {
     );
 
     runtime.markSourceFailed(sourceId);
-    assert.throws(() => runtime.registerSource(sourceId, "fresh", "cli"), {
+    assert.throws(() => runtime.registerSource(sourceId, "fresh"), {
       name: "TypeError",
       message: "Registry exploded.",
     });
@@ -762,7 +762,7 @@ describe("fillMissingSourceDefaults", () => {
   test("does not overwrite existing source", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.registerSource(sourceId, "prod");
     const nodes: RuntimeNode[] = [{
       path: ["env"],
       parser: {
@@ -1023,7 +1023,7 @@ describe("fillMissingSourceDefaultsAsync", () => {
     const matchedId = Symbol("matched");
     const transformedId = Symbol("transformed");
     const missingGetterId = Symbol("missing-getter");
-    runtime.registerSource(existingId, "cli", "cli");
+    runtime.registerSource(existingId, "cli");
     runtime.markSourceFailed(failedId);
 
     const calls: string[] = [];
@@ -1116,7 +1116,7 @@ describe("replayDerivedParser", () => {
   test("replays sync derived parser", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.registerSource(sourceId, "prod");
     const metadata: ParserDependencyMetadata = {
       derived: {
         kind: "derived",
@@ -1202,7 +1202,7 @@ describe("replayDerivedParser", () => {
   test("throws when sync replay receives a thenable", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.registerSource(sourceId, "prod");
     const metadata: ParserDependencyMetadata = {
       derived: {
         kind: "derived",
@@ -1235,7 +1235,7 @@ describe("replayDerivedParserAsync", () => {
   test("replays async derived parser", async () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.registerSource(sourceId, "prod");
     const metadata: ParserDependencyMetadata = {
       derived: {
         kind: "derived",
@@ -1330,9 +1330,9 @@ describe("resolveStateWithRuntime", () => {
     const firstId = Symbol("first");
     const secondId = Symbol("second");
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(singleId, "prod", "cli");
-    runtime.registerSource(firstId, "us", "cli");
-    runtime.registerSource(secondId, "blue", "cli");
+    runtime.registerSource(singleId, "prod");
+    runtime.registerSource(firstId, "us");
+    runtime.registerSource(secondId, "blue");
 
     const single = createDeferredParseState(
       "warn",
@@ -1391,7 +1391,7 @@ describe("resolveStateWithRuntime", () => {
   test("preserves dependency source states and clones only changed containers", () => {
     const sourceId = Symbol("env");
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.registerSource(sourceId, "prod");
     const source = createDependencySourceState(
       { success: true, value: "prod" },
       sourceId,
@@ -1463,7 +1463,7 @@ describe("resolveStateWithRuntime", () => {
       },
     );
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(depId, "prod", "cli");
+    runtime.registerSource(depId, "prod");
 
     assert.throws(
       () => resolveStateWithRuntime(deferred, runtime),
@@ -1481,7 +1481,7 @@ describe("resolveStateWithRuntimeAsync", () => {
     const explicitId = Symbol("explicit");
     const defaultId = Symbol("default");
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(explicitId, "prod", "cli");
+    runtime.registerSource(explicitId, "prod");
     let defaultReplays = 0;
     const state = [
       createDeferredParseState(
@@ -1546,7 +1546,7 @@ describe("resolveStateWithRuntimeAsync", () => {
   test("resolves a shared async deferred state at every reference", async () => {
     const sourceId = Symbol("env");
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(sourceId, "prod", "cli");
+    runtime.registerSource(sourceId, "prod");
     const deferred = createDeferredParseState(
       "warn",
       makeDerivedValueParser(
@@ -1783,7 +1783,7 @@ describe("replayDerivedParser—additional branches", () => {
     const runtime = createDependencyRuntimeContext();
     const id1 = Symbol("a");
     const id2 = Symbol("b");
-    runtime.registerSource(id1, "present", "cli");
+    runtime.registerSource(id1, "present");
     // id2 is missing with no defaults
 
     const metadata: ParserDependencyMetadata = {
@@ -1880,7 +1880,7 @@ describe("replayDerivedParserAsync—additional branches", () => {
     const runtime = createDependencyRuntimeContext();
     const id1 = Symbol("a");
     const id2 = Symbol("b");
-    runtime.registerSource(id1, "present", "cli");
+    runtime.registerSource(id1, "present");
     // id2 missing → partial
 
     const metadata: ParserDependencyMetadata = {
@@ -2024,7 +2024,7 @@ describe("DependencyRuntimeContext—FailedAwareRegistry clone", () => {
     const sourceA = Symbol("envA");
     const sourceB = Symbol("envB");
     const runtime = createDependencyRuntimeContext();
-    runtime.registerSource(sourceA, "prod", "cli");
+    runtime.registerSource(sourceA, "prod");
     runtime.markSourceFailed(sourceA);
     runtime.markSourceFailed(sourceB);
 
