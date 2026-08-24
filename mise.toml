@@ -2,21 +2,15 @@
 experimental = true
 
 [tools]
+"aqua:dahlia/hongdown" = "0.5.3"
 "aqua:fish-shell/fish-shell" = "latest"
 bun = "1.3"
 deno = "2.8"
-"github:dahlia/sacho" = "0.1.0"
+"github:dahlia/sacho" = "0.3.2"
 "github:PowerShell/PowerShell" = "latest"
 "github:nushell/nushell" = "latest"
 "github:pnpm/pnpm" = "11"
 node = "26"
-
-[tools."github:dahlia/hongdown"]
-version = "0.5.3"
-
-[tools."github:dahlia/hongdown".platforms]
-linux-x64 = "hongdown-*-x86_64-unknown-linux-musl.tar.bz2"
-linux-arm64 = "hongdown-*-aarch64-unknown-linux-musl.tar.bz2"
 
 [deps.deno]
 auto = true
@@ -82,6 +76,19 @@ run = "hongdown --check"
 [tasks."check:publish"]
 description = "Check if publishing is ready"
 run = "deno publish --dry-run --allow-dirty"
+
+[tasks."bump-version"]
+description = "Bump the version of all packages"
+usage = """
+arg "<version>" help="Version to bump to (e.g., 1.2.3)"
+"""
+shell = "nu -c"
+run = """
+sacho next $env.usage_version
+open packages/core/deno.json | upsert version $env.usage_version | save -f packages/core/deno.json
+deno fmt packages/core/deno.json
+deno task check-versions --fix
+"""
 
 [tasks.fmt]
 description = "Format source files"
