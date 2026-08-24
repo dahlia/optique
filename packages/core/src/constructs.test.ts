@@ -18805,7 +18805,6 @@ describe("branch coverage: constructs.ts edge cases", () => {
         exec?.dependencyRuntime?.registerSource(
           dep,
           "fast",
-          "derived-precomplete",
         );
         return createDependencySourceState(
           { success: true as const, value: "fast" },
@@ -19313,7 +19312,6 @@ describe("branch coverage: constructs.ts edge cases", () => {
         exec?.dependencyRuntime?.registerSource(
           dep,
           "fast",
-          "derived-precomplete",
         );
         return Promise.resolve(
           createDependencySourceState(
