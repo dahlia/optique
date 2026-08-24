@@ -8,6 +8,14 @@ Version 1.0.6
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `merge()` reporting a generic no-match error when no child parser
+    matched.  It now suggests mistyped option names and reports whether it
+    expects options, commands, or arguments, matching `object()`.  [[#888]]
+
+[#888]: https://github.com/dahlia/optique/issues/888
+
 
 Version 1.0.5
 -------------
