@@ -4929,6 +4929,54 @@ export interface ObjectErrorOptions {
 }
 
 /**
+ * Creates the initial parse error shared by object-like combinators.
+ * @param context The current parser context.
+ * @param noMatchContext The kinds of input accepted by the combinator.
+ * @param errors Optional custom error formatters.
+ * @returns A zero-consumption parse error.
+ */
+function createObjectLikeInitialError(
+  context: ParserContext<unknown>,
+  noMatchContext: NoMatchContext,
+  errors?: ObjectErrorOptions,
+): { consumed: number; error: Message } {
+  if (context.buffer.length < 1) {
+    const customEndOfInput = errors?.endOfInput;
+    return {
+      consumed: 0,
+      error: customEndOfInput
+        ? (typeof customEndOfInput === "function"
+          ? customEndOfInput(noMatchContext)
+          : customEndOfInput)
+        : generateNoMatchError(noMatchContext),
+    };
+  }
+
+  const token = context.buffer[0];
+  const customMessage = errors?.unexpectedInput;
+  if (customMessage) {
+    return {
+      consumed: 0,
+      error: typeof customMessage === "function"
+        ? customMessage(token)
+        : customMessage,
+    };
+  }
+
+  const baseError = message`Unexpected option or argument: ${token}.`;
+  return {
+    consumed: 0,
+    error: createErrorWithSuggestions(
+      baseError,
+      token,
+      context.usage,
+      "both",
+      errors?.suggestions,
+    ),
+  };
+}
+
+/**
  * Internal sync helper for object suggest functionality.
  * @internal
  */
@@ -6004,39 +6052,12 @@ export function object<
   type ParseResult = ParserResult<{ readonly [K in keyof T]: unknown }>;
   const getInitialError = (
     context: ParserContext<{ readonly [K in keyof T]: unknown }>,
-  ): { consumed: number; error: Message } => ({
-    consumed: 0,
-    error: context.buffer.length > 0
-      ? (() => {
-        const token = context.buffer[0];
-        const customMessage = options.errors?.unexpectedInput;
-
-        // If custom error message is provided, use it
-        if (customMessage) {
-          return typeof customMessage === "function"
-            ? customMessage(token)
-            : customMessage;
-        }
-
-        // Generate default error with suggestions
-        const baseError = message`Unexpected option or argument: ${token}.`;
-        return createErrorWithSuggestions(
-          baseError,
-          token,
-          context.usage,
-          "both",
-          options.errors?.suggestions,
-        );
-      })()
-      : (() => {
-        const customEndOfInput = options.errors?.endOfInput;
-        return customEndOfInput
-          ? (typeof customEndOfInput === "function"
-            ? customEndOfInput(noMatchContext)
-            : customEndOfInput)
-          : generateNoMatchError(noMatchContext);
-      })(),
-  });
+  ): { consumed: number; error: Message } =>
+    createObjectLikeInitialError(
+      context,
+      noMatchContext,
+      options.errors,
+    );
 
   // Sync parse implementation
   const parseSync = (
@@ -10191,6 +10212,8 @@ export function merge(
     ),
   );
 
+  const noMatchContext = analyzeNoMatchContext(rawParsers);
+
   // Collect field parser pairs from all children so that nested merge()
   // can pre-complete dependency source fields at the outer level.
   const mergedFieldParsers = collectChildFieldParsers(parsers);
@@ -10401,8 +10424,7 @@ export function merge(
 
     return {
       success: false,
-      consumed: 0,
-      error: message`No matching option or argument found.`,
+      ...createObjectLikeInitialError(context, noMatchContext),
     };
   };
 
@@ -10486,8 +10508,7 @@ export function merge(
 
     return {
       success: false,
-      consumed: 0,
-      error: message`No matching option or argument found.`,
+      ...createObjectLikeInitialError(context, noMatchContext),
     };
   };
 

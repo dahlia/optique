@@ -8,6 +8,14 @@ Version 1.1.4
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `merge()` reporting a generic no-match error when no child parser
+    matched.  It now suggests mistyped option names and reports whether it
+    expects options, commands, or arguments, matching `object()`.  [[#888]]
+
+[#888]: https://github.com/dahlia/optique/issues/888
+
 
 Version 1.1.3
 -------------
@@ -302,6 +310,18 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.6
+-------------
+
+Released on August 24, 2026.
+
+### @optique/core
+
+ -  Fixed `merge()` reporting a generic no-match error when no child parser
+    matched.  It now suggests mistyped option names and reports whether it
+    expects options, commands, or arguments, matching `object()`.  [[#888]]
 
 
 Version 1.0.5
