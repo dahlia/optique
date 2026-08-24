@@ -77,6 +77,19 @@ run = "hongdown --check"
 description = "Check if publishing is ready"
 run = "deno publish --dry-run --allow-dirty"
 
+[tasks."bump-version"]
+description = "Bump the version of all packages"
+usage = """
+arg "<version>" help="Version to bump to (e.g., 1.2.3)"
+"""
+shell = "nu -c"
+run = """
+sacho next $env.usage_version
+open packages/core/deno.json | upsert version $env.usage_version | save -f packages/core/deno.json
+deno fmt packages/core/deno.json
+deno task check-versions --fix
+"""
+
 [tasks.fmt]
 description = "Format source files"
 run = ["deno fmt", "hongdown --write", "mise fmt"]

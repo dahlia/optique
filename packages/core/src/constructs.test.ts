@@ -7104,29 +7104,106 @@ describe("merge", () => {
     }
   });
 
-  it("should handle parsing when no input matches", () => {
-    const parser1 = object({
-      flag1: option("-1"),
-    });
+  it("should suggest options across merged parsers", () => {
+    const parser = merge(
+      object("Output", {
+        output: option("--output", string()),
+      }),
+      object("Input", {
+        format: option("--format", string()),
+      }),
+    );
 
-    const parser2 = object({
-      flag2: option("-2"),
-    });
-
-    const parser = merge(parser1, parser2);
-
-    const context = {
-      buffer: ["-3"] as readonly string[],
-      state: parser.initialState,
-      optionsTerminated: false,
-      usage: parser.usage,
-    };
-
-    const result = parser.parse(context);
+    const result = parseSync(parser, ["--foramt", "json"]);
     assert.ok(!result.success);
     if (!result.success) {
-      assert.equal(result.consumed, 0);
-      assertErrorIncludes(result.error, "No matching option or argument found");
+      assert.equal(
+        formatMessage(result.error),
+        'Unexpected option or argument: "--foramt".\n\n' +
+          "Did you mean `--format`?",
+      );
+    }
+  });
+
+  it("should suggest options across asynchronous merged parsers", async () => {
+    const parser = merge(
+      object({
+        output: option("--output", asyncStringValue()),
+      }),
+      object({
+        format: option("--format", string()),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["--foramt", "json"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        'Unexpected option or argument: "--foramt".\n\n' +
+          "Did you mean `--format`?",
+      );
+    }
+  });
+
+  it("should report the expected input kinds at end of input", () => {
+    const optionsOnly = merge(
+      object({ output: option("--output", string()) }),
+      object({ format: option("--format", string()) }),
+    );
+    const optionsAndArguments = merge(
+      object({ output: option("--output", string()) }),
+      object({ input: argument(string()) }),
+    );
+
+    const optionsOnlyResult = parseSync(optionsOnly, []);
+    assert.ok(!optionsOnlyResult.success);
+    if (!optionsOnlyResult.success) {
+      assert.equal(
+        formatMessage(optionsOnlyResult.error),
+        "No matching option found.",
+      );
+    }
+
+    const optionsAndArgumentsResult = parseSync(optionsAndArguments, []);
+    assert.ok(!optionsAndArgumentsResult.success);
+    if (!optionsAndArgumentsResult.success) {
+      assert.equal(
+        formatMessage(optionsAndArgumentsResult.error),
+        "No matching option or argument found.",
+      );
+    }
+  });
+
+  it("should report expected input kinds asynchronously", async () => {
+    const optionsOnly = merge(
+      object({ output: option("--output", asyncStringValue()) }),
+      object({ format: option("--format", string()) }),
+    );
+    const optionsAndArguments = merge(
+      object({ output: option("--output", asyncStringValue()) }),
+      object({ input: argument(string()) }),
+    );
+
+    const optionsOnlyResult = await parseAsync(optionsOnly, []);
+    assert.ok(!optionsOnlyResult.success);
+    if (!optionsOnlyResult.success) {
+      assert.equal(
+        formatMessage(optionsOnlyResult.error),
+        "No matching option found.",
+      );
+    }
+
+    const optionsAndArgumentsResult = await parseAsync(
+      optionsAndArguments,
+      [],
+    );
+    assert.ok(!optionsAndArgumentsResult.success);
+    if (!optionsAndArgumentsResult.success) {
+      assert.equal(
+        formatMessage(optionsAndArgumentsResult.error),
+        "No matching option or argument found.",
+      );
     }
   });
 
@@ -7304,7 +7381,7 @@ describe("merge", () => {
     }
   });
 
-  it("should handle parsing failures with proper error propagation", () => {
+  it("should report unexpected unmatched input", () => {
     const parser1 = object({
       required: option("-r", string()),
     });
@@ -7326,7 +7403,10 @@ describe("merge", () => {
     assert.ok(!result.success);
     if (!result.success) {
       assert.equal(result.consumed, 0);
-      assertErrorIncludes(result.error, "No matching option or argument found");
+      assert.equal(
+        formatMessage(result.error),
+        'Unexpected option or argument: "--unknown".',
+      );
     }
   });
 
