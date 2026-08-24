@@ -1,6 +1,6 @@
 {
   "name": "@optique/inquirer",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Interactive prompt support for Optique via Inquirer.js",
   "keywords": [
     "CLI",
