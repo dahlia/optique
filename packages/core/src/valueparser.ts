@@ -1443,6 +1443,10 @@ export interface RegExpOptions {
     /**
      * Custom error message when the input is not a valid regular expression
      * source.  Can be a static message or a function that receives the input.
+     *
+     * **Security note**: Successful compilation does not guarantee safe
+     * execution. Vulnerable patterns can cause catastrophic backtracking when
+     * later matched against untrusted data.
      * @since 1.3.0
      */
     readonly invalidRegExp?: Message | ((input: string) => Message);
