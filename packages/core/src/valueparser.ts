@@ -1506,6 +1506,15 @@ export function regExp(
         };
       }
     },
+    validate(value: RegExp): ValueParserResult<RegExp> {
+      if (!(value instanceof RegExp)) {
+        return {
+          success: false,
+          error: message`Expected a RegExp value.`,
+        };
+      }
+      return this.parse(value.source);
+    },
     format(value: RegExp): string {
       return value.source;
     },

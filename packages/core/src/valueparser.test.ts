@@ -6677,6 +6677,44 @@ describe("regExp()", () => {
     });
   });
 
+  describe("validate()", () => {
+    it("should reject non-RegExp values", () => {
+      const parser = regExp();
+      assert.ok(typeof parser.validate === "function");
+
+      for (const value of ["foo", null]) {
+        const result = parser.validate(value as never);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, message`Expected a RegExp value.`);
+      }
+    });
+
+    it("should recompile valid values with the configured flags", () => {
+      const parser = regExp({ flags: "gi" });
+      const value = /foo/m;
+      value.lastIndex = 3;
+      assert.ok(typeof parser.validate === "function");
+
+      const result = parser.validate(value);
+
+      assert.ok(result.success);
+      assert.notStrictEqual(result.value, value);
+      assert.equal(result.value.source, "foo");
+      assert.equal(result.value.flags, "gi");
+      assert.equal(result.value.lastIndex, 0);
+    });
+
+    it("should reject non-RegExp option fallback values", () => {
+      const parser = option("--pattern", regExp());
+      assert.ok(typeof parser.validateValue === "function");
+
+      for (const value of ["foo", null]) {
+        const result = parser.validateValue(value as never);
+        assert.ok(!result.success);
+      }
+    });
+  });
+
   describe("format()", () => {
     it("should format a regular expression with RegExp.source", () => {
       const parser = regExp({ flags: "gi" });
