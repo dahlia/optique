@@ -1414,6 +1414,104 @@ export function string(
   };
 }
 
+/**
+ * Options for creating a {@link regExp} value parser.
+ *
+ * @since 1.3.0
+ */
+export interface RegExpOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.
+   * @default `"REGEXP"`
+   * @since 1.3.0
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * Fixed flags used to compile every input source.
+   * @default `""`
+   * @since 1.3.0
+   */
+  readonly flags?: string;
+
+  /**
+   * Custom error messages for regular expression parsing failures.
+   * @since 1.3.0
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when the input is not a valid regular expression
+     * source.  Can be a static message or a function that receives the input.
+     * @since 1.3.0
+     */
+    readonly invalidRegExp?: Message | ((input: string) => Message);
+  };
+}
+
+/**
+ * Creates a {@link ValueParser} that compiles regular expression sources.
+ *
+ * The entire input is treated as the source.  Slash-delimited notation such
+ * as `/pattern/flags` is not interpreted; use {@link RegExpOptions.flags} to
+ * configure fixed flags for the parser.
+ *
+ * **Security note**: Compiling a source does not establish that it is safe to
+ * execute.  Patterns from untrusted input can cause Regular Expression Denial
+ * of Service (ReDoS) when matched.  Limit pattern and subject lengths, execute
+ * matches in an environment that can be terminated, or use a linear-time
+ * regular expression engine when accepting untrusted patterns.
+ *
+ * @param options Configuration options for the regular expression parser.
+ * @returns A sync value parser producing JavaScript {@link RegExp} objects.
+ * @throws {TypeError} If `options.metavar` is an empty string or
+ *   `options.flags` is not a string.
+ * @throws {SyntaxError} If `options.flags` contains invalid, duplicate, or
+ *   incompatible regular expression flags.
+ * @since 1.3.0
+ */
+export function regExp(
+  options: RegExpOptions = {},
+): ValueParser<"sync", RegExp> {
+  const metavar = options.metavar ?? "REGEXP";
+  ensureNonEmptyString(metavar);
+  if (options.flags !== undefined && typeof options.flags !== "string") {
+    throw new TypeError(
+      `Expected flags to be a string, but got ${typeof options.flags}: ${
+        String(options.flags)
+      }.`,
+    );
+  }
+
+  const flags = new RegExp("", options.flags ?? "").flags;
+  const invalidRegExp = options.errors?.invalidRegExp;
+  return {
+    mode: "sync",
+    metavar,
+    get placeholder() {
+      return new RegExp("", flags);
+    },
+    parse(input: string): ValueParserResult<RegExp> {
+      try {
+        return { success: true, value: new RegExp(input, flags) };
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        return {
+          success: false,
+          error: invalidRegExp
+            ? (typeof invalidRegExp === "function"
+              ? invalidRegExp(input)
+              : invalidRegExp)
+            : message`Invalid regular expression: ${input}.`,
+        };
+      }
+    },
+    format(value: RegExp): string {
+      return value.source;
+    },
+  };
+}
+
 interface KeyValueOptionsBase {
   /**
    * The metavariable name for this parser.  Used in help messages to

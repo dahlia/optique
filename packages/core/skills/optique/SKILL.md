@@ -40,11 +40,12 @@ Core rules
  -  Use `message` from *@optique/core/message* for descriptions, help text, and
     custom errors. Prefer semantic message helpers such as `optionName()` and
     `metavar()` over string concatenation when naming CLI elements.
- -  Use value parsers such as `integer()`, `choice()`, `biject()`, `url()`,
-    and `uuid()` instead of validating raw strings after parsing. Use
-    `biject()` for one-to-one string-to-value choices, and use `transform()`
-    when an existing value parser describes the accepted CLI spelling but your
-    app needs a different result type. Use `path()` from
+ -  Use value parsers such as `integer()`, `choice()`, `biject()`, `regExp()`,
+    `url()`, and `uuid()` instead of validating raw strings after parsing. Use
+    `regExp({ flags })` for user-supplied regular expression sources,
+    `biject()` for one-to-one string-to-value choices, and `transform()` when
+    an existing value parser describes the accepted CLI spelling but your app
+    needs a different result type. Use `path()` from
     `@optique/run/valueparser` for file-system paths. Write a custom
     `{ mode, metavar, parse, format }` value parser only when the catalog does
     not cover the domain.

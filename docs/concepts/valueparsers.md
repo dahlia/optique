@@ -31,6 +31,7 @@ with Optique's type system.
 | Parser                           | Module                     | Return type                    | Description                                           |
 | -------------------------------- | -------------------------- | ------------------------------ | ----------------------------------------------------- |
 | `string()`                       | *@optique/core*            | `string`                       | Any string, with optional pattern validation          |
+| `regExp()`                       | *@optique/core*            | `RegExp`                       | Regular expression source with fixed flags            |
 | `keyValue()`                     | *@optique/core*            | readonly `[key, value]`        | Key–value pair such as `KEY=VALUE`                    |
 | `integer()`                      | *@optique/core*            | `number` or `bigint`           | Integer with range validation                         |
 | `float()`                        | *@optique/core*            | `number`                       | Floating-point number                                 |
@@ -120,6 +121,69 @@ Error: Expected a string matching pattern ^\d+\.\d+\.\d+$, but got 1.2.
 
 The `string()` parser uses `"STRING"` as its default metavar, which appears in
 help text to indicate what kind of input is expected.
+
+
+`regExp()` parser
+-----------------
+
+*This API is available since Optique 1.3.0.*
+
+The `regExp()` parser compiles a command-line value as the source of a
+JavaScript [`RegExp`].  It returns a `RegExp` object instead of the original
+string, so the pattern is ready to use after parsing.
+
+~~~~ typescript twoslash
+import { regExp } from "@optique/core/valueparser";
+
+const pattern = regExp();
+const insensitivePattern = regExp({ flags: "iu" });
+
+const result = insensitivePattern.parse("^café$");
+if (result.success) {
+  result.value.test("CAFÉ"); // true
+}
+~~~~
+
+The parser treats the entire input token as the source.  It does not interpret
+slash-delimited notation, so `/foo/i` matches that literal text rather than
+creating the source `foo` with the `i` flag.  Set fixed flags when constructing
+the parser instead:
+
+~~~~ typescript twoslash
+import { regExp } from "@optique/core/valueparser";
+
+const pattern = regExp({
+  flags: "giu",
+  metavar: "PATTERN",
+});
+~~~~
+
+Invalid, duplicate, and incompatible flags throw a `SyntaxError` immediately
+when `regExp()` is called.  An invalid input source produces a normal parse
+failure.  Customize that failure with `errors.invalidRegExp`:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { regExp } from "@optique/core/valueparser";
+
+const pattern = regExp({
+  errors: {
+    invalidRegExp: (input) => message`Invalid search pattern: ${input}.`,
+  },
+});
+~~~~
+
+`format()` returns the value's `RegExp.source`; flags remain part of the
+parser's fixed configuration.  The default metavar is `"REGEXP"`.
+
+> [!CAUTION]
+> `regExp()` only checks whether the source compiles.  It cannot determine
+> whether a pattern is safe to execute.  Untrusted patterns can cause Regular
+> Expression Denial of Service (ReDoS) through excessive backtracking when
+> matched.  Limit pattern and subject lengths, execute matches in an environment
+> that can be terminated, or use a linear-time regular expression engine.
+
+[`RegExp`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp
 
 
 `keyValue()` parser

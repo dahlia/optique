@@ -10,6 +10,8 @@ To be released.
 
 ### @optique/core
 
+ -  Added `regExp()` for compiling command-line values into `RegExp` objects
+    with fixed flags and customizable parse errors.  [[#906], [#909]]
  -  Added `usageLine` to the core runner `RunOptions`.  Top-level full help can
     now replace the generated root synopsis or derive one from a callback,
     while subcommand help and usage-only error output remain unchanged.
@@ -23,6 +25,8 @@ To be released.
 [#874]: https://github.com/dahlia/optique/issues/874
 [#879]: https://github.com/dahlia/optique/issues/879
 [#889]: https://github.com/dahlia/optique/pull/889
+[#906]: https://github.com/dahlia/optique/issues/906
+[#909]: https://github.com/dahlia/optique/pull/909
 
 ### @optique/run
 
