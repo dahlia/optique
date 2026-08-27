@@ -6713,6 +6713,44 @@ describe("regExp()", () => {
         assert.ok(!result.success);
       }
     });
+
+    it("should stay synchronous when spread into an async parser", () => {
+      const syncParser = regExp({ flags: "i" });
+      const { suggest: _suggest, ...spreadable } = syncParser;
+      const parser: ValueParser<"async", RegExp> = {
+        ...spreadable,
+        mode: "async",
+        // deno-lint-ignore require-await -- async promotes the parser mode
+        async parse(input: string) {
+          return syncParser.parse(input);
+        },
+      };
+      assert.ok(typeof parser.validate === "function");
+
+      const result = parser.validate(/foo/g);
+
+      assert.ok(result.success);
+      assert.equal(result.value.flags, "i");
+    });
+  });
+
+  describe("normalize()", () => {
+    it("should normalize defaults with the configured flags", () => {
+      const value = /foo/g;
+      value.lastIndex = 3;
+      const parser = withDefault(
+        option("--pattern", regExp({ flags: "i" })),
+        value,
+      );
+
+      const result = parse(parser, []);
+
+      assert.ok(result.success);
+      assert.notStrictEqual(result.value, value);
+      assert.equal(result.value.source, "foo");
+      assert.equal(result.value.flags, "i");
+      assert.equal(result.value.lastIndex, 0);
+    });
   });
 
   describe("format()", () => {

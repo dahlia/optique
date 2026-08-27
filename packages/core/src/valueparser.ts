@@ -1485,27 +1485,28 @@ export function regExp(
 
   const flags = new RegExp("", options.flags ?? "").flags;
   const invalidRegExp = options.errors?.invalidRegExp;
+  const parseRegExp = (input: string): ValueParserResult<RegExp> => {
+    try {
+      return { success: true, value: new RegExp(input, flags) };
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+      return {
+        success: false,
+        error: invalidRegExp
+          ? (typeof invalidRegExp === "function"
+            ? invalidRegExp(input)
+            : invalidRegExp)
+          : message`Invalid regular expression: ${input}.`,
+      };
+    }
+  };
   return {
     mode: "sync",
     metavar,
     get placeholder() {
       return new RegExp("", flags);
     },
-    parse(input: string): ValueParserResult<RegExp> {
-      try {
-        return { success: true, value: new RegExp(input, flags) };
-      } catch (error) {
-        if (!(error instanceof SyntaxError)) throw error;
-        return {
-          success: false,
-          error: invalidRegExp
-            ? (typeof invalidRegExp === "function"
-              ? invalidRegExp(input)
-              : invalidRegExp)
-            : message`Invalid regular expression: ${input}.`,
-        };
-      }
-    },
+    parse: parseRegExp,
     validate(value: RegExp): ValueParserResult<RegExp> {
       if (!(value instanceof RegExp)) {
         return {
@@ -1513,7 +1514,12 @@ export function regExp(
           error: message`Expected a RegExp value.`,
         };
       }
-      return this.parse(value.source);
+      return parseRegExp(value.source);
+    },
+    normalize(value: RegExp): RegExp {
+      if (!(value instanceof RegExp)) return value;
+      const result = parseRegExp(value.source);
+      return result.success ? result.value : value;
     },
     format(value: RegExp): string {
       return value.source;
