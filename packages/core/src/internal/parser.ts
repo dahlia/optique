@@ -74,6 +74,56 @@ export type ModeIterable<M extends Mode, T> = M extends "async"
   : Iterable<T>;
 
 /**
+ * Internal symbol used by transparent combinators to expose independently
+ * competing parse operations to shared-buffer parents.
+ * @internal
+ */
+export const parseLanesKey: unique symbol = Symbol("parseLanes");
+
+/**
+ * An owner-consumption requirement for a parse lane.
+ * @internal
+ */
+export interface ParseLaneConsumptionGroup {
+  /** Identity shared by lanes belonging to the same owning parser. */
+  readonly id: object;
+  /** Whether the owning parser is active after a consuming lane succeeds. */
+  readonly isActive?: (state: unknown) => boolean;
+}
+
+/**
+ * A state-preserving parse operation that competes at one exact priority.
+ * @internal
+ */
+export interface ParseLane<TState> {
+  /** The exact priority at which this lane competes. */
+  readonly priority: number;
+  /**
+   * Identity shared by lanes that must all succeed before their
+   * zero-consumption state updates can be committed.
+   */
+  readonly zeroConsumptionGroup?: object;
+  /**
+   * Whether a zero-consumption success can settle the owning parser while
+   * input remains.  Defaults to `true`.
+   */
+  readonly settlesZeroConsumption?: boolean;
+  /** Fixed tokens reachable through this lane. */
+  readonly leadingNames: ReadonlySet<string>;
+  /** Whether this lane accepts any positional token. */
+  readonly acceptingAnyToken: boolean;
+  /**
+   * Groups in which a zero-consumption update is valid only after another
+   * lane in every group has consumed input during the same arbitration.
+   */
+  readonly requiredConsumptionGroups?: readonly ParseLaneConsumptionGroup[];
+  /** Parses through the owning parser's state and execution context. */
+  parse(
+    context: ParserContext<TState>,
+  ): ParserResult<TState> | Promise<ParserResult<TState>>;
+}
+
+/**
  * Combines multiple modes into a single mode.
  * If any mode is `"async"`, the result is `"async"`; otherwise `"sync"`.
  *
@@ -206,6 +256,14 @@ export interface Parser<
    * state when parsing starts.
    */
   readonly initialState: TState;
+
+  /**
+   * Independently competing parse operations exposed by transparent
+   * combinators.  Shared-buffer parents use these to arbitrate below an
+   * aggregate parser boundary without bypassing the owner's state adapters.
+   * @internal
+   */
+  readonly [parseLanesKey]?: readonly ParseLane<TState>[];
 
   /**
    * Internal marker for wrappers whose `{ hasCliValue: false }` states should
@@ -1277,6 +1335,41 @@ export function composeWrappedSourceMetadata(
     ...dependencyMetadata,
     source: wrapSource(dependencyMetadata.source),
   };
+}
+
+/**
+ * Defines internal parse-lane metadata without exposing it through object
+ * spreads used by custom parser wrappers.
+ *
+ * @internal
+ */
+export function defineParseLanes<TState>(
+  parser: object,
+  lanes: readonly ParseLane<TState>[] | undefined,
+): void {
+  if (lanes == null) return;
+  Object.defineProperty(parser, parseLanesKey, {
+    value: lanes,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
+/**
+ * Gets parse-lane metadata defined directly on a parser.
+ *
+ * Inherited metadata belongs to the parser's prototype and must not bypass an
+ * overriding `parse()` implementation on a custom wrapper.
+ *
+ * @internal
+ */
+export function getOwnParseLanes<TState>(
+  parser: object,
+): readonly ParseLane<TState>[] | undefined {
+  if (!Object.hasOwn(parser, parseLanesKey)) return undefined;
+  return (parser as {
+    readonly [parseLanesKey]?: readonly ParseLane<TState>[];
+  })[parseLanesKey];
 }
 
 /**
