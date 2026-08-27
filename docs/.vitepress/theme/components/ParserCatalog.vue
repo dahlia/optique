@@ -9,6 +9,7 @@ const valueParsers = [
     base: "/concepts/valueparsers",
     items: [
       ["string", "string-parser"],
+      ["regExp", "regexp-parser"],
       ["choice", "choice-parser"],
       ["biject", "biject-parser"],
       ["transform", "transform-combinator"],

@@ -30,6 +30,7 @@ import {
   type NonEmptyString,
   port,
   portRange,
+  regExp,
   type SemVer,
   semVer,
   type SemVerString,
@@ -6531,6 +6532,232 @@ describe("string", () => {
       const result2 = parser.parse("b");
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
+    });
+  });
+});
+
+describe("regExp()", () => {
+  describe("constructor", () => {
+    it("should expose sync parser metadata", () => {
+      const parser = regExp();
+
+      assert.equal(parser.mode, "sync");
+      assert.equal(parser.metavar, "REGEXP");
+      assert.ok(parser.placeholder instanceof RegExp);
+      assert.equal(parser.placeholder.source, "(?:)");
+      assert.equal(parser.placeholder.flags, "");
+    });
+
+    it("should return a fresh placeholder for each access", () => {
+      const parser = regExp({ flags: "gy" });
+      const first = parser.placeholder;
+
+      first.lastIndex = 3;
+      const second = parser.placeholder;
+
+      assert.notStrictEqual(second, first);
+      assert.equal(second.source, "(?:)");
+      assert.equal(second.flags, "gy");
+      assert.equal(second.lastIndex, 0);
+    });
+
+    it("should accept a custom metavar", () => {
+      const parser = regExp({ metavar: "PATTERN" });
+
+      assert.equal(parser.metavar, "PATTERN");
+    });
+
+    it("should reject an empty metavar", () => {
+      assert.throws(
+        () => regExp({ metavar: "" as NonEmptyString }),
+        {
+          name: "TypeError",
+          message: "Expected a non-empty string.",
+        },
+      );
+    });
+
+    it("should reject invalid flags when constructed", () => {
+      assert.throws(() => regExp({ flags: "x" }), SyntaxError);
+    });
+
+    it("should reject non-string flags when constructed", () => {
+      assert.throws(
+        () => regExp({ flags: 1 as never }),
+        {
+          name: "TypeError",
+          message: "Expected flags to be a string, but got number: 1.",
+        },
+      );
+    });
+
+    it("should reject duplicate flags when constructed", () => {
+      assert.throws(() => regExp({ flags: "gg" }), SyntaxError);
+    });
+
+    it("should reject incompatible flags when constructed", () => {
+      assert.throws(() => regExp({ flags: "uv" }), SyntaxError);
+    });
+  });
+
+  describe("parse()", () => {
+    it("should compile a valid regular expression source", () => {
+      const result = regExp().parse("^[a-z]+$");
+
+      assert.ok(result.success);
+      assert.ok(result.value instanceof RegExp);
+      assert.equal(result.value.source, "^[a-z]+$");
+      assert.equal(result.value.flags, "");
+    });
+
+    it("should compile an empty source", () => {
+      const result = regExp().parse("");
+
+      assert.ok(result.success);
+      assert.equal(result.value.source, "(?:)");
+    });
+
+    it("should preserve an escaped slash in the source", () => {
+      const result = regExp().parse(String.raw`foo\/bar`);
+
+      assert.ok(result.success);
+      assert.equal(result.value.source, String.raw`foo\/bar`);
+      assert.ok(result.value.test("foo/bar"));
+    });
+
+    it("should treat slash notation as a raw source", () => {
+      const result = regExp().parse("/foo/i");
+
+      assert.ok(result.success);
+      assert.equal(result.value.source, String.raw`\/foo\/i`);
+      assert.equal(result.value.flags, "");
+      assert.ok(result.value.test("/foo/i"));
+      assert.ok(!result.value.test("FOO"));
+    });
+
+    it("should compile sources with fixed flags", () => {
+      const result = regExp({ flags: "iu" }).parse("café");
+
+      assert.ok(result.success);
+      assert.equal(result.value.source, "café");
+      assert.equal(result.value.flags, "iu");
+      assert.ok(result.value.test("CAFÉ"));
+    });
+
+    it("should return a structured error for an invalid source", () => {
+      const result = regExp().parse("[");
+
+      assert.ok(!result.success);
+      assert.deepEqual(
+        result.error,
+        message`Invalid regular expression: ${"["}.`,
+      );
+    });
+
+    it("should use a static custom error", () => {
+      const result = regExp({
+        errors: {
+          invalidRegExp: message`Pattern could not be compiled.`,
+        },
+      }).parse("[");
+
+      assert.ok(!result.success);
+      assert.deepEqual(result.error, message`Pattern could not be compiled.`);
+    });
+
+    it("should pass the source to a custom error callback", () => {
+      const result = regExp({
+        errors: {
+          invalidRegExp: (input) => message`Bad pattern: ${input}.`,
+        },
+      }).parse("[");
+
+      assert.ok(!result.success);
+      assert.equal(formatMessage(result.error), 'Bad pattern: "[".');
+    });
+  });
+
+  describe("validate()", () => {
+    it("should reject non-RegExp values", () => {
+      const parser = regExp();
+      assert.ok(typeof parser.validate === "function");
+
+      for (const value of ["foo", null]) {
+        const result = parser.validate(value as never);
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, message`Expected a RegExp value.`);
+      }
+    });
+
+    it("should recompile valid values with the configured flags", () => {
+      const parser = regExp({ flags: "gi" });
+      const value = /foo/m;
+      value.lastIndex = 3;
+      assert.ok(typeof parser.validate === "function");
+
+      const result = parser.validate(value);
+
+      assert.ok(result.success);
+      assert.notStrictEqual(result.value, value);
+      assert.equal(result.value.source, "foo");
+      assert.equal(result.value.flags, "gi");
+      assert.equal(result.value.lastIndex, 0);
+    });
+
+    it("should reject non-RegExp option fallback values", () => {
+      const parser = option("--pattern", regExp());
+      assert.ok(typeof parser.validateValue === "function");
+
+      for (const value of ["foo", null]) {
+        const result = parser.validateValue(value as never);
+        assert.ok(!result.success);
+      }
+    });
+
+    it("should stay synchronous when spread into an async parser", () => {
+      const syncParser = regExp({ flags: "i" });
+      const { suggest: _suggest, ...spreadable } = syncParser;
+      const parser: ValueParser<"async", RegExp> = {
+        ...spreadable,
+        mode: "async",
+        // deno-lint-ignore require-await -- async promotes the parser mode
+        async parse(input: string) {
+          return syncParser.parse(input);
+        },
+      };
+      assert.ok(typeof parser.validate === "function");
+
+      const result = parser.validate(/foo/g);
+
+      assert.ok(result.success);
+      assert.equal(result.value.flags, "i");
+    });
+  });
+
+  describe("normalize()", () => {
+    it("should normalize defaults with the configured flags", () => {
+      const value = /foo/g;
+      value.lastIndex = 3;
+      const parser = withDefault(
+        option("--pattern", regExp({ flags: "i" })),
+        value,
+      );
+
+      const result = parse(parser, []);
+
+      assert.ok(result.success);
+      assert.notStrictEqual(result.value, value);
+      assert.equal(result.value.source, "foo");
+      assert.equal(result.value.flags, "i");
+      assert.equal(result.value.lastIndex, 0);
+    });
+  });
+
+  describe("format()", () => {
+    it("should format a regular expression with RegExp.source", () => {
+      const parser = regExp({ flags: "gi" });
+
+      assert.equal(parser.format(/foo\/bar/m), String.raw`foo\/bar`);
     });
   });
 });
