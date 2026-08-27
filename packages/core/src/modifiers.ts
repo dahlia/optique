@@ -35,7 +35,10 @@ import {
 import type { Phase2Seed } from "./phase2-seed.ts";
 import {
   defineInheritedAnnotationParser,
+  defineParseLanes,
   defineSourceBindingOnlyAnnotationCompletionParser,
+  getOwnParseLanes,
+  type ParseLane,
   unmatchedNonCliDependencySourceStateMarker,
 } from "./internal/parser.ts";
 import type {
@@ -539,6 +542,57 @@ function processOptionalStyleResult<TState>(
   return result;
 }
 
+function adaptOptionalStyleParseLanes<M extends Mode, TState>(
+  parser: Parser<M, unknown, TState>,
+): readonly ParseLane<[TState] | undefined>[] | undefined {
+  const lanes = getOwnParseLanes<TState>(parser);
+  if (lanes == null) return undefined;
+  const consumptionGroup = {};
+  return lanes.map((lane) => ({
+    priority: lane.priority,
+    zeroConsumptionGroup: lane.zeroConsumptionGroup,
+    settlesZeroConsumption: lane.settlesZeroConsumption,
+    leadingNames: lane.leadingNames,
+    // optional() and withDefault() can both succeed without matching input,
+    // even when the wrapped lane accepts arbitrary tokens.
+    acceptingAnyToken: false,
+    requiredConsumptionGroups: [
+      ...(lane.requiredConsumptionGroups?.map((group) => ({
+        id: group.id,
+        ...(group.isActive == null ? {} : {
+          isActive(state: unknown) {
+            const innerState = Array.isArray(state)
+              ? state[0]
+              : parser.initialState;
+            return group.isActive?.(innerState) ?? true;
+          },
+        }),
+      })) ?? []),
+      {
+        id: consumptionGroup,
+        isActive(state: unknown) {
+          return Array.isArray(state);
+        },
+      },
+    ],
+    parse(context: ParserContext<[TState] | undefined>) {
+      const innerState = deriveOptionalInnerParseState(context.state, parser);
+      const innerContext = { ...context, state: innerState };
+      return dispatchByMode(
+        parser.mode,
+        () => {
+          const result = lane.parse(innerContext) as ParserResult<TState>;
+          return processOptionalStyleResult(result, innerState, context);
+        },
+        async () => {
+          const result = await lane.parse(innerContext);
+          return processOptionalStyleResult(result, innerState, context);
+        },
+      );
+    },
+  }));
+}
+
 /**
  * Creates a `shouldDeferCompletion` adapter that unwraps the outer state
  * shape (`[TState] | undefined`) used by {@link optional} and
@@ -933,6 +987,7 @@ export function optional<M extends Mode, TValue, TState>(
         .dependencyMetadata = composed;
     }
   }
+  defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
   return optionalParser;
@@ -1469,6 +1524,10 @@ export function withDefault<
         .dependencyMetadata = composed;
     }
   }
+  defineParseLanes(
+    withDefaultParser,
+    adaptOptionalStyleParseLanes(parser),
+  );
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
   return withDefaultParser;
@@ -1639,6 +1698,7 @@ export function map<M extends Mode, T, U, TState>(
       return parser.getDocFragments(state, undefined);
     },
   } as Parser<M, U, TState>;
+  defineParseLanes(mappedParser, getOwnParseLanes(parser));
   // Strip any normalizeValue inherited from the inner parser via ...parser
   // spread.  The inner normalizer operates on type T, not the mapped type U,
   // so keeping it would corrupt mapped defaults.
@@ -2952,6 +3012,7 @@ export function nonEmpty<M extends Mode, T, TState>(
   parser: Parser<M, T, TState>,
 ): Parser<M, T, TState> {
   const syncParser = parser as Parser<"sync", T, TState>;
+  const consumptionGroup = {};
 
   // Helper to process the result of the inner parser
   const processNonEmptyResult = (
@@ -3024,6 +3085,23 @@ export function nonEmpty<M extends Mode, T, TState>(
       return syncParser.getDocFragments(state, defaultValue);
     },
   } as Parser<M, T, TState>;
+  defineParseLanes(
+    nonEmptyParser,
+    getOwnParseLanes<TState>(parser)?.map((lane) => ({
+      priority: lane.priority,
+      zeroConsumptionGroup: lane.zeroConsumptionGroup,
+      settlesZeroConsumption: lane.settlesZeroConsumption,
+      leadingNames: lane.leadingNames,
+      acceptingAnyToken: lane.acceptingAnyToken,
+      requiredConsumptionGroups: [
+        ...(lane.requiredConsumptionGroups ?? []),
+        { id: consumptionGroup },
+      ],
+      parse(context: ParserContext<TState>) {
+        return lane.parse(context);
+      },
+    })),
+  );
   // Forward placeholder lazily from inner parser.
   if ("placeholder" in parser) {
     Object.defineProperty(nonEmptyParser, "placeholder", {

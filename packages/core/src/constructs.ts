@@ -75,7 +75,10 @@ import type {
 } from "./parser.ts";
 import {
   defineInheritedAnnotationParser,
+  defineParseLanes,
+  getOwnParseLanes,
   getParserSuggestRuntimeNodes,
+  type ParseLane,
   unmatchedNonCliDependencySourceStateMarker,
 } from "./internal/parser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -233,8 +236,8 @@ function unionLeadingNames(
  * Computes `leadingNames` for shared-buffer compositions (`tuple()`,
  * `object()`, `merge()`, `concat()`).
  *
- * Children are processed in descending priority order (matching the
- * round-robin parse loop).  Once a child with `acceptingAnyToken` is
+ * Sources are processed in descending priority order (matching the
+ * round-robin parse loop).  Once a source with `acceptingAnyToken` is
  * encountered, no lower-priority children can match at position 0, so
  * their names are excluded.
  */
@@ -5907,6 +5910,88 @@ export function object<
       options.errors,
     );
 
+  type ObjectState = { readonly [K in keyof T]: unknown };
+  const adaptFieldLaneResult = (
+    context: ParserContext<ObjectState>,
+    field: keyof T,
+    parser: Parser<Mode, unknown, unknown>,
+    fieldState: unknown,
+    result: ParserResult<unknown>,
+  ): ParserResult<ObjectState> => {
+    if (!result.success) return result;
+    if (result.consumed.length === 0 && result.next.state === fieldState) {
+      return { success: true, next: context, consumed: [] };
+    }
+    const mergedExec = mergeChildExec(context.exec, result.next.exec);
+    const nextState = result.next.state === fieldState ? context.state : {
+      ...(context.state as Record<string | symbol, unknown>),
+      [field as string | symbol]: getAnnotatedChildState(
+        context.state,
+        result.next.state,
+        parser,
+      ),
+    } as ObjectState;
+    return {
+      success: true,
+      next: {
+        ...context,
+        buffer: result.next.buffer,
+        optionsTerminated: result.next.optionsTerminated,
+        state: nextState,
+        ...(mergedExec != null
+          ? {
+            trace: mergedExec.trace,
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
+      },
+      consumed: result.consumed,
+    };
+  };
+  const objectZeroConsumptionGroup = {};
+  const objectParseLanes: readonly ParseLane<ObjectState>[] = parserPairs
+    .map(([field, parser]) => ({
+      priority: parser.priority,
+      zeroConsumptionGroup: objectZeroConsumptionGroup,
+      settlesZeroConsumption: false,
+      leadingNames: parser.leadingNames,
+      acceptingAnyToken: parser.acceptingAnyToken,
+      parse(context: ParserContext<ObjectState>) {
+        const fieldState = createFieldStateGetter(
+          context.state,
+          getObjectParseChildState,
+        )(field, parser);
+        return dispatchByMode(
+          combinedMode,
+          () => {
+            const result = (parser as Parser<"sync", unknown, unknown>).parse(
+              withChildContext(context, field, fieldState, parser),
+            );
+            return adaptFieldLaneResult(
+              context,
+              field,
+              parser,
+              fieldState,
+              result,
+            );
+          },
+          async () => {
+            const result = await parser.parse(
+              withChildContext(context, field, fieldState, parser),
+            );
+            return adaptFieldLaneResult(
+              context,
+              field,
+              parser,
+              fieldState,
+              result,
+            );
+          },
+        );
+      },
+    }));
+
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<{ readonly [K in keyof T]: unknown }>,
@@ -6924,6 +7009,7 @@ export function object<
     });
   }
 
+  defineParseLanes(objectParser, objectParseLanes);
   defineInheritedAnnotationParser(objectParser);
   return objectParser;
 }
@@ -8563,7 +8649,7 @@ export function merge(
   // Helper function to extract the appropriate state for a parser
   const extractParserState = (
     parser: Parser<Mode, MergeState, MergeState>,
-    context: ParserContext<MergeState>,
+    state: MergeState,
     index: number,
   ): unknown => {
     if (parser.initialState === undefined) {
@@ -8571,10 +8657,10 @@ export function merge(
       // check if they have accumulated state during parsing
       const key = parserStateKey(index);
       if (
-        context.state && typeof context.state === "object" &&
-        key in context.state
+        state && typeof state === "object" &&
+        key in state
       ) {
-        return context.state[key];
+        return state[key];
       }
       return undefined;
     } else if (
@@ -8583,17 +8669,17 @@ export function merge(
       const localStateKey = localObjectStateKey(index);
       if (
         shouldPreserveLocalChildState(parser) &&
-        context.state && typeof context.state === "object" &&
-        localStateKey in context.state
+        state && typeof state === "object" &&
+        localStateKey in state
       ) {
-        return context.state[localStateKey];
+        return state[localStateKey];
       }
       // For object parsers, extract matching fields from context state
-      if (context.state && typeof context.state === "object") {
+      if (state && typeof state === "object") {
         const extractedState: MergeState = {};
         for (const field in parser.initialState) {
-          extractedState[field] = field in context.state
-            ? context.state[field]
+          extractedState[field] = field in state
+            ? state[field]
             : parser.initialState[field];
         }
         return extractedState;
@@ -8649,8 +8735,227 @@ export function merge(
     };
   };
 
-  // Sync parse implementation
-  const parseSync = (
+  const adaptMergeLaneResult = (
+    parser: Parser<Mode, MergeState, MergeState>,
+    context: ParserContext<MergeState>,
+    parserState: unknown,
+    parsedState: unknown,
+    result: ParserResult<unknown>,
+    index: number,
+  ): MergeParseResult => {
+    if (!result.success) return result;
+    const mergedExec = mergeChildExec(context.exec, result.next.exec);
+    const newState = result.next.state === parsedState
+      ? context.state
+      : mergeResultState(parser, context, parserState, result, index);
+    return {
+      success: true,
+      next: {
+        ...context,
+        buffer: result.next.buffer,
+        optionsTerminated: result.next.optionsTerminated,
+        state: newState,
+        ...(mergedExec != null
+          ? {
+            trace: mergedExec.trace,
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
+          : {}),
+      },
+      consumed: result.consumed,
+    };
+  };
+
+  const childrenInDeclarationOrder = sorted.map(
+    ([parser, originalIndex], sortedIndex) => ({
+      parser,
+      originalIndex,
+      sortedIndex,
+    }),
+  ).toSorted((a, b) => a.originalIndex - b.originalIndex);
+  const mergeParseLanes: readonly ParseLane<MergeState>[] =
+    childrenInDeclarationOrder.flatMap(({ parser, sortedIndex }) => {
+      const occurrenceConsumptionGroups = new WeakMap<object, object>();
+      const occurrenceZeroConsumptionGroups = new WeakMap<object, object>();
+      const scopeConsumptionGroup = (group: object): object => {
+        const existing = occurrenceConsumptionGroups.get(group);
+        if (existing != null) return existing;
+        const scoped = {};
+        occurrenceConsumptionGroups.set(group, scoped);
+        return scoped;
+      };
+      const childLanes = getOwnParseLanes<unknown>(parser);
+      const lanes = childLanes ?? [
+        {
+          priority: parser.priority,
+          leadingNames: parser.leadingNames,
+          acceptingAnyToken: parser.acceptingAnyToken,
+          parse(context: ParserContext<unknown>) {
+            return parser.parse(context as ParserContext<MergeState>);
+          },
+        } satisfies ParseLane<unknown>,
+      ];
+      return lanes.map((lane): ParseLane<MergeState> => ({
+        priority: lane.priority,
+        zeroConsumptionGroup: (() => {
+          const group = lane.zeroConsumptionGroup ?? lane;
+          const existing = occurrenceZeroConsumptionGroups.get(group);
+          if (existing != null) return existing;
+          const scoped = {};
+          occurrenceZeroConsumptionGroups.set(group, scoped);
+          return scoped;
+        })(),
+        settlesZeroConsumption: lane.settlesZeroConsumption,
+        leadingNames: lane.leadingNames,
+        acceptingAnyToken: lane.acceptingAnyToken,
+        requiredConsumptionGroups: lane.requiredConsumptionGroups?.map(
+          (group) => ({
+            id: scopeConsumptionGroup(group.id),
+            ...(group.isActive == null ? {} : {
+              isActive(state: unknown) {
+                if (state == null || typeof state !== "object") return false;
+                const parserState = extractParserState(
+                  parser,
+                  state as MergeState,
+                  sortedIndex,
+                );
+                return group.isActive?.(parserState) ?? true;
+              },
+            }),
+          }),
+        ),
+        parse(context: ParserContext<MergeState>) {
+          const parserState = extractParserState(
+            parser,
+            context.state,
+            sortedIndex,
+          );
+          const childContext = withChildContext(
+            context,
+            sortedIndex,
+            parserState,
+            parser,
+          );
+          return dispatchByMode(
+            combinedMode,
+            () => {
+              const result = lane.parse(childContext) as ParserResult<unknown>;
+              return adaptMergeLaneResult(
+                parser,
+                context,
+                parserState,
+                childContext.state,
+                result,
+                sortedIndex,
+              );
+            },
+            async () => {
+              const result = await lane.parse(childContext);
+              return adaptMergeLaneResult(
+                parser,
+                context,
+                parserState,
+                childContext.state,
+                result,
+                sortedIndex,
+              );
+            },
+          );
+        },
+      }));
+    }).toSorted((a, b) => b.priority - a.priority);
+
+  const settleZeroConsumptionLanes = (
+    context: ParserContext<MergeState>,
+    laneResults: ReadonlyMap<
+      ParseLane<MergeState>,
+      MergeParseResult
+    >,
+  ): MergeParseResult | null => {
+    const groups = new Map<object, ParseLane<MergeState>[]>();
+    for (const lane of mergeParseLanes) {
+      const group = lane.zeroConsumptionGroup ?? lane;
+      const groupedLanes = groups.get(group);
+      if (groupedLanes == null) groups.set(group, [lane]);
+      else groupedLanes.push(lane);
+    }
+
+    const settledGroups: ParseLane<MergeState>[][] = [];
+    for (const groupedLanes of groups.values()) {
+      const groupSucceeded = groupedLanes.every((lane) => {
+        const result = laneResults.get(lane);
+        return lane.settlesZeroConsumption !== false &&
+          result?.success === true && result.consumed.length === 0 &&
+          (lane.requiredConsumptionGroups?.length ?? 0) === 0;
+      });
+      if (!groupSucceeded) return null;
+      settledGroups.push(groupedLanes);
+    }
+
+    let settledContext = context;
+    for (const groupedLanes of settledGroups) {
+      for (const lane of groupedLanes) {
+        const result = laneResults.get(lane);
+        if (result?.success !== true) continue;
+
+        const originalState = context.state as Record<PropertyKey, unknown>;
+        const resultState = result.next.state as Record<PropertyKey, unknown>;
+        const nextState: MergeState = { ...settledContext.state };
+        const stateKeys = new Set([
+          ...Reflect.ownKeys(originalState),
+          ...Reflect.ownKeys(resultState),
+        ]);
+        for (const key of stateKeys) {
+          const originalHasKey = Object.hasOwn(originalState, key);
+          const resultHasKey = Object.hasOwn(resultState, key);
+          if (
+            originalHasKey === resultHasKey &&
+            originalState[key] === resultState[key]
+          ) {
+            continue;
+          }
+          if (resultHasKey) nextState[key] = resultState[key];
+          else delete nextState[key];
+        }
+
+        const mergedExec = mergeChildExec(
+          settledContext.exec,
+          result.next.exec,
+        );
+        settledContext = {
+          ...settledContext,
+          buffer: result.next.buffer,
+          optionsTerminated: result.next.optionsTerminated,
+          state: nextState,
+          ...(mergedExec != null
+            ? {
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
+            : {}),
+        };
+      }
+    }
+
+    return { success: true, next: settledContext, consumed: [] };
+  };
+
+  const canTryPositionalLaneAfterFailure = (
+    lane: ParseLane<MergeState>,
+    context: ParserContext<MergeState>,
+  ): boolean => {
+    const token = context.buffer[0];
+    return token != null &&
+      (context.optionsTerminated || !token.startsWith("-")) &&
+      (lane.acceptingAnyToken || lane.leadingNames.has(token));
+  };
+
+  // Child-level fallback is used only when an empty buffer prevented lane
+  // evaluation.  Once lanes have run, their cached results are settled above
+  // instead of invoking the owning parsers a second time.
+  const parseChildrenSync = (
     context: ParserContext<MergeState>,
   ): MergeParseResult => {
     let currentContext = context;
@@ -8661,7 +8966,7 @@ export function merge(
 
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
-      const parserState = extractParserState(parser, currentContext, i);
+      const parserState = extractParserState(parser, currentContext.state, i);
 
       const result = parser.parse(
         withChildContext(
@@ -8732,8 +9037,7 @@ export function merge(
     };
   };
 
-  // Async parse implementation
-  const parseAsync = async (
+  const parseChildrenAsync = async (
     context: ParserContext<MergeState>,
   ): Promise<MergeParseResult> => {
     let currentContext = context;
@@ -8744,7 +9048,7 @@ export function merge(
 
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
-      const parserState = extractParserState(parser, currentContext, i);
+      const parserState = extractParserState(parser, currentContext.state, i);
 
       const resultOrPromise = parser.parse(
         withChildContext(
@@ -8816,18 +9120,221 @@ export function merge(
     };
   };
 
+  const parseSync = (
+    context: ParserContext<MergeState>,
+  ): MergeParseResult => {
+    let currentContext = context;
+    let error: { consumed: number; error: Message } =
+      createObjectLikeInitialError(context, noMatchContext);
+    const allConsumed: string[] = [];
+    const consumedLanes = new Set<ParseLane<MergeState>>();
+    const consumedGroups = new Set<object>();
+    const laneResults = new Map<ParseLane<MergeState>, MergeParseResult>();
+    let attemptedLane = false;
+    let madeProgress = true;
+
+    while (madeProgress && currentContext.buffer.length > 0) {
+      madeProgress = false;
+      let consumingError: {
+        readonly priority: number;
+        readonly result: {
+          readonly success: false;
+          readonly consumed: number;
+          readonly error: Message;
+        };
+      } | null = null;
+      for (const lane of mergeParseLanes) {
+        if (
+          consumingError != null &&
+          lane.priority < consumingError.priority
+        ) {
+          // A selected opaque field can reject a token speculatively before a
+          // lower-priority positional sibling gets a chance to consume it.
+          // Keep option-like fallbacks blocked so malformed known options
+          // still report their consuming failure.
+          if (!canTryPositionalLaneAfterFailure(lane, currentContext)) {
+            continue;
+          }
+        }
+        attemptedLane = true;
+        const result = lane.parse(currentContext) as MergeParseResult;
+        laneResults.set(lane, result);
+        if (result.success && result.consumed.length > 0) {
+          currentContext = result.next;
+          allConsumed.push(...result.consumed);
+          consumedLanes.add(lane);
+          for (const group of lane.requiredConsumptionGroups ?? []) {
+            if (group.isActive?.(result.next.state) !== false) {
+              consumedGroups.add(group.id);
+            }
+          }
+          madeProgress = true;
+          break;
+        }
+        if (!result.success) {
+          if (result.consumed > 0 && consumingError == null) {
+            consumingError = { priority: lane.priority, result };
+          }
+          if (error.consumed < result.consumed) error = result;
+        }
+      }
+      if (
+        !madeProgress && consumingError != null && allConsumed.length === 0
+      ) {
+        return consumingError.result;
+      }
+    }
+
+    if (allConsumed.length === 0) {
+      if (attemptedLane) {
+        const settled = settleZeroConsumptionLanes(context, laneResults);
+        return settled ?? { ...error, success: false };
+      }
+      const fallback = parseChildrenSync(context);
+      if (!fallback.success && fallback.consumed < error.consumed) {
+        return { ...error, success: false };
+      }
+      return fallback;
+    }
+
+    for (const lane of mergeParseLanes) {
+      if (
+        consumedLanes.has(lane) || lane.leadingNames.size > 0 ||
+        lane.acceptingAnyToken ||
+        lane.requiredConsumptionGroups?.some((group) =>
+            !consumedGroups.has(group.id)
+          ) === true
+      ) {
+        continue;
+      }
+      const result = lane.parse(currentContext) as MergeParseResult;
+      if (
+        result.success && result.consumed.length === 0 &&
+        result.next.state !== currentContext.state
+      ) {
+        currentContext = result.next;
+      }
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
+  const parseAsync = async (
+    context: ParserContext<MergeState>,
+  ): Promise<MergeParseResult> => {
+    let currentContext = context;
+    let error: { consumed: number; error: Message } =
+      createObjectLikeInitialError(context, noMatchContext);
+    const allConsumed: string[] = [];
+    const consumedLanes = new Set<ParseLane<MergeState>>();
+    const consumedGroups = new Set<object>();
+    const laneResults = new Map<ParseLane<MergeState>, MergeParseResult>();
+    let attemptedLane = false;
+    let madeProgress = true;
+
+    while (madeProgress && currentContext.buffer.length > 0) {
+      madeProgress = false;
+      let consumingError: {
+        readonly priority: number;
+        readonly result: {
+          readonly success: false;
+          readonly consumed: number;
+          readonly error: Message;
+        };
+      } | null = null;
+      for (const lane of mergeParseLanes) {
+        if (
+          consumingError != null &&
+          lane.priority < consumingError.priority
+        ) {
+          // See the synchronous loop above.
+          if (!canTryPositionalLaneAfterFailure(lane, currentContext)) {
+            continue;
+          }
+        }
+        attemptedLane = true;
+        const result = await lane.parse(currentContext);
+        laneResults.set(lane, result);
+        if (result.success && result.consumed.length > 0) {
+          currentContext = result.next;
+          allConsumed.push(...result.consumed);
+          consumedLanes.add(lane);
+          for (const group of lane.requiredConsumptionGroups ?? []) {
+            if (group.isActive?.(result.next.state) !== false) {
+              consumedGroups.add(group.id);
+            }
+          }
+          madeProgress = true;
+          break;
+        }
+        if (!result.success) {
+          if (result.consumed > 0 && consumingError == null) {
+            consumingError = { priority: lane.priority, result };
+          }
+          if (error.consumed < result.consumed) error = result;
+        }
+      }
+      if (
+        !madeProgress && consumingError != null && allConsumed.length === 0
+      ) {
+        return consumingError.result;
+      }
+    }
+
+    if (allConsumed.length === 0) {
+      if (attemptedLane) {
+        const settled = settleZeroConsumptionLanes(context, laneResults);
+        return settled ?? { ...error, success: false };
+      }
+      const fallback = await parseChildrenAsync(context);
+      if (!fallback.success && fallback.consumed < error.consumed) {
+        return { ...error, success: false };
+      }
+      return fallback;
+    }
+
+    for (const lane of mergeParseLanes) {
+      if (
+        consumedLanes.has(lane) || lane.leadingNames.size > 0 ||
+        lane.acceptingAnyToken ||
+        lane.requiredConsumptionGroups?.some((group) =>
+            !consumedGroups.has(group.id)
+          ) === true
+      ) {
+        continue;
+      }
+      const result = await lane.parse(currentContext);
+      if (
+        result.success && result.consumed.length === 0 &&
+        result.next.state !== currentContext.state
+      ) {
+        currentContext = result.next;
+      }
+    }
+
+    return {
+      success: true,
+      next: currentContext,
+      consumed: allConsumed,
+    };
+  };
+
   const mergeParser = {
     mode: combinedMode,
     $valueType: [],
     $stateType: [],
     [fieldParsersKey]: mergedFieldParsers,
-    priority: Math.max(...parsers.map((p) => p.priority)),
+    priority: Math.max(...mergeParseLanes.map((lane) => lane.priority)),
     usage: applyHiddenToUsage(
       parsers.flatMap((p) => p.usage),
       options.hidden,
     ),
-    leadingNames: sharedBufferLeadingNames(parsers),
-    acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
+    leadingNames: sharedBufferLeadingNames(mergeParseLanes),
+    acceptingAnyToken: mergeParseLanes.some((lane) => lane.acceptingAnyToken),
     initialState,
     parse(context: ParserContext<MergeState>) {
       if (isAsync) {
@@ -9830,6 +10337,7 @@ export function merge(
   // an earlier child's normalizer would change keys owned by a later child.
   // The same reasoning applies to validateValue (#414): composite-key
   // ownership cannot be resolved from the value alone.
+  defineParseLanes(mergeParser, mergeParseLanes);
   defineInheritedAnnotationParser(mergeParser);
   return mergeParser;
 }
@@ -11373,6 +11881,7 @@ export function group<M extends Mode, TValue, TState>(
       };
     },
   };
+  defineParseLanes(groupParser, getOwnParseLanes(parser));
   Object.defineProperty(groupParser, extractPhase2SeedKey, {
     value(state: TState, exec?: ExecutionContext) {
       return extractPhase2Seed(parser, state, exec);

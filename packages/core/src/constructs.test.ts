@@ -32,7 +32,13 @@ import {
   text,
   valueSet,
 } from "@optique/core/message";
-import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
+import {
+  map,
+  multiple,
+  nonEmpty,
+  optional,
+  withDefault,
+} from "@optique/core/modifiers";
 import { defineInheritedAnnotationParser } from "./internal/parser.ts";
 import {
   type ExecutionContext,
@@ -67,6 +73,7 @@ import {
 } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as fc from "fast-check";
 import {
   concat as concatLocal,
   conditional as conditionalLocal,
@@ -5874,6 +5881,1247 @@ describe("merge", () => {
       assert.equal(result.value.verbose, true);
       assert.equal(result.value.output, "out.txt");
       assert.equal(result.value.input, "input.txt");
+    }
+  });
+
+  it("should preserve positional order across merged objects (issue #895)", () => {
+    const parser = merge(
+      object({
+        first: argument(string({ metavar: "FIRST" })),
+        x: option("-x", "--ex"),
+      }),
+      object({
+        second: argument(string({ metavar: "SECOND" })),
+        y: option("-y", "--why"),
+      }),
+    );
+
+    const cases = [
+      [
+        ["aaa", "bbb"],
+        { first: "aaa", second: "bbb", x: false, y: false },
+      ],
+      [
+        ["aaa", "bbb", "-y"],
+        { first: "aaa", second: "bbb", x: false, y: true },
+      ],
+      [
+        ["-y", "aaa", "bbb"],
+        { first: "aaa", second: "bbb", x: false, y: true },
+      ],
+      [
+        ["-x", "aaa", "bbb"],
+        { first: "aaa", second: "bbb", x: true, y: false },
+      ],
+      [
+        ["-y", "-x", "aaa", "bbb"],
+        { first: "aaa", second: "bbb", x: true, y: true },
+      ],
+      [
+        ["-x", "-y", "aaa", "bbb"],
+        { first: "aaa", second: "bbb", x: true, y: true },
+      ],
+      [
+        ["-y", "--", "aaa", "bbb"],
+        { first: "aaa", second: "bbb", x: false, y: true },
+      ],
+      [
+        ["--", "-y", "bbb"],
+        { first: "-y", second: "bbb", x: false, y: false },
+      ],
+    ] as const;
+
+    for (const [args, expected] of cases) {
+      const result = parseSync(parser, args);
+      assert.ok(result.success, `Parsing ${args.join(" ")} should succeed`);
+      if (result.success) assert.deepEqual(result.value, expected);
+    }
+  });
+
+  it("should preserve the flat input trace between merge lanes", () => {
+    const readsPreviousTrace: Parser<"sync", boolean, boolean> = {
+      mode: "sync",
+      $valueType: [] as boolean[],
+      $stateType: [] as boolean[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: false,
+      parse(context: ParserContext<boolean>) {
+        if (context.buffer.length < 1) {
+          return {
+            success: false as const,
+            consumed: 0,
+            error: message`Expected an argument.`,
+          };
+        }
+        const parentPath = context.exec?.path.slice(0, -1) ?? [];
+        return {
+          success: true as const,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: context.trace?.get([...parentPath, "first"]) != null,
+          },
+          consumed: [context.buffer[0]],
+        };
+      },
+      complete(state: boolean) {
+        return { success: true as const, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const parser = merge(
+      object({
+        first: argument(string()),
+        sawTrace: readsPreviousTrace,
+      }),
+    );
+
+    const result = parseSync(parser, ["aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) assert.ok(result.value.sawTrace);
+  });
+
+  it("should not copy internal parse lanes into custom parser wrappers", () => {
+    const inner = object({ value: argument(string()) });
+    const parseLanesKey = Object.getOwnPropertySymbols(inner).find(
+      (key) => key.description === "parseLanes",
+    );
+    assert.ok(parseLanesKey != null);
+    let calls = 0;
+    const wrapped: typeof inner = {
+      ...inner,
+      parse() {
+        calls++;
+        return {
+          success: false,
+          consumed: 0,
+          error: message`Wrapper rejected the input.`,
+        };
+      },
+    };
+
+    assert.ok(!Object.hasOwn(wrapped, parseLanesKey));
+    const result = parseSync(merge(wrapped), ["accepted"]);
+    assert.ok(!result.success);
+    assert.ok(calls > 0);
+  });
+
+  it("should not copy internal async parse lanes into custom parser wrappers", async () => {
+    const inner = object({ value: argument(asyncStringValue()) });
+    const parseLanesKey = Object.getOwnPropertySymbols(inner).find(
+      (key) => key.description === "parseLanes",
+    );
+    assert.ok(parseLanesKey != null);
+    let calls = 0;
+    const wrapped: typeof inner = {
+      ...inner,
+      parse() {
+        calls++;
+        return Promise.resolve({
+          success: false,
+          consumed: 0,
+          error: message`Async wrapper rejected the input.`,
+        });
+      },
+    };
+
+    assert.ok(!Object.hasOwn(wrapped, parseLanesKey));
+    const result = await parseAsync(merge(wrapped), ["accepted"]);
+    assert.ok(!result.success);
+    assert.ok(calls > 0);
+  });
+
+  it("should expose parse lanes non-enumerably through transparent wrappers", () => {
+    const inner = object({ value: argument(string()) });
+    const parseLanesKey = Object.getOwnPropertySymbols(inner).find(
+      (key) => key.description === "parseLanes",
+    );
+    assert.ok(parseLanesKey != null);
+    const parsers = [
+      inner,
+      merge(inner),
+      map(inner, (value) => value),
+      optional(inner),
+      withDefault(inner, { value: "default" }),
+      nonEmpty(inner),
+      group("Values", inner),
+    ];
+
+    for (const parser of parsers) {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        parser,
+        parseLanesKey,
+      );
+      assert.ok(descriptor != null);
+      assert.ok(!descriptor.enumerable);
+    }
+  });
+
+  it("should arbitrate merged fields instead of aggregate object priority", () => {
+    const parser = merge(
+      object({ first: argument(string()) }),
+      object({
+        second: argument(string()),
+        y: option("-y"),
+      }),
+    );
+
+    const result = parseSync(parser, ["aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: "aaa",
+        second: "bbb",
+        y: false,
+      });
+    }
+  });
+
+  it("should match the equivalent flattened object across token interleavings", () => {
+    const merged = merge(
+      object({
+        first: argument(string()),
+        x: option("-x"),
+      }),
+      object({
+        second: argument(string()),
+        y: option("-y"),
+      }),
+    );
+    const flattened = object({
+      first: argument(string()),
+      x: option("-x"),
+      second: argument(string()),
+      y: option("-y"),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.shuffledSubarray(["-x", "-y", "aaa", "bbb"], {
+          minLength: 2,
+          maxLength: 4,
+        }).filter((args) => args.includes("aaa") && args.includes("bbb")),
+        (args) => {
+          const mergedResult = parseSync(merged, args);
+          const flattenedResult = parseSync(flattened, args);
+          assert.ok(mergedResult.success);
+          assert.ok(flattenedResult.success);
+          assert.deepEqual(mergedResult.value, flattenedResult.value);
+        },
+      ),
+    );
+  });
+
+  it("should preserve positional order through map() and withDefault()", () => {
+    const parser = merge(
+      map(
+        object({
+          first: argument(string()),
+          x: option("-x"),
+        }),
+        (value) => value,
+      ),
+      withDefault(
+        object({
+          second: argument(string()),
+          y: option("-y"),
+        }),
+        { second: "default", y: false },
+      ),
+    );
+
+    const result = parseSync(parser, ["-y", "aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: "aaa",
+        second: "bbb",
+        x: false,
+        y: true,
+      });
+    }
+  });
+
+  it("should not activate optional lanes after unrelated consumption", () => {
+    const inner = object({
+      kind: constant("x"),
+      value: option("--value", string()),
+    });
+    const parser = merge(
+      optional(inner),
+      object({ verbose: option("-v") }),
+    );
+
+    const absentResult = parseSync(parser, ["-v"]);
+    assert.ok(absentResult.success);
+    if (absentResult.success) {
+      assert.deepEqual(absentResult.value, { verbose: true });
+    }
+
+    const presentResult = parseSync(parser, ["--value", "provided"]);
+    assert.ok(presentResult.success);
+    if (presentResult.success) {
+      assert.deepEqual(presentResult.value, {
+        kind: "x",
+        value: "provided",
+        verbose: false,
+      });
+    }
+  });
+
+  it("should not activate withDefault lanes after unrelated consumption", () => {
+    const inner = object({
+      kind: constant("x"),
+      value: option("--value", string()),
+    });
+    const parser = merge(
+      withDefault(inner, { kind: "fallback", value: "default" }),
+      object({ verbose: option("-v") }),
+    );
+
+    const absentResult = parseSync(parser, ["-v"]);
+    assert.ok(absentResult.success);
+    if (absentResult.success) {
+      assert.deepEqual(absentResult.value, {
+        kind: "fallback",
+        value: "default",
+        verbose: true,
+      });
+    }
+
+    const presentResult = parseSync(parser, ["--value", "provided"]);
+    assert.ok(presentResult.success);
+    if (presentResult.success) {
+      assert.deepEqual(presentResult.value, {
+        kind: "x",
+        value: "provided",
+        verbose: false,
+      });
+    }
+  });
+
+  it("should keep optional-style async lanes absent after sibling input", async () => {
+    const inner = object({
+      kind: constant("x"),
+      value: option("--value", asyncStringValue()),
+    });
+    const verbose = object({ verbose: option("-v") });
+
+    const optionalResult = await parseAsync(
+      merge(optional(inner), verbose),
+      ["-v"],
+    );
+    assert.ok(optionalResult.success);
+    if (optionalResult.success) {
+      assert.deepEqual(optionalResult.value, { verbose: true });
+    }
+
+    const defaultResult = await parseAsync(
+      merge(
+        withDefault(inner, { kind: "fallback", value: "default" }),
+        verbose,
+      ),
+      ["-v"],
+    );
+    assert.ok(defaultResult.success);
+    if (defaultResult.success) {
+      assert.deepEqual(defaultResult.value, {
+        kind: "fallback",
+        value: "default",
+        verbose: true,
+      });
+    }
+  });
+
+  it("should accept a same-priority positional lane after a consuming failure", () => {
+    const parser = merge(
+      object({
+        first: argument(string()),
+        second: argument(string()),
+      }),
+    );
+
+    const result = parseSync(parser, ["a", "--", "b"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { first: "a", second: "b" });
+    }
+  });
+
+  it("should accept repeated same-priority options when duplicates are allowed", () => {
+    const parser = merge(
+      object({ first: option("-v") }),
+      object({ second: option("-v") }),
+      { allowDuplicates: true },
+    );
+
+    const result = parseSync(parser, ["-v", "-v"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { first: true, second: true });
+    }
+  });
+
+  it("should accept an async same-priority lane after a consuming failure", async () => {
+    const parser = merge(
+      object({
+        first: argument(asyncStringValue()),
+        second: argument(asyncStringValue()),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["a", "--", "b"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { first: "a", second: "b" });
+    }
+  });
+
+  it("should accept repeated async options when duplicates are allowed", async () => {
+    const parser = merge(
+      object({ first: option("-v", asyncStringValue()) }),
+      object({ second: option("-v", asyncStringValue()) }),
+      { allowDuplicates: true },
+    );
+
+    const result = await parseAsync(parser, ["-v", "a", "-v", "b"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { first: "a", second: "b" });
+    }
+  });
+
+  it("should not reparse a consuming lane failure through fallback", () => {
+    let calls = 0;
+    const fieldParser: Parser<"sync", boolean, boolean> = {
+      mode: "sync",
+      $valueType: [] as boolean[],
+      $stateType: [] as boolean[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: false,
+      parse() {
+        calls++;
+        return {
+          success: false,
+          consumed: 1,
+          error: message`The field rejected the input.`,
+        };
+      },
+      complete(state) {
+        return { success: true, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parseSync(merge(object({ value: fieldParser })), ["x"]);
+    assert.ok(!result.success);
+    assert.equal(calls, 1);
+  });
+
+  it("should not reparse an async consuming lane failure through fallback", async () => {
+    let calls = 0;
+    const fieldParser = toAsyncParser<boolean, boolean>({
+      mode: "sync",
+      $valueType: [] as boolean[],
+      $stateType: [] as boolean[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: false,
+      parse() {
+        calls++;
+        return {
+          success: false,
+          consumed: 1,
+          error: message`The async field rejected the input.`,
+        };
+      },
+      complete(state) {
+        return { success: true, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const result = await parseAsync(
+      merge(object({ value: fieldParser })),
+      ["x"],
+    );
+    assert.ok(!result.success);
+    assert.equal(calls, 1);
+  });
+
+  it("should not reparse a non-consuming lane failure through fallback", () => {
+    let calls = 0;
+    const fieldParser: Parser<"sync", boolean, boolean> = {
+      mode: "sync",
+      $valueType: [] as boolean[],
+      $stateType: [] as boolean[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: false,
+      parse(context) {
+        calls++;
+        if (calls === 1) {
+          return {
+            success: false,
+            consumed: 0,
+            error: message`The field rejected the input.`,
+          };
+        }
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: true,
+          },
+          consumed: [context.buffer[0]],
+        };
+      },
+      complete(state) {
+        return { success: true, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parseSync(
+      merge(object({ marker: constant("x"), value: fieldParser })),
+      ["x"],
+    );
+    assert.ok(!result.success);
+    assert.equal(calls, 1);
+  });
+
+  it("should not reparse an async non-consuming failure through fallback", async () => {
+    let calls = 0;
+    const fieldParser = toAsyncParser<boolean, boolean>({
+      mode: "sync",
+      $valueType: [] as boolean[],
+      $stateType: [] as boolean[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: false,
+      parse(context) {
+        calls++;
+        if (calls === 1) {
+          return {
+            success: false,
+            consumed: 0,
+            error: message`The async field rejected the input.`,
+          };
+        }
+        return {
+          success: true,
+          next: {
+            ...context,
+            buffer: context.buffer.slice(1),
+            state: true,
+          },
+          consumed: [context.buffer[0]],
+        };
+      },
+      complete(state) {
+        return { success: true, value: state };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    });
+
+    const result = await parseAsync(
+      merge(object({ marker: constant("x"), value: fieldParser })),
+      ["x"],
+    );
+    assert.ok(!result.success);
+    assert.equal(calls, 1);
+  });
+
+  it("should propagate consuming lane failures before greedy fallbacks", () => {
+    const parser = merge(
+      optional(
+        or(
+          object({ x: option("-x", string()) }),
+          object({ y: option("-y", string()) }),
+        ),
+      ),
+      object({ rest: passThrough({ format: "greedy" }) }),
+    );
+
+    const result = parseSync(parser, ["-x"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(formatMessage(result.error), "`-x` requires `STRING`.");
+    }
+  });
+
+  it("should propagate async consuming lane failures before greedy fallbacks", async () => {
+    const parser = merge(
+      optional(
+        or(
+          object({ x: option("-x", asyncStringValue()) }),
+          object({ y: option("-y", asyncStringValue()) }),
+        ),
+      ),
+      object({ rest: passThrough({ format: "greedy" }) }),
+    );
+
+    const result = await parseAsync(parser, ["-x"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        "`-x` requires `ASYNC_STRING`.",
+      );
+    }
+  });
+
+  it("should preserve prior lane progress when propagating failures", () => {
+    const parser = merge(
+      object({ y: option("-y") }),
+      object({ x: option("-x", string()) }),
+      object({ value: argument(string()) }),
+    );
+
+    const firstResult = parser.parse({
+      buffer: ["-y", "-x"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(firstResult.success);
+    if (firstResult.success) {
+      assert.deepEqual(firstResult.consumed, ["-y"]);
+      assert.deepEqual(firstResult.next.buffer, ["-x"]);
+      const secondResult = parser.parse(firstResult.next);
+      assert.ok(!secondResult.success);
+      if (!secondResult.success) {
+        assert.equal(
+          formatMessage(secondResult.error),
+          "`-x` requires `STRING`.",
+        );
+      }
+    }
+  });
+
+  it("should preserve prior async lane progress when propagating failures", async () => {
+    const parser = merge(
+      object({ y: option("-y") }),
+      object({ x: option("-x", asyncStringValue()) }),
+      object({ value: argument(asyncStringValue()) }),
+    );
+
+    const firstResult = await parser.parse({
+      buffer: ["-y", "-x"],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(firstResult.success);
+    if (firstResult.success) {
+      assert.deepEqual(firstResult.consumed, ["-y"]);
+      assert.deepEqual(firstResult.next.buffer, ["-x"]);
+      const secondResult = await parser.parse(firstResult.next);
+      assert.ok(!secondResult.success);
+      if (!secondResult.success) {
+        assert.equal(
+          formatMessage(secondResult.error),
+          "`-x` requires `ASYNC_STRING`.",
+        );
+      }
+    }
+  });
+
+  it("should try positional lanes after opaque branch failures", () => {
+    const parser = merge(
+      object({
+        choice: or(
+          object({
+            x: option("-x"),
+            value: argument(string()),
+          }),
+          object({
+            y: option("-y"),
+            value: argument(string()),
+          }),
+        ),
+        tail: argument(string()),
+      }),
+    );
+
+    const result = parseSync(parser, ["-x", "one", "two"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        choice: { x: true, value: "one" },
+        tail: "two",
+      });
+    }
+  });
+
+  it("should try async positional lanes after opaque branch failures", async () => {
+    const parser = merge(
+      object({
+        choice: or(
+          object({
+            x: option("-x"),
+            value: argument(asyncStringValue()),
+          }),
+          object({
+            y: option("-y"),
+            value: argument(asyncStringValue()),
+          }),
+        ),
+        tail: argument(asyncStringValue()),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["-x", "one", "two"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        choice: { x: true, value: "one" },
+        tail: "two",
+      });
+    }
+  });
+
+  it("should preserve optional-style merge fallbacks inside or()", () => {
+    const optionalParser = merge(
+      optional(object({ value: argument(string()) })),
+    );
+    const defaultParser = merge(
+      withDefault(
+        object({ value: argument(string()) }),
+        { value: "default" },
+      ),
+    );
+
+    assert.ok(!optionalParser.acceptingAnyToken);
+    assert.ok(!defaultParser.acceptingAnyToken);
+    const optionalResult = parseSync(or(optionalParser), []);
+    const defaultResult = parseSync(or(defaultParser), []);
+    assert.ok(optionalResult.success);
+    assert.ok(defaultResult.success);
+    if (optionalResult.success) assert.deepEqual(optionalResult.value, {});
+    if (defaultResult.success) {
+      assert.deepEqual(defaultResult.value, { value: "default" });
+    }
+  });
+
+  it("should preserve async optional-style merge fallbacks inside or()", async () => {
+    const optionalParser = merge(
+      optional(object({ value: argument(asyncStringValue()) })),
+    );
+    const defaultParser = merge(
+      withDefault(
+        object({ value: argument(asyncStringValue()) }),
+        { value: "default" },
+      ),
+    );
+
+    assert.ok(!optionalParser.acceptingAnyToken);
+    assert.ok(!defaultParser.acceptingAnyToken);
+    const optionalResult = await parseAsync(or(optionalParser), []);
+    const defaultResult = await parseAsync(or(defaultParser), []);
+    assert.ok(optionalResult.success);
+    assert.ok(defaultResult.success);
+    if (optionalResult.success) assert.deepEqual(optionalResult.value, {});
+    if (defaultResult.success) {
+      assert.deepEqual(defaultResult.value, { value: "default" });
+    }
+  });
+
+  it("should not activate optional-style lanes on a bare terminator", () => {
+    const optionalParser = merge(
+      optional(
+        object({
+          kind: constant("x"),
+          value: option("--value", string()),
+        }),
+      ),
+      object({ y: option("-y") }),
+    );
+    const defaultParser = merge(
+      withDefault(
+        object({
+          kind: constant("x"),
+          value: option("--value", string()),
+        }),
+        { kind: "default", value: "default" },
+      ),
+      object({ y: option("-y") }),
+    );
+
+    const optionalResult = parseSync(optionalParser, ["-y", "--"]);
+    const defaultResult = parseSync(defaultParser, ["-y", "--"]);
+    assert.ok(optionalResult.success);
+    assert.ok(defaultResult.success);
+    if (optionalResult.success) {
+      assert.deepEqual(optionalResult.value, { y: true });
+    }
+    if (defaultResult.success) {
+      assert.deepEqual(defaultResult.value, {
+        kind: "default",
+        value: "default",
+        y: true,
+      });
+    }
+  });
+
+  it("should not activate async optional-style lanes on a bare terminator", async () => {
+    const optionalParser = merge(
+      optional(
+        object({
+          kind: constant("x"),
+          value: option("--value", asyncStringValue()),
+        }),
+      ),
+      object({ y: option("-y") }),
+    );
+    const defaultParser = merge(
+      withDefault(
+        object({
+          kind: constant("x"),
+          value: option("--value", asyncStringValue()),
+        }),
+        { kind: "default", value: "default" },
+      ),
+      object({ y: option("-y") }),
+    );
+
+    const optionalResult = await parseAsync(optionalParser, ["-y", "--"]);
+    const defaultResult = await parseAsync(defaultParser, ["-y", "--"]);
+    assert.ok(optionalResult.success);
+    assert.ok(defaultResult.success);
+    if (optionalResult.success) {
+      assert.deepEqual(optionalResult.value, { y: true });
+    }
+    if (defaultResult.success) {
+      assert.deepEqual(defaultResult.value, {
+        kind: "default",
+        value: "default",
+        y: true,
+      });
+    }
+  });
+
+  it("should ignore inherited parse lanes from custom wrappers", () => {
+    let calls = 0;
+    const inner = object({ value: argument(string()) });
+    const wrapper = Object.create(inner) as typeof inner;
+    Object.defineProperty(wrapper, "parse", {
+      value() {
+        calls++;
+        return {
+          success: false,
+          consumed: 1,
+          error: message`Rejected by the custom wrapper.`,
+        };
+      },
+    });
+
+    const result = parseSync(merge(wrapper), ["x"]);
+    assert.ok(!result.success);
+    assert.equal(calls, 1);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        "Rejected by the custom wrapper.",
+      );
+    }
+  });
+
+  it("should ignore inherited parse lanes from async custom wrappers", async () => {
+    let calls = 0;
+    const inner = object({ value: argument(asyncStringValue()) });
+    const wrapper = Object.create(inner) as typeof inner;
+    Object.defineProperty(wrapper, "parse", {
+      value() {
+        calls++;
+        return Promise.resolve({
+          success: false,
+          consumed: 1,
+          error: message`Rejected by the async custom wrapper.`,
+        });
+      },
+    });
+
+    const result = await parseAsync(merge(wrapper), ["x"]);
+    assert.ok(!result.success);
+    assert.equal(calls, 1);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        "Rejected by the async custom wrapper.",
+      );
+    }
+  });
+
+  it("should preserve contextual errors when zero-consumption groups cannot settle", () => {
+    const composite = object({
+      b: tuple([option("-x"), argument(string())]),
+    });
+    const parsers = [
+      merge(composite),
+      merge(
+        object({ a: argument(string()) }),
+        composite,
+      ),
+    ];
+
+    for (const parser of parsers) {
+      const result = parseSync(parser, ["-y"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          'Unexpected option or argument: "-y".\n\nDid you mean `-x`?',
+        );
+      }
+    }
+  });
+
+  it("should preserve async contextual errors when zero-consumption groups cannot settle", async () => {
+    const composite = object({
+      b: tuple([option("-x"), argument(asyncStringValue())]),
+    });
+    const parsers = [
+      merge(composite),
+      merge(
+        object({ a: argument(asyncStringValue()) }),
+        composite,
+      ),
+    ];
+
+    for (const parser of parsers) {
+      const result = await parseAsync(parser, ["-y"]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(
+          formatMessage(result.error),
+          'Unexpected option or argument: "-y".\n\nDid you mean `-x`?',
+        );
+      }
+    }
+  });
+
+  it("should scope consumption groups to reused parser occurrences", () => {
+    const shared = optional(
+      object({
+        value: argument(string()),
+        marker: constant("x"),
+      }),
+    );
+    const parser = merge(
+      map(shared, (value) => value == null ? {} : { first: value }),
+      map(shared, (value) => value == null ? {} : { second: value }),
+    );
+
+    const result = parseSync(parser, ["a"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: { value: "a", marker: "x" },
+      });
+    }
+  });
+
+  it("should scope async consumption groups to reused parser occurrences", async () => {
+    const shared = optional(
+      object({
+        value: argument(asyncStringValue()),
+        marker: constant("x"),
+      }),
+    );
+    const parser = merge(
+      map(shared, (value) => value == null ? {} : { first: value }),
+      map(shared, (value) => value == null ? {} : { second: value }),
+    );
+
+    const result = await parseAsync(parser, ["a"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: { value: "a", marker: "x" },
+      });
+    }
+  });
+
+  it("should preserve positional order across asynchronous merged objects", async () => {
+    const parser = merge(
+      object({
+        first: argument(asyncStringValue()),
+        x: option("-x"),
+      }),
+      object({
+        second: argument(asyncStringValue()),
+        y: option("-y"),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["-y", "aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: "aaa",
+        second: "bbb",
+        x: false,
+        y: true,
+      });
+    }
+  });
+
+  it("should preserve positional order through transparent wrappers", () => {
+    const parser = merge(
+      group(
+        "First",
+        nonEmpty(
+          object({
+            first: argument(string()),
+            x: option("-x"),
+          }),
+        ),
+      ),
+      optional(
+        object({
+          second: argument(string()),
+          y: option("-y"),
+        }),
+      ),
+    );
+
+    const result = parseSync(parser, ["-y", "aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: "aaa",
+        second: "bbb",
+        x: false,
+        y: true,
+      });
+    }
+  });
+
+  it("should preserve zero-consumption state within nonEmpty() lanes", () => {
+    const inner = nonEmpty(
+      object({
+        arg: argument(string()),
+        xs: multiple(constant("x")),
+      }),
+    );
+
+    const directResult = parseSync(inner, ["a"]);
+    const mergedResult = parseSync(merge(inner), ["a"]);
+    const optionalResult = parseSync(merge(optional(inner)), ["a"]);
+    const nestedResult = parseSync(merge(merge(inner)), ["a"]);
+    assert.ok(directResult.success);
+    assert.ok(mergedResult.success);
+    assert.ok(optionalResult.success);
+    assert.ok(nestedResult.success);
+    if (
+      directResult.success && mergedResult.success && optionalResult.success &&
+      nestedResult.success
+    ) {
+      assert.deepEqual(mergedResult.value, directResult.value);
+      assert.deepEqual(optionalResult.value, directResult.value);
+      assert.deepEqual(nestedResult.value, directResult.value);
+      assert.deepEqual(mergedResult.value, { arg: "a", xs: ["x"] });
+    }
+  });
+
+  it("should preserve async zero-consumption state within nonEmpty() lanes", async () => {
+    const inner = nonEmpty(
+      object({
+        arg: argument(asyncStringValue()),
+        xs: multiple(constant("x")),
+      }),
+    );
+
+    const directResult = await parseAsync(inner, ["a"]);
+    const mergedResult = await parseAsync(merge(inner), ["a"]);
+    assert.ok(directResult.success);
+    assert.ok(mergedResult.success);
+    if (directResult.success && mergedResult.success) {
+      assert.deepEqual(mergedResult.value, directResult.value);
+      assert.deepEqual(mergedResult.value, { arg: "a", xs: ["x"] });
+    }
+  });
+
+  it("should not activate nonEmpty() lanes after unrelated consumption", () => {
+    const parser = merge(
+      nonEmpty(
+        object({ xs: multiple(constant("x")) }),
+      ),
+      object({ flag: option("-f") }),
+    );
+
+    const result = parseSync(parser, ["-f"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { flag: true, xs: [] });
+    }
+  });
+
+  it("should preserve positional order through wrapped nested merges", () => {
+    const parser = merge(
+      map(
+        withDefault(
+          merge(
+            object({ first: argument(string()) }),
+            object({
+              second: argument(string()),
+              y: option("-y"),
+            }),
+          ),
+          { first: "first", second: "second", y: false },
+        ),
+        (value) => value,
+      ),
+      object({
+        third: argument(string()),
+        z: option("-z"),
+      }),
+    );
+
+    const result = parseSync(parser, ["-z", "aaa", "bbb", "ccc"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: "aaa",
+        second: "bbb",
+        third: "ccc",
+        y: false,
+        z: true,
+      });
+    }
+  });
+
+  it("should let longestMatch() observe flattened merge consumption", () => {
+    const parser = longestMatch(
+      object({ fallback: argument(string()) }),
+      merge(
+        object({ first: argument(string()) }),
+        object({ second: argument(string()) }),
+      ),
+    );
+
+    const result = parseSync(parser, ["aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { first: "aaa", second: "bbb" });
+    }
+  });
+
+  it("should preserve duplicate child-local state while parsing lanes", () => {
+    const parser = merge(
+      map(
+        object({
+          value: argument(string()),
+          x: option("-x"),
+        }),
+        (value) => ({ left: value.value }),
+      ),
+      map(
+        object({
+          value: argument(string()),
+          y: option("-y"),
+        }),
+        (value) => ({ right: value.value }),
+      ),
+    );
+
+    const result = parseSync(parser, ["-y", "aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { left: "aaa", right: "bbb" });
+    }
+  });
+
+  it("should leave withDefault() unmatched after consuming only --", () => {
+    const parser = merge(
+      withDefault(
+        object({ x: option("-x") }),
+        { x: "default" },
+      ),
+    );
+
+    const result = parseSync(parser, ["--"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, { x: "default" });
+    }
+  });
+
+  it("should not evaluate completion callbacks while choosing lanes", () => {
+    let defaultCalls = 0;
+    let mapCalls = 0;
+    const parser = merge(
+      withDefault(
+        object({ x: option("-x") }),
+        () => {
+          defaultCalls++;
+          return { x: false };
+        },
+      ),
+      map(
+        object({ value: argument(string()) }),
+        (value) => {
+          mapCalls++;
+          return value;
+        },
+      ),
+    );
+
+    const result = parseSync(parser, ["aaa"]);
+    assert.ok(result.success);
+    assert.equal(defaultCalls, 1);
+    assert.equal(mapCalls, 1);
+  });
+
+  it("should keep exclusive parser boundaries opaque to merge()", () => {
+    const parser = merge(
+      object({ first: argument(string()) }),
+      or(
+        object({
+          second: argument(string()),
+          y: option("-y"),
+        }),
+        object({ other: option("-o") }),
+      ),
+    );
+
+    const result = parseSync(parser, ["aaa", "bbb"]);
+    assert.ok(result.success);
+    if (result.success) {
+      assert.deepEqual(result.value, {
+        first: "bbb",
+        second: "aaa",
+        y: false,
+      });
     }
   });
 

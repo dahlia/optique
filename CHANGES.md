@@ -8,6 +8,17 @@ Version 1.0.7
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `merge()` assigning positional arguments according to which options
+    appeared earlier in the input.  Fields from merged `object()` parsers now
+    compete by their own priority and declaration order, matching the
+    equivalent flattened `object()` even through `map()`, `optional()`,
+    `withDefault()`, `nonEmpty()`, `group()`, and nested `merge()` wrappers.
+    [[#895]]
+
+[#895]: https://github.com/dahlia/optique/issues/895
+
 
 Version 1.0.6
 -------------
