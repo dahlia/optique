@@ -311,6 +311,215 @@ describe("formatDocPage", () => {
     assert.equal(result, expected);
   });
 
+  describe("automatic term width", () => {
+    it("should align descriptions to the widest relevant term", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [
+            {
+              term: { type: "option", names: ["-v"] },
+              description: message`Enable verbose output.`,
+            },
+            {
+              term: { type: "option", names: ["--configuration"] },
+              description: message`Load configuration.`,
+            },
+          ],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, { termWidth: "auto" });
+
+      assert.equal(
+        result,
+        "\n  -v               Enable verbose output.\n" +
+          "  --configuration  Load configuration.\n",
+      );
+    });
+
+    it("should measure CJK, emoji, and combining sequences by display width", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [
+            {
+              term: { type: "argument", metavar: "ABC" },
+              description: message`ASCII`,
+            },
+            {
+              term: { type: "argument", metavar: "한글" },
+              description: message`Korean`,
+            },
+            {
+              term: { type: "argument", metavar: "👨‍👩‍👧‍👦" },
+              description: message`Family`,
+            },
+            {
+              term: { type: "argument", metavar: "e\u0301" },
+              description: message`Combined`,
+            },
+          ],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, { termWidth: "auto" });
+
+      assert.equal(
+        result,
+        "\n  ABC   ASCII\n" +
+          "  한글  Korean\n" +
+          "  👨‍👩‍👧‍👦    Family\n" +
+          "  e\u0301     Combined\n",
+      );
+    });
+
+    it("should ignore ANSI styling when measuring colored terms", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [
+            {
+              term: { type: "option", names: ["-v"] },
+              description: message`Enable verbose output.`,
+            },
+            {
+              term: { type: "option", names: ["--configuration"] },
+              description: message`Load configuration.`,
+            },
+          ],
+        }],
+      };
+
+      const plain = formatDocPage("myapp", page, {
+        termWidth: "auto",
+        colors: false,
+      });
+      const colored = formatDocPage("myapp", page, {
+        termWidth: "auto",
+        colors: true,
+      });
+      // deno-lint-ignore no-control-regex
+      const withoutAnsi = colored.replace(/\x1B\[[0-9;:]*[@-~]/g, "");
+
+      assert.ok(colored.includes("\x1b["));
+      assert.equal(withoutAnsi, plain);
+    });
+
+    it("should ignore hidden, degenerate, and bare entries when measuring", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [
+            {
+              term: {
+                type: "option",
+                names: ["--hidden-and-extremely-long"],
+                hidden: true,
+              },
+              description: message`Hidden`,
+            },
+            {
+              term: {
+                type: "option",
+                names: [],
+                metavar: "DEGENERATE_AND_EXTREMELY_LONG",
+              },
+              description: message`Degenerate`,
+            },
+            {
+              term: {
+                type: "command",
+                name: "bare-and-extremely-long-command",
+              },
+            },
+            {
+              term: { type: "option", names: ["-v"] },
+              description: message`Visible`,
+            },
+          ],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, { termWidth: "auto" });
+
+      assert.equal(
+        result,
+        "\n  bare-and-extremely-long-command\n  -v  Visible\n",
+      );
+    });
+
+    it("should preserve default formatting when no entry has content", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{ term: { type: "command", name: "status" } }],
+        }],
+      };
+
+      const defaultResult = formatDocPage("myapp", page);
+      const automaticResult = formatDocPage("myapp", page, {
+        termWidth: "auto",
+      });
+
+      assert.equal(automaticResult, defaultResult);
+    });
+
+    it("should measure entries with displayed defaults and choices", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [
+            {
+              term: { type: "option", names: ["--output"] },
+              default: message`result.txt`,
+            },
+            {
+              term: { type: "option", names: ["--format-long"] },
+              choices: valueSet(["json", "yaml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, {
+        termWidth: "auto",
+        showDefault: true,
+        showChoices: true,
+      });
+
+      assert.equal(
+        result,
+        "\n  --output        [result.txt]\n" +
+          "  --format-long   (choices: json, yaml)\n",
+      );
+    });
+
+    it("should retain maxWidth layout reduction", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["-s", "--longname"],
+            },
+            description: message`A B C D E F`,
+          }],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, {
+        termWidth: "auto",
+        maxWidth: 15,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          getDisplayWidth(line) <= 15,
+          `Line display width exceeds 15: "${line}"`,
+        );
+      }
+      assert.ok(result.includes("\n--longname"));
+    });
+  });
+
   it("should respect maxWidth option with brief", () => {
     const page: DocPage = {
       brief: [{

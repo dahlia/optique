@@ -389,10 +389,14 @@ export interface DocPageFormatOptions {
   termIndent?: number;
 
   /**
-   * Width allocated for terms before descriptions start.
+   * Width allocated for terms before descriptions start.  Set to `"auto"`
+   * to align descriptions after the widest visible term that has content.
+   * Terminal display width is used for automatic measurement.
+   *
    * @default `26`
+   * @since 1.3.0 Added automatic term width.
    */
-  termWidth?: number;
+  termWidth?: number | "auto";
 
   /**
    * Maximum width of the entire formatted output.
@@ -565,7 +569,6 @@ export function formatDocPage(
 ): string {
   validateProgramName(programName);
   const termIndent = options.termIndent ?? 2;
-  const termWidth = options.termWidth ?? 26;
   const showUsage = options.showUsage ?? true;
   if (
     options.maxWidth != null &&
@@ -611,19 +614,40 @@ export function formatDocPage(
   //  - Examples:/Author:/Bugs: labels are 9/7/5 chars on their own lines.
   const hasContent = (msg: unknown): msg is readonly unknown[] =>
     Array.isArray(msg) && msg.length > 0;
+  const needsDescriptionColumn = (entry: DocEntry): boolean =>
+    hasContent(entry.description) ||
+    (options.showDefault === true || typeof options.showDefault === "object") &&
+      hasContent(entry.default) ||
+    (options.showChoices === true || typeof options.showChoices === "object") &&
+      hasContent(entry.choices);
+  const automaticTermWidth = (): number | undefined => {
+    let widest: number | undefined;
+    for (const section of page.sections) {
+      for (const entry of section.entries) {
+        if (!needsDescriptionColumn(entry)) continue;
+        const rendered = formatUsageTerm(entry.term, {
+          colors: options.colors,
+          optionsSeparator: ", ",
+          context: "doc",
+        });
+        const width = Math.max(
+          ...rendered.split("\n").map((line) => getDisplayWidth(line)),
+        );
+        widest = widest == null ? width : Math.max(widest, width);
+      }
+    }
+    return widest;
+  };
+  const termWidth = options.termWidth === "auto"
+    ? automaticTermWidth() ?? 26
+    : options.termWidth ?? 26;
   if (options.maxWidth != null) {
     const hasEntries = page.sections.some((s) => s.entries.length > 0);
     // The formatter skips empty default/choices arrays, so the
     // validation must match: use hasContent() (which checks length > 0)
     // rather than just `!= null`.
     const needsDescColumn = hasEntries &&
-      page.sections.some((s) =>
-        s.entries.some((e) =>
-          hasContent(e.description) ||
-          (options.showDefault && hasContent(e.default)) ||
-          (options.showChoices && hasContent(e.choices))
-        )
-      );
+      page.sections.some((s) => s.entries.some(needsDescriptionColumn));
     // Compute minimum description column width for showDefault/showChoices.
     // When the rendered content is non-empty, only the prefix (or
     // prefix + label for choices) must fit on one line; the suffix

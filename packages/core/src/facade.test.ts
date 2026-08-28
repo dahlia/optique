@@ -2202,6 +2202,27 @@ describe("runParser", () => {
       // With a very narrow width, output should contain line breaks
       assert.ok(helpOutput.includes("\n"));
     });
+
+    it("should include runner-provided meta-options in automatic term width", () => {
+      const parser = object({
+        execute: flag("-x", { description: message`Execute.` }),
+      });
+      let helpOutput = "";
+
+      runParser(parser, "tool", ["--help"], {
+        help: {
+          option: true,
+          onShow: () => "help-shown",
+        },
+        termWidth: "auto",
+        stdout: (text) => {
+          helpOutput = text;
+        },
+      });
+
+      assert.ok(helpOutput.includes("  -x      Execute."));
+      assert.ok(helpOutput.includes("  --help  Show help information."));
+    });
   });
 
   describe("callback functions", () => {

@@ -83,6 +83,15 @@ export interface RunOptions {
   readonly maxWidth?: number;
 
   /**
+   * Width allocated for help terms before descriptions start.  Set to
+   * `"auto"` to align descriptions after the widest visible term.
+   *
+   * @default `26`
+   * @since 1.3.0
+   */
+  readonly termWidth?: number | "auto";
+
+  /**
    * Whether and how to display default values for options and arguments.
    *
    * - `boolean`: When `true`, displays defaults using format `[value]`
@@ -862,6 +871,7 @@ function buildCoreOptions(
     ((exitCode: number) => process.exit(exitCode) as never);
   const colors = options.colors ?? process.stdout.isTTY;
   const maxWidth = options.maxWidth ?? process.stdout.columns;
+  const termWidth = options.termWidth;
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;
   const showUsage = options.showUsage;
@@ -929,6 +939,7 @@ function buildCoreOptions(
     stdout,
     colors,
     maxWidth,
+    termWidth,
     showDefault,
     showChoices,
     showUsage,
@@ -965,6 +976,7 @@ const knownRunOptionsKeyList = [
   "onExit",
   "colors",
   "maxWidth",
+  "termWidth",
   "showDefault",
   "showChoices",
   "showUsage",

@@ -12,6 +12,9 @@ To be released.
 
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
     with fixed flags and customizable parse errors.  [[#906], [#909]]
+ -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
+    after the widest visible term using terminal display width.  The existing
+    default and explicit numeric widths remain unchanged.  [[#904], [#911]]
  -  Added `usageLine` to the core runner `RunOptions`.  Top-level full help can
     now replace the generated root synopsis or derive one from a callback,
     while subcommand help and usage-only error output remain unchanged.
@@ -25,11 +28,16 @@ To be released.
 [#874]: https://github.com/dahlia/optique/issues/874
 [#879]: https://github.com/dahlia/optique/issues/879
 [#889]: https://github.com/dahlia/optique/pull/889
+[#904]: https://github.com/dahlia/optique/issues/904
 [#906]: https://github.com/dahlia/optique/issues/906
 [#909]: https://github.com/dahlia/optique/pull/909
+[#911]: https://github.com/dahlia/optique/pull/911
 
 ### @optique/run
 
+ -  Added `termWidth` to the core and high-level runner options.  Automatic
+    sizing measures the final help page after built-in help, version, and shell
+    completion entries have been added.  [[#904], [#911]]
  -  Added `usageLine` to `RunOptions`.  `run()`, `runSync()`, and `runAsync()`
     can now replace the root synopsis in full help without changing parsing or
     subcommand help.  [[#879]]

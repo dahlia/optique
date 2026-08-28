@@ -64,6 +64,9 @@ Core rules
     brief and command or option sections without the `Usage:` synopsis.
     For deeply nested command trees, add `commandList: "top-level"` when root
     help should list only first-level command groups.
+ -  Use `termWidth: "auto"` in runner options when descriptions should align
+    after the widest visible help term. Optique measures terminal display
+    width after adding built-in help/version/completion entries.
 
 
 Canonical app shape
@@ -97,6 +100,7 @@ const config = run(parser, {
   brief: message`Process a file.`,
   completion: "both",
   showDefault: true,
+  termWidth: "auto",
 });
 
 console.log(`Processing ${config.input} on port ${config.port}.`);
