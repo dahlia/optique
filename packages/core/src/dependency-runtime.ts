@@ -1198,6 +1198,16 @@ export interface CompleteEffectfulSourcesOptions {
    * collected but not reusable.  Defaults to {@link isReusable}.
    */
   readonly isCollected?: (node: RuntimeNode) => boolean;
+
+  /**
+   * Processes structural source nodes even when no node carries an
+   * effectful completion or a barrier.  A barrier's nested scheduling
+   * call sets this: the branch it schedules may hold only structural
+   * (command-line) values, which still must register into the pass's
+   * runtime, while ordinary construct passes keep the cheap early
+   * return.
+   */
+  readonly includeStructural?: boolean;
 }
 
 /**
@@ -1306,7 +1316,9 @@ export async function completeEffectfulSourcesAsync(
     node.parser.dependencyMetadata?.source?.completeSource != null ||
     node.prepare != null
   );
-  if (schedulable.length === 0) return empty;
+  if (schedulable.length === 0 && options?.includeStructural !== true) {
+    return empty;
+  }
 
   const completed: EffectfulSourceCompletion[] = [];
   for (const node of nodes) {
@@ -1317,10 +1329,16 @@ export async function completeEffectfulSourcesAsync(
       const barrierFailure = await node.prepare({
         runtime,
         exec,
+        // The barrier's subtree is part of the construct's delivery
+        // scope: its structural values re-register at the barrier's
+        // declaration position (isCollected), while its completion
+        // results stay out of the owning construct's pre-completed
+        // cache (isReusable) and deduplicate through the session.
         schedule: (barrierNodes) =>
           completeEffectfulSourcesAsync(barrierNodes, state, runtime, exec, {
             isReusable: () => false,
-            isCollected: () => false,
+            isCollected: () => true,
+            includeStructural: true,
           }).then((result) => result.success ? undefined : result),
       });
       if (barrierFailure != null) return barrierFailure;

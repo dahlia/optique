@@ -15994,31 +15994,22 @@ export function conditional(
       }
       return nodes;
     }
-    if (selected !== undefined || conditionalState.speculative === true) {
-      return nodes;
-    }
 
     const discriminatorSource = discriminator.dependencyMetadata?.source;
-    // A prompted discriminator that is not a dependency source has no
-    // run-scoped occurrence cache, so completing it during preparation
-    // would run its effect a second time in final completion.  Dynamic
-    // branch preparation is unsupported for it (documented limitation).
-    if (
-      discriminatorSource == null &&
-      typeof discriminator.shouldDeferCompletion === "function"
-    ) {
-      return nodes;
-    }
-
-    // Tee the discriminator's effectful completion result so the
-    // barrier below can resolve the branch without re-running the
-    // effect.  The wrapped metadata lives only on this pass's node;
-    // the discriminator parser itself is never mutated.
+    const innerCompleteSource = discriminatorSource?.completeSource;
+    const discriminatorPathKey = serializeSchedulingPath([
+      ...(parentPath ?? []),
+      "_discriminator",
+    ]);
+    // Tee the discriminator's effectful completion result so a barrier
+    // can resolve the branch without re-running the effect.  The
+    // wrapped metadata lives only on this pass's node; the
+    // discriminator parser itself is never mutated.
     const cell: {
       result?: import("./valueparser.ts").ValueParserResult<unknown>;
     } = {};
-    const innerCompleteSource = discriminatorSource?.completeSource;
-    if (discriminatorSource != null && innerCompleteSource != null) {
+    const teeDiscriminatorNode = (): void => {
+      if (discriminatorSource == null || innerCompleteSource == null) return;
       nodes[0] = {
         ...nodes[0],
         parser: {
@@ -16035,11 +16026,71 @@ export function conditional(
           },
         },
       };
+    };
+
+    if (conditionalState.speculative === true) {
+      // A speculative selection is a parse-time guess: the guessed
+      // branch stays effect-free until the discriminator's own
+      // completion confirms its key, so the barrier schedules the
+      // branch only on a confirmed match; a mismatch schedules nothing
+      // and the verification in completion fails the parse.  Only an
+      // effectful source discriminator can confirm here—its completion
+      // is deduplicated through the run-scoped session, so it runs at
+      // most once per pass.
+      if (selected?.kind !== "branch" || innerCompleteSource == null) {
+        return nodes;
+      }
+      teeDiscriminatorNode();
+      const speculativeKey = selected.key;
+      nodes.push({
+        path: [...(parentPath ?? []), "_branch"],
+        parser: {},
+        state: conditionalState,
+        ...(discriminatorSource != null
+          ? { requiresSourceId: discriminatorSource.sourceId }
+          : {}),
+        providesSourceIds: branchProvidedSourceIds,
+        prepare: async (ctx) => {
+          const session = ctx.exec?.effectfulCompletionSession;
+          if (session == null) return undefined;
+          const result = cell.result ??
+            session.completedByPath.get(discriminatorPathKey);
+          if (
+            result == null || isDeferredCompletionResult(result) ||
+            result.success !== true
+          ) {
+            return undefined;
+          }
+          if (String(result.value) !== speculativeKey) return undefined;
+          const branchParser = branches[speculativeKey];
+          if (branchParser == null) return undefined;
+          return await ctx.schedule(expandEffectfulRuntimeNodes([{
+            path: [...(parentPath ?? []), "_branch"],
+            parser: branchParser,
+            state: getAnnotatedChildState(
+              conditionalState,
+              conditionalState.branchState,
+              branchParser,
+            ),
+          }]));
+        },
+      });
+      return nodes;
     }
-    const discriminatorPathKey = serializeSchedulingPath([
-      ...(parentPath ?? []),
-      "_discriminator",
-    ]);
+    if (selected !== undefined) return nodes;
+
+    // A prompted discriminator that is not a dependency source has no
+    // run-scoped occurrence cache, so completing it during preparation
+    // would run its effect a second time in final completion.  Dynamic
+    // branch preparation is unsupported for it (documented limitation).
+    if (
+      discriminatorSource == null &&
+      typeof discriminator.shouldDeferCompletion === "function"
+    ) {
+      return nodes;
+    }
+
+    teeDiscriminatorNode();
     nodes.push({
       path: [...(parentPath ?? []), "_branch"],
       parser: {},

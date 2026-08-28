@@ -2200,6 +2200,80 @@ describe("prompted values as dependency sources", () => {
   );
 
   it(
+    "schedules a confirmed speculative branch's prompted source",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // "--a x" speculatively selects branch a while the prompted
+      // discriminator defers; the answer "a" confirms the guess, so the
+      // branch's prompted source must still complete before the outer
+      // sibling's replay.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: object({
+              ax: option("--a", choice(["x"] as const)),
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const valid = await parseAsync(
+        parser,
+        ["--a", "x", "--level", "silent"],
+      );
+      assert.ok(valid.success);
+      assert.equal(valid.value.level, "silent");
+      assert.equal(calls.length, 2);
+
+      const invalid = await parseAsync(
+        parser,
+        ["--a", "x", "--level", "debug"],
+      );
+      assert.ok(!invalid.success);
+    },
+  );
+
+  it(
+    "delivers a confirmed speculative branch's CLI source",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // The speculative branch's mode value is typed, not prompted; it
+      // must reach the sibling once the discriminator's answer confirms
+      // the branch.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: object({
+              ax: option("--a", choice(["x"] as const)),
+              mode: option("--mode", mode),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(
+        parser,
+        ["--a", "x", "--mode", "prod", "--level", "silent"],
+      );
+
+      assert.ok(result.success);
+      assert.equal(result.value.level, "silent");
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
     "prepares a demanded conditional() branch across two-pass runs",
     async () => {
       const kind = dependency(choice(["a", "b"] as const));
