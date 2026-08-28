@@ -638,6 +638,32 @@ describe("run", () => {
       assert.ok(helpOutput.includes("--verbose"));
       assert.equal(exitCode, 0);
     });
+
+    it("should forward automatic term width to the core runner", () => {
+      const parser = option("-x", { description: message`Execute.` });
+      let helpOutput = "";
+
+      assert.throws(
+        () => {
+          run(parser, {
+            args: ["--help"],
+            programName: "tool",
+            help: "option",
+            termWidth: "auto",
+            stdout: (text) => {
+              helpOutput = text;
+            },
+            onExit: () => {
+              throw new Error("EXIT");
+            },
+          });
+        },
+        /EXIT/,
+      );
+
+      assert.ok(helpOutput.includes("  -x      Execute."));
+      assert.ok(helpOutput.includes("  --help  Show help information."));
+    });
   });
 
   describe("version functionality", () => {

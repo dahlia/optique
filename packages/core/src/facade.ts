@@ -1341,6 +1341,15 @@ export interface RunOptions<THelp, TError> {
   readonly maxWidth?: number;
 
   /**
+   * Width allocated for help terms before descriptions start.  Set to
+   * `"auto"` to align descriptions after the widest visible term.
+   *
+   * @default `26`
+   * @since 1.3.0
+   */
+  readonly termWidth?: number | "auto";
+
+  /**
    * Whether and how to display default values for options and arguments.
    *
    * - `boolean`: When `true`, displays defaults using format `[value]`
@@ -1592,6 +1601,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   availableShells: Record<string, ShellCompletion>,
   colors?: boolean,
   maxWidth?: number,
+  termWidth?: number | "auto",
   completionCommandDisplayName?: string,
   completionOptionDisplayName?: string,
   isOptionMode?: boolean,
@@ -1621,6 +1631,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
           formatDocPage(programName, doc, {
             colors,
             maxWidth,
+            termWidth,
             sectionOrder,
             showUsage,
           }),
@@ -2418,6 +2429,7 @@ export function runParser<
   const {
     colors,
     maxWidth,
+    termWidth,
     showDefault,
     showChoices,
     sectionOrder,
@@ -2737,6 +2749,7 @@ export function runParser<
           availableShells,
           colors,
           maxWidth,
+          termWidth,
           completionCommandNames[0],
           completionOptionNames[0],
           classified.source === "option",
@@ -2872,6 +2885,7 @@ export function runParser<
             stdout(formatDocPage(programName, renderedDoc, {
               colors,
               maxWidth,
+              termWidth,
               showDefault,
               showChoices,
               sectionOrder,
@@ -3005,6 +3019,7 @@ export function runParser<
               stderr(formatDocPage(programName, renderedDoc, {
                 colors,
                 maxWidth,
+                termWidth,
                 showDefault,
                 showChoices,
                 sectionOrder,

@@ -1128,6 +1128,7 @@ const config = run(prog, {
 
   colors: true,           // Force colored output (auto-detected by default)
   maxWidth: 100,          // Set help text width (terminal width by default)
+  termWidth: "auto",      // Fit the term column to visible help entries
   errorExitCode: 2        // Custom exit code for errors (default: 1)
 });
 
@@ -1135,6 +1136,10 @@ const config = run(prog, {
 // $ my-tool --help
 // $ my-tool help
 ~~~~
+
+With `termWidth: "auto"`, Optique measures the terminal display width of
+visible terms after built-in help/version/completion entries have been added.
+The default remains a fixed 26-column term width when this option is omitted.
 
 ### Complete CLI application
 

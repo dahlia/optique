@@ -298,6 +298,7 @@ const prog = defineProgram({
 const result = runParser(prog, ["--name", "test"], {
   colors: true,           // Force colored output
   maxWidth: 80,          // Wrap text at 80 columns
+  termWidth: "auto",     // Fit the term column to visible entries
   usageLine: [{ type: "ellipsis" }], // Show a compact root synopsis
   commandList: "top-level", // Show only first-level commands
   showDefault: true,     // Show default values in help text
@@ -347,6 +348,16 @@ only first-level commands instead of recursively listing every nested leaf
 command.  The default, `commandList: "recursive"`, preserves the full command
 list.  The setting does not change subcommand help pages, so users can still
 drill down with `<command> --help`.
+
+Pass `termWidth: "auto"` to fit the help term column to its visible content.
+Optique measures terminal display width, including CJK characters, emoji, and
+combining sequences, after runner-provided help/version/completion entries have
+been added.  Hidden or degenerate entries and entries without descriptions,
+displayed defaults, or displayed choices do not widen the column.  Omitting
+`termWidth` keeps the default width of 26, while a number sets an explicit
+width.  When `maxWidth` constrains the layout, automatic sizing reserves at
+least half of the available space for descriptions.  Numeric widths retain
+their existing fallback behavior.
 
 ### Explicit sync/async variants
 
@@ -499,6 +510,7 @@ const config = run(prog, {
   args: ["custom", "args"],   // Override process.argv
   colors: true,               // Force colored output
   maxWidth: 100,              // Set output width
+  termWidth: "auto",          // Fit terms before descriptions
   stdout: console.log,        // Inject output writer for help/version/completion
   stderr: console.error,      // Inject error writer
   onExit: process.exit,       // Inject exit handler
