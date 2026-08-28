@@ -10112,6 +10112,50 @@ describe("source delivery from conditional()/command() to siblings", () => {
   });
 
   test(
+    "delivers through an optional()-wrapped conditional()",
+    async () => {
+      const { mode, level } = createModeLevel();
+      // The consumer is declared first on purpose: a later-declared one
+      // could be rescued by declaration-order completion leakage, which
+      // would mask a broken wrapper forwarding of the collection opt-in.
+      const parser = object({
+        level: option("--level", level),
+        cond: optional(
+          conditional(
+            option("--mode", mode),
+            {
+              dev: object({
+                d: withDefault(
+                  option("--d", choice(["x"] as const)),
+                  "x" as const,
+                ),
+              }),
+              prod: object({
+                p: withDefault(
+                  option("--p", choice(["y"] as const)),
+                  "y" as const,
+                ),
+              }),
+            },
+          ),
+        ),
+      });
+
+      const valid = await parseAsync(parser, [
+        "--level",
+        "silent",
+        "--mode",
+        "prod",
+      ]);
+      assert.ok(
+        valid.success,
+        `Expected success but got: ${JSON.stringify(valid)}`,
+      );
+      assert.equal(valid.value.level, "silent");
+    },
+  );
+
+  test(
     "does not deliver a plain nested object() CLI source to an earlier consumer",
     async () => {
       const { mode, level } = createModeLevel();
