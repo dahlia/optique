@@ -972,6 +972,21 @@ export function bindConfig<
           parser,
         );
       },
+      // Rebind the inner effectful completion (e.g.,
+      // bindConfig(prompt(...))) to this wrapper's own complete() so the
+      // wrapper's fallback precedence (CLI → configuration → inner
+      // prompt) is honored when a parent construct schedules the
+      // completion directly.  When the wrapped parser transforms the
+      // source value, this wrapper's completion lives in the transformed
+      // domain and must never register under the raw source ID, so no
+      // completion is exposed.
+      completeSource: sourceMetadata.completeSource == null ||
+          sourceMetadata.preservesSourceValue === false
+        ? undefined
+        : (state: unknown, exec) =>
+          Promise.resolve(
+            boundParser.complete(state as TState, exec),
+          ) as Promise<ValueParserResult<unknown> | undefined>,
     }),
   );
   if (dependencyMetadata != null) {

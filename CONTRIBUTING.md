@@ -252,7 +252,11 @@ This project follows test-driven development (TDD) practices:
 
 Optique uses [Sacho] to keep unreleased changelog entries as small Markdown
 fragments in *changes.d/*.  Add a fragment for every user-visible change and
-commit it with the code it describes.  Do not edit the unreleased section of
+commit it with the code it describes.  Because *sacho.toml* sets
+`materialize = true`, the unreleased section of *CHANGES.md* is a generated
+mirror of those fragments: `sacho sync` regenerates it, and the regenerated
+section is committed together with the fragments it reflects.  The fragments
+remain the single source of truth, so do not edit the unreleased section of
 *CHANGES.md* directly.
 
 Create a fragment with a short, topic-based name:
@@ -277,10 +281,13 @@ user-visible effect, such as an internal refactor or a test-only change, do not
 need an entry.  If a branch-level changelog check requires an explicit
 exemption, add `Changelog: none` to the commit message.
 
-Format the fragments, preview the compiled result, and check it before
-committing:
+Format the fragments, synchronize the materialized unreleased section of
+*CHANGES.md*, preview the compiled result, and check it before committing
+(`sacho fmt` refuses to run while the materialized section is out of sync,
+so run `sacho sync` first after changing fragments):
 
 ~~~~ bash
+sacho sync
 sacho fmt
 sacho preview
 sacho check

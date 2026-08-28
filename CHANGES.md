@@ -20,12 +20,31 @@ To be released.
     now replace the generated root synopsis or derive one from a callback,
     while subcommand help and usage-only error output remain unchanged.
     [[#879]]
+ -  Fixed dependency sources completed by a prompt fallback to register
+    their value in the dependency runtime, so a parser derived from such a
+    source now sees the value the user actually selected instead of the
+    source's default.  A derived parser now behaves identically whether its
+    dependency value came from the command line or from an interactive
+    prompt, across `object()`, `tuple()`, `seq()`, `concat()`, and
+    `merge()` compositions—including sources nested in child constructs
+    such as `concat()` child tuples, and sources transformed with `map()`,
+    which register their pre-transform value.  Interactive source
+    completions run serially in
+    declaration order before dependency replay, at most once per parse
+    operation, and never during help, suggestion, or probe phases; a
+    cancelled prompt fails the parse without running later prompts.  Under
+    `runWith()` with two-pass source contexts, a source prompt now runs at
+    most once per run: it runs during the seed pass only when a phase-one
+    consumer demands its value and otherwise defers to the final pass, so
+    an undemanded source prompt no longer exposes its value to phase-two
+    contexts.  [[#869], [#870], [#912]]
  -  Removed the unused `DependencyValueOrigin` type and `registerSource()`
     origin argument from `@optique/core/dependency-runtime`.  Both APIs were
     marked `@internal`; dependency resolution behavior is unchanged.
     [[#869], [#874], [#889]]
 
 [#869]: https://github.com/dahlia/optique/issues/869
+[#870]: https://github.com/dahlia/optique/issues/870
 [#874]: https://github.com/dahlia/optique/issues/874
 [#879]: https://github.com/dahlia/optique/issues/879
 [#889]: https://github.com/dahlia/optique/pull/889
@@ -33,6 +52,7 @@ To be released.
 [#906]: https://github.com/dahlia/optique/issues/906
 [#909]: https://github.com/dahlia/optique/pull/909
 [#911]: https://github.com/dahlia/optique/pull/911
+[#912]: https://github.com/dahlia/optique/pull/912
 
 ### @optique/run
 
@@ -69,6 +89,13 @@ To be released.
     now skip a fallback with a synchronous or asynchronous `when` check and
     return a typed `otherwise` value.  The check runs only when parsing reaches
     the prompt fallback.  [[#882]]
+ -  Fixed `prompt()` so that a prompted value for a wrapped dependency
+    source registers in the dependency runtime, letting derived parsers
+    observe the selected value during the same parse operation.  The fix
+    applies to every adapter built on `createPromptAdapter()`, including
+    *@optique/inquirer* and *@optique/clack*.  A dependency-source prompt
+    now runs before dependency replay, so it may be displayed before an
+    earlier-declared non-source prompt.  [[#869], [#870], [#912]]
 
 
 Version 1.2.4

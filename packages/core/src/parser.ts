@@ -2,6 +2,7 @@ export type { ParseOptions } from "./annotations.ts";
 export type {
   CombineModes,
   DocState,
+  EffectfulCompletionSession,
   ExecutionContext,
   ExecutionPhase,
   InferMode,

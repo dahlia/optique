@@ -9,9 +9,11 @@ import * as assert from "node:assert/strict";
 import {
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
+  collectDemandedDependencyIds,
   collectExplicitSourceValues,
   collectExplicitSourceValuesAsync,
   collectSourcesFromState,
+  completeEffectfulSourcesAsync,
   createDependencyFingerprint,
   createDependencyRuntimeContext,
   createReplayKey,
@@ -24,6 +26,7 @@ import {
   resolveStateWithRuntimeAsync,
   type RuntimeNode,
 } from "#src/dependency-runtime.ts";
+import { createInputTrace } from "#src/input-trace.ts";
 import type { ParserDependencyMetadata } from "#src/dependency-metadata.ts";
 import {
   createDeferredParseState,
@@ -39,7 +42,12 @@ import {
   parseWithDependency,
 } from "#src/internal/dependency.ts";
 import { formatMessage, message } from "#src/message.ts";
-import { unmatchedNonCliDependencySourceStateMarker } from "#src/internal/parser.ts";
+import {
+  createEffectfulCompletionSession,
+  type EffectfulCompletionSession,
+  type ExecutionContext,
+  unmatchedNonCliDependencySourceStateMarker,
+} from "#src/internal/parser.ts";
 import type { DependencyRegistryLike } from "#src/registry-types.ts";
 import type { ValueParserResult } from "#src/valueparser.ts";
 
@@ -2035,5 +2043,439 @@ describe("DependencyRuntimeContext—FailedAwareRegistry clone", () => {
     assert.ok(cloned.isSourceFailed(sourceA));
     assert.ok(cloned.isSourceFailed(sourceB));
     assert.ok(!cloned.hasSource(sourceA));
+  });
+});
+
+// =============================================================================
+// Effectful source completion scheduling (issue #870)
+// =============================================================================
+
+function createCompleteExecFixture(
+  session?: EffectfulCompletionSession,
+  phase: "complete" | "parse" = "complete",
+): ExecutionContext {
+  return {
+    usage: [],
+    phase,
+    path: [],
+    ...(session != null ? { effectfulCompletionSession: session } : {}),
+  };
+}
+
+function createEffectfulSourceNode(
+  key: string,
+  sourceId: symbol,
+  completeSource: NonNullable<
+    NonNullable<ParserDependencyMetadata["source"]>["completeSource"]
+  >,
+  options: { readonly preservesSourceValue?: boolean } = {},
+): RuntimeNode {
+  return {
+    path: [key],
+    parser: {
+      dependencyMetadata: {
+        source: {
+          kind: "source",
+          sourceId,
+          extractSourceValue: () => undefined,
+          preservesSourceValue: options.preservesSourceValue ?? true,
+          completeSource,
+        },
+      },
+    },
+    state: undefined,
+  };
+}
+
+describe("completeEffectfulSourcesAsync", () => {
+  test("runs completions serially in declaration order and registers", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const idA = Symbol("a");
+    const idB = Symbol("b");
+    const order: string[] = [];
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", idA, () => {
+        order.push("a");
+        return Promise.resolve({ success: true, value: "A" });
+      }),
+      createEffectfulSourceNode("b", idB, () => {
+        order.push("b");
+        return Promise.resolve({ success: true, value: "B" });
+      }),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(order, ["a", "b"]);
+    assert.equal(runtime.getSource(idA), "A");
+    assert.equal(runtime.getSource(idB), "B");
+    assert.deepEqual(
+      result.completed.map((c) => c.key),
+      ["a", "b"],
+    );
+  });
+
+  test("skips sources that already have a registered value", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("a");
+    runtime.registerSource(id, "cli");
+    let calls = 0;
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", id, () => {
+        calls++;
+        return Promise.resolve({ success: true, value: "prompted" });
+      }),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(result.success);
+    assert.equal(calls, 0);
+    assert.equal(runtime.getSource(id), "cli");
+  });
+
+  test(
+    "completes every occurrence of a shared source, last one winning",
+    async () => {
+      const runtime = createDependencyRuntimeContext();
+      const id = Symbol("shared");
+      const order: string[] = [];
+      const nodes: RuntimeNode[] = [
+        createEffectfulSourceNode("a", id, () => {
+          order.push("a");
+          return Promise.resolve({ success: true, value: "first" });
+        }),
+        createEffectfulSourceNode("b", id, () => {
+          order.push("b");
+          return Promise.resolve({ success: true, value: "second" });
+        }),
+      ];
+
+      // A value registered by an earlier effectful occurrence within the
+      // same pass must not suppress later occurrences: each occurrence
+      // completes and re-registers, matching how repeated command-line
+      // source occurrences overwrite earlier ones.
+      const result = await completeEffectfulSourcesAsync(
+        nodes,
+        undefined,
+        runtime,
+        createCompleteExecFixture(),
+      );
+
+      assert.ok(result.success);
+      assert.deepEqual(order, ["a", "b"]);
+      assert.equal(runtime.getSource(id), "second");
+    },
+  );
+
+  test("skips non-reusable sources when no session is available", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("a");
+    let calls = 0;
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", id, () => {
+        calls++;
+        return Promise.resolve({ success: true, value: "prompted" });
+      }, { preservesSourceValue: false }),
+    ];
+
+    // Without a run-scoped session, a non-reusable completion cannot be
+    // deduplicated against the construct's final completion phase, so it
+    // must not run.
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(result.success);
+    assert.equal(calls, 0);
+    assert.ok(!runtime.hasSource(id));
+  });
+
+  test(
+    "registers pre-transform values for non-preserved sources with a session",
+    async () => {
+      const runtime = createDependencyRuntimeContext();
+      const id = Symbol("a");
+      let calls = 0;
+      const nodes: RuntimeNode[] = [
+        createEffectfulSourceNode("a", id, () => {
+          calls++;
+          return Promise.resolve({ success: true, value: "prompted" });
+        }, { preservesSourceValue: false }),
+      ];
+
+      // With a session, the completion runs and registers the source
+      // value, but the result is not cached for the owning construct
+      // because the field's final value differs from the source value.
+      const result = await completeEffectfulSourcesAsync(
+        nodes,
+        undefined,
+        runtime,
+        createCompleteExecFixture(createEffectfulCompletionSession()),
+      );
+
+      assert.ok(result.success);
+      assert.equal(calls, 1);
+      assert.equal(runtime.getSource(id), "prompted");
+      assert.deepEqual(result.completed, []);
+    },
+  );
+
+  test("treats expanded nodes as non-reusable via isReusable", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("a");
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode(
+        "a",
+        id,
+        () => Promise.resolve({ success: true, value: "prompted" }),
+      ),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(createEffectfulCompletionSession()),
+      { isReusable: () => false },
+    );
+
+    assert.ok(result.success);
+    assert.equal(runtime.getSource(id), "prompted");
+    assert.deepEqual(result.completed, []);
+  });
+
+  test("does not run completions during probe phases", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("a");
+    let calls = 0;
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", id, () => {
+        calls++;
+        return Promise.resolve({ success: true, value: "prompted" });
+      }),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(undefined, "parse"),
+    );
+
+    assert.ok(result.success);
+    assert.equal(calls, 0);
+  });
+
+  test("aborts on failure without running later completions", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const idA = Symbol("a");
+    const idB = Symbol("b");
+    let laterCalls = 0;
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", idA, () =>
+        Promise.resolve({
+          success: false,
+          error: message`Prompt cancelled.`,
+        })),
+      createEffectfulSourceNode("b", idB, () => {
+        laterCalls++;
+        return Promise.resolve({ success: true, value: "B" });
+      }),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(!result.success);
+    assert.equal(formatMessage(result.error), "Prompt cancelled.");
+    assert.equal(laterCalls, 0);
+    assert.ok(runtime.isSourceFailed(idA));
+    assert.ok(!runtime.hasSource(idB));
+  });
+
+  test("treats undefined and deferred results as declined", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const idA = Symbol("a");
+    const idB = Symbol("b");
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", idA, () => Promise.resolve(undefined)),
+      createEffectfulSourceNode("b", idB, () =>
+        Promise.resolve({
+          success: true,
+          value: "placeholder",
+          deferred: true,
+        })),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(result.completed, []);
+    assert.ok(!runtime.hasSource(idA));
+    assert.ok(!runtime.hasSource(idB));
+  });
+
+  test("caches a successful undefined value without registering it", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("a");
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode(
+        "a",
+        id,
+        () => Promise.resolve({ success: true, value: undefined }),
+      ),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(result.success);
+    assert.equal(result.completed.length, 1);
+    assert.equal(result.completed[0].key, "a");
+    assert.ok(!runtime.hasSource(id));
+  });
+
+  test("accumulates demanded ids into a demand-only session", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const sourceId = Symbol("mode");
+    const session = createEffectfulCompletionSession("demand-only");
+    const trace = createInputTrace().set(["level"], {
+      kind: "option-value",
+      rawInput: "debug",
+      consumed: ["--level", "debug"],
+    });
+    const consumerNode: RuntimeNode = {
+      path: ["level"],
+      parser: {
+        dependencyMetadata: {
+          derived: {
+            kind: "derived",
+            dependencyIds: [sourceId],
+            replayParse: () => ({ success: true, value: "debug" }),
+          },
+        },
+      },
+      state: undefined,
+    };
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode(
+        "mode",
+        sourceId,
+        () => Promise.resolve({ success: true, value: "prod" }),
+      ),
+      consumerNode,
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      { ...createCompleteExecFixture(session), trace },
+    );
+
+    assert.ok(result.success);
+    assert.ok(session.demanded.has(sourceId));
+  });
+});
+
+describe("collectDemandedDependencyIds", () => {
+  test("collects ids from derived nodes with trace raw input", () => {
+    const sourceId = Symbol("mode");
+    const trace = createInputTrace().set(["level"], {
+      kind: "option-value",
+      rawInput: "debug",
+      consumed: ["--level", "debug"],
+    });
+    const nodes: RuntimeNode[] = [{
+      path: ["level"],
+      parser: {
+        dependencyMetadata: {
+          derived: {
+            kind: "derived",
+            dependencyIds: [sourceId],
+            replayParse: () => ({ success: true, value: "debug" }),
+          },
+        },
+      },
+      state: undefined,
+    }];
+
+    const demanded = collectDemandedDependencyIds(nodes, undefined, trace);
+
+    assert.ok(demanded.has(sourceId));
+  });
+
+  test("ignores derived nodes without raw input evidence", () => {
+    const sourceId = Symbol("mode");
+    const nodes: RuntimeNode[] = [{
+      path: ["level"],
+      parser: {
+        dependencyMetadata: {
+          derived: {
+            kind: "derived",
+            dependencyIds: [sourceId],
+            replayParse: () => ({ success: true, value: "debug" }),
+          },
+        },
+      },
+      state: undefined,
+    }];
+
+    const demanded = collectDemandedDependencyIds(
+      nodes,
+      undefined,
+      createInputTrace(),
+    );
+
+    assert.ok(!demanded.has(sourceId));
+  });
+
+  test("collects ids from legacy deferred states in the state tree", () => {
+    const sourceId = Symbol("mode");
+    const derivedParser = makeDerivedValueParser(
+      sourceId,
+      (rawInput) => ({ success: true, value: rawInput }),
+    );
+    const deferred = createDeferredParseState(
+      "debug",
+      derivedParser,
+      { success: true, value: "debug" } as ValueParserResult<unknown>,
+    );
+
+    const demanded = collectDemandedDependencyIds(
+      [],
+      { level: deferred },
+      undefined,
+    );
+
+    assert.ok(demanded.has(sourceId));
   });
 });

@@ -35,6 +35,7 @@ import { multiple, optional, withDefault } from "./modifiers.ts";
 import type { Program } from "./program.ts";
 import {
   createParserContext,
+  type EffectfulCompletionSession,
   type ExecutionContext,
   getDocPage,
   type InferMode,
@@ -46,6 +47,7 @@ import {
   type ParserResult,
   type Suggestion,
 } from "./parser.ts";
+import { createEffectfulCompletionSession } from "./internal/parser.ts";
 import { dispatchByMode } from "./internal/mode-dispatch.ts";
 import {
   collectExplicitSourceValues,
@@ -317,12 +319,35 @@ function getCommandPath(exec: ExecutionContext | undefined): readonly string[] {
   return exec?.commandPath ?? [];
 }
 
+// Module-private options key carrying the run-scoped effectful completion
+// session from runWith() into the final runParser() pass without widening
+// the public RunOptions surface.
+const effectfulSessionOptionsKey: unique symbol = Symbol(
+  "@optique/core/facade/effectfulSessionOptionsKey",
+);
+
+function getEffectfulSessionOption(
+  options: object,
+): EffectfulCompletionSession | undefined {
+  return (options as {
+    readonly [effectfulSessionOptionsKey]?: EffectfulCompletionSession;
+  })[effectfulSessionOptionsKey];
+}
+
+function withEffectfulSessionOption<T extends object>(
+  options: T,
+  session: EffectfulCompletionSession,
+): T {
+  return { ...options, [effectfulSessionOptionsKey]: session } as T;
+}
+
 function createCompleteExec(
   exec: ExecutionContext,
   context: {
     readonly exec?: ExecutionContext;
     readonly trace?: ReturnType<typeof createInputTrace>;
   },
+  session?: EffectfulCompletionSession,
 ): ExecutionContext {
   const runtime = createDependencyRuntimeContext();
   return {
@@ -332,6 +357,7 @@ function createCompleteExec(
     dependencyRegistry: runtime.registry,
     commandPath: getCommandPath(context.exec) ?? exec.commandPath,
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
+    effectfulCompletionSession: session ?? createEffectfulCompletionSession(),
   };
 }
 
@@ -347,7 +373,14 @@ function attemptParseSync(
 function attemptParseSync<T>(
   parser: Parser<"sync", T, unknown>,
   args: readonly string[],
+  mode: "complete",
+  session?: EffectfulCompletionSession,
+): ParseAttempt<T>;
+function attemptParseSync<T>(
+  parser: Parser<"sync", T, unknown>,
+  args: readonly string[],
   mode: "complete" | "parse-only" = "complete",
+  session?: EffectfulCompletionSession,
 ): ParseAttempt<T | undefined> {
   const shouldUnwrapAnnotatedValue = isInjectedAnnotationWrapper(
     parser.initialState,
@@ -403,7 +436,7 @@ function attemptParseSync<T>(
 
   const endResult = parser.complete(
     context.state,
-    createCompleteExec(exec, context),
+    createCompleteExec(exec, context, session),
   );
   if (!endResult.success) {
     return {
@@ -435,7 +468,14 @@ async function attemptParseAsync(
 async function attemptParseAsync<T>(
   parser: Parser<Mode, T, unknown>,
   args: readonly string[],
+  mode: "complete",
+  session?: EffectfulCompletionSession,
+): Promise<ParseAttempt<T>>;
+async function attemptParseAsync<T>(
+  parser: Parser<Mode, T, unknown>,
+  args: readonly string[],
   mode: "complete" | "parse-only" = "complete",
+  session?: EffectfulCompletionSession,
 ): Promise<ParseAttempt<T | undefined>> {
   const shouldUnwrapAnnotatedValue = isInjectedAnnotationWrapper(
     parser.initialState,
@@ -491,7 +531,7 @@ async function attemptParseAsync<T>(
 
   const endResult = await parser.complete(
     context.state,
-    createCompleteExec(exec, context),
+    createCompleteExec(exec, context, session),
   );
   if (!endResult.success) {
     return {
@@ -517,6 +557,7 @@ function createPhase2SeedExec(
     readonly trace?: ReturnType<typeof createInputTrace>;
     readonly exec?: ExecutionContext;
   },
+  session?: EffectfulCompletionSession,
 ): ExecutionContext {
   const exec: ExecutionContext = {
     usage: parser.usage,
@@ -533,6 +574,7 @@ function createPhase2SeedExec(
     dependencyRegistry: runtime.registry,
     commandPath: getCommandPath(context.exec),
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
+    effectfulCompletionSession: session ?? createEffectfulCompletionSession(),
   };
 }
 
@@ -560,6 +602,7 @@ function createPhase2SeedContext(
 function extractPhase2SeedSync(
   parser: Parser<"sync", unknown, unknown>,
   args: readonly string[],
+  session?: EffectfulCompletionSession,
 ) {
   let context = createPhase2SeedContext(parser, args);
   do {
@@ -568,7 +611,7 @@ function extractPhase2SeedSync(
       return completeOrExtractPhase2Seed(
         parser,
         context.state,
-        createPhase2SeedExec(parser, context),
+        createPhase2SeedExec(parser, context, session),
       );
     }
     const previousBuffer = context.buffer;
@@ -577,20 +620,21 @@ function extractPhase2SeedSync(
       return completeOrExtractPhase2Seed(
         parser,
         context.state,
-        createPhase2SeedExec(parser, context),
+        createPhase2SeedExec(parser, context, session),
       );
     }
   } while (context.buffer.length > 0);
   return completeOrExtractPhase2Seed(
     parser,
     context.state,
-    createPhase2SeedExec(parser, context),
+    createPhase2SeedExec(parser, context, session),
   );
 }
 
 async function extractPhase2SeedAsync(
   parser: Parser<Mode, unknown, unknown>,
   args: readonly string[],
+  session?: EffectfulCompletionSession,
 ) {
   let context = createPhase2SeedContext(parser, args);
   do {
@@ -599,7 +643,7 @@ async function extractPhase2SeedAsync(
       return await completeOrExtractPhase2Seed(
         parser,
         context.state,
-        createPhase2SeedExec(parser, context),
+        createPhase2SeedExec(parser, context, session),
       );
     }
     const previousBuffer = context.buffer;
@@ -608,14 +652,14 @@ async function extractPhase2SeedAsync(
       return await completeOrExtractPhase2Seed(
         parser,
         context.state,
-        createPhase2SeedExec(parser, context),
+        createPhase2SeedExec(parser, context, session),
       );
     }
   } while (context.buffer.length > 0);
   return await completeOrExtractPhase2Seed(
     parser,
     context.state,
-    createPhase2SeedExec(parser, context),
+    createPhase2SeedExec(parser, context, session),
   );
 }
 
@@ -3075,6 +3119,8 @@ export function runParser<
       const attempted = attemptParseSync(
         parser as Parser<"sync", unknown, unknown>,
         args,
+        "complete",
+        getEffectfulSessionOption(options),
       );
       const classified: ParsedResult = attempted.kind === "success"
         ? { type: "success", value: attempted.value }
@@ -3094,7 +3140,12 @@ export function runParser<
       return handled;
     },
     async () => {
-      const attempted = await attemptParseAsync(parser, args);
+      const attempted = await attemptParseAsync(
+        parser,
+        args,
+        "complete",
+        getEffectfulSessionOption(options),
+      );
       const classified: ParsedResult = attempted.kind === "success"
         ? { type: "success", value: attempted.value }
         : classifyParseFailure(
@@ -3858,6 +3909,24 @@ async function runWithBody<
   }
 
   // Two-phase parsing for two-pass contexts.
+  // Run-scoped effectful completion session shared by the seed pass and
+  // the final pass, so an effectful source (e.g., a prompt) runs at most
+  // once per runWith() invocation.  The seed pass uses the demand-only
+  // policy: an effectful source completes there only when a phase-one
+  // consumer demands its value; others defer to the final pass.
+  const seedSession = createEffectfulCompletionSession("demand-only");
+  // The final pass shares the run-scoped results cache and demand set,
+  // but recomputes structural precedence from scratch: phase-two
+  // annotations may introduce environment/configuration values that must
+  // win over a cached seed prompt answer, so the effectful-source
+  // markers do not carry over.
+  const finalSession: EffectfulCompletionSession = {
+    ...seedSession,
+    policy: "eager",
+    effectfulSources: new Set(),
+    completedByPath: new Map(),
+  };
+  const sessionOptions = withEffectfulSessionOption(options, finalSession);
   // First pass: parse with Phase 1 annotations to get initial result
   const firstPassSeed = await dispatchByMode(
     parser.mode,
@@ -3865,8 +3934,9 @@ async function runWithBody<
       extractPhase2SeedSync(
         augmentedParser1 as Parser<"sync", unknown, unknown>,
         args,
+        seedSession,
       ),
-    () => extractPhase2SeedAsync(augmentedParser1, args),
+    () => extractPhase2SeedAsync(augmentedParser1, args, seedSession),
   );
 
   // First pass failed - run through runParser for proper error handling.
@@ -3882,13 +3952,18 @@ async function runWithBody<
         fallbackParser,
         programName,
         args,
-        options,
+        sessionOptions,
       ) as Promise<
         InferValue<TParser>
       >;
     }
     return Promise.resolve(
-      runParser(fallbackParser, programName, args, options) as InferValue<
+      runParser(
+        fallbackParser,
+        programName,
+        args,
+        sessionOptions,
+      ) as InferValue<
         TParser
       >,
     );
@@ -3911,12 +3986,22 @@ async function runWithBody<
   );
 
   if (parser.mode === "async") {
-    return runParser(augmentedParser2, programName, args, options) as Promise<
+    return runParser(
+      augmentedParser2,
+      programName,
+      args,
+      sessionOptions,
+    ) as Promise<
       InferValue<TParser>
     >;
   }
   return Promise.resolve(
-    runParser(augmentedParser2, programName, args, options) as InferValue<
+    runParser(
+      augmentedParser2,
+      programName,
+      args,
+      sessionOptions,
+    ) as InferValue<
       TParser
     >,
   );
@@ -4094,14 +4179,33 @@ function runWithSyncBody<
   }
 
   // Two-phase parsing for two-pass contexts.
+  // Run-scoped effectful completion session shared by the seed pass and
+  // the final pass (see runWithBody for details).
+  const seedSession = createEffectfulCompletionSession("demand-only");
+  // The final pass shares the run-scoped results cache and demand set,
+  // but recomputes structural precedence from scratch: phase-two
+  // annotations may introduce environment/configuration values that must
+  // win over a cached seed prompt answer, so the effectful-source
+  // markers do not carry over.
+  const finalSession: EffectfulCompletionSession = {
+    ...seedSession,
+    policy: "eager",
+    effectfulSources: new Set(),
+    completedByPath: new Map(),
+  };
+  const sessionOptions = withEffectfulSessionOption(options, finalSession);
   // First pass: parse with Phase 1 annotations
-  const firstPassSeed = extractPhase2SeedSync(augmentedParser1, args);
+  const firstPassSeed = extractPhase2SeedSync(
+    augmentedParser1,
+    args,
+    seedSession,
+  );
   if (firstPassSeed == null) {
     const fallbackParser = injectAnnotationsIntoParser(
       parser,
       phase1Annotations,
     );
-    return runParser(fallbackParser, programName, args, options);
+    return runParser(fallbackParser, programName, args, sessionOptions);
   }
 
   // Phase 2: Collect annotations with parsed result
@@ -4120,7 +4224,7 @@ function runWithSyncBody<
     finalAnnotations,
   );
 
-  return runParser(augmentedParser2, programName, args, options);
+  return runParser(augmentedParser2, programName, args, sessionOptions);
 }
 
 /**

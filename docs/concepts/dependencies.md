@@ -454,6 +454,64 @@ const pushCommand = object({
 ~~~~
 
 
+Interactive sources
+-------------------
+
+*This behavior is available since Optique 1.3.0.*
+
+A dependency source can be wrapped in a prompt fallback such as `prompt()`
+from *@optique/inquirer* or *@optique/clack*.  When the command line omits
+the source option and the prompt supplies the value interactively, the
+prompted value registers as the dependency value, so derived parsers observe
+the value the user actually selected:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { prompt } from "@optique/inquirer";
+
+const modeParser = dependency(choice(["dev", "prod"] as const));
+
+const portParser = modeParser.derive({
+  metavar: "PORT",
+  mode: "sync",
+  factory: (mode) =>
+    choice(mode === "dev" ? ["3000", "8080"] : ["80", "443"]),
+  defaultValue: () => "dev" as const,
+});
+
+const parser = object({
+  mode: prompt(option("--mode", modeParser), {
+    type: "select",
+    message: "Select mode:",
+    choices: ["dev", "prod"],
+  }),
+  port: option("--port", portParser),
+});
+// With --port 443 and no --mode, the prompt asks for the mode first, and
+// the answer determines which ports --port accepts.
+~~~~
+
+A derived parser behaves identically whether the dependency value came from
+the command line, an environment or configuration binding, or a prompt.
+Existing precedence is unchanged: the prompt runs only after the command
+line and earlier fallback sources fail to produce a value.
+
+A prompted source and its consumers can live anywhere within the same
+`object()`, `tuple()`, `seq()`, `concat()`, or `merge()` composition,
+including fields contributed through `merge()` children and sources nested
+in child constructs such as `concat()` child tuples.  A prompted source
+transformed with `map()` registers its pre-transform value, so consumers
+derive from the value the prompt produced rather than the mapped result.
+To make its value available before derived parsers re-evaluate, a
+dependency-source prompt runs before ordinary prompts, so it may be
+displayed before a non-source prompt declared earlier in the same object.
+When the user cancels a source prompt, the parse fails immediately and
+later prompts do not run.
+
+
 Limitations
 -----------
 

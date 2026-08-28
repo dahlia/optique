@@ -6,6 +6,7 @@ import {
   normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
+import { defineForwardedEffectfulSchedulingNodes } from "./dependency-runtime.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
@@ -1006,10 +1007,50 @@ export function optional<M extends Mode, TValue, TState>(
       "optional",
     );
     if (composed != null) {
+      // Rebind the inner effectful completion (e.g., optional(prompt(...)))
+      // to this wrapper's own complete() so optional()'s suppression is
+      // honored when a parent construct schedules the completion
+      // directly: an unmatched optional field resolves to `undefined`
+      // without prompting, exactly as it does for a non-source prompt.
+      // A transformed source (preservesSourceValue: false) exposes no
+      // completion at all, because this wrapper's completion lives in
+      // the transformed domain and must never register under the raw
+      // source ID.
+      const rebound = composed.source?.completeSource == null
+        ? composed
+        : composed.source.preservesSourceValue === false
+        ? {
+          ...composed,
+          source: { ...composed.source, completeSource: undefined },
+        }
+        : {
+          ...composed,
+          source: {
+            ...composed.source,
+            completeSource: (
+              state: unknown,
+              exec?: ExecutionContext,
+            ): Promise<ValueParserResult<unknown> | undefined> =>
+              Promise.resolve(
+                optionalParser.complete(
+                  state as Parameters<typeof optionalParser.complete>[0],
+                  exec,
+                ),
+              ) as Promise<ValueParserResult<unknown>>,
+          },
+        };
       (optionalParser as unknown as Record<string, unknown>)
-        .dependencyMetadata = composed;
+        .dependencyMetadata = rebound;
     }
   }
+  // Forward the inner effectful scheduling hook (e.g., a wrapped
+  // exclusive or command construct), unwrapping optional()'s
+  // `[innerState]` state shape first.
+  defineForwardedEffectfulSchedulingNodes(
+    optionalParser,
+    parser,
+    (state) => Array.isArray(state) && state.length === 1 ? state[0] : state,
+  );
   defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
@@ -1552,10 +1593,50 @@ export function withDefault<
       },
     );
     if (composed != null) {
+      // Rebind the inner effectful completion (e.g., withDefault(prompt(...)))
+      // to this wrapper's own complete() so the wrapper's fallback
+      // precedence is honored when a parent construct schedules the
+      // completion directly, matching how Phase 1 pre-completion behaves
+      // for a top-level field.
+      // A transformed source (preservesSourceValue: false) exposes no
+      // completion at all, because this wrapper's completion lives in
+      // the transformed domain and must never register under the raw
+      // source ID.
+      const rebound = composed.source?.completeSource == null
+        ? composed
+        : composed.source.preservesSourceValue === false
+        ? {
+          ...composed,
+          source: { ...composed.source, completeSource: undefined },
+        }
+        : {
+          ...composed,
+          source: {
+            ...composed.source,
+            completeSource: (
+              state: unknown,
+              exec?: ExecutionContext,
+            ): Promise<ValueParserResult<unknown> | undefined> =>
+              Promise.resolve(
+                withDefaultParser.complete(
+                  state as Parameters<typeof withDefaultParser.complete>[0],
+                  exec,
+                ),
+              ) as Promise<ValueParserResult<unknown>>,
+          },
+        };
       (withDefaultParser as unknown as Record<string, unknown>)
-        .dependencyMetadata = composed;
+        .dependencyMetadata = rebound;
     }
   }
+  // Forward the inner effectful scheduling hook (e.g., a wrapped
+  // exclusive or command construct), unwrapping withDefault()'s
+  // `[innerState]` state shape first.
+  defineForwardedEffectfulSchedulingNodes(
+    withDefaultParser,
+    parser,
+    (state) => Array.isArray(state) && state.length === 1 ? state[0] : state,
+  );
   defineParseLanes(
     withDefaultParser,
     adaptOptionalStyleParseLanes(parser),
@@ -1811,6 +1892,10 @@ export function map<M extends Mode, T, U, TState>(
         composed;
     }
   }
+  // Forward the inner effectful scheduling hook—map() passes state
+  // through unchanged, so a wrapped exclusive or command construct stays
+  // visible to a parent's scheduling expansion.
+  defineForwardedEffectfulSchedulingNodes(mappedParser, parser);
   return fluent(mappedParser);
 }
 
@@ -3287,6 +3372,10 @@ export function multiple<M extends Mode, TValue, TState>(
         source: {
           ...innerSource,
           preservesSourceValue: false,
+          // There is no non-surprising rule for reducing several
+          // effectful completions to one dependency value, so multiple()
+          // never forwards the effectful completion capability.
+          completeSource: undefined,
           extractSourceValue: (
             state: unknown,
           ):
@@ -3471,6 +3560,16 @@ export function nonEmpty<M extends Mode, T, TState>(
       },
     })),
   );
+  // Forward dependency metadata unchanged—nonEmpty() passes state
+  // through, so source extraction and effectful completion see the inner
+  // shape, exactly like group().
+  if (parser.dependencyMetadata != null) {
+    Object.defineProperty(nonEmptyParser, "dependencyMetadata", {
+      value: parser.dependencyMetadata,
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Forward placeholder lazily from inner parser.
   if ("placeholder" in parser) {
     Object.defineProperty(nonEmptyParser, "placeholder", {
@@ -3508,6 +3607,10 @@ export function nonEmpty<M extends Mode, T, TState>(
       enumerable: false,
     });
   }
+  // Forward the inner effectful scheduling hook—nonEmpty() passes state
+  // through unchanged, so a wrapped exclusive or command construct stays
+  // visible to a parent's scheduling expansion.
+  defineForwardedEffectfulSchedulingNodes(nonEmptyParser, parser);
   return fluent(nonEmptyParser);
 }
 

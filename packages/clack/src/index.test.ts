@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
 import { message } from "@optique/core/message";
 import { multiple } from "@optique/core/modifiers";
 import { parseAsync } from "@optique/core/parser";
 import { fail, flag, option } from "@optique/core/primitives";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, createEnvContext } from "@optique/env";
 import { prompt } from "@optique/clack";
 
@@ -331,5 +332,56 @@ describe("prompt()", () => {
       () => parseAsync(parser, []),
       new TypeError("Unsupported prompt type: input."),
     );
+  });
+});
+
+// https://github.com/dahlia/optique/issues/870
+describe("prompt() with dependency sources", () => {
+  const mode = dependency(choice(["dev", "prod"] as const));
+  const level = mode.derive({
+    metavar: "LEVEL",
+    mode: "sync",
+    factory: (value: "dev" | "prod") =>
+      choice(
+        value === "dev"
+          ? (["debug", "verbose"] as const)
+          : (["silent", "strict"] as const),
+      ),
+    defaultValue: () => "dev" as const,
+  });
+
+  it("prompted dependency source resolves the derived parser", async () => {
+    const parser = object({
+      mode: prompt(option("--mode", mode), {
+        type: "select",
+        message: "Select mode:",
+        options: ["dev", "prod"],
+        prompter: () => Promise.resolve("prod"),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "silent"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+  });
+
+  it("prompted dependency source rejects invalid derived value", async () => {
+    const parser = object({
+      mode: prompt(option("--mode", mode), {
+        type: "select",
+        message: "Select mode:",
+        options: ["dev", "prod"],
+        prompter: () => Promise.resolve("prod"),
+      }),
+      level: option("--level", level),
+    });
+
+    // "debug" is only valid for "dev", but the prompt answers "prod".
+    const result = await parseAsync(parser, ["--level", "debug"]);
+
+    assert.ok(!result.success);
   });
 });

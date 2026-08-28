@@ -15,6 +15,8 @@ import {
 import { annotateFreshArray, getAnnotations } from "./internal/annotations.ts";
 import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
+  type EffectfulSchedulingNodesFn,
+  effectfulSchedulingNodesKey,
   replayDerivedParser,
   replayDerivedParserAsync,
 } from "./dependency-runtime.ts";
@@ -3596,6 +3598,37 @@ export function command<M extends Mode, T, TState>(
       enumerable: false,
     });
   }
+  // Expose the inner parser to parent-level effectful scheduling once the
+  // command's inner parsing has started, so a source nested in a selected
+  // command completes before parent-level dependency replay.  The node
+  // path appends the command name, matching the execution path used when
+  // the inner parser completes.
+  Object.defineProperty(result, effectfulSchedulingNodesKey, {
+    value: ((state, parentPath) => {
+      const normalizedState = normalizeCommandState(
+        state as CommandState<TState>,
+      );
+      if (normalizedState == null) return [];
+      // "matched" means the command name was consumed but the inner
+      // parser has not started; scheduling then works from the inner
+      // parser's initial state, mirroring the "matched" completion
+      // branch below.
+      const innerState = normalizedState[0] === "parsing"
+        ? normalizedState[1]
+        : parser.initialState;
+      return [{
+        path: [...(parentPath ?? []), name],
+        parser,
+        state: getCommandChildState(
+          state as CommandState<TState>,
+          innerState,
+          parser,
+        ),
+      }];
+    }) satisfies EffectfulSchedulingNodesFn,
+    configurable: true,
+    enumerable: false,
+  });
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   return fluent(result as unknown as Parser<M, T, CommandState<TState>>);

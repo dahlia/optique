@@ -10,7 +10,7 @@
  * @since 1.0.0
  * @module
  */
-import type { Suggestion } from "./parser.ts";
+import type { ExecutionContext, Suggestion } from "./parser.ts";
 import {
   defaultValues,
   dependencyId,
@@ -72,6 +72,29 @@ export interface DependencySourceCapability {
   readonly getMissingSourceValue?: () =>
     | ValueParserResult<unknown>
     | Promise<ValueParserResult<unknown>>;
+
+  /**
+   * Runs the parser's effectful completion (e.g., an interactive prompt)
+   * to obtain the source value when it is not extractable from state.
+   *
+   * Invoked only during real completion (never probes, help, or suggest),
+   * serially in declaration order, at most once per parse operation—the
+   * result is cached in the run-scoped effectful completion session.  Only
+   * honored in asynchronous completion lanes; synchronous completion
+   * ignores this hook, in which case the owning parser still completes
+   * normally in the construct's final completion phase without early
+   * registration.
+   *
+   * May resolve to `undefined` when the state offers nothing to complete.
+   * A result marked `deferred` is treated the same way: it is skipped and
+   * never registered.
+   *
+   * @since 1.3.0
+   */
+  readonly completeSource?: (
+    state: unknown,
+    exec?: ExecutionContext,
+  ) => Promise<ValueParserResult<unknown> | undefined>;
 
   /**
    * Whether the parser's output value is the actual dependency source value.
@@ -297,6 +320,26 @@ function unwrapArrayThenExtract(innerExtract: ExtractFn): ExtractFn {
   };
 }
 
+type CompleteSourceFn = NonNullable<
+  DependencySourceCapability["completeSource"]
+>;
+
+/**
+ * Wraps an inner `completeSource` to unwrap `[innerState]` first, mirroring
+ * `unwrapArrayThenExtract` for the effectful completion operation.
+ */
+function unwrapArrayThenComplete(
+  innerComplete: CompleteSourceFn,
+): CompleteSourceFn {
+  return (state: unknown, exec?: ExecutionContext) => {
+    if (Array.isArray(state) && state.length === 1) {
+      return innerComplete(state[0], exec);
+    }
+    // Also try the bare state in case it's already unwrapped.
+    return innerComplete(state, exec);
+  };
+}
+
 // =============================================================================
 // Composition: modify metadata through modifier wrappers
 // =============================================================================
@@ -353,6 +396,11 @@ export function composeDependencyMetadata(
             extractSourceValue: unwrapArrayThenExtract(
               inner.source.extractSourceValue,
             ),
+            ...(inner.source.completeSource != null && {
+              completeSource: unwrapArrayThenComplete(
+                inner.source.completeSource,
+              ),
+            }),
           },
         };
       }
@@ -372,6 +420,11 @@ export function composeDependencyMetadata(
             ...(wrappedExtract != null && {
               extractSourceValue: wrappedExtract,
             }),
+            ...(inner.source.completeSource != null && {
+              completeSource: unwrapArrayThenComplete(
+                inner.source.completeSource,
+              ),
+            }),
             ...(preservesSourceValue && options?.defaultValue != null && {
               getMissingSourceValue: options.defaultValue,
             }),
@@ -383,7 +436,13 @@ export function composeDependencyMetadata(
 
     case "map": {
       // map() does not wrap state—it passes through the inner state
-      // unchanged.  extractSourceValue is inherited as-is from inner.
+      // unchanged.  extractSourceValue and completeSource are inherited
+      // as-is from inner: completeSource stays the *inner* effectful
+      // completion, so scheduling it yields (and registers) the
+      // pre-transform source value, while the mapped field value is
+      // produced separately by map()'s own complete().
+      // `preservesSourceValue: false` keeps the scheduler from caching
+      // the pre-transform result as the field's completion result.
       const result: ParserDependencyMetadata = {
         ...inner,
         transform: { transformsSourceValue: true },

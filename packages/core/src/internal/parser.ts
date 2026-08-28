@@ -494,6 +494,88 @@ export type ExecutionPhase =
   | "suggest";
 
 /**
+ * Run-scoped state for effectful source completions such as `prompt()`.
+ *
+ * A session is created once per parse operation (or once per `runWith()`
+ * run, shared by the phase-two seed pass and the final pass) and threaded
+ * through {@link ExecutionContext}.  It guarantees that an effectful source
+ * completion runs at most once per run: the completion result is cached by
+ * dependency source ID, and a cache hit is returned without repeating the
+ * effect.  Results never leak between runs because the session is discarded
+ * when the run ends.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface EffectfulCompletionSession {
+  /**
+   * The scheduling policy for effectful source completions.
+   *
+   * `"demand-only"` is used during the phase-two seed pass of a two-pass
+   * source context run: an effectful source completion runs only when a
+   * phase-one consumer demands its source (see
+   * {@link EffectfulCompletionSession.demanded}); otherwise it defers to
+   * the final pass.  `"eager"` is used everywhere else.
+   */
+  readonly policy: "demand-only" | "eager";
+
+  /**
+   * Effectful completion results keyed by completion occurrence (e.g.,
+   * a per-`prompt()`-wrapper cache key), shared across the passes of a
+   * run.  Occurrence keys, rather than dependency source IDs, keep two
+   * distinct effectful wrappers around the same source—such as duplicate
+   * `merge()` fields—from observing each other's local results.
+   */
+  readonly results: Map<symbol, ValueParserResult<unknown>>;
+
+  /**
+   * Source IDs demanded by phase-one consumers.  Constructs add entries
+   * before scheduling effectful completions; the set accumulates across
+   * constructs within a run.
+   */
+  readonly demanded: Set<symbol>;
+
+  /**
+   * Source IDs whose registered value came from an effectful completion
+   * (a prompt that actually executed) rather than from a structural
+   * source such as CLI state, environment, configuration, or a default.
+   * The scheduler uses this to keep structural precedence while still
+   * letting a later prompted occurrence of the same source overwrite an
+   * earlier prompted answer, matching repeated command-line occurrences.
+   */
+  readonly effectfulSources: Set<symbol>;
+
+  /**
+   * Effectful source completion results keyed by serialized node path,
+   * scoped to a single pass like {@link effectfulSources}.  A completion
+   * scheduled for an expanded nested node is recorded here so that the
+   * owning nested construct's own scheduling pass reuses it instead of
+   * completing the same node again—keeping lazy wrapper defaults at one
+   * evaluation per pass and the registered dependency value identical to
+   * the field's final value.
+   */
+  readonly completedByPath: Map<string, ValueParserResult<unknown>>;
+}
+
+/**
+ * Creates a fresh {@link EffectfulCompletionSession}.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export function createEffectfulCompletionSession(
+  policy: "demand-only" | "eager" = "eager",
+): EffectfulCompletionSession {
+  return {
+    policy,
+    results: new Map(),
+    demanded: new Set(),
+    effectfulSources: new Set(),
+    completedByPath: new Map(),
+  };
+}
+
+/**
  * Shared execution context carrying cross-cutting runtime data.
  * This includes information that is shared across all parsers in a parse
  * tree, such as usage information, dependency registries, and the current
@@ -584,6 +666,16 @@ export interface ExecutionContext {
    * @internal
    */
   readonly excludedSourceFields?: ReadonlySet<string | symbol>;
+
+  /**
+   * Run-scoped state for effectful source completions such as `prompt()`.
+   * Created at the top-level parse entry points and shared across the
+   * passes of a `runWith()` run.
+   *
+   * @internal
+   * @since 1.3.0
+   */
+  readonly effectfulCompletionSession?: EffectfulCompletionSession;
 }
 
 /**
@@ -594,7 +686,9 @@ export interface ExecutionContext {
  * Wrappers like `bindEnv()` and `bindConfig()` opt in because their missing
  * CLI states still carry enough fallback context to pre-complete exactly
  * once. Wrappers like `prompt()` intentionally do not opt in because
- * prompted values are not yet registered as dependency sources.
+ * Phase 1 must stay effect-free; prompted values register instead through
+ * the `completeSource` capability during the serial effectful completion
+ * pass that runs before dependency replay.
  *
  * @internal
  */
@@ -969,6 +1063,7 @@ export function parseSync<T>(
     dependencyRegistry: runtime.registry,
     commandPath: context.exec?.commandPath ?? exec.commandPath,
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
+    effectfulCompletionSession: createEffectfulCompletionSession(),
   };
   const endResult = parser.complete(context.state, completeExec);
   return endResult.success
@@ -1061,6 +1156,7 @@ export async function parseAsync<T>(
     dependencyRegistry: runtime.registry,
     commandPath: context.exec?.commandPath ?? exec.commandPath,
     trace: context.exec?.trace ?? context.trace ?? exec.trace,
+    effectfulCompletionSession: createEffectfulCompletionSession(),
   };
   const endResult = await parser.complete(context.state, completeExec);
   return endResult.success

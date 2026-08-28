@@ -203,6 +203,40 @@ export function createPromptAdapter<TConfig>(
     const promptBindStateKey: unique symbol = Symbol(
       "@optique/prompt/promptState",
     );
+    // Identifies this prompt wrapper occurrence in the run-scoped
+    // effectful completion session.  The cache key combines the wrapper
+    // instance (via this closure) with the completion path so that two
+    // distinct prompts sharing one source (e.g., duplicate merge()
+    // fields) and one instance reused at several positions (e.g.,
+    // `tuple([p, p])`) each keep their own result, while the same
+    // occurrence still reuses its result across the seed and final
+    // passes of a runWith() run.
+    const completionCacheKeys = new Map<string, symbol>();
+    const completionCacheSymbolIds = new Map<symbol, number>();
+    const completionCacheKeyFor = (
+      path: readonly PropertyKey[] | undefined,
+    ): symbol => {
+      // Length-prefix each segment so no separator escaping is needed.
+      const serialized = (path ?? []).map((segment) => {
+        if (typeof segment === "symbol") {
+          let id = completionCacheSymbolIds.get(segment);
+          if (id == null) {
+            id = completionCacheSymbolIds.size;
+            completionCacheSymbolIds.set(segment, id);
+          }
+          return `y${id}:`;
+        }
+        const tag = typeof segment === "number" ? "n" : "s";
+        const text = String(segment);
+        return `${tag}${text.length}:${text}`;
+      }).join("");
+      let key = completionCacheKeys.get(serialized);
+      if (key == null) {
+        key = Symbol("@optique/prompt/completionCache");
+        completionCacheKeys.set(serialized, key);
+      }
+      return key;
+    };
 
     type PromptBindState =
       & { readonly [K in typeof promptBindStateKey]: true }
@@ -441,6 +475,45 @@ export function createPromptAdapter<TConfig>(
               value: readPlaceholder() as TValue,
             });
           }
+          // When this prompt wraps a dependency source, its execution is
+          // coordinated through the run-scoped effectful completion
+          // session: a cached result (including a cancellation) is reused
+          // so the prompt runs at most once per run, and under the
+          // demand-only policy of the phase-two seed pass the prompt
+          // defers unless a phase-one consumer demands its source.
+          const session = exec?.effectfulCompletionSession;
+          const sourceId = promptedParser.dependencyMetadata?.source?.sourceId;
+          if (session != null && sourceId != null) {
+            const cacheKey = completionCacheKeyFor(exec?.path);
+            const cached = session.results.get(cacheKey);
+            if (cached != null) {
+              // A reused answer is still effectful in origin: mark the
+              // source so a later prompted occurrence in the same pass
+              // can overwrite it (last occurrence wins).
+              session.effectfulSources.add(sourceId);
+              return Promise.resolve(cached as ValueParserResult<TValue>);
+            }
+            if (
+              session.policy === "demand-only" &&
+              !session.demanded.has(sourceId)
+            ) {
+              return Promise.resolve(
+                deferredPromptResult(readPlaceholder() as TValue),
+              );
+            }
+            return executePrompt().then((result) => {
+              session.results.set(
+                cacheKey,
+                result as ValueParserResult<unknown>,
+              );
+              // Record that this source's value now comes from an
+              // effectful completion, so a later prompted occurrence of
+              // the same source can still overwrite it (last occurrence
+              // wins) while structural values keep their precedence.
+              session.effectfulSources.add(sourceId);
+              return result;
+            });
+          }
           return executePrompt();
         };
 
@@ -604,6 +677,25 @@ export function createPromptAdapter<TConfig>(
             state.cliState ?? state,
           );
         },
+        // Originate the effectful completion so the scheduler can run
+        // the prompt before dependency replay and register its value.
+        // The wrapper's own complete() already handles CLI delegation,
+        // source-binding delegation, runtime conditions, deferral, and
+        // adapter execution, so it is the completion in its entirety.
+        //
+        // When the wrapped parser transforms the source value (e.g.,
+        // prompt() around a mapped source), the prompt's answer lives in
+        // the transformed domain and the pre-transform source value is
+        // unrecoverable, so no effectful completion is exposed: the
+        // prompt keeps running in the ordinary completion phase and
+        // never registers a transformed value under the raw source ID.
+        completeSource: source.preservesSourceValue === false ? undefined : (
+          state: unknown,
+          exec?: ExecutionContext,
+        ): Promise<ValueParserResult<unknown> | undefined> =>
+          promptedParser.complete(state as TState, exec) as Promise<
+            ValueParserResult<unknown>
+          >,
       }),
     );
     if (dependencyMetadata != null) {
