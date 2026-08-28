@@ -28,6 +28,7 @@ import {
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
   type RuntimeNode,
+  serializeSchedulingPath,
   sourceCollectionExpansionKey,
 } from "./dependency-runtime.ts";
 import {
@@ -342,6 +343,64 @@ function expandSourceCollectionNodes(
     expanded.push(...expandEffectfulRuntimeNodes([node]));
   }
   return expanded ?? nodes;
+}
+
+/**
+ * A branch selection resolved during the effectful scheduling pass by a
+ * `conditional()` whose branch was not committed at parse time.  Cached
+ * in the run-scoped session (per pass) so final completion consumes the
+ * same decision instead of re-completing the discriminator or
+ * re-selecting a branch.
+ */
+interface PreparedConditionalSelection {
+  /** The discriminator's completion result. */
+  readonly discriminatorResult: import("./valueparser.ts").ValueParserResult<
+    unknown
+  >;
+
+  /** The selected branch parser, if any branch applies. */
+  readonly branchParser: Parser<Mode, unknown, unknown> | undefined;
+
+  /**
+   * The named branch key, or `undefined` when the default branch was
+   * selected.
+   */
+  readonly branchKey: string | undefined;
+
+  /** The branch state from the preparation's empty-input replay parse. */
+  readonly branchState: unknown;
+}
+
+// Per-instance identity for prepared-selection cache keys, so two
+// conditional() parsers at the same path never share an entry.
+let conditionalInstanceCounter = 0;
+
+/**
+ * Statically collects the dependency source IDs reachable through a
+ * parser's composed metadata and flattened field pairs.  Used as the
+ * `providesSourceIds` estimate for a conditional()'s branches: an
+ * undercount only delays an effectful completion from the seed pass to
+ * the final pass of a `runWith()` run.
+ */
+function collectStaticSourceIds(
+  parser: Parser<Mode, unknown, unknown>,
+  out: Set<symbol>,
+  seen: Set<object>,
+): void {
+  if (seen.has(parser as object)) return;
+  seen.add(parser as object);
+  const source = parser.dependencyMetadata?.source;
+  if (source != null) {
+    out.add(source.sourceId);
+    return;
+  }
+  const pairs = (parser as {
+    readonly [fieldParsersKey]?: ReadonlyArray<
+      readonly [string | symbol, Parser<Mode, unknown, unknown>]
+    >;
+  })[fieldParsersKey];
+  if (pairs == null) return;
+  for (const [, child] of pairs) collectStaticSourceIds(child, out, seen);
 }
 
 function isDeferredCompletionResult(result: unknown): boolean {
@@ -15868,6 +15927,25 @@ export function conditional(
     };
   };
 
+  // Per-instance prefix for prepared-selection cache keys.
+  const preparedKeyPrefix = `c${++conditionalInstanceCounter}|`;
+  const preparedKeyFor = (
+    parentPath: readonly PropertyKey[] | undefined,
+  ): string => preparedKeyPrefix + serializeSchedulingPath(parentPath ?? []);
+  // Source IDs the branches can provide, for demand-only control
+  // dependency detection (see RuntimeNode.providesSourceIds).
+  const branchProvidedSourceIds = (() => {
+    const out = new Set<symbol>();
+    const seen = new Set<object>();
+    for (const key of Object.keys(branches)) {
+      collectStaticSourceIds(branches[key], out, seen);
+    }
+    if (defaultBranch != null) {
+      collectStaticSourceIds(defaultBranch, out, seen);
+    }
+    return out;
+  })();
+
   // Builds the effectful scheduling nodes for this conditional: the
   // discriminator (always) and the committed branch (only when the
   // selection is not speculative, so branch sources stay hidden until
@@ -15875,20 +15953,28 @@ export function conditional(
   // effectfulSchedulingNodesKey hook and the completion below; the
   // "_discriminator"/"_branch" path segments match completion paths so
   // the run-scoped completion cache lines up.
+  //
+  // When no branch was committed at parse time, a scheduling barrier
+  // follows the discriminator node: it resolves the branch from the
+  // discriminator's completion, caches the decision in the run-scoped
+  // session (final completion consumes the same decision), and
+  // schedules the chosen branch's nodes within the same pass, so branch
+  // sources still complete before a parent sibling's dependency replay.
   const buildConditionalSchedulingNodes = (
     state: unknown,
     parentPath: readonly PropertyKey[] | undefined,
   ): readonly RuntimeNode[] => {
     if (state == null || typeof state !== "object") return [];
     const conditionalState = state as ConditionalState<string>;
+    const annotatedDiscriminatorState = getAnnotatedChildState(
+      conditionalState,
+      conditionalState.discriminatorState,
+      discriminator,
+    );
     const nodes: RuntimeNode[] = [{
       path: [...(parentPath ?? []), "_discriminator"],
       parser: discriminator,
-      state: getAnnotatedChildState(
-        conditionalState,
-        conditionalState.discriminatorState,
-        discriminator,
-      ),
+      state: annotatedDiscriminatorState,
     }];
     const selected = conditionalState.selectedBranch;
     if (selected !== undefined && conditionalState.speculative !== true) {
@@ -15906,7 +15992,148 @@ export function conditional(
           ),
         });
       }
+      return nodes;
     }
+    if (selected !== undefined || conditionalState.speculative === true) {
+      return nodes;
+    }
+
+    const discriminatorSource = discriminator.dependencyMetadata?.source;
+    // A prompted discriminator that is not a dependency source has no
+    // run-scoped occurrence cache, so completing it during preparation
+    // would run its effect a second time in final completion.  Dynamic
+    // branch preparation is unsupported for it (documented limitation).
+    if (
+      discriminatorSource == null &&
+      typeof discriminator.shouldDeferCompletion === "function"
+    ) {
+      return nodes;
+    }
+
+    // Tee the discriminator's effectful completion result so the
+    // barrier below can resolve the branch without re-running the
+    // effect.  The wrapped metadata lives only on this pass's node;
+    // the discriminator parser itself is never mutated.
+    const cell: {
+      result?: import("./valueparser.ts").ValueParserResult<unknown>;
+    } = {};
+    const innerCompleteSource = discriminatorSource?.completeSource;
+    if (discriminatorSource != null && innerCompleteSource != null) {
+      nodes[0] = {
+        ...nodes[0],
+        parser: {
+          dependencyMetadata: {
+            ...discriminator.dependencyMetadata,
+            source: {
+              ...discriminatorSource,
+              completeSource: async (s, e) => {
+                const result = await innerCompleteSource(s, e);
+                if (result != null) cell.result = result;
+                return result;
+              },
+            },
+          },
+        },
+      };
+    }
+    const discriminatorPathKey = serializeSchedulingPath([
+      ...(parentPath ?? []),
+      "_discriminator",
+    ]);
+    nodes.push({
+      path: [...(parentPath ?? []), "_branch"],
+      parser: {},
+      state: conditionalState,
+      ...(discriminatorSource != null
+        ? { requiresSourceId: discriminatorSource.sourceId }
+        : {}),
+      providesSourceIds: branchProvidedSourceIds,
+      prepare: async (ctx) => {
+        const session = ctx.exec?.effectfulCompletionSession;
+        if (session == null) return undefined;
+        const key = preparedKeyFor(parentPath);
+        let prepared = session.preparedByPath.get(key) as
+          | PreparedConditionalSelection
+          | undefined;
+        if (prepared == null) {
+          let discriminatorResult = cell.result ??
+            session.completedByPath.get(discriminatorPathKey);
+          if (
+            discriminatorResult == null && innerCompleteSource == null
+          ) {
+            // Effect-free discriminator: complete it once here; final
+            // completion reuses the prepared result, so non-idempotent
+            // completions (e.g., lazy defaults) still evaluate once.
+            const discriminatorExec = ctx.exec == null ? undefined : {
+              ...ctx.exec,
+              path: [...(parentPath ?? []), "_discriminator"],
+            };
+            discriminatorResult = unwrapCompleteResult(
+              await discriminator.complete(
+                annotatedDiscriminatorState,
+                discriminatorExec,
+              ),
+            );
+          }
+          if (
+            discriminatorResult == null ||
+            isDeferredCompletionResult(discriminatorResult)
+          ) {
+            return undefined;
+          }
+          const namedBranch = discriminatorResult.success
+            ? branches[String(discriminatorResult.value)]
+            : undefined;
+          const branchParser = namedBranch ?? defaultBranch;
+          let branchState: unknown;
+          if (branchParser != null) {
+            // Mirror final completion's empty-input replay parse so the
+            // prepared branch state matches what completion would build.
+            const branchExec = ctx.exec == null ? undefined : {
+              ...ctx.exec,
+              path: [...(parentPath ?? []), "_branch"],
+            };
+            const annotatedInitial = getAnnotatedChildState(
+              conditionalState,
+              branchParser.initialState,
+              branchParser,
+            );
+            const replayResult = await branchParser.parse({
+              buffer: [] as string[],
+              optionsTerminated: false,
+              usage: [] as never[],
+              exec: branchExec,
+              dependencyRegistry: ctx.exec?.dependencyRegistry,
+              state: annotatedInitial,
+            } as ParserContext<unknown>);
+            branchState = replayResult.success
+              ? replayResult.next.state
+              : annotatedInitial;
+          }
+          prepared = {
+            discriminatorResult,
+            branchParser,
+            branchKey: namedBranch != null
+              ? String(
+                (discriminatorResult as { readonly value: unknown }).value,
+              )
+              : undefined,
+            branchState,
+          };
+          session.preparedByPath.set(key, prepared);
+        }
+        if (prepared.branchParser == null) return undefined;
+        return await ctx.schedule(expandEffectfulRuntimeNodes([{
+          path: [...(parentPath ?? []), "_branch"],
+          parser: prepared.branchParser,
+          state: getAnnotatedChildState(
+            conditionalState,
+            prepared.branchState,
+            prepared.branchParser,
+          ),
+        }]));
+      },
+    });
     return nodes;
   };
 
@@ -15946,42 +16173,83 @@ export function conditional(
 
     // No branch selected yet (see sync counterpart for rationale).
     if (state.selectedBranch === undefined) {
+      let prepared: PreparedConditionalSelection | undefined;
       if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+        // Resolve the branch through the scheduling pass first: the
+        // barrier completes a prompted discriminator, prepares the
+        // branch selection in the run-scoped session, and completes
+        // the chosen branch's effectful sources.  When a parent
+        // construct already ran this pass, the run-scoped caches make
+        // it a no-op; without a session there is no cache to prevent
+        // double effects, so the pass is skipped and completion below
+        // behaves as before.
+        if (exec?.effectfulCompletionSession != null) {
+          const schedulingRuntime = createDependencyRuntimeContext(
+            exec.dependencyRegistry?.clone(),
+          );
+          const schedulingExec: ExecutionContext = {
+            ...exec,
+            phase: "complete",
+            dependencyRuntime: schedulingRuntime,
+            dependencyRegistry: schedulingRuntime.registry,
+          };
+          const schedulingFailure = await scheduleEffectfulSourceCompletions(
+            buildConditionalSchedulingNodes(state, exec.path),
+            state,
+            schedulingRuntime,
+            schedulingExec,
+            new Map<string | symbol, unknown>(),
+          );
+          if (schedulingFailure != null) return schedulingFailure;
+          prepared = exec.effectfulCompletionSession.preparedByPath.get(
+            preparedKeyFor(exec.path),
+          ) as PreparedConditionalSelection | undefined;
+        }
         const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
           state,
           state.discriminatorState,
           discriminator,
         );
-        const deferredDiscriminatorResult = unwrapCompleteResult(
-          await discriminator.complete(
-            annotatedDiscriminatorStateForDeferred,
-            withChildExecPath(exec, "_discriminator"),
-          ),
-        );
+        // Consume the prepared decision instead of re-completing the
+        // discriminator, so a non-idempotent completion cannot select
+        // a different branch than the one whose sources were scheduled.
+        const deferredDiscriminatorResult = prepared != null
+          ? prepared.discriminatorResult
+          : unwrapCompleteResult(
+            await discriminator.complete(
+              annotatedDiscriminatorStateForDeferred,
+              withChildExecPath(exec, "_discriminator"),
+            ),
+          );
         if (deferredDiscriminatorResult.success) {
           const deferredValue = deferredDiscriminatorResult.value as string;
           const deferredBranch = branches[deferredValue];
           if (deferredBranch) {
             const branchExec = withChildExecPath(exec, "_branch");
-            const emptyCtx = {
-              buffer: [] as string[],
-              optionsTerminated: false,
-              usage: [] as never[],
-              exec: branchExec,
-              dependencyRegistry: exec?.dependencyRegistry,
-            };
-            const annotatedInitial = getAnnotatedChildState(
-              state,
-              deferredBranch.initialState,
-              deferredBranch,
-            );
-            const replayResult = await deferredBranch.parse({
-              ...emptyCtx,
-              state: annotatedInitial,
-            });
-            const branchState = replayResult.success
-              ? replayResult.next.state
-              : annotatedInitial;
+            let branchState: unknown;
+            if (prepared != null && prepared.branchKey === deferredValue) {
+              branchState = prepared.branchState;
+            } else {
+              const emptyCtx = {
+                buffer: [] as string[],
+                optionsTerminated: false,
+                usage: [] as never[],
+                exec: branchExec,
+                dependencyRegistry: exec?.dependencyRegistry,
+              };
+              const annotatedInitial = getAnnotatedChildState(
+                state,
+                deferredBranch.initialState,
+                deferredBranch,
+              );
+              const replayResult = await deferredBranch.parse({
+                ...emptyCtx,
+                state: annotatedInitial,
+              });
+              branchState = replayResult.success
+                ? replayResult.next.state
+                : annotatedInitial;
+            }
             // Re-inject parent annotations for the complete phase
             // (see sync counterpart for rationale).
             const annotatedBranchState = getAnnotatedChildState(
@@ -16063,11 +16331,15 @@ export function conditional(
         };
       }
 
-      // Default branch (real complete only).
+      // Default branch (real complete only).  A prepared selection for
+      // the default branch carries the branch state the scheduling
+      // pass's preparation built, so completion reuses it.
       if (defaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,
-          state.branchState ?? defaultBranch.initialState,
+          (prepared != null && prepared.branchKey == null
+            ? prepared.branchState
+            : undefined) ?? state.branchState ?? defaultBranch.initialState,
           defaultBranch,
         );
         const defaultResult = unwrapCompleteResult(

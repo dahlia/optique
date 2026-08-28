@@ -170,6 +170,67 @@ export interface RuntimeNode {
    * @since 1.0.0
    */
   readonly defaultDependencyValues?: readonly unknown[];
+
+  /**
+   * A scheduling barrier: a preparation step executed serially at this
+   * node's declaration position during the effectful completion pass.
+   *
+   * A `conditional()` whose branch selection is still unknown installs
+   * one after its discriminator node: the preparation resolves the
+   * branch from the discriminator's completion, caches the decision in
+   * the run-scoped session so final completion reuses it, and schedules
+   * the chosen branch's nodes through `ctx.schedule` within the same
+   * pass.  A failure aborts the pass like a failed effectful
+   * completion; `undefined` declines without effect.
+   *
+   * @since 1.3.0
+   */
+  readonly prepare?: (ctx: SchedulingBarrierContext) => Promise<
+    { readonly success: false; readonly error: Message } | undefined
+  >;
+
+  /**
+   * Source IDs that the subtree guarded by this barrier can provide.
+   * Used by the demand-only pass: when any of them is demanded, the
+   * barrier's {@link RuntimeNode.requiresSourceId} becomes demanded as
+   * a control dependency, so the guarding discriminator completes in
+   * the seed pass even though no consumer demands it directly.
+   *
+   * @since 1.3.0
+   */
+  readonly providesSourceIds?: ReadonlySet<symbol>;
+
+  /**
+   * The source ID whose completion this barrier's preparation depends
+   * on (a `conditional()` discriminator).  See
+   * {@link RuntimeNode.providesSourceIds}.
+   *
+   * @since 1.3.0
+   */
+  readonly requiresSourceId?: symbol;
+}
+
+/**
+ * The context handed to a {@link RuntimeNode.prepare} barrier.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface SchedulingBarrierContext {
+  /** The runtime the current pass registers source values into. */
+  readonly runtime: DependencyRuntimeContext;
+
+  /** The execution context of the current pass. */
+  readonly exec: ExecutionContext | undefined;
+
+  /**
+   * Schedules further (already expanded) nodes within the current pass,
+   * at the barrier's position.  Results are deduplicated through the
+   * run-scoped session and are not cached by the owning construct.
+   */
+  readonly schedule: (nodes: readonly RuntimeNode[]) => Promise<
+    { readonly success: false; readonly error: Message } | undefined
+  >;
 }
 
 /**
@@ -1212,6 +1273,21 @@ export async function completeEffectfulSourcesAsync(
     for (const id of demanded) {
       session.demanded.add(id);
     }
+    // A barrier's discriminator is a control dependency: when a source
+    // it can provide is demanded, resolving the branch requires the
+    // discriminator even though no consumer demands it directly.
+    for (const node of nodes) {
+      if (node.requiresSourceId == null || node.providesSourceIds == null) {
+        continue;
+      }
+      if (session.demanded.has(node.requiresSourceId)) continue;
+      for (const provided of node.providesSourceIds) {
+        if (session.demanded.has(provided)) {
+          session.demanded.add(node.requiresSourceId);
+          break;
+        }
+      }
+    }
   }
 
   // A failed effectful completion cached in the run-scoped session (a
@@ -1227,12 +1303,29 @@ export async function completeEffectfulSourcesAsync(
   }
 
   const schedulable = nodes.filter((node) =>
-    node.parser.dependencyMetadata?.source?.completeSource != null
+    node.parser.dependencyMetadata?.source?.completeSource != null ||
+    node.prepare != null
   );
   if (schedulable.length === 0) return empty;
 
   const completed: EffectfulSourceCompletion[] = [];
   for (const node of nodes) {
+    // A scheduling barrier runs at its declaration position; its
+    // preparation may schedule further nodes through the nested call,
+    // which shares this pass's runtime, session, and exec.
+    if (node.prepare != null) {
+      const barrierFailure = await node.prepare({
+        runtime,
+        exec,
+        schedule: (barrierNodes) =>
+          completeEffectfulSourcesAsync(barrierNodes, state, runtime, exec, {
+            isReusable: () => false,
+            isCollected: () => false,
+          }).then((result) => result.success ? undefined : result),
+      });
+      if (barrierFailure != null) return barrierFailure;
+      continue;
+    }
     const source = node.parser.dependencyMetadata?.source;
     if (source == null) continue;
     if (source.completeSource == null) {
@@ -1324,9 +1417,16 @@ export async function completeEffectfulSourcesAsync(
 
 /**
  * Serializes a scheduling node path into a stable string key, using
- * length-prefixed segments so no separator escaping is needed.
+ * length-prefixed segments so no separator escaping is needed.  Shared
+ * with constructs that key run-scoped session entries by path (e.g.,
+ * `conditional()`'s prepared branch selections).
+ *
+ * @internal
+ * @since 1.3.0
  */
-function serializeSchedulingPath(path: readonly PropertyKey[]): string {
+export function serializeSchedulingPath(
+  path: readonly PropertyKey[],
+): string {
   return path.map(serializePathSegment).join("");
 }
 

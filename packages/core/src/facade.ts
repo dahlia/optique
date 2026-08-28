@@ -363,6 +363,7 @@ function createRunWithSessions(): {
     policy: "eager",
     effectfulSources: new Set(),
     completedByPath: new Map(),
+    preparedByPath: new Map(),
   };
   return { seedSession, finalSession };
 }
