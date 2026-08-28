@@ -19,7 +19,10 @@ import {
   collectExplicitSourceValues,
   collectExplicitSourceValuesAsync,
   collectSourcesFromState,
+  completeEffectfulSourcesAsync,
   createDependencyRuntimeContext,
+  type EffectfulSchedulingNodesFn,
+  effectfulSchedulingNodesKey,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
   resolveStateWithRuntime,
@@ -192,6 +195,221 @@ function filterPreCompletedRuntimeNodes<
     }
     return segment == null || !preCompletedKeys.has(segment);
   });
+}
+
+/**
+ * Filters a construct's runtime nodes for the effectful scheduling pass.
+ *
+ * A settled Phase 1 pre-completion excludes an *effectful* node: its
+ * completion already ran and must not run again.  Structural
+ * (non-effectful) nodes always stay in the pass, whether pre-completed
+ * or not: the scheduler re-registers their extracted values so that
+ * registration order follows declaration order across structural and
+ * effectful occurrences of a shared source.
+ */
+function filterSchedulableRuntimeNodes(
+  nodes: readonly RuntimeNode[],
+  preCompleted: ReadonlyMap<string | symbol, unknown>,
+): readonly RuntimeNode[] {
+  const settledKeys = settledPreCompletedKeys(preCompleted);
+  if (settledKeys.size < 1) return nodes;
+  return nodes.filter((node) => {
+    if (node.parser.dependencyMetadata?.source?.completeSource == null) {
+      return true;
+    }
+    const segment = node.path.at(-1);
+    if (typeof segment === "number") {
+      return !settledKeys.has(String(segment));
+    }
+    return segment == null || !settledKeys.has(segment);
+  });
+}
+
+/**
+ * Runs the effectful source completion pass for a construct's direct
+ * children and merges the completed results into the construct's
+ * pre-completed cache so its final completion phase reuses them instead
+ * of completing the same field twice.
+ *
+ * Returns a failure when an effectful completion fails (e.g., a cancelled
+ * prompt); the construct should propagate it as its own completion
+ * failure.  Returns `undefined` on success.
+ */
+/**
+ * Expands runtime nodes through nested constructs for effectful source
+ * scheduling and demand detection.
+ *
+ * A node without effectful-source or consumer metadata whose parser
+ * exposes child field pairs (e.g., a `tuple()` child of `concat()`, or a
+ * nested `object()` field) is replaced by nodes for its children so that
+ * an effectful source nested one or more constructs deep is still
+ * completed before any sibling consumer completes.  Array states use
+ * numeric path segments and record states use their field keys, matching
+ * the paths that child completion (and parse-time tracing) uses.
+ */
+function expandEffectfulRuntimeNodes(
+  nodes: readonly RuntimeNode[],
+): readonly RuntimeNode[] {
+  const expanded: RuntimeNode[] = [];
+  const visit = (node: RuntimeNode): void => {
+    const meta = node.parser.dependencyMetadata;
+    if (meta?.source?.completeSource != null || meta?.derived != null) {
+      expanded.push(node);
+      return;
+    }
+    // A nested merge() supplies its own scheduling nodes so that the
+    // expansion uses the same child-indexed paths, declaration order,
+    // and duplicate-field exclusion as the merge's direct scheduling.
+    const schedulingNodes = (node.parser as {
+      readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
+    })[effectfulSchedulingNodesKey];
+    if (schedulingNodes != null) {
+      for (const child of schedulingNodes(node.state, node.path)) {
+        visit(child);
+      }
+      return;
+    }
+    const pairs = (node.parser as {
+      readonly [fieldParsersKey]?: ReadonlyArray<
+        readonly [string | symbol, Parser<Mode, unknown, unknown>]
+      >;
+    })[fieldParsersKey];
+    if (
+      pairs == null || node.state == null || typeof node.state !== "object"
+    ) {
+      expanded.push(node);
+      return;
+    }
+    // A nested merge() exposes duplicate field keys through its pairs.
+    // Sources behind duplicated fields must stay local to their own
+    // merge() child (which completes them with a cloned runtime), so
+    // they are never expanded into the parent's scheduling pass.
+    const duplicateFieldNames = collectDuplicateFieldNames(pairs);
+    const state = node.state as
+      | readonly unknown[]
+      | Record<string | symbol, unknown>;
+    for (const [field, childParser] of pairs) {
+      if (duplicateFieldNames.has(field)) continue;
+      const segment: PropertyKey =
+        Array.isArray(state) && typeof field === "string"
+          ? Number(field)
+          : field;
+      const childState = Array.isArray(state)
+        ? state[segment as number]
+        : (state as Record<string | symbol, unknown>)[field];
+      visit({
+        path: [...node.path, segment],
+        parser: childParser,
+        // Propagate parent annotations so source bindings (e.g.,
+        // bindEnv()) can read their values when completed through the
+        // expansion.
+        state: getAnnotatedChildState(state, childState, childParser),
+      });
+    }
+  };
+  for (const node of nodes) visit(node);
+  return expanded;
+}
+
+function isDeferredCompletionResult(result: unknown): boolean {
+  return typeof result === "object" && result !== null &&
+    "success" in result &&
+    (result as { readonly success: unknown }).success === true &&
+    "deferred" in result &&
+    (result as { readonly deferred?: unknown }).deferred === true;
+}
+
+/**
+ * Returns the keys of pre-completed results that are settled (not
+ * deferred).
+ *
+ * A deferred pre-completion—e.g., a demand-only prompt invoked during
+ * Phase 1 through a source binding wrapper, before consumer demand was
+ * known—must remain visible to the effectful scheduling pass so it can
+ * complete once demand is discovered; the scheduler then replaces the
+ * cached placeholder result with the real one.
+ */
+function settledPreCompletedKeys(
+  preCompleted: ReadonlyMap<string | symbol, unknown>,
+): ReadonlySet<string | symbol> {
+  const keys = new Set<string | symbol>();
+  for (const [key, result] of preCompleted) {
+    // Legacy pre-completion cases store DependencySourceState wrappers
+    // with the completion result under `result`; classify the inner
+    // result, not the wrapper.
+    const completion = isDependencySourceState(result) ? result.result : result;
+    if (isDeferredCompletionResult(completion)) continue;
+    keys.add(key);
+  }
+  return keys;
+}
+
+/**
+ * Returns the first failure among pre-completed results, if any.
+ *
+ * A failed pre-completion (e.g., a prompt cancelled during Phase 1
+ * through a source binding wrapper) fails the construct in its final
+ * completion phase anyway, so the scheduling pass must not run further
+ * effectful completions after it—cancellation stops later prompts
+ * immediately.
+ */
+function firstPreCompletedFailure(
+  preCompleted: ReadonlyMap<string | symbol, unknown>,
+): Message | undefined {
+  for (const result of preCompleted.values()) {
+    // See settledPreCompletedKeys() for the wrapper unwrap rationale.
+    const completion = isDependencySourceState(result) ? result.result : result;
+    if (
+      typeof completion === "object" && completion !== null &&
+      "success" in completion &&
+      (completion as { readonly success: unknown }).success === false &&
+      "error" in completion
+    ) {
+      return (completion as { readonly error: Message }).error;
+    }
+  }
+  return undefined;
+}
+
+async function scheduleEffectfulSourceCompletions(
+  nodes: readonly RuntimeNode[],
+  state: unknown,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
+  exec: ExecutionContext | undefined,
+  preCompleted: Map<string | symbol, unknown>,
+  demandNodes?: readonly RuntimeNode[],
+): Promise<{ readonly success: false; readonly error: Message } | undefined> {
+  // A failed Phase 1 pre-completion (e.g., a cancelled prompt) fails the
+  // construct anyway; abort before running any further effects so
+  // cancellation stops later prompts immediately.
+  const preCompletedFailure = firstPreCompletedFailure(preCompleted);
+  if (preCompletedFailure != null) {
+    return { success: false, error: preCompletedFailure };
+  }
+  // Only direct children can feed the construct's own pre-completed
+  // cache; expanded descendants are deduplicated through the run-scoped
+  // session instead.
+  const direct = new Set<RuntimeNode>(nodes);
+  const effectful = await completeEffectfulSourcesAsync(
+    expandEffectfulRuntimeNodes(nodes),
+    state,
+    runtime,
+    exec,
+    {
+      ...(demandNodes != null
+        ? { demandNodes: expandEffectfulRuntimeNodes(demandNodes) }
+        : {}),
+      isReusable: (node) => direct.has(node),
+    },
+  );
+  if (!effectful.success) {
+    return { success: false, error: effectful.error };
+  }
+  for (const { key, result } of effectful.completed) {
+    const cacheKey = typeof key === "number" ? String(key) : key;
+    preCompleted.set(cacheKey as string | symbol, result);
+  }
+  return undefined;
 }
 
 function buildIndexedParserPairs<
@@ -1697,6 +1915,35 @@ function getNoMatchError(
     : generateNoMatchError(noMatchContext);
 }
 
+/**
+ * Installs the effectful scheduling hook on an exclusive parser
+ * (`or()`/`longestMatch()`), exposing the committed branch so a parent
+ * construct's scheduling expansion can complete a source nested in the
+ * selected branch before parent-level dependency replay.  The branch
+ * node's path appends the branch index, matching the execution path used
+ * when the committed branch completes.
+ */
+function defineExclusiveSchedulingNodes(
+  exclusiveParser: object,
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): void {
+  Object.defineProperty(exclusiveParser, effectfulSchedulingNodesKey, {
+    value: ((state, parentPath) => {
+      const active = normalizeExclusiveState(state);
+      if (active == null) return [];
+      const [index, result] = active;
+      if (result?.success !== true) return [];
+      return [{
+        path: [...(parentPath ?? []), index],
+        parser: parsers[index],
+        state: result.next.state,
+      }];
+    }) satisfies EffectfulSchedulingNodesFn,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
 function composeExclusiveDependencyMetadata(
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): ParserDependencyMetadata | undefined {
@@ -1709,13 +1956,21 @@ function composeExclusiveDependencyMetadata(
   );
   if (sourceIds.size !== 1) return undefined;
   const sharedSource = sourceBranches[0].dependencyMetadata!.source!;
+  // A mixed alternative (some branches are not the source) completes in
+  // the union domain, so its completion result is not the source value:
+  // the union is treated as non-preserving, which also keeps wrappers
+  // such as prompt() from originating an effectful completion for it.
+  // Committed-branch extraction below remains safe either way, because
+  // it only reads the selected branch's own source state.
+  const everyBranchPreserves = sourceBranches.length === parsers.length &&
+    sourceBranches.every((parser) =>
+      parser.dependencyMetadata?.source?.preservesSourceValue !== false
+    );
   return {
     source: {
       ...sharedSource,
       getMissingSourceValue: undefined,
-      preservesSourceValue: sourceBranches.every((parser) =>
-        parser.dependencyMetadata?.source?.preservesSourceValue !== false
-      ),
+      preservesSourceValue: everyBranchPreserves,
       extractSourceValue(state) {
         if (
           !Array.isArray(state) || state.length !== 2 ||
@@ -1728,6 +1983,23 @@ function composeExclusiveDependencyMetadata(
         const branchSource = parsers[index].dependencyMetadata?.source;
         if (branchSource?.extractSourceValue == null) return undefined;
         return branchSource.extractSourceValue(parserResult.next.state);
+      },
+      completeSource(state, exec) {
+        // Delegate to the committed branch only; an uncommitted state
+        // offers nothing to complete effectfully.
+        if (
+          !Array.isArray(state) || state.length !== 2 ||
+          typeof state[0] !== "number"
+        ) {
+          return Promise.resolve(undefined);
+        }
+        const [index, parserResult] = state as [number, ParserResult<unknown>];
+        if (!parserResult?.success) return Promise.resolve(undefined);
+        const branchSource = parsers[index].dependencyMetadata?.source;
+        if (branchSource?.completeSource == null) {
+          return Promise.resolve(undefined);
+        }
+        return branchSource.completeSource(parserResult.next.state, exec);
       },
     },
   };
@@ -4158,6 +4430,7 @@ export function or(
     (singleResult as Record<string, unknown>).dependencyMetadata =
       singleDependencyMetadata;
   }
+  defineExclusiveSchedulingNodes(singleResult, parsers);
   defineInheritedAnnotationParser(singleResult);
 
   // or() does NOT forward normalizeValue because the active branch is
@@ -4847,6 +5120,7 @@ function createLongestMatch(
     (multiResult as Record<string, unknown>).dependencyMetadata =
       multiDependencyMetadata;
   }
+  defineExclusiveSchedulingNodes(multiResult, parsers);
   defineInheritedAnnotationParser(multiResult);
 
   // longestMatch() does NOT forward normalizeValue because the winning
@@ -5239,12 +5513,20 @@ async function* suggestObjectAsync<
 function registerCompletedDependency(
   completed: unknown,
   registry: DependencyRegistryLike,
+  exec?: ExecutionContext,
 ): void {
-  if (
-    isDependencySourceState(completed) && completed.result.success &&
-    !registry.has(completed[dependencyId])
-  ) {
-    registry.set(completed[dependencyId], completed.result.value);
+  if (!isDependencySourceState(completed) || !completed.result.success) {
+    return;
+  }
+  const sourceId = completed[dependencyId];
+  // Structural pre-completions keep first-write-wins semantics, but a
+  // value produced by an effectful completion (a prompt that actually
+  // executed) follows the last-occurrence-wins rule instead, matching
+  // how repeated command-line source occurrences overwrite earlier ones.
+  const effectful = exec?.effectfulCompletionSession?.effectfulSources
+    .has(sourceId) === true;
+  if (effectful || !registry.has(sourceId)) {
+    registry.set(sourceId, completed.result.value);
   }
 }
 
@@ -5396,6 +5678,10 @@ function wrapAsDependencySourceState(
   const hasDep = metadataSource != null ||
     isWrappedDependencySource(parser) ||
     isPendingDependencySourceState(parser.initialState);
+  // Deferred results carry placeholder stand-ins for values that an
+  // effectful completion (e.g., a prompt) has not produced yet; they
+  // must never register as dependency values.
+  if (isDeferredCompletionResult(completed)) return undefined;
   if (
     hasDep &&
     typeof completed === "object" && completed !== null &&
@@ -5704,10 +5990,27 @@ async function preCompleteAndRegisterDependenciesAsync(
   const preCompleted = new Map<string | symbol, unknown>();
   const parentResults = exec?.preCompletedByParser;
   for (const [field, fieldParser] of fieldParserPairs) {
+    // Async pre-completions may be effectful (e.g., a prompt reached
+    // through a source binding wrapper).  Once one has failed—such as a
+    // cancelled prompt—no further pre-completion may run: cancellation
+    // stops later prompts immediately, and the construct fails on the
+    // stored failure anyway.
+    if (firstPreCompletedFailure(preCompleted) != null) break;
+
     const cached = parentResults?.get(field);
     if (cached !== undefined) {
       preCompleted.set(field, cached);
-      registerCompletedDependency(cached, registry);
+      registerCompletedDependency(cached, registry, exec);
+      continue;
+    }
+
+    // A field with an effectful completion (e.g., a prompt, possibly
+    // reached through a source binding wrapper) is completed by the
+    // unified declaration-order effectful scheduling pass instead of
+    // being pre-completed here, so that direct, bound, and nested
+    // prompts share one ordering and the last occurrence of a shared
+    // source wins.
+    if (fieldParser.dependencyMetadata?.source?.completeSource != null) {
       continue;
     }
 
@@ -5727,7 +6030,7 @@ async function preCompleteAndRegisterDependenciesAsync(
       );
       preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
-      if (depState) registerCompletedDependency(depState, registry);
+      if (depState) registerCompletedDependency(depState, registry, exec);
       continue;
     }
 
@@ -5743,7 +6046,7 @@ async function preCompleteAndRegisterDependenciesAsync(
       );
       preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
-      if (depState) registerCompletedDependency(depState, registry);
+      if (depState) registerCompletedDependency(depState, registry, exec);
       continue;
     }
 
@@ -5760,7 +6063,7 @@ async function preCompleteAndRegisterDependenciesAsync(
       );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
-        registerCompletedDependency(completed, registry);
+        registerCompletedDependency(completed, registry, exec);
       }
     } else if (
       fieldState === undefined &&
@@ -5772,7 +6075,7 @@ async function preCompleteAndRegisterDependenciesAsync(
       );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
-        registerCompletedDependency(completed, registry);
+        registerCompletedDependency(completed, registry, exec);
       }
     } else if (
       fieldState === undefined &&
@@ -5785,7 +6088,7 @@ async function preCompleteAndRegisterDependenciesAsync(
       );
       preCompleted.set(field, completed);
       if (isDependencySourceState(completed)) {
-        registerCompletedDependency(completed, registry);
+        registerCompletedDependency(completed, registry, exec);
       }
     } // Case 4: force-wrap for bindEnv/bindConfig.
     else if (
@@ -5806,7 +6109,7 @@ async function preCompleteAndRegisterDependenciesAsync(
       );
       preCompleted.set(field, completed);
       const depState = wrapAsDependencySourceState(completed, fieldParser);
-      if (depState) registerCompletedDependency(depState, registry);
+      if (depState) registerCompletedDependency(depState, registry, exec);
     }
   }
   return preCompleted;
@@ -6759,17 +7062,31 @@ export function object<
             const fieldParser = parsers[field];
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
-          await collectExplicitSourceValuesAsync(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromPairs(
-                asyncParserPairs,
-                annotatedState,
-                exec?.path,
-              ),
-              new Set(preCompleted.keys()),
-            ),
-            runtime,
+          const allRuntimeNodes = buildRuntimeNodesFromPairs(
+            asyncParserPairs,
+            annotatedState,
+            exec?.path,
           );
+          const runtimeNodes = filterPreCompletedRuntimeNodes(
+            allRuntimeNodes,
+            new Set(preCompleted.keys()),
+          );
+          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          // Phase 2b: Run effectful source completions (e.g., prompts)
+          // serially so their values register before deferred replay.
+          // Deferred Phase 1 results stay schedulable so a demand-only
+          // prompt can still complete once demand is discovered here.
+          const effectfulFailure = await scheduleEffectfulSourceCompletions(
+            filterSchedulableRuntimeNodes(
+              allRuntimeNodes,
+              preCompleted,
+            ),
+            annotatedState,
+            runtime,
+            childExec,
+            preCompleted,
+          );
+          if (effectfulFailure != null) return effectfulFailure;
           const resolvedFieldStates = await resolveStateWithRuntimeAsync(
             annotatedState,
             runtime,
@@ -7027,17 +7344,34 @@ export function object<
             const fieldParser = parsers[field];
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
-          await collectExplicitSourceValuesAsync(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromPairs(
-                asyncParserPairs,
-                annotatedState,
-                exec?.path,
-              ),
-              new Set(preCompleted.keys()),
-            ),
-            runtime,
+          const allRuntimeNodes = buildRuntimeNodesFromPairs(
+            asyncParserPairs,
+            annotatedState,
+            exec?.path,
           );
+          const runtimeNodes = filterPreCompletedRuntimeNodes(
+            allRuntimeNodes,
+            new Set(preCompleted.keys()),
+          );
+          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          // Best-effort seeding: run effectful source completions so
+          // prompted values reach phase-two contexts.  A failure (e.g.,
+          // a cancelled prompt) aborts seed extraction entirely so no
+          // further effects run; the fallback parse surfaces the cached
+          // failure.  Deferred Phase 1 results stay schedulable so a
+          // demand-only prompt can still complete once demand is
+          // discovered here.
+          const effectfulFailure = await scheduleEffectfulSourceCompletions(
+            filterSchedulableRuntimeNodes(
+              allRuntimeNodes,
+              preCompleted,
+            ),
+            annotatedState,
+            runtime,
+            childExec,
+            preCompleted,
+          );
+          if (effectfulFailure != null) return null;
           const resolvedFieldStates = await resolveStateWithRuntimeAsync(
             annotatedState,
             runtime,
@@ -7910,13 +8244,31 @@ function createSeqComplete(
           runtime.registry,
           childExec,
         );
-        await collectExplicitSourceValuesAsync(
-          filterPreCompletedRuntimeNodes(
-            buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
-            new Set(preCompleted.keys()),
-          ),
-          runtime,
+        const allRuntimeNodes = buildRuntimeNodesFromArray(
+          parsers,
+          stateArray,
+          exec?.path,
         );
+        const runtimeNodes = filterPreCompletedRuntimeNodes(
+          allRuntimeNodes,
+          new Set(preCompleted.keys()),
+        );
+        await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+        // Phase 2b: Run effectful source completions (e.g., prompts)
+        // serially so their values register before deferred replay.
+        // Deferred Phase 1 results stay schedulable so a demand-only
+        // prompt can still complete once demand is discovered here.
+        const effectfulFailure = await scheduleEffectfulSourceCompletions(
+          filterSchedulableRuntimeNodes(
+            allRuntimeNodes,
+            preCompleted,
+          ),
+          stateArray,
+          runtime,
+          childExec,
+          preCompleted,
+        );
+        if (effectfulFailure != null) return effectfulFailure;
         const phase3Exec: ExecutionContext = {
           ...childExec,
           preCompletedByParser: undefined,
@@ -8991,13 +9343,31 @@ export function tuple<
             runtime.registry,
             childExec,
           );
-          await collectExplicitSourceValuesAsync(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
-            ),
-            runtime,
+          const allRuntimeNodes = buildRuntimeNodesFromArray(
+            parsers,
+            stateArray,
+            exec?.path,
           );
+          const runtimeNodes = filterPreCompletedRuntimeNodes(
+            allRuntimeNodes,
+            new Set(preCompleted.keys()),
+          );
+          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          // Phase 2b: Run effectful source completions (e.g., prompts)
+          // serially so their values register before deferred replay.
+          // Deferred Phase 1 results stay schedulable so a demand-only
+          // prompt can still complete once demand is discovered here.
+          const effectfulFailure = await scheduleEffectfulSourceCompletions(
+            filterSchedulableRuntimeNodes(
+              allRuntimeNodes,
+              preCompleted,
+            ),
+            stateArray,
+            runtime,
+            childExec,
+            preCompleted,
+          );
+          if (effectfulFailure != null) return effectfulFailure;
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
@@ -9173,13 +9543,34 @@ export function tuple<
             runtime.registry,
             childExec,
           );
-          await collectExplicitSourceValuesAsync(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
-            ),
-            runtime,
+          const allRuntimeNodes = buildRuntimeNodesFromArray(
+            parsers,
+            stateArray,
+            exec?.path,
           );
+          const runtimeNodes = filterPreCompletedRuntimeNodes(
+            allRuntimeNodes,
+            new Set(preCompleted.keys()),
+          );
+          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          // Best-effort seeding: run effectful source completions so
+          // prompted values reach phase-two contexts.  A failure (e.g.,
+          // a cancelled prompt) aborts seed extraction entirely so no
+          // further effects run; the fallback parse surfaces the cached
+          // failure.  Deferred Phase 1 results stay schedulable so a
+          // demand-only prompt can still complete once demand is
+          // discovered here.
+          const effectfulFailure = await scheduleEffectfulSourceCompletions(
+            filterSchedulableRuntimeNodes(
+              allRuntimeNodes,
+              preCompleted,
+            ),
+            stateArray,
+            runtime,
+            childExec,
+            preCompleted,
+          );
+          if (effectfulFailure != null) return null;
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
@@ -9780,13 +10171,34 @@ export function seq<
             runtime.registry,
             childExec,
           );
-          await collectExplicitSourceValuesAsync(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
-            ),
-            runtime,
+          const allRuntimeNodes = buildRuntimeNodesFromArray(
+            parsers,
+            stateArray,
+            exec?.path,
           );
+          const runtimeNodes = filterPreCompletedRuntimeNodes(
+            allRuntimeNodes,
+            new Set(preCompleted.keys()),
+          );
+          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          // Best-effort seeding: run effectful source completions so
+          // prompted values reach phase-two contexts.  A failure (e.g.,
+          // a cancelled prompt) aborts seed extraction entirely so no
+          // further effects run; the fallback parse surfaces the cached
+          // failure.  Deferred Phase 1 results stay schedulable so a
+          // demand-only prompt can still complete once demand is
+          // discovered here.
+          const effectfulFailure = await scheduleEffectfulSourceCompletions(
+            filterSchedulableRuntimeNodes(
+              allRuntimeNodes,
+              preCompleted,
+            ),
+            stateArray,
+            runtime,
+            childExec,
+            preCompleted,
+          );
+          if (effectfulFailure != null) return null;
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
@@ -10311,6 +10723,89 @@ export function merge(
   const duplicateOutputFieldNames = collectDuplicateFieldNames(
     mergedFieldParsers,
   );
+  // Effectful source completions (e.g., prompts) run in declaration
+  // order, while parsing and completion iterate the priority-sorted
+  // parsers—so scheduling iterates the original declaration order but
+  // builds paths with each child's *sorted* index, matching the paths
+  // used by parse-time tracing and child completion.  Duplicate output
+  // fields stay local to their own child and are never scheduled here.
+  const sortedIndexByOriginal: number[] = [];
+  sorted.forEach(([, originalIndex], sortedIndex) => {
+    sortedIndexByOriginal[originalIndex] = sortedIndex;
+  });
+  const buildMergeSchedulingNodes = (
+    state: Record<PropertyKey, unknown>,
+    parentPath: readonly PropertyKey[] | undefined,
+  ): readonly RuntimeNode[] => {
+    // Mirrors the state routing that child completion uses: children
+    // whose state is stored under a dedicated key (`__parser_N` or a
+    // preserved local object state) receive that stored state, while
+    // flat-record children read their own fields from the merged state.
+    const extractChildSchedulingState = (
+      parser: Parser<
+        Mode,
+        Record<string | symbol, unknown>,
+        Record<string | symbol, unknown>
+      >,
+      sortedIndex: number,
+    ): unknown => {
+      if (parser.initialState === undefined) {
+        const key = parserStateKey(sortedIndex);
+        return key in state ? state[key] : undefined;
+      }
+      if (parser.initialState && typeof parser.initialState === "object") {
+        const key = localObjectStateKey(sortedIndex);
+        if (shouldPreserveLocalChildState(parser) && key in state) {
+          return state[key];
+        }
+      }
+      return state;
+    };
+    const nodes: RuntimeNode[] = [];
+    rawParsers.forEach((parser, originalIndex) => {
+      if (!(fieldParsersKey in parser)) {
+        // A child that exposes no field pairs may still carry the
+        // effectful scheduling hook through a wrapper such as
+        // nonEmpty(object(...)); expose it as a child-indexed node so
+        // its nested sources are scheduled before sibling replay.
+        if (effectfulSchedulingNodesKey in parser) {
+          const sortedIndex = sortedIndexByOriginal[originalIndex];
+          nodes.push({
+            path: [...(parentPath ?? []), sortedIndex],
+            parser,
+            state: extractChildSchedulingState(parser, sortedIndex),
+          });
+        }
+        return;
+      }
+      const pairs = (parser as {
+        readonly [fieldParsersKey]: ReadonlyArray<
+          readonly [string | symbol, Parser<Mode, unknown, unknown>]
+        >;
+      })[fieldParsersKey];
+      const unambiguousPairs = pairs.filter(
+        ([field]) => !duplicateOutputFieldNames.has(field),
+      );
+      // Annotate each field state with the merge state's annotations so
+      // source bindings (e.g., bindEnv()) can read their values when
+      // completed through the scheduling pass.
+      const annotatedState: Record<string | symbol, unknown> = {};
+      for (const [field, fieldParser] of unambiguousPairs) {
+        annotatedState[field] = getAnnotatedFieldState(
+          state,
+          field,
+          fieldParser,
+        );
+      }
+      nodes.push(
+        ...buildRuntimeNodesFromPairs(unambiguousPairs, annotatedState, [
+          ...(parentPath ?? []),
+          sortedIndexByOriginal[originalIndex],
+        ]),
+      );
+    });
+    return nodes;
+  };
   const parserStateKey = (index: number) => `__parser_${index}`;
   const localObjectStateKey = (index: number) => `__merge_local_${index}`;
   const shouldPreserveLocalChildState = (
@@ -11029,6 +11524,14 @@ export function merge(
     $valueType: [],
     $stateType: [],
     [fieldParsersKey]: mergedFieldParsers,
+    [effectfulSchedulingNodesKey]:
+      ((state, parentPath) =>
+        state != null && typeof state === "object"
+          ? buildMergeSchedulingNodes(
+            state as Record<PropertyKey, unknown>,
+            parentPath,
+          )
+          : []) satisfies EffectfulSchedulingNodesFn,
     priority: Math.max(...mergeParseLanes.map((lane) => lane.priority)),
     usage: applyHiddenToUsage(
       parsers.flatMap((p) => p.usage),
@@ -11262,18 +11765,24 @@ export function merge(
         const duplicateFieldNames = collectDuplicateFieldNames(
           mergedFieldParsers,
         );
-        const unambiguousFieldParsers = filterDuplicateFieldParsers(
-          mergedFieldParsers,
-        );
         type AsyncFieldPairs = ReadonlyArray<
           readonly [string | symbol, Parser<Mode, unknown, unknown>]
         >;
         const perChildPhase1: {
           readonly cache?: ReadonlyMap<string | symbol, unknown>;
           readonly excludedSourceFields?: ReadonlySet<string | symbol>;
-        }[] = [];
-        for (let i = 0; i < parsers.length; i++) {
-          const parser = parsers[i];
+        }[] = new Array(parsers.length);
+        // Pre-completion may be effectful (e.g., a prompt reached through
+        // a source binding wrapper), so iterate children in declaration
+        // order while storing entries at their sorted index (the index
+        // used by completion paths and tracing).
+        for (
+          let originalIndex = 0;
+          originalIndex < rawParsers.length;
+          originalIndex++
+        ) {
+          const parser = rawParsers[originalIndex];
+          const sortedIndex = sortedIndexByOriginal[originalIndex];
           if (fieldParsersKey in parser) {
             const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
               fieldParsersKey
@@ -11291,29 +11800,72 @@ export function merge(
               state as Record<string | symbol, unknown>,
               phase1Pairs,
               runtime.registry,
-              withChildExecPath(childExec, i),
+              withChildExecPath(childExec, sortedIndex),
             );
-            perChildPhase1.push({
+            // A failed pre-completion (e.g., a cancelled prompt) fails
+            // this merge anyway; abort before pre-completing later
+            // children so cancellation stops later prompts immediately.
+            const failure = firstPreCompletedFailure(preCompleted);
+            if (failure != null) {
+              return { success: false as const, error: failure };
+            }
+            perChildPhase1[sortedIndex] = {
               cache: filterDuplicateKeys(preCompleted, phase1Pairs),
               excludedSourceFields: excludedSourceFields.size > 0
                 ? excludedSourceFields
                 : undefined,
-            });
+            };
           } else {
-            perChildPhase1.push({
+            perChildPhase1[sortedIndex] = {
               cache: undefined,
               excludedSourceFields: undefined,
-            });
+            };
           }
         }
-        await collectExplicitSourceValuesAsync(
-          buildRuntimeNodesFromPairs(
-            unambiguousFieldParsers,
-            state as Record<PropertyKey, unknown>,
-            exec?.path,
-          ),
-          runtime,
+        // Child-indexed paths keep scheduling, demand detection, and the
+        // run-scoped completion cache aligned with parse-time tracing
+        // and child completion paths.
+        const mergeNodes = buildMergeSchedulingNodes(
+          state as Record<PropertyKey, unknown>,
+          exec?.path,
         );
+        await collectExplicitSourceValuesAsync(mergeNodes, runtime);
+        // Phase 2b: Run effectful source completions (e.g., prompts) for
+        // unambiguous fields so their values register before deferred
+        // replay.  Duplicate-key fields are already excluded from the
+        // node list, so values discarded by duplicate-field resolution
+        // are never scheduled at the merge level.
+        const effectfulPreCompleted = new Map<string | symbol, unknown>();
+        const effectfulFailure = await scheduleEffectfulSourceCompletions(
+          mergeNodes,
+          state,
+          runtime,
+          childExec,
+          effectfulPreCompleted,
+        );
+        if (effectfulFailure != null) return effectfulFailure;
+        if (effectfulPreCompleted.size > 0) {
+          // Route each completed field into the owning child's Phase 1
+          // cache so the child's completion reuses the result instead of
+          // completing the same field twice.
+          for (let i = 0; i < parsers.length; i++) {
+            const parser = parsers[i];
+            if (!(fieldParsersKey in parser)) continue;
+            const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
+              fieldParsersKey
+            ];
+            let cache: Map<string | symbol, unknown> | undefined;
+            for (const [field] of pairs) {
+              const completed = effectfulPreCompleted.get(field);
+              if (completed === undefined) continue;
+              cache ??= new Map(perChildPhase1[i].cache);
+              cache.set(field, completed);
+            }
+            if (cache != null) {
+              perChildPhase1[i] = { ...perChildPhase1[i], cache };
+            }
+          }
+        }
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
@@ -11571,18 +12123,25 @@ export function merge(
           const duplicateFieldNames = collectDuplicateFieldNames(
             mergedFieldParsers,
           );
-          const unambiguousFieldParsers = filterDuplicateFieldParsers(
-            mergedFieldParsers,
-          );
           type AsyncFieldPairs = ReadonlyArray<
             readonly [string | symbol, Parser<Mode, unknown, unknown>]
           >;
           const perChildPhase1: {
             readonly cache?: ReadonlyMap<string | symbol, unknown>;
             readonly excludedSourceFields?: ReadonlySet<string | symbol>;
-          }[] = [];
-          for (let i = 0; i < parsers.length; i++) {
-            const parser = parsers[i];
+          }[] = new Array(parsers.length);
+          // Pre-completion may be effectful, so iterate children in
+          // declaration order while storing entries at their sorted
+          // index.  A failed pre-completion (e.g., a cancelled prompt)
+          // must stop all subsequent effects, so seed extraction aborts
+          // entirely; the fallback parse surfaces the cached failure.
+          for (
+            let originalIndex = 0;
+            originalIndex < rawParsers.length;
+            originalIndex++
+          ) {
+            const parser = rawParsers[originalIndex];
+            const sortedIndex = sortedIndexByOriginal[originalIndex];
             if (fieldParsersKey in parser) {
               const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
                 fieldParsersKey
@@ -11601,29 +12160,63 @@ export function merge(
                   state as Record<string | symbol, unknown>,
                   phase1Pairs,
                   runtime.registry,
-                  withChildExecPath(childExec, i),
+                  withChildExecPath(childExec, sortedIndex),
                 );
-              perChildPhase1.push({
+              if (firstPreCompletedFailure(preCompleted) != null) return null;
+              perChildPhase1[sortedIndex] = {
                 cache: filterDuplicateKeys(preCompleted, phase1Pairs),
                 excludedSourceFields: excludedSourceFields.size > 0
                   ? excludedSourceFields
                   : undefined,
-              });
+              };
             } else {
-              perChildPhase1.push({
+              perChildPhase1[sortedIndex] = {
                 cache: undefined,
                 excludedSourceFields: undefined,
-              });
+              };
             }
           }
-          await collectExplicitSourceValuesAsync(
-            buildRuntimeNodesFromPairs(
-              unambiguousFieldParsers,
-              state as Record<PropertyKey, unknown>,
-              exec?.path,
-            ),
-            runtime,
+          // Child-indexed paths keep scheduling, demand detection, and
+          // the run-scoped completion cache aligned with parse-time
+          // tracing and child completion paths.
+          const mergeNodes = buildMergeSchedulingNodes(
+            state as Record<PropertyKey, unknown>,
+            exec?.path,
           );
+          await collectExplicitSourceValuesAsync(mergeNodes, runtime);
+          // Best-effort seeding: run effectful source completions so
+          // prompted values reach phase-two contexts.  A failure (e.g.,
+          // a cancelled prompt) aborts seed extraction entirely so no
+          // further effects run; the fallback parse surfaces the cached
+          // failure.
+          const effectfulPreCompleted = new Map<string | symbol, unknown>();
+          const effectfulFailure = await scheduleEffectfulSourceCompletions(
+            mergeNodes,
+            state,
+            runtime,
+            childExec,
+            effectfulPreCompleted,
+          );
+          if (effectfulFailure != null) return null;
+          if (effectfulPreCompleted.size > 0) {
+            for (let i = 0; i < parsers.length; i++) {
+              const parser = parsers[i];
+              if (!(fieldParsersKey in parser)) continue;
+              const pairs = (parser as { [fieldParsersKey]: AsyncFieldPairs })[
+                fieldParsersKey
+              ];
+              let cache: Map<string | symbol, unknown> | undefined;
+              for (const [field] of pairs) {
+                const completed = effectfulPreCompleted.get(field);
+                if (completed === undefined) continue;
+                cache ??= new Map(perChildPhase1[i].cache);
+                cache.set(field, completed);
+              }
+              if (cache != null) {
+                perChildPhase1[i] = { ...perChildPhase1[i], cache };
+              }
+            }
+          }
           const resolvedState = await resolveStateWithRuntimeAsync(
             state,
             runtime,
@@ -13043,13 +13636,31 @@ export function concat(
       runtime.registry,
       childExec,
     );
-    await collectExplicitSourceValuesAsync(
-      filterPreCompletedRuntimeNodes(
-        buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
-        new Set(preCompleted.keys()),
-      ),
-      runtime,
+    const allRuntimeNodes = buildRuntimeNodesFromArray(
+      parsers,
+      stateArray,
+      exec?.path,
     );
+    const runtimeNodes = filterPreCompletedRuntimeNodes(
+      allRuntimeNodes,
+      new Set(preCompleted.keys()),
+    );
+    await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+    // Phase 2b: Run effectful source completions (e.g., prompts)
+    // serially so their values register before deferred replay.
+    // Deferred Phase 1 results stay schedulable so a demand-only
+    // prompt can still complete once demand is discovered here.
+    const effectfulFailure = await scheduleEffectfulSourceCompletions(
+      filterSchedulableRuntimeNodes(
+        allRuntimeNodes,
+        preCompleted,
+      ),
+      stateArray,
+      runtime,
+      childExec,
+      preCompleted,
+    );
+    if (effectfulFailure != null) return effectfulFailure;
     const phase3Exec: ExecutionContext = {
       ...childExec,
       preCompletedByParser: undefined,
@@ -13136,6 +13747,16 @@ export function concat(
     usage: parsers.flatMap((p) => p.usage),
     leadingNames: sharedBufferLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
+    // Expose child parsers like tuple() and seq() do, so parent
+    // constructs can expand into concat() children when scheduling
+    // effectful source completions.
+    [fieldParsersKey]: parsers.map(
+      (parser, index) =>
+        [String(index), parser] as [
+          string,
+          Parser<Mode, unknown, unknown>,
+        ],
+    ),
     initialState,
     canSkip(state, exec?: ExecutionContext) {
       const stateArray = state as readonly unknown[];
@@ -13250,13 +13871,34 @@ export function concat(
             runtime.registry,
             childExec,
           );
-          await collectExplicitSourceValuesAsync(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(parsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
-            ),
-            runtime,
+          const allRuntimeNodes = buildRuntimeNodesFromArray(
+            parsers,
+            stateArray,
+            exec?.path,
           );
+          const runtimeNodes = filterPreCompletedRuntimeNodes(
+            allRuntimeNodes,
+            new Set(preCompleted.keys()),
+          );
+          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          // Best-effort seeding: run effectful source completions so
+          // prompted values reach phase-two contexts.  A failure (e.g.,
+          // a cancelled prompt) aborts seed extraction entirely so no
+          // further effects run; the fallback parse surfaces the cached
+          // failure.  Deferred Phase 1 results stay schedulable so a
+          // demand-only prompt can still complete once demand is
+          // discovered here.
+          const effectfulFailure = await scheduleEffectfulSourceCompletions(
+            filterSchedulableRuntimeNodes(
+              allRuntimeNodes,
+              preCompleted,
+            ),
+            stateArray,
+            runtime,
+            childExec,
+            preCompleted,
+          );
+          if (effectfulFailure != null) return null;
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
@@ -13488,6 +14130,17 @@ export function group<M extends Mode, TValue, TState>(
         )[fieldParsersKey],
       }
       : {}),
+    // Forward effectful scheduling nodes so that a grouped merge()
+    // expands with the same child-indexed paths and declaration order.
+    ...(effectfulSchedulingNodesKey in parser
+      ? {
+        [effectfulSchedulingNodesKey]: (
+          parser as {
+            [effectfulSchedulingNodesKey]: EffectfulSchedulingNodesFn;
+          }
+        )[effectfulSchedulingNodesKey],
+      }
+      : {}),
     // Forward completion deferral hook from inner parser so that
     // prompt(group("label", bindConfig(...))) defers correctly.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -13613,6 +14266,15 @@ export function group<M extends Mode, TValue, TState>(
     configurable: true,
     enumerable: false,
   });
+  // Forward dependency metadata unchanged—group() passes state through,
+  // so source extraction and effectful completion see the inner shape.
+  if (parser.dependencyMetadata != null) {
+    Object.defineProperty(groupParser, "dependencyMetadata", {
+      value: parser.dependencyMetadata,
+      configurable: true,
+      enumerable: false,
+    });
+  }
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
   if ("placeholder" in parser) {
@@ -15068,6 +15730,48 @@ export function conditional(
     };
   };
 
+  // Builds the effectful scheduling nodes for this conditional: the
+  // discriminator (always) and the committed branch (only when the
+  // selection is not speculative, so branch sources stay hidden until
+  // the discriminator confirms the selection).  Shared by the parser's
+  // effectfulSchedulingNodesKey hook and the completion below; the
+  // "_discriminator"/"_branch" path segments match completion paths so
+  // the run-scoped completion cache lines up.
+  const buildConditionalSchedulingNodes = (
+    state: unknown,
+    parentPath: readonly PropertyKey[] | undefined,
+  ): readonly RuntimeNode[] => {
+    if (state == null || typeof state !== "object") return [];
+    const conditionalState = state as ConditionalState<string>;
+    const nodes: RuntimeNode[] = [{
+      path: [...(parentPath ?? []), "_discriminator"],
+      parser: discriminator,
+      state: getAnnotatedChildState(
+        conditionalState,
+        conditionalState.discriminatorState,
+        discriminator,
+      ),
+    }];
+    const selected = conditionalState.selectedBranch;
+    if (selected !== undefined && conditionalState.speculative !== true) {
+      const branchParser = selected.kind === "default"
+        ? defaultBranch
+        : branches[selected.key];
+      if (branchParser != null) {
+        nodes.push({
+          path: [...(parentPath ?? []), "_branch"],
+          parser: branchParser,
+          state: getAnnotatedChildState(
+            conditionalState,
+            conditionalState.branchState,
+            branchParser,
+          ),
+        });
+      }
+    }
+    return nodes;
+  };
+
   // Async complete implementation
   const completeAsync = async (
     state: ConditionalState<string>,
@@ -15312,6 +16016,32 @@ export function conditional(
       dependencyRuntime: runtime,
       dependencyRegistry: runtime.registry,
     };
+    // Complete a prompted dependency-source discriminator (and, for a
+    // confirmed selection, the committed branch) before branch replay
+    // so branch consumers resolve against the answered value even when
+    // no parent construct invoked this parser's scheduling hook.  While
+    // the selection is speculative, only the discriminator is scheduled:
+    // the guessed branch must produce no interactive side effects before
+    // the mismatch verification below confirms or rejects it.
+    {
+      const allSchedulingNodes = buildConditionalSchedulingNodes(
+        state,
+        exec?.path,
+      );
+      const schedulingNodes = wasSpeculative
+        ? allSchedulingNodes.filter((node) =>
+          node.path.at(-1) === "_discriminator"
+        )
+        : allSchedulingNodes;
+      const schedulingFailure = await scheduleEffectfulSourceCompletions(
+        schedulingNodes,
+        combinedState,
+        runtime,
+        completionExec,
+        new Map<string | symbol, unknown>(),
+      );
+      if (schedulingFailure != null) return schedulingFailure;
+    }
     // Only complete the discriminator when needed
     // (see sync counterpart for rationale).
     const needsDiscriminatorCompletion = state.selectedBranch.kind !==
@@ -16108,5 +16838,18 @@ export function conditional(
     ConditionalState<string>
   >;
   defineInheritedAnnotationParser(conditionalParser);
+  // Expose the discriminator (and the committed, non-speculative branch)
+  // to parent-level effectful scheduling so a prompted source inside a
+  // conditional completes before sibling dependency replay.  A
+  // speculatively selected branch stays hidden: its sources must not be
+  // visible while the discriminator has not confirmed the selection,
+  // mirroring the discriminator-only verification runtime above.  Node
+  // paths reuse the "_discriminator"/"_branch" segments that completion
+  // itself uses, so the run-scoped completion cache lines up.
+  Object.defineProperty(conditionalParser, effectfulSchedulingNodesKey, {
+    value: buildConditionalSchedulingNodes satisfies EffectfulSchedulingNodesFn,
+    configurable: true,
+    enumerable: false,
+  });
   return fluent(conditionalParser);
 }

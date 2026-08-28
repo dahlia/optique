@@ -18,8 +18,12 @@ import {
   isPendingDependencySourceState,
   parseWithDependency,
 } from "./internal/dependency.ts";
-import { message } from "./message.ts";
-import { unmatchedNonCliDependencySourceStateMarker } from "./internal/parser.ts";
+import type { InputTrace } from "./input-trace.ts";
+import { type Message, message } from "./message.ts";
+import {
+  type ExecutionContext,
+  unmatchedNonCliDependencySourceStateMarker,
+} from "./internal/parser.ts";
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
@@ -898,6 +902,387 @@ export function extractRawInputFromState(state: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+// =============================================================================
+// Effectful source completion scheduling
+// =============================================================================
+
+/**
+ * Internal parser hook for constructs whose effectful scheduling nodes
+ * cannot be derived from flattened field pairs alone.
+ *
+ * `merge()` installs it so a parent's scheduling expansion uses the same
+ * child-indexed paths, declaration order, and duplicate-field exclusion
+ * as the merge's own scheduling pass; `or()`/`longestMatch()` install it
+ * to expose the committed branch; `command()` installs it to expose its
+ * inner parser once the command has matched.  The returned node paths
+ * must match the execution paths used when the same parsers complete, so
+ * the run-scoped completion cache lines up.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export const effectfulSchedulingNodesKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/effectfulSchedulingNodes",
+);
+
+/**
+ * The shape of the {@link effectfulSchedulingNodesKey} hook.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export type EffectfulSchedulingNodesFn = (
+  state: unknown,
+  parentPath: readonly PropertyKey[] | undefined,
+) => readonly RuntimeNode[];
+
+/**
+ * Forwards effectful scheduling through a shape-preserving wrapper such
+ * as `map()`, `optional()`, `withDefault()`, or `nonEmpty()`, so the
+ * wrapped parser—a selected exclusive or command branch, or an ordinary
+ * construct with nested effectful sources—stays visible to a parent
+ * construct's scheduling expansion.
+ *
+ * The installed hook simply re-exposes the inner parser as a node with
+ * the wrapper's own state shape unwrapped (`adaptState`, e.g. the
+ * `[innerState]` array used by `optional()`/`withDefault()`); the
+ * expansion then applies its ordinary rules to the inner parser, whether
+ * it carries its own hook, flattened field pairs, or source metadata.
+ * Wrappers are path-transparent, so the node keeps the wrapper's path.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export function defineForwardedEffectfulSchedulingNodes(
+  wrapper: object,
+  inner: { readonly dependencyMetadata?: ParserDependencyMetadata },
+  adaptState?: (state: unknown) => unknown,
+): void {
+  // When the inner parser is itself a dependency source, the wrapper's
+  // own composed metadata governs scheduling—including the deliberate
+  // absence of an effectful completion (e.g., optional() suppression or
+  // a transformed source).  Re-exposing the inner parser here would
+  // bypass that decision, so the hook is only installed for wrapped
+  // non-source parsers such as constructs and exclusive branches.
+  if (inner.dependencyMetadata?.source != null) return;
+  Object.defineProperty(wrapper, effectfulSchedulingNodesKey, {
+    value: ((state, parentPath) => [{
+      path: parentPath ?? [],
+      parser: inner,
+      state: adaptState == null ? state : adaptState(state),
+    }]) satisfies EffectfulSchedulingNodesFn,
+    configurable: true,
+    enumerable: false,
+  });
+}
+
+/**
+ * A completed effectful source result to be reused by the owning
+ * construct's final completion phase, keyed by the node's last path
+ * segment (its field key or tuple index).
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface EffectfulSourceCompletion {
+  /** The node's field key or index (its last path segment). */
+  readonly key: PropertyKey;
+
+  /** The effectful completion result. */
+  readonly result: ValueParserResult<unknown>;
+}
+
+/**
+ * The result of scheduling effectful source completions.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export type EffectfulSourceCompletionResult =
+  | {
+    readonly success: true;
+    readonly completed: readonly EffectfulSourceCompletion[];
+  }
+  | { readonly success: false; readonly error: Message };
+
+/**
+ * Collects the dependency source IDs demanded by consumers among the
+ * given nodes and state subtree.
+ *
+ * A consumer demands its sources when it has raw input evidence: either a
+ * trace entry recorded at its path during parsing, or a legacy
+ * `DeferredParseState` embedded in the state subtree.  Consumers without
+ * raw input never replay against real dependency values, so their sources
+ * are not demanded.
+ *
+ * @param nodes The direct-child runtime nodes of the owning construct.
+ * @param state The construct's state subtree (for legacy deferred states).
+ * @param trace The input trace recorded during parsing.
+ * @returns The set of demanded dependency source IDs.
+ * @internal
+ * @since 1.3.0
+ */
+export function collectDemandedDependencyIds(
+  nodes: readonly RuntimeNode[],
+  state: unknown,
+  trace: InputTrace | undefined,
+): ReadonlySet<symbol> {
+  const demanded = new Set<symbol>();
+  for (const node of nodes) {
+    const derived = node.parser.dependencyMetadata?.derived;
+    if (derived == null) continue;
+    const hasRawInput = trace?.get(node.path)?.rawInput != null ||
+      extractRawInputFromState(node.state) != null;
+    if (!hasRawInput) continue;
+    for (const id of derived.dependencyIds) demanded.add(id);
+  }
+  collectDeferredDemand(state, demanded, new WeakSet<object>());
+  return demanded;
+}
+
+function collectDeferredDemand(
+  state: unknown,
+  demanded: Set<symbol>,
+  visited: WeakSet<object>,
+): void {
+  if (state == null || typeof state !== "object") return;
+  if (visited.has(state)) return;
+  visited.add(state);
+
+  if (isDeferredParseState(state)) {
+    const ids = state.dependencyIds != null && state.dependencyIds.length > 0
+      ? state.dependencyIds
+      : [state.dependencyId];
+    for (const id of ids) demanded.add(id);
+    return;
+  }
+
+  for (const key of Reflect.ownKeys(state)) {
+    collectDeferredDemand(
+      (state as Record<string | symbol, unknown>)[key],
+      demanded,
+      visited,
+    );
+  }
+}
+
+/**
+ * Options for {@link completeEffectfulSourcesAsync}.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface CompleteEffectfulSourcesOptions {
+  /**
+   * Nodes used for demand detection instead of the scheduled nodes.
+   * Constructs whose parse-time trace paths differ from their scheduling
+   * node paths (e.g., `merge()`, which records child-indexed paths but
+   * schedules flattened field nodes) pass path-corrected nodes here.
+   */
+  readonly demandNodes?: readonly RuntimeNode[];
+
+  /**
+   * Whether a node's completion result may be cached by the owning
+   * construct for reuse in its final completion phase.  Defaults to
+   * treating every node as reusable.  Non-reusable completions (nodes
+   * expanded from nested children, or sources whose field value differs
+   * from the source value) rely on the run-scoped session cache to avoid
+   * running twice, and are skipped when no session is available.
+   */
+  readonly isReusable?: (node: RuntimeNode) => boolean;
+}
+
+/**
+ * Runs effectful source completions (e.g., interactive prompts) serially
+ * in declaration order for source nodes whose value is not yet registered.
+ *
+ * This is the scheduling half of the `completeSource` capability contract:
+ *
+ * - Runs only during real completion (`exec.phase === "complete"`); probe
+ *   and suggest phases return immediately without effects.
+ * - Precedence is structural: a source whose value was registered before
+ *   the pass begins (from CLI state, environment, configuration, or a
+ *   default) or that has already failed is never completed effectfully.
+ *   When several scheduled occurrences share one source, each occurrence
+ *   still completes and re-registers, so the last occurrence wins—the
+ *   same rule as repeated command-line source occurrences.
+ * - Completion results that are `undefined` or marked `deferred` are
+ *   treated as declined and neither registered nor cached.
+ * - A successful result registers its value unless the value is
+ *   `undefined`.  When the node is reusable (a direct child whose field
+ *   value is the source value), the result is also returned for reuse by
+ *   the owning construct so the node is not completed twice; otherwise the
+ *   effectful parser's own run-scoped session cache prevents a second
+ *   execution, so nodes that are not reusable are only scheduled when a
+ *   session is present.  For a source behind a transform such as `map()`
+ *   (`preservesSourceValue: false`), the `completeSource` contract still
+ *   yields the pre-transform source value, so registration stays correct
+ *   while the field's final value is produced separately.
+ * - A failed result (e.g., a cancelled prompt) marks the source as failed
+ *   and aborts immediately—later effectful completions do not run.
+ *
+ * When the run-scoped session policy is `"demand-only"` (the phase-two
+ * seed pass), the demanded source IDs from
+ * {@link collectDemandedDependencyIds} are added to the session before any
+ * completion runs, letting effectful parsers defer when no phase-one
+ * consumer demands their value.
+ *
+ * @param nodes The runtime nodes to schedule, in declaration order.
+ * @param state The construct's state subtree (for demand detection).
+ * @param runtime The dependency runtime context.
+ * @param exec The execution context of the owning construct.
+ * @param options Scheduling options.
+ * @returns The scheduling result: completed nodes for reuse, or the first
+ *   failure.
+ * @internal
+ * @since 1.3.0
+ */
+export async function completeEffectfulSourcesAsync(
+  nodes: readonly RuntimeNode[],
+  state: unknown,
+  runtime: DependencyRuntimeContext,
+  exec: ExecutionContext | undefined,
+  options?: CompleteEffectfulSourcesOptions,
+): Promise<EffectfulSourceCompletionResult> {
+  const empty: EffectfulSourceCompletionResult = {
+    success: true,
+    completed: [],
+  };
+  if (exec == null || exec.phase !== "complete") return empty;
+
+  // Demand accumulates in the session even when this construct has
+  // nothing schedulable itself: a consumer here may demand a source that
+  // an opaque descendant (e.g., a selected command branch) completes in
+  // its own, later scheduling pass.
+  const session = exec.effectfulCompletionSession;
+  if (session?.policy === "demand-only") {
+    const demandNodes = options?.demandNodes ?? nodes;
+    const demanded = collectDemandedDependencyIds(
+      demandNodes,
+      state,
+      exec.trace,
+    );
+    for (const id of demanded) {
+      session.demanded.add(id);
+    }
+  }
+
+  // A failed effectful completion cached in the run-scoped session (a
+  // cancelled prompt) stops every later effectful completion in the run,
+  // even across separate scheduling passes sharing the session—such as a
+  // seed-extraction fallback after a failed completion attempt.
+  if (session != null) {
+    for (const result of session.results.values()) {
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+    }
+  }
+
+  const schedulable = nodes.filter((node) =>
+    node.parser.dependencyMetadata?.source?.completeSource != null
+  );
+  if (schedulable.length === 0) return empty;
+
+  const completed: EffectfulSourceCompletion[] = [];
+  for (const node of nodes) {
+    const source = node.parser.dependencyMetadata?.source;
+    if (source == null) continue;
+    if (source.completeSource == null) {
+      // Registration order must follow declaration order across
+      // structural and effectful occurrences of a shared source, the
+      // way repeated command-line occurrences overwrite earlier ones.
+      // Structural values were registered by source collection before
+      // this pass, so a structural occurrence declared *after* an
+      // effectful one re-registers its extracted value here to restore
+      // that order.  Only the construct's own nodes re-register:
+      // expanded descendants were never part of its source collection.
+      if (
+        source.extractSourceValue == null ||
+        (options?.isReusable?.(node) ?? true) === false
+      ) {
+        continue;
+      }
+      const extracted = await source.extractSourceValue(node.state);
+      if (extracted?.success === true && extracted.value !== undefined) {
+        runtime.registerSource(source.sourceId, extracted.value);
+      }
+      continue;
+    }
+
+    // A completion already performed for this exact node in this pass—
+    // typically by a parent construct's expanded scheduling—is reused
+    // instead of being performed again, keeping lazy wrapper defaults at
+    // one evaluation per pass and letting the owning construct cache the
+    // very result whose value was registered.
+    const pathKey = serializeSchedulingPath(node.path);
+    const priorResult = session?.completedByPath.get(pathKey);
+    if (priorResult != null) {
+      if (
+        source.preservesSourceValue && (options?.isReusable?.(node) ?? true)
+      ) {
+        completed.push({
+          key: node.path[node.path.length - 1],
+          result: priorResult,
+        });
+      }
+      continue;
+    }
+
+    // Structural precedence is enforced per occurrence by the effectful
+    // completion itself: a command-line value or a source binding for
+    // the occurrence's own field is returned without running the effect
+    // (see prompt()'s completion, which consults both before its
+    // run-scoped cache).  A value registered by *another* occurrence of
+    // the same source does not suppress this one: its field still needs
+    // a value, so the completion runs here rather than after dependency
+    // replay, and its registration overwrites earlier ones so the last
+    // occurrence wins, matching repeated command-line occurrences.
+    //
+    // A source marked failed by extraction (e.g., an invalid bound
+    // environment or configuration value) is not skipped: the effectful
+    // completion is its recovery path—a prompt wrapper falls back after
+    // the inner completion fails, and a successful answer re-registers
+    // the source, clearing the failed state, so consumers resolve
+    // consistently with the prompted field.  (Missing-source *defaults*
+    // still never override explicit failures; see
+    // fillMissingSourceDefaults.)
+    const reusable = source.preservesSourceValue &&
+      (options?.isReusable?.(node) ?? true);
+    // A completion that cannot be cached by the owning construct would
+    // run again during the construct's final completion phase unless it
+    // is deduplicated through the run-scoped session.
+    if (!reusable && session == null) continue;
+
+    const childExec: ExecutionContext = { ...exec, path: node.path };
+    const result = await source.completeSource(node.state, childExec);
+    if (result == null) continue;
+    if (!result.success) {
+      runtime.markSourceFailed(source.sourceId);
+      return { success: false, error: result.error };
+    }
+    // Deferred results carry placeholder values, which must never become
+    // dependency values or cached completions.
+    if (result.deferred === true) continue;
+    session?.completedByPath.set(pathKey, result);
+    if (reusable) {
+      completed.push({ key: node.path[node.path.length - 1], result });
+    }
+    if (result.value !== undefined) {
+      runtime.registerSource(source.sourceId, result.value);
+    }
+  }
+  return { success: true, completed };
+}
+
+/**
+ * Serializes a scheduling node path into a stable string key, using
+ * length-prefixed segments so no separator escaping is needed.
+ */
+function serializeSchedulingPath(path: readonly PropertyKey[]): string {
+  return path.map(serializePathSegment).join("");
 }
 
 // =============================================================================

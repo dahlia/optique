@@ -5340,12 +5340,8 @@ describe("prompt() with dependency sources", () => {
     assert.ok(!result.success);
   });
 
-  // Note: prompted values are not currently registered as dependency
-  // sources.  When the CLI omits the source option and prompt()
-  // provides the value interactively, the derived parser falls back
-  // to its defaultValue instead of using the prompted value.
-  // This gap is tracked in https://github.com/dahlia/optique/issues/750
-  it("prompted dependency source uses default for derived parser", async () => {
+  // https://github.com/dahlia/optique/issues/870
+  it("prompted dependency source resolves the derived parser", async () => {
     const parser = object({
       mode: prompt(option("--mode", mode), {
         type: "select",
@@ -5355,14 +5351,98 @@ describe("prompt() with dependency sources", () => {
       }),
       level: option("--level", level),
     });
-    // --mode not provided; prompt returns "prod" but the derived parser
-    // uses its defaultValue ("dev") since prompted values don't register
-    // as dependency sources
-    const result = await parseAsync(parser, ["--level", "debug"]);
+    // --mode not provided; the prompt returns "prod", which registers as
+    // the dependency value, so "silent" is valid for the derived parser.
+    const result = await parseAsync(parser, ["--level", "silent"]);
     assert.ok(result.success);
     assert.equal(result.value.mode, "prod");
-    assert.equal(result.value.level, "debug");
+    assert.equal(result.value.level, "silent");
   });
+
+  // https://github.com/dahlia/optique/issues/870
+  it("prompted dependency source rejects invalid derived value", async () => {
+    const parser = object({
+      mode: prompt(option("--mode", mode), {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () => Promise.resolve("prod"),
+      }),
+      level: option("--level", level),
+    });
+    // "debug" is only valid for "dev", but the prompt answers "prod".
+    const result = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(!result.success);
+  });
+
+  it(
+    "lets a phase-two structural value win over a seed prompt answer",
+    async () => {
+      type SharedConfig = { readonly b?: "dev" | "prod" };
+      const shared = dependency(choice(["dev", "prod"] as const));
+      const seen: string[] = [];
+      const sharedLevel = shared.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: (value: "dev" | "prod") => {
+          seen.push(value);
+          return choice(
+            value === "dev"
+              ? (["debug", "common"] as const)
+              : (["silent", "common"] as const),
+          );
+        },
+        defaultValue: () => "dev" as const,
+      });
+      const context = createConfigContext<SharedConfig>({
+        schema: {
+          "~standard": {
+            version: 1,
+            vendor: "optique-test",
+            validate(input: unknown) {
+              return { value: input as SharedConfig };
+            },
+          },
+        },
+      });
+      let promptCalls = 0;
+      const parser = object({
+        a: prompt(option("--a", shared), {
+          type: "select",
+          message: "A:",
+          choices: ["dev", "prod"],
+          prompter: () => {
+            promptCalls += 1;
+            return Promise.resolve("dev");
+          },
+        }),
+        b: bindConfig(option("--b", shared), {
+          context,
+          key: "b",
+          default: "dev",
+        }),
+        level: option("--level", sharedLevel),
+      });
+
+      // The seed pass demands the source (CLI --level), so the prompt
+      // for `a` answers "dev" there.  Phase two then supplies a
+      // structural config value "prod" for the later occurrence `b`,
+      // which must win in the final pass: the final replay must see
+      // "prod".
+      const result = await runWith(parser, "test", [context], {
+        args: ["--level", "common"],
+        contextOptions: {
+          load: () => ({ config: { b: "prod" }, meta: undefined }),
+        },
+      });
+
+      assert.equal(result.a, "dev");
+      assert.equal(result.b, "prod");
+      assert.equal(result.level, "common");
+      assert.equal(promptCalls, 1);
+      assert.equal(seen.at(-1), "prod");
+    },
+  );
 
   it("preserves inner source extraction when prompt() wraps bindEnv()", async () => {
     const envContext = createEnvContext({

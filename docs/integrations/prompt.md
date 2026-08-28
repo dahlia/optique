@@ -549,6 +549,59 @@ The wrapper preserves parser metadata used by dependency-aware completions and
 metadata themselves.
 
 
+Dependency sources
+------------------
+
+*This behavior is available since Optique 1.3.0.*
+
+When `prompt()` wraps a [dependency source](../concepts/dependencies.md), the
+prompted value registers in the dependency runtime, so parsers derived from
+that source observe the value the user actually selected.  A derived parser
+behaves identically whether its dependency value came from the command line,
+a source binding, or an interactive prompt.
+
+To make the value available before derived parsers re-evaluate, a
+dependency-source prompt runs earlier than ordinary prompts: source prompts
+run serially in declaration order before dependency replay, while non-source
+prompts keep running after the other fields complete.  As a consequence, a
+dependency-source prompt may be displayed before a non-source prompt declared
+earlier in the same object.  Structural precedence applies per field: a
+prompted field whose own value already came from the command line or a
+source binding does not prompt, while another prompted field sharing the
+same source still does, and its answer registers last.
+
+Each source prompt runs at most once per parse operation, and never during
+help, shell suggestion, or probe phases.  When the user cancels a source
+prompt, the parse fails immediately and later prompts do not run.  A source
+prompt transformed with `map()` registers its pre-transform value, and a
+source prompt nested in a child construct (such as a `concat()` child tuple)
+still completes before sibling consumers.  A source prompt wrapped in
+`optional()` follows `optional()`'s suppression: an unmatched field
+resolves to `undefined` without prompting, just as for a non-source
+prompt.  Note the direction of `map()`: `prompt(...).map(...)` registers
+the pre-transform prompt answer, while `prompt()` around an
+already-transformed source cannot recover the pre-transform value and
+registers nothing.  When distinct prompts wrap the
+same source in duplicate `merge()` fields, each prompt runs in its own
+child and the later field's value wins, as with other duplicate fields.
+Likewise, when several prompted fields share one dependency source, every
+prompt runs and the last occurrence's value registers, matching how
+repeated command-line source occurrences overwrite earlier ones.
+
+Under `runWith()` with two-pass source contexts, a source prompt runs at most
+once per run.  During the phase-two seed pass it runs only when another
+parser's command-line input demands the source value; otherwise it defers to
+the final pass, and phase-two contexts see the field as deferred.
+
+One pre-existing limitation carries over: a prompt used directly as an
+`or()`/`longestMatch()` branch never executes when no command-line input
+matches, because the parse fails before any branch is chosen.  Prompts
+inside a branch still run once other input commits that branch.
+
+Concrete integrations built on `createPromptAdapter()` get this behavior
+automatically.
+
+
 Testing adapters
 ----------------
 
