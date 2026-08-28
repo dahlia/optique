@@ -355,9 +355,9 @@ combining sequences, after runner-provided help/version/completion entries have
 been added.  Hidden or degenerate entries and entries without descriptions,
 displayed defaults, or displayed choices do not widen the column.  Omitting
 `termWidth` keeps the default width of 26, while a number sets an explicit
-width.  If the measured term width would leave no room for descriptions under
-`maxWidth`, Optique uses the same even-split fallback as an explicit numeric
-width.
+width.  When `maxWidth` constrains the layout, automatic sizing reserves at
+least half of the available space for descriptions.  Numeric widths retain
+their existing fallback behavior.
 
 ### Explicit sync/async variants
 

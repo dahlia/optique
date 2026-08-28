@@ -641,13 +641,13 @@ export function formatDocPage(
   const termWidth = options.termWidth === "auto"
     ? automaticTermWidth() ?? 26
     : options.termWidth ?? 26;
+  const hasEntries = page.sections.some((s) => s.entries.length > 0);
+  const needsDescColumn = hasEntries &&
+    page.sections.some((s) => s.entries.some(needsDescriptionColumn));
   if (options.maxWidth != null) {
-    const hasEntries = page.sections.some((s) => s.entries.length > 0);
     // The formatter skips empty default/choices arrays, so the
     // validation must match: use hasContent() (which checks length > 0)
     // rather than just `!= null`.
-    const needsDescColumn = hasEntries &&
-      page.sections.some((s) => s.entries.some(needsDescriptionColumn));
     // Compute minimum description column width for showDefault/showChoices.
     // When the rendered content is non-empty, only the prefix (or
     // prefix + label for choices) must fit on one line; the suffix
@@ -748,17 +748,24 @@ export function formatDocPage(
   // When maxWidth constrains the layout, shrink the term column so that
   // the description column gets a reasonable share of the available width.
   // Layout: <termIndent><term><2-space gap><description>
-  // When the normal termWidth fits (leaving >= 1 char for description),
-  // keep it unchanged.  Otherwise, split the available space evenly
-  // between term and description columns.
+  // Automatic sizing reserves at least half of the available space for the
+  // description.  Explicit numeric widths retain their existing behavior:
+  // keep the requested width when it leaves >= 1 char for the description,
+  // otherwise split the available space evenly between the two columns.
   let effectiveTermWidth: number;
   if (options.maxWidth == null) {
     effectiveTermWidth = termWidth;
   } else {
     const availableForColumns = options.maxWidth - termIndent - 2;
-    effectiveTermWidth = availableForColumns >= termWidth + 1
+    const evenlySplitTermWidth = Math.max(
+      1,
+      Math.floor(availableForColumns / 2),
+    );
+    effectiveTermWidth = options.termWidth === "auto" && needsDescColumn
+      ? Math.min(termWidth, evenlySplitTermWidth)
+      : availableForColumns >= termWidth + 1
       ? termWidth
-      : Math.max(1, Math.floor(availableForColumns / 2));
+      : evenlySplitTermWidth;
   }
   let output = "";
   if (hasContent(page.brief)) {

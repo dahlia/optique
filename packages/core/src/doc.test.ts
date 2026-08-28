@@ -456,8 +456,16 @@ describe("formatDocPage", () => {
       const automaticResult = formatDocPage("myapp", page, {
         termWidth: "auto",
       });
+      const constrainedDefaultResult = formatDocPage("myapp", page, {
+        maxWidth: 40,
+      });
+      const constrainedAutomaticResult = formatDocPage("myapp", page, {
+        termWidth: "auto",
+        maxWidth: 40,
+      });
 
       assert.equal(automaticResult, defaultResult);
+      assert.equal(constrainedAutomaticResult, constrainedDefaultResult);
     });
 
     it("should measure entries with displayed defaults and choices", () => {
@@ -517,6 +525,34 @@ describe("formatDocPage", () => {
         );
       }
       assert.ok(result.includes("\n--longname"));
+    });
+
+    it("should reserve description space under maxWidth", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--package-manager"],
+              metavar: "PACKAGE_MANAGER",
+            },
+            description: message`description words`,
+          }],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, {
+        termWidth: "auto",
+        maxWidth: 40,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          getDisplayWidth(line) <= 40,
+          `Line display width exceeds 40: "${line}"`,
+        );
+      }
+      assert.ok(result.includes("description words"));
     });
   });
 

@@ -13,8 +13,9 @@ To be released.
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
     with fixed flags and customizable parse errors.  [[#906], [#909]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
-    after the widest visible term using terminal display width.  The existing
-    default and explicit numeric widths remain unchanged.  [[#904], [#911]]
+    after the widest visible term using terminal display width while reserving
+    description space under `maxWidth`.  The existing default and explicit
+    numeric widths remain unchanged.  [[#904], [#911]]
  -  Added `usageLine` to the core runner `RunOptions`.  Top-level full help can
     now replace the generated root synopsis or derive one from a callback,
     while subcommand help and usage-only error output remain unchanged.
