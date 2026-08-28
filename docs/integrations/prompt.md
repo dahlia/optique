@@ -593,6 +593,15 @@ once per run.  During the phase-two seed pass it runs only when another
 parser's command-line input demands the source value; otherwise it defers to
 the final pass, and phase-two contexts see the field as deferred.
 
+Inside a `conditional()`, a prompted source discriminator and the
+prompted sources of the selected branch both run before sibling derived
+parsers re-evaluate, even when nothing on the command line selects a
+branch: the discriminator's answer resolves the branch once, and the
+same selection is reused when the conditional completes.  A prompted
+discriminator that does not wrap a dependency source cannot take part in
+this early resolution, so the branch it selects prompts only during the
+conditional's own completion.
+
 One pre-existing limitation carries over: a prompt used directly as an
 `or()`/`longestMatch()` branch never executes when no command-line input
 matches, because the parse fails before any branch is chosen.  Prompts
