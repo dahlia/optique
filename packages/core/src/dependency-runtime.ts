@@ -1273,15 +1273,7 @@ export async function completeEffectfulSourcesAsync(
  * length-prefixed segments so no separator escaping is needed.
  */
 function serializeSchedulingPath(path: readonly PropertyKey[]): string {
-  return path.map((segment) => {
-    if (typeof segment === "symbol") {
-      const key = stableSymbolKey(segment);
-      return `y${key.length}:${key}`;
-    }
-    const tag = typeof segment === "number" ? "n" : "s";
-    const text = String(segment);
-    return `${tag}${text.length}:${text}`;
-  }).join("");
+  return path.map(serializePathSegment).join("");
 }
 
 // =============================================================================
