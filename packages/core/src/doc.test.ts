@@ -554,6 +554,40 @@ describe("formatDocPage", () => {
       }
       assert.ok(result.includes("description words"));
     });
+
+    it("should validate prefixes against the automatic maxWidth layout", () => {
+      const page: DocPage = {
+        sections: [{
+          entries: [{
+            term: {
+              type: "option",
+              names: ["--package-manager"],
+              metavar: "PACKAGE_ID",
+            },
+            choices: valueSet(["npm", "pnpm"], {
+              fallback: "",
+              type: "unit",
+            }),
+          }],
+        }],
+      };
+
+      const result = formatDocPage("myapp", page, {
+        termWidth: "auto",
+        maxWidth: 40,
+        showChoices: true,
+      });
+
+      for (const line of result.split("\n")) {
+        assert.ok(
+          getDisplayWidth(line) <= 40,
+          `Line display width exceeds 40: "${line}"`,
+        );
+      }
+      assert.ok(result.includes("choices:"));
+      assert.ok(result.includes("npm,"));
+      assert.ok(result.includes("pnpm"));
+    });
   });
 
   it("should respect maxWidth option with brief", () => {

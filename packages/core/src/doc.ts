@@ -644,6 +644,28 @@ export function formatDocPage(
   const hasEntries = page.sections.some((s) => s.entries.length > 0);
   const needsDescColumn = hasEntries &&
     page.sections.some((s) => s.entries.some(needsDescriptionColumn));
+  // When maxWidth constrains the layout, shrink the term column so that
+  // the description column gets a reasonable share of the available width.
+  // Layout: <termIndent><term><2-space gap><description>
+  // Automatic sizing reserves at least half of the available space for the
+  // description.  Explicit numeric widths retain their existing behavior:
+  // keep the requested width when it leaves >= 1 char for the description,
+  // otherwise split the available space evenly between the two columns.
+  let effectiveTermWidth: number;
+  if (options.maxWidth == null) {
+    effectiveTermWidth = termWidth;
+  } else {
+    const availableForColumns = options.maxWidth - termIndent - 2;
+    const evenlySplitTermWidth = Math.max(
+      1,
+      Math.floor(availableForColumns / 2),
+    );
+    effectiveTermWidth = options.termWidth === "auto" && needsDescColumn
+      ? Math.min(termWidth, evenlySplitTermWidth)
+      : availableForColumns >= termWidth + 1
+      ? termWidth
+      : evenlySplitTermWidth;
+  }
   if (options.maxWidth != null) {
     // The formatter skips empty default/choices arrays, so the
     // validation must match: use hasContent() (which checks length > 0)
@@ -728,44 +750,17 @@ export function formatDocPage(
       );
     }
     // Second check: even if maxWidth passes the formula-based minimum,
-    // the actual layout may use the full termWidth, giving a description
-    // column of only maxWidth - termIndent - termWidth - 2 chars.  When
-    // this is smaller than minDescWidth, the fixed prefixes overflow.
+    // the effective layout may leave too little room for fixed prefixes.
     if (needsDescColumn && minDescWidth > 1) {
       const avail = options.maxWidth - termIndent - 2;
-      const effTW = avail >= termWidth + 1
-        ? termWidth
-        : Math.max(1, Math.floor(avail / 2));
-      const descW = avail - effTW;
+      const descW = avail - effectiveTermWidth;
       if (descW < minDescWidth) {
-        const needed = termIndent + termWidth + 2 + minDescWidth;
+        const needed = termIndent + effectiveTermWidth + 2 + minDescWidth;
         throw new RangeError(
           `maxWidth must be at least ${needed}, got ${options.maxWidth}.`,
         );
       }
     }
-  }
-  // When maxWidth constrains the layout, shrink the term column so that
-  // the description column gets a reasonable share of the available width.
-  // Layout: <termIndent><term><2-space gap><description>
-  // Automatic sizing reserves at least half of the available space for the
-  // description.  Explicit numeric widths retain their existing behavior:
-  // keep the requested width when it leaves >= 1 char for the description,
-  // otherwise split the available space evenly between the two columns.
-  let effectiveTermWidth: number;
-  if (options.maxWidth == null) {
-    effectiveTermWidth = termWidth;
-  } else {
-    const availableForColumns = options.maxWidth - termIndent - 2;
-    const evenlySplitTermWidth = Math.max(
-      1,
-      Math.floor(availableForColumns / 2),
-    );
-    effectiveTermWidth = options.termWidth === "auto" && needsDescColumn
-      ? Math.min(termWidth, evenlySplitTermWidth)
-      : availableForColumns >= termWidth + 1
-      ? termWidth
-      : evenlySplitTermWidth;
   }
   let output = "";
   if (hasContent(page.brief)) {
