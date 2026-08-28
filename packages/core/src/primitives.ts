@@ -20,6 +20,7 @@ import {
   replayDerivedParser,
   replayDerivedParserAsync,
   sourceCollectionExpansionKey,
+  staticSourceScopeKey,
 } from "./dependency-runtime.ts";
 import {
   mergeChildExec,
@@ -3635,6 +3636,13 @@ export function command<M extends Mode, T, TState>(
   // uses, so a value behaves identically whether typed or prompted.
   Object.defineProperty(result, sourceCollectionExpansionKey, {
     value: true,
+    configurable: true,
+    enumerable: false,
+  });
+  // Static source estimation reaches the inner parser even while the
+  // command is unmatched (see staticSourceScopeKey).
+  Object.defineProperty(result, staticSourceScopeKey, {
+    value: [parser],
     configurable: true,
     enumerable: false,
   });

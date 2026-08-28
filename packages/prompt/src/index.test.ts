@@ -2319,6 +2319,54 @@ describe("prompted values as dependency sources", () => {
   );
 
   it(
+    "demands a branch source hidden behind a command() in two-pass runs",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let phase2Level: string | undefined = "unset";
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@optique/prompt/test-command-branch-demand"),
+        phase: "two-pass",
+        getAnnotations(request?: unknown) {
+          if (isPhase2ContextRequest(request)) {
+            phase2Level = (request.parsed as { readonly level?: string })
+              ?.level;
+          }
+          return {};
+        },
+      };
+      // The branch's mode source sits behind a command(), which exposes
+      // no field pairs; the static estimate must still see it so the
+      // seed pass demands the discriminator as a control dependency and
+      // phase-two contexts observe the sibling's value.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: command(
+              "deploy",
+              object({
+                mode: prompt(option("--mode", mode), { value: "prod" }),
+              }),
+            ),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["deploy", "--level", "silent"],
+      });
+
+      assert.equal((result as { readonly level: string }).level, "silent");
+      assert.equal(phase2Level, "silent");
+      assert.equal(calls.length, 2);
+    },
+  );
+
+  it(
     "prepares a nested conditional() inside a prepared branch",
     async () => {
       const kind = dependency(choice(["x", "z"] as const));

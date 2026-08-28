@@ -30,6 +30,7 @@ import {
   type RuntimeNode,
   serializeSchedulingPath,
   sourceCollectionExpansionKey,
+  staticSourceScopeKey,
 } from "./dependency-runtime.ts";
 import {
   annotateFreshArray,
@@ -399,8 +400,17 @@ function collectStaticSourceIds(
       readonly [string | symbol, Parser<Mode, unknown, unknown>]
     >;
   })[fieldParsersKey];
-  if (pairs == null) return;
-  for (const [, child] of pairs) collectStaticSourceIds(child, out, seen);
+  if (pairs != null) {
+    for (const [, child] of pairs) collectStaticSourceIds(child, out, seen);
+  }
+  const scope = (parser as {
+    readonly [staticSourceScopeKey]?: ReadonlyArray<
+      Parser<Mode, unknown, unknown>
+    >;
+  })[staticSourceScopeKey];
+  if (scope != null) {
+    for (const child of scope) collectStaticSourceIds(child, out, seen);
+  }
 }
 
 function isDeferredCompletionResult(result: unknown): boolean {
@@ -2034,6 +2044,11 @@ function defineExclusiveSchedulingNodes(
   exclusiveParser: object,
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): void {
+  Object.defineProperty(exclusiveParser, staticSourceScopeKey, {
+    value: parsers,
+    configurable: true,
+    enumerable: false,
+  });
   Object.defineProperty(exclusiveParser, effectfulSchedulingNodesKey, {
     value: ((state, parentPath) => {
       const active = normalizeExclusiveState(state);
@@ -14454,6 +14469,12 @@ export function group<M extends Mode, TValue, TState>(
     },
   };
   defineParseLanes(groupParser, getOwnParseLanes(parser));
+  // Forward static source estimation through the group.
+  Object.defineProperty(groupParser, staticSourceScopeKey, {
+    value: [parser],
+    configurable: true,
+    enumerable: false,
+  });
   Object.defineProperty(groupParser, extractPhase2SeedKey, {
     value(state: TState, exec?: ExecutionContext) {
       return extractPhase2Seed(parser, state, exec);
@@ -17330,6 +17351,17 @@ export function conditional(
   // identically whether it was typed or prompted.
   Object.defineProperty(conditionalParser, sourceCollectionExpansionKey, {
     value: true,
+    configurable: true,
+    enumerable: false,
+  });
+  // Static source estimation reaches the discriminator and every branch
+  // (see staticSourceScopeKey); an overcount is harmless.
+  Object.defineProperty(conditionalParser, staticSourceScopeKey, {
+    value: [
+      discriminator,
+      ...Object.values(branches),
+      ...(defaultBranch != null ? [defaultBranch] : []),
+    ],
     configurable: true,
     enumerable: false,
   });

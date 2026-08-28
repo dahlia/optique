@@ -1021,6 +1021,26 @@ export const sourceCollectionExpansionKey: unique symbol = Symbol(
 );
 
 /**
+ * Static child parsers reachable for dependency-source estimation.
+ *
+ * `collectStaticSourceIds()` walks flattened field pairs, which stops at
+ * parsers whose children are not field-shaped—a `command()`'s inner
+ * parser, a nested `conditional()`'s branches, exclusive alternatives,
+ * or a transparent wrapper's inner construct.  Such parsers expose their
+ * children here so the walk can estimate every source a subtree may
+ * provide.  The estimate feeds demand-only control dependencies, where
+ * an overcount merely completes a discriminator earlier than strictly
+ * needed, while an undercount delays an effectful completion to the
+ * final pass and starves phase-two contexts of seed values.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export const staticSourceScopeKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/staticSourceScope",
+);
+
+/**
  * Forwards effectful scheduling through a shape-preserving wrapper such
  * as `map()`, `optional()`, `withDefault()`, or `nonEmpty()`, so the
  * wrapped parser—a selected exclusive or command branch, or an ordinary
@@ -1048,6 +1068,13 @@ export function defineForwardedEffectfulSchedulingNodes(
   // a transformed source).  Re-exposing the inner parser here would
   // bypass that decision, so the hook is only installed for wrapped
   // non-source parsers such as constructs and exclusive branches.
+  // Static source estimation must see through the wrapper even when the
+  // scheduling hook below is not installed.
+  Object.defineProperty(wrapper, staticSourceScopeKey, {
+    value: [inner],
+    configurable: true,
+    enumerable: false,
+  });
   if (inner.dependencyMetadata?.source != null) return;
   Object.defineProperty(wrapper, effectfulSchedulingNodesKey, {
     value: ((state, parentPath) => [{
