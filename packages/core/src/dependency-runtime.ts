@@ -939,6 +939,27 @@ export type EffectfulSchedulingNodesFn = (
 ) => readonly RuntimeNode[];
 
 /**
+ * Opt-in marker for parsers whose {@link effectfulSchedulingNodesKey}
+ * hook also defines their explicit-source *collection* scope.
+ *
+ * A parent construct normally collects explicit source values from its
+ * direct children only.  A parser carrying this marker (with value
+ * `true`) asks the parent to expand it through its scheduling hook
+ * before collecting, so command-line source values inside it—such as a
+ * `conditional()` discriminator, a committed conditional branch, or a
+ * selected `command()` subtree—register into the parent's dependency
+ * runtime exactly like a prompt-completed value would.  Constructs
+ * without the marker (plain nested `object()`, uncommitted exclusive
+ * branches) keep their existing scope.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export const sourceCollectionExpansionKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/sourceCollectionExpansion",
+);
+
+/**
  * Forwards effectful scheduling through a shape-preserving wrapper such
  * as `map()`, `optional()`, `withDefault()`, or `nonEmpty()`, so the
  * wrapped parser—a selected exclusive or command branch, or an ordinary
@@ -976,6 +997,19 @@ export function defineForwardedEffectfulSchedulingNodes(
     configurable: true,
     enumerable: false,
   });
+  // Wrappers are transparent for source-collection expansion too: a
+  // wrapped conditional()/command() keeps its collection opt-in.
+  if (
+    (inner as { readonly [sourceCollectionExpansionKey]?: boolean })[
+      sourceCollectionExpansionKey
+    ] === true
+  ) {
+    Object.defineProperty(wrapper, sourceCollectionExpansionKey, {
+      value: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
 }
 
 /**
@@ -1092,6 +1126,17 @@ export interface CompleteEffectfulSourcesOptions {
    * running twice, and are skipped when no session is available.
    */
   readonly isReusable?: (node: RuntimeNode) => boolean;
+
+  /**
+   * Whether a node participated in the owning construct's explicit
+   * source collection, and therefore must have its structural value
+   * re-registered at its declaration position so registration order
+   * follows declaration order across structural and effectful
+   * occurrences.  This is wider than {@link isReusable}: nodes expanded
+   * from an opted-in child (see `sourceCollectionExpansionKey`) are
+   * collected but not reusable.  Defaults to {@link isReusable}.
+   */
+  readonly isCollected?: (node: RuntimeNode) => boolean;
 }
 
 /**
@@ -1102,12 +1147,12 @@ export interface CompleteEffectfulSourcesOptions {
  *
  * - Runs only during real completion (`exec.phase === "complete"`); probe
  *   and suggest phases return immediately without effects.
- * - Precedence is structural: a source whose value was registered before
- *   the pass begins (from CLI state, environment, configuration, or a
- *   default) or that has already failed is never completed effectfully.
- *   When several scheduled occurrences share one source, each occurrence
- *   still completes and re-registers, so the last occurrence wins—the
- *   same rule as repeated command-line source occurrences.
+ * - Precedence is structural per occurrence: an effectful completion
+ *   returns its own field's command-line or bound value without running
+ *   the effect, and structural occurrences re-register their extracted
+ *   values in declaration order.  When several scheduled occurrences
+ *   share one source, the last occurrence wins—the same rule as repeated
+ *   command-line source occurrences.
  * - Completion results that are `undefined` or marked `deferred` are
  *   treated as declined and neither registered nor cached.
  * - A successful result registers its value unless the value is
@@ -1197,12 +1242,12 @@ export async function completeEffectfulSourcesAsync(
       // Structural values were registered by source collection before
       // this pass, so a structural occurrence declared *after* an
       // effectful one re-registers its extracted value here to restore
-      // that order.  Only the construct's own nodes re-register:
-      // expanded descendants were never part of its source collection.
-      if (
-        source.extractSourceValue == null ||
-        (options?.isReusable?.(node) ?? true) === false
-      ) {
+      // that order.  Only nodes that participated in the construct's
+      // source collection re-register; other expanded descendants were
+      // never part of it.
+      const collected = options?.isCollected?.(node) ??
+        options?.isReusable?.(node) ?? true;
+      if (source.extractSourceValue == null || collected === false) {
         continue;
       }
       const extracted = await source.extractSourceValue(node.state);

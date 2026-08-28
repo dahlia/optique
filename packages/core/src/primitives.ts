@@ -19,6 +19,7 @@ import {
   effectfulSchedulingNodesKey,
   replayDerivedParser,
   replayDerivedParserAsync,
+  sourceCollectionExpansionKey,
 } from "./dependency-runtime.ts";
 import {
   mergeChildExec,
@@ -3626,6 +3627,14 @@ export function command<M extends Mode, T, TState>(
         ),
       }];
     }) satisfies EffectfulSchedulingNodesFn,
+    configurable: true,
+    enumerable: false,
+  });
+  // Command-line source values in a selected command register into the
+  // parent's runtime through the same expansion the scheduling pass
+  // uses, so a value behaves identically whether typed or prompted.
+  Object.defineProperty(result, sourceCollectionExpansionKey, {
+    value: true,
     configurable: true,
     enumerable: false,
   });

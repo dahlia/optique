@@ -9892,3 +9892,372 @@ describe("Real-world scenario: Mutually dependent option groups", () => {
     assert.ok(!invalidFormat.success);
   });
 });
+
+// https://github.com/dahlia/optique/issues/913
+describe("source delivery from conditional()/command() to siblings", () => {
+  function createModeLevel() {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    return { mode, level };
+  }
+
+  test("delivers a CLI discriminator value to an outer sibling", async () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      cond: conditional(
+        option("--mode", mode),
+        {
+          dev: object({
+            d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
+          }),
+          prod: object({
+            p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
+          }),
+        },
+      ),
+      level: option("--level", level),
+    });
+
+    const valid = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+
+    const invalid = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!invalid.success);
+  });
+
+  test("delivers a CLI discriminator value synchronously", () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      cond: conditional(
+        option("--mode", mode),
+        {
+          dev: object({
+            d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
+          }),
+          prod: object({
+            p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
+          }),
+        },
+      ),
+      level: option("--level", level),
+    });
+
+    const valid = parseSync(parser, ["--mode", "prod", "--level", "silent"]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+
+    const invalid = parseSync(parser, ["--mode", "prod", "--level", "debug"]);
+    assert.ok(!invalid.success);
+  });
+
+  test("delivers a committed named-branch CLI source to a sibling", async () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      cond: conditional(
+        option("--kind", choice(["a", "b"] as const)),
+        {
+          a: object({ mode: option("--mode", mode) }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      level: option("--level", level),
+    });
+
+    const valid = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+
+    const invalid = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!invalid.success);
+  });
+
+  test("delivers a consumed default-branch CLI source to a sibling", async () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      cond: conditional(
+        option("--kind", choice(["a", "b"] as const)),
+        {
+          a: object({ x: option("--x", choice(["1"] as const)) }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+        object({ mode: option("--mode", mode) }),
+      ),
+      level: option("--level", level),
+    });
+
+    const valid = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+
+    const invalid = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!invalid.success);
+  });
+
+  test("delivers a selected command()'s CLI source to a sibling", async () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      cmd: command(
+        "deploy",
+        object({ mode: option("--mode", mode) }),
+      ),
+      level: option("--level", level),
+    });
+
+    const valid = await parseAsync(parser, [
+      "deploy",
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+
+    const invalid = await parseAsync(parser, [
+      "deploy",
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!invalid.success);
+  });
+
+  test("delivers through a group()-wrapped conditional()", async () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      cond: group(
+        "Mode",
+        conditional(
+          option("--kind", choice(["a"] as const)),
+          { a: object({ mode: option("--mode", mode) }) },
+        ),
+      ),
+      level: option("--level", level),
+    });
+
+    const valid = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+  });
+
+  test(
+    "does not deliver a plain nested object() CLI source to an earlier consumer",
+    async () => {
+      const { mode, level } = createModeLevel();
+      // A source nested in a plain object() only leaks to consumers
+      // completed after it (declaration order); a consumer declared
+      // first keeps seeing the source default.  This pins the existing
+      // scope so the conditional()/command() expansion does not widen it.
+      const parser = object({
+        level: option("--level", level),
+        inner: object({ mode: option("--mode", mode) }),
+      });
+
+      const result = await parseAsync(parser, [
+        "--mode",
+        "prod",
+        "--level",
+        "debug",
+      ]);
+      assert.ok(
+        result.success,
+        `Expected success but got: ${JSON.stringify(result)}`,
+      );
+      assert.equal(result.value.level, "debug");
+    },
+  );
+
+  test(
+    "delivers a CLI discriminator value to an earlier-declared sibling",
+    async () => {
+      const { mode, level } = createModeLevel();
+      const parser = object({
+        level: option("--level", level),
+        cond: conditional(
+          option("--mode", mode),
+          {
+            dev: object({
+              d: withDefault(
+                option("--d", choice(["x"] as const)),
+                "x" as const,
+              ),
+            }),
+            prod: object({
+              p: withDefault(
+                option("--p", choice(["y"] as const)),
+                "y" as const,
+              ),
+            }),
+          },
+        ),
+      });
+
+      const valid = await parseAsync(parser, [
+        "--level",
+        "silent",
+        "--mode",
+        "prod",
+      ]);
+      assert.ok(
+        valid.success,
+        `Expected success but got: ${JSON.stringify(valid)}`,
+      );
+      assert.equal(valid.value.level, "silent");
+    },
+  );
+
+  test(
+    "delivers a selected command()'s CLI source to an earlier-declared sibling",
+    async () => {
+      const { mode, level } = createModeLevel();
+      const parser = object({
+        level: option("--level", level),
+        cmd: command(
+          "deploy",
+          object({ mode: option("--mode", mode) }),
+        ),
+      });
+
+      const valid = await parseAsync(parser, [
+        "deploy",
+        "--mode",
+        "prod",
+        "--level",
+        "silent",
+      ]);
+      assert.ok(
+        valid.success,
+        `Expected success but got: ${JSON.stringify(valid)}`,
+      );
+      assert.equal(valid.value.level, "silent");
+    },
+  );
+
+  test("keeps declaration order across the conditional() boundary", async () => {
+    const { mode, level } = createModeLevel();
+    // The conditional's branch occurrence is declared after the sibling
+    // occurrence of the same source, so the branch value must win.
+    const parser = object({
+      a: withDefault(option("--a", mode), "dev" as const),
+      cond: conditional(
+        option("--kind", choice(["k"] as const)),
+        { k: object({ b: option("--b", mode) }) },
+      ),
+      level: option("--level", level),
+    });
+
+    const later = await parseAsync(parser, [
+      "--a",
+      "dev",
+      "--kind",
+      "k",
+      "--b",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      later.success,
+      `Expected success but got: ${JSON.stringify(later)}`,
+    );
+    assert.equal(later.value.level, "silent");
+
+    // Reversed declaration: the sibling is declared after the
+    // conditional, so the sibling value wins.
+    const reversed = object({
+      cond: conditional(
+        option("--kind", choice(["k"] as const)),
+        { k: object({ b: option("--b", mode) }) },
+      ),
+      a: withDefault(option("--a", mode), "dev" as const),
+      level: option("--level", level),
+    });
+
+    const earlier = await parseAsync(reversed, [
+      "--kind",
+      "k",
+      "--b",
+      "prod",
+      "--a",
+      "dev",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(
+      earlier.success,
+      `Expected success but got: ${JSON.stringify(earlier)}`,
+    );
+    assert.equal(earlier.value.level, "debug");
+  });
+});

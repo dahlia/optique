@@ -1227,6 +1227,47 @@ describe("prompted values as dependency sources", () => {
   );
 
   it(
+    "lets a later conditional() CLI occurrence win over an earlier prompt",
+    async () => {
+      const shared = dependency(choice(["dev", "prod"] as const));
+      const level = shared.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: (value: "dev" | "prod") =>
+          choice(
+            value === "dev"
+              ? (["debug", "verbose"] as const)
+              : (["silent", "strict"] as const),
+          ),
+        defaultValue: () => "dev" as const,
+      });
+      const { prompt, calls } = createTestPrompt();
+      // The conditional's branch occurrence of the shared source is
+      // declared after the prompted sibling, so its command-line value
+      // must win over the prompt's answer, exactly as a repeated
+      // command-line occurrence would.
+      const parser = object({
+        a: prompt(option("--a", shared), { value: "dev" }),
+        cond: conditional(
+          option("--kind", choice(["k"] as const)),
+          { k: object({ b: option("--b", shared) }) },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(
+        parser,
+        ["--kind", "k", "--b", "prod", "--level", "silent"],
+      );
+
+      assert.ok(result.success);
+      assert.equal(result.value.a, "dev");
+      assert.equal(result.value.level, "silent");
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
     "runs merge() source prompts in declaration order despite priorities",
     async () => {
       const srcA = dependency(string());
