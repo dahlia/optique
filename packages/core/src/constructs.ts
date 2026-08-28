@@ -306,7 +306,11 @@ function settledPreCompletedKeys(
 ): ReadonlySet<string | symbol> {
   const keys = new Set<string | symbol>();
   for (const [key, result] of preCompleted) {
-    if (isDeferredCompletionResult(result)) continue;
+    // Legacy pre-completion cases store DependencySourceState wrappers
+    // with the completion result under `result`; classify the inner
+    // result, not the wrapper.
+    const completion = isDependencySourceState(result) ? result.result : result;
+    if (isDeferredCompletionResult(completion)) continue;
     keys.add(key);
   }
   return keys;
@@ -325,13 +329,15 @@ function firstPreCompletedFailure(
   preCompleted: ReadonlyMap<string | symbol, unknown>,
 ): Message | undefined {
   for (const result of preCompleted.values()) {
+    // See settledPreCompletedKeys() for the wrapper unwrap rationale.
+    const completion = isDependencySourceState(result) ? result.result : result;
     if (
-      typeof result === "object" && result !== null &&
-      "success" in result &&
-      (result as { readonly success: unknown }).success === false &&
-      "error" in result
+      typeof completion === "object" && completion !== null &&
+      "success" in completion &&
+      (completion as { readonly success: unknown }).success === false &&
+      "error" in completion
     ) {
-      return (result as { readonly error: Message }).error;
+      return (completion as { readonly error: Message }).error;
     }
   }
   return undefined;
