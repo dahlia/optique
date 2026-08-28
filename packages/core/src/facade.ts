@@ -341,6 +341,32 @@ function withEffectfulSessionOption<T extends object>(
   return { ...options, [effectfulSessionOptionsKey]: session } as T;
 }
 
+/**
+ * Creates the run-scoped effectful completion sessions shared by a
+ * `runWith()` two-phase run, so an effectful source (e.g., a prompt)
+ * runs at most once per invocation.  The seed pass uses the demand-only
+ * policy: an effectful source completes there only when a phase-one
+ * consumer demands its value; others defer to the final pass.  The
+ * final pass shares the run-scoped results cache and demand set, but
+ * recomputes structural precedence from scratch: phase-two annotations
+ * may introduce environment/configuration values that must win over a
+ * cached seed prompt answer, so the effectful-source markers do not
+ * carry over.
+ */
+function createRunWithSessions(): {
+  readonly seedSession: EffectfulCompletionSession;
+  readonly finalSession: EffectfulCompletionSession;
+} {
+  const seedSession = createEffectfulCompletionSession("demand-only");
+  const finalSession: EffectfulCompletionSession = {
+    ...seedSession,
+    policy: "eager",
+    effectfulSources: new Set(),
+    completedByPath: new Map(),
+  };
+  return { seedSession, finalSession };
+}
+
 function createCompleteExec(
   exec: ExecutionContext,
   context: {
@@ -3909,23 +3935,7 @@ async function runWithBody<
   }
 
   // Two-phase parsing for two-pass contexts.
-  // Run-scoped effectful completion session shared by the seed pass and
-  // the final pass, so an effectful source (e.g., a prompt) runs at most
-  // once per runWith() invocation.  The seed pass uses the demand-only
-  // policy: an effectful source completes there only when a phase-one
-  // consumer demands its value; others defer to the final pass.
-  const seedSession = createEffectfulCompletionSession("demand-only");
-  // The final pass shares the run-scoped results cache and demand set,
-  // but recomputes structural precedence from scratch: phase-two
-  // annotations may introduce environment/configuration values that must
-  // win over a cached seed prompt answer, so the effectful-source
-  // markers do not carry over.
-  const finalSession: EffectfulCompletionSession = {
-    ...seedSession,
-    policy: "eager",
-    effectfulSources: new Set(),
-    completedByPath: new Map(),
-  };
+  const { seedSession, finalSession } = createRunWithSessions();
   const sessionOptions = withEffectfulSessionOption(options, finalSession);
   // First pass: parse with Phase 1 annotations to get initial result
   const firstPassSeed = await dispatchByMode(
@@ -4179,20 +4189,7 @@ function runWithSyncBody<
   }
 
   // Two-phase parsing for two-pass contexts.
-  // Run-scoped effectful completion session shared by the seed pass and
-  // the final pass (see runWithBody for details).
-  const seedSession = createEffectfulCompletionSession("demand-only");
-  // The final pass shares the run-scoped results cache and demand set,
-  // but recomputes structural precedence from scratch: phase-two
-  // annotations may introduce environment/configuration values that must
-  // win over a cached seed prompt answer, so the effectful-source
-  // markers do not carry over.
-  const finalSession: EffectfulCompletionSession = {
-    ...seedSession,
-    policy: "eager",
-    effectfulSources: new Set(),
-    completedByPath: new Map(),
-  };
+  const { seedSession, finalSession } = createRunWithSessions();
   const sessionOptions = withEffectfulSessionOption(options, finalSession);
   // First pass: parse with Phase 1 annotations
   const firstPassSeed = extractPhase2SeedSync(

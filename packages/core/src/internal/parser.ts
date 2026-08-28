@@ -500,9 +500,9 @@ export type ExecutionPhase =
  * run, shared by the phase-two seed pass and the final pass) and threaded
  * through {@link ExecutionContext}.  It guarantees that an effectful source
  * completion runs at most once per run: the completion result is cached by
- * dependency source ID, and a cache hit is returned without repeating the
- * effect.  Results never leak between runs because the session is discarded
- * when the run ends.
+ * completion occurrence (see {@link EffectfulCompletionSession.results}),
+ * and a cache hit is returned without repeating the effect.  Results never
+ * leak between runs because the session is discarded when the run ends.
  *
  * @internal
  * @since 1.3.0
