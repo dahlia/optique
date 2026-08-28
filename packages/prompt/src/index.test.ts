@@ -1183,6 +1183,50 @@ describe("prompted values as dependency sources", () => {
   );
 
   it(
+    "prompts a later shared-source occurrence despite an earlier CLI value",
+    async () => {
+      const shared = dependency(choice(["dev", "prod"] as const));
+      const level = shared.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: (value: "dev" | "prod") =>
+          choice(
+            value === "dev"
+              ? (["debug", "verbose"] as const)
+              : (["silent", "strict"] as const),
+          ),
+        defaultValue: () => "dev" as const,
+      });
+      const { prompt, calls } = createTestPrompt();
+      const parser = object({
+        a: prompt(option("--a", shared), { value: "prod" }),
+        b: prompt(option("--b", shared), { value: "prod" }),
+        level: option("--level", level),
+      });
+
+      // CLI parity with "--a dev --b prod": a command-line value for one
+      // occurrence must not suppress the other occurrence's prompt, whose
+      // answer still registers last and wins before sibling replay.
+      const result = await parseAsync(
+        parser,
+        ["--a", "dev", "--level", "silent"],
+      );
+
+      assert.ok(result.success);
+      assert.equal(result.value.a, "dev");
+      assert.equal(result.value.b, "prod");
+      assert.equal(result.value.level, "silent");
+      assert.equal(calls.length, 1);
+
+      const invalid = await parseAsync(
+        parser,
+        ["--a", "dev", "--level", "debug"],
+      );
+      assert.ok(!invalid.success);
+    },
+  );
+
+  it(
     "runs merge() source prompts in declaration order despite priorities",
     async () => {
       const srcA = dependency(string());

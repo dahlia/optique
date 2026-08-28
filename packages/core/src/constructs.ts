@@ -198,6 +198,34 @@ function filterPreCompletedRuntimeNodes<
 }
 
 /**
+ * Filters a construct's runtime nodes for the effectful scheduling pass.
+ *
+ * A settled Phase 1 pre-completion excludes an *effectful* node: its
+ * completion already ran and must not run again.  Structural
+ * (non-effectful) nodes always stay in the pass, whether pre-completed
+ * or not: the scheduler re-registers their extracted values so that
+ * registration order follows declaration order across structural and
+ * effectful occurrences of a shared source.
+ */
+function filterSchedulableRuntimeNodes(
+  nodes: readonly RuntimeNode[],
+  preCompleted: ReadonlyMap<string | symbol, unknown>,
+): readonly RuntimeNode[] {
+  const settledKeys = settledPreCompletedKeys(preCompleted);
+  if (settledKeys.size < 1) return nodes;
+  return nodes.filter((node) => {
+    if (node.parser.dependencyMetadata?.source?.completeSource == null) {
+      return true;
+    }
+    const segment = node.path.at(-1);
+    if (typeof segment === "number") {
+      return !settledKeys.has(String(segment));
+    }
+    return segment == null || !settledKeys.has(segment);
+  });
+}
+
+/**
  * Runs the effectful source completion pass for a construct's direct
  * children and merges the completed results into the construct's
  * pre-completed cache so its final completion phase reuses them instead
@@ -7049,9 +7077,9 @@ export function object<
           // Deferred Phase 1 results stay schedulable so a demand-only
           // prompt can still complete once demand is discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterPreCompletedRuntimeNodes(
+            filterSchedulableRuntimeNodes(
               allRuntimeNodes,
-              settledPreCompletedKeys(preCompleted),
+              preCompleted,
             ),
             annotatedState,
             runtime,
@@ -7334,9 +7362,9 @@ export function object<
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterPreCompletedRuntimeNodes(
+            filterSchedulableRuntimeNodes(
               allRuntimeNodes,
-              settledPreCompletedKeys(preCompleted),
+              preCompleted,
             ),
             annotatedState,
             runtime,
@@ -8231,9 +8259,9 @@ function createSeqComplete(
         // Deferred Phase 1 results stay schedulable so a demand-only
         // prompt can still complete once demand is discovered here.
         const effectfulFailure = await scheduleEffectfulSourceCompletions(
-          filterPreCompletedRuntimeNodes(
+          filterSchedulableRuntimeNodes(
             allRuntimeNodes,
-            settledPreCompletedKeys(preCompleted),
+            preCompleted,
           ),
           stateArray,
           runtime,
@@ -9330,9 +9358,9 @@ export function tuple<
           // Deferred Phase 1 results stay schedulable so a demand-only
           // prompt can still complete once demand is discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterPreCompletedRuntimeNodes(
+            filterSchedulableRuntimeNodes(
               allRuntimeNodes,
-              settledPreCompletedKeys(preCompleted),
+              preCompleted,
             ),
             stateArray,
             runtime,
@@ -9533,9 +9561,9 @@ export function tuple<
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterPreCompletedRuntimeNodes(
+            filterSchedulableRuntimeNodes(
               allRuntimeNodes,
-              settledPreCompletedKeys(preCompleted),
+              preCompleted,
             ),
             stateArray,
             runtime,
@@ -10161,9 +10189,9 @@ export function seq<
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterPreCompletedRuntimeNodes(
+            filterSchedulableRuntimeNodes(
               allRuntimeNodes,
-              settledPreCompletedKeys(preCompleted),
+              preCompleted,
             ),
             stateArray,
             runtime,
@@ -13623,9 +13651,9 @@ export function concat(
     // Deferred Phase 1 results stay schedulable so a demand-only
     // prompt can still complete once demand is discovered here.
     const effectfulFailure = await scheduleEffectfulSourceCompletions(
-      filterPreCompletedRuntimeNodes(
+      filterSchedulableRuntimeNodes(
         allRuntimeNodes,
-        settledPreCompletedKeys(preCompleted),
+        preCompleted,
       ),
       stateArray,
       runtime,
@@ -13861,9 +13889,9 @@ export function concat(
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterPreCompletedRuntimeNodes(
+            filterSchedulableRuntimeNodes(
               allRuntimeNodes,
-              settledPreCompletedKeys(preCompleted),
+              preCompleted,
             ),
             stateArray,
             runtime,

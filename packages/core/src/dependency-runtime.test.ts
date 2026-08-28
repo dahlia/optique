@@ -2121,29 +2121,82 @@ describe("completeEffectfulSourcesAsync", () => {
     );
   });
 
-  test("skips sources that already have a registered value", async () => {
-    const runtime = createDependencyRuntimeContext();
-    const id = Symbol("a");
-    runtime.registerSource(id, "cli");
-    let calls = 0;
-    const nodes: RuntimeNode[] = [
-      createEffectfulSourceNode("a", id, () => {
-        calls++;
-        return Promise.resolve({ success: true, value: "prompted" });
-      }),
-    ];
+  test(
+    "completes an occurrence despite another occurrence's registered value",
+    async () => {
+      const runtime = createDependencyRuntimeContext();
+      const id = Symbol("a");
+      // Registered by another occurrence of the shared source (e.g., a
+      // command-line value for a sibling field).  The effectful
+      // occurrence's own field still needs a value, so its completion
+      // runs and re-registers, and the last occurrence wins.
+      runtime.registerSource(id, "cli");
+      let calls = 0;
+      const nodes: RuntimeNode[] = [
+        createEffectfulSourceNode("a", id, () => {
+          calls++;
+          return Promise.resolve({ success: true, value: "prompted" });
+        }),
+      ];
 
-    const result = await completeEffectfulSourcesAsync(
-      nodes,
-      undefined,
-      runtime,
-      createCompleteExecFixture(),
-    );
+      const result = await completeEffectfulSourcesAsync(
+        nodes,
+        undefined,
+        runtime,
+        createCompleteExecFixture(),
+      );
 
-    assert.ok(result.success);
-    assert.equal(calls, 0);
-    assert.equal(runtime.getSource(id), "cli");
-  });
+      assert.ok(result.success);
+      assert.equal(calls, 1);
+      assert.equal(runtime.getSource(id), "prompted");
+    },
+  );
+
+  test(
+    "re-registers a later structural occurrence over an earlier effect",
+    async () => {
+      const runtime = createDependencyRuntimeContext();
+      const id = Symbol("shared");
+      // A structural occurrence declared after an effectful one: its
+      // extracted value must register after the effectful result so
+      // registration order follows declaration order.
+      const structuralNode: RuntimeNode = {
+        path: ["b"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId: id,
+              extractSourceValue: () => ({
+                success: true,
+                value: "structural",
+              }),
+              preservesSourceValue: true,
+            },
+          },
+        },
+        state: undefined,
+      };
+      const nodes: RuntimeNode[] = [
+        createEffectfulSourceNode(
+          "a",
+          id,
+          () => Promise.resolve({ success: true, value: "prompted" }),
+        ),
+        structuralNode,
+      ];
+
+      const result = await completeEffectfulSourcesAsync(
+        nodes,
+        undefined,
+        runtime,
+        createCompleteExecFixture(),
+      );
+
+      assert.ok(result.success);
+      assert.equal(runtime.getSource(id), "structural");
+    },
+  );
 
   test(
     "completes every occurrence of a shared source, last one winning",

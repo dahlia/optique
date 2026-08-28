@@ -1186,31 +1186,31 @@ export async function completeEffectfulSourcesAsync(
   );
   if (schedulable.length === 0) return empty;
 
-  // Structural precedence applies to values present before this pass
-  // (CLI state, environment, configuration, or defaults).  A value
-  // registered by an *earlier effectful occurrence within this pass* does
-  // not suppress later occurrences of the same source: each occurrence
-  // completes and re-registers, so the last occurrence wins, matching how
-  // repeated command-line source occurrences overwrite earlier ones.
-  const preexisting = new Set<symbol>();
-  for (const node of schedulable) {
-    const source = node.parser.dependencyMetadata?.source;
-    if (
-      source != null && runtime.hasSource(source.sourceId) &&
-      // A value registered by an effectful completion (e.g., a prompt
-      // pre-completed through a source binding during Phase 1) is not a
-      // structural value: later prompted occurrences still run so the
-      // last occurrence wins, as with repeated command-line occurrences.
-      session?.effectfulSources.has(source.sourceId) !== true
-    ) {
-      preexisting.add(source.sourceId);
-    }
-  }
-
   const completed: EffectfulSourceCompletion[] = [];
-  for (const node of schedulable) {
+  for (const node of nodes) {
     const source = node.parser.dependencyMetadata?.source;
-    if (source?.completeSource == null) continue;
+    if (source == null) continue;
+    if (source.completeSource == null) {
+      // Registration order must follow declaration order across
+      // structural and effectful occurrences of a shared source, the
+      // way repeated command-line occurrences overwrite earlier ones.
+      // Structural values were registered by source collection before
+      // this pass, so a structural occurrence declared *after* an
+      // effectful one re-registers its extracted value here to restore
+      // that order.  Only the construct's own nodes re-register:
+      // expanded descendants were never part of its source collection.
+      if (
+        source.extractSourceValue == null ||
+        (options?.isReusable?.(node) ?? true) === false
+      ) {
+        continue;
+      }
+      const extracted = await source.extractSourceValue(node.state);
+      if (extracted?.success === true && extracted.value !== undefined) {
+        runtime.registerSource(source.sourceId, extracted.value);
+      }
+      continue;
+    }
 
     // A completion already performed for this exact node in this pass—
     // typically by a parent construct's expanded scheduling—is reused
@@ -1231,7 +1231,16 @@ export async function completeEffectfulSourcesAsync(
       continue;
     }
 
-    if (preexisting.has(source.sourceId)) continue;
+    // Structural precedence is enforced per occurrence by the effectful
+    // completion itself: a command-line value or a source binding for
+    // the occurrence's own field is returned without running the effect
+    // (see prompt()'s completion, which consults both before its
+    // run-scoped cache).  A value registered by *another* occurrence of
+    // the same source does not suppress this one: its field still needs
+    // a value, so the completion runs here rather than after dependency
+    // replay, and its registration overwrites earlier ones so the last
+    // occurrence wins, matching repeated command-line occurrences.
+    //
     // A source marked failed by extraction (e.g., an invalid bound
     // environment or configuration value) is not skipped: the effectful
     // completion is its recovery path—a prompt wrapper falls back after

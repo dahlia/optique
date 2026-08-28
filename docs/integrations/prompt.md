@@ -565,7 +565,10 @@ dependency-source prompt runs earlier than ordinary prompts: source prompts
 run serially in declaration order before dependency replay, while non-source
 prompts keep running after the other fields complete.  As a consequence, a
 dependency-source prompt may be displayed before a non-source prompt declared
-earlier in the same object.
+earlier in the same object.  Structural precedence applies per field: a
+prompted field whose own value already came from the command line or a
+source binding does not prompt, while another prompted field sharing the
+same source still does, and its answer registers last.
 
 Each source prompt runs at most once per parse operation, and never during
 help, shell suggestion, or probe phases.  When the user cancels a source
