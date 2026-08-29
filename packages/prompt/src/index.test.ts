@@ -2240,6 +2240,107 @@ describe("prompted values as dependency sources", () => {
   );
 
   it(
+    "does not prompt a rejected speculative branch through a parent",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // "--a x" speculatively selects branch a while the prompted
+      // discriminator defers; the answer "b" rejects the guess, so the
+      // parent's scheduling pass must not run the guessed branch's
+      // prompt before the mismatch is detected.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "b" }),
+          {
+            a: object({
+              ax: option("--a", choice(["x"] as const)),
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(
+        parser,
+        ["--a", "x", "--level", "silent"],
+      );
+
+      assert.ok(!result.success);
+      // Only the discriminator prompt ran.
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
+    "propagates chained barrier demand across declaration order",
+    async () => {
+      const kindA = dependency(choice(["a", "z"] as const));
+      const kindB = dependency(choice(["b", "z"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let phase2CondA: unknown;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@optique/prompt/test-chained-barrier-demand"),
+        phase: "two-pass",
+        getAnnotations(request?: unknown) {
+          if (isPhase2ContextRequest(request)) {
+            phase2CondA = (request.parsed as { readonly condA?: unknown })
+              ?.condA;
+          }
+          return {};
+        },
+      };
+      // Demand flows through a chain of barriers declared in the
+      // failing order: --level demands mode, which condB provides, so
+      // condB's discriminator becomes demanded; condA's branch provides
+      // that discriminator's source, so condA's discriminator must
+      // become demanded too even though condA precedes condB.
+      const parser = object({
+        condA: conditional(
+          prompt(option("--kind-a", kindA), { value: "a" }),
+          {
+            a: object({
+              kb: prompt(option("--kb", kindB), { value: "b" }),
+            }),
+            z: object({ za: option("--za", choice(["1"] as const)) }),
+          },
+        ),
+        condB: conditional(
+          prompt(option("--kind-b", kindB), { value: "b" }),
+          {
+            b: object({
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            z: object({ zb: option("--zb", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["--level", "silent"],
+      });
+
+      assert.equal((result as { readonly level: string }).level, "silent");
+      assert.ok(phase2CondA != null);
+      // Chained demand must resolve before the seed pass runs any
+      // effect, so the prompts keep declaration order (condA's
+      // discriminator and branch before condB's); a single demand scan
+      // would run condB's prompts first and only reach condA's in its
+      // own later completion.
+      assert.deepEqual(calls, [
+        { value: "a" },
+        { value: "b" },
+        { value: "b" },
+        { value: "prod" },
+      ]);
+    },
+  );
+
+  it(
     "delivers a confirmed speculative branch's CLI source",
     async () => {
       const kind = dependency(choice(["a", "b"] as const));

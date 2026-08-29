@@ -1313,15 +1313,25 @@ export async function completeEffectfulSourcesAsync(
     // A barrier's discriminator is a control dependency: when a source
     // it can provide is demanded, resolving the branch requires the
     // discriminator even though no consumer demands it directly.
-    for (const node of nodes) {
-      if (node.requiresSourceId == null || node.providesSourceIds == null) {
-        continue;
-      }
-      if (session.demanded.has(node.requiresSourceId)) continue;
-      for (const provided of node.providesSourceIds) {
-        if (session.demanded.has(provided)) {
-          session.demanded.add(node.requiresSourceId);
-          break;
+    // Iterate to a fixed point: one barrier's branches can provide
+    // another barrier's discriminator source, and the chain must
+    // propagate regardless of declaration order.  Each iteration adds
+    // at least one demanded ID, so the loop is bounded by the number
+    // of barriers.
+    let demandAdded = true;
+    while (demandAdded) {
+      demandAdded = false;
+      for (const node of nodes) {
+        if (node.requiresSourceId == null || node.providesSourceIds == null) {
+          continue;
+        }
+        if (session.demanded.has(node.requiresSourceId)) continue;
+        for (const provided of node.providesSourceIds) {
+          if (session.demanded.has(provided)) {
+            session.demanded.add(node.requiresSourceId);
+            demandAdded = true;
+            break;
+          }
         }
       }
     }
