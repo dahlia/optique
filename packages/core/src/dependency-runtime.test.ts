@@ -1767,6 +1767,23 @@ describe("buildRuntimeNodesFromPairs", () => {
     const nodes = buildRuntimeNodesFromPairs(pairs, state);
     assert.equal(nodes[0].defaultDependencyValues, undefined);
   });
+
+  test("does not inspect plain parser state properties", () => {
+    const parser = makeParser();
+    const parserState = {
+      success: true as const,
+      value: "ok",
+      get diagnostic(): never {
+        throw new Error("diagnostic getter should not run");
+      },
+    };
+
+    assert.doesNotThrow(() =>
+      buildRuntimeNodesFromPairs([["value", parser]], {
+        value: parserState,
+      })
+    );
+  });
 });
 
 describe("buildRuntimeNodesFromArray", () => {
@@ -1807,6 +1824,21 @@ describe("buildRuntimeNodesFromArray", () => {
     const p = makeParser();
     const nodes = buildRuntimeNodesFromArray([p], ["x"], ["parent"]);
     assert.deepStrictEqual(nodes[0].path, ["parent", 0]);
+  });
+
+  test("does not inspect plain parser state properties", () => {
+    const parser = makeParser();
+    const parserState = {
+      success: true as const,
+      value: "ok",
+      get diagnostic(): never {
+        throw new Error("diagnostic getter should not run");
+      },
+    };
+
+    assert.doesNotThrow(() =>
+      buildRuntimeNodesFromArray([parser], [parserState])
+    );
   });
 });
 

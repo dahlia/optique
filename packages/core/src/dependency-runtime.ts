@@ -2547,8 +2547,13 @@ export function buildRuntimeNodesFromPairs(
     const fieldState = Object.hasOwn(state, field)
       ? state[field as string | symbol]
       : undefined;
-    const rawInput = extractRawInputFromState(fieldState);
-    const defaultDependencyValues = getDefaultDependencySnapshot(fieldState);
+    const isDerived = parser.dependencyMetadata?.derived != null;
+    const rawInput = isDerived
+      ? extractRawInputFromState(fieldState)
+      : undefined;
+    const defaultDependencyValues = isDerived
+      ? getDefaultDependencySnapshot(fieldState)
+      : undefined;
     nodes.push({
       path: [...prefix, field],
       parser,
@@ -2588,8 +2593,13 @@ export function buildRuntimeNodesFromArray(
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
     const elemState = i < stateArray.length ? stateArray[i] : undefined;
-    const rawInput = extractRawInputFromState(elemState);
-    const defaultDependencyValues = getDefaultDependencySnapshot(elemState);
+    const isDerived = parser.dependencyMetadata?.derived != null;
+    const rawInput = isDerived
+      ? extractRawInputFromState(elemState)
+      : undefined;
+    const defaultDependencyValues = isDerived
+      ? getDefaultDependencySnapshot(elemState)
+      : undefined;
     nodes.push({
       path: [...prefix, i],
       parser,
