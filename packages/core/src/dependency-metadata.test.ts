@@ -10,6 +10,7 @@ import {
   dependency,
   dependencyId,
   dependencyIds,
+  dependencySourceId,
   derivedValueParserMarker,
   deriveFrom,
   isDependencySourceState,
@@ -215,6 +216,24 @@ describe("extractDependencyMetadata", () => {
     assert.equal(metadata.source, undefined);
   });
 
+  test("extracts source and derived capabilities from a derived source", () => {
+    const env = createEnvSource();
+    const level = dependency(env.deriveSync({
+      metavar: "LEVEL" as NonEmptyString,
+      factory: () => choice(["debug"] as const),
+      defaultValue: () => "dev" as const,
+    }));
+
+    const metadata = extractDependencyMetadata(level);
+
+    assert.ok(metadata?.source != null);
+    assert.ok(metadata.derived != null);
+    assert.equal(metadata.source.sourceId, level[dependencySourceId]);
+    assert.deepEqual(metadata.derived.dependencyIds, [
+      env[dependencySourceId],
+    ]);
+  });
+
   test("derived capability replayParse works", () => {
     const env = createEnvSource();
     const logLevel = createDerivedLogLevel(env);
@@ -261,7 +280,7 @@ describe("extractDependencyMetadata", () => {
     const env = createEnvSource();
     const valueParser = {
       [derivedValueParserMarker]: true,
-      [dependencyId]: env[dependencyId],
+      [dependencyId]: env[dependencySourceId],
       mode: "sync" as const,
       metavar: "LEVEL" as NonEmptyString,
       placeholder: "",
@@ -284,7 +303,10 @@ describe("extractDependencyMetadata", () => {
     const region = createEnvSource();
     const valueParser = {
       [derivedValueParserMarker]: true,
-      [dependencyIds]: [env[dependencyId], region[dependencyId]] as const,
+      [dependencyIds]: [
+        env[dependencySourceId],
+        region[dependencySourceId],
+      ] as const,
       mode: "sync" as const,
       metavar: "URL" as NonEmptyString,
       placeholder: "",

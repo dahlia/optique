@@ -15,6 +15,19 @@ export const dependencySourceMarker: unique symbol = Symbol.for(
 );
 
 /**
+ * A unique symbol used to store a dependency source's own identity.
+ *
+ * This is distinct from {@link dependencyId}, which stores an upstream
+ * reference on a derived parser.  A parser wrapped with `dependency()` after
+ * derivation carries both values.
+ * @internal
+ * @since 1.3.0
+ */
+export const dependencySourceId: unique symbol = Symbol.for(
+  "@optique/core/dependency/dependencySourceId",
+);
+
+/**
  * A unique symbol used to identify derived value parsers at compile time.
  * This marker is used to distinguish {@link DerivedValueParser} from regular
  * {@link ValueParser} instances.
@@ -217,7 +230,7 @@ export interface DependencySource<M extends Mode = "sync", T = unknown>
    * Unique identifier for this dependency source.
    * @internal
    */
-  readonly [dependencyId]: symbol;
+  readonly [dependencySourceId]: symbol;
 
   /**
    * Creates a derived value parser whose behavior depends on this
@@ -326,7 +339,7 @@ export type CombinedDependencyMode<T extends readonly unknown[]> =
  */
 export interface AnyDependencySource<M extends Mode = Mode> {
   readonly [dependencySourceMarker]: true;
-  readonly [dependencyId]: symbol;
+  readonly [dependencySourceId]: symbol;
   readonly mode: M;
 }
 
@@ -456,9 +469,6 @@ export interface DeriveFromAsyncOptions<
 /**
  * A value parser that depends on another parser's value.
  *
- * A derived value parser cannot be nested (i.e., you cannot call
- * {@link DependencySource.derive} on a {@link DerivedValueParser}).
- *
  * @template M The execution mode of the parser (`"sync"` or `"async"`).
  * @template T The type of value this parser produces.
  * @template S The type of the source dependency value.
@@ -542,6 +552,8 @@ export interface DerivedValueParser<
  * A dependency source wraps an existing value parser and enables creating
  * derived parsers that depend on the parsed value. This is useful for
  * scenarios where one option's valid values depend on another option's value.
+ * A derived parser can itself become a source by wrapping it with
+ * `dependency()`, allowing dependency chains of any depth.
  *
  * @template M The execution mode of the value parser.
  * @template T The type of value the parser produces.
@@ -563,6 +575,14 @@ export interface DerivedValueParser<
  *   factory: (dir) => gitBranch({ dir }),
  *   defaultValue: () => process.cwd(),
  * });
+ *
+ * // A derived parser can provide the next dependency level.
+ * const branchSource = dependency(branchParser);
+ * const commitParser = branchSource.deriveSync({
+ *   metavar: "COMMIT",
+ *   factory: (branch) => gitCommit({ branch }),
+ *   defaultValue: () => "main",
+ * });
  * ```
  * @since 0.10.0
  */
@@ -570,42 +590,48 @@ export function dependency<M extends Mode, T>(
   parser: ValueParser<M, T>,
 ): DependencySource<M, T> {
   const id = Symbol();
-  const result: DependencySource<M, T> = {
-    ...parser,
-    [dependencySourceMarker]: true,
-    [dependencyId]: id,
-    derive<U, FM extends Mode = "sync">(
-      options: DeriveOptions<T, U, FM>,
-    ): DerivedValueParser<CombineMode<M, FM>, U, T> {
-      if (options.mode !== "sync" && options.mode !== "async") {
-        throw new TypeError(
-          'derive() requires an explicit mode field ("sync" or "async").',
-        );
-      }
-      return createDerivedValueParser(id, parser, options, options.mode);
-    },
-    deriveSync<U>(
-      options: DeriveSyncOptions<T, U>,
-    ): DerivedValueParser<M, U, T> {
-      // For sync factories, the mode is determined solely by the source mode
-      if (parser.mode === "async") {
-        return createAsyncDerivedParserFromSyncFactory(
+  const result = Object.create(
+    Object.getPrototypeOf(parser),
+    Object.getOwnPropertyDescriptors(parser),
+  ) as DependencySource<M, T>;
+  Object.defineProperties(
+    result,
+    Object.getOwnPropertyDescriptors({
+      [dependencySourceMarker]: true,
+      [dependencySourceId]: id,
+      derive<U, FM extends Mode = "sync">(
+        options: DeriveOptions<T, U, FM>,
+      ): DerivedValueParser<CombineMode<M, FM>, U, T> {
+        if (options.mode !== "sync" && options.mode !== "async") {
+          throw new TypeError(
+            'derive() requires an explicit mode field ("sync" or "async").',
+          );
+        }
+        return createDerivedValueParser(id, parser, options, options.mode);
+      },
+      deriveSync<U>(
+        options: DeriveSyncOptions<T, U>,
+      ): DerivedValueParser<M, U, T> {
+        // For sync factories, the mode is determined solely by the source mode
+        if (parser.mode === "async") {
+          return createAsyncDerivedParserFromSyncFactory(
+            id,
+            options,
+          ) as unknown as DerivedValueParser<M, U, T>;
+        }
+        return createSyncDerivedParser(
           id,
           options,
         ) as unknown as DerivedValueParser<M, U, T>;
-      }
-      return createSyncDerivedParser(
-        id,
-        options,
-      ) as unknown as DerivedValueParser<M, U, T>;
-    },
-    deriveAsync<U>(
-      options: DeriveAsyncOptions<T, U>,
-    ): DerivedValueParser<"async", U, T> {
-      // Skip mode detection—the type guarantees the factory returns async.
-      return createAsyncDerivedParserFromAsyncFactory(id, options);
-    },
-  };
+      },
+      deriveAsync<U>(
+        options: DeriveAsyncOptions<T, U>,
+      ): DerivedValueParser<"async", U, T> {
+        // Skip mode detection—the type guarantees the factory returns async.
+        return createAsyncDerivedParserFromAsyncFactory(id, options);
+      },
+    }),
+  );
   return result;
 }
 
@@ -690,7 +716,7 @@ export function deriveFrom<
   const depsAsync = options.dependencies.some((dep) => dep.mode === "async");
 
   const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][dependencyId]
+    ? options.dependencies[0][dependencySourceId]
     : Symbol();
 
   // Use the explicit mode to avoid calling the factory during
@@ -748,7 +774,7 @@ export function deriveFromSync<
   const depsAsync = options.dependencies.some((dep) => dep.mode === "async");
 
   const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][dependencyId]
+    ? options.dependencies[0][dependencySourceId]
     : Symbol();
 
   if (depsAsync) {
@@ -793,7 +819,7 @@ export function deriveFromAsync<
   options: DeriveFromAsyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][dependencyId]
+    ? options.dependencies[0][dependencySourceId]
     : Symbol();
 
   return createAsyncDerivedFromParserFromAsyncFactory(sourceId, options);
@@ -924,7 +950,9 @@ function createSyncDerivedFromParser<
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"sync", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
+  const alldependencyIds = options.dependencies.map((dep) =>
+    dep[dependencySourceId]
+  );
 
   return {
     mode: "sync",
@@ -1087,7 +1115,9 @@ function createAsyncDerivedFromParserFromAsyncFactory<
   options: DeriveFromAsyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
+  const alldependencyIds = options.dependencies.map((dep) =>
+    dep[dependencySourceId]
+  );
 
   return {
     mode: "async",
@@ -1231,7 +1261,9 @@ function createAsyncDerivedFromParserFromSyncFactory<
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const alldependencyIds = options.dependencies.map((dep) => dep[dependencyId]);
+  const alldependencyIds = options.dependencies.map((dep) =>
+    dep[dependencySourceId]
+  );
 
   return {
     mode: "async",

@@ -8,8 +8,9 @@
  *
  * Part of https://github.com/dahlia/optique/issues/751
  */
-import { describe, test } from "node:test";
+import { describe, it, test } from "node:test";
 import * as assert from "node:assert/strict";
+import * as fc from "fast-check";
 import { dependency, deriveFrom } from "#src/internal/dependency.ts";
 import {
   parseAsync,
@@ -18,11 +19,11 @@ import {
   type Suggestion,
   suggestSync,
 } from "#src/parser.ts";
-import { choice } from "#src/valueparser.ts";
+import { choice, type ValueParser } from "#src/valueparser.ts";
 import { concat, merge, object, or, tuple } from "#src/constructs.ts";
 import { argument, option } from "#src/primitives.ts";
 import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
-import { message } from "#src/message.ts";
+import { formatMessage, message } from "#src/message.ts";
 import type { NonEmptyString } from "#src/nonempty.ts";
 // =============================================================================
 // Shared test fixtures
@@ -131,6 +132,556 @@ function literalTexts(suggestions: readonly Suggestion[]): string[] {
     .filter((s): s is Suggestion & { kind: "literal" } => s.kind === "literal")
     .map((s) => s.text);
 }
+
+describe("derived dependency sources", () => {
+  it("should validate a multi-level chain against resolved upstream values", () => {
+    // Arrange
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      storage: option("--storage", storage),
+      packageManager: option("--package-manager", packageManager),
+      framework: option("--framework", framework),
+    });
+
+    // Act
+    const result = parseSync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "npm",
+      "--storage",
+      "redis",
+    ]);
+
+    // Assert
+    assert.deepEqual(result, {
+      success: true,
+      value: {
+        storage: "redis",
+        packageManager: "npm",
+        framework: "hono",
+      },
+    });
+  });
+
+  it("should reject a stale preliminary value in a multi-level chain", () => {
+    // Arrange
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManager: option("--package-manager", packageManager),
+      storage: option("--storage", storage),
+    });
+
+    // Act
+    const result = parseSync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "deno",
+      "--storage",
+      "kv",
+    ]);
+
+    // Assert
+    assert.ok(!result.success);
+  });
+
+  it("should resolve downstream suggestions through a derived source", () => {
+    // Arrange
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManager: option("--package-manager", packageManager),
+      storage: option("--storage", storage),
+    });
+
+    // Act
+    const suggestions = suggestSync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "npm",
+      "--storage",
+      "",
+    ]);
+
+    // Assert
+    assert.deepEqual(literalTexts(suggestions), ["redis"]);
+  });
+
+  it("should resolve downstream suggestions after an upstream source default", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      framework: withDefault(option("--framework", framework), "hono"),
+      packageManager: option("--package-manager", packageManager),
+      storage: option("--storage", storage),
+    });
+
+    const suggestions = suggestSync(parser, [
+      "--package-manager",
+      "npm",
+      "--storage",
+      "",
+    ]);
+
+    assert.deepEqual(literalTexts(suggestions), ["redis"]);
+  });
+
+  it("should preserve a derived source snapshot through wrappers", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    let defaultCalls = 0;
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => {
+        defaultCalls++;
+        if (defaultCalls > 1) throw new TypeError("Default evaluated twice.");
+        return "fresh" as const;
+      },
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManager: optional(option("--package-manager", packageManager)),
+      storage: option("--storage", storage),
+    });
+
+    const result = parseSync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "npm",
+      "--storage",
+      "redis",
+    ]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.storage, "redis");
+    assert.equal(defaultCalls, 1);
+  });
+
+  it("should reuse a preliminary source result when all inputs default", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    let factoryCalls = 0;
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: () => {
+        factoryCalls++;
+        if (factoryCalls > 1) throw new TypeError("Factory evaluated twice.");
+        return choice(["npm"] as const);
+      },
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "npm" ? (["registry"] as const) : (["none"] as const)),
+      defaultValue: () => "npm" as const,
+    });
+    const parser = object({
+      packageManager: option("--package-manager", packageManager),
+      storage: option("--storage", storage),
+    });
+
+    const result = parseSync(parser, [
+      "--package-manager",
+      "npm",
+      "--storage",
+      "registry",
+    ]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.storage, "registry");
+    assert.equal(factoryCalls, 1);
+  });
+
+  it("should replay the last occurrence of a repeated derived source", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(
+          value === "fresh"
+            ? (["deno", "bun"] as const)
+            : (["npm", "pnpm"] as const),
+        ),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(
+          value === "pnpm" ? (["workspace"] as const) : (["registry"] as const),
+        ),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManagers: multiple(option("--package-manager", packageManager)),
+      storage: option("--storage", storage),
+    });
+
+    const result = parseSync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "npm",
+      "--package-manager",
+      "pnpm",
+      "--storage",
+      "workspace",
+    ]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.packageManagers, ["npm", "pnpm"]);
+    assert.equal(result.value.storage, "workspace");
+  });
+
+  it("should publish a successful undefined derived source value", () => {
+    const upstream = dependency(choice(["enabled"] as const));
+    const maybeValueParser: ValueParser<"sync", string | undefined> = {
+      mode: "sync",
+      metavar: "MAYBE" as NonEmptyString,
+      placeholder: undefined,
+      parse: () => ({ success: true, value: undefined }),
+      format: () => "none",
+    };
+    const maybe = dependency(upstream.deriveSync({
+      metavar: "MAYBE" as NonEmptyString,
+      factory: () => maybeValueParser,
+      defaultValue: () => "enabled" as const,
+    }));
+    const downstream = maybe.deriveSync({
+      metavar: "DOWNSTREAM" as NonEmptyString,
+      factory: (value) =>
+        choice(
+          value === undefined
+            ? (["undefined"] as const)
+            : (["fallback"] as const),
+        ),
+      defaultValue: () => "fallback" as const,
+    });
+    const parser = object({
+      upstream: option("--upstream", upstream),
+      maybe: option("--maybe", maybe),
+      downstream: option("--downstream", downstream),
+    });
+
+    const result = parseSync(parser, [
+      "--upstream",
+      "enabled",
+      "--maybe",
+      "none",
+      "--downstream",
+      "undefined",
+    ]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.downstream, "undefined");
+  });
+
+  it("should combine async modes through every level", async () => {
+    // Arrange
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.derive({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      mode: "async",
+      factory: (value) =>
+        asyncChoice(
+          value === "fresh" ? (["deno"] as const) : (["npm"] as const),
+        ),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      storage: option("--storage", storage),
+      packageManager: option("--package-manager", packageManager),
+      framework: option("--framework", framework),
+    });
+
+    // Act
+    const result = await parseAsync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "npm",
+      "--storage",
+      "redis",
+    ]);
+
+    // Assert
+    assert.ok(result.success);
+    assert.equal(result.value.storage, "redis");
+  });
+
+  it("should support a multi-source deriveFrom parser as a source", () => {
+    // Arrange
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const runtime = dependency(choice(["deno", "node"] as const));
+    const packageManager = dependency(deriveFrom({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      mode: "sync",
+      dependencies: [framework, runtime] as const,
+      factory: (frameworkValue, runtimeValue) =>
+        choice(
+          frameworkValue === "fresh" && runtimeValue === "deno"
+            ? (["jsr"] as const)
+            : (["npm"] as const),
+        ),
+      defaultValues: () => ["fresh", "deno"] as const,
+    }));
+    const registry = packageManager.deriveSync({
+      metavar: "REGISTRY" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "jsr" ? (["jsr.io"] as const) : (["npmjs"] as const)),
+      defaultValue: () => "jsr" as const,
+    });
+    const parser = object({
+      registry: option("--registry", registry),
+      packageManager: option("--package-manager", packageManager),
+      runtime: option("--runtime", runtime),
+      framework: option("--framework", framework),
+    });
+
+    // Act
+    const result = parseSync(parser, [
+      "--framework",
+      "hono",
+      "--runtime",
+      "node",
+      "--package-manager",
+      "npm",
+      "--registry",
+      "npmjs",
+    ]);
+
+    // Assert
+    assert.ok(result.success);
+    assert.equal(result.value.registry, "npmjs");
+  });
+
+  it("should use downstream defaults when a derived source is absent", () => {
+    // Arrange
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = option("--storage", storage);
+
+    // Act
+    const result = parseSync(parser, ["--storage", "kv"]);
+
+    // Assert
+    assert.deepEqual(result, { success: true, value: "kv" });
+  });
+
+  it("should propagate an upstream failure through the dependency chain", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = object({
+      storage: option("--storage", storage),
+      packageManager: option("--package-manager", packageManager),
+      framework: option("--framework", framework),
+    });
+
+    const result = parseSync(parser, [
+      "--framework",
+      "invalid",
+      "--package-manager",
+      "deno",
+      "--storage",
+      "kv",
+    ]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error, { quotes: false }),
+      /TYPE -> PACKAGE_MANAGER -> STORAGE/u,
+    );
+    assert.deepEqual(
+      literalTexts(suggestSync(parser, [
+        "--framework",
+        "invalid",
+        "--package-manager",
+        "deno",
+        "--storage",
+        "",
+      ])),
+      [],
+    );
+  });
+
+  it("should resolve a tuple independently of element order", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE" as NonEmptyString,
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const parser = tuple([
+      option("--storage", storage),
+      option("--package-manager", packageManager),
+      option("--framework", framework),
+    ]);
+
+    const result = parseSync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "npm",
+      "--storage",
+      "redis",
+    ]);
+
+    assert.deepEqual(result, {
+      success: true,
+      value: ["redis", "npm", "hono"],
+    });
+  });
+
+  it("should preserve results for every object field permutation", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(
+          ["framework", "packageManager", "storage"] as const,
+          ["framework", "storage", "packageManager"] as const,
+          ["packageManager", "framework", "storage"] as const,
+          ["packageManager", "storage", "framework"] as const,
+          ["storage", "framework", "packageManager"] as const,
+          ["storage", "packageManager", "framework"] as const,
+        ),
+        (order) => {
+          // Arrange
+          const framework = dependency(choice(["fresh", "hono"] as const));
+          const packageManager = dependency(framework.deriveSync({
+            metavar: "PACKAGE_MANAGER" as NonEmptyString,
+            factory: (value) =>
+              choice(
+                value === "fresh" ? (["deno"] as const) : (["npm"] as const),
+              ),
+            defaultValue: () => "fresh" as const,
+          }));
+          const storage = packageManager.deriveSync({
+            metavar: "STORAGE" as NonEmptyString,
+            factory: (value) =>
+              choice(
+                value === "deno" ? (["kv"] as const) : (["redis"] as const),
+              ),
+            defaultValue: () => "deno" as const,
+          });
+          const fields = {
+            framework: option("--framework", framework),
+            packageManager: option("--package-manager", packageManager),
+            storage: option("--storage", storage),
+          };
+          const parser = object(Object.fromEntries(
+            order.map((field) => [field, fields[field]] as const),
+          ));
+
+          // Act
+          const result = parseSync(parser, [
+            "--framework",
+            "hono",
+            "--package-manager",
+            "npm",
+            "--storage",
+            "redis",
+          ]);
+
+          // Assert
+          assert.ok(result.success);
+        },
+      ),
+    );
+  });
+});
 
 // =============================================================================
 // Section A: Core dependency shapes × execution contexts (parse path)

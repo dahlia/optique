@@ -25,6 +25,8 @@ import {
   effectfulSchedulingNodesKey,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
+  resolveDerivedSourceValues,
+  resolveDerivedSourceValuesAsync,
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
   type RuntimeNode,
@@ -5471,7 +5473,7 @@ function* suggestObjectSync<
   completeDependencySourceDefaults(
     context,
     sourceParserPairs,
-    runtime.registry,
+    runtime,
     context.exec,
   );
 
@@ -5593,7 +5595,7 @@ async function* suggestObjectAsync<
   await completeDependencySourceDefaultsAsync(
     context,
     sourceParserPairs,
-    runtime.registry,
+    runtime,
     context.exec,
   );
 
@@ -5806,20 +5808,30 @@ function completeDependencySourceDefaults(
   parserPairs: ReadonlyArray<
     readonly [string | symbol, Parser<Mode, unknown, unknown>]
   >,
-  registry: DependencyRegistryLike,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
   exec?: ExecutionContext,
 ): void {
   for (
     const { parser, state } of pendingDependencyDefaults(
       context,
       parserPairs,
-      registry,
+      runtime.registry,
     )
   ) {
     const completed = parser.complete(state, exec);
     const depState = wrapAsDependencySourceState(completed, parser);
-    if (depState) registerCompletedDependency(depState, registry);
+    if (depState) registerCompletedDependency(depState, runtime.registry);
   }
+  const stateRecord = context.state != null && typeof context.state === "object"
+    ? context.state as Record<PropertyKey, unknown>
+    : {};
+  resolveDerivedSourceValues(
+    expandSourceCollectionNodes(
+      buildRuntimeNodesFromPairs(parserPairs, stateRecord, exec?.path),
+    ),
+    runtime,
+    { effectfulProviders: "inactive" },
+  );
 }
 
 /**
@@ -5880,20 +5892,30 @@ async function completeDependencySourceDefaultsAsync(
   parserPairs: ReadonlyArray<
     readonly [string | symbol, Parser<Mode, unknown, unknown>]
   >,
-  registry: DependencyRegistryLike,
+  runtime: ReturnType<typeof createDependencyRuntimeContext>,
   exec?: ExecutionContext,
 ): Promise<void> {
   for (
     const { parser, state } of pendingDependencyDefaults(
       context,
       parserPairs,
-      registry,
+      runtime.registry,
     )
   ) {
     const completed = await parser.complete(state, exec);
     const depState = wrapAsDependencySourceState(completed, parser);
-    if (depState) registerCompletedDependency(depState, registry);
+    if (depState) registerCompletedDependency(depState, runtime.registry);
   }
+  const stateRecord = context.state != null && typeof context.state === "object"
+    ? context.state as Record<PropertyKey, unknown>
+    : {};
+  await resolveDerivedSourceValuesAsync(
+    expandSourceCollectionNodes(
+      buildRuntimeNodesFromPairs(parserPairs, stateRecord, exec?.path),
+    ),
+    runtime,
+    { effectfulProviders: "inactive" },
+  );
 }
 
 /**
@@ -8540,7 +8562,7 @@ function suggestTupleSync(
         state: createAnnotatedArrayStateRecord(stateArray),
       },
       buildIndexedParserPairs(parsers),
-      runtime.registry,
+      runtime,
       advancedContext.exec,
     );
   }
@@ -8615,7 +8637,7 @@ async function* suggestTupleAsync(
         state: createAnnotatedArrayStateRecord(stateArray),
       },
       buildIndexedParserPairs(parsers),
-      runtime.registry,
+      runtime,
       advancedContext.exec,
     );
   }
@@ -10498,7 +10520,7 @@ export function seq<
               state: createAnnotatedArrayStateRecord(stateArray),
             },
             buildIndexedParserPairs(syncParsers),
-            runtime.registry,
+            runtime,
             advancedContext.exec,
           );
           const contextWithRegistry = {
@@ -10563,7 +10585,7 @@ export function seq<
               state: createAnnotatedArrayStateRecord(stateArray),
             },
             buildIndexedParserPairs(parsers),
-            runtime.registry,
+            runtime,
             advancedContext.exec,
           );
           const contextWithRegistry = {
@@ -12616,7 +12638,7 @@ export function merge(
           await completeDependencySourceDefaultsAsync(
             context,
             childFieldPairs,
-            runtime.registry,
+            runtime,
             context.exec,
           );
           const contextWithRegistry = {
@@ -12718,7 +12740,7 @@ export function merge(
       completeDependencySourceDefaults(
         context,
         childFieldPairs,
-        runtime.registry,
+        runtime,
         context.exec,
       );
       const contextWithRegistry = {
@@ -12952,7 +12974,7 @@ function buildSuggestRegistry(
         state: createAnnotatedArrayStateRecord(stateArray),
       },
       buildIndexedParserPairs(parsers),
-      runtime.registry,
+      runtime,
       preParsedContext.exec,
     );
     const prefix = preParsedContext.exec?.path ?? [];
@@ -13014,7 +13036,7 @@ async function buildSuggestRegistryAsync(
         state: createAnnotatedArrayStateRecord(stateArray),
       },
       buildIndexedParserPairs(parsers),
-      runtime.registry,
+      runtime,
       preParsedContext.exec,
     );
     const prefix = preParsedContext.exec?.path ?? [];
@@ -13093,7 +13115,7 @@ function seedSuggestRuntimeFromFieldParsers(
       },
     },
     pairs,
-    runtime.registry,
+    runtime,
     {
       usage: parser.usage,
       phase: "suggest",
@@ -13163,7 +13185,7 @@ async function seedSuggestRuntimeFromFieldParsersAsync(
       },
     },
     pairs,
-    runtime.registry,
+    runtime,
     {
       usage: parser.usage,
       phase: "suggest",

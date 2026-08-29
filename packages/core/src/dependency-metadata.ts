@@ -15,6 +15,7 @@ import {
   defaultValues,
   dependencyId,
   dependencyIds,
+  dependencySourceId,
   isDependencySource,
   isDependencySourceState,
   isDerivedValueParser,
@@ -40,6 +41,9 @@ export interface DependencySourceCapability {
 
   /** The unique dependency source identifier. */
   readonly sourceId: symbol;
+
+  /** Metavariable used to identify this source in diagnostics. */
+  readonly metavar?: string;
 
   /**
    * Extracts the dependency source parse result from the parser's state.
@@ -116,6 +120,9 @@ export interface DerivedDependencyCapability {
   /** The dependency source IDs this parser depends on. */
   readonly dependencyIds: readonly symbol[];
 
+  /** Metavariable used to identify this parser in diagnostics. */
+  readonly metavar?: string;
+
   /**
    * Returns default values for each dependency, used when the
    * corresponding sources are not provided.
@@ -190,17 +197,18 @@ export interface ParserDependencyMetadata {
 export function extractDependencyMetadata<M extends Mode, T>(
   valueParser: ValueParser<M, T>,
 ): ParserDependencyMetadata | undefined {
+  let source: DependencySourceCapability | undefined;
   if (isDependencySource(valueParser)) {
-    return {
-      source: {
-        kind: "source",
-        sourceId: valueParser[dependencyId],
-        extractSourceValue: extractFromBareState,
-        preservesSourceValue: true,
-      },
+    source = {
+      kind: "source",
+      sourceId: valueParser[dependencySourceId],
+      metavar: valueParser.metavar,
+      extractSourceValue: extractFromBareState,
+      preservesSourceValue: true,
     };
   }
 
+  let derived: DerivedDependencyCapability | undefined;
   if (isDerivedValueParser(valueParser)) {
     // deriveFrom() sets [dependencyIds]; derive() only sets [dependencyId].
     // This distinction matters for parseWithDependency: derive() expects
@@ -252,18 +260,17 @@ export function extractDependencyMetadata<M extends Mode, T>(
       }
       : undefined;
 
-    return {
-      derived: {
-        kind: "derived",
-        dependencyIds: allIds,
-        getDefaultDependencyValues: defaultValuesFn,
-        replayParse,
-        replaySuggest,
-      },
+    derived = {
+      kind: "derived",
+      dependencyIds: allIds,
+      metavar: valueParser.metavar,
+      getDefaultDependencyValues: defaultValuesFn,
+      replayParse,
+      replaySuggest,
     };
   }
 
-  return undefined;
+  return source == null && derived == null ? undefined : { source, derived };
 }
 
 // =============================================================================

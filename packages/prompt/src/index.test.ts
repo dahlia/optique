@@ -675,6 +675,157 @@ function getPhase2ContextParsed<T>(request: unknown): T | undefined {
 
 // https://github.com/dahlia/optique/issues/870
 describe("prompted values as dependency sources", () => {
+  it("resolves a prompted source before a derived source chain", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER",
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE",
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      storage: option("--storage", storage),
+      packageManager: option("--package-manager", packageManager),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, [
+      "--package-manager",
+      "npm",
+      "--storage",
+      "redis",
+    ]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, {
+      storage: "redis",
+      packageManager: "npm",
+      framework: "hono",
+    });
+    assert.equal(calls.length, 1);
+  });
+
+  it("publishes a prompted value from a derived source", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER",
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE",
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      storage: option("--storage", storage),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        { value: "npm" },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, ["--storage", "redis"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, {
+      storage: "redis",
+      packageManager: "npm",
+      framework: "hono",
+    });
+    assert.equal(calls.length, 2);
+  });
+
+  it("resolves derived-source suggestions without prompting", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER",
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE",
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: prompt(option("--framework", framework), { value: "fresh" }),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        { value: "deno" },
+      ),
+      storage: option("--storage", storage),
+    });
+
+    const suggestions = await suggestAsync(parser, [
+      "--framework",
+      "hono",
+      "--package-manager",
+      "npm",
+      "--storage",
+      "",
+    ]);
+
+    assert.deepEqual(
+      suggestions.flatMap((suggestion) =>
+        suggestion.kind === "literal" ? [suggestion.text] : []
+      ),
+      ["redis"],
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("uses an inactive prompted source's default for derived suggestions", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(framework.deriveSync({
+      metavar: "PACKAGE_MANAGER",
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE",
+      factory: (value) =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "npm" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      packageManager: option("--package-manager", packageManager),
+      storage: option("--storage", storage),
+    });
+
+    const suggestions = await suggestAsync(parser, [
+      "--package-manager",
+      "deno",
+      "--storage",
+      "",
+    ]);
+
+    assert.deepEqual(
+      suggestions.flatMap((suggestion) =>
+        suggestion.kind === "literal" ? [suggestion.text] : []
+      ),
+      ["kv"],
+    );
+    assert.deepEqual(calls, []);
+  });
+
   it("registers a prompted value for a derived parser", async () => {
     const { mode, level } = createModeFixture();
     const { prompt, calls } = createTestPrompt();
@@ -1263,6 +1414,31 @@ describe("prompted values as dependency sources", () => {
       assert.ok(result.success);
       assert.equal(result.value.a, "dev");
       assert.equal(result.value.level, "silent");
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
+    "does not treat a conditional source barrier as its own provider",
+    async () => {
+      const shared = dependency(choice(["dev", "prod"] as const));
+      const { prompt, calls } = createTestPrompt();
+      const parser = conditional(
+        prompt(option("--mode", shared), { value: "prod" }),
+        {
+          dev: object({
+            again: withDefault(option("--again", shared), "dev"),
+          }),
+          prod: object({
+            again: withDefault(option("--again", shared), "prod"),
+          }),
+        },
+      );
+
+      const result = await parseAsync(parser, []);
+
+      assert.ok(result.success);
+      assert.deepEqual(result.value, ["prod", { again: "prod" }]);
       assert.equal(calls.length, 1);
     },
   );

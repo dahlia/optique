@@ -36,13 +36,14 @@ import {
 } from "@optique/core/valueparser";
 import {
   dependency,
-  dependencyId,
   DependencyRegistry,
+  dependencySourceId,
   deriveFromAsync,
   deriveFromSync,
 } from "#src/internal/dependency.ts";
 import { annotationKey } from "#src/internal/annotations.ts";
 import { extractDependencyMetadata } from "#src/dependency-metadata.ts";
+import { extractRawInputFromState } from "#src/dependency-runtime.ts";
 import {
   type InferValue,
   parse,
@@ -534,6 +535,77 @@ describe("option", () => {
         assert.deepEqual(result.next.buffer, []);
         assert.deepEqual(result.consumed, ["--port", "8080"]);
       }
+    });
+
+    it("should not record raw input for a plain value parser", () => {
+      const parser = option("--value", string());
+      const context = {
+        buffer: ["--value", "plain"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(extractRawInputFromState(result.next.state), undefined);
+      }
+    });
+
+    it("should preserve a value parser result prototype", () => {
+      const valueParser: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "",
+        parse(input) {
+          const prototype: ValueParserResult<string> = {
+            success: true,
+            value: input,
+          };
+          return Object.create(prototype) as ValueParserResult<string>;
+        },
+        format(value) {
+          return value;
+        },
+      };
+      const parser = option("--value", valueParser);
+
+      const result = parseSync(parser, ["--value", "inherited"]);
+
+      assert.deepEqual(result, { success: true, value: "inherited" });
+    });
+
+    it("should preserve private state in a value parser result", () => {
+      class PrivateResult {
+        readonly success = true as const;
+        readonly #value: string;
+
+        constructor(value: string) {
+          this.#value = value;
+        }
+
+        get value(): string {
+          return this.#value;
+        }
+      }
+      const valueParser: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "VALUE",
+        placeholder: "",
+        parse(input) {
+          return new PrivateResult(input);
+        },
+        format(value) {
+          return value;
+        },
+      };
+      const parser = option("--value", valueParser);
+
+      const result = parseSync(parser, ["--value", "private"]);
+
+      assert.deepEqual(result, { success: true, value: "private" });
     });
 
     it("should parse option with equals-separated value", () => {
@@ -7178,7 +7250,7 @@ describe("branch coverage: primitives edge cases", () => {
     });
     const parser = option("--target", asyncDerived);
     const registry = new DependencyRegistry();
-    registry.set(modeDep[dependencyId], "prod");
+    registry.set(modeDep[dependencySourceId], "prod");
     const ctx = {
       buffer: ["--target"] as readonly string[],
       state: undefined,
@@ -7228,7 +7300,7 @@ describe("branch coverage: primitives edge cases", () => {
       usage: parser.usage,
       dependencyRegistry: (() => {
         const r = new DependencyRegistry();
-        r.set(modeDep[dependencyId], "prod");
+        r.set(modeDep[dependencySourceId], "prod");
         return r;
       })(),
     };

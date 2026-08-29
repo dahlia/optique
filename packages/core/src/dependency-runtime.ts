@@ -13,6 +13,7 @@
 import {
   type DeferredParseState,
   dependencyId as dependencyIdSymbol,
+  getSnapshottedDefaultDependencyValues,
   isDeferredParseState,
   isDependencySourceState,
   isPendingDependencySourceState,
@@ -27,6 +28,40 @@ import {
 import type { DependencyRegistryLike } from "./registry-types.ts";
 import type { ValueParserResult } from "./valueparser.ts";
 import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
+
+/**
+ * Stores the raw token parsed by a derived value parser on structural parser
+ * states that can safely carry an in-band annotation.
+ *
+ * The execution trace remains the canonical diagnostic record.  This state
+ * marker lets construct-independent dependency resolution replay a derived
+ * source before downstream fields complete.
+ * @internal
+ * @since 1.3.0
+ */
+export const derivedRawInputKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/derivedRawInput",
+);
+
+const derivedRawInputs = new WeakMap<object, string>();
+
+/**
+ * Records a derived parser's raw token without modifying its parse result.
+ *
+ * Parse results may be frozen or carry class private state, so primitives keep
+ * their original identity and associate replay metadata out of band.
+ *
+ * @param state The original value parser result.
+ * @param rawInput The token parsed into that result.
+ * @internal
+ * @since 1.3.0
+ */
+export function recordDerivedRawInput(
+  state: object,
+  rawInput: string,
+): void {
+  derivedRawInputs.set(state, rawInput);
+}
 
 // =============================================================================
 // Symbol serialization
@@ -153,6 +188,9 @@ export interface RuntimeNode {
   /** The parser's current state. */
   readonly state: unknown;
 
+  /** Raw input captured for a derived parser, when this node matched. */
+  readonly rawInput?: string;
+
   /**
    * Whether the parser consumed explicit input during parsing.
    * When `true`, the parser's state reflects user-provided input (which
@@ -208,6 +246,21 @@ export interface RuntimeNode {
    * @since 1.3.0
    */
   readonly requiresSourceId?: symbol;
+}
+
+/**
+ * Options for resolving matched derived source values.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface ResolveDerivedSourceValuesOptions {
+  /**
+   * Whether an unpopulated effectful source can still provide a value later.
+   * Suggestion generation sets this to `"inactive"` because it never runs
+   * effects and must let downstream parsers use declared dependency defaults.
+   */
+  readonly effectfulProviders?: "pending" | "inactive";
 }
 
 /**
@@ -271,6 +324,26 @@ export interface DependencyRuntimeContext {
    */
   markSourceFailed(sourceId: symbol): void;
 
+  /** Register a source's diagnostic label and upstream dependencies. */
+  registerSourceMetadata(
+    sourceId: symbol,
+    label: string,
+    dependencyIds?: readonly symbol[],
+  ): void;
+
+  /**
+   * Propagate a failed upstream source through one derived dependency edge.
+   * Returns whether any upstream source had failed.
+   */
+  propagateSourceFailure(
+    dependencyIds: readonly symbol[],
+    label: string,
+    sourceId?: symbol,
+  ): boolean;
+
+  /** Return the most informative dependency chain for a failed source. */
+  getSourceFailureChain(sourceId: symbol): readonly string[] | undefined;
+
   /**
    * Check if a source was explicitly attempted but failed validation.
    */
@@ -288,6 +361,15 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   readonly registry: DependencyRegistryLike;
   readonly #replayCache = new Map<string, ValueParserResult<unknown>>();
   readonly #failedSources = new Set<symbol>();
+  readonly #sourceMetadata = new Map<symbol, {
+    readonly label: string;
+    readonly dependencyIds: readonly symbol[];
+  }>();
+  readonly #sourceFailures = new Map<symbol, {
+    readonly chain: readonly string[];
+    readonly participants: readonly symbol[];
+    diagnosticChain: readonly string[];
+  }>();
 
   constructor(registry: DependencyRegistryLike) {
     if (registry instanceof FailedAwareRegistry) {
@@ -299,6 +381,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
 
   registerSource(sourceId: symbol, value: unknown): void {
     this.registry.set(sourceId, value);
+    this.#sourceFailures.delete(sourceId);
   }
 
   hasSource(sourceId: symbol): boolean {
@@ -326,6 +409,60 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
 
   markSourceFailed(sourceId: symbol): void {
     this.#failedSources.add(sourceId);
+    const lineage = this.#getSourceLineage(sourceId, new Set<symbol>());
+    const failure = {
+      chain: lineage.labels,
+      participants: lineage.sourceIds,
+      diagnosticChain: lineage.labels,
+    };
+    this.#sourceFailures.set(sourceId, failure);
+    this.#promoteDiagnosticChain(failure);
+  }
+
+  registerSourceMetadata(
+    sourceId: symbol,
+    label: string,
+    dependencyIds: readonly symbol[] = [],
+  ): void {
+    this.#sourceMetadata.set(sourceId, { label, dependencyIds });
+  }
+
+  propagateSourceFailure(
+    dependencyIds: readonly symbol[],
+    label: string,
+    sourceId?: symbol,
+  ): boolean {
+    const upstream = dependencyIds
+      .filter((id) => this.isSourceFailed(id))
+      .map((id) =>
+        this.#sourceFailures.get(id) ?? {
+          chain: [this.#getSourceLabel(id)],
+          participants: [id],
+          diagnosticChain: [this.#getSourceLabel(id)],
+        }
+      )
+      .sort((left, right) => right.chain.length - left.chain.length)[0];
+    if (upstream == null) return false;
+
+    const chain = upstream.chain.at(-1) === label
+      ? upstream.chain
+      : [...upstream.chain, label];
+    const participants = sourceId == null ||
+        upstream.participants.includes(sourceId)
+      ? upstream.participants
+      : [...upstream.participants, sourceId];
+    const failure = { chain, participants, diagnosticChain: chain };
+    if (sourceId != null) {
+      this.#failedSources.add(sourceId);
+      this.#sourceFailures.set(sourceId, failure);
+    }
+    this.#promoteDiagnosticChain(failure);
+    return true;
+  }
+
+  getSourceFailureChain(sourceId: symbol): readonly string[] | undefined {
+    if (!this.#failedSources.has(sourceId)) return undefined;
+    return this.#sourceFailures.get(sourceId)?.diagnosticChain;
   }
 
   isSourceFailed(sourceId: symbol): boolean {
@@ -334,6 +471,54 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
 
   getSuggestionDependencies(request: DependencyRequest): DependencyResolution {
     return resolveRequest(this, request);
+  }
+
+  #getSourceLabel(sourceId: symbol): string {
+    return this.#sourceMetadata.get(sourceId)?.label ??
+      sourceId.description ?? String(sourceId);
+  }
+
+  #getSourceLineage(
+    sourceId: symbol,
+    visited: Set<symbol>,
+  ): {
+    readonly labels: readonly string[];
+    readonly sourceIds: readonly symbol[];
+  } {
+    if (visited.has(sourceId)) {
+      return {
+        labels: [this.#getSourceLabel(sourceId)],
+        sourceIds: [sourceId],
+      };
+    }
+    visited.add(sourceId);
+    const metadata = this.#sourceMetadata.get(sourceId);
+    const upstream = (metadata?.dependencyIds ?? [])
+      .map((id) => this.#getSourceLineage(id, new Set(visited)))
+      .sort((left, right) => right.labels.length - left.labels.length)[0];
+    return upstream == null
+      ? { labels: [this.#getSourceLabel(sourceId)], sourceIds: [sourceId] }
+      : {
+        labels: [...upstream.labels, this.#getSourceLabel(sourceId)],
+        sourceIds: [...upstream.sourceIds, sourceId],
+      };
+  }
+
+  #promoteDiagnosticChain(
+    failure: {
+      readonly participants: readonly symbol[];
+      readonly diagnosticChain: readonly string[];
+    },
+  ): void {
+    for (const sourceId of failure.participants) {
+      const current = this.#sourceFailures.get(sourceId);
+      if (
+        current != null &&
+        current.diagnosticChain.length < failure.diagnosticChain.length
+      ) {
+        current.diagnosticChain = failure.diagnosticChain;
+      }
+    }
   }
 }
 
@@ -612,10 +797,15 @@ export function collectExplicitSourceValues(
   nodes: readonly RuntimeNode[],
   runtime: DependencyRuntimeContext,
 ): void {
+  registerRuntimeSourceMetadata(nodes, runtime);
   for (const node of nodes) {
     const meta = node.parser.dependencyMetadata;
     if (meta?.source == null) continue;
     if (meta.source.extractSourceValue == null) continue;
+    // A matched parser that is both derived and a source contains only its
+    // preliminary result.  It was parsed against snapshotted upstream
+    // defaults and must not be published before dependency replay.
+    if (meta.derived != null && getNodeRawInput(node) != null) continue;
 
     const result = meta.source.extractSourceValue(node.state);
     if (isPromiseLike(result)) {
@@ -627,6 +817,7 @@ export function collectExplicitSourceValues(
     }
     registerExplicitSourceValue(meta.source.sourceId, result, runtime);
   }
+  resolveDerivedSourceValues(nodes, runtime);
 }
 
 function registerExplicitSourceValue(
@@ -669,14 +860,341 @@ export async function collectExplicitSourceValuesAsync(
   nodes: readonly RuntimeNode[],
   runtime: DependencyRuntimeContext,
 ): Promise<void> {
+  registerRuntimeSourceMetadata(nodes, runtime);
   for (const node of nodes) {
     const meta = node.parser.dependencyMetadata;
     if (meta?.source == null) continue;
     if (meta.source.extractSourceValue == null) continue;
+    if (meta.derived != null && getNodeRawInput(node) != null) continue;
 
     const result = await meta.source.extractSourceValue(node.state);
     registerExplicitSourceValue(meta.source.sourceId, result, runtime);
   }
+  await resolveDerivedSourceValuesAsync(nodes, runtime);
+}
+
+/**
+ * Orders runtime nodes so every in-scope provider precedes a derived source
+ * that consumes it.  Independent nodes retain declaration order.
+ *
+ * Missing providers create no edge because the consumer may use its declared
+ * default.  Scheduling barriers act as providers for the source IDs their
+ * selected subtree may expose and depend on their discriminator source.
+ *
+ * @param nodes Runtime nodes in declaration order.
+ * @returns The same nodes in stable dependency order.
+ * @throws {TypeError} If active provider edges contain a cycle.
+ * @internal
+ * @since 1.3.0
+ */
+export function orderDependencyNodes(
+  nodes: readonly RuntimeNode[],
+): readonly RuntimeNode[] {
+  const providers = new Map<symbol, RuntimeNode[]>();
+  const addProvider = (sourceId: symbol, node: RuntimeNode): void => {
+    const existing = providers.get(sourceId);
+    if (existing == null) providers.set(sourceId, [node]);
+    else existing.push(node);
+  };
+  for (const node of nodes) {
+    const source = node.parser.dependencyMetadata?.source;
+    if (source != null) addProvider(source.sourceId, node);
+    for (const sourceId of node.providesSourceIds ?? []) {
+      addProvider(sourceId, node);
+    }
+  }
+
+  const outgoing = new Map<RuntimeNode, Set<RuntimeNode>>();
+  const indegree = new Map<RuntimeNode, number>();
+  for (const node of nodes) indegree.set(node, 0);
+  const addEdge = (provider: RuntimeNode, consumer: RuntimeNode): void => {
+    const edges = outgoing.get(provider) ?? new Set<RuntimeNode>();
+    if (edges.has(consumer)) return;
+    edges.add(consumer);
+    outgoing.set(provider, edges);
+    indegree.set(consumer, (indegree.get(consumer) ?? 0) + 1);
+  };
+
+  for (const node of nodes) {
+    const derived = node.parser.dependencyMetadata?.derived;
+    if (derived != null) {
+      for (const dependencySourceId of derived.dependencyIds) {
+        for (const provider of providers.get(dependencySourceId) ?? []) {
+          addEdge(provider, node);
+        }
+      }
+    }
+    if (node.requiresSourceId != null) {
+      for (const provider of providers.get(node.requiresSourceId) ?? []) {
+        if (provider !== node) addEdge(provider, node);
+      }
+    }
+  }
+
+  const declarationOrder = new Map(
+    nodes.map((node, index) => [node, index] as const),
+  );
+  const ready = nodes.filter((node) => indegree.get(node) === 0);
+  const ordered: RuntimeNode[] = [];
+  while (ready.length > 0) {
+    ready.sort((left, right) =>
+      declarationOrder.get(left)! - declarationOrder.get(right)!
+    );
+    const node = ready.shift()!;
+    ordered.push(node);
+    for (const consumer of outgoing.get(node) ?? []) {
+      const next = (indegree.get(consumer) ?? 0) - 1;
+      indegree.set(consumer, next);
+      if (next === 0) ready.push(consumer);
+    }
+  }
+
+  if (ordered.length !== nodes.length) {
+    const cycle = nodes.filter((node) => (indegree.get(node) ?? 0) > 0);
+    const labels = cycle.map(formatDependencyNodeLabel).join(" -> ");
+    throw new TypeError(
+      `Circular dependency detected among derived sources: ${labels}.`,
+    );
+  }
+  return ordered;
+}
+
+/** Resolves and publishes matched derived sources in stable dependency order. */
+export function resolveDerivedSourceValues(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+  options?: ResolveDerivedSourceValuesOptions,
+): void {
+  resolveDerivedSourceValuesInOrder(
+    orderDependencyNodes(nodes),
+    nodes,
+    runtime,
+    (node, rawInput) => replayDerivedParser(node, rawInput, runtime),
+    options,
+  );
+}
+
+/** Async version of {@link resolveDerivedSourceValues}. */
+export async function resolveDerivedSourceValuesAsync(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+  options?: ResolveDerivedSourceValuesOptions,
+): Promise<void> {
+  await resolveDerivedSourceValuesInOrderAsync(
+    orderDependencyNodes(nodes),
+    nodes,
+    runtime,
+    options,
+  );
+}
+
+function resolveDerivedSourceValuesInOrder(
+  ordered: readonly RuntimeNode[],
+  allNodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+  replay: (
+    node: RuntimeNode,
+    rawInput: string,
+  ) => ValueParserResult<unknown> | undefined,
+  options?: ResolveDerivedSourceValuesOptions,
+): void {
+  const providers = collectSourceProviders(allNodes);
+  const settled = new Set<RuntimeNode>();
+  for (const node of ordered) {
+    const metadata = node.parser.dependencyMetadata;
+    const rawInput = getNodeRawInput(node);
+    if (metadata?.derived == null) {
+      continue;
+    }
+    const label = formatDependencyNodeMetavar(node);
+    if (
+      runtime.propagateSourceFailure(
+        metadata.derived.dependencyIds,
+        label,
+        metadata.source?.sourceId,
+      )
+    ) {
+      if (metadata.source != null) settled.add(node);
+      continue;
+    }
+    if (metadata.source == null || rawInput == null) continue;
+    if (hasPendingProvider(node, providers, settled, runtime, options)) {
+      continue;
+    }
+    settleDerivedSource(node, rawInput, runtime, replay);
+    settled.add(node);
+  }
+}
+
+async function resolveDerivedSourceValuesInOrderAsync(
+  ordered: readonly RuntimeNode[],
+  allNodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+  options?: ResolveDerivedSourceValuesOptions,
+): Promise<void> {
+  const providers = collectSourceProviders(allNodes);
+  const settled = new Set<RuntimeNode>();
+  for (const node of ordered) {
+    const metadata = node.parser.dependencyMetadata;
+    const rawInput = getNodeRawInput(node);
+    if (metadata?.derived == null) {
+      continue;
+    }
+    const label = formatDependencyNodeMetavar(node);
+    if (
+      runtime.propagateSourceFailure(
+        metadata.derived.dependencyIds,
+        label,
+        metadata.source?.sourceId,
+      )
+    ) {
+      if (metadata.source != null) settled.add(node);
+      continue;
+    }
+    if (metadata.source == null || rawInput == null) continue;
+    if (hasPendingProvider(node, providers, settled, runtime, options)) {
+      continue;
+    }
+    const result = await replayDerivedParserAsync(node, rawInput, runtime);
+    publishDerivedSourceResult(metadata.source.sourceId, result, runtime);
+    settled.add(node);
+  }
+}
+
+function settleDerivedSource(
+  node: RuntimeNode,
+  rawInput: string,
+  runtime: DependencyRuntimeContext,
+  replay: (
+    node: RuntimeNode,
+    rawInput: string,
+  ) => ValueParserResult<unknown> | undefined,
+): void {
+  const metadata = node.parser.dependencyMetadata!;
+  publishDerivedSourceResult(
+    metadata.source!.sourceId,
+    replay(node, rawInput),
+    runtime,
+  );
+}
+
+function publishDerivedSourceResult(
+  sourceId: symbol,
+  result: ValueParserResult<unknown> | undefined,
+  runtime: DependencyRuntimeContext,
+): void {
+  if (result == null || (result.success && result.deferred === true)) return;
+  if (!result.success) {
+    runtime.markSourceFailed(sourceId);
+  } else {
+    runtime.registerSource(sourceId, result.value);
+  }
+}
+
+function collectSourceProviders(
+  nodes: readonly RuntimeNode[],
+): ReadonlyMap<symbol, readonly RuntimeNode[]> {
+  const providers = new Map<symbol, RuntimeNode[]>();
+  for (const node of nodes) {
+    const sourceId = node.parser.dependencyMetadata?.source?.sourceId;
+    if (sourceId == null) continue;
+    const existing = providers.get(sourceId);
+    if (existing == null) providers.set(sourceId, [node]);
+    else existing.push(node);
+  }
+  return providers;
+}
+
+function hasPendingProvider(
+  node: RuntimeNode,
+  providers: ReadonlyMap<symbol, readonly RuntimeNode[]>,
+  settled: ReadonlySet<RuntimeNode>,
+  runtime: DependencyRuntimeContext,
+  options?: ResolveDerivedSourceValuesOptions,
+): boolean {
+  const derived = node.parser.dependencyMetadata!.derived!;
+  return derived.dependencyIds.some((sourceId) =>
+    (providers.get(sourceId) ?? []).some((provider) => {
+      if (
+        provider === node || runtime.hasSource(sourceId) ||
+        runtime.isSourceFailed(sourceId)
+      ) return false;
+      const metadata = provider.parser.dependencyMetadata;
+      if (metadata?.derived != null && getNodeRawInput(provider) != null) {
+        return !settled.has(provider);
+      }
+      return options?.effectfulProviders !== "inactive" &&
+        metadata?.source?.completeSource != null;
+    })
+  );
+}
+
+function getNodeRawInput(node: RuntimeNode): string | undefined {
+  return node.rawInput ?? extractRawInputFromState(node.state);
+}
+
+function registerRuntimeSourceMetadata(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+): void {
+  for (const node of nodes) {
+    const metadata = node.parser.dependencyMetadata;
+    if (metadata?.source == null) continue;
+    runtime.registerSourceMetadata(
+      metadata.source.sourceId,
+      formatDependencyNodeMetavar(node),
+      metadata.derived?.dependencyIds,
+    );
+  }
+}
+
+function propagateRuntimeSourceFailures(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+): void {
+  for (const node of orderDependencyNodes(nodes)) {
+    const metadata = node.parser.dependencyMetadata;
+    if (metadata?.derived == null) continue;
+    runtime.propagateSourceFailure(
+      metadata.derived.dependencyIds,
+      formatDependencyNodeMetavar(node),
+      metadata.source?.sourceId,
+    );
+  }
+}
+
+/**
+ * Appends the recorded dependency chain to a source failure.
+ *
+ * @param error The source failure to annotate.
+ * @param sourceId The identifier of the failed source.
+ * @param runtime The dependency runtime that recorded the failure chain.
+ * @returns The annotated failure, or the original failure when no chain exists.
+ * @internal
+ * @since 1.3.0
+ */
+export function includeSourceFailureChain(
+  error: Message,
+  sourceId: symbol,
+  runtime: DependencyRuntimeContext,
+): Message {
+  const chain = runtime.getSourceFailureChain(sourceId);
+  return chain == null || chain.length < 2
+    ? error
+    : message`${error} Dependency chain: ${chain.join(" -> ")}.`;
+}
+
+function formatDependencyNodeMetavar(node: RuntimeNode): string {
+  return node.parser.dependencyMetadata?.derived?.metavar ??
+    node.parser.dependencyMetadata?.source?.metavar ??
+    (node.path.map(String).join(".") || "<root>");
+}
+
+function formatDependencyNodeLabel(node: RuntimeNode): string {
+  const metavar = node.parser.dependencyMetadata?.derived?.metavar ??
+    node.parser.dependencyMetadata?.source?.metavar;
+  const path = node.path.map(String).join(".") || "<root>";
+  return metavar == null ? path : `${metavar} (${path})`;
 }
 
 /**
@@ -753,6 +1271,7 @@ export function fillMissingSourceDefaults(
       });
     }
   }
+  resolveDerivedSourceValues(nodes, runtime);
   return failures;
 }
 
@@ -805,6 +1324,7 @@ export async function fillMissingSourceDefaultsAsync(
       });
     }
   }
+  await resolveDerivedSourceValuesAsync(nodes, runtime);
   return failures;
 }
 
@@ -850,6 +1370,11 @@ export function replayDerivedParser(
 
   if (resolution.kind === "missing") return undefined;
   if (resolution.kind === "partial") return undefined;
+
+  if (resolution.usedDefaults.every((usedDefault) => usedDefault)) {
+    const preliminary = extractPreliminaryResultFromState(node.state);
+    if (preliminary != null) return preliminary;
+  }
 
   // Check replay cache
   const key = createReplayKey(
@@ -912,6 +1437,11 @@ export async function replayDerivedParserAsync(
   if (resolution.kind === "missing") return undefined;
   if (resolution.kind === "partial") return undefined;
 
+  if (resolution.usedDefaults.every((usedDefault) => usedDefault)) {
+    const preliminary = extractPreliminaryResultFromState(node.state);
+    if (preliminary != null) return preliminary;
+  }
+
   // Check replay cache
   const key = createReplayKey(
     node.path,
@@ -947,21 +1477,106 @@ export async function replayDerivedParserAsync(
  * @since 1.0.0
  */
 export function extractRawInputFromState(state: unknown): string | undefined {
+  return extractRawInputFromStateInner(state, new Set<object>());
+}
+
+function extractRawInputFromStateInner(
+  state: unknown,
+  visited: Set<object>,
+): string | undefined {
   if (state == null) return undefined;
   if (typeof state !== "object") return undefined;
+  if (visited.has(state)) return undefined;
+  visited.add(state);
+
+  const recordedRawInput = getRecordedDerivedRawInput(state);
+  if (recordedRawInput != null) return recordedRawInput;
 
   // Direct DeferredParseState
   if (isDeferredParseState(state)) return state.rawInput;
 
-  // Array-wrapped: [DeferredParseState] from optional/withDefault
-  if (
-    Array.isArray(state) &&
-    state.length === 1 &&
-    isDeferredParseState(state[0])
-  ) {
-    return state[0].rawInput;
+  // Wrapper arrays preserve occurrence order.  For multiple(), the last
+  // occurrence is the dependency source value; single-element wrappers such
+  // as optional()/withDefault() follow the same rule.
+  if (Array.isArray(state)) {
+    for (let index = state.length - 1; index >= 0; index--) {
+      const rawInput = extractRawInputFromStateInner(state[index], visited);
+      if (rawInput != null) return rawInput;
+    }
+    return undefined;
   }
 
+  // Extension wrappers can store a primitive's parse state inside a plain
+  // object (for example, prompt() uses `cliState`).  Walk single-state wrapper
+  // objects so the outer node can replay a parser that is both derived and a
+  // dependency source.  If several children expose different raw inputs, the
+  // wrapper is ambiguous and must not claim any of them as its own.
+  const nested = new Set<string>();
+  for (const value of Object.values(state)) {
+    const rawInput = extractRawInputFromStateInner(value, visited);
+    if (rawInput != null) nested.add(rawInput);
+  }
+  return nested.size === 1 ? nested.values().next().value : undefined;
+}
+
+function extractPreliminaryResultFromState(
+  state: unknown,
+): ValueParserResult<unknown> | undefined {
+  return extractPreliminaryResultFromStateInner(state, new Set<object>());
+}
+
+function extractPreliminaryResultFromStateInner(
+  state: unknown,
+  visited: Set<object>,
+): ValueParserResult<unknown> | undefined {
+  if (state == null || typeof state !== "object") return undefined;
+  if (visited.has(state)) return undefined;
+  visited.add(state);
+
+  if (isDeferredParseState(state)) return state.preliminaryResult;
+  if (
+    getRecordedDerivedRawInput(state) != null && "success" in state &&
+    typeof state.success === "boolean"
+  ) {
+    if (state.success === true && "value" in state) {
+      return state as { readonly success: true; readonly value: unknown };
+    }
+    if (state.success === false && "error" in state) {
+      return state as { readonly success: false; readonly error: Message };
+    }
+  }
+  if (Array.isArray(state)) {
+    for (let index = state.length - 1; index >= 0; index--) {
+      const result = extractPreliminaryResultFromStateInner(
+        state[index],
+        visited,
+      );
+      if (result != null) return result;
+    }
+    return undefined;
+  }
+
+  const nested = new Set<ValueParserResult<unknown>>();
+  for (const value of Object.values(state)) {
+    const result = extractPreliminaryResultFromStateInner(value, visited);
+    if (result != null) nested.add(result);
+  }
+  return nested.size === 1 ? nested.values().next().value : undefined;
+}
+
+function getRecordedDerivedRawInput(state: object): string | undefined {
+  const recorded = derivedRawInputs.get(state);
+  if (recorded != null) return recorded;
+  if (
+    derivedRawInputKey in state &&
+    typeof (state as { readonly [derivedRawInputKey]?: unknown })[
+        derivedRawInputKey
+      ] === "string"
+  ) {
+    return (state as { readonly [derivedRawInputKey]: string })[
+      derivedRawInputKey
+    ];
+  }
   return undefined;
 }
 
@@ -1294,6 +1909,7 @@ export async function completeEffectfulSourcesAsync(
     completed: [],
   };
   if (exec == null || exec.phase !== "complete") return empty;
+  registerRuntimeSourceMetadata(nodes, runtime);
 
   // Demand accumulates in the session even when this construct has
   // nothing schedulable itself: a consumer here may demand a source that
@@ -1322,6 +1938,17 @@ export async function completeEffectfulSourcesAsync(
     while (demandAdded) {
       demandAdded = false;
       for (const node of nodes) {
+        const metadata = node.parser.dependencyMetadata;
+        if (
+          metadata?.source != null && metadata.derived != null &&
+          session.demanded.has(metadata.source.sourceId)
+        ) {
+          for (const dependencySourceId of metadata.derived.dependencyIds) {
+            if (session.demanded.has(dependencySourceId)) continue;
+            session.demanded.add(dependencySourceId);
+            demandAdded = true;
+          }
+        }
         if (node.requiresSourceId == null || node.providesSourceIds == null) {
           continue;
         }
@@ -1358,7 +1985,7 @@ export async function completeEffectfulSourcesAsync(
   }
 
   const completed: EffectfulSourceCompletion[] = [];
-  for (const node of nodes) {
+  for (const node of orderDependencyNodes(nodes)) {
     // A scheduling barrier runs at its declaration position; its
     // preparation may schedule further nodes through the nested call,
     // which shares this pass's runtime, session, and exec.
@@ -1384,6 +2011,49 @@ export async function completeEffectfulSourcesAsync(
     const source = node.parser.dependencyMetadata?.source;
     if (source == null) continue;
     if (source.completeSource == null) {
+      const derived = node.parser.dependencyMetadata?.derived;
+      const rawInput = getNodeRawInput(node);
+      if (derived != null && rawInput != null) {
+        if (
+          runtime.propagateSourceFailure(
+            derived.dependencyIds,
+            formatDependencyNodeMetavar(node),
+            source.sourceId,
+          )
+        ) {
+          continue;
+        }
+        const replayed = await replayDerivedParserAsync(
+          node,
+          rawInput,
+          runtime,
+        );
+        if (replayed == null) continue;
+        if (!replayed.success) {
+          runtime.markSourceFailed(source.sourceId);
+          propagateRuntimeSourceFailures(nodes, runtime);
+          return {
+            success: false,
+            error: includeSourceFailureChain(
+              replayed.error,
+              source.sourceId,
+              runtime,
+            ),
+          };
+        }
+        if (replayed.deferred === true) continue;
+        runtime.registerSource(source.sourceId, replayed.value);
+        if (
+          source.preservesSourceValue &&
+          (options?.isReusable?.(node) ?? true)
+        ) {
+          completed.push({
+            key: node.path[node.path.length - 1],
+            result: replayed,
+          });
+        }
+        continue;
+      }
       // Registration order must follow declaration order across
       // structural and effectful occurrences of a shared source, the
       // way repeated command-line occurrences overwrite earlier ones.
@@ -1454,7 +2124,15 @@ export async function completeEffectfulSourcesAsync(
     if (result == null) continue;
     if (!result.success) {
       runtime.markSourceFailed(source.sourceId);
-      return { success: false, error: result.error };
+      propagateRuntimeSourceFailures(nodes, runtime);
+      return {
+        success: false,
+        error: includeSourceFailureChain(
+          result.error,
+          source.sourceId,
+          runtime,
+        ),
+      };
     }
     // Deferred results carry placeholder values, which must never become
     // dependency values or cached completions.
@@ -1869,11 +2547,20 @@ export function buildRuntimeNodesFromPairs(
     const fieldState = Object.hasOwn(state, field)
       ? state[field as string | symbol]
       : undefined;
+    const isDerived = parser.dependencyMetadata?.derived != null;
+    const rawInput = isDerived
+      ? extractRawInputFromState(fieldState)
+      : undefined;
+    const defaultDependencyValues = isDerived
+      ? getDefaultDependencySnapshot(fieldState)
+      : undefined;
     nodes.push({
       path: [...prefix, field],
       parser,
       state: fieldState,
       matched: isMatchedState(fieldState, parser),
+      ...(rawInput != null ? { rawInput } : {}),
+      ...(defaultDependencyValues != null ? { defaultDependencyValues } : {}),
     });
   }
   return nodes;
@@ -1906,12 +2593,59 @@ export function buildRuntimeNodesFromArray(
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
     const elemState = i < stateArray.length ? stateArray[i] : undefined;
+    const isDerived = parser.dependencyMetadata?.derived != null;
+    const rawInput = isDerived
+      ? extractRawInputFromState(elemState)
+      : undefined;
+    const defaultDependencyValues = isDerived
+      ? getDefaultDependencySnapshot(elemState)
+      : undefined;
     nodes.push({
       path: [...prefix, i],
       parser,
       state: elemState,
       matched: isMatchedState(elemState, parser),
+      ...(rawInput != null ? { rawInput } : {}),
+      ...(defaultDependencyValues != null ? { defaultDependencyValues } : {}),
     });
   }
   return nodes;
+}
+
+function getDefaultDependencySnapshot(
+  state: unknown,
+): readonly unknown[] | undefined {
+  return getDefaultDependencySnapshotInner(state, new Set<object>());
+}
+
+function getDefaultDependencySnapshotInner(
+  state: unknown,
+  visited: Set<object>,
+): readonly unknown[] | undefined {
+  if (state == null || typeof state !== "object") return undefined;
+  if (visited.has(state)) return undefined;
+  visited.add(state);
+
+  const direct = getSnapshottedDefaultDependencyValues(
+    state as ValueParserResult<unknown>,
+  );
+  if (direct != null) return direct;
+
+  if (Array.isArray(state)) {
+    for (let index = state.length - 1; index >= 0; index--) {
+      const snapshot = getDefaultDependencySnapshotInner(
+        state[index],
+        visited,
+      );
+      if (snapshot != null) return snapshot;
+    }
+    return undefined;
+  }
+
+  const nested: (readonly unknown[])[] = [];
+  for (const value of Object.values(state)) {
+    const snapshot = getDefaultDependencySnapshotInner(value, visited);
+    if (snapshot != null) nested.push(snapshot);
+  }
+  return nested.length === 1 ? nested[0] : undefined;
 }

@@ -52,6 +52,10 @@ Core rules
  -  Async value parsers make the containing parser async. If you use packages
     such as *@optique/git*, remember to `await run(...)`, `await parse(...)`, or
     `await runParser(...)` as appropriate.
+ -  Use `dependency()` when one value parser controls another's valid values.
+    For a multi-level chain, wrap the middle derivation too:
+    `dependency(source.deriveSync(...))`. Optique resolves such chains by
+    dependency order, independently of object/tuple field order.
  -  Build subcommands with `command()` combined by `or()`. Put a literal field
     such as `command: constant("serve")` in each branch when you want a
     discriminated union.
@@ -228,6 +232,9 @@ Common mistakes checklist
     `message` values.
  -  Do not forget to register source contexts when using `bindEnv()`,
     `bindConfig()`, or `bindDerivedDefault()`.
+ -  Do not flatten a multi-level dependency graph into duplicated one-level
+    factories. Wrap each derived value that becomes a later source with
+    `dependency()` and derive the next parser from it.
  -  Do not probe runtime capabilities eagerly before constructing a prompt
     parser. Put synchronous or asynchronous checks in the prompt config's
     `when` field and provide a typed `otherwise` value. The check then runs
