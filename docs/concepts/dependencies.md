@@ -594,7 +594,8 @@ their declaration order, while each source is resolved before the derived
 parsers that consume it. This applies equally to `object()` and `tuple()` and
 to sources exposed through selected `conditional()`/`command()` branches.
 
-Suggestions use only values already present in parser state and never run
+Suggestions use values already present in parser state, plus declared
+`defaultValue`/`defaultValues` fallbacks when a source is absent. They never run
 prompts or other effectful completions. During real completion, effectful
 sources run serially and at most once per parse operation. Their results and
 failures are scoped to that operation.
