@@ -43,6 +43,7 @@ import {
 } from "#src/internal/dependency.ts";
 import { annotationKey } from "#src/internal/annotations.ts";
 import { extractDependencyMetadata } from "#src/dependency-metadata.ts";
+import { extractRawInputFromState } from "#src/dependency-runtime.ts";
 import {
   type InferValue,
   parse,
@@ -533,6 +534,23 @@ describe("option", () => {
         }
         assert.deepEqual(result.next.buffer, []);
         assert.deepEqual(result.consumed, ["--port", "8080"]);
+      }
+    });
+
+    it("should not record raw input for a plain value parser", () => {
+      const parser = option("--value", string());
+      const context = {
+        buffer: ["--value", "plain"] as readonly string[],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      };
+
+      const result = parser.parse(context);
+
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(extractRawInputFromState(result.next.state), undefined);
       }
     });
 

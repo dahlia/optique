@@ -92,8 +92,11 @@ function isTerminalValueState<T>(
 function createOptionParseState<M extends Mode, T>(
   parseResult: ValueParserResult<T>,
   rawInput: string,
+  valueParser: ValueParser<M, T>,
 ): ValueParserResult<T> {
-  recordDerivedRawInput(parseResult, rawInput);
+  if (isDerivedValueParser(valueParser)) {
+    recordDerivedRawInput(parseResult, rawInput);
+  }
   return parseResult;
 }
 
@@ -1102,7 +1105,11 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult, rawInput),
+                state: createOptionParseState(
+                  parseResult,
+                  rawInput,
+                  syncValueParser!,
+                ),
                 buffer: context.buffer.slice(2),
               },
               consumed: context.buffer.slice(0, 2),
@@ -1125,7 +1132,11 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult, rawInput),
+                state: createOptionParseState(
+                  parseResult,
+                  rawInput,
+                  valueParser!,
+                ),
                 buffer: context.buffer.slice(2),
               },
               consumed: context.buffer.slice(0, 2),
@@ -1192,7 +1203,11 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult, rawInput),
+                state: createOptionParseState(
+                  parseResult,
+                  rawInput,
+                  syncValueParser!,
+                ),
                 buffer: context.buffer.slice(1),
               },
               consumed: context.buffer.slice(0, 1),
@@ -1215,7 +1230,11 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult, rawInput),
+                state: createOptionParseState(
+                  parseResult,
+                  rawInput,
+                  valueParser,
+                ),
                 buffer: context.buffer.slice(1),
               },
               consumed: context.buffer.slice(0, 1),
@@ -2583,7 +2602,11 @@ export function argument<M extends Mode, T>(
             next: {
               ...next,
               buffer: context.buffer.slice(i + 1),
-              state: createOptionParseState(parseResult, rawInput),
+              state: createOptionParseState(
+                parseResult,
+                rawInput,
+                syncValueParser,
+              ),
               optionsTerminated,
             },
             consumed: context.buffer.slice(0, i + 1),
@@ -2606,7 +2629,7 @@ export function argument<M extends Mode, T>(
             next: {
               ...next,
               buffer: context.buffer.slice(i + 1),
-              state: createOptionParseState(parseResult, rawInput),
+              state: createOptionParseState(parseResult, rawInput, valueParser),
               optionsTerminated,
             },
             consumed: context.buffer.slice(0, i + 1),
