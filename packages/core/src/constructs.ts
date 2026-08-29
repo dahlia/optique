@@ -256,18 +256,38 @@ function expandEffectfulRuntimeNodes(
   const expanded: RuntimeNode[] = [];
   const visit = (node: RuntimeNode): void => {
     const meta = node.parser.dependencyMetadata;
-    if (meta?.source?.completeSource != null || meta?.derived != null) {
+    const schedulingNodes = (node.parser as {
+      readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
+    })[effectfulSchedulingNodesKey];
+    // A marked exclusive parser (an or() whose alternative is a
+    // command() or conditional()) can carry composed source metadata
+    // that merely delegates to its committed branch.  The branch is
+    // what must be expanded, so the scheduling hook takes precedence
+    // over that metadata; a hook yielding no nodes (no committed
+    // branch) falls back to the node itself.  Derived metadata still
+    // pins the node: consumers must stay visible to demand detection.
+    const expandsThroughHook = schedulingNodes != null &&
+      meta?.derived == null &&
+      (node.parser as {
+          readonly [sourceCollectionExpansionKey]?: boolean;
+        })[sourceCollectionExpansionKey] === true;
+    if (
+      !expandsThroughHook &&
+      (meta?.source?.completeSource != null || meta?.derived != null)
+    ) {
       expanded.push(node);
       return;
     }
     // A nested merge() supplies its own scheduling nodes so that the
     // expansion uses the same child-indexed paths, declaration order,
     // and duplicate-field exclusion as the merge's direct scheduling.
-    const schedulingNodes = (node.parser as {
-      readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
-    })[effectfulSchedulingNodesKey];
     if (schedulingNodes != null) {
-      for (const child of schedulingNodes(node.state, node.path)) {
+      const children = schedulingNodes(node.state, node.path);
+      if (children.length === 0 && meta?.source != null) {
+        expanded.push(node);
+        return;
+      }
+      for (const child of children) {
         visit(child);
       }
       return;

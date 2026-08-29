@@ -10198,6 +10198,58 @@ describe("source delivery from conditional()/command() to siblings", () => {
   );
 
   test(
+    "delivers through or() mixing a command() and a direct source",
+    async () => {
+      const { mode, level } = createModeLevel();
+      // Mixing a marked command() with a direct source alternative
+      // gives the or() composed source metadata; the committed branch
+      // must still expand through the scheduling hook, whichever
+      // alternative wins.
+      const parser = object({
+        level: option("--level", level),
+        cmd: or(
+          command("deploy", object({ mode: option("--mode", mode) })),
+          option("--fallback", mode),
+        ),
+      });
+
+      const viaCommand = await parseAsync(parser, [
+        "deploy",
+        "--mode",
+        "prod",
+        "--level",
+        "silent",
+      ]);
+      assert.ok(
+        viaCommand.success,
+        `Expected success but got: ${JSON.stringify(viaCommand)}`,
+      );
+      assert.equal(viaCommand.value.level, "silent");
+
+      const viaSource = await parseAsync(parser, [
+        "--fallback",
+        "prod",
+        "--level",
+        "silent",
+      ]);
+      assert.ok(
+        viaSource.success,
+        `Expected success but got: ${JSON.stringify(viaSource)}`,
+      );
+      assert.equal(viaSource.value.level, "silent");
+
+      const invalid = await parseAsync(parser, [
+        "deploy",
+        "--mode",
+        "prod",
+        "--level",
+        "debug",
+      ]);
+      assert.ok(!invalid.success);
+    },
+  );
+
+  test(
     "does not deliver a plain nested object() CLI source to an earlier consumer",
     async () => {
       const { mode, level } = createModeLevel();
