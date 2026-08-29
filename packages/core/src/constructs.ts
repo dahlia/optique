@@ -412,8 +412,11 @@ function collectStaticSourceIds(
   seen.add(parser as object);
   const source = parser.dependencyMetadata?.source;
   if (source != null) {
+    // A composed source (e.g., a mixed or() delegating to its committed
+    // branch) can sit on a parser whose alternatives provide further
+    // sources, so record it and keep walking the field and static
+    // scopes rather than stopping here.
     out.add(source.sourceId);
-    return;
   }
   const pairs = (parser as {
     readonly [fieldParsersKey]?: ReadonlyArray<

@@ -2468,6 +2468,59 @@ describe("prompted values as dependency sources", () => {
   );
 
   it(
+    "demands a branch source inside a mixed or() in two-pass runs",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const other = dependency(choice(["x"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let phase2Level: string | undefined = "unset";
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@optique/prompt/test-mixed-or-branch-demand"),
+        phase: "two-pass",
+        getAnnotations(request?: unknown) {
+          if (isPhase2ContextRequest(request)) {
+            phase2Level = (request.parsed as { readonly level?: string })
+              ?.level;
+          }
+          return {};
+        },
+      };
+      // The branch is a mixed or(): the exclusive parser carries
+      // composed metadata for the direct source alternative, but the
+      // static estimate must still see mode inside the command
+      // alternative so the discriminator becomes a control dependency
+      // in the seed pass.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: or(
+              command(
+                "deploy",
+                object({
+                  mode: prompt(option("--mode", mode), { value: "prod" }),
+                }),
+              ),
+              option("--fallback", other),
+            ),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["deploy", "--level", "silent"],
+      });
+
+      assert.equal((result as { readonly level: string }).level, "silent");
+      assert.equal(phase2Level, "silent");
+      assert.equal(calls.length, 2);
+    },
+  );
+
+  it(
     "prepares a nested conditional() inside a prepared branch",
     async () => {
       const kind = dependency(choice(["x", "z"] as const));
