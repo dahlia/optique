@@ -17,6 +17,7 @@ import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   type EffectfulSchedulingNodesFn,
   effectfulSchedulingNodesKey,
+  includeSourceFailureChain,
   recordDerivedRawInput,
   replayDerivedParser,
   replayDerivedParserAsync,
@@ -190,9 +191,7 @@ function includeDependencyFailureChain(
 ): Message {
   const sourceId = dependencyMetadata?.source?.sourceId;
   if (sourceId == null || exec?.dependencyRuntime == null) return error;
-  const chain = exec.dependencyRuntime.getSourceFailureChain(sourceId);
-  if (chain == null || chain.length < 2) return error;
-  return message`${error} Dependency chain: ${chain.join(" -> ")}.`;
+  return includeSourceFailureChain(error, sourceId, exec.dependencyRuntime);
 }
 
 async function resolveDerivedCompletionAsync<T>(

@@ -1163,7 +1163,17 @@ function propagateRuntimeSourceFailures(
   }
 }
 
-function includeSourceFailureChain(
+/**
+ * Appends the recorded dependency chain to a source failure.
+ *
+ * @param error The source failure to annotate.
+ * @param sourceId The identifier of the failed source.
+ * @param runtime The dependency runtime that recorded the failure chain.
+ * @returns The annotated failure, or the original failure when no chain exists.
+ * @internal
+ * @since 1.3.0
+ */
+export function includeSourceFailureChain(
   error: Message,
   sourceId: symbol,
   runtime: DependencyRuntimeContext,
