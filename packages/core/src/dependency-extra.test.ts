@@ -10156,6 +10156,48 @@ describe("source delivery from conditional()/command() to siblings", () => {
   );
 
   test(
+    "delivers a command() selected through or() to a sibling",
+    async () => {
+      const { mode, level } = createModeLevel();
+      // or() forwards the collection opt-in when an alternative carries
+      // it, so the committed command's typed value reaches the
+      // earlier-declared consumer just like a prompted one would.
+      const parser = object({
+        level: option("--level", level),
+        cmd: or(
+          command("deploy", object({ mode: option("--mode", mode) })),
+          command(
+            "status",
+            object({ s: option("--s", choice(["1"] as const)) }),
+          ),
+        ),
+      });
+
+      const valid = await parseAsync(parser, [
+        "deploy",
+        "--mode",
+        "prod",
+        "--level",
+        "silent",
+      ]);
+      assert.ok(
+        valid.success,
+        `Expected success but got: ${JSON.stringify(valid)}`,
+      );
+      assert.equal(valid.value.level, "silent");
+
+      const invalid = await parseAsync(parser, [
+        "deploy",
+        "--mode",
+        "prod",
+        "--level",
+        "debug",
+      ]);
+      assert.ok(!invalid.success);
+    },
+  );
+
+  test(
     "does not deliver a plain nested object() CLI source to an earlier consumer",
     async () => {
       const { mode, level } = createModeLevel();

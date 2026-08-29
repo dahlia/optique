@@ -2044,6 +2044,25 @@ function defineExclusiveSchedulingNodes(
   exclusiveParser: object,
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): void {
+  // When an alternative opts into source-collection expansion (a
+  // command() or a conditional()), the exclusive parser forwards the
+  // opt-in so its committed branch stays visible during explicit
+  // collection, matching what the scheduling hook already exposes for
+  // prompted values.  Alternatives without the marker keep the
+  // exclusive parser's existing collection scope.
+  if (
+    parsers.some((parser) =>
+      (parser as {
+        readonly [sourceCollectionExpansionKey]?: boolean;
+      })[sourceCollectionExpansionKey] === true
+    )
+  ) {
+    Object.defineProperty(exclusiveParser, sourceCollectionExpansionKey, {
+      value: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
   Object.defineProperty(exclusiveParser, staticSourceScopeKey, {
     value: parsers,
     configurable: true,
