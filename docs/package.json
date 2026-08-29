@@ -25,6 +25,7 @@
     "markdown-it-deflist": "^3.0.0",
     "markdown-it-footnote": "^4.0.0",
     "mermaid": "^11.16.0",
+    "shiki": "3.20.0",
     "typescript": "catalog:",
     "valibot": "catalog:",
     "vitepress": "^2.0.0-alpha.17",
@@ -35,8 +36,9 @@
   },
   "scripts": {
     "dev": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && vitepress dev",
-    "build": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && NODE_OPTIONS=--max-old-space-size=12288 vitepress build",
-    "preview": "vitepress preview"
+    "build": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && node .vitepress/warm-twoslash-cache.mts && NODE_OPTIONS=--max-old-space-size=12288 vitepress build",
+    "preview": "vitepress preview",
+    "test": "tsc --noEmit --allowImportingTsExtensions --module nodenext --moduleResolution nodenext --target esnext --types node --skipLibCheck .vitepress/twoslash-cache.mts .vitepress/twoslash-cache.test.mts .vitepress/warm-twoslash-cache.mts && node --test .vitepress/*.test.mts"
   },
   "dependencies": {
     "wrangler": "^4",

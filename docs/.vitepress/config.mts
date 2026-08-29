@@ -2,7 +2,6 @@ import { transformerTwoslash } from "@shikijs/vitepress-twoslash";
 import deflist from "markdown-it-deflist";
 import footnote from "markdown-it-footnote";
 import process from "node:process";
-import { ModuleKind, ModuleResolutionKind, ScriptTarget } from "typescript";
 import { defineConfig } from "vitepress";
 import {
   groupIconMdPlugin,
@@ -10,6 +9,12 @@ import {
 } from "vitepress-plugin-group-icons";
 import llmstxt from "vitepress-plugin-llms";
 import { withMermaid } from "vitepress-plugin-mermaid";
+import {
+  createOptiqueTwoslashCaches,
+  twoslashCompilerOptions,
+} from "./twoslash-cache.mts";
+
+const twoslashCaches = createOptiqueTwoslashCaches(twoslashCompilerOptions);
 
 let extraNav: { text: string; link: string }[] = [];
 if (process.env.EXTRA_NAV_TEXT && process.env.EXTRA_NAV_LINK) {
@@ -240,15 +245,11 @@ export default withMermaid(defineConfig({
     ],
     codeTransformers: [
       transformerTwoslash({
+        typesCache: twoslashCaches.typesCache,
         twoslashOptions: {
-          compilerOptions: {
-            moduleResolution: ModuleResolutionKind.Bundler,
-            module: ModuleKind.ESNext,
-            target: ScriptTarget.ESNext,
-            lib: ["dom", "dom.iterable", "esnext"],
-            types: ["dom", "dom.iterable", "esnext", "node"],
-          },
-          // Reuse language service instance across files to reduce memory usage
+          cache: twoslashCaches.environmentCache,
+          compilerOptions: twoslashCompilerOptions,
+          // Generate hover information for every identifier in the examples.
           shouldGetHoverInfo: () => true,
         },
       }),
@@ -286,6 +287,24 @@ export default withMermaid(defineConfig({
           "changelog.md",
         ],
       }),
+      {
+        name: "optique:release-written-bundle-memory",
+        apply: "build",
+        writeBundle: {
+          order: "post",
+          handler(_options, bundle) {
+            for (const output of Object.values(bundle)) {
+              if (output.type === "chunk") {
+                output.code = "";
+                output.map = null;
+                output.modules = {};
+              } else {
+                output.source = "";
+              }
+            }
+          },
+        },
+      },
     ],
   },
 

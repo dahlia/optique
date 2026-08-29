@@ -7,7 +7,7 @@ on:
     tags:
     - "*.*.*"
     branches:
-    - "*"
+    - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -148,7 +148,7 @@ jobs:
       pages: write
       deployments: write
     environment:
-      name: github-pages
+      name: ${{ github.ref_type == 'tag' && 'github-pages' || 'preview' }}
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
     - uses: actions/checkout@v6
@@ -157,6 +157,16 @@ jobs:
         experimental: true
         install: true
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
+    - uses: actions/cache@v6
+      with:
+        path: docs/.vitepress/cache/twoslash
+        key: >-
+          twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml',
+          'docs/package.json', 'docs/.vitepress/*.mts',
+          'packages/**/package.json', 'packages/**/src/**') }}-${{
+          hashFiles('docs/**/*.md') }}
+        restore-keys: |
+          twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'docs/package.json', 'docs/.vitepress/*.mts', 'packages/**/package.json', 'packages/**/src/**') }}-
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
