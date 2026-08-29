@@ -511,6 +511,20 @@ displayed before a non-source prompt declared earlier in the same object.
 When the user cancels a source prompt, the parse fails immediately and
 later prompts do not run.
 
+A source inside a `conditional()` or a `command()` also reaches consumers
+declared next to that construct, and it does so whether the value was
+typed on the command line or answered interactively: the `conditional()`
+discriminator, the fields of the selected branch, and the subtree of a
+selected command all register into the enclosing runtime.  When nothing
+on the command line selects a branch, the branch chosen by the
+discriminator's completion—including a prompted discriminator's answer,
+and the default branch when no named branch applies—is resolved once
+before derived parsers re-evaluate, and the same selection is reused by
+the final completion.  One limitation: a prompted discriminator that
+does not wrap a dependency source cannot participate in this early
+branch resolution, so sources inside the branch it selects only complete
+during the conditional's own completion.
+
 
 Limitations
 -----------

@@ -1227,6 +1227,47 @@ describe("prompted values as dependency sources", () => {
   );
 
   it(
+    "lets a later conditional() CLI occurrence win over an earlier prompt",
+    async () => {
+      const shared = dependency(choice(["dev", "prod"] as const));
+      const level = shared.derive({
+        metavar: "LEVEL",
+        mode: "sync",
+        factory: (value: "dev" | "prod") =>
+          choice(
+            value === "dev"
+              ? (["debug", "verbose"] as const)
+              : (["silent", "strict"] as const),
+          ),
+        defaultValue: () => "dev" as const,
+      });
+      const { prompt, calls } = createTestPrompt();
+      // The conditional's branch occurrence of the shared source is
+      // declared after the prompted sibling, so its command-line value
+      // must win over the prompt's answer, exactly as a repeated
+      // command-line occurrence would.
+      const parser = object({
+        a: prompt(option("--a", shared), { value: "dev" }),
+        cond: conditional(
+          option("--kind", choice(["k"] as const)),
+          { k: object({ b: option("--b", shared) }) },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(
+        parser,
+        ["--kind", "k", "--b", "prod", "--level", "silent"],
+      );
+
+      assert.ok(result.success);
+      assert.equal(result.value.a, "dev");
+      assert.equal(result.value.level, "silent");
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
     "runs merge() source prompts in declaration order despite priorities",
     async () => {
       const srcA = dependency(string());
@@ -2028,6 +2069,497 @@ describe("prompted values as dependency sources", () => {
 
       assert.ok(!result.success);
       assert.deepEqual(calls, [{ value: "prod" }]);
+    },
+  );
+
+  it(
+    "schedules the branch chosen by a prompted discriminator",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // Nothing on the command line selects the branch; the prompted
+      // discriminator answers "a", whose branch prompts a mode source
+      // consumed by an outer sibling.  Both prompts must run before
+      // the sibling's replay, once each.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: object({
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const valid = await parseAsync(parser, ["--level", "silent"]);
+      assert.ok(valid.success);
+      assert.equal(valid.value.level, "silent");
+      assert.equal(calls.length, 2);
+
+      const invalid = await parseAsync(parser, ["--level", "debug"]);
+      assert.ok(!invalid.success);
+    },
+  );
+
+  it(
+    "schedules a nothing-parsed default branch's prompted source",
+    async () => {
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // No input at all commits a branch and the discriminator option
+      // cannot complete, so the default branch is selected; its
+      // prompted source must be scheduled before the sibling's replay.
+      const parser = object({
+        cond: conditional(
+          option("--kind", choice(["a", "b"] as const)),
+          {
+            a: object({ x: option("--x", choice(["1"] as const)) }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+          object({
+            mode: prompt(option("--mode", mode), { value: "prod" }),
+          }),
+        ),
+        level: option("--level", level),
+      });
+
+      const valid = await parseAsync(parser, ["--level", "silent"]);
+      assert.ok(valid.success);
+      assert.equal(valid.value.level, "silent");
+      assert.equal(calls.length, 1);
+
+      const invalid = await parseAsync(parser, ["--level", "debug"]);
+      assert.ok(!invalid.success);
+    },
+  );
+
+  it(
+    "reuses the prepared selection for a non-idempotent discriminator",
+    async () => {
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let defaultCalls = 0;
+      // The discriminator's lazy default yields "a" on its first two
+      // evaluations (parse-time branch probing consumes one, the
+      // scheduling pass's preparation the other) and "b" afterwards.
+      // Final completion must consume the prepared selection instead of
+      // evaluating the default a third time: a third evaluation would
+      // select branch "b", whose required --y is missing.
+      const parser = object({
+        cond: conditional(
+          withDefault(
+            option("--kind", choice(["a", "b"] as const)),
+            () => (++defaultCalls <= 2 ? "a" : "b") as "a" | "b",
+          ),
+          {
+            a: object({
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(parser, ["--level", "silent"]);
+      assert.ok(result.success);
+      assert.equal(result.value.level, "silent");
+      assert.equal(defaultCalls, 2);
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
+    "stops after a cancelled prompted discriminator",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a", reject: true }),
+          {
+            a: object({
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(parser, ["--level", "silent"]);
+      assert.ok(!result.success);
+      // Only the discriminator prompt ran; the branch prompt never did.
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
+    "schedules a confirmed speculative branch's prompted source",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // "--a x" speculatively selects branch a while the prompted
+      // discriminator defers; the answer "a" confirms the guess, so the
+      // branch's prompted source must still complete before the outer
+      // sibling's replay.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: object({
+              ax: option("--a", choice(["x"] as const)),
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const valid = await parseAsync(
+        parser,
+        ["--a", "x", "--level", "silent"],
+      );
+      assert.ok(valid.success);
+      assert.equal(valid.value.level, "silent");
+      assert.equal(calls.length, 2);
+
+      const invalid = await parseAsync(
+        parser,
+        ["--a", "x", "--level", "debug"],
+      );
+      assert.ok(!invalid.success);
+    },
+  );
+
+  it(
+    "does not prompt a rejected speculative branch through a parent",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // "--a x" speculatively selects branch a while the prompted
+      // discriminator defers; the answer "b" rejects the guess, so the
+      // parent's scheduling pass must not run the guessed branch's
+      // prompt before the mismatch is detected.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "b" }),
+          {
+            a: object({
+              ax: option("--a", choice(["x"] as const)),
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(
+        parser,
+        ["--a", "x", "--level", "silent"],
+      );
+
+      assert.ok(!result.success);
+      // Only the discriminator prompt ran.
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
+    "propagates chained barrier demand across declaration order",
+    async () => {
+      const kindA = dependency(choice(["a", "z"] as const));
+      const kindB = dependency(choice(["b", "z"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let phase2CondA: unknown;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@optique/prompt/test-chained-barrier-demand"),
+        phase: "two-pass",
+        getAnnotations(request?: unknown) {
+          if (isPhase2ContextRequest(request)) {
+            phase2CondA = (request.parsed as { readonly condA?: unknown })
+              ?.condA;
+          }
+          return {};
+        },
+      };
+      // Demand flows through a chain of barriers declared in the
+      // failing order: --level demands mode, which condB provides, so
+      // condB's discriminator becomes demanded; condA's branch provides
+      // that discriminator's source, so condA's discriminator must
+      // become demanded too even though condA precedes condB.
+      const parser = object({
+        condA: conditional(
+          prompt(option("--kind-a", kindA), { value: "a" }),
+          {
+            a: object({
+              kb: prompt(option("--kb", kindB), { value: "b" }),
+            }),
+            z: object({ za: option("--za", choice(["1"] as const)) }),
+          },
+        ),
+        condB: conditional(
+          prompt(option("--kind-b", kindB), { value: "b" }),
+          {
+            b: object({
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            z: object({ zb: option("--zb", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["--level", "silent"],
+      });
+
+      assert.equal((result as { readonly level: string }).level, "silent");
+      assert.ok(phase2CondA != null);
+      // Chained demand must resolve before the seed pass runs any
+      // effect, so the prompts keep declaration order (condA's
+      // discriminator and branch before condB's); a single demand scan
+      // would run condB's prompts first and only reach condA's in its
+      // own later completion.
+      assert.deepEqual(calls, [
+        { value: "a" },
+        { value: "b" },
+        { value: "b" },
+        { value: "prod" },
+      ]);
+    },
+  );
+
+  it(
+    "delivers a confirmed speculative branch's CLI source",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      // The speculative branch's mode value is typed, not prompted; it
+      // must reach the sibling once the discriminator's answer confirms
+      // the branch.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: object({
+              ax: option("--a", choice(["x"] as const)),
+              mode: option("--mode", mode),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(
+        parser,
+        ["--a", "x", "--mode", "prod", "--level", "silent"],
+      );
+
+      assert.ok(result.success);
+      assert.equal(result.value.level, "silent");
+      assert.equal(calls.length, 1);
+    },
+  );
+
+  it(
+    "prepares a demanded conditional() branch across two-pass runs",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let phase2Level: string | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@optique/prompt/test-conditional-branch-demand"),
+        phase: "two-pass",
+        getAnnotations(request?: unknown) {
+          if (isPhase2ContextRequest(request)) {
+            phase2Level = (request.parsed as { readonly level?: string })
+              ?.level;
+          }
+          return {};
+        },
+      };
+      // --level demands the branch's mode source; the discriminator is
+      // its control dependency, so both prompts already run in the seed
+      // pass and their answers are reused in the final pass: one
+      // execution each across the whole run.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: object({
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["--level", "silent"],
+      });
+
+      assert.equal(result.level, "silent");
+      assert.equal(calls.length, 2);
+      assert.equal(phase2Level, "silent");
+    },
+  );
+
+  it(
+    "demands a branch source hidden behind a command() in two-pass runs",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let phase2Level: string | undefined = "unset";
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@optique/prompt/test-command-branch-demand"),
+        phase: "two-pass",
+        getAnnotations(request?: unknown) {
+          if (isPhase2ContextRequest(request)) {
+            phase2Level = (request.parsed as { readonly level?: string })
+              ?.level;
+          }
+          return {};
+        },
+      };
+      // The branch's mode source sits behind a command(), which exposes
+      // no field pairs; the static estimate must still see it so the
+      // seed pass demands the discriminator as a control dependency and
+      // phase-two contexts observe the sibling's value.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: command(
+              "deploy",
+              object({
+                mode: prompt(option("--mode", mode), { value: "prod" }),
+              }),
+            ),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["deploy", "--level", "silent"],
+      });
+
+      assert.equal((result as { readonly level: string }).level, "silent");
+      assert.equal(phase2Level, "silent");
+      assert.equal(calls.length, 2);
+    },
+  );
+
+  it(
+    "demands a branch source inside a mixed or() in two-pass runs",
+    async () => {
+      const kind = dependency(choice(["a", "b"] as const));
+      const other = dependency(choice(["x"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      let phase2Level: string | undefined = "unset";
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@optique/prompt/test-mixed-or-branch-demand"),
+        phase: "two-pass",
+        getAnnotations(request?: unknown) {
+          if (isPhase2ContextRequest(request)) {
+            phase2Level = (request.parsed as { readonly level?: string })
+              ?.level;
+          }
+          return {};
+        },
+      };
+      // The branch is a mixed or(): the exclusive parser carries
+      // composed metadata for the direct source alternative, but the
+      // static estimate must still see mode inside the command
+      // alternative so the discriminator becomes a control dependency
+      // in the seed pass.
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          {
+            a: or(
+              command(
+                "deploy",
+                object({
+                  mode: prompt(option("--mode", mode), { value: "prod" }),
+                }),
+              ),
+              option("--fallback", other),
+            ),
+            b: object({ y: option("--y", choice(["2"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext], {
+        args: ["deploy", "--level", "silent"],
+      });
+
+      assert.equal((result as { readonly level: string }).level, "silent");
+      assert.equal(phase2Level, "silent");
+      assert.equal(calls.length, 2);
+    },
+  );
+
+  it(
+    "prepares a nested conditional() inside a prepared branch",
+    async () => {
+      const kind = dependency(choice(["x", "z"] as const));
+      const { mode, level } = createModeFixture();
+      const { prompt, calls } = createTestPrompt();
+      const parser = object({
+        outer: conditional(
+          prompt(option("--kind", kind), { value: "x" }),
+          {
+            x: object({
+              inner: conditional(
+                prompt(option("--mode", mode), { value: "prod" }),
+                {
+                  dev: object({
+                    d: withDefault(
+                      option("--d", choice(["1"] as const)),
+                      "1" as const,
+                    ),
+                  }),
+                  prod: object({
+                    p: withDefault(
+                      option("--p", choice(["2"] as const)),
+                      "2" as const,
+                    ),
+                  }),
+                },
+              ),
+            }),
+            z: object({ y: option("--y", choice(["3"] as const)) }),
+          },
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await parseAsync(parser, ["--level", "silent"]);
+
+      assert.ok(result.success);
+      assert.equal(result.value.level, "silent");
+      assert.equal(calls.length, 2);
     },
   );
 

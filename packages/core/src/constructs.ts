@@ -28,6 +28,9 @@ import {
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
   type RuntimeNode,
+  serializeSchedulingPath,
+  sourceCollectionExpansionKey,
+  staticSourceScopeKey,
 } from "./dependency-runtime.ts";
 import {
   annotateFreshArray,
@@ -253,18 +256,38 @@ function expandEffectfulRuntimeNodes(
   const expanded: RuntimeNode[] = [];
   const visit = (node: RuntimeNode): void => {
     const meta = node.parser.dependencyMetadata;
-    if (meta?.source?.completeSource != null || meta?.derived != null) {
+    const schedulingNodes = (node.parser as {
+      readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
+    })[effectfulSchedulingNodesKey];
+    // A marked exclusive parser (an or() whose alternative is a
+    // command() or conditional()) can carry composed source metadata
+    // that merely delegates to its committed branch.  The branch is
+    // what must be expanded, so the scheduling hook takes precedence
+    // over that metadata; a hook yielding no nodes (no committed
+    // branch) falls back to the node itself.  Derived metadata still
+    // pins the node: consumers must stay visible to demand detection.
+    const expandsThroughHook = schedulingNodes != null &&
+      meta?.derived == null &&
+      (node.parser as {
+          readonly [sourceCollectionExpansionKey]?: boolean;
+        })[sourceCollectionExpansionKey] === true;
+    if (
+      !expandsThroughHook &&
+      (meta?.source?.completeSource != null || meta?.derived != null)
+    ) {
       expanded.push(node);
       return;
     }
     // A nested merge() supplies its own scheduling nodes so that the
     // expansion uses the same child-indexed paths, declaration order,
     // and duplicate-field exclusion as the merge's direct scheduling.
-    const schedulingNodes = (node.parser as {
-      readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
-    })[effectfulSchedulingNodesKey];
     if (schedulingNodes != null) {
-      for (const child of schedulingNodes(node.state, node.path)) {
+      const children = schedulingNodes(node.state, node.path);
+      if (children.length === 0 && meta?.source != null) {
+        expanded.push(node);
+        return;
+      }
+      for (const child of children) {
         visit(child);
       }
       return;
@@ -309,6 +332,108 @@ function expandEffectfulRuntimeNodes(
   };
   for (const node of nodes) visit(node);
   return expanded;
+}
+
+/**
+ * Expands a construct's direct-child nodes for explicit source
+ * collection.
+ *
+ * A direct child that opted in through {@link sourceCollectionExpansionKey}
+ * (a `conditional()` or a `command()`, possibly behind transparent
+ * wrappers) is replaced in place by its scheduling-hook expansion, so
+ * its command-line source values—the discriminator, a committed branch,
+ * a selected command subtree—register into the parent's runtime in the
+ * child's declaration position.  Every other node passes through
+ * unchanged, keeping the existing collection scope for plain nested
+ * constructs and uncommitted exclusive branches.
+ */
+function expandSourceCollectionNodes(
+  nodes: readonly RuntimeNode[],
+): readonly RuntimeNode[] {
+  let expanded: RuntimeNode[] | undefined;
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const optedIn = (node.parser as {
+      readonly [sourceCollectionExpansionKey]?: boolean;
+    })[sourceCollectionExpansionKey] === true;
+    if (!optedIn) {
+      expanded?.push(node);
+      continue;
+    }
+    if (expanded == null) expanded = nodes.slice(0, i);
+    expanded.push(...expandEffectfulRuntimeNodes([node]));
+  }
+  return expanded ?? nodes;
+}
+
+/**
+ * A branch selection resolved during the effectful scheduling pass by a
+ * `conditional()` whose branch was not committed at parse time.  Cached
+ * in the run-scoped session (per pass) so final completion consumes the
+ * same decision instead of re-completing the discriminator or
+ * re-selecting a branch.
+ */
+interface PreparedConditionalSelection {
+  /** The discriminator's completion result. */
+  readonly discriminatorResult: import("./valueparser.ts").ValueParserResult<
+    unknown
+  >;
+
+  /** The selected branch parser, if any branch applies. */
+  readonly branchParser: Parser<Mode, unknown, unknown> | undefined;
+
+  /**
+   * The named branch key, or `undefined` when the default branch was
+   * selected.
+   */
+  readonly branchKey: string | undefined;
+
+  /** The branch state from the preparation's empty-input replay parse. */
+  readonly branchState: unknown;
+}
+
+// Per-instance identity for prepared-selection cache keys, so two
+// conditional() parsers at the same path never share an entry.
+let conditionalInstanceCounter = 0;
+
+/**
+ * Statically collects the dependency source IDs reachable through a
+ * parser's composed metadata and flattened field pairs.  Used as the
+ * `providesSourceIds` estimate for a conditional()'s branches: an
+ * undercount only delays an effectful completion from the seed pass to
+ * the final pass of a `runWith()` run.
+ */
+function collectStaticSourceIds(
+  parser: Parser<Mode, unknown, unknown>,
+  out: Set<symbol>,
+  seen: Set<object>,
+): void {
+  if (seen.has(parser as object)) return;
+  seen.add(parser as object);
+  const source = parser.dependencyMetadata?.source;
+  if (source != null) {
+    // A composed source (e.g., a mixed or() delegating to its committed
+    // branch) can sit on a parser whose alternatives provide further
+    // sources, so record it and keep walking the field and static
+    // scopes rather than stopping here.
+    out.add(source.sourceId);
+  }
+  const pairs = (parser as {
+    readonly [fieldParsersKey]?: ReadonlyArray<
+      readonly [string | symbol, Parser<Mode, unknown, unknown>]
+    >;
+  })[fieldParsersKey];
+  if (pairs != null) {
+    for (const [, child] of pairs) collectStaticSourceIds(child, out, seen);
+  }
+  const scope = (parser as {
+    readonly [staticSourceScopeKey]?: ReadonlyArray<
+      Parser<Mode, unknown, unknown>
+    >;
+  })[staticSourceScopeKey];
+  if (scope != null) {
+    for (const child of scope) collectStaticSourceIds(child, out, seen);
+  }
 }
 
 function isDeferredCompletionResult(result: unknown): boolean {
@@ -388,10 +513,24 @@ async function scheduleEffectfulSourceCompletions(
   }
   // Only direct children can feed the construct's own pre-completed
   // cache; expanded descendants are deduplicated through the run-scoped
-  // session instead.
+  // session instead.  Nodes expanded from a collection-opted-in child
+  // (a conditional()/command()) did participate in the construct's
+  // explicit source collection, so they re-register structurally in
+  // declaration order even though their results are not reusable.
   const direct = new Set<RuntimeNode>(nodes);
+  const collected = new Set<RuntimeNode>();
+  const expandedNodes: RuntimeNode[] = [];
+  for (const node of nodes) {
+    const optedIn = (node.parser as {
+      readonly [sourceCollectionExpansionKey]?: boolean;
+    })[sourceCollectionExpansionKey] === true;
+    for (const expandedNode of expandEffectfulRuntimeNodes([node])) {
+      expandedNodes.push(expandedNode);
+      if (optedIn || expandedNode === node) collected.add(expandedNode);
+    }
+  }
   const effectful = await completeEffectfulSourcesAsync(
-    expandEffectfulRuntimeNodes(nodes),
+    expandedNodes,
     state,
     runtime,
     exec,
@@ -400,6 +539,7 @@ async function scheduleEffectfulSourceCompletions(
         ? { demandNodes: expandEffectfulRuntimeNodes(demandNodes) }
         : {}),
       isReusable: (node) => direct.has(node),
+      isCollected: (node) => collected.has(node),
     },
   );
   if (!effectful.success) {
@@ -1927,6 +2067,30 @@ function defineExclusiveSchedulingNodes(
   exclusiveParser: object,
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): void {
+  // When an alternative opts into source-collection expansion (a
+  // command() or a conditional()), the exclusive parser forwards the
+  // opt-in so its committed branch stays visible during explicit
+  // collection, matching what the scheduling hook already exposes for
+  // prompted values.  Alternatives without the marker keep the
+  // exclusive parser's existing collection scope.
+  if (
+    parsers.some((parser) =>
+      (parser as {
+        readonly [sourceCollectionExpansionKey]?: boolean;
+      })[sourceCollectionExpansionKey] === true
+    )
+  ) {
+    Object.defineProperty(exclusiveParser, sourceCollectionExpansionKey, {
+      value: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  Object.defineProperty(exclusiveParser, staticSourceScopeKey, {
+    value: parsers,
+    configurable: true,
+    enumerable: false,
+  });
   Object.defineProperty(exclusiveParser, effectfulSchedulingNodesKey, {
     value: ((state, parentPath) => {
       const active = normalizeExclusiveState(state);
@@ -5287,7 +5451,7 @@ function* suggestObjectSync<
       : {}) as Record<PropertyKey, unknown>,
     context.exec?.path,
   );
-  collectExplicitSourceValues(nodes, runtime);
+  collectExplicitSourceValues(expandSourceCollectionNodes(nodes), runtime);
 
   // Collect dependency sources from the state tree (handles nested
   // DependencySourceState inside arrays, e.g., multiple()).
@@ -5411,7 +5575,10 @@ async function* suggestObjectAsync<
       : {}) as Record<PropertyKey, unknown>,
     context.exec?.path,
   );
-  await collectExplicitSourceValuesAsync(nodes, runtime);
+  await collectExplicitSourceValuesAsync(
+    expandSourceCollectionNodes(nodes),
+    runtime,
+  );
 
   // Collect dependency sources from state tree.
   if (context.state && typeof context.state === "object") {
@@ -6944,13 +7111,15 @@ export function object<
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
           collectExplicitSourceValues(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromPairs(
-                typedParserPairs,
-                annotatedState,
-                exec?.path,
+            expandSourceCollectionNodes(
+              filterPreCompletedRuntimeNodes(
+                buildRuntimeNodesFromPairs(
+                  typedParserPairs,
+                  annotatedState,
+                  exec?.path,
+                ),
+                new Set(preCompleted.keys()),
               ),
-              new Set(preCompleted.keys()),
             ),
             runtime,
           );
@@ -7071,7 +7240,10 @@ export function object<
             allRuntimeNodes,
             new Set(preCompleted.keys()),
           );
-          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(runtimeNodes),
+            runtime,
+          );
           // Phase 2b: Run effectful source completions (e.g., prompts)
           // serially so their values register before deferred replay.
           // Deferred Phase 1 results stay schedulable so a demand-only
@@ -7239,13 +7411,15 @@ export function object<
             annotatedState[fieldKey] = getFieldState(field, fieldParser);
           }
           collectExplicitSourceValues(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromPairs(
-                typedParserPairs,
-                annotatedState,
-                exec?.path,
+            expandSourceCollectionNodes(
+              filterPreCompletedRuntimeNodes(
+                buildRuntimeNodesFromPairs(
+                  typedParserPairs,
+                  annotatedState,
+                  exec?.path,
+                ),
+                new Set(preCompleted.keys()),
               ),
-              new Set(preCompleted.keys()),
             ),
             runtime,
           );
@@ -7353,7 +7527,10 @@ export function object<
             allRuntimeNodes,
             new Set(preCompleted.keys()),
           );
-          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(runtimeNodes),
+            runtime,
+          );
           // Best-effort seeding: run effectful source completions so
           // prompted values reach phase-two contexts.  A failure (e.g.,
           // a cancelled prompt) aborts seed extraction entirely so no
@@ -8163,9 +8340,11 @@ function createSeqComplete(
           childExec,
         );
         collectExplicitSourceValues(
-          filterPreCompletedRuntimeNodes(
-            buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
-            new Set(preCompleted.keys()),
+          expandSourceCollectionNodes(
+            filterPreCompletedRuntimeNodes(
+              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+              new Set(preCompleted.keys()),
+            ),
           ),
           runtime,
         );
@@ -8253,7 +8432,10 @@ function createSeqComplete(
           allRuntimeNodes,
           new Set(preCompleted.keys()),
         );
-        await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+        await collectExplicitSourceValuesAsync(
+          expandSourceCollectionNodes(runtimeNodes),
+          runtime,
+        );
         // Phase 2b: Run effectful source completions (e.g., prompts)
         // serially so their values register before deferred replay.
         // Deferred Phase 1 results stay schedulable so a demand-only
@@ -8349,7 +8531,7 @@ function suggestTupleSync(
       stateArray,
       advancedContext.exec?.path,
     );
-    collectExplicitSourceValues(nodes, runtime);
+    collectExplicitSourceValues(expandSourceCollectionNodes(nodes), runtime);
     fillMissingSourceDefaults(nodes, runtime);
     collectSourcesFromState(stateArray, runtime);
     completeDependencySourceDefaults(
@@ -8421,7 +8603,10 @@ async function* suggestTupleAsync(
       stateArray,
       advancedContext.exec?.path,
     );
-    await collectExplicitSourceValuesAsync(nodes, runtime);
+    await collectExplicitSourceValuesAsync(
+      expandSourceCollectionNodes(nodes),
+      runtime,
+    );
     await fillMissingSourceDefaultsAsync(nodes, runtime);
     collectSourcesFromState(stateArray, runtime);
     await completeDependencySourceDefaultsAsync(
@@ -8760,7 +8945,10 @@ function markFailedTupleSuggestSources(
     if (nodes.length < 1) continue;
 
     const failedRuntime = createDependencyRuntimeContext();
-    collectExplicitSourceValues(nodes, failedRuntime);
+    collectExplicitSourceValues(
+      expandSourceCollectionNodes(nodes),
+      failedRuntime,
+    );
     for (const node of nodes) {
       const sourceId = node.parser.dependencyMetadata?.source?.sourceId;
       if (sourceId != null && failedRuntime.isSourceFailed(sourceId)) {
@@ -8795,7 +8983,10 @@ async function markFailedTupleSuggestSourcesAsync(
     if (nodes.length < 1) continue;
 
     const failedRuntime = createDependencyRuntimeContext();
-    await collectExplicitSourceValuesAsync(nodes, failedRuntime);
+    await collectExplicitSourceValuesAsync(
+      expandSourceCollectionNodes(nodes),
+      failedRuntime,
+    );
     for (const node of nodes) {
       const sourceId = node.parser.dependencyMetadata?.source?.sourceId;
       if (sourceId != null && failedRuntime.isSourceFailed(sourceId)) {
@@ -9248,9 +9439,11 @@ export function tuple<
             childExec,
           );
           collectExplicitSourceValues(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
+            expandSourceCollectionNodes(
+              filterPreCompletedRuntimeNodes(
+                buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+                new Set(preCompleted.keys()),
+              ),
             ),
             runtime,
           );
@@ -9352,7 +9545,10 @@ export function tuple<
             allRuntimeNodes,
             new Set(preCompleted.keys()),
           );
-          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(runtimeNodes),
+            runtime,
+          );
           // Phase 2b: Run effectful source completions (e.g., prompts)
           // serially so their values register before deferred replay.
           // Deferred Phase 1 results stay schedulable so a demand-only
@@ -9461,9 +9657,11 @@ export function tuple<
             childExec,
           );
           collectExplicitSourceValues(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
+            expandSourceCollectionNodes(
+              filterPreCompletedRuntimeNodes(
+                buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+                new Set(preCompleted.keys()),
+              ),
             ),
             runtime,
           );
@@ -9552,7 +9750,10 @@ export function tuple<
             allRuntimeNodes,
             new Set(preCompleted.keys()),
           );
-          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(runtimeNodes),
+            runtime,
+          );
           // Best-effort seeding: run effectful source completions so
           // prompted values reach phase-two contexts.  A failure (e.g.,
           // a cancelled prompt) aborts seed extraction entirely so no
@@ -10089,9 +10290,11 @@ export function seq<
             childExec,
           );
           collectExplicitSourceValues(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
+            expandSourceCollectionNodes(
+              filterPreCompletedRuntimeNodes(
+                buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+                new Set(preCompleted.keys()),
+              ),
             ),
             runtime,
           );
@@ -10180,7 +10383,10 @@ export function seq<
             allRuntimeNodes,
             new Set(preCompleted.keys()),
           );
-          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(runtimeNodes),
+            runtime,
+          );
           // Best-effort seeding: run effectful source completions so
           // prompted values reach phase-two contexts.  A failure (e.g.,
           // a cancelled prompt) aborts seed extraction entirely so no
@@ -10280,7 +10486,10 @@ export function seq<
             stateArray,
             advancedContext.exec?.path,
           );
-          collectExplicitSourceValues(nodes, runtime);
+          collectExplicitSourceValues(
+            expandSourceCollectionNodes(nodes),
+            runtime,
+          );
           fillMissingSourceDefaults(nodes, runtime);
           collectSourcesFromState(stateArray, runtime);
           completeDependencySourceDefaults(
@@ -10342,7 +10551,10 @@ export function seq<
             stateArray,
             advancedContext.exec?.path,
           );
-          await collectExplicitSourceValuesAsync(nodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(nodes),
+            runtime,
+          );
           await fillMissingSourceDefaultsAsync(nodes, runtime);
           collectSourcesFromState(stateArray, runtime);
           await completeDependencySourceDefaultsAsync(
@@ -11663,10 +11875,12 @@ export function merge(
           return { cache: undefined, excludedSourceFields: undefined };
         });
         collectExplicitSourceValues(
-          buildRuntimeNodesFromPairs(
-            unambiguousFieldParsers,
-            state as Record<PropertyKey, unknown>,
-            exec?.path,
+          expandSourceCollectionNodes(
+            buildRuntimeNodesFromPairs(
+              unambiguousFieldParsers,
+              state as Record<PropertyKey, unknown>,
+              exec?.path,
+            ),
           ),
           runtime,
         );
@@ -11829,7 +12043,10 @@ export function merge(
           state as Record<PropertyKey, unknown>,
           exec?.path,
         );
-        await collectExplicitSourceValuesAsync(mergeNodes, runtime);
+        await collectExplicitSourceValuesAsync(
+          expandSourceCollectionNodes(mergeNodes),
+          runtime,
+        );
         // Phase 2b: Run effectful source completions (e.g., prompts) for
         // unambiguous fields so their values register before deferred
         // replay.  Duplicate-key fields are already excluded from the
@@ -12032,10 +12249,12 @@ export function merge(
             return { cache: undefined, excludedSourceFields: undefined };
           });
           collectExplicitSourceValues(
-            buildRuntimeNodesFromPairs(
-              unambiguousFieldParsers,
-              state as Record<PropertyKey, unknown>,
-              exec?.path,
+            expandSourceCollectionNodes(
+              buildRuntimeNodesFromPairs(
+                unambiguousFieldParsers,
+                state as Record<PropertyKey, unknown>,
+                exec?.path,
+              ),
             ),
             runtime,
           );
@@ -12183,7 +12402,10 @@ export function merge(
             state as Record<PropertyKey, unknown>,
             exec?.path,
           );
-          await collectExplicitSourceValuesAsync(mergeNodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(mergeNodes),
+            runtime,
+          );
           // Best-effort seeding: run effectful source completions so
           // prompted values reach phase-two contexts.  A failure (e.g.,
           // a cancelled prompt) aborts seed extraction entirely so no
@@ -12373,10 +12595,12 @@ export function merge(
           });
           if (context.state && typeof context.state === "object") {
             await collectExplicitSourceValuesAsync(
-              buildRuntimeNodesFromPairs(
-                childFieldPairs,
-                context.state as Record<PropertyKey, unknown>,
-                context.exec?.path,
+              expandSourceCollectionNodes(
+                buildRuntimeNodesFromPairs(
+                  childFieldPairs,
+                  context.state as Record<PropertyKey, unknown>,
+                  context.exec?.path,
+                ),
               ),
               runtime,
             );
@@ -12473,10 +12697,12 @@ export function merge(
       });
       if (context.state && typeof context.state === "object") {
         collectExplicitSourceValues(
-          buildRuntimeNodesFromPairs(
-            childFieldPairs,
-            context.state as Record<PropertyKey, unknown>,
-            context.exec?.path,
+          expandSourceCollectionNodes(
+            buildRuntimeNodesFromPairs(
+              childFieldPairs,
+              context.state as Record<PropertyKey, unknown>,
+              context.exec?.path,
+            ),
           ),
           runtime,
         );
@@ -12713,7 +12939,9 @@ function buildSuggestRegistry(
       preParsedContext.exec?.path,
     );
     collectExplicitSourceValues(
-      nodes,
+      expandSourceCollectionNodes(
+        nodes,
+      ),
       runtime,
     );
     fillMissingSourceDefaults(nodes, runtime);
@@ -12773,7 +13001,9 @@ async function buildSuggestRegistryAsync(
       preParsedContext.exec?.path,
     );
     await collectExplicitSourceValuesAsync(
-      nodes,
+      expandSourceCollectionNodes(
+        nodes,
+      ),
       runtime,
     );
     await fillMissingSourceDefaultsAsync(nodes, runtime);
@@ -12839,7 +13069,7 @@ function seedSuggestRuntimeFromFieldParsers(
     stateRecord,
     parentPath,
   );
-  collectExplicitSourceValues(nodes, runtime);
+  collectExplicitSourceValues(expandSourceCollectionNodes(nodes), runtime);
   fillMissingSourceDefaults(nodes, runtime);
   collectSourcesFromState(
     state,
@@ -12906,7 +13136,10 @@ async function seedSuggestRuntimeFromFieldParsersAsync(
     stateRecord,
     parentPath,
   );
-  await collectExplicitSourceValuesAsync(nodes, runtime);
+  await collectExplicitSourceValuesAsync(
+    expandSourceCollectionNodes(nodes),
+    runtime,
+  );
   await fillMissingSourceDefaultsAsync(nodes, runtime);
   collectSourcesFromState(
     state,
@@ -13527,9 +13760,11 @@ export function concat(
       childExec,
     );
     collectExplicitSourceValues(
-      filterPreCompletedRuntimeNodes(
-        buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
-        new Set(preCompleted.keys()),
+      expandSourceCollectionNodes(
+        filterPreCompletedRuntimeNodes(
+          buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+          new Set(preCompleted.keys()),
+        ),
       ),
       runtime,
     );
@@ -13645,7 +13880,10 @@ export function concat(
       allRuntimeNodes,
       new Set(preCompleted.keys()),
     );
-    await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+    await collectExplicitSourceValuesAsync(
+      expandSourceCollectionNodes(runtimeNodes),
+      runtime,
+    );
     // Phase 2b: Run effectful source completions (e.g., prompts)
     // serially so their values register before deferred replay.
     // Deferred Phase 1 results stay schedulable so a demand-only
@@ -13800,9 +14038,11 @@ export function concat(
             childExec,
           );
           collectExplicitSourceValues(
-            filterPreCompletedRuntimeNodes(
-              buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
-              new Set(preCompleted.keys()),
+            expandSourceCollectionNodes(
+              filterPreCompletedRuntimeNodes(
+                buildRuntimeNodesFromArray(syncParsers, stateArray, exec?.path),
+                new Set(preCompleted.keys()),
+              ),
             ),
             runtime,
           );
@@ -13880,7 +14120,10 @@ export function concat(
             allRuntimeNodes,
             new Set(preCompleted.keys()),
           );
-          await collectExplicitSourceValuesAsync(runtimeNodes, runtime);
+          await collectExplicitSourceValuesAsync(
+            expandSourceCollectionNodes(runtimeNodes),
+            runtime,
+          );
           // Best-effort seeding: run effectful source completions so
           // prompted values reach phase-two contexts.  A failure (e.g.,
           // a cancelled prompt) aborts seed extraction entirely so no
@@ -14141,6 +14384,15 @@ export function group<M extends Mode, TValue, TState>(
         )[effectfulSchedulingNodesKey],
       }
       : {}),
+    // Forward the source-collection opt-in so a grouped conditional()
+    // or command() keeps its collection scope.
+    ...(sourceCollectionExpansionKey in parser
+      ? {
+        [sourceCollectionExpansionKey]: (
+          parser as { [sourceCollectionExpansionKey]: boolean }
+        )[sourceCollectionExpansionKey],
+      }
+      : {}),
     // Forward completion deferral hook from inner parser so that
     // prompt(group("label", bindConfig(...))) defers correctly.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -14259,6 +14511,12 @@ export function group<M extends Mode, TValue, TState>(
     },
   };
   defineParseLanes(groupParser, getOwnParseLanes(parser));
+  // Forward static source estimation through the group.
+  Object.defineProperty(groupParser, staticSourceScopeKey, {
+    value: [parser],
+    configurable: true,
+    enumerable: false,
+  });
   Object.defineProperty(groupParser, extractPhase2SeedKey, {
     value(state: TState, exec?: ExecutionContext) {
       return extractPhase2Seed(parser, state, exec);
@@ -15626,13 +15884,15 @@ export function conditional(
       exec?.dependencyRegistry?.clone(),
     );
     collectExplicitSourceValues(
-      buildRuntimeNodesFromPairs(
-        [
-          ["_discriminator", discriminator],
-          ["_branch", branchParser],
-        ],
-        combinedState,
-        exec?.path,
+      expandSourceCollectionNodes(
+        buildRuntimeNodesFromPairs(
+          [
+            ["_discriminator", discriminator],
+            ["_branch", branchParser],
+          ],
+          combinedState,
+          exec?.path,
+        ),
       ),
       runtime,
     );
@@ -15730,6 +15990,25 @@ export function conditional(
     };
   };
 
+  // Per-instance prefix for prepared-selection cache keys.
+  const preparedKeyPrefix = `c${++conditionalInstanceCounter}|`;
+  const preparedKeyFor = (
+    parentPath: readonly PropertyKey[] | undefined,
+  ): string => preparedKeyPrefix + serializeSchedulingPath(parentPath ?? []);
+  // Source IDs the branches can provide, for demand-only control
+  // dependency detection (see RuntimeNode.providesSourceIds).
+  const branchProvidedSourceIds = (() => {
+    const out = new Set<symbol>();
+    const seen = new Set<object>();
+    for (const key of Object.keys(branches)) {
+      collectStaticSourceIds(branches[key], out, seen);
+    }
+    if (defaultBranch != null) {
+      collectStaticSourceIds(defaultBranch, out, seen);
+    }
+    return out;
+  })();
+
   // Builds the effectful scheduling nodes for this conditional: the
   // discriminator (always) and the committed branch (only when the
   // selection is not speculative, so branch sources stay hidden until
@@ -15737,20 +16016,28 @@ export function conditional(
   // effectfulSchedulingNodesKey hook and the completion below; the
   // "_discriminator"/"_branch" path segments match completion paths so
   // the run-scoped completion cache lines up.
+  //
+  // When no branch was committed at parse time, a scheduling barrier
+  // follows the discriminator node: it resolves the branch from the
+  // discriminator's completion, caches the decision in the run-scoped
+  // session (final completion consumes the same decision), and
+  // schedules the chosen branch's nodes within the same pass, so branch
+  // sources still complete before a parent sibling's dependency replay.
   const buildConditionalSchedulingNodes = (
     state: unknown,
     parentPath: readonly PropertyKey[] | undefined,
   ): readonly RuntimeNode[] => {
     if (state == null || typeof state !== "object") return [];
     const conditionalState = state as ConditionalState<string>;
+    const annotatedDiscriminatorState = getAnnotatedChildState(
+      conditionalState,
+      conditionalState.discriminatorState,
+      discriminator,
+    );
     const nodes: RuntimeNode[] = [{
       path: [...(parentPath ?? []), "_discriminator"],
       parser: discriminator,
-      state: getAnnotatedChildState(
-        conditionalState,
-        conditionalState.discriminatorState,
-        discriminator,
-      ),
+      state: annotatedDiscriminatorState,
     }];
     const selected = conditionalState.selectedBranch;
     if (selected !== undefined && conditionalState.speculative !== true) {
@@ -15768,7 +16055,199 @@ export function conditional(
           ),
         });
       }
+      return nodes;
     }
+
+    const discriminatorSource = discriminator.dependencyMetadata?.source;
+    const innerCompleteSource = discriminatorSource?.completeSource;
+    const discriminatorPathKey = serializeSchedulingPath([
+      ...(parentPath ?? []),
+      "_discriminator",
+    ]);
+    // Tee the discriminator's effectful completion result so a barrier
+    // can resolve the branch without re-running the effect.  The
+    // wrapped metadata lives only on this pass's node; the
+    // discriminator parser itself is never mutated.
+    const cell: {
+      result?: import("./valueparser.ts").ValueParserResult<unknown>;
+    } = {};
+    const teeDiscriminatorNode = (): void => {
+      if (discriminatorSource == null || innerCompleteSource == null) return;
+      nodes[0] = {
+        ...nodes[0],
+        parser: {
+          dependencyMetadata: {
+            ...discriminator.dependencyMetadata,
+            source: {
+              ...discriminatorSource,
+              completeSource: async (s, e) => {
+                const result = await innerCompleteSource(s, e);
+                if (result != null) cell.result = result;
+                return result;
+              },
+            },
+          },
+        },
+      };
+    };
+
+    if (conditionalState.speculative === true) {
+      // A speculative selection is a parse-time guess: the guessed
+      // branch stays effect-free until the discriminator's own
+      // completion confirms its key, so the barrier schedules the
+      // branch only on a confirmed match; a mismatch schedules nothing
+      // and the verification in completion fails the parse.  Only an
+      // effectful source discriminator can confirm here—its completion
+      // is deduplicated through the run-scoped session, so it runs at
+      // most once per pass.
+      if (selected?.kind !== "branch" || innerCompleteSource == null) {
+        return nodes;
+      }
+      teeDiscriminatorNode();
+      const speculativeKey = selected.key;
+      nodes.push({
+        path: [...(parentPath ?? []), "_branch"],
+        parser: {},
+        state: conditionalState,
+        ...(discriminatorSource != null
+          ? { requiresSourceId: discriminatorSource.sourceId }
+          : {}),
+        providesSourceIds: branchProvidedSourceIds,
+        prepare: async (ctx) => {
+          const session = ctx.exec?.effectfulCompletionSession;
+          if (session == null) return undefined;
+          const result = cell.result ??
+            session.completedByPath.get(discriminatorPathKey);
+          if (
+            result == null || isDeferredCompletionResult(result) ||
+            result.success !== true
+          ) {
+            return undefined;
+          }
+          if (String(result.value) !== speculativeKey) return undefined;
+          const branchParser = branches[speculativeKey];
+          if (branchParser == null) return undefined;
+          return await ctx.schedule(expandEffectfulRuntimeNodes([{
+            path: [...(parentPath ?? []), "_branch"],
+            parser: branchParser,
+            state: getAnnotatedChildState(
+              conditionalState,
+              conditionalState.branchState,
+              branchParser,
+            ),
+          }]));
+        },
+      });
+      return nodes;
+    }
+    if (selected !== undefined) return nodes;
+
+    // A prompted discriminator that is not a dependency source has no
+    // run-scoped occurrence cache, so completing it during preparation
+    // would run its effect a second time in final completion.  Dynamic
+    // branch preparation is unsupported for it (documented limitation).
+    if (
+      discriminatorSource == null &&
+      typeof discriminator.shouldDeferCompletion === "function"
+    ) {
+      return nodes;
+    }
+
+    teeDiscriminatorNode();
+    nodes.push({
+      path: [...(parentPath ?? []), "_branch"],
+      parser: {},
+      state: conditionalState,
+      ...(discriminatorSource != null
+        ? { requiresSourceId: discriminatorSource.sourceId }
+        : {}),
+      providesSourceIds: branchProvidedSourceIds,
+      prepare: async (ctx) => {
+        const session = ctx.exec?.effectfulCompletionSession;
+        if (session == null) return undefined;
+        const key = preparedKeyFor(parentPath);
+        let prepared = session.preparedByPath.get(key) as
+          | PreparedConditionalSelection
+          | undefined;
+        if (prepared == null) {
+          let discriminatorResult = cell.result ??
+            session.completedByPath.get(discriminatorPathKey);
+          if (
+            discriminatorResult == null && innerCompleteSource == null
+          ) {
+            // Effect-free discriminator: complete it once here; final
+            // completion reuses the prepared result, so non-idempotent
+            // completions (e.g., lazy defaults) still evaluate once.
+            const discriminatorExec = ctx.exec == null ? undefined : {
+              ...ctx.exec,
+              path: [...(parentPath ?? []), "_discriminator"],
+            };
+            discriminatorResult = unwrapCompleteResult(
+              await discriminator.complete(
+                annotatedDiscriminatorState,
+                discriminatorExec,
+              ),
+            );
+          }
+          if (
+            discriminatorResult == null ||
+            isDeferredCompletionResult(discriminatorResult)
+          ) {
+            return undefined;
+          }
+          const namedBranch = discriminatorResult.success
+            ? branches[String(discriminatorResult.value)]
+            : undefined;
+          const branchParser = namedBranch ?? defaultBranch;
+          let branchState: unknown;
+          if (branchParser != null) {
+            // Mirror final completion's empty-input replay parse so the
+            // prepared branch state matches what completion would build.
+            const branchExec = ctx.exec == null ? undefined : {
+              ...ctx.exec,
+              path: [...(parentPath ?? []), "_branch"],
+            };
+            const annotatedInitial = getAnnotatedChildState(
+              conditionalState,
+              branchParser.initialState,
+              branchParser,
+            );
+            const replayResult = await branchParser.parse({
+              buffer: [] as string[],
+              optionsTerminated: false,
+              usage: [] as never[],
+              exec: branchExec,
+              dependencyRegistry: ctx.exec?.dependencyRegistry,
+              state: annotatedInitial,
+            } as ParserContext<unknown>);
+            branchState = replayResult.success
+              ? replayResult.next.state
+              : annotatedInitial;
+          }
+          prepared = {
+            discriminatorResult,
+            branchParser,
+            branchKey: namedBranch != null
+              ? String(
+                (discriminatorResult as { readonly value: unknown }).value,
+              )
+              : undefined,
+            branchState,
+          };
+          session.preparedByPath.set(key, prepared);
+        }
+        if (prepared.branchParser == null) return undefined;
+        return await ctx.schedule(expandEffectfulRuntimeNodes([{
+          path: [...(parentPath ?? []), "_branch"],
+          parser: prepared.branchParser,
+          state: getAnnotatedChildState(
+            conditionalState,
+            prepared.branchState,
+            prepared.branchParser,
+          ),
+        }]));
+      },
+    });
     return nodes;
   };
 
@@ -15808,42 +16287,83 @@ export function conditional(
 
     // No branch selected yet (see sync counterpart for rationale).
     if (state.selectedBranch === undefined) {
+      let prepared: PreparedConditionalSelection | undefined;
       if (exec?.phase !== "parse" && exec?.phase !== "suggest") {
+        // Resolve the branch through the scheduling pass first: the
+        // barrier completes a prompted discriminator, prepares the
+        // branch selection in the run-scoped session, and completes
+        // the chosen branch's effectful sources.  When a parent
+        // construct already ran this pass, the run-scoped caches make
+        // it a no-op; without a session there is no cache to prevent
+        // double effects, so the pass is skipped and completion below
+        // behaves as before.
+        if (exec?.effectfulCompletionSession != null) {
+          const schedulingRuntime = createDependencyRuntimeContext(
+            exec.dependencyRegistry?.clone(),
+          );
+          const schedulingExec: ExecutionContext = {
+            ...exec,
+            phase: "complete",
+            dependencyRuntime: schedulingRuntime,
+            dependencyRegistry: schedulingRuntime.registry,
+          };
+          const schedulingFailure = await scheduleEffectfulSourceCompletions(
+            buildConditionalSchedulingNodes(state, exec.path),
+            state,
+            schedulingRuntime,
+            schedulingExec,
+            new Map<string | symbol, unknown>(),
+          );
+          if (schedulingFailure != null) return schedulingFailure;
+          prepared = exec.effectfulCompletionSession.preparedByPath.get(
+            preparedKeyFor(exec.path),
+          ) as PreparedConditionalSelection | undefined;
+        }
         const annotatedDiscriminatorStateForDeferred = getAnnotatedChildState(
           state,
           state.discriminatorState,
           discriminator,
         );
-        const deferredDiscriminatorResult = unwrapCompleteResult(
-          await discriminator.complete(
-            annotatedDiscriminatorStateForDeferred,
-            withChildExecPath(exec, "_discriminator"),
-          ),
-        );
+        // Consume the prepared decision instead of re-completing the
+        // discriminator, so a non-idempotent completion cannot select
+        // a different branch than the one whose sources were scheduled.
+        const deferredDiscriminatorResult = prepared != null
+          ? prepared.discriminatorResult
+          : unwrapCompleteResult(
+            await discriminator.complete(
+              annotatedDiscriminatorStateForDeferred,
+              withChildExecPath(exec, "_discriminator"),
+            ),
+          );
         if (deferredDiscriminatorResult.success) {
           const deferredValue = deferredDiscriminatorResult.value as string;
           const deferredBranch = branches[deferredValue];
           if (deferredBranch) {
             const branchExec = withChildExecPath(exec, "_branch");
-            const emptyCtx = {
-              buffer: [] as string[],
-              optionsTerminated: false,
-              usage: [] as never[],
-              exec: branchExec,
-              dependencyRegistry: exec?.dependencyRegistry,
-            };
-            const annotatedInitial = getAnnotatedChildState(
-              state,
-              deferredBranch.initialState,
-              deferredBranch,
-            );
-            const replayResult = await deferredBranch.parse({
-              ...emptyCtx,
-              state: annotatedInitial,
-            });
-            const branchState = replayResult.success
-              ? replayResult.next.state
-              : annotatedInitial;
+            let branchState: unknown;
+            if (prepared != null && prepared.branchKey === deferredValue) {
+              branchState = prepared.branchState;
+            } else {
+              const emptyCtx = {
+                buffer: [] as string[],
+                optionsTerminated: false,
+                usage: [] as never[],
+                exec: branchExec,
+                dependencyRegistry: exec?.dependencyRegistry,
+              };
+              const annotatedInitial = getAnnotatedChildState(
+                state,
+                deferredBranch.initialState,
+                deferredBranch,
+              );
+              const replayResult = await deferredBranch.parse({
+                ...emptyCtx,
+                state: annotatedInitial,
+              });
+              branchState = replayResult.success
+                ? replayResult.next.state
+                : annotatedInitial;
+            }
             // Re-inject parent annotations for the complete phase
             // (see sync counterpart for rationale).
             const annotatedBranchState = getAnnotatedChildState(
@@ -15925,11 +16445,15 @@ export function conditional(
         };
       }
 
-      // Default branch (real complete only).
+      // Default branch (real complete only).  A prepared selection for
+      // the default branch carries the branch state the scheduling
+      // pass's preparation built, so completion reuses it.
       if (defaultBranch !== undefined) {
         const branchState = getAnnotatedChildState(
           state,
-          state.branchState ?? defaultBranch.initialState,
+          (prepared != null && prepared.branchKey == null
+            ? prepared.branchState
+            : undefined) ?? state.branchState ?? defaultBranch.initialState,
           defaultBranch,
         );
         const defaultResult = unwrapCompleteResult(
@@ -15988,13 +16512,15 @@ export function conditional(
       exec?.dependencyRegistry?.clone(),
     );
     await collectExplicitSourceValuesAsync(
-      buildRuntimeNodesFromPairs(
-        [
-          ["_discriminator", discriminator],
-          ["_branch", branchParser],
-        ],
-        combinedState,
-        exec?.path,
+      expandSourceCollectionNodes(
+        buildRuntimeNodesFromPairs(
+          [
+            ["_discriminator", discriminator],
+            ["_branch", branchParser],
+          ],
+          combinedState,
+          exec?.path,
+        ),
       ),
       runtime,
     );
@@ -16065,10 +16591,12 @@ export function conditional(
         exec?.dependencyRegistry?.clone(),
       );
       await collectExplicitSourceValuesAsync(
-        buildRuntimeNodesFromPairs(
-          [["_discriminator", discriminator]] as const,
-          discOnlyState,
-          exec?.path,
+        expandSourceCollectionNodes(
+          buildRuntimeNodesFromPairs(
+            [["_discriminator", discriminator]] as const,
+            discOnlyState,
+            exec?.path,
+          ),
         ),
         discOnlyRuntime,
       );
@@ -16273,15 +16801,17 @@ export function conditional(
           ),
       };
       collectExplicitSourceValues(
-        buildRuntimeNodesFromPairs(
-          syncDefaultBranch == null
-            ? [["\u005fdiscriminator", discriminator]] as const
-            : [
-              ["\u005fdiscriminator", discriminator],
-              ["\u005fbranch", syncDefaultBranch],
-            ] as const,
-          defaultCombinedState,
-          context.exec?.path,
+        expandSourceCollectionNodes(
+          buildRuntimeNodesFromPairs(
+            syncDefaultBranch == null
+              ? [["\u005fdiscriminator", discriminator]] as const
+              : [
+                ["\u005fdiscriminator", discriminator],
+                ["\u005fbranch", syncDefaultBranch],
+              ] as const,
+            defaultCombinedState,
+            context.exec?.path,
+          ),
         ),
         runtime,
       );
@@ -16374,13 +16904,15 @@ export function conditional(
         ),
       };
       collectExplicitSourceValues(
-        buildRuntimeNodesFromPairs(
-          [
-            ["_discriminator", discriminator],
-            ["_branch", branchParser],
-          ],
-          combinedState,
-          context.exec?.path,
+        expandSourceCollectionNodes(
+          buildRuntimeNodesFromPairs(
+            [
+              ["_discriminator", discriminator],
+              ["_branch", branchParser],
+            ],
+            combinedState,
+            context.exec?.path,
+          ),
         ),
         runtime,
       );
@@ -16439,15 +16971,17 @@ export function conditional(
           ),
       };
       await collectExplicitSourceValuesAsync(
-        buildRuntimeNodesFromPairs(
-          defaultBranch == null
-            ? [["\u005fdiscriminator", discriminator]] as const
-            : [
-              ["\u005fdiscriminator", discriminator],
-              ["\u005fbranch", defaultBranch],
-            ] as const,
-          defaultCombinedState,
-          context.exec?.path,
+        expandSourceCollectionNodes(
+          buildRuntimeNodesFromPairs(
+            defaultBranch == null
+              ? [["\u005fdiscriminator", discriminator]] as const
+              : [
+                ["\u005fdiscriminator", discriminator],
+                ["\u005fbranch", defaultBranch],
+              ] as const,
+            defaultCombinedState,
+            context.exec?.path,
+          ),
         ),
         runtime,
       );
@@ -16548,13 +17082,15 @@ export function conditional(
         ),
       };
       await collectExplicitSourceValuesAsync(
-        buildRuntimeNodesFromPairs(
-          [
-            ["_discriminator", discriminator],
-            ["_branch", branchParser],
-          ],
-          combinedState,
-          context.exec?.path,
+        expandSourceCollectionNodes(
+          buildRuntimeNodesFromPairs(
+            [
+              ["_discriminator", discriminator],
+              ["_branch", branchParser],
+            ],
+            combinedState,
+            context.exec?.path,
+          ),
         ),
         runtime,
       );
@@ -16848,6 +17384,26 @@ export function conditional(
   // itself uses, so the run-scoped completion cache lines up.
   Object.defineProperty(conditionalParser, effectfulSchedulingNodesKey, {
     value: buildConditionalSchedulingNodes satisfies EffectfulSchedulingNodesFn,
+    configurable: true,
+    enumerable: false,
+  });
+  // Command-line source values behind the discriminator and the
+  // committed branch register into the parent's runtime through the
+  // same node expansion the scheduling pass uses, so a value behaves
+  // identically whether it was typed or prompted.
+  Object.defineProperty(conditionalParser, sourceCollectionExpansionKey, {
+    value: true,
+    configurable: true,
+    enumerable: false,
+  });
+  // Static source estimation reaches the discriminator and every branch
+  // (see staticSourceScopeKey); an overcount is harmless.
+  Object.defineProperty(conditionalParser, staticSourceScopeKey, {
+    value: [
+      discriminator,
+      ...Object.values(branches),
+      ...(defaultBranch != null ? [defaultBranch] : []),
+    ],
     configurable: true,
     enumerable: false,
   });

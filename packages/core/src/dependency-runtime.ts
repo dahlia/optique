@@ -170,6 +170,67 @@ export interface RuntimeNode {
    * @since 1.0.0
    */
   readonly defaultDependencyValues?: readonly unknown[];
+
+  /**
+   * A scheduling barrier: a preparation step executed serially at this
+   * node's declaration position during the effectful completion pass.
+   *
+   * A `conditional()` whose branch selection is still unknown installs
+   * one after its discriminator node: the preparation resolves the
+   * branch from the discriminator's completion, caches the decision in
+   * the run-scoped session so final completion reuses it, and schedules
+   * the chosen branch's nodes through `ctx.schedule` within the same
+   * pass.  A failure aborts the pass like a failed effectful
+   * completion; `undefined` declines without effect.
+   *
+   * @since 1.3.0
+   */
+  readonly prepare?: (ctx: SchedulingBarrierContext) => Promise<
+    { readonly success: false; readonly error: Message } | undefined
+  >;
+
+  /**
+   * Source IDs that the subtree guarded by this barrier can provide.
+   * Used by the demand-only pass: when any of them is demanded, the
+   * barrier's {@link RuntimeNode.requiresSourceId} becomes demanded as
+   * a control dependency, so the guarding discriminator completes in
+   * the seed pass even though no consumer demands it directly.
+   *
+   * @since 1.3.0
+   */
+  readonly providesSourceIds?: ReadonlySet<symbol>;
+
+  /**
+   * The source ID whose completion this barrier's preparation depends
+   * on (a `conditional()` discriminator).  See
+   * {@link RuntimeNode.providesSourceIds}.
+   *
+   * @since 1.3.0
+   */
+  readonly requiresSourceId?: symbol;
+}
+
+/**
+ * The context handed to a {@link RuntimeNode.prepare} barrier.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface SchedulingBarrierContext {
+  /** The runtime the current pass registers source values into. */
+  readonly runtime: DependencyRuntimeContext;
+
+  /** The execution context of the current pass. */
+  readonly exec: ExecutionContext | undefined;
+
+  /**
+   * Schedules further (already expanded) nodes within the current pass,
+   * at the barrier's position.  Results are deduplicated through the
+   * run-scoped session and are not cached by the owning construct.
+   */
+  readonly schedule: (nodes: readonly RuntimeNode[]) => Promise<
+    { readonly success: false; readonly error: Message } | undefined
+  >;
 }
 
 /**
@@ -939,6 +1000,47 @@ export type EffectfulSchedulingNodesFn = (
 ) => readonly RuntimeNode[];
 
 /**
+ * Opt-in marker for parsers whose {@link effectfulSchedulingNodesKey}
+ * hook also defines their explicit-source *collection* scope.
+ *
+ * A parent construct normally collects explicit source values from its
+ * direct children only.  A parser carrying this marker (with value
+ * `true`) asks the parent to expand it through its scheduling hook
+ * before collecting, so command-line source values inside it—such as a
+ * `conditional()` discriminator, a committed conditional branch, or a
+ * selected `command()` subtree—register into the parent's dependency
+ * runtime exactly like a prompt-completed value would.  Constructs
+ * without the marker (plain nested `object()`, uncommitted exclusive
+ * branches) keep their existing scope.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export const sourceCollectionExpansionKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/sourceCollectionExpansion",
+);
+
+/**
+ * Static child parsers reachable for dependency-source estimation.
+ *
+ * `collectStaticSourceIds()` walks flattened field pairs, which stops at
+ * parsers whose children are not field-shaped—a `command()`'s inner
+ * parser, a nested `conditional()`'s branches, exclusive alternatives,
+ * or a transparent wrapper's inner construct.  Such parsers expose their
+ * children here so the walk can estimate every source a subtree may
+ * provide.  The estimate feeds demand-only control dependencies, where
+ * an overcount merely completes a discriminator earlier than strictly
+ * needed, while an undercount delays an effectful completion to the
+ * final pass and starves phase-two contexts of seed values.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export const staticSourceScopeKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/staticSourceScope",
+);
+
+/**
  * Forwards effectful scheduling through a shape-preserving wrapper such
  * as `map()`, `optional()`, `withDefault()`, or `nonEmpty()`, so the
  * wrapped parser—a selected exclusive or command branch, or an ordinary
@@ -966,6 +1068,13 @@ export function defineForwardedEffectfulSchedulingNodes(
   // a transformed source).  Re-exposing the inner parser here would
   // bypass that decision, so the hook is only installed for wrapped
   // non-source parsers such as constructs and exclusive branches.
+  // Static source estimation must see through the wrapper even when the
+  // scheduling hook below is not installed.
+  Object.defineProperty(wrapper, staticSourceScopeKey, {
+    value: [inner],
+    configurable: true,
+    enumerable: false,
+  });
   if (inner.dependencyMetadata?.source != null) return;
   Object.defineProperty(wrapper, effectfulSchedulingNodesKey, {
     value: ((state, parentPath) => [{
@@ -976,6 +1085,19 @@ export function defineForwardedEffectfulSchedulingNodes(
     configurable: true,
     enumerable: false,
   });
+  // Wrappers are transparent for source-collection expansion too: a
+  // wrapped conditional()/command() keeps its collection opt-in.
+  if (
+    (inner as { readonly [sourceCollectionExpansionKey]?: boolean })[
+      sourceCollectionExpansionKey
+    ] === true
+  ) {
+    Object.defineProperty(wrapper, sourceCollectionExpansionKey, {
+      value: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
 }
 
 /**
@@ -1092,6 +1214,27 @@ export interface CompleteEffectfulSourcesOptions {
    * running twice, and are skipped when no session is available.
    */
   readonly isReusable?: (node: RuntimeNode) => boolean;
+
+  /**
+   * Whether a node participated in the owning construct's explicit
+   * source collection, and therefore must have its structural value
+   * re-registered at its declaration position so registration order
+   * follows declaration order across structural and effectful
+   * occurrences.  This is wider than {@link isReusable}: nodes expanded
+   * from an opted-in child (see `sourceCollectionExpansionKey`) are
+   * collected but not reusable.  Defaults to {@link isReusable}.
+   */
+  readonly isCollected?: (node: RuntimeNode) => boolean;
+
+  /**
+   * Processes structural source nodes even when no node carries an
+   * effectful completion or a barrier.  A barrier's nested scheduling
+   * call sets this: the branch it schedules may hold only structural
+   * (command-line) values, which still must register into the pass's
+   * runtime, while ordinary construct passes keep the cheap early
+   * return.
+   */
+  readonly includeStructural?: boolean;
 }
 
 /**
@@ -1102,12 +1245,12 @@ export interface CompleteEffectfulSourcesOptions {
  *
  * - Runs only during real completion (`exec.phase === "complete"`); probe
  *   and suggest phases return immediately without effects.
- * - Precedence is structural: a source whose value was registered before
- *   the pass begins (from CLI state, environment, configuration, or a
- *   default) or that has already failed is never completed effectfully.
- *   When several scheduled occurrences share one source, each occurrence
- *   still completes and re-registers, so the last occurrence wins—the
- *   same rule as repeated command-line source occurrences.
+ * - Precedence is structural per occurrence: an effectful completion
+ *   returns its own field's command-line or bound value without running
+ *   the effect, and structural occurrences re-register their extracted
+ *   values in declaration order.  When several scheduled occurrences
+ *   share one source, the last occurrence wins—the same rule as repeated
+ *   command-line source occurrences.
  * - Completion results that are `undefined` or marked `deferred` are
  *   treated as declined and neither registered nor cached.
  * - A successful result registers its value unless the value is
@@ -1167,6 +1310,31 @@ export async function completeEffectfulSourcesAsync(
     for (const id of demanded) {
       session.demanded.add(id);
     }
+    // A barrier's discriminator is a control dependency: when a source
+    // it can provide is demanded, resolving the branch requires the
+    // discriminator even though no consumer demands it directly.
+    // Iterate to a fixed point: one barrier's branches can provide
+    // another barrier's discriminator source, and the chain must
+    // propagate regardless of declaration order.  Each iteration adds
+    // at least one demanded ID, so the loop is bounded by the number
+    // of barriers.
+    let demandAdded = true;
+    while (demandAdded) {
+      demandAdded = false;
+      for (const node of nodes) {
+        if (node.requiresSourceId == null || node.providesSourceIds == null) {
+          continue;
+        }
+        if (session.demanded.has(node.requiresSourceId)) continue;
+        for (const provided of node.providesSourceIds) {
+          if (session.demanded.has(provided)) {
+            session.demanded.add(node.requiresSourceId);
+            demandAdded = true;
+            break;
+          }
+        }
+      }
+    }
   }
 
   // A failed effectful completion cached in the run-scoped session (a
@@ -1182,12 +1350,37 @@ export async function completeEffectfulSourcesAsync(
   }
 
   const schedulable = nodes.filter((node) =>
-    node.parser.dependencyMetadata?.source?.completeSource != null
+    node.parser.dependencyMetadata?.source?.completeSource != null ||
+    node.prepare != null
   );
-  if (schedulable.length === 0) return empty;
+  if (schedulable.length === 0 && options?.includeStructural !== true) {
+    return empty;
+  }
 
   const completed: EffectfulSourceCompletion[] = [];
   for (const node of nodes) {
+    // A scheduling barrier runs at its declaration position; its
+    // preparation may schedule further nodes through the nested call,
+    // which shares this pass's runtime, session, and exec.
+    if (node.prepare != null) {
+      const barrierFailure = await node.prepare({
+        runtime,
+        exec,
+        // The barrier's subtree is part of the construct's delivery
+        // scope: its structural values re-register at the barrier's
+        // declaration position (isCollected), while its completion
+        // results stay out of the owning construct's pre-completed
+        // cache (isReusable) and deduplicate through the session.
+        schedule: (barrierNodes) =>
+          completeEffectfulSourcesAsync(barrierNodes, state, runtime, exec, {
+            isReusable: () => false,
+            isCollected: () => true,
+            includeStructural: true,
+          }).then((result) => result.success ? undefined : result),
+      });
+      if (barrierFailure != null) return barrierFailure;
+      continue;
+    }
     const source = node.parser.dependencyMetadata?.source;
     if (source == null) continue;
     if (source.completeSource == null) {
@@ -1197,12 +1390,12 @@ export async function completeEffectfulSourcesAsync(
       // Structural values were registered by source collection before
       // this pass, so a structural occurrence declared *after* an
       // effectful one re-registers its extracted value here to restore
-      // that order.  Only the construct's own nodes re-register:
-      // expanded descendants were never part of its source collection.
-      if (
-        source.extractSourceValue == null ||
-        (options?.isReusable?.(node) ?? true) === false
-      ) {
+      // that order.  Only nodes that participated in the construct's
+      // source collection re-register; other expanded descendants were
+      // never part of it.
+      const collected = options?.isCollected?.(node) ??
+        options?.isReusable?.(node) ?? true;
+      if (source.extractSourceValue == null || collected === false) {
         continue;
       }
       const extracted = await source.extractSourceValue(node.state);
@@ -1279,9 +1472,16 @@ export async function completeEffectfulSourcesAsync(
 
 /**
  * Serializes a scheduling node path into a stable string key, using
- * length-prefixed segments so no separator escaping is needed.
+ * length-prefixed segments so no separator escaping is needed.  Shared
+ * with constructs that key run-scoped session entries by path (e.g.,
+ * `conditional()`'s prepared branch selections).
+ *
+ * @internal
+ * @since 1.3.0
  */
-function serializeSchedulingPath(path: readonly PropertyKey[]): string {
+export function serializeSchedulingPath(
+  path: readonly PropertyKey[],
+): string {
   return path.map(serializePathSegment).join("");
 }
 

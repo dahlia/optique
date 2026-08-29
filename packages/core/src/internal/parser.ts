@@ -555,6 +555,17 @@ export interface EffectfulCompletionSession {
    * the field's final value.
    */
   readonly completedByPath: Map<string, ValueParserResult<unknown>>;
+
+  /**
+   * Prepared branch selections for `conditional()` parsers whose branch
+   * was resolved during the scheduling pass, keyed by parser occurrence
+   * and serialized path.  Scoped to a single pass like
+   * {@link completedByPath}: phase-two bindings may change the
+   * selection, so the final pass of a `runWith()` run re-prepares.
+   * Final completion consumes the prepared decision instead of
+   * re-completing the discriminator or re-selecting a branch.
+   */
+  readonly preparedByPath: Map<string, unknown>;
 }
 
 /**
@@ -572,6 +583,7 @@ export function createEffectfulCompletionSession(
     demanded: new Set(),
     effectfulSources: new Set(),
     completedByPath: new Map(),
+    preparedByPath: new Map(),
   };
 }
 
