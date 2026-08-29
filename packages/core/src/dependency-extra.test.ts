@@ -10278,7 +10278,9 @@ describe("source delivery from conditional()/command() to siblings", () => {
     assert.equal(later.value.level, "silent");
 
     // Reversed declaration: the sibling is declared after the
-    // conditional, so the sibling value wins.
+    // conditional, so the sibling value wins.  The winner must differ
+    // from the derived default ("dev"), or an undelivered value would
+    // pass the same assertion.
     const reversed = object({
       cond: conditional(
         option("--kind", choice(["k"] as const)),
@@ -10292,16 +10294,16 @@ describe("source delivery from conditional()/command() to siblings", () => {
       "--kind",
       "k",
       "--b",
-      "prod",
-      "--a",
       "dev",
+      "--a",
+      "prod",
       "--level",
-      "debug",
+      "silent",
     ]);
     assert.ok(
       earlier.success,
       `Expected success but got: ${JSON.stringify(earlier)}`,
     );
-    assert.equal(earlier.value.level, "debug");
+    assert.equal(earlier.value.level, "silent");
   });
 });
