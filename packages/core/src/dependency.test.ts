@@ -6,6 +6,7 @@ import {
   dependency,
   dependencyId,
   DependencyRegistry,
+  dependencySourceId,
   dependencySourceMarker,
   derivedValueParserMarker,
   deriveFrom,
@@ -200,7 +201,7 @@ describe("dependency()", () => {
 
     assert.ok(isDependencySource(source));
     assert.equal(source[dependencySourceMarker], true);
-    assert.equal(typeof source[dependencyId], "symbol");
+    assert.equal(typeof source[dependencySourceId], "symbol");
   });
 
   test("preserves the original parser's properties", () => {
@@ -232,7 +233,10 @@ describe("dependency()", () => {
     const source1 = dependency(parser);
     const source2 = dependency(parser);
 
-    assert.notEqual(source1[dependencyId], source2[dependencyId]);
+    assert.notEqual(
+      source1[dependencySourceId],
+      source2[dependencySourceId],
+    );
   });
 });
 
@@ -317,7 +321,7 @@ describe("derive()", () => {
       defaultValue: () => "/default",
     });
 
-    assert.equal(derived[dependencyId], cwdParser[dependencyId]);
+    assert.equal(derived[dependencyId], cwdParser[dependencySourceId]);
   });
 
   test("derived parser has sync mode when source is sync", () => {
@@ -513,8 +517,8 @@ describe("deriveFrom()", () => {
   });
 });
 
-describe("nested dependency prevention", () => {
-  test("DerivedValueParser does not have derive method", () => {
+describe("derived dependency source composition", () => {
+  test("a derived parser must be wrapped before it can source another parser", () => {
     const source = dependency(string({ metavar: "DIR" }));
     const derived = source.derive<string>({
       metavar: "FILE",
@@ -523,9 +527,32 @@ describe("nested dependency prevention", () => {
       defaultValue: () => "/default",
     });
 
-    // TypeScript should prevent this at compile time, but we also verify at runtime
-    // that DerivedValueParser does not have the derive method
     assert.ok(!("derive" in derived));
+
+    const derivedSource = dependency(derived);
+    assert.ok("derive" in derivedSource);
+    assert.equal(derived[dependencyId], source[dependencySourceId]);
+    assert.notEqual(
+      derivedSource[dependencySourceId],
+      source[dependencySourceId],
+    );
+  });
+
+  test("wrapping a derived parser does not evaluate its lazy placeholder", () => {
+    const source = dependency(string({ metavar: "DIR" }));
+    let defaultCalls = 0;
+    const derived = source.deriveSync({
+      metavar: "FILE",
+      factory: () => string({ metavar: "FILE" }),
+      defaultValue: () => {
+        defaultCalls++;
+        return "/default";
+      },
+    });
+
+    dependency(derived);
+
+    assert.equal(defaultCalls, 0);
   });
 });
 
@@ -550,7 +577,7 @@ describe("DeferredParseState", () => {
     assert.equal(deferred[deferredParseMarker], true);
     assert.equal(deferred.rawInput, "test-input");
     assert.equal(deferred.parser, derived);
-    assert.equal(deferred.dependencyId, source[dependencyId]);
+    assert.equal(deferred.dependencyId, source[dependencySourceId]);
     assert.deepEqual(deferred.preliminaryResult, preliminaryResult);
   });
 
@@ -596,7 +623,7 @@ describe("DeferredParseState", () => {
       derived,
       preliminaryResult,
     );
-    assert.equal(deferred.dependencyId, source[dependencyId]);
+    assert.equal(deferred.dependencyId, source[dependencySourceId]);
   });
 
   test("deferred state stores preliminary result", () => {

@@ -375,6 +375,66 @@ const serverParser = deriveFromSync({
 ~~~~
 
 
+Chaining derived dependency sources
+-----------------------------------
+
+*This behavior is available since Optique 1.3.0.*
+
+Wrap a derived parser with `dependency()` when later parsers need to depend on
+its resolved value. The result keeps both roles: it remains derived from its
+upstream source and becomes a source for the next level:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
+import { parseSync } from "@optique/core/parser";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+
+const frameworkParser = dependency(choice(["fresh", "hono"] as const));
+
+const packageManagerParser = dependency(frameworkParser.deriveSync({
+  metavar: "PACKAGE_MANAGER",
+  factory: (framework) =>
+    choice(framework === "fresh" ? ["deno"] : ["npm"]),
+  defaultValue: () => "fresh" as const,
+}));
+
+const storageParser = packageManagerParser.deriveSync({
+  metavar: "STORAGE",
+  factory: (packageManager) =>
+    choice(packageManager === "deno" ? ["kv"] : ["redis"]),
+  defaultValue: () => "deno" as const,
+});
+
+const parser = object({
+  // Field order does not determine dependency evaluation order.
+  storage: option("--storage", storageParser),
+  packageManager: option("--package-manager", packageManagerParser),
+  framework: option("--framework", frameworkParser),
+});
+
+const result = parseSync(parser, [
+  "--framework", "hono",
+  "--package-manager", "npm",
+  "--storage", "redis",
+]);
+~~~~
+
+The same composition works when the middle parser was created with
+`deriveFrom()` and therefore has several upstream sources. Synchronous and
+asynchronous modes continue to combine at each level, so one asynchronous
+source or factory makes every downstream parser asynchronous.
+
+Optique resolves a chain in dependency order rather than object/tuple field
+order. A derived source publishes only its replayed value; its preliminary
+parse result, which may have used an upstream default, is never exposed to the
+next level. If an intermediate source is absent without failing, a downstream
+parser may use its own `defaultValue`/`defaultValues`. If an upstream value was
+provided but failed validation, that failure propagates instead, and the error
+includes the affected metavar chain.
+
+
 Shell completion support
 ------------------------
 
@@ -526,18 +586,21 @@ branch resolution, so sources inside the branch it selects only complete
 during the conditional's own completion.
 
 
-Limitations
------------
+Evaluation order and failures
+-----------------------------
 
-The current dependency implementation has some limitations to be aware of:
+Dependency evaluation follows the active source graph. Independent nodes keep
+their declaration order, while each source is resolved before the derived
+parsers that consume it. This applies equally to `object()` and `tuple()` and
+to sources exposed through selected `conditional()`/`command()` branches.
 
- -  *No nested dependencies*: A derived parser cannot itself be used as a
-    dependency source. Dependencies form a single level of relationships.
-    However, you can have multiple derived parsers that depend on the same
-    source, or use `deriveFrom()` to depend on multiple sources simultaneously.
+Suggestions use only values already present in parser state and never run
+prompts or other effectful completions. During real completion, effectful
+sources run serially and at most once per parse operation. Their results and
+failures are scoped to that operation.
 
- -  *`deriveFrom()` requires dependency sources*: The `dependencies` array
-    in `deriveFrom()` must contain `DependencySource` objects created with
-    `dependency()`, not derived parsers. If you need a parser that depends
-    on both a source and a derived value, consider restructuring to have
-    multiple sources instead.
+An invalid source never falls back to its default. The failure propagates
+through every derived source that consumes it, and diagnostics show the
+metavars along that dependency path. Optique also rejects a cycle in the active
+runtime graph with the involved paths/metavars, although ordinary `derive()`
+and `deriveFrom()` composition constructs an acyclic graph by value.

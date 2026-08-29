@@ -17,9 +17,11 @@ import {
   createDependencyFingerprint,
   createDependencyRuntimeContext,
   createReplayKey,
+  derivedRawInputKey,
   extractRawInputFromState,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
+  orderDependencyNodes,
   replayDerivedParser,
   replayDerivedParserAsync,
   resolveStateWithRuntime,
@@ -229,6 +231,40 @@ describe("DependencyRuntimeContext", () => {
     assert.ok(!runtime.hasSource(sourceId));
     assert.equal(runtime.getSource(sourceId), undefined);
     assert.ok(runtime.isSourceFailed(sourceId));
+  });
+
+  test("tracks a transitive diagnostic chain for failed sources", () => {
+    const framework = Symbol("framework");
+    const packageManager = Symbol("package-manager");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSourceMetadata(framework, "FRAMEWORK");
+    runtime.registerSourceMetadata(
+      packageManager,
+      "PACKAGE_MANAGER",
+      [framework],
+    );
+
+    runtime.markSourceFailed(framework);
+    assert.ok(runtime.propagateSourceFailure(
+      [framework],
+      "PACKAGE_MANAGER",
+      packageManager,
+    ));
+    assert.ok(runtime.propagateSourceFailure(
+      [packageManager],
+      "STORAGE",
+    ));
+
+    assert.deepEqual(runtime.getSourceFailureChain(framework), [
+      "FRAMEWORK",
+      "PACKAGE_MANAGER",
+      "STORAGE",
+    ]);
+    assert.deepEqual(runtime.getSourceFailureChain(packageManager), [
+      "FRAMEWORK",
+      "PACKAGE_MANAGER",
+      "STORAGE",
+    ]);
   });
 });
 
@@ -1301,6 +1337,30 @@ describe("extractRawInputFromState", () => {
       { success: true, value: "world" },
     );
     assert.equal(extractRawInputFromState([deferred]), "world");
+  });
+
+  test("extracts rawInput from a single-state extension wrapper", () => {
+    const inner = Object.defineProperty(
+      { success: true, value: "npm" },
+      derivedRawInputKey,
+      { value: "npm", enumerable: false },
+    );
+    assert.equal(
+      extractRawInputFromState({ hasCliValue: true, cliState: inner }),
+      "npm",
+    );
+  });
+
+  test("rejects an extension wrapper with ambiguous raw inputs", () => {
+    const first = Object.defineProperty({}, derivedRawInputKey, {
+      value: "npm",
+      enumerable: false,
+    });
+    const second = Object.defineProperty({}, derivedRawInputKey, {
+      value: "deno",
+      enumerable: false,
+    });
+    assert.equal(extractRawInputFromState({ first, second }), undefined);
   });
 
   test("returns undefined for PendingDependencySourceState", () => {
@@ -2532,3 +2592,99 @@ describe("collectDemandedDependencyIds", () => {
     assert.ok(demanded.has(sourceId));
   });
 });
+
+describe("orderDependencyNodes", () => {
+  test("orders a derived source after every in-scope provider", () => {
+    const upstreamId = Symbol("upstream");
+    const derivedId = Symbol("derived");
+    const consumer = createRuntimeSourceNode({
+      path: ["consumer"],
+      sourceId: derivedId,
+      dependencyIds: [upstreamId],
+      metavar: "CONSUMER",
+    });
+    const unrelated = createRuntimeSourceNode({
+      path: ["unrelated"],
+      sourceId: Symbol("unrelated"),
+      metavar: "UNRELATED",
+    });
+    const provider = createRuntimeSourceNode({
+      path: ["provider"],
+      sourceId: upstreamId,
+      metavar: "PROVIDER",
+    });
+
+    const ordered = orderDependencyNodes([consumer, unrelated, provider]);
+
+    assert.deepEqual(ordered, [unrelated, provider, consumer]);
+  });
+
+  test("does not treat a missing provider as a cycle", () => {
+    const consumer = createRuntimeSourceNode({
+      path: ["consumer"],
+      sourceId: Symbol("derived"),
+      dependencyIds: [Symbol("absent")],
+      metavar: "CONSUMER",
+    });
+
+    const ordered = orderDependencyNodes([consumer]);
+
+    assert.deepEqual(ordered, [consumer]);
+  });
+
+  test("reports the paths and metavars in a forged cycle", () => {
+    const firstId = Symbol("first");
+    const secondId = Symbol("second");
+    const first = createRuntimeSourceNode({
+      path: ["first"],
+      sourceId: firstId,
+      dependencyIds: [secondId],
+      metavar: "FIRST",
+    });
+    const second = createRuntimeSourceNode({
+      path: ["second"],
+      sourceId: secondId,
+      dependencyIds: [firstId],
+      metavar: "SECOND",
+    });
+
+    assert.throws(
+      () => orderDependencyNodes([first, second]),
+      /Circular dependency.*FIRST \(first\).*SECOND \(second\)/,
+    );
+  });
+});
+
+// Helpers
+
+function createRuntimeSourceNode(options: {
+  readonly path: readonly PropertyKey[];
+  readonly sourceId: symbol;
+  readonly dependencyIds?: readonly symbol[];
+  readonly metavar: string;
+}): RuntimeNode {
+  const source: NonNullable<ParserDependencyMetadata["source"]> = {
+    kind: "source",
+    sourceId: options.sourceId,
+    metavar: options.metavar,
+    extractSourceValue: () => undefined,
+    preservesSourceValue: true,
+  };
+  const derived: ParserDependencyMetadata["derived"] =
+    options.dependencyIds == null ? undefined : {
+      kind: "derived",
+      dependencyIds: options.dependencyIds,
+      metavar: options.metavar,
+      replayParse: (rawInput) => ({ success: true, value: rawInput }),
+    };
+  return {
+    path: options.path,
+    parser: {
+      dependencyMetadata: {
+        source,
+        ...(derived != null ? { derived } : {}),
+      },
+    },
+    state: undefined,
+  };
+}

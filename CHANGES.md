@@ -53,6 +53,9 @@ To be released.
     sibling parsers against the answered values.  A prompted
     discriminator that does not wrap a dependency source cannot take part
     in this early resolution.  [[#869], [#913], [#914]]
+ -  Fixed derived parsers so they can act as dependency sources for later
+    parsers, allowing multi-level parsing, defaults, and shell suggestions to
+    resolve independently of object/tuple field order. [[#869], [#871], [#915]]
  -  Removed the unused `DependencyValueOrigin` type and `registerSource()`
     origin argument from `@optique/core/dependency-runtime`.  Both APIs were
     marked `@internal`; dependency resolution behavior is unchanged.
@@ -60,6 +63,7 @@ To be released.
 
 [#869]: https://github.com/dahlia/optique/issues/869
 [#870]: https://github.com/dahlia/optique/issues/870
+[#871]: https://github.com/dahlia/optique/issues/871
 [#874]: https://github.com/dahlia/optique/issues/874
 [#879]: https://github.com/dahlia/optique/issues/879
 [#889]: https://github.com/dahlia/optique/pull/889
@@ -70,6 +74,7 @@ To be released.
 [#912]: https://github.com/dahlia/optique/pull/912
 [#913]: https://github.com/dahlia/optique/issues/913
 [#914]: https://github.com/dahlia/optique/pull/914
+[#915]: https://github.com/dahlia/optique/pull/915
 
 ### @optique/run
 

@@ -17,6 +17,7 @@ import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   type EffectfulSchedulingNodesFn,
   effectfulSchedulingNodesKey,
+  recordDerivedRawInput,
   replayDerivedParser,
   replayDerivedParserAsync,
   sourceCollectionExpansionKey,
@@ -90,7 +91,9 @@ function isTerminalValueState<T>(
  */
 function createOptionParseState<M extends Mode, T>(
   parseResult: ValueParserResult<T>,
+  rawInput: string,
 ): ValueParserResult<T> {
+  recordDerivedRawInput(parseResult, rawInput);
   return parseResult;
 }
 
@@ -175,6 +178,18 @@ function resolveDerivedCompletionSync<T>(
   return replayed as ValueParserResult<T> ??
     traceEntry.preliminaryResult as ValueParserResult<T> ??
     state;
+}
+
+function includeDependencyFailureChain(
+  error: Message,
+  dependencyMetadata: ReturnType<typeof extractDependencyMetadata> | undefined,
+  exec: ExecutionContext | undefined,
+): Message {
+  const sourceId = dependencyMetadata?.source?.sourceId;
+  if (sourceId == null || exec?.dependencyRuntime == null) return error;
+  const chain = exec.dependencyRuntime.getSourceFailureChain(sourceId);
+  if (chain == null || chain.length < 2) return error;
+  return message`${error} Dependency chain: ${chain.join(" -> ")}.`;
 }
 
 async function resolveDerivedCompletionAsync<T>(
@@ -1087,7 +1102,7 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult),
+                state: createOptionParseState(parseResult, rawInput),
                 buffer: context.buffer.slice(2),
               },
               consumed: context.buffer.slice(0, 2),
@@ -1110,7 +1125,7 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult),
+                state: createOptionParseState(parseResult, rawInput),
                 buffer: context.buffer.slice(2),
               },
               consumed: context.buffer.slice(0, 2),
@@ -1177,7 +1192,7 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult),
+                state: createOptionParseState(parseResult, rawInput),
                 buffer: context.buffer.slice(1),
               },
               consumed: context.buffer.slice(0, 1),
@@ -1200,7 +1215,7 @@ export function option<M extends Mode, T>(
               success: true as const,
               next: {
                 ...next,
-                state: createOptionParseState(parseResult),
+                state: createOptionParseState(parseResult, rawInput),
                 buffer: context.buffer.slice(1),
               },
               consumed: context.buffer.slice(0, 1),
@@ -1311,7 +1326,11 @@ export function option<M extends Mode, T>(
           : state;
         return resolvedState.success ? resolvedState : {
           success: false,
-          error: formatInvalidValueError(resolvedState.error),
+          error: formatInvalidValueError(includeDependencyFailureChain(
+            resolvedState.error,
+            dependencyMetadata,
+            exec,
+          )),
         };
       };
       const completeAsync = async (): Promise<
@@ -1328,7 +1347,11 @@ export function option<M extends Mode, T>(
         );
         return resolved.success ? resolved : {
           success: false,
-          error: formatInvalidValueError(resolved.error),
+          error: formatInvalidValueError(includeDependencyFailureChain(
+            resolved.error,
+            dependencyMetadata,
+            exec,
+          )),
         };
       };
       return dispatchByMode(
@@ -2560,7 +2583,7 @@ export function argument<M extends Mode, T>(
             next: {
               ...next,
               buffer: context.buffer.slice(i + 1),
-              state: createOptionParseState(parseResult),
+              state: createOptionParseState(parseResult, rawInput),
               optionsTerminated,
             },
             consumed: context.buffer.slice(0, i + 1),
@@ -2583,7 +2606,7 @@ export function argument<M extends Mode, T>(
             next: {
               ...next,
               buffer: context.buffer.slice(i + 1),
-              state: createOptionParseState(parseResult),
+              state: createOptionParseState(parseResult, rawInput),
               optionsTerminated,
             },
             consumed: context.buffer.slice(0, i + 1),
@@ -2609,7 +2632,11 @@ export function argument<M extends Mode, T>(
           : state;
         return resolvedState.success ? resolvedState : {
           success: false,
-          error: formatInvalidValueError(resolvedState.error),
+          error: formatInvalidValueError(includeDependencyFailureChain(
+            resolvedState.error,
+            dependencyMetadata,
+            exec,
+          )),
         };
       };
       const completeAsync = async (): Promise<ValueParserResult<T>> => {
@@ -2622,7 +2649,11 @@ export function argument<M extends Mode, T>(
         );
         return resolved.success ? resolved : {
           success: false,
-          error: formatInvalidValueError(resolved.error),
+          error: formatInvalidValueError(includeDependencyFailureChain(
+            resolved.error,
+            dependencyMetadata,
+            exec,
+          )),
         };
       };
       return dispatchByMode(

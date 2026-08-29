@@ -291,6 +291,12 @@ inner one. Derived defaults slot in wherever you wrap them in that chain.
 
 Two more points worth knowing:
 
+ -  *A derived parser needs `dependency()` before another parser can depend on
+    it.* Write `dependency(source.deriveSync(...))` for the middle level of a
+    chain, then call `.derive*()` on that new source. Do not flatten a
+    framework → package manager → storage graph into unrelated one-level
+    dependencies merely to work around field order; Optique resolves the
+    source graph independently of object/tuple declaration order.
  -  *Fallback values are re-validated.* A config or environment value still
     passes through the inner parser's constraints. A config `port` of `80` is
     rejected by `option("--port", integer({ min: 1024 }))` exactly as a
