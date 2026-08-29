@@ -35,8 +35,10 @@
     "zod": "catalog:"
   },
   "scripts": {
-    "dev": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && vitepress dev",
-    "build": "cd ../ && pnpm run --filter '!{docs}' -r build && cd docs/ && node .vitepress/warm-twoslash-cache.mts && NODE_OPTIONS=--max-old-space-size=12288 vitepress build",
+    "dev": "pnpm build:packages && vitepress dev",
+    "build": "pnpm build:packages && pnpm build:site",
+    "build:packages": "cd ../ && pnpm run --filter '!{docs}' -r build",
+    "build:site": "node .vitepress/warm-twoslash-cache.mts && NODE_OPTIONS=--max-old-space-size=12288 vitepress build",
     "preview": "vitepress preview",
     "test": "tsc --noEmit --allowImportingTsExtensions --module nodenext --moduleResolution nodenext --target esnext --types node --skipLibCheck .vitepress/twoslash-cache.mts .vitepress/twoslash-cache.test.mts .vitepress/warm-twoslash-cache.mts && node --test .vitepress/*.test.mts"
   },

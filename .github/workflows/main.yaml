@@ -157,17 +157,19 @@ jobs:
         experimental: true
         install: true
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
+    - run: pnpm build:packages
+      working-directory: docs
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: docs/.vitepress/cache/twoslash
         key: >-
           twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml',
           'docs/package.json', 'docs/.vitepress/*.mts',
-          'packages/**/package.json', 'packages/**/tsdown.config.*',
-          'packages/**/src/**') }}-${{
+          'packages/**/dist/**/*.d.ts', 'packages/**/dist/**/*.d.mts',
+          'packages/**/dist/**/*.d.cts') }}-${{
           hashFiles('docs/**/*.md') }}
         restore-keys: |
-          twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'docs/package.json', 'docs/.vitepress/*.mts', 'packages/**/package.json', 'packages/**/tsdown.config.*', 'packages/**/src/**') }}-
+          twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'docs/package.json', 'docs/.vitepress/*.mts', 'packages/**/dist/**/*.d.ts', 'packages/**/dist/**/*.d.mts', 'packages/**/dist/**/*.d.cts') }}-
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
@@ -175,13 +177,13 @@ jobs:
           EXTRA_NAV_LINK="$UNSTABLE_DOCS_URL" \
           SITEMAP_HOSTNAME="$STABLE_DOCS_URL" \
           JSR_REF_VERSION=stable \
-          pnpm build
+          pnpm build:site
         else
           EXTRA_NAV_TEXT=Stable \
           EXTRA_NAV_LINK="$STABLE_DOCS_URL" \
           SITEMAP_HOSTNAME="$UNSTABLE_DOCS_URL" \
           JSR_REF_VERSION=unstable \
-          pnpm build
+          pnpm build:site
         fi
       env:
         STABLE_DOCS_URL: ${{ vars.STABLE_DOCS_URL }}
