@@ -163,10 +163,11 @@ jobs:
         key: >-
           twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml',
           'docs/package.json', 'docs/.vitepress/*.mts',
-          'packages/**/package.json', 'packages/**/src/**') }}-${{
+          'packages/**/package.json', 'packages/**/tsdown.config.*',
+          'packages/**/src/**') }}-${{
           hashFiles('docs/**/*.md') }}
         restore-keys: |
-          twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'docs/package.json', 'docs/.vitepress/*.mts', 'packages/**/package.json', 'packages/**/src/**') }}-
+          twoslash-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'docs/package.json', 'docs/.vitepress/*.mts', 'packages/**/package.json', 'packages/**/tsdown.config.*', 'packages/**/src/**') }}-
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then

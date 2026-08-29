@@ -46,17 +46,25 @@ export function extractTwoslashBlocks(markdown: string): TwoslashBlock[] {
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const opening = lines[lineIndex].match(
-      /^((?:[ \t]|> ?)*)~~~~\s+(\S+)\s+(.+)$/,
+      /^((?:[ \t]|> ?)*)(`{3,}|~{3,})[ \t]*(\S+)[ \t]+(.+)$/,
     );
-    if (opening == null || !opening[3].split(/\s+/).includes("twoslash")) {
+    if (opening == null || !opening[4].split(/\s+/).includes("twoslash")) {
       continue;
     }
 
     const prefix = opening[1];
+    const fence = opening[2];
+    const isClosingFence = (line: string): boolean => {
+      if (!line.startsWith(prefix)) return false;
+      const closing = line.slice(prefix.length).match(/^(`+|~+)[ \t]*$/);
+      return closing != null &&
+        closing[1][0] === fence[0] &&
+        closing[1].length >= fence.length;
+    };
     const code: string[] = [];
     for (
       lineIndex++;
-      lineIndex < lines.length && lines[lineIndex] !== `${prefix}~~~~`;
+      lineIndex < lines.length && !isClosingFence(lines[lineIndex]);
       lineIndex++
     ) {
       const line = lines[lineIndex];
@@ -71,8 +79,8 @@ export function extractTwoslashBlocks(markdown: string): TwoslashBlock[] {
 
     blocks.push({
       code: code.join("\n").replace(/\n+$/, ""),
-      lang: languageAliases[opening[2]] ?? opening[2],
-      meta: opening[3],
+      lang: languageAliases[opening[3]] ?? opening[3],
+      meta: opening[4],
     });
   }
 

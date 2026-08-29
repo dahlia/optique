@@ -159,6 +159,38 @@ describe("extractTwoslashBlocks", () => {
     ]);
   });
 
+  it("should support VitePress fence characters and lengths", () => {
+    // Arrange
+    const markdown = [
+      "```typescript twoslash",
+      "const first: number = 1;",
+      "```",
+      "",
+      "~~~~~ ts twoslash",
+      "const second: number = 2;",
+      "`````",
+      "~~~~",
+      "~~~~~~",
+    ].join("\n");
+
+    // Act
+    const blocks = extractTwoslashBlocks(markdown);
+
+    // Assert
+    assert.deepEqual(blocks, [
+      {
+        code: "const first: number = 1;",
+        lang: "ts",
+        meta: "twoslash",
+      },
+      {
+        code: "const second: number = 2;\n`````\n~~~~",
+        lang: "ts",
+        meta: "twoslash",
+      },
+    ]);
+  });
+
   it("should remove trailing blank lines like VitePress", () => {
     // Arrange
     const markdown = [
