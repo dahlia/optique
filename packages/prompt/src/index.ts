@@ -922,6 +922,27 @@ export function createPromptAdapter<TConfig>(
                 deferredPromptResult(readPlaceholder() as TValue),
               );
             }
+            // Even when demanded, a derived configuration defers out of
+            // the seed pass while any of its dependencies is neither
+            // published nor failed: a value bound through a two-pass
+            // source context (e.g., a configuration file) arrives only
+            // in the final pass, and resolving—or caching a missing-
+            // dependency failure—against its absence would poison the
+            // whole run.  Dependencies published by earlier prompts in
+            // the same pass are visible here, so a demanded prompt
+            // chain still resolves in the seed pass.
+            if (
+              session.policy === "demand-only" &&
+              isDerivedPromptConfig(config) &&
+              config.dependencyIds.some((id) =>
+                exec?.dependencyRuntime?.hasSource(id) !== true &&
+                exec?.dependencyRuntime?.isSourceFailed(id) !== true
+              )
+            ) {
+              return Promise.resolve(
+                deferredPromptResult(readPlaceholder() as TValue),
+              );
+            }
             return executePrompt(exec).then((result) => {
               session.results.set(
                 cacheKey,

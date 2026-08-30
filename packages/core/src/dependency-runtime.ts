@@ -1171,8 +1171,14 @@ function hasInactiveCompletion(node: RuntimeNode): boolean {
   const metadata = node.parser.dependencyMetadata;
   if (metadata?.completion == null || metadata.source == null) return false;
   const extracted = metadata.source.extractSourceValue?.(node.state);
-  return extracted != null && !isPromiseLike(extracted) &&
-    extracted.success === true;
+  if (isPromiseLike(extracted)) {
+    // Asynchronous extraction stays active; the discarded promise must
+    // not surface as an unhandled rejection when extraction fails (the
+    // async collection path reports that failure properly).
+    void Promise.resolve(extracted).catch(() => {});
+    return false;
+  }
+  return extracted != null && extracted.success === true;
 }
 
 function registerRuntimeSourceMetadata(
