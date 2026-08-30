@@ -4,6 +4,7 @@ export type {
   CombineMode,
   DependencyMode,
   DependencySource,
+  DependencySourceInfo,
   DependencyValue,
   DependencyValues,
   DeriveAsyncOptions,
@@ -19,6 +20,7 @@ export {
   deriveFrom,
   deriveFromAsync,
   deriveFromSync,
+  getDependencySourceInfo,
   isDependencySource,
   isDerivedValueParser,
 } from "./internal/dependency.ts";

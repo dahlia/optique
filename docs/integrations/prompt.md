@@ -611,6 +611,109 @@ Concrete integrations built on `createPromptAdapter()` get this behavior
 automatically.
 
 
+Derived prompt configurations
+-----------------------------
+
+*This API is available since Optique 1.3.0.*
+
+`derivePromptConfig()` derives a prompt configuration from one or more
+dependency source values, so a later prompt can adapt its question to
+earlier answers.  The resolver may return the configuration synchronously
+or asynchronously, and it runs immediately before the adapter executes,
+inside the same effectful completion as the prompt itself:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { createPromptAdapter, derivePromptConfig } from "@optique/prompt";
+
+interface SelectConfig {
+  readonly message: string;
+  readonly choices: readonly string[];
+}
+
+declare function promptSelect(config: SelectConfig): Promise<string>;
+// ---cut-before---
+const prompt = createPromptAdapter<SelectConfig>({
+  async execute<TValue>(config: SelectConfig) {
+    return { success: true, value: await promptSelect(config) as TValue };
+  },
+});
+
+const framework = dependency(choice(["fresh", "hono"] as const));
+const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
+
+const parser = object({
+  framework: prompt(option("--framework", framework), {
+    message: "Web framework:",
+    choices: ["fresh", "hono"],
+  }),
+  packageManager: prompt(
+    option("--package-manager", packageManager),
+    derivePromptConfig(framework, (value) => ({
+      message: "Package manager:",
+      choices: value === "fresh" ? ["deno"] : ["npm", "pnpm"],
+    })),
+  ),
+});
+~~~~
+
+The named sources must publish their values before the resolver runs, so
+the scheduler orders prompts by the dependency graph: in the example
+above, the framework prompt always runs before the package manager
+prompt, even if the fields were declared in the opposite order.
+Declaration order still breaks ties between independent prompts.  A
+configuration may also read several sources at once by passing a tuple;
+the resolver then receives the values as a tuple in the same order.
+
+The resolver does not care where a dependency value came from: the
+command line, a source binding, a `withDefault()` fallback, and an
+interactive prompt all publish real values.  When a source has published
+nothing, the configuration's own declared default applies instead:
+
+ -  With `defaultValue` (or `defaultValues` for a tuple), the resolver
+    receives the lazily evaluated fallback, and its context reports
+    `usedDefault: true` (or the matching `usedDefaults` position) so the
+    resolver can distinguish an actual answer from a fallback.
+ -  Without a declared default, an unpublished dependency fails the
+    prompt with a diagnostic naming the missing source; the resolver and
+    the adapter never run.
+
+Failures follow the same rules as a cancelled prompt.  A resolver that
+throws or rejects fails the prompt, and when the prompt is also a
+dependency source, the failure propagates to its consumers with the full
+dependency chain in the diagnostic.  A failed upstream source likewise
+fails the prompt before the resolver runs.  Mutually dependent
+configurations are rejected with a circular dependency error.
+
+The optional third argument accepts the same `when`/`otherwise` pair as
+static configurations, evaluated before the resolver, so a skipped
+prompt performs no configuration work.  Note that upstream sources may
+already have prompted by then: the condition skips this prompt's own
+question, not the dependency resolution that scheduled before it.
+
+Because probes, help, and suggestions never run resolvers, generated
+documentation cannot reflect a derived configuration.  `getDocFragments`
+falls back to the wrapped parser's static metadata, and the adapter's
+`getDefaultValue()` is never called with a derived configuration.
+
+Under `runWith()` with two-pass source contexts, a prompt with a derived
+configuration whose wrapped parser is *not* a dependency source defers
+during the phase-two seed pass and resolves in the final pass, after
+every source has published.  If phase-two contexts need its value, make
+the wrapped parser a source with `dependency()`.
+
+One ordering limitation applies inside a `conditional()` whose branch is
+selected only during completion: the branch's prompts run at the
+conditional's declaration position, so a derived configuration inside
+such a branch cannot see a source prompt declared *after* the
+conditional—the resolver falls back to its declared default or fails as
+missing.  Declare the sources a branch configuration reads in the
+surrounding scope before the conditional, so they publish first.
+
+
 Testing adapters
 ----------------
 
@@ -674,7 +777,9 @@ Parameters
 Returns
 :   A function that wraps any parser and always returns a
     `FluentParser<"async", TValue, TState>`.  Its config accepts the adapter's
-    fields together with [`PromptCondition<TValue>`](#promptconditiontvalue).
+    fields together with [`PromptCondition<TValue>`](#promptconditiontvalue),
+    or a [`DerivedPromptConfig`](#derivepromptconfigsource-resolver-options)
+    whose resolver returns the adapter's config type.
 
 ### `PromptCondition<TValue>`
 
@@ -698,7 +803,47 @@ Adapter object accepted by `createPromptAdapter()`.
 
 `getDefaultValue(config)`
 :   Optional function that returns a prompt-level default for documentation
-    fragments.
+    fragments.  Never called with a derived configuration.
+
+### `derivePromptConfig(source, resolver, options?)`
+
+*Available since Optique 1.3.0.*
+
+Creates a `DerivedPromptConfig` that resolves the adapter configuration
+from dependency source values during the real completion phase.
+
+Parameters
+:   `source`: A dependency source created with `dependency()`, or a
+    non-empty tuple of such sources.
+
+:   `resolver`: Receives the source value (or the tuple of values) and a
+    context object, and returns the adapter configuration synchronously or
+    as a promise.  The single-source context has `usedDefault: boolean`;
+    the tuple context has a positional `usedDefaults` tuple.  A flag is
+    `true` only when the value came from this configuration's own declared
+    default, not from source-level fallbacks such as `withDefault()`.
+
+:   `options`: Optional `defaultValue` (or `defaultValues` for a tuple)
+    thunk evaluated lazily for unpublished sources, plus the same
+    `when`/`otherwise` pair as static configurations.
+
+Returns
+:   An opaque `DerivedPromptConfig` accepted by every `prompt()` wrapper
+    generated by `createPromptAdapter()`.
+
+Throws
+:   `TypeError` when `source` is empty or contains a value that is not a
+    dependency source.
+
+### `isDerivedPromptConfig(config)`
+
+*Available since Optique 1.3.0.*
+
+Returns whether a prompt configuration was created by
+`derivePromptConfig()`.  Adapters that inspect config objects (for
+example, in a custom `getDefaultValue()`) can use it to skip the derived
+marker, although *@optique/prompt* already never passes the marker to
+adapter callbacks.
 
 
 Implementation checklist
@@ -714,4 +859,7 @@ When adding a concrete prompt integration, make sure it:
  -  Validates and converts prompted values before returning success.
  -  Exposes prompt-level defaults through `getDefaultValue()` if the library
     does not use a `default` config property.
+ -  Accepts `derivePromptConfig()` results in its public `prompt()`
+    signature, typed so the resolver returns the integration's own config
+    union.
  -  Provides a TTY-free testing path.

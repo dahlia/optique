@@ -2180,6 +2180,126 @@ function createEffectfulSourceNode(
 }
 
 describe("completeEffectfulSourcesAsync", () => {
+  // https://github.com/dahlia/optique/issues/872
+  test("reports the executing occurrence's completion lineage", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const failedUpstream = Symbol("upstreamA");
+    const otherUpstream = Symbol("upstreamB");
+    const shared = Symbol("shared");
+    const providerA = createRuntimeSourceNode({
+      path: ["a"],
+      sourceId: failedUpstream,
+      metavar: "AAA",
+    });
+    const providerB = createRuntimeSourceNode({
+      path: ["b"],
+      sourceId: otherUpstream,
+      metavar: "BBB",
+    });
+    runtime.registerSource(otherUpstream, "ok");
+    runtime.registerSourceMetadata(failedUpstream, "AAA");
+    runtime.registerSourceMetadata(otherUpstream, "BBB");
+    runtime.markSourceFailed(failedUpstream);
+    const occurrence = (
+      key: string,
+      dependencyId: symbol,
+      completeSource: NonNullable<
+        NonNullable<ParserDependencyMetadata["source"]>["completeSource"]
+      >,
+    ): RuntimeNode => ({
+      path: [key],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: shared,
+            metavar: "SHARED",
+            extractSourceValue: () => undefined,
+            preservesSourceValue: true,
+            completeSource,
+          },
+          completion: { dependencyIds: [dependencyId] },
+        },
+      },
+      state: undefined,
+    });
+    const nodes: RuntimeNode[] = [
+      providerA,
+      providerB,
+      occurrence("first", failedUpstream, () =>
+        Promise.resolve({
+          success: false,
+          error: [{ type: "text", text: "Upstream failed." }],
+        })),
+      occurrence(
+        "second",
+        otherUpstream,
+        () => Promise.resolve({ success: true, value: "unreached" }),
+      ),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(!result.success);
+    // The chain reflects the occurrence that actually failed (its
+    // configuration depends on AAA), not the last-registered occurrence
+    // (which depends on BBB).
+    const chain = runtime.getSourceFailureChain(shared);
+    assert.deepEqual(chain, ["AAA", "SHARED"]);
+  });
+
+  test("keeps a bypassed occurrence out of transitive failure", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const idA = Symbol("a");
+    const idB = Symbol("b");
+    // A's own state already extracts a value, so its configuration
+    // dependencies on B are inactive: B's cancellation must not fail A.
+    const bypassed: RuntimeNode = {
+      path: ["a"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: idA,
+            metavar: "AAA",
+            extractSourceValue: () => ({ success: true, value: "cli" }),
+            preservesSourceValue: true,
+            completeSource: () =>
+              Promise.resolve({ success: true, value: "cli" }),
+          },
+          completion: { dependencyIds: [idB] },
+        },
+      },
+      state: undefined,
+    };
+    const cancelled = createEffectfulSourceNode(
+      "b",
+      idB,
+      () =>
+        Promise.resolve({
+          success: false,
+          error: [{ type: "text", text: "Prompt cancelled." }],
+        }),
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [bypassed, cancelled],
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(!result.success);
+    assert.ok(runtime.isSourceFailed(idB));
+    assert.ok(!runtime.isSourceFailed(idA));
+    assert.equal(runtime.getSource(idA), "cli");
+  });
+
   test("runs completions serially in declaration order and registers", async () => {
     const runtime = createDependencyRuntimeContext();
     const idA = Symbol("a");
@@ -2664,6 +2784,82 @@ describe("orderDependencyNodes", () => {
     assert.deepEqual(ordered, [consumer]);
   });
 
+  // https://github.com/dahlia/optique/issues/872
+  test("orders a completion consumer after its provider", () => {
+    const upstreamId = Symbol("upstream");
+    const consumer = createRuntimeSourceNode({
+      path: ["consumer"],
+      sourceId: Symbol("consumer"),
+      completionDependencyIds: [upstreamId],
+      metavar: "CONSUMER",
+    });
+    const provider = createRuntimeSourceNode({
+      path: ["provider"],
+      sourceId: upstreamId,
+      metavar: "PROVIDER",
+    });
+
+    const ordered = orderDependencyNodes([consumer, provider]);
+
+    assert.deepEqual(ordered, [provider, consumer]);
+  });
+
+  test("skips a completion dependency on the node's own source", () => {
+    const sourceId = Symbol("self");
+    const node = createRuntimeSourceNode({
+      path: ["self"],
+      sourceId,
+      completionDependencyIds: [sourceId],
+      metavar: "SELF",
+    });
+
+    const ordered = orderDependencyNodes([node]);
+
+    assert.deepEqual(ordered, [node]);
+  });
+
+  test("keeps same-source self dependencies acyclic across occurrences", () => {
+    const sharedId = Symbol("shared");
+    const first = createRuntimeSourceNode({
+      path: ["first"],
+      sourceId: sharedId,
+      completionDependencyIds: [sharedId],
+      metavar: "FIRST",
+    });
+    const second = createRuntimeSourceNode({
+      path: ["second"],
+      sourceId: sharedId,
+      completionDependencyIds: [sharedId],
+      metavar: "SECOND",
+    });
+
+    const ordered = orderDependencyNodes([first, second]);
+
+    assert.deepEqual(ordered, [first, second]);
+  });
+
+  test("detects a cycle formed by completion dependencies", () => {
+    const firstId = Symbol("first");
+    const secondId = Symbol("second");
+    const first = createRuntimeSourceNode({
+      path: ["first"],
+      sourceId: firstId,
+      completionDependencyIds: [secondId],
+      metavar: "FIRST",
+    });
+    const second = createRuntimeSourceNode({
+      path: ["second"],
+      sourceId: secondId,
+      completionDependencyIds: [firstId],
+      metavar: "SECOND",
+    });
+
+    assert.throws(
+      () => orderDependencyNodes([first, second]),
+      /Circular dependency.*FIRST \(first\).*SECOND \(second\)/,
+    );
+  });
+
   test("reports the paths and metavars in a forged cycle", () => {
     const firstId = Symbol("first");
     const secondId = Symbol("second");
@@ -2693,6 +2889,7 @@ function createRuntimeSourceNode(options: {
   readonly path: readonly PropertyKey[];
   readonly sourceId: symbol;
   readonly dependencyIds?: readonly symbol[];
+  readonly completionDependencyIds?: readonly symbol[];
   readonly metavar: string;
 }): RuntimeNode {
   const source: NonNullable<ParserDependencyMetadata["source"]> = {
@@ -2709,12 +2906,17 @@ function createRuntimeSourceNode(options: {
       metavar: options.metavar,
       replayParse: (rawInput) => ({ success: true, value: rawInput }),
     };
+  const completion: ParserDependencyMetadata["completion"] =
+    options.completionDependencyIds == null ? undefined : {
+      dependencyIds: options.completionDependencyIds,
+    };
   return {
     path: options.path,
     parser: {
       dependencyMetadata: {
         source,
         ...(derived != null ? { derived } : {}),
+        ...(completion != null ? { completion } : {}),
       },
     },
     state: undefined,

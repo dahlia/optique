@@ -571,6 +571,57 @@ displayed before a non-source prompt declared earlier in the same object.
 When the user cancels a source prompt, the parse fails immediately and
 later prompts do not run.
 
+The relationship also works in the opposite direction: a prompt's own
+configuration can be derived from dependency values with
+`derivePromptConfig()` from *@optique/prompt* (re-exported by
+*@optique/inquirer* and *@optique/clack*).  The resolver receives the
+published source values and produces the prompt configuration right
+before the prompt runs, so a later question can adapt its choices to
+earlier answers:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { derivePromptConfig, prompt } from "@optique/inquirer";
+
+const framework = dependency(choice(["fresh", "hono"] as const));
+const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
+const storage = packageManager.deriveSync({
+  metavar: "STORAGE",
+  factory: (pm) => choice(pm === "deno" ? ["kv"] : ["redis", "postgres"]),
+  defaultValue: () => "deno" as const,
+});
+
+const parser = object({
+  framework: prompt(option("--framework", framework), {
+    type: "select",
+    message: "Web framework:",
+    choices: ["fresh", "hono"],
+  }),
+  packageManager: prompt(
+    option("--package-manager", packageManager),
+    derivePromptConfig(framework, (value) => ({
+      type: "select",
+      message: "Package manager:",
+      choices: value === "fresh" ? ["deno"] : ["npm", "pnpm"],
+    })),
+  ),
+  storage: option("--storage", storage),
+});
+// The package manager prompt derives its choices from the framework
+// answer, and its own answer then determines which storages --storage
+// accepts.
+~~~~
+
+Such a prompt is a consumer in the dependency graph, and it may be a
+source at the same time, as above.  The scheduler runs it only after the
+sources its resolver reads have published, whether their values came
+from the command line, a binding, or another prompt.  See the
+[*@optique/prompt* documentation](../integrations/prompt.md#derived-prompt-configurations)
+for resolver defaults, failure behavior, and the runtime condition form.
+
 A source inside a `conditional()` or a `command()` also reaches consumers
 declared next to that construct, and it does so whether the value was
 typed on the command line or answered interactively: the `conditional()`
@@ -596,12 +647,19 @@ to sources exposed through selected `conditional()`/`command()` branches.
 
 Suggestions use values already present in parser state, plus declared
 `defaultValue`/`defaultValues` fallbacks when a source is absent. They never run
-prompts or other effectful completions. During real completion, effectful
-sources run serially and at most once per parse operation. Their results and
-failures are scoped to that operation.
+prompts, prompt configuration resolvers, or other effectful completions. During
+real completion, effectful sources run serially and at most once per parse
+operation. Their results and failures are scoped to that operation.
+
+A prompt whose configuration is derived with `derivePromptConfig()` is a
+consumer node in the same graph: the sources its resolver reads count as its
+providers, so they resolve first, and the prompt runs after them regardless of
+field order.
 
 An invalid source never falls back to its default. The failure propagates
-through every derived source that consumes it, and diagnostics show the
-metavars along that dependency path. Optique also rejects a cycle in the active
-runtime graph with the involved paths/metavars, although ordinary `derive()`
-and `deriveFrom()` composition constructs an acyclic graph by value.
+through every derived source that consumes it—including prompts whose
+configurations read it—and diagnostics show the metavars along that dependency
+path. Optique also rejects a cycle in the active runtime graph with the
+involved paths/metavars, although ordinary `derive()` and `deriveFrom()`
+composition constructs an acyclic graph by value; derived prompt
+configurations can introduce cycles, which fail with the same diagnostic.

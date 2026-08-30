@@ -924,6 +924,30 @@ export function orderDependencyNodes(
         }
       }
     }
+    // An effectful completion that consumes dependency values (e.g., a
+    // prompt with a derived configuration) must run after its providers
+    // publish.  A dependency on the node's own source creates no edge at
+    // all: the node cannot run before itself, and another occurrence of
+    // the same source ranks by declaration order (last occurrence wins),
+    // so edges between same-source occurrences would only forge a cycle.
+    // An unsatisfiable self-dependency surfaces as a missing dependency
+    // at resolution time instead of a structural cycle.  An occurrence
+    // whose own state already extracts a value (a command-line or bound
+    // value for this very field) bypasses its completion entirely, so
+    // its completion dependencies are inactive and contribute no edges
+    // either; a *failed* or asynchronous extraction keeps its edges,
+    // because the effectful completion is the recovery path for the
+    // former and the latter cannot be decided synchronously.
+    const completion = node.parser.dependencyMetadata?.completion;
+    if (completion != null && !hasInactiveCompletion(node)) {
+      const ownSourceId = node.parser.dependencyMetadata?.source?.sourceId;
+      for (const dependencySourceId of completion.dependencyIds) {
+        if (dependencySourceId === ownSourceId) continue;
+        for (const provider of providers.get(dependencySourceId) ?? []) {
+          if (provider !== node) addEdge(provider, node);
+        }
+      }
+    }
     if (node.requiresSourceId != null) {
       for (const provider of providers.get(node.requiresSourceId) ?? []) {
         if (provider !== node) addEdge(provider, node);
@@ -953,7 +977,7 @@ export function orderDependencyNodes(
     const cycle = nodes.filter((node) => (indegree.get(node) ?? 0) > 0);
     const labels = cycle.map(formatDependencyNodeLabel).join(" -> ");
     throw new TypeError(
-      `Circular dependency detected among derived sources: ${labels}.`,
+      `Circular dependency detected among dependency sources: ${labels}.`,
     );
   }
   return ordered;
@@ -1133,6 +1157,48 @@ function getNodeRawInput(node: RuntimeNode): string | undefined {
   return node.rawInput ?? extractRawInputFromState(node.state);
 }
 
+/**
+ * Memoizes {@link hasInactiveCompletion} per runtime node.  Extraction is
+ * pure over the node's state and nodes are freshly built for each
+ * completion pass, so a result keyed by node identity stays valid for as
+ * long as the node is reachable, while ordering, demand propagation,
+ * metadata registration, and failure propagation within one pass share a
+ * single evaluation.
+ */
+const inactiveCompletionCache = new WeakMap<RuntimeNode, boolean>();
+
+/**
+ * Whether a node's completion dependencies are inactive because this
+ * occurrence's own state already extracts a value: a field satisfied by
+ * the command line or a binding never runs its configuration resolver,
+ * so its completion dependencies must not order scheduling, demand
+ * upstream sources, or join failure lineage.  A failed extraction keeps
+ * the completion active (the effectful completion is its recovery
+ * path), and an asynchronous extraction is conservatively treated as
+ * active because it cannot be decided synchronously.
+ */
+function hasInactiveCompletion(node: RuntimeNode): boolean {
+  const cached = inactiveCompletionCache.get(node);
+  if (cached != null) return cached;
+  const inactive = computeInactiveCompletion(node);
+  inactiveCompletionCache.set(node, inactive);
+  return inactive;
+}
+
+function computeInactiveCompletion(node: RuntimeNode): boolean {
+  const metadata = node.parser.dependencyMetadata;
+  if (metadata?.completion == null || metadata.source == null) return false;
+  const extracted = metadata.source.extractSourceValue?.(node.state);
+  if (isPromiseLike(extracted)) {
+    // Asynchronous extraction stays active; the discarded promise must
+    // not surface as an unhandled rejection when extraction fails (the
+    // async collection path reports that failure properly).
+    void Promise.resolve(extracted).catch(() => {});
+    return false;
+  }
+  return extracted != null && extracted.success === true;
+}
+
 function registerRuntimeSourceMetadata(
   nodes: readonly RuntimeNode[],
   runtime: DependencyRuntimeContext,
@@ -1140,10 +1206,26 @@ function registerRuntimeSourceMetadata(
   for (const node of nodes) {
     const metadata = node.parser.dependencyMetadata;
     if (metadata?.source == null) continue;
+    // Completion dependencies (a prompt configuration derived from other
+    // sources) join replay dependencies in the lineage so a failure chain
+    // reaches back through either kind of edge.  An occurrence whose
+    // completion is bypassed never reads them, so they stay out of its
+    // lineage.
+    const completion = hasInactiveCompletion(node)
+      ? undefined
+      : metadata.completion;
+    const dependencyIds = completion == null
+      ? metadata.derived?.dependencyIds
+      : [
+        ...(metadata.derived?.dependencyIds ?? []),
+        ...completion.dependencyIds.filter((id) =>
+          !(metadata.derived?.dependencyIds ?? []).includes(id)
+        ),
+      ];
     runtime.registerSourceMetadata(
       metadata.source.sourceId,
       formatDependencyNodeMetavar(node),
-      metadata.derived?.dependencyIds,
+      dependencyIds,
     );
   }
 }
@@ -1154,9 +1236,16 @@ function propagateRuntimeSourceFailures(
 ): void {
   for (const node of orderDependencyNodes(nodes)) {
     const metadata = node.parser.dependencyMetadata;
-    if (metadata?.derived == null) continue;
+    if (metadata == null) continue;
+    const completion = hasInactiveCompletion(node)
+      ? undefined
+      : metadata.completion;
+    if (metadata.derived == null && completion == null) continue;
     runtime.propagateSourceFailure(
-      metadata.derived.dependencyIds,
+      [
+        ...(metadata.derived?.dependencyIds ?? []),
+        ...(completion?.dependencyIds ?? []),
+      ],
       formatDependencyNodeMetavar(node),
       metadata.source?.sourceId,
     );
@@ -1944,6 +2033,23 @@ export async function completeEffectfulSourcesAsync(
           session.demanded.has(metadata.source.sourceId)
         ) {
           for (const dependencySourceId of metadata.derived.dependencyIds) {
+            if (session.demanded.has(dependencySourceId)) continue;
+            session.demanded.add(dependencySourceId);
+            demandAdded = true;
+          }
+        }
+        // A demanded source whose effectful completion consumes other
+        // dependency values (a prompt with a derived configuration)
+        // demands those prerequisites too—but only when its own value is
+        // demanded and this occurrence is not already satisfied, so a
+        // CLI- or binding-satisfied prompt never demands its upstream
+        // prompts.
+        if (
+          metadata?.source != null && metadata.completion != null &&
+          session.demanded.has(metadata.source.sourceId) &&
+          !hasInactiveCompletion(node)
+        ) {
+          for (const dependencySourceId of metadata.completion.dependencyIds) {
             if (session.demanded.has(dependencySourceId)) continue;
             session.demanded.add(dependencySourceId);
             demandAdded = true;
