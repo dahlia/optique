@@ -41,6 +41,7 @@ import {
   option,
 } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
+import { bindConfig, createConfigContext } from "@optique/config";
 import { bindEnv, createEnvContext } from "@optique/env";
 import {
   createPromptAdapter,
@@ -68,6 +69,20 @@ function createTestPrompt() {
     },
   });
   return { prompt, calls };
+}
+
+function createRegionConfigContext() {
+  return createConfigContext<{ readonly region?: "us" | "eu" }>({
+    schema: {
+      "~standard": {
+        version: 1,
+        vendor: "test",
+        validate: (input: unknown) => ({
+          value: input as { readonly region?: "us" | "eu" },
+        }),
+      },
+    },
+  });
 }
 
 describe("createPromptAdapter()", () => {
@@ -1144,6 +1159,52 @@ describe("prompted values as dependency sources", () => {
       assert.equal(phase2Parsed?.mode, "prod");
       assert.equal(phase2Parsed?.level, "silent");
       assert.equal(calls.length, 1);
+    },
+  );
+
+  // https://github.com/dahlia/optique/issues/920
+  it(
+    "should allow demanded source prompts beside two-pass configuration bindings",
+    async () => {
+      const region = dependency(choice(["us", "eu"] as const));
+      const zone = dependency(choice(["z1", "z2"] as const));
+      const zoneDerived = zone.deriveSync({
+        metavar: "ZD",
+        factory: (value: "z1" | "z2") =>
+          choice(
+            value === "z1"
+              ? (["a1", "common"] as const)
+              : (["a2", "common"] as const),
+          ),
+        defaultValue: () => "z1" as const,
+      });
+      const context = createRegionConfigContext();
+      const { prompt, calls } = createTestPrompt();
+      const parser = object({
+        region: bindConfig(option("--region", region), {
+          context,
+          key: "region",
+        }),
+        zone: prompt(option("--zone", zone), { value: "z2" }),
+        out: option("--out", zoneDerived),
+      });
+
+      const result = await runWith(parser, "test", [context], {
+        args: ["--out", "common"],
+        contextOptions: {
+          load: () => ({
+            config: { region: "eu" as const },
+            meta: undefined,
+          }),
+        },
+      });
+
+      assert.deepEqual(result, {
+        region: "eu",
+        zone: "z2",
+        out: "common",
+      });
+      assert.deepEqual(calls, [{ value: "z2" }]);
     },
   );
 
@@ -3270,6 +3331,57 @@ describe("derived prompt configurations", () => {
     assert.deepEqual(result, { framework: "hono", greeting: "hi-hono" });
     assert.equal(calls.length, 1);
   });
+
+  // https://github.com/dahlia/optique/issues/920
+  it(
+    "should derive a prompt configuration from a two-pass configuration binding",
+    async () => {
+      const region = dependency(choice(["us", "eu"] as const));
+      const zone = dependency(choice(["z1", "z2"] as const));
+      const zoneDerived = zone.deriveSync({
+        metavar: "ZD",
+        factory: (value: "z1" | "z2") =>
+          choice(
+            value === "z1"
+              ? (["a1", "common"] as const)
+              : (["a2", "common"] as const),
+          ),
+        defaultValue: () => "z1" as const,
+      });
+      const context = createRegionConfigContext();
+      const { prompt, calls } = createTestPrompt();
+      const parser = object({
+        region: bindConfig(option("--region", region), {
+          context,
+          key: "region",
+        }),
+        zone: prompt(
+          option("--zone", zone),
+          derivePromptConfig(region, (value) => ({
+            value: value === "eu" ? "z2" : "z1",
+          })),
+        ),
+        out: option("--out", zoneDerived),
+      });
+
+      const result = await runWith(parser, "test", [context], {
+        args: ["--out", "common"],
+        contextOptions: {
+          load: () => ({
+            config: { region: "eu" as const },
+            meta: undefined,
+          }),
+        },
+      });
+
+      assert.deepEqual(result, {
+        region: "eu",
+        zone: "z2",
+        out: "common",
+      });
+      assert.deepEqual(calls, [{ value: "z2" }]);
+    },
+  );
 });
 
 // https://github.com/dahlia/optique/issues/872
