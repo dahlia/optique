@@ -1158,6 +1158,16 @@ function getNodeRawInput(node: RuntimeNode): string | undefined {
 }
 
 /**
+ * Memoizes {@link hasInactiveCompletion} per runtime node.  Extraction is
+ * pure over the node's state and nodes are freshly built for each
+ * completion pass, so a result keyed by node identity stays valid for as
+ * long as the node is reachable, while ordering, demand propagation,
+ * metadata registration, and failure propagation within one pass share a
+ * single evaluation.
+ */
+const inactiveCompletionCache = new WeakMap<RuntimeNode, boolean>();
+
+/**
  * Whether a node's completion dependencies are inactive because this
  * occurrence's own state already extracts a value: a field satisfied by
  * the command line or a binding never runs its configuration resolver,
@@ -1168,6 +1178,14 @@ function getNodeRawInput(node: RuntimeNode): string | undefined {
  * active because it cannot be decided synchronously.
  */
 function hasInactiveCompletion(node: RuntimeNode): boolean {
+  const cached = inactiveCompletionCache.get(node);
+  if (cached != null) return cached;
+  const inactive = computeInactiveCompletion(node);
+  inactiveCompletionCache.set(node, inactive);
+  return inactive;
+}
+
+function computeInactiveCompletion(node: RuntimeNode): boolean {
   const metadata = node.parser.dependencyMetadata;
   if (metadata?.completion == null || metadata.source == null) return false;
   const extracted = metadata.source.extractSourceValue?.(node.state);
