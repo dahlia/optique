@@ -24,7 +24,7 @@ import { constant, fail, flag, option } from "@optique/core/primitives";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
-import { prompt, Separator } from "@optique/inquirer";
+import { derivePromptConfig, prompt, Separator } from "@optique/inquirer";
 import { bindConfig, createConfigContext } from "@optique/config";
 import { runAsync } from "@optique/run/run";
 
@@ -6032,5 +6032,89 @@ describe("or(prompt(...), constant(...))", () => {
     if (result.success) {
       assert.equal(result.value.v, "fallback");
     }
+  });
+});
+
+// https://github.com/dahlia/optique/issues/872
+describe("prompt() with derived configurations", () => {
+  const framework = dependency(choice(["fresh", "hono"] as const));
+  const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
+  const storage = packageManager.deriveSync({
+    metavar: "STORAGE",
+    factory: (value: "deno" | "npm" | "pnpm") =>
+      choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+    defaultValue: () => "deno" as const,
+  });
+
+  it("derives select choices from a prompted framework", async () => {
+    const resolvedChoices: (readonly string[])[] = [];
+    const parser = object({
+      framework: prompt(option("--framework", framework), {
+        type: "select",
+        message: "Web framework:",
+        choices: ["fresh", "hono"],
+        prompter: () => Promise.resolve("hono"),
+      }),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (value) => {
+          const choices = value === "fresh"
+            ? (["deno"] as const)
+            : (["npm", "pnpm"] as const);
+          resolvedChoices.push(choices);
+          return {
+            type: "select",
+            message: "Package manager:",
+            choices,
+            prompter: () => Promise.resolve(choices[0]),
+          };
+        }),
+      ),
+      storage: option("--storage", storage),
+    });
+
+    const result = await parseAsync(parser, ["--storage", "redis"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, {
+      framework: "hono",
+      packageManager: "npm",
+      storage: "redis",
+    });
+    assert.deepEqual(resolvedChoices, [["npm", "pnpm"]]);
+  });
+
+  it("skips the resolver when the CLI provides the value", async () => {
+    let resolverCalls = 0;
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (value) => {
+          resolverCalls++;
+          return {
+            type: "select",
+            message: "Package manager:",
+            choices: value === "fresh" ? ["deno"] : ["npm", "pnpm"],
+            prompter: () =>
+              Promise.reject(new Error("Prompt should not be called")),
+          };
+        }),
+      ),
+      storage: option("--storage", storage),
+    });
+
+    const result = await parseAsync(parser, [
+      "--framework",
+      "fresh",
+      "--package-manager",
+      "deno",
+      "--storage",
+      "kv",
+    ]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.packageManager, "deno");
+    assert.equal(resolverCalls, 0);
   });
 });

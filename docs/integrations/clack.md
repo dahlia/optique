@@ -466,6 +466,50 @@ When Clack reports cancellation through `isCancel()`, *@optique/clack* returns
 a parse failure with the message `Prompt cancelled.` instead of throwing.
 
 
+Dependency-derived configurations
+---------------------------------
+
+*This API is available since Optique 1.3.0.*
+
+`derivePromptConfig()`, re-exported from *@optique/prompt*, derives a
+prompt configuration from [dependency source](../concepts/dependencies.md)
+values, so a later question can adapt its options to earlier answers:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { dependency } from "@optique/core/dependency";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { derivePromptConfig, prompt } from "@optique/clack";
+
+const framework = dependency(choice(["fresh", "hono"] as const));
+const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
+
+const parser = object({
+  framework: prompt(option("--framework", framework), {
+    type: "select",
+    message: "Web framework:",
+    options: [{ value: "fresh" }, { value: "hono" }],
+  }),
+  packageManager: prompt(
+    option("--package-manager", packageManager),
+    derivePromptConfig(framework, (value) => ({
+      type: "select",
+      message: "Package manager:",
+      options: (value === "fresh" ? ["deno"] : ["npm", "pnpm"])
+        .map((name) => ({ value: name })),
+    })),
+  ),
+});
+~~~~
+
+The resolver may be synchronous or asynchronous and runs right before the
+prompt opens, after the named sources have published their values—whether
+they came from the command line, a binding, or another prompt.  See the
+[*@optique/prompt* documentation](./prompt.md#derived-prompt-configurations)
+for declared defaults, failure behavior, and the runtime condition form.
+
+
 API reference
 -------------
 
@@ -477,7 +521,12 @@ Parameters
 :    -  `parser`: The inner parser.  CLI tokens consumed by this parser
         suppress the prompt.
      -  `config`: A [`PromptConfig<T>`] object specifying the prompt type
-        and its options.
+        and its options, or a configuration derived from dependency
+        sources with `derivePromptConfig()` (re-exported from
+        *@optique/prompt* since 1.3.0).  A derived configuration's
+        resolver may return any [`RuntimePromptConfig`] member; see the
+        [*@optique/prompt* documentation](./prompt.md#derived-prompt-configurations)
+        for the resolver contract.
 
 Returns
 :   A new parser with `mode: "async"` and Clack prompt fallback.  The `usage`
@@ -485,6 +534,7 @@ Returns
     missing-value case.
 
 [`PromptConfig<T>`]: #promptconfigt
+[`RuntimePromptConfig`]: #runtimepromptconfig
 
 ### `PromptConfig<T>`
 
@@ -507,6 +557,15 @@ to the same config types as their non-optional counterparts.
 [`NumberPromptConfig`]: #number—numeric-input
 [`TextConfig`]: #text—free-text-string
 [`MultiselectConfig`]: #multiselect—multi-select
+
+### `RuntimePromptConfig`
+
+*Available since Optique 1.3.0.*
+
+The union of every prompt configuration this package can execute,
+regardless of the parser value type.  A `derivePromptConfig()` resolver
+returns a member of this union; the per-value-type narrowing of
+[`PromptConfig<T>`] applies only to static configurations.
 
 ### `Option`
 

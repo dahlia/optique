@@ -19,14 +19,19 @@ import type {
 import { dependency } from "@optique/core/dependency";
 import { defineTraits, getTraits } from "@optique/core/extension";
 import { runParser, runWith } from "@optique/core/facade";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import {
   multiple,
   nonEmpty,
   optional,
   withDefault,
 } from "@optique/core/modifiers";
-import { parseAsync, type Parser, suggestAsync } from "@optique/core/parser";
+import {
+  getDocPageAsync,
+  parseAsync,
+  type Parser,
+  suggestAsync,
+} from "@optique/core/parser";
 import {
   argument,
   command,
@@ -37,7 +42,11 @@ import {
 } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, createEnvContext } from "@optique/env";
-import { createPromptAdapter, type PromptCondition } from "@optique/prompt";
+import {
+  createPromptAdapter,
+  derivePromptConfig,
+  type PromptCondition,
+} from "@optique/prompt";
 
 type TestPromptConfig<TValue> = {
   readonly value: TValue;
@@ -3059,5 +3068,827 @@ describe("prompted values as dependency sources", () => {
 
     assert.deepEqual(result, { mode: "prod", level: "silent" });
     assert.deepEqual(calls, []);
+  });
+});
+
+// https://github.com/dahlia/optique/issues/872
+describe("derived prompt configurations", () => {
+  function createFedifyChain() {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(
+      choice(["deno", "npm", "pnpm"] as const),
+    );
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE",
+      factory: (value: "deno" | "npm" | "pnpm") =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    return { framework, packageManager, storage };
+  }
+
+  it("derives a prompt configuration from a prompted source", async () => {
+    const { framework, packageManager, storage } = createFedifyChain();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (value) => ({
+          value: value === "hono" ? "npm" : "deno",
+        })),
+      ),
+      storage: option("--storage", storage),
+    });
+
+    const result = await parseAsync(parser, ["--storage", "redis"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, {
+      framework: "hono",
+      packageManager: "npm",
+      storage: "redis",
+    });
+    assert.deepEqual(calls, [{ value: "hono" }, { value: "npm" }]);
+  });
+
+  it("orders prompts topologically regardless of field order", async () => {
+    const { framework, packageManager, storage } = createFedifyChain();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      storage: option("--storage", storage),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (value) => ({
+          value: value === "hono" ? "npm" : "deno",
+        })),
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, ["--storage", "redis"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, {
+      framework: "hono",
+      packageManager: "npm",
+      storage: "redis",
+    });
+    assert.deepEqual(calls, [{ value: "hono" }, { value: "npm" }]);
+  });
+
+  it("resolves a consumer-only prompt from a CLI source value", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value) => ({ value: `hi-${value}` })),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { framework: "hono", greeting: "hi-hono" });
+    assert.deepEqual(calls, [{ value: "hi-hono" }]);
+  });
+
+  it("supports asynchronous configuration resolvers", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, async (value) => {
+          await Promise.resolve();
+          return { value: `async-${value}` };
+        }),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "fresh"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.greeting, "async-fresh");
+    assert.deepEqual(calls, [{ value: "async-fresh" }]);
+  });
+
+  it("passes the declared default when the source is absent", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: optional(option("--framework", framework)),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(
+          framework,
+          (value, { usedDefault }) => ({ value: `${value}:${usedDefault}` }),
+          { defaultValue: () => "fresh" as const },
+        ),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value.greeting, "fresh:true");
+    assert.deepEqual(calls, [{ value: "fresh:true" }]);
+  });
+
+  it("fails when a dependency is absent without a declared default", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: optional(option("--framework", framework)),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value) => ({ value: `hi-${value}` })),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.deepEqual(calls, []);
+  });
+
+  it("resolves multiple dependencies in declaration positions", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const runtime = dependency(choice(["deno", "node"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      runtime: optional(option("--runtime", runtime)),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(
+          [framework, runtime],
+          ([fw, rt], { usedDefaults }) => ({
+            value: `${fw}/${rt}:${usedDefaults.join(",")}`,
+          }),
+          { defaultValues: () => ["fresh", "deno"] as const },
+        ),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.greeting, "hono/deno:false,true");
+    assert.deepEqual(calls, [{ value: "hono/deno:false,true" }]);
+  });
+
+  it("defers a consumer-only prompt during the seed pass", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-derived-config-seed"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value) => ({ value: `hi-${value}` })),
+      ),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--framework", "hono"],
+    });
+
+    assert.deepEqual(result, { framework: "hono", greeting: "hi-hono" });
+    assert.equal(calls.length, 1);
+  });
+});
+
+// https://github.com/dahlia/optique/issues/872
+describe("derived prompt configuration failures and edge cases", () => {
+  it("fails the prompt when the resolver throws synchronously", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (): { value: string } => {
+          throw new Error("boom");
+        }),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /Prompt configuration resolution failed:.*boom/,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("fails the prompt when the resolver rejects", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(
+          framework,
+          (): Promise<{ value: string }> =>
+            Promise.reject(new Error("rejected")),
+        ),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /Prompt configuration resolution failed:.*rejected/,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("reports a thrown non-Error value", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (): { value: string } => {
+          throw "plain string";
+        }),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /Prompt configuration resolution failed:.*plain string/,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("stops later prompts when a resolver fails on a source prompt", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(
+      choice(["deno", "npm", "pnpm"] as const),
+    );
+    const extra = dependency(choice(["a", "b"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (): { value: string } => {
+          throw new Error("resolver failed");
+        }),
+      ),
+      extra: prompt(option("--extra", extra), { value: "a" }),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    // Only the framework prompt ran; the failed resolver stopped the
+    // package manager prompt and every later prompt.
+    assert.deepEqual(calls, [{ value: "hono" }]);
+  });
+
+  it("does not run the resolver when an upstream source failed", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const middle = dependency(framework.deriveSync({
+      metavar: "MIDDLE",
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const resolverCalls: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      middle: option("--middle", middle),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(middle, (value) => {
+          resolverCalls.push(value);
+          return { value: `hi-${value}` };
+        }),
+      ),
+    });
+
+    // "deno" parses against the snapshotted default ("fresh") but fails
+    // replay once the real framework value ("hono") resolves.
+    const result = await parseAsync(parser, [
+      "--framework",
+      "hono",
+      "--middle",
+      "deno",
+    ]);
+
+    assert.ok(!result.success);
+    assert.deepEqual(resolverCalls, []);
+    assert.deepEqual(calls, []);
+  });
+
+  it("includes the dependency chain when a source prompt depends on a failed source", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const middle = dependency(framework.deriveSync({
+      metavar: "MIDDLE",
+      factory: (value) =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    }));
+    const packageManager = dependency(choice(["deno", "npm"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      middle: option("--middle", middle),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(middle, (value) => ({ value })),
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--framework",
+      "hono",
+      "--middle",
+      "deno",
+    ]);
+
+    assert.ok(!result.success);
+    assert.deepEqual(calls, []);
+  });
+
+  it("returns otherwise without resolving when the condition is false", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(choice(["deno", "npm"] as const));
+    const resolverCalls: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (value) => {
+          resolverCalls.push(value);
+          return { value: "npm" };
+        }, { when: () => false, otherwise: "deno" }),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, {
+      framework: "hono",
+      packageManager: "deno",
+    });
+    // The upstream framework prompt still ran: topological scheduling
+    // completes providers before the condition is evaluated.
+    assert.deepEqual(calls, [{ value: "hono" }]);
+    assert.deepEqual(resolverCalls, []);
+  });
+
+  it("never runs the resolver or defaults during suggestions", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolverCalls: unknown[] = [];
+    const defaultCalls: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value) => {
+          resolverCalls.push(value);
+          return { value: `hi-${value}` };
+        }, {
+          defaultValue: () => {
+            defaultCalls.push(null);
+            return "fresh" as const;
+          },
+        }),
+      ),
+    });
+
+    await suggestAsync(parser, ["--framework", "hono", "--gree"]);
+
+    assert.deepEqual(resolverCalls, []);
+    assert.deepEqual(defaultCalls, []);
+    assert.deepEqual(calls, []);
+  });
+
+  it("never passes the derived marker to adapter.getDefaultValue", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const defaultValueCalls: unknown[] = [];
+    const prompt = createPromptAdapter<{ readonly value: unknown }>({
+      execute<TValue>() {
+        return Promise.resolve({
+          success: true as const,
+          value: undefined as TValue,
+        });
+      },
+      getDefaultValue(config) {
+        defaultValueCalls.push(config);
+        return undefined;
+      },
+    });
+    const parser = prompt(
+      option("--greeting", string()),
+      derivePromptConfig(framework, (value) => ({ value: `hi-${value}` })),
+    );
+
+    const page = getDocPageAsync(parser);
+
+    assert.ok(page != null);
+    assert.deepEqual(defaultValueCalls, []);
+  });
+
+  it("resolves independently in separate parse operations", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value) => ({ value: `hi-${value}` })),
+      ),
+    });
+
+    const first = await parseAsync(parser, ["--framework", "hono"]);
+    const second = await parseAsync(parser, ["--framework", "fresh"]);
+
+    assert.ok(first.success);
+    assert.ok(second.success);
+    assert.equal(first.value.greeting, "hi-hono");
+    assert.equal(second.value.greeting, "hi-fresh");
+    assert.deepEqual(calls, [{ value: "hi-hono" }, { value: "hi-fresh" }]);
+  });
+
+  it("passes duplicate sources positionally", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(
+          [framework, framework],
+          ([first, second], { usedDefaults }) => ({
+            value: `${first}=${second}:${usedDefaults.join(",")}`,
+          }),
+        ),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.greeting, "hono=hono:false,false");
+    assert.equal(calls.length, 1);
+  });
+
+  it("rejects an empty dependency tuple at construction", () => {
+    assert.throws(
+      () =>
+        derivePromptConfig(
+          [] as never,
+          () => ({ value: "unreachable" }),
+        ),
+      TypeError,
+    );
+  });
+
+  it("rejects a non-source dependency at construction", () => {
+    assert.throws(
+      () =>
+        derivePromptConfig(
+          string() as never,
+          () => ({ value: "unreachable" }),
+        ),
+      TypeError,
+    );
+  });
+
+  it("fails when the default tuple length does not match", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const runtime = dependency(choice(["deno", "node"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: optional(option("--framework", framework)),
+      runtime: optional(option("--runtime", runtime)),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(
+          [framework, runtime],
+          ([fw, rt]) => ({ value: `${fw}/${rt}` }),
+          { defaultValues: () => ["fresh"] as never },
+        ),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.match(formatMessage(result.error), /default values/);
+    assert.deepEqual(calls, []);
+  });
+
+  it("fails when the default thunk throws", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: optional(option("--framework", framework)),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value) => ({ value }), {
+          defaultValue: (): "fresh" => {
+            throw new Error("default exploded");
+          },
+        }),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /default evaluation failed:.*default exploded/,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("evaluates the default thunk lazily", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const defaultCalls: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value) => ({ value: `hi-${value}` }), {
+          defaultValue: () => {
+            defaultCalls.push(null);
+            return "fresh" as const;
+          },
+        }),
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(defaultCalls, []);
+  });
+
+  it("treats a source-level withDefault() value as a published value", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const usedDefaultSeen: boolean[] = [];
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      framework: withDefault(option("--framework", framework), "fresh"),
+      greeting: prompt(
+        option("--greeting", string()),
+        derivePromptConfig(framework, (value, { usedDefault }) => {
+          usedDefaultSeen.push(usedDefault);
+          return { value: `hi-${value}` };
+        }),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value.greeting, "hi-fresh");
+    // A withDefault() fallback publishes a real source value, so the
+    // configuration-level default is not reported as used.
+    assert.deepEqual(usedDefaultSeen, [false]);
+  });
+
+  it("detects a cycle between derived prompt configurations", async () => {
+    const a = dependency(choice(["x"] as const));
+    const b = dependency(choice(["y"] as const));
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      a: prompt(
+        option("--a", a),
+        derivePromptConfig(b, () => ({ value: "x" })),
+      ),
+      b: prompt(
+        option("--b", b),
+        derivePromptConfig(a, () => ({ value: "y" })),
+      ),
+    });
+
+    await assert.rejects(
+      () => parseAsync(parser, []),
+      /Circular dependency/,
+    );
+  });
+
+  it("fails a self-dependent configuration without a default", async () => {
+    const a = dependency(choice(["x"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      a: prompt(
+        option("--a", a),
+        derivePromptConfig(a, (value) => ({ value })),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.deepEqual(calls, []);
+  });
+
+  it("resolves a self-dependent configuration from its default", async () => {
+    const a = dependency(choice(["x"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      a: prompt(
+        option("--a", a),
+        derivePromptConfig(a, (value, { usedDefault }) => ({
+          value: `${value}:${usedDefault}`,
+        }), { defaultValue: () => "x" as const }),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls, [{ value: "x:true" }]);
+  });
+
+  it("resolves across merge() boundaries", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = merge(
+      object({ framework: option("--framework", framework) }),
+      object({
+        greeting: prompt(
+          option("--greeting", string()),
+          derivePromptConfig(framework, (value) => ({ value: `hi-${value}` })),
+        ),
+      }),
+    );
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.greeting, "hi-hono");
+    assert.deepEqual(calls, [{ value: "hi-hono" }]);
+  });
+
+  it("prompts a demanded derived-configuration source chain in the seed pass once", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(
+      choice(["deno", "npm", "pnpm"] as const),
+    );
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE",
+      factory: (value: "deno" | "npm" | "pnpm") =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-derived-config-demanded"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    const parser = object({
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (value) => ({
+          value: value === "hono" ? "npm" : "deno",
+        })),
+      ),
+      storage: option("--storage", storage),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--storage", "redis"],
+    });
+
+    assert.deepEqual(result, {
+      framework: "hono",
+      packageManager: "npm",
+      storage: "redis",
+    });
+    assert.deepEqual(calls, [{ value: "hono" }, { value: "npm" }]);
+  });
+
+  it("should behave identically for CLI and prompted upstream values", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom("fresh", "hono"),
+        async (frameworkValue) => {
+          const framework = dependency(choice(["fresh", "hono"] as const));
+          const { prompt: cliPrompt, calls: cliCalls } = createTestPrompt();
+          const cliParser = object({
+            framework: option("--framework", framework),
+            greeting: cliPrompt(
+              option("--greeting", string()),
+              derivePromptConfig(framework, (value) => ({
+                value: `hi-${value}`,
+              })),
+            ),
+          });
+          const { prompt: promptedPrompt, calls: promptedCalls } =
+            createTestPrompt();
+          const promptedParser = object({
+            framework: promptedPrompt(option("--framework", framework), {
+              value: frameworkValue,
+            }),
+            greeting: promptedPrompt(
+              option("--greeting", string()),
+              derivePromptConfig(framework, (value) => ({
+                value: `hi-${value}`,
+              })),
+            ),
+          });
+
+          const cliResult = await parseAsync(cliParser, [
+            "--framework",
+            frameworkValue,
+          ]);
+          const promptedResult = await parseAsync(promptedParser, []);
+
+          assert.ok(cliResult.success);
+          assert.ok(promptedResult.success);
+          assert.equal(
+            cliResult.value.greeting,
+            promptedResult.value.greeting,
+          );
+          assert.deepEqual(cliCalls, [{ value: `hi-${frameworkValue}` }]);
+          assert.deepEqual(promptedCalls, [
+            { value: frameworkValue },
+            { value: `hi-${frameworkValue}` },
+          ]);
+        },
+      ),
+    );
+  });
+
+  it("type-checks derived prompt configurations", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const runtime = dependency(choice(["deno", "node"] as const));
+    const { prompt } = createTestPrompt();
+
+    // The resolver parameter is typed from the dependency source and the
+    // issue example shape compiles without annotations.
+    prompt(
+      option("--greeting", string()),
+      derivePromptConfig(framework, (value) => {
+        const narrowed: "fresh" | "hono" = value;
+        return { value: narrowed };
+      }),
+    );
+
+    // Tuple dependencies infer positional value types.
+    prompt(
+      option("--greeting", string()),
+      derivePromptConfig([framework, runtime], ([fw, rt]) => {
+        const narrowedFw: "fresh" | "hono" = fw;
+        const narrowedRt: "deno" | "node" = rt;
+        return { value: `${narrowedFw}/${narrowedRt}` };
+      }),
+    );
+
+    // @ts-expect-error The default must match the source value type.
+    derivePromptConfig(framework, (value) => ({ value }), {
+      defaultValue: () => 42,
+    });
+
+    // @ts-expect-error The default tuple must match every position.
+    derivePromptConfig([framework, runtime], ([fw]) => ({ value: fw }), {
+      defaultValues: () => ["fresh"] as const,
+    });
+
+    derivePromptConfig(framework, (value) => ({ value }), {
+      when: () => true,
+      otherwise: "deno",
+      // Static configurations remain source-compatible.
+    }) satisfies { readonly otherwise?: string };
+
+    assert.ok(true);
   });
 });

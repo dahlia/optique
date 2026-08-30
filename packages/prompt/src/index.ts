@@ -6,6 +6,17 @@
  */
 import { getAnnotations } from "@optique/core/annotations";
 import {
+  type AnyDependencySource,
+  type DependencyValue,
+  type DependencyValues,
+  getDependencySourceInfo,
+} from "@optique/core/dependency";
+import {
+  type Message,
+  message,
+  values as valuesTerm,
+} from "@optique/core/message";
+import {
   defineTraits,
   delegateSuggestNodes,
   getTraits,
@@ -86,6 +97,382 @@ export interface PromptAdapter<TConfig> {
   readonly getDefaultValue?: (config: TConfig) => unknown;
 }
 
+const derivedPromptConfigMarker: unique symbol = Symbol.for(
+  "@optique/prompt/derivedPromptConfig",
+);
+
+/**
+ * Context passed to a single-dependency prompt configuration resolver.
+ *
+ * @since 1.3.0
+ */
+export interface DerivePromptConfigContext {
+  /**
+   * Whether the dependency value came from the `defaultValue` declared by
+   * this derived prompt configuration rather than a published source
+   * value.  Source-level fallbacks such as `withDefault()` publish real
+   * values and are not reported here.
+   */
+  readonly usedDefault: boolean;
+}
+
+/**
+ * Context passed to a multi-dependency prompt configuration resolver.
+ *
+ * @typeParam Deps Tuple of dependency sources the resolver reads.
+ * @since 1.3.0
+ */
+export interface DerivePromptConfigsContext<
+  Deps extends readonly AnyDependencySource[],
+> {
+  /**
+   * For each dependency position, whether the value came from the
+   * `defaultValues` declared by this derived prompt configuration rather
+   * than a published source value.
+   */
+  readonly usedDefaults: { readonly [K in keyof Deps]: boolean };
+}
+
+/**
+ * Options for a single-dependency {@link derivePromptConfig} call.
+ *
+ * @typeParam TDefault Value type of the dependency source.
+ * @typeParam TOtherwise Value type returned when `when` skips the prompt.
+ * @since 1.3.0
+ */
+export type DerivePromptConfigOptions<TDefault, TOtherwise> =
+  & {
+    /**
+     * Lazily evaluated fallback used when the dependency source has not
+     * published a value.  Without it, an unresolved dependency fails the
+     * prompt instead of running the resolver.
+     */
+    readonly defaultValue?: () => TDefault;
+  }
+  & (
+    | { readonly when?: never; readonly otherwise?: never }
+    | {
+      readonly when: () => boolean | Promise<boolean>;
+      readonly otherwise: TOtherwise;
+    }
+  );
+
+/**
+ * Options for a multi-dependency {@link derivePromptConfig} call.
+ *
+ * @typeParam TDefaults Tuple of dependency source value types.
+ * @typeParam TOtherwise Value type returned when `when` skips the prompt.
+ * @since 1.3.0
+ */
+export type DerivePromptConfigsOptions<
+  TDefaults extends readonly unknown[],
+  TOtherwise,
+> =
+  & {
+    /**
+     * Lazily evaluated fallbacks used for dependency sources that have
+     * not published a value.  The thunk must return one value per
+     * dependency.  Without it, an unresolved dependency fails the prompt
+     * instead of running the resolver.
+     */
+    readonly defaultValues?: () => TDefaults;
+  }
+  & (
+    | { readonly when?: never; readonly otherwise?: never }
+    | {
+      readonly when: () => boolean | Promise<boolean>;
+      readonly otherwise: TOtherwise;
+    }
+  );
+
+/**
+ * A prompt configuration derived from dependency source values, created
+ * by {@link derivePromptConfig}.
+ *
+ * The resolver runs during the real completion phase, immediately before
+ * the adapter executes, and never during probes, help, or suggestions.
+ * Generated documentation therefore cannot reflect a derived
+ * configuration and falls back to the wrapped parser's static metadata.
+ *
+ * @typeParam TConfig Adapter configuration produced by the resolver.
+ * @typeParam TOtherwise Value type returned when `when` skips the prompt.
+ * @since 1.3.0
+ */
+export interface DerivedPromptConfig<TConfig, TOtherwise = never> {
+  readonly [derivedPromptConfigMarker]: true;
+
+  /** The dependency sources the resolver reads, in declaration order. */
+  readonly dependencies: readonly AnyDependencySource[];
+
+  /** Snapshot of the dependency source identities. @internal */
+  readonly dependencyIds: readonly symbol[];
+
+  /** Diagnostic labels matching {@link dependencyIds}. @internal */
+  readonly dependencyLabels: readonly string[];
+
+  /**
+   * Resolves the adapter configuration from dependency values.  Receives
+   * one value and one used-default flag per dependency position.
+   * @internal
+   */
+  readonly resolve: (
+    values: readonly unknown[],
+    usedDefaults: readonly boolean[],
+  ) => TConfig | Promise<TConfig>;
+
+  /**
+   * Lazily evaluated fallbacks, one per dependency position.
+   * @internal
+   */
+  readonly defaultValues?: () => readonly unknown[];
+
+  /** Runtime condition, evaluated before the resolver. */
+  readonly when?: () => boolean | Promise<boolean>;
+
+  /** Value produced when {@link when} returns `false`. */
+  readonly otherwise?: TOtherwise;
+}
+
+/**
+ * Checks whether a prompt configuration was created by
+ * {@link derivePromptConfig}.
+ *
+ * @param config The configuration to inspect.
+ * @returns `true` for a derived prompt configuration.
+ * @since 1.3.0
+ */
+export function isDerivedPromptConfig(
+  config: unknown,
+): config is DerivedPromptConfig<unknown, unknown> {
+  return config != null && typeof config === "object" &&
+    derivedPromptConfigMarker in config &&
+    (config as { readonly [derivedPromptConfigMarker]: unknown })[
+        derivedPromptConfigMarker
+      ] === true;
+}
+
+/**
+ * Derives a prompt configuration from one dependency source value.
+ *
+ * The resolver may return the configuration synchronously or
+ * asynchronously.  It runs only during the real completion phase, after
+ * the named source has published its value—whether that value came from
+ * the command line, a source binding, or another prompt.
+ *
+ * @typeParam D The dependency source type.
+ * @typeParam TConfig Adapter configuration produced by the resolver.
+ * @typeParam TOtherwise Value type returned when `when` skips the prompt.
+ * @param source The dependency source the resolver reads.
+ * @param resolver Produces the adapter configuration from the source
+ *                 value.
+ * @param options Optional declared default and runtime condition.
+ * @returns A derived configuration accepted by `prompt()` wrappers.
+ * @throws {TypeError} If `source` is not a dependency source.
+ * @since 1.3.0
+ */
+export function derivePromptConfig<
+  D extends AnyDependencySource,
+  TConfig,
+  const TOtherwise = never,
+>(
+  source: D,
+  resolver: (
+    value: DependencyValue<D>,
+    context: DerivePromptConfigContext,
+  ) => TConfig | Promise<TConfig>,
+  options?: DerivePromptConfigOptions<DependencyValue<D>, TOtherwise>,
+): DerivedPromptConfig<TConfig, TOtherwise>;
+
+/**
+ * Derives a prompt configuration from multiple dependency source values.
+ *
+ * The resolver receives the values as a tuple matching the declaration
+ * order of `sources`.  Evaluation order among prompts follows the
+ * dependency graph, not surrounding object or tuple field order.
+ *
+ * @typeParam Deps Tuple of dependency sources the resolver reads.
+ * @typeParam TConfig Adapter configuration produced by the resolver.
+ * @typeParam TOtherwise Value type returned when `when` skips the prompt.
+ * @param sources The dependency sources, at least one.
+ * @param resolver Produces the adapter configuration from the source
+ *                 values.
+ * @param options Optional declared defaults and runtime condition.
+ * @returns A derived configuration accepted by `prompt()` wrappers.
+ * @throws {TypeError} If `sources` is empty or contains a value that is
+ *         not a dependency source.
+ * @since 1.3.0
+ */
+export function derivePromptConfig<
+  const Deps extends readonly [AnyDependencySource, ...AnyDependencySource[]],
+  TConfig,
+  const TOtherwise = never,
+>(
+  sources: Deps,
+  resolver: (
+    values: DependencyValues<Deps>,
+    context: DerivePromptConfigsContext<Deps>,
+  ) => TConfig | Promise<TConfig>,
+  options?: DerivePromptConfigsOptions<DependencyValues<Deps>, TOtherwise>,
+): DerivedPromptConfig<TConfig, TOtherwise>;
+
+export function derivePromptConfig(
+  source: AnyDependencySource | readonly AnyDependencySource[],
+  resolver: (value: never, context: never) => unknown,
+  options?: {
+    readonly defaultValue?: () => unknown;
+    readonly defaultValues?: () => readonly unknown[];
+    readonly when?: () => boolean | Promise<boolean>;
+    readonly otherwise?: unknown;
+  },
+): DerivedPromptConfig<unknown, unknown> {
+  const isTuple = Array.isArray(source);
+  const dependencies: readonly AnyDependencySource[] = isTuple
+    ? source
+    : [source as AnyDependencySource];
+  if (dependencies.length === 0) {
+    throw new TypeError(
+      "derivePromptConfig() requires at least one dependency source.",
+    );
+  }
+  const infos = dependencies.map(getDependencySourceInfo);
+  const singleDefault = options?.defaultValue;
+  const defaultValues = isTuple
+    ? options?.defaultValues
+    : singleDefault == null
+    ? undefined
+    : () => [singleDefault()];
+  const resolve = isTuple
+    ? (
+      values: readonly unknown[],
+      usedDefaults: readonly boolean[],
+    ): unknown => resolver(values as never, { usedDefaults } as never)
+    : (
+      values: readonly unknown[],
+      usedDefaults: readonly boolean[],
+    ): unknown =>
+      resolver(
+        values[0] as never,
+        { usedDefault: usedDefaults[0] } as never,
+      );
+  return {
+    [derivedPromptConfigMarker]: true,
+    dependencies,
+    dependencyIds: infos.map((info) => info.sourceId),
+    dependencyLabels: infos.map((info, index) =>
+      info.metavar ?? `dependency #${index + 1}`
+    ),
+    resolve: resolve as DerivedPromptConfig<unknown, unknown>["resolve"],
+    ...(defaultValues == null ? {} : { defaultValues }),
+    ...(options?.when == null
+      ? {}
+      : { when: options.when, otherwise: options.otherwise }),
+  };
+}
+
+function describeThrown(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+type DerivedConfigResolution<TConfig> =
+  | { readonly ok: true; readonly config: TConfig }
+  | { readonly ok: false; readonly error: Message };
+
+/**
+ * Resolves a derived prompt configuration against the dependency runtime.
+ *
+ * A failed upstream source fails the resolution transitively—the resolver
+ * and the adapter never run.  A missing source uses the configuration's
+ * declared default, or fails when none is declared.  Resolver exceptions
+ * (synchronous throws and rejections alike) become prompt failures so
+ * the scheduler treats them like a cancelled prompt.
+ */
+async function resolveDerivedPromptConfig<TConfig>(
+  config: DerivedPromptConfig<TConfig, unknown>,
+  exec: ExecutionContext | undefined,
+  ownSourceId: symbol | undefined,
+  ownLabel: string | undefined,
+): Promise<DerivedConfigResolution<TConfig>> {
+  const runtime = exec?.dependencyRuntime;
+  const ids = config.dependencyIds;
+
+  if (runtime != null) {
+    const failedIndex = ids.findIndex((id) => runtime.isSourceFailed(id));
+    if (failedIndex >= 0) {
+      runtime.propagateSourceFailure(ids, ownLabel ?? "prompt", ownSourceId);
+      const base = message`Cannot resolve prompt configuration: dependency ${
+        config.dependencyLabels[failedIndex]
+      } failed.`;
+      // A source-backed prompt reports through the scheduler, which
+      // appends the failure chain itself; a consumer-only prompt appends
+      // it here.
+      const chain = ownSourceId == null
+        ? runtime.getSourceFailureChain(ids[failedIndex])
+        : undefined;
+      return {
+        ok: false,
+        error: chain == null || chain.length < 2
+          ? base
+          : message`${base} Dependency chain: ${chain.join(" -> ")}.`,
+      };
+    }
+  }
+
+  const missing: number[] = [];
+  const values = ids.map((id, index) => {
+    if (runtime?.hasSource(id) === true) return runtime.getSource(id);
+    missing.push(index);
+    return undefined;
+  });
+  const usedDefaults = ids.map(() => false);
+  if (missing.length > 0) {
+    if (config.defaultValues == null) {
+      const missingLabels = valuesTerm(
+        missing.map((index) => config.dependencyLabels[index]),
+      );
+      return {
+        ok: false,
+        error: missing.length > 1
+          ? message`Cannot resolve prompt configuration: dependencies ${missingLabels} are not available and no default values are declared.`
+          : message`Cannot resolve prompt configuration: dependency ${missingLabels} is not available and no default value is declared.`,
+      };
+    }
+    let defaults: readonly unknown[];
+    try {
+      defaults = config.defaultValues();
+    } catch (error) {
+      return {
+        ok: false,
+        error: message`Prompt configuration default evaluation failed: ${
+          describeThrown(error)
+        }`,
+      };
+    }
+    if (defaults.length !== ids.length) {
+      return {
+        ok: false,
+        error: message`Prompt configuration declared ${
+          String(defaults.length)
+        } default values for ${String(ids.length)} dependencies.`,
+      };
+    }
+    for (const index of missing) {
+      values[index] = defaults[index];
+      usedDefaults[index] = true;
+    }
+  }
+
+  try {
+    return { ok: true, config: await config.resolve(values, usedDefaults) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: message`Prompt configuration resolution failed: ${
+        describeThrown(error)
+      }`,
+    };
+  }
+}
+
 function shouldDeferPrompt(
   parser: Parser<Mode, unknown, unknown>,
   state: unknown,
@@ -157,9 +544,15 @@ function hasSourceBindingMarker(state: unknown): boolean {
 
 function readDefaultValue<TConfig>(
   adapter: PromptAdapter<TConfig>,
-  config: TConfig,
+  config: unknown,
 ): unknown {
-  if (adapter.getDefaultValue != null) return adapter.getDefaultValue(config);
+  // A derived configuration does not exist until its resolver runs during
+  // the real completion phase, so documentation cannot read a default from
+  // it and the adapter never receives the marker object.
+  if (isDerivedPromptConfig(config)) return undefined;
+  if (adapter.getDefaultValue != null) {
+    return adapter.getDefaultValue(config as TConfig);
+  }
   if (config != null && typeof config === "object" && "default" in config) {
     return (config as { readonly default?: unknown }).default;
   }
@@ -177,6 +570,20 @@ function unwrapCompleteResult<TValue>(
 }
 
 /**
+ * Prompt configuration accepted by a generated `prompt()` wrapper: either
+ * a static adapter configuration (optionally with a runtime condition) or
+ * a configuration derived from dependency sources via
+ * {@link derivePromptConfig}.
+ *
+ * @typeParam TConfig Prompt configuration accepted by the adapter.
+ * @typeParam TValue Value type produced by the wrapped parser.
+ * @since 1.3.0
+ */
+export type PromptConfigInput<TConfig, TValue> =
+  | (TConfig & PromptCondition<TValue>)
+  | DerivedPromptConfig<TConfig, NoInfer<TValue>>;
+
+/**
  * Creates a `prompt()` parser wrapper for a prompt library adapter.
  *
  * The generated wrapper tries the inner parser first.  If CLI tokens, source
@@ -187,18 +594,19 @@ function unwrapCompleteResult<TValue>(
  * @typeParam TConfig Prompt configuration accepted by the adapter.
  * @param adapter Library-specific prompt executor.
  * @returns A `prompt(parser, config)` wrapper that always produces an async
- *          parser.
+ *          parser.  The configuration may be a static `TConfig` or a
+ *          {@link DerivedPromptConfig} whose resolver returns `TConfig`.
  * @since 1.2.0
  */
 export function createPromptAdapter<TConfig>(
   adapter: PromptAdapter<TConfig>,
 ): <M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
-  config: TConfig & PromptCondition<TValue>,
+  config: PromptConfigInput<TConfig, TValue>,
 ) => FluentParser<"async", TValue, TState> {
   return function prompt<M extends Mode, TValue, TState>(
     parser: Parser<M, TValue, TState>,
-    config: TConfig & PromptCondition<TValue>,
+    config: PromptConfigInput<TConfig, TValue>,
   ): FluentParser<"async", TValue, TState> {
     const promptBindStateKey: unique symbol = Symbol(
       "@optique/prompt/promptState",
@@ -303,11 +711,24 @@ export function createPromptAdapter<TConfig>(
         hasNestedSourceBinding;
     }
 
-    async function executePrompt(): Promise<ValueParserResult<TValue>> {
+    async function executePrompt(
+      exec?: ExecutionContext,
+    ): Promise<ValueParserResult<TValue>> {
       if (config.when != null && !(await config.when())) {
-        return { success: true, value: config.otherwise };
+        return { success: true, value: config.otherwise as TValue };
       }
-      return adapter.execute<TValue>(config);
+      if (!isDerivedPromptConfig(config)) {
+        return adapter.execute<TValue>(config as TConfig);
+      }
+      const source = promptedParser.dependencyMetadata?.source;
+      const resolved = await resolveDerivedPromptConfig(
+        config as DerivedPromptConfig<TConfig, unknown>,
+        exec,
+        source?.sourceId,
+        source?.metavar,
+      );
+      if (!resolved.ok) return { success: false, error: resolved.error };
+      return adapter.execute<TValue>(resolved.config);
     }
 
     const parserInheritsAnnotations = getTraits(parser).inheritsAnnotations ===
@@ -501,7 +922,7 @@ export function createPromptAdapter<TConfig>(
                 deferredPromptResult(readPlaceholder() as TValue),
               );
             }
-            return executePrompt().then((result) => {
+            return executePrompt(exec).then((result) => {
               session.results.set(
                 cacheKey,
                 result as ValueParserResult<unknown>,
@@ -514,7 +935,20 @@ export function createPromptAdapter<TConfig>(
               return result;
             });
           }
-          return executePrompt();
+          // A consumer-only prompt with a derived configuration defers
+          // during the demand-only seed pass: its dependencies may still
+          // be unpublished there, and an answer computed from seed-pass
+          // values must not be cached.  It resolves in the final pass,
+          // after every source has published.
+          if (
+            session?.policy === "demand-only" &&
+            isDerivedPromptConfig(config)
+          ) {
+            return Promise.resolve(
+              deferredPromptResult(readPlaceholder() as TValue),
+            );
+          }
+          return executePrompt(exec);
         };
 
         const hasDeferHook = typeof parser.shouldDeferCompletion === "function";
@@ -698,9 +1132,21 @@ export function createPromptAdapter<TConfig>(
           >,
       }),
     );
-    if (dependencyMetadata != null) {
+    // A derived configuration makes this prompt a dependency consumer:
+    // the named sources must publish before its effectful completion may
+    // run.  The completion capability adds provider edges to the
+    // scheduler, propagates demand, and joins failure lineage, whether or
+    // not the wrapped parser is itself a source.
+    const composedMetadata: typeof dependencyMetadata =
+      isDerivedPromptConfig(config)
+        ? {
+          ...(dependencyMetadata ?? {}),
+          completion: { dependencyIds: config.dependencyIds },
+        }
+        : dependencyMetadata;
+    if (composedMetadata != null) {
       Object.defineProperty(promptedParser, "dependencyMetadata", {
-        value: dependencyMetadata,
+        value: composedMetadata,
         configurable: true,
         enumerable: false,
       });

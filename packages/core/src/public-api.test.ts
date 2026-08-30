@@ -127,6 +127,7 @@ test("dependency module hides internal replay machinery", () => {
     "deriveFrom",
     "deriveFromAsync",
     "deriveFromSync",
+    "getDependencySourceInfo",
     "isDependencySource",
     "isDerivedValueParser",
   ]);

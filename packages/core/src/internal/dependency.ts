@@ -650,6 +650,55 @@ export function isDependencySource<M extends Mode, T>(
 }
 
 /**
+ * Identity and diagnostic information about a dependency source.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface DependencySourceInfo {
+  /** The source's own identity, unique per `dependency()` call. */
+  readonly sourceId: symbol;
+
+  /** Metavariable used to identify this source in diagnostics. */
+  readonly metavar?: string;
+}
+
+/**
+ * Reads the identity and diagnostic label of a dependency source without
+ * exposing the internal marker symbols.
+ *
+ * Integration packages (e.g., *@optique/prompt*) use this to declare that
+ * an effectful completion consumes the source's value.
+ *
+ * @param source The dependency source to describe.
+ * @returns The source's identity and diagnostic metadata.
+ * @throws {TypeError} If `source` is not a dependency source created by
+ *         `dependency()`.
+ * @internal
+ * @since 1.3.0
+ */
+export function getDependencySourceInfo(
+  source: AnyDependencySource,
+): DependencySourceInfo {
+  if (
+    source == null || typeof source !== "object" ||
+    (source as { readonly [dependencySourceMarker]?: unknown })[
+        dependencySourceMarker
+      ] !== true ||
+    typeof source[dependencySourceId] !== "symbol"
+  ) {
+    throw new TypeError(
+      "Expected a dependency source created by dependency().",
+    );
+  }
+  const metavar = (source as { readonly metavar?: unknown }).metavar;
+  return {
+    sourceId: source[dependencySourceId],
+    ...(typeof metavar === "string" ? { metavar } : {}),
+  };
+}
+
+/**
  * Checks if a value parser is a {@link DerivedValueParser}.
  *
  * @param parser The value parser to check.

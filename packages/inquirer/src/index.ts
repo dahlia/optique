@@ -20,7 +20,20 @@ import type { FluentParser } from "@optique/core/fluent";
 import { message } from "@optique/core/message";
 import type { Mode, Parser } from "@optique/core/parser";
 import type { ValueParserResult } from "@optique/core/valueparser";
-import { createPromptAdapter, type PromptCondition } from "@optique/prompt";
+import {
+  createPromptAdapter,
+  type DerivedPromptConfig,
+  type PromptCondition,
+} from "@optique/prompt";
+
+export { derivePromptConfig, isDerivedPromptConfig } from "@optique/prompt";
+export type {
+  DerivedPromptConfig,
+  DerivePromptConfigContext,
+  DerivePromptConfigOptions,
+  DerivePromptConfigsContext,
+  DerivePromptConfigsOptions,
+} from "@optique/prompt";
 
 // Re-export Separator for use in choice lists.
 export { Separator };
@@ -378,7 +391,17 @@ type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
   : T extends readonly string[] ? CheckboxConfig
   : never;
 
-type RuntimePromptConfig =
+/**
+ * Union of every prompt configuration this package can execute,
+ * regardless of the parser value type.
+ *
+ * Derived prompt configurations resolve against this union: the adapter's
+ * configuration type supplies the resolver's return type, so a resolver
+ * may produce any prompt kind the adapter supports.
+ *
+ * @since 1.3.0
+ */
+export type RuntimePromptConfig =
   | ConfirmConfig
   | NumberPromptConfig
   | StringPromptConfig
@@ -406,7 +429,9 @@ const validPromptTypes: ReadonlySet<string> = new Set([
  * user.
  *
  * @param parser Inner parser that reads CLI values.
- * @param config Type-safe Inquirer.js prompt configuration.
+ * @param config Type-safe Inquirer.js prompt configuration, or a
+ *               configuration derived from dependency sources via
+ *               `derivePromptConfig()`.
  * @returns A parser with interactive prompt fallback, always in async mode.
  * @throws {Error} If prompt execution fails with an unexpected error or if the
  *                 inner parser throws while parsing or completing.
@@ -414,7 +439,9 @@ const validPromptTypes: ReadonlySet<string> = new Set([
  */
 export function prompt<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
-  config: PromptConfig<TValue>,
+  config:
+    | PromptConfig<TValue>
+    | DerivedPromptConfig<RuntimePromptConfig, NoInfer<TValue>>,
 ): FluentParser<"async", TValue, TState> {
   const promptWithAdapter = createPromptAdapter<RuntimePromptConfig>({
     execute: executePromptRaw,

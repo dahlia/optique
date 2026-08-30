@@ -2664,6 +2664,62 @@ describe("orderDependencyNodes", () => {
     assert.deepEqual(ordered, [consumer]);
   });
 
+  // https://github.com/dahlia/optique/issues/872
+  test("orders a completion consumer after its provider", () => {
+    const upstreamId = Symbol("upstream");
+    const consumer = createRuntimeSourceNode({
+      path: ["consumer"],
+      sourceId: Symbol("consumer"),
+      completionDependencyIds: [upstreamId],
+      metavar: "CONSUMER",
+    });
+    const provider = createRuntimeSourceNode({
+      path: ["provider"],
+      sourceId: upstreamId,
+      metavar: "PROVIDER",
+    });
+
+    const ordered = orderDependencyNodes([consumer, provider]);
+
+    assert.deepEqual(ordered, [provider, consumer]);
+  });
+
+  test("skips a completion dependency on the node's own source", () => {
+    const sourceId = Symbol("self");
+    const node = createRuntimeSourceNode({
+      path: ["self"],
+      sourceId,
+      completionDependencyIds: [sourceId],
+      metavar: "SELF",
+    });
+
+    const ordered = orderDependencyNodes([node]);
+
+    assert.deepEqual(ordered, [node]);
+  });
+
+  test("detects a cycle formed by completion dependencies", () => {
+    const firstId = Symbol("first");
+    const secondId = Symbol("second");
+    const first = createRuntimeSourceNode({
+      path: ["first"],
+      sourceId: firstId,
+      completionDependencyIds: [secondId],
+      metavar: "FIRST",
+    });
+    const second = createRuntimeSourceNode({
+      path: ["second"],
+      sourceId: secondId,
+      completionDependencyIds: [firstId],
+      metavar: "SECOND",
+    });
+
+    assert.throws(
+      () => orderDependencyNodes([first, second]),
+      /Circular dependency.*FIRST \(first\).*SECOND \(second\)/,
+    );
+  });
+
   test("reports the paths and metavars in a forged cycle", () => {
     const firstId = Symbol("first");
     const secondId = Symbol("second");
@@ -2693,6 +2749,7 @@ function createRuntimeSourceNode(options: {
   readonly path: readonly PropertyKey[];
   readonly sourceId: symbol;
   readonly dependencyIds?: readonly symbol[];
+  readonly completionDependencyIds?: readonly symbol[];
   readonly metavar: string;
 }): RuntimeNode {
   const source: NonNullable<ParserDependencyMetadata["source"]> = {
@@ -2709,12 +2766,17 @@ function createRuntimeSourceNode(options: {
       metavar: options.metavar,
       replayParse: (rawInput) => ({ success: true, value: rawInput }),
     };
+  const completion: ParserDependencyMetadata["completion"] =
+    options.completionDependencyIds == null ? undefined : {
+      dependencyIds: options.completionDependencyIds,
+    };
   return {
     path: options.path,
     parser: {
       dependencyMetadata: {
         source,
         ...(derived != null ? { derived } : {}),
+        ...(completion != null ? { completion } : {}),
       },
     },
     state: undefined,

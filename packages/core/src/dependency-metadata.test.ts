@@ -432,6 +432,26 @@ describe("extractDependencyMetadata", () => {
 // =============================================================================
 
 describe("composeDependencyMetadata", () => {
+  // https://github.com/dahlia/optique/issues/872
+  test("forwards the completion capability through every wrapper", () => {
+    const env = createEnvSource();
+    const inner = extractDependencyMetadata(env);
+    assert.ok(inner !== undefined);
+    const completion = { dependencyIds: [Symbol("upstream")] };
+    const withCompletion = { ...inner, completion };
+    for (const kind of ["optional", "withDefault", "map"] as const) {
+      const composed = composeDependencyMetadata(
+        withCompletion,
+        kind,
+        kind === "withDefault"
+          ? { defaultValue: () => ({ success: true as const, value: "dev" }) }
+          : undefined,
+      );
+      assert.ok(composed !== undefined);
+      assert.equal(composed.completion, completion);
+    }
+  });
+
   test("optional preserves preservesSourceValue and getMissingSourceValue", () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);

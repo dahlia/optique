@@ -147,6 +147,25 @@ export interface DerivedDependencyCapability {
 }
 
 /**
+ * Metadata for a parser whose effectful completion consumes dependency
+ * source values without replaying a parse.
+ *
+ * A prompt with a derived configuration is the canonical case: resolving
+ * the configuration reads previously published dependency values, so the
+ * named sources must publish before the parser's effectful completion may
+ * run.  The scheduler adds provider edges for these IDs, propagates
+ * demand through them when the owning source is demanded, and includes
+ * them in failure lineage.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface CompletionDependencyCapability {
+  /** The dependency source IDs the effectful completion reads. */
+  readonly dependencyIds: readonly symbol[];
+}
+
+/**
  * Metadata indicating that a wrapper transforms the dependency source value.
  *
  * @internal
@@ -173,6 +192,13 @@ export interface ParserDependencyMetadata {
 
   /** Present if the parser depends on one or more sources. */
   readonly derived?: DerivedDependencyCapability;
+
+  /**
+   * Present if the parser's effectful completion consumes dependency
+   * values (e.g., a prompt with a derived configuration).
+   * @since 1.3.0
+   */
+  readonly completion?: CompletionDependencyCapability;
 
   /** Present if a transform has been applied. */
   readonly transform?: DependencyTransformCapability;

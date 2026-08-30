@@ -56,6 +56,11 @@ Core rules
     For a multi-level chain, wrap the middle derivation too:
     `dependency(source.deriveSync(...))`. Optique resolves such chains by
     dependency order, independently of object/tuple field order.
+ -  Use `derivePromptConfig(source, resolver)` (from *@optique/prompt*,
+    re-exported by *@optique/inquirer* and *@optique/clack*) when a prompt's
+    choices or message depend on another parsed value. The resolver may be
+    async and runs only at the real prompt fallback, after the named sources
+    resolve; keep static prompt configs for everything else.
  -  Build subcommands with `command()` combined by `or()`. Put a literal field
     such as `command: constant("serve")` in each branch when you want a
     discriminated union.

@@ -924,6 +924,19 @@ export function orderDependencyNodes(
         }
       }
     }
+    // An effectful completion that consumes dependency values (e.g., a
+    // prompt with a derived configuration) must run after its providers
+    // publish.  A self-edge is skipped: a completion depending on its own
+    // source cannot be satisfied and surfaces as a missing dependency at
+    // resolution time instead of a structural cycle.
+    const completion = node.parser.dependencyMetadata?.completion;
+    if (completion != null) {
+      for (const dependencySourceId of completion.dependencyIds) {
+        for (const provider of providers.get(dependencySourceId) ?? []) {
+          if (provider !== node) addEdge(provider, node);
+        }
+      }
+    }
     if (node.requiresSourceId != null) {
       for (const provider of providers.get(node.requiresSourceId) ?? []) {
         if (provider !== node) addEdge(provider, node);
@@ -953,7 +966,7 @@ export function orderDependencyNodes(
     const cycle = nodes.filter((node) => (indegree.get(node) ?? 0) > 0);
     const labels = cycle.map(formatDependencyNodeLabel).join(" -> ");
     throw new TypeError(
-      `Circular dependency detected among derived sources: ${labels}.`,
+      `Circular dependency detected among dependency sources: ${labels}.`,
     );
   }
   return ordered;
@@ -1140,10 +1153,21 @@ function registerRuntimeSourceMetadata(
   for (const node of nodes) {
     const metadata = node.parser.dependencyMetadata;
     if (metadata?.source == null) continue;
+    // Completion dependencies (a prompt configuration derived from other
+    // sources) join replay dependencies in the lineage so a failure chain
+    // reaches back through either kind of edge.
+    const dependencyIds = metadata.completion == null
+      ? metadata.derived?.dependencyIds
+      : [
+        ...(metadata.derived?.dependencyIds ?? []),
+        ...metadata.completion.dependencyIds.filter((id) =>
+          !(metadata.derived?.dependencyIds ?? []).includes(id)
+        ),
+      ];
     runtime.registerSourceMetadata(
       metadata.source.sourceId,
       formatDependencyNodeMetavar(node),
-      metadata.derived?.dependencyIds,
+      dependencyIds,
     );
   }
 }
@@ -1154,9 +1178,12 @@ function propagateRuntimeSourceFailures(
 ): void {
   for (const node of orderDependencyNodes(nodes)) {
     const metadata = node.parser.dependencyMetadata;
-    if (metadata?.derived == null) continue;
+    if (metadata?.derived == null && metadata?.completion == null) continue;
     runtime.propagateSourceFailure(
-      metadata.derived.dependencyIds,
+      [
+        ...(metadata.derived?.dependencyIds ?? []),
+        ...(metadata.completion?.dependencyIds ?? []),
+      ],
       formatDependencyNodeMetavar(node),
       metadata.source?.sourceId,
     );
@@ -1944,6 +1971,21 @@ export async function completeEffectfulSourcesAsync(
           session.demanded.has(metadata.source.sourceId)
         ) {
           for (const dependencySourceId of metadata.derived.dependencyIds) {
+            if (session.demanded.has(dependencySourceId)) continue;
+            session.demanded.add(dependencySourceId);
+            demandAdded = true;
+          }
+        }
+        // A demanded source whose effectful completion consumes other
+        // dependency values (a prompt with a derived configuration)
+        // demands those prerequisites too—but only when its own value is
+        // demanded, so a CLI- or binding-satisfied prompt never demands
+        // its upstream prompts.
+        if (
+          metadata?.source != null && metadata.completion != null &&
+          session.demanded.has(metadata.source.sourceId)
+        ) {
+          for (const dependencySourceId of metadata.completion.dependencyIds) {
             if (session.demanded.has(dependencySourceId)) continue;
             session.demanded.add(dependencySourceId);
             demandAdded = true;

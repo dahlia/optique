@@ -301,6 +301,12 @@ Two more points worth knowing:
     passes through the inner parser's constraints. A config `port` of `80` is
     rejected by `option("--port", integer({ min: 1024 }))` exactly as a
     command-line `80` would be.
+ -  *Prompt questions can depend on earlier values, too.* When an interactive
+    prompt's choices should follow another option's value, derive the prompt
+    configuration with
+    [`derivePromptConfig()`](./integrations/prompt.md#derived-prompt-configurations)
+    instead of duplicating the dependency logic outside the parser or
+    presenting an unconditional list.
  -  *For config-only or environment-only values, wrap `fail()`, not
     `constant()`.* `constant()` always succeeds, so `bindConfig()` treats it as
     a value the user supplied and skips the file lookup entirely. `fail()`
