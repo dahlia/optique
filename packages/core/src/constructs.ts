@@ -6209,6 +6209,20 @@ async function preCompleteAndRegisterDependenciesAsync(
       field,
       fieldParser,
     );
+    // A two-pass source binding can be unresolved during Phase 1 and ask
+    // completion to wait for the final annotations.  Do not turn that
+    // provisional absence into a cached failure before the phase-two seed
+    // can run demanded effectful sources.
+    if (
+      exec?.effectfulCompletionSession?.policy === "demand-only" &&
+      typeof fieldParser.shouldDeferCompletion === "function" &&
+      fieldParser.shouldDeferCompletion(
+          annotatedFieldState,
+          withChildExecPath(exec, field),
+        ) === true
+    ) {
+      continue;
+    }
     if (
       fieldParser.dependencyMetadata?.source?.getMissingSourceValue != null &&
       isUnmatchedDependencyState(fieldState, fieldParser)
