@@ -2253,6 +2253,53 @@ describe("completeEffectfulSourcesAsync", () => {
     assert.deepEqual(chain, ["AAA", "SHARED"]);
   });
 
+  test("keeps a bypassed occurrence out of transitive failure", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const idA = Symbol("a");
+    const idB = Symbol("b");
+    // A's own state already extracts a value, so its configuration
+    // dependencies on B are inactive: B's cancellation must not fail A.
+    const bypassed: RuntimeNode = {
+      path: ["a"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: idA,
+            metavar: "AAA",
+            extractSourceValue: () => ({ success: true, value: "cli" }),
+            preservesSourceValue: true,
+            completeSource: () =>
+              Promise.resolve({ success: true, value: "cli" }),
+          },
+          completion: { dependencyIds: [idB] },
+        },
+      },
+      state: undefined,
+    };
+    const cancelled = createEffectfulSourceNode(
+      "b",
+      idB,
+      () =>
+        Promise.resolve({
+          success: false,
+          error: [{ type: "text", text: "Prompt cancelled." }],
+        }),
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [bypassed, cancelled],
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(!result.success);
+    assert.ok(runtime.isSourceFailed(idB));
+    assert.ok(!runtime.isSourceFailed(idA));
+    assert.equal(runtime.getSource(idA), "cli");
+  });
+
   test("runs completions serially in declaration order and registers", async () => {
     const runtime = createDependencyRuntimeContext();
     const idA = Symbol("a");

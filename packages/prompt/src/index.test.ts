@@ -3678,6 +3678,30 @@ describe("derived prompt configuration failures and edge cases", () => {
     assert.deepEqual(usedDefaultSeen, [false]);
   });
 
+  it("keeps unsatisfied occurrences ordered by their own dependencies", async () => {
+    const shared = dependency(choice(["s1", "s2"] as const));
+    const t = dependency(choice(["t1"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      // Occurrence 1 of the shared source is CLI-supplied, which must not
+      // deactivate occurrence 2's dependency on the later prompt for T.
+      first: prompt(option("--first", shared), { value: "s1" }),
+      second: prompt(
+        option("--second", shared),
+        derivePromptConfig(t, (value) => ({
+          value: value === "t1" ? "s2" : "s2",
+        })),
+      ),
+      t: prompt(option("--t", t), { value: "t1" }),
+    });
+
+    const result = await parseAsync(parser, ["--first", "s1"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { first: "s1", second: "s2", t: "t1" });
+    assert.deepEqual(calls, [{ value: "t1" }, { value: "s2" }]);
+  });
+
   it("breaks a mutual dependency when one value is CLI-supplied", async () => {
     const a = dependency(choice(["x"] as const));
     const b = dependency(choice(["y"] as const));
