@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { detectColorSupport, detectTerminalWidth } from "./run.ts";
+import { detectColorSupport, detectTerminalWidth } from "./detect.ts";
 
 describe("detectColorSupport()", () => {
   it("should enable colors if FORCE_COLOR is '1', '2', '3', 'true', or ''", () => {

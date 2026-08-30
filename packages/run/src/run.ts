@@ -25,6 +25,7 @@ import type { Program } from "@optique/core/program";
 import type { Usage } from "@optique/core/usage";
 import path from "node:path";
 import process from "node:process";
+import { detectColorSupport, detectTerminalWidth } from "./detect.ts";
 
 /**
  * Configuration options for the {@link run} function.
@@ -70,7 +71,7 @@ export interface RunOptions {
   /**
    * Whether to enable colored output in help and error messages.
    *
-   * @default `process.stdout.isTTY` (auto-detect based on terminal)
+   * @default Auto-detected. Uses `FORCE_COLOR`, `NO_COLOR`, and `NODE_DISABLE_COLORS` environment variables, falling back to `process.stdout.isTTY`.
    */
   readonly colors?: boolean;
 
@@ -78,7 +79,7 @@ export interface RunOptions {
    * Maximum width for output formatting. Text will be wrapped to fit within
    * this width. If not specified, uses the terminal width.
    *
-   * @default `process.stdout.columns` (auto-detect terminal width)
+   * @default Auto-detected. Uses `process.stdout.columns`, falling back to valid `COLUMNS` environment variable values.
    */
   readonly maxWidth?: number;
 
@@ -850,86 +851,6 @@ export function runAsync<T extends Parser<Mode, unknown, unknown>>(
  *
  * @internal
  */
-
-/**
- * A minimal abstraction of a writable stream (like `process.stdout`) to allow
- * for dependency injection during testing without mutating global state.
- *
- * @internal
- */
-export interface StdoutLike {
-  isTTY?: boolean;
-  columns?: number;
-  hasColors?: (depth?: number) => boolean;
-}
-
-/**
- * A minimal abstraction of a process environment (like `process.env`).
- *
- * @internal
- */
-export type EnvLike = Record<string, string | undefined>;
-
-/**
- * Detects whether the terminal supports color output based on environment
- * variables and TTY status.
- *
- * @param stdout - The standard output stream to check for TTY status.
- * @param env - The environment variables to check for color overrides.
- * @returns `true` if colors should be enabled, `false` otherwise.
- *
- * @internal
- */
-export function detectColorSupport(stdout: StdoutLike, env: EnvLike): boolean {
-  if (env.FORCE_COLOR !== undefined) {
-    switch (env.FORCE_COLOR) {
-      case "1":
-      case "2":
-      case "3":
-      case "true":
-      case "":
-        return true;
-      default:
-        return false;
-    }
-  }
-  if (env.NO_COLOR !== undefined || env.NODE_DISABLE_COLORS !== undefined) {
-    return false;
-  }
-  return stdout.isTTY ?? false;
-}
-
-/**
- * Detects the terminal width in columns, falling back to the `COLUMNS`
- * environment variable if the stream does not provide a valid width.
- *
- * @param stdout - The standard output stream to check for column width.
- * @param env - The environment variables to check for fallback column width.
- * @returns The detected terminal width as a positive integer, or `undefined` if undetected.
- *
- * @internal
- */
-export function detectTerminalWidth(
-  stdout: StdoutLike,
-  env: EnvLike,
-): number | undefined {
-  if (
-    typeof stdout.columns === "number" &&
-    Number.isInteger(stdout.columns) &&
-    stdout.columns > 0
-  ) {
-    return stdout.columns;
-  }
-  if (typeof env.COLUMNS === "string") {
-    if (/^\s*\d+\s*$/.test(env.COLUMNS)) {
-      const parsed = Number(env.COLUMNS);
-      if (parsed > 0) {
-        return parsed;
-      }
-    }
-  }
-  return undefined;
-}
 
 function buildCoreOptions(
   options: RunOptions,
