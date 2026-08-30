@@ -1,6 +1,10 @@
 import type { ShellCompletion } from "@optique/core/completion";
 import type { SourceContext } from "@optique/core/context";
-import { runParser, runWith, runWithSync } from "@optique/core/facade";
+import type {
+  DocSection,
+  ShowChoicesOptions,
+  ShowDefaultOptions,
+} from "@optique/core/doc";
 import type {
   CommandListMode,
   CommandSubConfig,
@@ -8,6 +12,8 @@ import type {
   OptionSubConfig,
   RunOptions as CoreRunOptions,
 } from "@optique/core/facade";
+import { runParser, runWith, runWithSync } from "@optique/core/facade";
+import type { Message } from "@optique/core/message";
 import type {
   InferMode,
   InferValue,
@@ -16,12 +22,6 @@ import type {
   Parser,
 } from "@optique/core/parser";
 import type { Program } from "@optique/core/program";
-import type {
-  DocSection,
-  ShowChoicesOptions,
-  ShowDefaultOptions,
-} from "@optique/core/doc";
-import type { Message } from "@optique/core/message";
 import type { Usage } from "@optique/core/usage";
 import path from "node:path";
 import process from "node:process";
@@ -850,6 +850,87 @@ export function runAsync<T extends Parser<Mode, unknown, unknown>>(
  *
  * @internal
  */
+
+/**
+ * A minimal abstraction of a writable stream (like `process.stdout`) to allow
+ * for dependency injection during testing without mutating global state.
+ *
+ * @internal
+ */
+export interface StdoutLike {
+  isTTY?: boolean;
+  columns?: number;
+  hasColors?: (depth?: number) => boolean;
+}
+
+/**
+ * A minimal abstraction of a process environment (like `process.env`).
+ *
+ * @internal
+ */
+export type EnvLike = Record<string, string | undefined>;
+
+/**
+ * Detects whether the terminal supports color output based on environment
+ * variables and TTY status.
+ *
+ * @param stdout - The standard output stream to check for TTY status.
+ * @param env - The environment variables to check for color overrides.
+ * @returns `true` if colors should be enabled, `false` otherwise.
+ *
+ * @internal
+ */
+export function detectColorSupport(stdout: StdoutLike, env: EnvLike): boolean {
+  if (env.FORCE_COLOR !== undefined) {
+    switch (env.FORCE_COLOR) {
+      case "1":
+      case "2":
+      case "3":
+      case "true":
+      case "":
+        return true;
+      default:
+        return false;
+    }
+  }
+  if (env.NO_COLOR !== undefined || env.NODE_DISABLE_COLORS !== undefined) {
+    return false;
+  }
+  return stdout.isTTY ?? false;
+}
+
+/**
+ * Detects the terminal width in columns, falling back to the `COLUMNS`
+ * environment variable if the stream does not provide a valid width.
+ *
+ * @param stdout - The standard output stream to check for column width.
+ * @param env - The environment variables to check for fallback column width.
+ * @returns The detected terminal width as a positive integer, or `undefined` if undetected.
+ *
+ * @internal
+ */
+export function detectTerminalWidth(
+  stdout: StdoutLike,
+  env: EnvLike,
+): number | undefined {
+  if (
+    typeof stdout.columns === "number" &&
+    Number.isInteger(stdout.columns) &&
+    stdout.columns > 0
+  ) {
+    return stdout.columns;
+  }
+  if (typeof env.COLUMNS === "string") {
+    if (/^\s*\d+\s*$/.test(env.COLUMNS)) {
+      const parsed = Number(env.COLUMNS);
+      if (parsed > 0) {
+        return parsed;
+      }
+    }
+  }
+  return undefined;
+}
+
 function buildCoreOptions(
   options: RunOptions,
   programMetadata?: ProgramHelpMetadata,
@@ -869,8 +950,10 @@ function buildCoreOptions(
   });
   const onExit = options.onExit ??
     ((exitCode: number) => process.exit(exitCode) as never);
-  const colors = options.colors ?? process.stdout.isTTY;
-  const maxWidth = options.maxWidth ?? process.stdout.columns;
+  const colors = options.colors ??
+    detectColorSupport(process.stdout, process.env);
+  const maxWidth = options.maxWidth ??
+    detectTerminalWidth(process.stdout, process.env);
   const termWidth = options.termWidth;
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;
