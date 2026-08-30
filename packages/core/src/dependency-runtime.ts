@@ -926,12 +926,17 @@ export function orderDependencyNodes(
     }
     // An effectful completion that consumes dependency values (e.g., a
     // prompt with a derived configuration) must run after its providers
-    // publish.  A self-edge is skipped: a completion depending on its own
-    // source cannot be satisfied and surfaces as a missing dependency at
-    // resolution time instead of a structural cycle.
+    // publish.  A dependency on the node's own source creates no edge at
+    // all: the node cannot run before itself, and another occurrence of
+    // the same source ranks by declaration order (last occurrence wins),
+    // so edges between same-source occurrences would only forge a cycle.
+    // An unsatisfiable self-dependency surfaces as a missing dependency
+    // at resolution time instead of a structural cycle.
     const completion = node.parser.dependencyMetadata?.completion;
     if (completion != null) {
+      const ownSourceId = node.parser.dependencyMetadata?.source?.sourceId;
       for (const dependencySourceId of completion.dependencyIds) {
+        if (dependencySourceId === ownSourceId) continue;
         for (const provider of providers.get(dependencySourceId) ?? []) {
           if (provider !== node) addEdge(provider, node);
         }

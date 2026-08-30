@@ -705,6 +705,14 @@ during the phase-two seed pass and resolves in the final pass, after
 every source has published.  If phase-two contexts need its value, make
 the wrapped parser a source with `dependency()`.
 
+One ordering limitation applies inside a `conditional()` whose branch is
+selected only during completion: the branch's prompts run at the
+conditional's declaration position, so a derived configuration inside
+such a branch cannot see a source prompt declared *after* the
+conditional—the resolver falls back to its declared default or fails as
+missing.  Declare the sources a branch configuration reads before the
+conditional (or outside it) so they publish first.
+
 
 Testing adapters
 ----------------

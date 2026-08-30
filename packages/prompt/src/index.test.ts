@@ -3715,6 +3715,33 @@ describe("derived prompt configuration failures and edge cases", () => {
     assert.deepEqual(calls, []);
   });
 
+  it("resolves shared-source self-dependent prompts without a cycle", async () => {
+    const shared = dependency(choice(["x", "y"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      a: prompt(
+        option("--a", shared),
+        derivePromptConfig(shared, (value) => ({ value }), {
+          defaultValue: () => "x" as const,
+        }),
+      ),
+      b: prompt(
+        option("--b", shared),
+        derivePromptConfig(shared, (value) => ({ value }), {
+          defaultValue: () => "y" as const,
+        }),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    // The first prompt resolves from its own declared default; the second
+    // then observes the published value instead of its default.
+    assert.deepEqual(result.value, { a: "x", b: "x" });
+    assert.deepEqual(calls, [{ value: "x" }, { value: "x" }]);
+  });
+
   it("resolves a self-dependent configuration from its default", async () => {
     const a = dependency(choice(["x"] as const));
     const { prompt, calls } = createTestPrompt();

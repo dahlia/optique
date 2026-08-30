@@ -2698,6 +2698,26 @@ describe("orderDependencyNodes", () => {
     assert.deepEqual(ordered, [node]);
   });
 
+  test("keeps same-source self dependencies acyclic across occurrences", () => {
+    const sharedId = Symbol("shared");
+    const first = createRuntimeSourceNode({
+      path: ["first"],
+      sourceId: sharedId,
+      completionDependencyIds: [sharedId],
+      metavar: "FIRST",
+    });
+    const second = createRuntimeSourceNode({
+      path: ["second"],
+      sourceId: sharedId,
+      completionDependencyIds: [sharedId],
+      metavar: "SECOND",
+    });
+
+    const ordered = orderDependencyNodes([first, second]);
+
+    assert.deepEqual(ordered, [first, second]);
+  });
+
   test("detects a cycle formed by completion dependencies", () => {
     const firstId = Symbol("first");
     const secondId = Symbol("second");
