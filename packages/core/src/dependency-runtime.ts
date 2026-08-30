@@ -246,6 +246,68 @@ export interface RuntimeNode {
    * @since 1.3.0
    */
   readonly requiresSourceId?: symbol;
+
+  /**
+   * Completion dependencies aggregated from the selectable subtrees
+   * guarded by this barrier, so the outer pass can order the barrier
+   * after the providers those subtrees' effectful completions read and
+   * propagate demand to them.
+   *
+   * The sets are static estimates: they describe every selectable
+   * branch, not the one preparation will eventually choose.  They are
+   * advisory for ordering and demand only and never join failure
+   * lineage—a failed prerequisite used only by an unselected branch
+   * must not fail the barrier.
+   *
+   * @since 1.3.0
+   */
+  readonly barrierCompletionDependencies?: BarrierCompletionDependencies;
+}
+
+/**
+ * An exact demand edge inside a scheduling barrier's subtree: when the
+ * consumer's own source is demanded, the completion dependencies its
+ * effectful completion reads become demanded as well, mirroring the
+ * flat demand rule for parsers whose completion consumes dependency
+ * values.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface BarrierCompletionDemandEdge {
+  /** The branch consumer's own source ID (the demand trigger). */
+  readonly consumerSourceId: symbol;
+
+  /** The completion dependency IDs that consumer reads. */
+  readonly dependencyIds: readonly symbol[];
+}
+
+/**
+ * Completion dependencies a scheduling barrier aggregates from its
+ * selectable subtrees.  See
+ * {@link RuntimeNode.barrierCompletionDependencies}.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface BarrierCompletionDependencies {
+  /**
+   * Union of the branches' completion dependency IDs, with each
+   * branch's own statically providable IDs subtracted.  Used only to
+   * order the barrier after outer providers; a missing provider
+   * creates no edge.
+   */
+  readonly orderingDependencyIds: readonly symbol[];
+
+  /**
+   * Exact demand edges collected from branch parsers that are both a
+   * source and a completion consumer.  Unlike
+   * {@link BarrierCompletionDependencies.orderingDependencyIds}, these
+   * keep branch-internal prerequisites: a demanded consumer must also
+   * demand an internal source prompt so it does not defer out of the
+   * seed pass.
+   */
+  readonly demandEdges: readonly BarrierCompletionDemandEdge[];
 }
 
 /**
@@ -879,7 +941,9 @@ export async function collectExplicitSourceValuesAsync(
  *
  * Missing providers create no edge because the consumer may use its declared
  * default.  Scheduling barriers act as providers for the source IDs their
- * selected subtree may expose and depend on their discriminator source.
+ * selected subtree may expose and depend on their discriminator source as
+ * well as on outer providers of the completion dependencies their
+ * selectable subtrees aggregate.
  *
  * @param nodes Runtime nodes in declaration order.
  * @returns The same nodes in stable dependency order.
@@ -951,6 +1015,19 @@ export function orderDependencyNodes(
     if (node.requiresSourceId != null) {
       for (const provider of providers.get(node.requiresSourceId) ?? []) {
         if (provider !== node) addEdge(provider, node);
+      }
+    }
+    // A scheduling barrier aggregates the completion dependencies its
+    // selectable subtrees declare, so the barrier waits for outer
+    // providers a branch's effectful completion reads.  The barrier
+    // itself provides its branches' source IDs, so skipping self edges
+    // keeps a dependency on a sibling branch's source internal.
+    const barrierDeps = node.barrierCompletionDependencies;
+    if (barrierDeps != null) {
+      for (const dependencySourceId of barrierDeps.orderingDependencyIds) {
+        for (const provider of providers.get(dependencySourceId) ?? []) {
+          if (provider !== node) addEdge(provider, node);
+        }
       }
     }
   }
@@ -1176,8 +1253,11 @@ const inactiveCompletionCache = new WeakMap<RuntimeNode, boolean>();
  * the completion active (the effectful completion is its recovery
  * path), and an asynchronous extraction is conservatively treated as
  * active because it cannot be decided synchronously.
+ *
+ * @internal
+ * @since 1.3.0
  */
-function hasInactiveCompletion(node: RuntimeNode): boolean {
+export function hasInactiveCompletion(node: RuntimeNode): boolean {
   const cached = inactiveCompletionCache.get(node);
   if (cached != null) return cached;
   const inactive = computeInactiveCompletion(node);
@@ -2053,6 +2133,21 @@ export async function completeEffectfulSourcesAsync(
             if (session.demanded.has(dependencySourceId)) continue;
             session.demanded.add(dependencySourceId);
             demandAdded = true;
+          }
+        }
+        // A barrier's demand edges mirror the flat completion rule for
+        // the consumers hidden behind it: only when a branch consumer's
+        // own source is demanded do its completion prerequisites become
+        // demanded, so a demanded discriminator or an unrelated branch
+        // source never forces another consumer's prerequisites.
+        if (node.barrierCompletionDependencies != null) {
+          for (const edge of node.barrierCompletionDependencies.demandEdges) {
+            if (!session.demanded.has(edge.consumerSourceId)) continue;
+            for (const dependencySourceId of edge.dependencyIds) {
+              if (session.demanded.has(dependencySourceId)) continue;
+              session.demanded.add(dependencySourceId);
+              demandAdded = true;
+            }
           }
         }
         if (node.requiresSourceId == null || node.providesSourceIds == null) {

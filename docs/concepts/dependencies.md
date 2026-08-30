@@ -654,7 +654,10 @@ operation. Their results and failures are scoped to that operation.
 A prompt whose configuration is derived with `derivePromptConfig()` is a
 consumer node in the same graph: the sources its resolver reads count as its
 providers, so they resolve first, and the prompt runs after them regardless of
-field order.
+field order.  A branch that a `conditional()` selects only during completion
+contributes its completion dependencies to the enclosing graph as well: the
+conditional waits for the providers its selectable branches read, even when
+they are declared after it.
 
 An invalid source never falls back to its default. The failure propagates
 through every derived source that consumes it—including prompts whose

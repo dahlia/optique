@@ -7,6 +7,7 @@
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
 import {
+  type BarrierCompletionDependencies,
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
   collectDemandedDependencyIds,
@@ -2669,6 +2670,98 @@ describe("completeEffectfulSourcesAsync", () => {
     assert.ok(result.success);
     assert.ok(session.demanded.has(sourceId));
   });
+
+  // https://github.com/dahlia/optique/issues/919
+  test("demands a barrier edge's prerequisites for a demanded consumer", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("demand-only");
+    const consumerId = Symbol("consumer");
+    const prerequisiteId = Symbol("prerequisite");
+    const chainedId = Symbol("chained");
+    const trace = createInputTrace().set(["level"], {
+      kind: "option-value",
+      rawInput: "debug",
+      consumed: ["--level", "debug"],
+    });
+    const derivedConsumer: RuntimeNode = {
+      path: ["level"],
+      parser: {
+        dependencyMetadata: {
+          derived: {
+            kind: "derived",
+            dependencyIds: [consumerId],
+            replayParse: () => ({ success: true, value: "debug" }),
+          },
+        },
+      },
+      state: undefined,
+    };
+    const barrier = createBarrierNode({
+      path: ["barrier"],
+      providesSourceIds: new Set([consumerId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [prerequisiteId],
+        demandEdges: [{
+          consumerSourceId: consumerId,
+          dependencyIds: [prerequisiteId],
+        }],
+      },
+    });
+    // The flat rule chains onward: the demanded prerequisite's own
+    // completion consumes another source.
+    const prerequisite = createRuntimeSourceNode({
+      path: ["prerequisite"],
+      sourceId: prerequisiteId,
+      completionDependencyIds: [chainedId],
+      metavar: "PREREQ",
+    });
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, derivedConsumer, prerequisite],
+      undefined,
+      runtime,
+      { ...createCompleteExecFixture(session), trace },
+    );
+
+    assert.ok(result.success);
+    assert.ok(session.demanded.has(prerequisiteId));
+    assert.ok(session.demanded.has(chainedId));
+  });
+
+  test("keeps an undemanded barrier edge's prerequisites undemanded", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("demand-only");
+    const consumerId = Symbol("consumer");
+    const otherBranchId = Symbol("otherBranch");
+    const prerequisiteId = Symbol("prerequisite");
+    const discriminatorId = Symbol("discriminator");
+    // An unrelated branch source and the discriminator control
+    // dependency are demanded, but not the edge's consumer.
+    session.demanded.add(otherBranchId);
+    session.demanded.add(discriminatorId);
+    const barrier = createBarrierNode({
+      path: ["barrier"],
+      requiresSourceId: discriminatorId,
+      providesSourceIds: new Set([consumerId, otherBranchId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [prerequisiteId],
+        demandEdges: [{
+          consumerSourceId: consumerId,
+          dependencyIds: [prerequisiteId],
+        }],
+      },
+    });
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.ok(!session.demanded.has(prerequisiteId));
+  });
 });
 
 describe("collectDemandedDependencyIds", () => {
@@ -2860,6 +2953,72 @@ describe("orderDependencyNodes", () => {
     );
   });
 
+  // https://github.com/dahlia/optique/issues/919
+  test("orders a barrier after providers of its branch completion deps", () => {
+    const upstreamId = Symbol("upstream");
+    const barrier = createBarrierNode({
+      path: ["barrier"],
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [upstreamId],
+        demandEdges: [],
+      },
+    });
+    const unrelated = createRuntimeSourceNode({
+      path: ["unrelated"],
+      sourceId: Symbol("unrelated"),
+      metavar: "UNRELATED",
+    });
+    const provider = createRuntimeSourceNode({
+      path: ["provider"],
+      sourceId: upstreamId,
+      metavar: "PROVIDER",
+    });
+
+    const ordered = orderDependencyNodes([barrier, unrelated, provider]);
+
+    assert.deepEqual(ordered, [unrelated, provider, barrier]);
+  });
+
+  test("skips a barrier completion dependency the barrier provides", () => {
+    const sharedId = Symbol("shared");
+    const barrier = createBarrierNode({
+      path: ["barrier"],
+      providesSourceIds: new Set([sharedId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [sharedId],
+        demandEdges: [],
+      },
+    });
+
+    const ordered = orderDependencyNodes([barrier]);
+
+    assert.deepEqual(ordered, [barrier]);
+  });
+
+  test("detects a cycle between a barrier and a sibling consumer", () => {
+    const branchId = Symbol("branch");
+    const siblingId = Symbol("sibling");
+    const barrier = createBarrierNode({
+      path: ["barrier"],
+      providesSourceIds: new Set([branchId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [siblingId],
+        demandEdges: [],
+      },
+    });
+    const sibling = createRuntimeSourceNode({
+      path: ["sibling"],
+      sourceId: siblingId,
+      completionDependencyIds: [branchId],
+      metavar: "SIBLING",
+    });
+
+    assert.throws(
+      () => orderDependencyNodes([barrier, sibling]),
+      /Circular dependency/,
+    );
+  });
+
   test("reports the paths and metavars in a forged cycle", () => {
     const firstId = Symbol("first");
     const secondId = Symbol("second");
@@ -2884,6 +3043,31 @@ describe("orderDependencyNodes", () => {
 });
 
 // Helpers
+
+function createBarrierNode(options: {
+  readonly path: readonly PropertyKey[];
+  readonly requiresSourceId?: symbol;
+  readonly providesSourceIds?: ReadonlySet<symbol>;
+  readonly barrierCompletionDependencies?: BarrierCompletionDependencies;
+}): RuntimeNode {
+  return {
+    path: options.path,
+    parser: {},
+    state: undefined,
+    ...(options.requiresSourceId != null
+      ? { requiresSourceId: options.requiresSourceId }
+      : {}),
+    ...(options.providesSourceIds != null
+      ? { providesSourceIds: options.providesSourceIds }
+      : {}),
+    ...(options.barrierCompletionDependencies != null
+      ? {
+        barrierCompletionDependencies: options.barrierCompletionDependencies,
+      }
+      : {}),
+    prepare: () => Promise.resolve(undefined),
+  };
+}
 
 function createRuntimeSourceNode(options: {
   readonly path: readonly PropertyKey[];
