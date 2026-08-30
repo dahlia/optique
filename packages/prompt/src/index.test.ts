@@ -3212,6 +3212,10 @@ describe("derived prompt configurations", () => {
     const result = await parseAsync(parser, []);
 
     assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /is not available and no default value is declared/,
+    );
     assert.deepEqual(calls, []);
   });
 
@@ -3430,6 +3434,7 @@ describe("derived prompt configuration failures and edge cases", () => {
     ]);
 
     assert.ok(!result.success);
+    assert.match(formatMessage(result.error), /Dependency chain:/);
     assert.deepEqual(calls, []);
   });
 
@@ -3490,7 +3495,7 @@ describe("derived prompt configuration failures and edge cases", () => {
     assert.deepEqual(calls, []);
   });
 
-  it("never passes the derived marker to adapter.getDefaultValue", () => {
+  it("never passes the derived marker to adapter.getDefaultValue", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
     const defaultValueCalls: unknown[] = [];
     const prompt = createPromptAdapter<{ readonly value: unknown }>({
@@ -3510,7 +3515,7 @@ describe("derived prompt configuration failures and edge cases", () => {
       derivePromptConfig(framework, (value) => ({ value: `hi-${value}` })),
     );
 
-    const page = getDocPageAsync(parser);
+    const page = await getDocPageAsync(parser);
 
     assert.ok(page != null);
     assert.deepEqual(defaultValueCalls, []);
@@ -3689,7 +3694,7 @@ describe("derived prompt configuration failures and edge cases", () => {
       second: prompt(
         option("--second", shared),
         derivePromptConfig(t, (value) => ({
-          value: value === "t1" ? "s2" : "s2",
+          value: value === "t1" ? "s2" : "s1",
         })),
       ),
       t: prompt(option("--t", t), { value: "t1" }),
@@ -3715,7 +3720,7 @@ describe("derived prompt configuration failures and edge cases", () => {
         option("--b", b),
         derivePromptConfig(
           a,
-          (value) => ({ value: value === "x" ? "y" : "y" }),
+          (value) => ({ value: value === "x" ? "y" : "unexpected" }),
         ),
       ),
     });
