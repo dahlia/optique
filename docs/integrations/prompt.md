@@ -711,16 +711,20 @@ completion dependencies of every selectable branch, so the conditional
 waits for the sources a branch configuration reads even when they are
 declared *after* the conditional, and the demand-only seed pass of a
 `runWith()` run reaches a prerequisite only through the branch consumer
-that actually reads it.  Two caveats follow from the branch estimates
+that actually reads it.  Three caveats follow from the branch estimates
 being static.  A dependency on a source that another sibling might
 publish, such as a completion consumer next to a conditional whose
 branch consumes the sibling's own source, can be rejected as a circular
-dependency even though only one of them would run.  And a branch that
+dependency even though only one of them would run.  A branch that
 *could* provide a source itself—through an unselected nested
 alternative, or an `optional()` occurrence that ends up parsing
 nothing—resolves that source inside the branch, so a matching provider
 declared after the conditional is not waited for and the configuration
-falls back to its declared default.
+falls back to its declared default.  And a speculative selection that
+the discriminator ultimately rejects may already have demanded its
+configuration prerequisites, so a prerequisite prompt can run before
+the branch-mismatch error surfaces, although the rejected branch's own
+resolver never runs.
 
 
 Testing adapters
