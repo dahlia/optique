@@ -2180,6 +2180,79 @@ function createEffectfulSourceNode(
 }
 
 describe("completeEffectfulSourcesAsync", () => {
+  // https://github.com/dahlia/optique/issues/872
+  test("reports the executing occurrence's completion lineage", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const failedUpstream = Symbol("upstreamA");
+    const otherUpstream = Symbol("upstreamB");
+    const shared = Symbol("shared");
+    const providerA = createRuntimeSourceNode({
+      path: ["a"],
+      sourceId: failedUpstream,
+      metavar: "AAA",
+    });
+    const providerB = createRuntimeSourceNode({
+      path: ["b"],
+      sourceId: otherUpstream,
+      metavar: "BBB",
+    });
+    runtime.registerSource(otherUpstream, "ok");
+    runtime.registerSourceMetadata(failedUpstream, "AAA");
+    runtime.registerSourceMetadata(otherUpstream, "BBB");
+    runtime.markSourceFailed(failedUpstream);
+    const occurrence = (
+      key: string,
+      dependencyId: symbol,
+      completeSource: NonNullable<
+        NonNullable<ParserDependencyMetadata["source"]>["completeSource"]
+      >,
+    ): RuntimeNode => ({
+      path: [key],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: shared,
+            metavar: "SHARED",
+            extractSourceValue: () => undefined,
+            preservesSourceValue: true,
+            completeSource,
+          },
+          completion: { dependencyIds: [dependencyId] },
+        },
+      },
+      state: undefined,
+    });
+    const nodes: RuntimeNode[] = [
+      providerA,
+      providerB,
+      occurrence("first", failedUpstream, () =>
+        Promise.resolve({
+          success: false,
+          error: [{ type: "text", text: "Upstream failed." }],
+        })),
+      occurrence(
+        "second",
+        otherUpstream,
+        () => Promise.resolve({ success: true, value: "unreached" }),
+      ),
+    ];
+
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
+
+    assert.ok(!result.success);
+    // The chain reflects the occurrence that actually failed (its
+    // configuration depends on AAA), not the last-registered occurrence
+    // (which depends on BBB).
+    const chain = runtime.getSourceFailureChain(shared);
+    assert.deepEqual(chain, ["AAA", "SHARED"]);
+  });
+
   test("runs completions serially in declaration order and registers", async () => {
     const runtime = createDependencyRuntimeContext();
     const idA = Symbol("a");

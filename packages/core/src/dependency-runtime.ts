@@ -882,6 +882,11 @@ export async function collectExplicitSourceValuesAsync(
  * selected subtree may expose and depend on their discriminator source.
  *
  * @param nodes Runtime nodes in declaration order.
+ * @param runtime When given, completion edges are built only for consumers
+ *                whose own source has no structurally registered value: a
+ *                source already satisfied by the command line or a binding
+ *                bypasses its effectful completion, so its completion
+ *                dependencies are inactive and must not forge a cycle.
  * @returns The same nodes in stable dependency order.
  * @throws {TypeError} If active provider edges contain a cycle.
  * @internal
@@ -889,6 +894,7 @@ export async function collectExplicitSourceValuesAsync(
  */
 export function orderDependencyNodes(
   nodes: readonly RuntimeNode[],
+  runtime?: DependencyRuntimeContext,
 ): readonly RuntimeNode[] {
   const providers = new Map<symbol, RuntimeNode[]>();
   const addProvider = (sourceId: symbol, node: RuntimeNode): void => {
@@ -931,14 +937,24 @@ export function orderDependencyNodes(
     // the same source ranks by declaration order (last occurrence wins),
     // so edges between same-source occurrences would only forge a cycle.
     // An unsatisfiable self-dependency surfaces as a missing dependency
-    // at resolution time instead of a structural cycle.
+    // at resolution time instead of a structural cycle.  A consumer whose
+    // own source already holds a structurally registered value bypasses
+    // its completion entirely, so its completion dependencies are
+    // inactive and contribute no edges either; a *failed* extraction
+    // keeps its edges, because the effectful completion is its recovery
+    // path.
     const completion = node.parser.dependencyMetadata?.completion;
     if (completion != null) {
       const ownSourceId = node.parser.dependencyMetadata?.source?.sourceId;
-      for (const dependencySourceId of completion.dependencyIds) {
-        if (dependencySourceId === ownSourceId) continue;
-        for (const provider of providers.get(dependencySourceId) ?? []) {
-          if (provider !== node) addEdge(provider, node);
+      const bypassed = runtime != null && ownSourceId != null &&
+        runtime.hasSource(ownSourceId) &&
+        !runtime.isSourceFailed(ownSourceId);
+      if (!bypassed) {
+        for (const dependencySourceId of completion.dependencyIds) {
+          if (dependencySourceId === ownSourceId) continue;
+          for (const provider of providers.get(dependencySourceId) ?? []) {
+            if (provider !== node) addEdge(provider, node);
+          }
         }
       }
     }
@@ -984,7 +1000,7 @@ export function resolveDerivedSourceValues(
   options?: ResolveDerivedSourceValuesOptions,
 ): void {
   resolveDerivedSourceValuesInOrder(
-    orderDependencyNodes(nodes),
+    orderDependencyNodes(nodes, runtime),
     nodes,
     runtime,
     (node, rawInput) => replayDerivedParser(node, rawInput, runtime),
@@ -999,7 +1015,7 @@ export async function resolveDerivedSourceValuesAsync(
   options?: ResolveDerivedSourceValuesOptions,
 ): Promise<void> {
   await resolveDerivedSourceValuesInOrderAsync(
-    orderDependencyNodes(nodes),
+    orderDependencyNodes(nodes, runtime),
     nodes,
     runtime,
     options,
@@ -1181,7 +1197,7 @@ function propagateRuntimeSourceFailures(
   nodes: readonly RuntimeNode[],
   runtime: DependencyRuntimeContext,
 ): void {
-  for (const node of orderDependencyNodes(nodes)) {
+  for (const node of orderDependencyNodes(nodes, runtime)) {
     const metadata = node.parser.dependencyMetadata;
     if (metadata?.derived == null && metadata?.completion == null) continue;
     runtime.propagateSourceFailure(
@@ -1984,11 +2000,13 @@ export async function completeEffectfulSourcesAsync(
         // A demanded source whose effectful completion consumes other
         // dependency values (a prompt with a derived configuration)
         // demands those prerequisites too—but only when its own value is
-        // demanded, so a CLI- or binding-satisfied prompt never demands
-        // its upstream prompts.
+        // demanded and not already structurally registered, so a CLI- or
+        // binding-satisfied prompt never demands its upstream prompts.
         if (
           metadata?.source != null && metadata.completion != null &&
-          session.demanded.has(metadata.source.sourceId)
+          session.demanded.has(metadata.source.sourceId) &&
+          !(runtime.hasSource(metadata.source.sourceId) &&
+            !runtime.isSourceFailed(metadata.source.sourceId))
         ) {
           for (const dependencySourceId of metadata.completion.dependencyIds) {
             if (session.demanded.has(dependencySourceId)) continue;
@@ -2032,7 +2050,7 @@ export async function completeEffectfulSourcesAsync(
   }
 
   const completed: EffectfulSourceCompletion[] = [];
-  for (const node of orderDependencyNodes(nodes)) {
+  for (const node of orderDependencyNodes(nodes, runtime)) {
     // A scheduling barrier runs at its declaration position; its
     // preparation may schedule further nodes through the nested call,
     // which shares this pass's runtime, session, and exec.

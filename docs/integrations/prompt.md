@@ -710,8 +710,8 @@ selected only during completion: the branch's prompts run at the
 conditional's declaration position, so a derived configuration inside
 such a branch cannot see a source prompt declared *after* the
 conditional—the resolver falls back to its declared default or fails as
-missing.  Declare the sources a branch configuration reads before the
-conditional (or outside it) so they publish first.
+missing.  Declare the sources a branch configuration reads in the
+surrounding scope before the conditional, so they publish first.
 
 
 Testing adapters

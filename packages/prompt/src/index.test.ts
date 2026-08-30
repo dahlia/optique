@@ -3678,6 +3678,33 @@ describe("derived prompt configuration failures and edge cases", () => {
     assert.deepEqual(usedDefaultSeen, [false]);
   });
 
+  it("breaks a mutual dependency when one value is CLI-supplied", async () => {
+    const a = dependency(choice(["x"] as const));
+    const b = dependency(choice(["y"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      a: prompt(
+        option("--a", a),
+        derivePromptConfig(b, () => ({ value: "x" })),
+      ),
+      b: prompt(
+        option("--b", b),
+        derivePromptConfig(
+          a,
+          (value) => ({ value: value === "x" ? "y" : "y" }),
+        ),
+      ),
+    });
+
+    // --a bypasses a's resolver, so its dependency on b is inactive and
+    // no cycle forms; b's resolver reads the published "x".
+    const result = await parseAsync(parser, ["--a", "x"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { a: "x", b: "y" });
+    assert.deepEqual(calls, [{ value: "y" }]);
+  });
+
   it("detects a cycle between derived prompt configurations", async () => {
     const a = dependency(choice(["x"] as const));
     const b = dependency(choice(["y"] as const));
