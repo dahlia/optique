@@ -14,6 +14,8 @@ import {
   wrappedDependencySourceMarker,
 } from "./internal/dependency.ts";
 import {
+  type BarrierCompletionDemandEdge,
+  type BarrierCompletionDependencies,
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
@@ -25,6 +27,7 @@ import {
   effectfulSchedulingNodesKey,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
+  hasInactiveCompletion,
   resolveDerivedSourceValues,
   resolveDerivedSourceValuesAsync,
   resolveStateWithRuntime,
@@ -436,6 +439,107 @@ function collectStaticSourceIds(
   if (scope != null) {
     for (const child of scope) collectStaticSourceIds(child, out, seen);
   }
+}
+
+/**
+ * Statically collects the completion dependencies reachable through a
+ * parser's composed metadata and flattened field pairs, mirroring
+ * {@link collectStaticSourceIds}.  Every completion consumer joins the
+ * ordering union, while demand edges record only parsers that are both
+ * a source and a completion consumer—the flat demand rule never
+ * demands a consumer-only completion's prerequisites, because such a
+ * completion defers itself out of the seed pass.
+ */
+function collectStaticCompletionDependencies(
+  parser: Parser<Mode, unknown, unknown>,
+  orderingDependencyIds: Set<symbol>,
+  demandEdges: BarrierCompletionDemandEdge[],
+  seen: Set<object>,
+): void {
+  if (seen.has(parser as object)) return;
+  seen.add(parser as object);
+  const metadata = parser.dependencyMetadata;
+  const completion = metadata?.completion;
+  if (completion != null) {
+    for (const id of completion.dependencyIds) orderingDependencyIds.add(id);
+    const consumerSourceId = metadata?.source?.sourceId;
+    if (consumerSourceId != null) {
+      demandEdges.push({
+        consumerSourceId,
+        dependencyIds: completion.dependencyIds,
+      });
+    }
+  }
+  const pairs = (parser as {
+    readonly [fieldParsersKey]?: ReadonlyArray<
+      readonly [string | symbol, Parser<Mode, unknown, unknown>]
+    >;
+  })[fieldParsersKey];
+  if (pairs != null) {
+    for (const [, child] of pairs) {
+      collectStaticCompletionDependencies(
+        child,
+        orderingDependencyIds,
+        demandEdges,
+        seen,
+      );
+    }
+  }
+  const scope = (parser as {
+    readonly [staticSourceScopeKey]?: ReadonlyArray<
+      Parser<Mode, unknown, unknown>
+    >;
+  })[staticSourceScopeKey];
+  if (scope != null) {
+    for (const child of scope) {
+      collectStaticCompletionDependencies(
+        child,
+        orderingDependencyIds,
+        demandEdges,
+        seen,
+      );
+    }
+  }
+}
+
+/**
+ * Recomputes a speculative barrier's completion dependencies from the
+ * guessed branch's expanded runtime nodes, so an occurrence already
+ * satisfied by the command line or a binding contributes neither
+ * ordering edges nor demand, mirroring the flat inactive-completion
+ * rule.  Nested barriers contribute their own aggregates, which remain
+ * static estimates.
+ */
+function computeBarrierDependenciesFromNodes(
+  nodes: readonly RuntimeNode[],
+  provides: ReadonlySet<symbol>,
+): BarrierCompletionDependencies | undefined {
+  const ordering = new Set<symbol>();
+  const demandEdges: BarrierCompletionDemandEdge[] = [];
+  for (const node of nodes) {
+    const metadata = node.parser.dependencyMetadata;
+    const completion = metadata?.completion;
+    if (completion != null && !hasInactiveCompletion(node)) {
+      for (const id of completion.dependencyIds) ordering.add(id);
+      const consumerSourceId = metadata?.source?.sourceId;
+      if (consumerSourceId != null) {
+        demandEdges.push({
+          consumerSourceId,
+          dependencyIds: completion.dependencyIds,
+        });
+      }
+    }
+    const nested = node.barrierCompletionDependencies;
+    if (nested != null) {
+      for (const id of nested.orderingDependencyIds) ordering.add(id);
+      demandEdges.push(...nested.demandEdges);
+    }
+  }
+  const orderingDependencyIds = [...ordering].filter((id) => !provides.has(id));
+  if (orderingDependencyIds.length < 1 && demandEdges.length < 1) {
+    return undefined;
+  }
+  return { orderingDependencyIds, demandEdges };
 }
 
 function isDeferredCompletionResult(result: unknown): boolean {
@@ -16032,17 +16136,82 @@ export function conditional(
     parentPath: readonly PropertyKey[] | undefined,
   ): string => preparedKeyPrefix + serializeSchedulingPath(parentPath ?? []);
   // Source IDs the branches can provide, for demand-only control
-  // dependency detection (see RuntimeNode.providesSourceIds).
-  const branchProvidedSourceIds = (() => {
-    const out = new Set<symbol>();
-    const seen = new Set<object>();
+  // dependency detection (see RuntimeNode.providesSourceIds), and the
+  // branches' aggregated completion dependencies, so a scheduling
+  // barrier can wait for outer providers a branch's effectful
+  // completion reads (see RuntimeNode.barrierCompletionDependencies).
+  // Each branch walks with its own `seen` set: a parser shared across
+  // branches must contribute to every branch's estimate.
+  const {
+    branchProvidedSourceIds,
+    mergedBarrierDependencies,
+    barrierDependenciesByKey,
+  } = (() => {
+    const provided = new Set<symbol>();
+    interface BranchDependencyEstimate {
+      readonly provides: ReadonlySet<symbol>;
+      readonly dependencies?: BarrierCompletionDependencies;
+    }
+    const byParser = new Map<object, BranchDependencyEstimate>();
+    const computeBranch = (
+      branch: Parser<Mode, unknown, unknown>,
+    ): BranchDependencyEstimate => {
+      const memoized = byParser.get(branch as object);
+      if (memoized != null) return memoized;
+      const provides = new Set<symbol>();
+      collectStaticSourceIds(branch, provides, new Set());
+      for (const id of provides) provided.add(id);
+      const ordering = new Set<symbol>();
+      const demandEdges: BarrierCompletionDemandEdge[] = [];
+      collectStaticCompletionDependencies(
+        branch,
+        ordering,
+        demandEdges,
+        new Set(),
+      );
+      // The ordering union subtracts the branch's own statically
+      // providable IDs: those prerequisites resolve inside the
+      // barrier's nested pass.  Demand edges keep them—a demanded
+      // consumer must still demand a branch-internal source prompt so
+      // it does not defer out of the seed pass.
+      const orderingDependencyIds = [...ordering].filter(
+        (id) => !provides.has(id),
+      );
+      const estimate: BranchDependencyEstimate = {
+        provides,
+        ...(orderingDependencyIds.length < 1 && demandEdges.length < 1
+          ? {}
+          : { dependencies: { orderingDependencyIds, demandEdges } }),
+      };
+      byParser.set(branch as object, estimate);
+      return estimate;
+    };
+    const byKey = new Map<string, BranchDependencyEstimate>();
     for (const key of Object.keys(branches)) {
-      collectStaticSourceIds(branches[key], out, seen);
+      const estimate = computeBranch(branches[key]);
+      if (estimate.dependencies != null) byKey.set(key, estimate);
     }
-    if (defaultBranch != null) {
-      collectStaticSourceIds(defaultBranch, out, seen);
+    if (defaultBranch != null) computeBranch(defaultBranch);
+    const orderingUnion = new Set<symbol>();
+    const mergedEdges: BarrierCompletionDemandEdge[] = [];
+    for (const estimate of new Set(byParser.values())) {
+      if (estimate.dependencies == null) continue;
+      for (const id of estimate.dependencies.orderingDependencyIds) {
+        orderingUnion.add(id);
+      }
+      mergedEdges.push(...estimate.dependencies.demandEdges);
     }
-    return out;
+    const merged = orderingUnion.size < 1 && mergedEdges.length < 1
+      ? undefined
+      : {
+        orderingDependencyIds: [...orderingUnion],
+        demandEdges: mergedEdges,
+      };
+    return {
+      branchProvidedSourceIds: provided,
+      mergedBarrierDependencies: merged,
+      barrierDependenciesByKey: byKey,
+    };
   })();
 
   // Builds the effectful scheduling nodes for this conditional: the
@@ -16141,6 +16310,29 @@ export function conditional(
       }
       teeDiscriminatorNode();
       const speculativeKey = selected.key;
+      // The guessed branch was parsed, so its occurrence states can
+      // refine the static estimate: a consumer already satisfied by the
+      // command line or a binding bypasses its completion, and its
+      // prerequisites must contribute neither ordering edges nor
+      // demand, mirroring the flat inactive-completion rule.
+      const speculativeBarrierDependencies = (() => {
+        const estimate = barrierDependenciesByKey.get(speculativeKey);
+        if (estimate?.dependencies == null) return undefined;
+        const branchParser = branches[speculativeKey];
+        if (branchParser == null) return estimate.dependencies;
+        return computeBarrierDependenciesFromNodes(
+          expandEffectfulRuntimeNodes([{
+            path: [...(parentPath ?? []), "_branch"],
+            parser: branchParser,
+            state: getAnnotatedChildState(
+              conditionalState,
+              conditionalState.branchState,
+              branchParser,
+            ),
+          }]),
+          estimate.provides,
+        );
+      })();
       nodes.push({
         path: [...(parentPath ?? []), "_branch"],
         parser: {},
@@ -16149,6 +16341,9 @@ export function conditional(
           ? { requiresSourceId: discriminatorSource.sourceId }
           : {}),
         providesSourceIds: branchProvidedSourceIds,
+        ...(speculativeBarrierDependencies != null
+          ? { barrierCompletionDependencies: speculativeBarrierDependencies }
+          : {}),
         prepare: async (ctx) => {
           const session = ctx.exec?.effectfulCompletionSession;
           if (session == null) return undefined;
@@ -16198,6 +16393,9 @@ export function conditional(
         ? { requiresSourceId: discriminatorSource.sourceId }
         : {}),
       providesSourceIds: branchProvidedSourceIds,
+      ...(mergedBarrierDependencies != null
+        ? { barrierCompletionDependencies: mergedBarrierDependencies }
+        : {}),
       prepare: async (ctx) => {
         const session = ctx.exec?.effectfulCompletionSession;
         if (session == null) return undefined;

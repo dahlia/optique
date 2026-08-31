@@ -705,13 +705,26 @@ during the phase-two seed pass and resolves in the final pass, after
 every source has published.  If phase-two contexts need its value, make
 the wrapped parser a source with `dependency()`.
 
-One ordering limitation applies inside a `conditional()` whose branch is
-selected only during completion: the branch's prompts run at the
-conditional's declaration position, so a derived configuration inside
-such a branch cannot see a source prompt declared *after* the
-conditional—the resolver falls back to its declared default or fails as
-missing.  Declare the sources a branch configuration reads in the
-surrounding scope before the conditional, so they publish first.
+Derived configurations also work inside a `conditional()` whose branch
+is selected only during completion.  The scheduler aggregates the
+completion dependencies of every selectable branch, so the conditional
+waits for the sources a branch configuration reads even when they are
+declared *after* the conditional, and the demand-only seed pass of a
+`runWith()` run reaches a prerequisite only through the branch consumer
+that actually reads it.  Three caveats follow from the branch estimates
+being static.  A dependency on a source that another sibling might
+publish, such as a completion consumer next to a conditional whose
+branch consumes the sibling's own source, can be rejected as a circular
+dependency even though only one of them would run.  A branch that
+*could* provide a source itself—through an unselected nested
+alternative, or an `optional()` occurrence that ends up parsing
+nothing—resolves that source inside the branch, so a matching provider
+declared after the conditional is not waited for and the configuration
+falls back to its declared default.  And a speculative selection that
+the discriminator ultimately rejects may already have demanded its
+configuration prerequisites, so a prerequisite prompt can run before
+the branch-mismatch error surfaces, although the rejected branch's own
+resolver never runs.
 
 
 Testing adapters
