@@ -4712,9 +4712,11 @@ describe("branch completion dependencies across scheduling barriers", () => {
     ]);
   });
 
-  // The remaining tests pin accepted limitations of the static
-  // aggregation, so a behavior change there is deliberate rather than
-  // accidental.
+  // The remaining tests pin the active-provider rule for branch
+  // provides (https://github.com/dahlia/optique/issues/924): a
+  // guaranteed internal occurrence serves its branch, while a merely
+  // possible one no longer hides a provider declared after the
+  // conditional.
 
   it("keeps a branch-internal provider for the branch consumer while a later occurrence wins outside", async () => {
     const kind = dependency(choice(["a", "b"] as const));
@@ -4758,15 +4760,15 @@ describe("branch completion dependencies across scheduling barriers", () => {
     assert.equal(result.value.out, "npm");
   });
 
-  it("lets an absent branch provider hide a later external provider", async () => {
+  it("resolves a later external provider despite an absent branch provider", async () => {
     const kind = dependency(choice(["a", "b"] as const));
     const framework = dependency(choice(["fresh", "hono"] as const));
     const resolved: unknown[] = [];
     const { prompt } = createTestPrompt();
-    // The branch statically provides the framework source through an
-    // optional occurrence that parses nothing, so the ordering union
-    // drops the edge to the later occurrence: the resolver keeps its
-    // declared default.
+    // The branch's optional occurrence parses nothing, so it is a
+    // merely possible provider: the barrier keeps its ordering edge to
+    // the occurrence declared after the conditional, whose prompted
+    // value reaches the branch resolver.
     const parser = object({
       cond: conditional(
         prompt(option("--kind", kind), { value: "a" }),
@@ -4790,20 +4792,19 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const result = await parseAsync(parser, []);
 
     assert.ok(result.success);
-    assert.deepEqual(resolved, [["fresh", true]]);
+    assert.deepEqual(resolved, [["hono", false]]);
   });
 
-  it("keeps a nested alternative's static provides hiding an outer provider", async () => {
+  it("resolves an outer provider despite an unselected nested alternative's provides", async () => {
     const kindOuter = dependency(choice(["a", "b"] as const));
     const kindInner = dependency(choice(["i1", "i2"] as const));
     const framework = dependency(choice(["fresh", "hono"] as const));
     const resolved: unknown[] = [];
     const { prompt } = createTestPrompt();
-    // The outer branch's static walk sees the unselected i1
-    // alternative providing the framework source, so the subtraction
-    // happens at outer-branch granularity and the selected i2
-    // consumer cannot wait for the provider declared after the outer
-    // conditional: it keeps its declared default.
+    // The i1 alternative provides the framework source only if it is
+    // selected, so it is a merely possible provider for the outer
+    // branch: the selected i2 consumer waits for the provider declared
+    // after the outer conditional and reads its prompted value.
     const parser = object({
       cond: conditional(
         prompt(option("--kind", kindOuter), { value: "a" }),
@@ -4837,6 +4838,595 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const result = await parseAsync(parser, []);
 
     assert.ok(result.success);
+    assert.deepEqual(resolved, ["hono"]);
+  });
+
+  it("resolves a later external provider despite an absent optional prompt provider", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // optional(prompt(...)) keeps an effectful completion, but an
+    // absent optional occurrence declines it and publishes nothing, so
+    // it is a merely possible provider: the consumer still waits for
+    // the occurrence declared after the conditional.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: optional(
+              prompt(option("--fw", framework), { value: "fresh" }),
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "hono" ? "npm" : "deno" };
+              }, { defaultValue: () => "fresh" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["hono"]);
+  });
+
+  it("keeps a runtime-conditioned branch prompt guaranteed through its otherwise value", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // A prompt guarded by a runtime `when` condition publishes its
+    // `otherwise` value when the condition declines, so it remains a
+    // guaranteed provider: the branch consumer reads that value instead
+    // of waiting for the occurrence declared after the conditional.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: prompt(option("--fw", framework), {
+              value: "hono",
+              when: () => false,
+              otherwise: "fresh" as const,
+            }),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "hono" ? "npm" : "deno" };
+              }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
     assert.deepEqual(resolved, ["fresh"]);
+  });
+
+  it("serves a branch consumer from a withDefault provider while a later occurrence wins outside", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // withDefault() publishes its default whenever the branch runs, so
+    // it is a guaranteed provider: the barrier does not wait for the
+    // later occurrence, the branch consumer reads the default, and the
+    // later occurrence still wins for post-conditional consumers.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: withDefault(option("--fw", framework), "fresh" as const),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.deepEqual(result.value.cond, ["a", { fw: "fresh", pm: "deno" }]);
+    assert.equal(result.value.fw2, "hono");
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("publishes a branch withDefault thunk once per run", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolved: unknown[] = [];
+    let thunkCalls = 0;
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: withDefault(option("--fw", framework), () => {
+              thunkCalls++;
+              return "fresh" as const;
+            }),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.deepEqual(result.value.cond, ["a", { fw: "fresh", pm: "deno" }]);
+    // The nested scheduling pass publishes the default at most once per
+    // run, on top of the pre-existing parse-probe and field-completion
+    // evaluations flat compositions already perform; without the
+    // run-scoped cache, repeated nested passes would keep adding more.
+    assert.ok(
+      thunkCalls <= 3,
+      `Expected at most 3 thunk evaluations, got ${thunkCalls}`,
+    );
+  });
+
+  it("never lets a branch default displace an explicit earlier value", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // Defaults are fill-only: the user's explicit --fw value, collected
+    // from the occurrence declared before the conditional, must not be
+    // overwritten by the branch's unmatched withDefault() fallback.
+    const parser = object({
+      fw1: option("--fw", framework),
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: withDefault(option("--fw2", framework), "hono" as const),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--fw", "fresh"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.fw1, "fresh");
+    assert.deepEqual(resolved, ["fresh"]);
+  });
+
+  it("serves a branch consumer from a withDefault prompt provider", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // withDefault(prompt(...)) keeps both the effectful completion and
+    // the publishable default, so it stays a guaranteed provider: the
+    // prompt answers inside the branch and the consumer reads it.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: withDefault(
+              prompt(option("--fw", framework), { value: "fresh" }),
+              "fresh" as const,
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+  });
+
+  it("treats a nested conditional providing on every route as guaranteed", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // Every route through the inner conditional prompts the framework
+    // source, so the outer branch is guaranteed to provide it: the
+    // outer barrier does not wait for the later occurrence, the branch
+    // consumer reads the inner answer, and the later occurrence wins
+    // for post-conditional consumers.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i2" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "hono" }),
+                }),
+                i2: object({
+                  fw: prompt(option("--fw-b", framework), { value: "fresh" }),
+                }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("parses a barrier and sibling consumer whose opposing edges cannot coexist", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const alpha = dependency(choice(["a1", "a2"] as const));
+    const beta = dependency(choice(["b1", "b2"] as const));
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // Branch a consumes the sibling's source while only branch b could
+    // provide the source the sibling consumes.  The opposing edges come
+    // from branches that cannot be selected together, so the parser is
+    // no longer rejected as circular: once the discriminator selects
+    // branch a, the barrier is only a consumer, so the sibling resolves
+    // first against its own default and the branch consumer reads the
+    // sibling's published value.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            pa: prompt(
+              option("--pa", dependency(choice(["x", "y"] as const))),
+              derivePromptConfig(alpha, (value) => {
+                resolved.push(["pa", value]);
+                return { value: value === "a1" ? "x" : "y" };
+              }, { defaultValue: () => "a1" as const }),
+            ),
+          }),
+          b: object({
+            pb: prompt(option("--pb", beta), { value: "b1" }),
+          }),
+        },
+      ),
+      sibling: prompt(
+        option("--sibling", alpha),
+        derivePromptConfig(beta, (value) => {
+          resolved.push(["sibling", value]);
+          return { value: value === "b1" ? "a1" : "a2" };
+        }, { defaultValue: () => "b2" as const }),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, [["sibling", "b2"], ["pa", "a2"]]);
+  });
+
+  it("rejects a genuine cycle between an active branch provider and a sibling consumer", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const alpha = dependency(choice(["a1", "a2"] as const));
+    const beta = dependency(choice(["b1", "b2"] as const));
+    const { prompt } = createTestPrompt();
+    // The selected branch actively provides the source the sibling
+    // consumes while also waiting for the sibling's source: once the
+    // discriminator resolves the branch, both edges are concrete and
+    // the cycle is genuine.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            pb: prompt(option("--pb", beta), { value: "b1" }),
+            pa: prompt(
+              option("--pa", dependency(choice(["x", "y"] as const))),
+              derivePromptConfig(alpha, (value) => ({
+                value: value === "a1" ? "x" : "y",
+              }), { defaultValue: () => "a1" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      sibling: prompt(
+        option("--sibling", alpha),
+        derivePromptConfig(beta, (value) => ({
+          value: value === "b1" ? "a1" : "a2",
+        }), { defaultValue: () => "b2" as const }),
+      ),
+    });
+
+    await assert.rejects(
+      () => parseAsync(parser, []),
+      /Circular dependency/,
+    );
+  });
+
+  it("resolves an absent optional provider's consumer under runWith", async () => {
+    const kind = dependency(choice(["a", "z"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-active-provider-demand"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    // The demanded branch consumer's prerequisite reaches the seed
+    // pass, and the absent optional occurrence does not hide the
+    // later provider under the two-pass path either.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: optional(option("--fw", framework)),
+            mode: prompt(
+              option("--mode", mode),
+              derivePromptConfig(framework, (value) => ({
+                value: value === "hono" ? "prod" : "dev",
+              }), { defaultValue: () => "fresh" as const }),
+            ),
+          }),
+          z: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      level: option("--level", level),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--level", "silent"],
+    });
+
+    assert.equal((result as { readonly level: string }).level, "silent");
+    assert.deepEqual(
+      (result as { readonly cond: unknown }).cond,
+      ["a", { fw: undefined, mode: "prod" }],
+    );
+    assert.deepEqual(calls, [
+      { value: "a" },
+      { value: "hono" },
+      { value: "prod" },
+    ]);
+  });
+
+  it("keeps a mixed alternative a merely possible provider", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // The or() may commit its non-source alternative, so the branch is
+    // not guaranteed to publish the framework source even though one
+    // alternative is an unconditional prompt: the consumer waits for
+    // the occurrence declared after the conditional.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: or(
+              prompt(option("--fw", framework), { value: "fresh" }),
+              constant("none"),
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "hono" ? "npm" : "deno" };
+              }, { defaultValue: () => "fresh" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["hono"]);
+  });
+
+  it("keeps a prompted optional branch provider merely possible", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // prompt(optional(...)) may legitimately answer `undefined`, which
+    // the scheduler never registers, so the occurrence stays a merely
+    // possible provider and the consumer waits for the later one.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: prompt(optional(option("--fw", framework)), {
+              value: undefined,
+            }),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "hono" ? "npm" : "deno" };
+              }, { defaultValue: () => "fresh" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["hono"]);
+  });
+
+  it("rejects a genuine cycle behind an effect-free discriminator", async () => {
+    const alpha = dependency(choice(["a1", "a2"] as const));
+    const beta = dependency(choice(["b1", "b2"] as const));
+    const { prompt } = createTestPrompt();
+    // The discriminator is not a dependency source, so the barrier
+    // resolves at its execution position; the selected branch actively
+    // provides the source the sibling consumes while waiting for the
+    // sibling's source, which is a genuine concrete cycle.
+    const parser = object({
+      cond: conditional(
+        withDefault(option("--kind", choice(["a", "b"] as const)), "a"),
+        {
+          a: object({
+            pb: prompt(option("--pb", beta), { value: "b1" }),
+            pa: prompt(
+              option("--pa", dependency(choice(["x", "y"] as const))),
+              derivePromptConfig(alpha, (value) => ({
+                value: value === "a1" ? "x" : "y",
+              }), { defaultValue: () => "a1" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      sibling: prompt(
+        option("--sibling", alpha),
+        derivePromptConfig(beta, (value) => ({
+          value: value === "b1" ? "a1" : "a2",
+        }), { defaultValue: () => "b2" as const }),
+      ),
+    });
+
+    await assert.rejects(
+      () => parseAsync(parser, []),
+      /Circular dependency/,
+    );
+  });
+
+  it("confirms a config-bound branch provider once its value binds", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const resolved: unknown[] = [];
+    const context = createRegionConfigContext();
+    const { prompt } = createTestPrompt();
+    // The bound occurrence extracts its configuration value when the
+    // barrier resolves, so it is an active provider: the branch
+    // consumer reads the bound value instead of waiting for the later
+    // occurrence.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            region: bindConfig(option("--region", region), {
+              context,
+              key: "region",
+            }),
+            zone: prompt(
+              option("--zone", dependency(choice(["z1", "z2"] as const))),
+              derivePromptConfig(region, (value) => {
+                resolved.push(value);
+                return { value: value === "eu" ? "z2" : "z1" };
+              }, { defaultValue: () => "us" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      region2: prompt(option("--region2", region), { value: "us" }),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      args: [],
+      contextOptions: {
+        load: () => ({
+          config: { region: "eu" as const },
+          meta: undefined,
+        }),
+      },
+    });
+
+    assert.deepEqual(resolved, ["eu"]);
+    assert.deepEqual((result as { readonly cond: unknown }).cond, [
+      "a",
+      { region: "eu", zone: "z2" },
+    ]);
   });
 });

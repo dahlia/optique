@@ -2762,6 +2762,127 @@ describe("completeEffectfulSourcesAsync", () => {
     assert.ok(result.success);
     assert.ok(!session.demanded.has(prerequisiteId));
   });
+
+  // https://github.com/dahlia/optique/issues/924
+  test("resolves a barrier ahead of an advisory provider it refines away", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("eager");
+    const providerId = Symbol("provider");
+    const discriminatorId = Symbol("discriminator");
+    const order: string[] = [];
+    // The static estimate orders the barrier after the later provider,
+    // but resolution—eligible once its control dependency is satisfied
+    // and never blocked by advisory edges—reports no concrete
+    // dependencies, so the barrier executes first at its declaration
+    // position.
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      requiresSourceId: discriminatorId,
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [providerId],
+        demandEdges: [],
+      },
+      resolveBarrier: () =>
+        Promise.resolve({
+          orderingDependencyIds: [],
+          activeProvidesSourceIds: new Set<symbol>(),
+        }),
+      prepare: () => {
+        order.push("barrier");
+        return Promise.resolve(undefined);
+      },
+    };
+    const provider: RuntimeNode = {
+      path: ["provider"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: providerId,
+            metavar: "PROVIDER",
+            extractSourceValue: () => undefined,
+            completeSource: () => {
+              order.push("provider");
+              return Promise.resolve({ success: true, value: "x" });
+            },
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: undefined,
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, provider],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(order, ["barrier", "provider"]);
+  });
+
+  // https://github.com/dahlia/optique/issues/924
+  test("keeps a resolved concrete dependency ordered after its provider", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("eager");
+    const providerId = Symbol("provider");
+    const discriminatorId = Symbol("discriminator");
+    const order: string[] = [];
+    // Resolution confirms the barrier's dependency, so the concrete
+    // edge holds: the provider still completes first.
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      requiresSourceId: discriminatorId,
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [providerId],
+        demandEdges: [],
+      },
+      resolveBarrier: () =>
+        Promise.resolve({
+          orderingDependencyIds: [providerId],
+          activeProvidesSourceIds: new Set<symbol>(),
+        }),
+      prepare: () => {
+        order.push("barrier");
+        return Promise.resolve(undefined);
+      },
+    };
+    const provider: RuntimeNode = {
+      path: ["provider"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: providerId,
+            metavar: "PROVIDER",
+            extractSourceValue: () => undefined,
+            completeSource: () => {
+              order.push("provider");
+              return Promise.resolve({ success: true, value: "x" });
+            },
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: undefined,
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, provider],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(order, ["provider", "barrier"]);
+  });
 });
 
 describe("collectDemandedDependencyIds", () => {
@@ -2995,9 +3116,15 @@ describe("orderDependencyNodes", () => {
     assert.deepEqual(ordered, [barrier]);
   });
 
-  test("detects a cycle between a barrier and a sibling consumer", () => {
+  // https://github.com/dahlia/optique/issues/924
+  test("relaxes an advisory cycle between a barrier and a sibling consumer", () => {
     const branchId = Symbol("branch");
     const siblingId = Symbol("sibling");
+    // The barrier's ordering dependency on the sibling comes from one
+    // selectable branch, while the branch source the sibling consumes
+    // could only be provided by another: the opposing edges cannot be
+    // active together, so the unresolved barrier's advisory in-edge is
+    // relaxed and declaration order prevails.
     const barrier = createBarrierNode({
       path: ["barrier"],
       providesSourceIds: new Set([branchId]),
@@ -3013,10 +3140,81 @@ describe("orderDependencyNodes", () => {
       metavar: "SIBLING",
     });
 
+    const ordered = orderDependencyNodes([barrier, sibling]);
+
+    assert.deepEqual(ordered, [barrier, sibling]);
+  });
+
+  // https://github.com/dahlia/optique/issues/924
+  test("detects a concrete cycle through a resolved barrier", () => {
+    const branchId = Symbol("branch");
+    const siblingId = Symbol("sibling");
+    // Once the barrier resolves its selection, its edges are concrete:
+    // the selected branch actively provides the source the sibling
+    // consumes while also waiting for the sibling, which is a genuine
+    // cycle.
+    const barrier = createBarrierNode({
+      path: ["barrier"],
+      providesSourceIds: new Set([branchId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [siblingId],
+        demandEdges: [],
+      },
+      barrierResolutionState: "resolved",
+    });
+    const sibling = createRuntimeSourceNode({
+      path: ["sibling"],
+      sourceId: siblingId,
+      completionDependencyIds: [branchId],
+      metavar: "SIBLING",
+    });
+
     assert.throws(
       () => orderDependencyNodes([barrier, sibling]),
       /Circular dependency/,
     );
+  });
+
+  // https://github.com/dahlia/optique/issues/924
+  test("keeps advisory relaxation local to the stalled component", () => {
+    const branchId = Symbol("branch");
+    const siblingId = Symbol("sibling");
+    const outsideId = Symbol("outside");
+    // A second barrier that merely waits for a provider outside the
+    // cycle keeps its advisory edge: only edges inside the strongly
+    // connected component are relaxed.
+    const cyclic = createBarrierNode({
+      path: ["cyclic"],
+      providesSourceIds: new Set([branchId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [siblingId],
+        demandEdges: [],
+      },
+    });
+    const sibling = createRuntimeSourceNode({
+      path: ["sibling"],
+      sourceId: siblingId,
+      completionDependencyIds: [branchId],
+      metavar: "SIBLING",
+    });
+    const waiting = createBarrierNode({
+      path: ["waiting"],
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [outsideId],
+        demandEdges: [],
+      },
+    });
+    const provider = createRuntimeSourceNode({
+      path: ["provider"],
+      sourceId: outsideId,
+      metavar: "PROVIDER",
+    });
+
+    const ordered = orderDependencyNodes([cyclic, sibling, waiting, provider]);
+
+    // Ready nodes drain first; the stalled pair is relaxed afterwards,
+    // and the waiting barrier's advisory edge to its provider held.
+    assert.deepEqual(ordered, [provider, waiting, cyclic, sibling]);
   });
 
   test("reports the paths and metavars in a forged cycle", () => {
@@ -3049,6 +3247,7 @@ function createBarrierNode(options: {
   readonly requiresSourceId?: symbol;
   readonly providesSourceIds?: ReadonlySet<symbol>;
   readonly barrierCompletionDependencies?: BarrierCompletionDependencies;
+  readonly barrierResolutionState?: "resolved" | "unresolvable";
 }): RuntimeNode {
   return {
     path: options.path,
@@ -3064,6 +3263,9 @@ function createBarrierNode(options: {
       ? {
         barrierCompletionDependencies: options.barrierCompletionDependencies,
       }
+      : {}),
+    ...(options.barrierResolutionState != null
+      ? { barrierResolutionState: options.barrierResolutionState }
       : {}),
     prepare: () => Promise.resolve(undefined),
   };

@@ -17,12 +17,12 @@ import { extractDependencyMetadata } from "./dependency-metadata.ts";
 import {
   type EffectfulSchedulingNodesFn,
   effectfulSchedulingNodesKey,
+  exclusiveSourceScopeKey,
   includeSourceFailureChain,
   recordDerivedRawInput,
   replayDerivedParser,
   replayDerivedParserAsync,
   sourceCollectionExpansionKey,
-  staticSourceScopeKey,
 } from "./dependency-runtime.ts";
 import {
   mergeChildExec,
@@ -3693,8 +3693,10 @@ export function command<M extends Mode, T, TState>(
     enumerable: false,
   });
   // Static source estimation reaches the inner parser even while the
-  // command is unmatched (see staticSourceScopeKey).
-  Object.defineProperty(result, staticSourceScopeKey, {
+  // command is unmatched.  The edge is exclusive: an unmatched command
+  // never provides its inner sources, so they must not count as
+  // guaranteed providers (see exclusiveSourceScopeKey).
+  Object.defineProperty(result, exclusiveSourceScopeKey, {
     value: [parser],
     configurable: true,
     enumerable: false,

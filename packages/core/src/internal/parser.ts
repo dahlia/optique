@@ -566,6 +566,26 @@ export interface EffectfulCompletionSession {
    * re-completing the discriminator or re-selecting a branch.
    */
   readonly preparedByPath: Map<string, unknown>;
+
+  /**
+   * Missing-value default results published for structural source
+   * occurrences inside a scheduling barrier's nested pass, keyed by the
+   * occurrence's composed `getMissingSourceValue` function.  The
+   * function identifies the exact wrapper instance, so two branches of
+   * a `conditional()` sharing a node path never observe each other's
+   * defaults even when a phase-two binding changes the selection
+   * between passes.  Unlike {@link completedByPath} this cache is
+   * shared across the passes of a run: a default does not depend on
+   * pass-specific state, so caching it keeps a non-idempotent
+   * `withDefault()` thunk at one evaluation per run even when the
+   * nested pass repeats.
+   *
+   * @since 1.3.0
+   */
+  readonly missingDefaultsByOccurrence: WeakMap<
+    object,
+    ValueParserResult<unknown>
+  >;
 }
 
 /**
@@ -584,6 +604,7 @@ export function createEffectfulCompletionSession(
     effectfulSources: new Set(),
     completedByPath: new Map(),
     preparedByPath: new Map(),
+    missingDefaultsByOccurrence: new WeakMap(),
   };
 }
 
