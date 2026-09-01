@@ -31,6 +31,7 @@ import {
   fillMissingSourceDefaultsAsync,
   guaranteedStaticSourceIdsKey,
   hasInactiveCompletion,
+  replaceCachedBarrierFailure,
   resolveDerivedSourceValues,
   resolveDerivedSourceValuesAsync,
   resolveStateWithRuntime,
@@ -93,6 +94,7 @@ import type {
 import {
   defineInheritedAnnotationParser,
   defineParseLanes,
+  type EffectfulCompletionSession,
   getOwnParseLanes,
   getParserSuggestRuntimeNodes,
   type ParseLane,
@@ -250,6 +252,15 @@ function filterSchedulableRuntimeNodes(
  * prompt); the construct should propagate it as its own completion
  * failure.  Returns `undefined` on success.
  */
+/**
+ * Nodes a `conditional()` pre-expanded from a committed branch so a
+ * `branchError` wrap can ride on the nested barrier nodes.  They are
+ * expanded descendants despite appearing in a scheduling call's direct
+ * node list, so {@link scheduleEffectfulSourceCompletions} must not
+ * treat them as reusable or collected.
+ */
+const preExpandedBranchNodes = new WeakSet<RuntimeNode>();
+
 /**
  * Expands runtime nodes through nested constructs for effectful source
  * scheduling and demand detection.
@@ -711,15 +722,20 @@ function computeBarrierDependenciesFromNodes(
  * Computes a resolved barrier's concrete dependencies from the selected
  * branch's expanded runtime nodes: the completion dependencies its
  * active consumers read, minus the sources the branch actively
- * provides, and the active provides themselves.  Unlike the
- * synchronous estimate, promise-shaped state extractions are awaited,
- * so an asynchronously validating bound value counts as active.
+ * provides, the active provides themselves, and the selection's demand
+ * edges.  Unlike the synchronous estimate, promise-shaped state
+ * extractions are awaited, so an asynchronously validating bound value
+ * counts as active.  A nested barrier whose demand activation is
+ * `"after-resolution"` contributes only its ordering aggregate: its
+ * demand edges stay behind its own confirmation boundary and are
+ * promoted by its own resolution within the nested scheduling pass.
  */
 async function computeActiveBarrierDependencies(
   nodes: readonly RuntimeNode[],
 ): Promise<BarrierResolution> {
   const active = new Set<symbol>();
   const ordering = new Set<symbol>();
+  const demandEdges: BarrierCompletionDemandEdge[] = [];
   for (const node of nodes) {
     const metadata = node.parser.dependencyMetadata;
     const source = metadata?.source;
@@ -760,16 +776,29 @@ async function computeActiveBarrierDependencies(
         : hasInactiveCompletion(node);
       if (!inactive) {
         for (const id of completion.dependencyIds) ordering.add(id);
+        if (source != null) {
+          demandEdges.push({
+            consumerSourceId: source.sourceId,
+            dependencyIds: completion.dependencyIds,
+          });
+        }
       }
     }
     const nested = node.barrierCompletionDependencies;
     if (nested != null) {
       for (const id of nested.orderingDependencyIds) ordering.add(id);
+      if (
+        node.barrierDemandActivation !== "after-resolution" ||
+        node.barrierResolutionState === "resolved"
+      ) {
+        demandEdges.push(...nested.demandEdges);
+      }
     }
   }
   return {
     orderingDependencyIds: [...ordering].filter((id) => !active.has(id)),
     activeProvidesSourceIds: active,
+    demandEdges,
   };
 }
 
@@ -853,16 +882,25 @@ async function scheduleEffectfulSourceCompletions(
   // session instead.  Nodes expanded from a collection-opted-in child
   // (a conditional()/command()) did participate in the construct's
   // explicit source collection, so they re-register structurally in
-  // declaration order even though their results are not reusable.
-  const direct = new Set<RuntimeNode>(nodes);
+  // declaration order even though their results are not reusable.  A
+  // node a conditional() pre-expanded itself (a committed branch's
+  // subtree, wrapped for branchError) is an expanded descendant even
+  // when it arrives in the direct list, so it keeps the session-only
+  // treatment: reusability would bypass the no-session guard and could
+  // run a branch effect twice.
+  const direct = new Set<RuntimeNode>(
+    nodes.filter((node) => !preExpandedBranchNodes.has(node)),
+  );
   const collected = new Set<RuntimeNode>();
   const expandedNodes: RuntimeNode[] = [];
   for (const node of nodes) {
     const optedIn = (node.parser as {
       readonly [sourceCollectionExpansionKey]?: boolean;
     })[sourceCollectionExpansionKey] === true;
+    const preExpanded = preExpandedBranchNodes.has(node);
     for (const expandedNode of expandEffectfulRuntimeNodes([node])) {
       expandedNodes.push(expandedNode);
+      if (preExpanded) continue;
       if (optedIn || expandedNode === node) collected.add(expandedNode);
     }
   }
@@ -16373,6 +16411,92 @@ export function conditional(
   const preparedKeyFor = (
     parentPath: readonly PropertyKey[] | undefined,
   ): string => preparedKeyPrefix + serializeSchedulingPath(parentPath ?? []);
+  // The branch-mismatch failure shared by speculative barrier
+  // resolution and the completion-phase verification, so both surfaces
+  // report the identical message—including the defensive coercion of a
+  // discriminator that violates its return-type contract by yielding a
+  // non-string value.
+  const branchMismatchFailure = (
+    resolvedValue: unknown,
+    speculativeKey: string,
+  ): { readonly success: false; readonly error: Message } => {
+    const resolvedKey = typeof resolvedValue === "string"
+      ? resolvedValue
+      : "<unknown>";
+    return {
+      success: false,
+      error: options?.errors?.branchMismatch
+        ? options.errors.branchMismatch(resolvedKey, speculativeKey)
+        : message`Branch mismatch: tokens for ${speculativeKey} were consumed, but the discriminator resolved to ${resolvedKey}.`,
+    };
+  };
+  // A nested conditional's rejected speculation fails its barrier, and
+  // the failure surfaces through this conditional's branch scheduling
+  // rather than through branch completion.  Mirror the completion-phase
+  // contract: wrap a *barrier* failure from a named branch with the
+  // branchError hook, and update the run-scoped cache so later passes
+  // (the eager fallback after a failed seed pass) surface the wrapped
+  // error too.  A non-barrier failure—a cancelled branch prompt—is not
+  // in the cache under a barrier key and propagates untouched, exactly
+  // as scheduling failures always have.
+  const wrapCachedBarrierFailure = (
+    session: EffectfulCompletionSession | undefined,
+    failure: { readonly success: false; readonly error: Message },
+    branchKey: string | undefined,
+  ): { readonly success: false; readonly error: Message } => {
+    const branchError = options?.errors?.branchError;
+    if (branchKey == null || branchError == null) return failure;
+    const wrapped = {
+      success: false as const,
+      error: branchError(branchKey, failure.error),
+    };
+    return replaceCachedBarrierFailure(session, failure, wrapped)
+      ? wrapped
+      : failure;
+  };
+  // For a branch committed at parse time, nested barriers flatten into
+  // the enclosing pass, so the wrap has to travel on the nodes
+  // themselves: a nested barrier's own resolution failure is wrapped
+  // directly, and a failure a nested preparation forwards from deeper
+  // scheduling is wrapped through the cache check above.
+  const wrapBranchBarrierNodes = (
+    nodes: readonly RuntimeNode[],
+    branchKey: string | undefined,
+  ): readonly RuntimeNode[] => {
+    const branchError = options?.errors?.branchError;
+    if (branchKey == null || branchError == null) return nodes;
+    return nodes.map((node) => {
+      const resolveBarrier = node.resolveBarrier;
+      const prepare = node.prepare;
+      if (resolveBarrier == null && prepare == null) return node;
+      return {
+        ...node,
+        ...(resolveBarrier == null ? {} : {
+          resolveBarrier: async (ctx: SchedulingBarrierContext) => {
+            const result = await resolveBarrier(ctx);
+            if (result != null && "success" in result) {
+              return {
+                success: false as const,
+                error: branchError(branchKey, result.error),
+              };
+            }
+            return result;
+          },
+        }),
+        ...(prepare == null ? {} : {
+          prepare: async (ctx: SchedulingBarrierContext) => {
+            const failure = await prepare(ctx);
+            if (failure == null) return undefined;
+            return wrapCachedBarrierFailure(
+              ctx.exec?.effectfulCompletionSession,
+              failure,
+              branchKey,
+            );
+          },
+        }),
+      };
+    });
+  };
   // Source IDs the branches can provide, for demand-only control
   // dependency detection (see RuntimeNode.providesSourceIds), and the
   // branches' aggregated completion dependencies, so a scheduling
@@ -16507,7 +16631,7 @@ export function conditional(
         ? defaultBranch
         : branches[selected.key];
       if (branchParser != null) {
-        nodes.push({
+        const branchNode: RuntimeNode = {
           path: [...(parentPath ?? []), "_branch"],
           parser: branchParser,
           state: getAnnotatedChildState(
@@ -16515,7 +16639,27 @@ export function conditional(
             conditionalState.branchState,
             branchParser,
           ),
-        });
+        };
+        const branchKey = selected.kind === "branch" ? selected.key : undefined;
+        if (branchKey != null && options?.errors?.branchError != null) {
+          // A committed branch's nested barriers flatten into the
+          // enclosing pass, so pre-expand here and carry the
+          // branchError wrap on the barrier nodes themselves; the
+          // expansion is the same one the enclosing pass would apply,
+          // and the nodes stay marked as expanded descendants so the
+          // scheduling call never treats them as reusable.
+          for (
+            const expanded of wrapBranchBarrierNodes(
+              expandEffectfulRuntimeNodes([branchNode]),
+              branchKey,
+            )
+          ) {
+            preExpandedBranchNodes.add(expanded);
+            nodes.push(expanded);
+          }
+        } else {
+          nodes.push(branchNode);
+        }
       }
       return nodes;
     }
@@ -16610,6 +16754,7 @@ export function conditional(
         ...(speculativeBarrierDependencies != null
           ? { barrierCompletionDependencies: speculativeBarrierDependencies }
           : {}),
+        barrierDemandActivation: "after-resolution",
         resolveBarrier: async (ctx) => {
           const session = ctx.exec?.effectfulCompletionSession;
           if (session == null) return undefined;
@@ -16621,16 +16766,20 @@ export function conditional(
           ) {
             return undefined;
           }
-          if (
-            String(result.value) !== speculativeKey ||
-            branches[speculativeKey] == null
-          ) {
-            // A rejected speculation schedules no branch, so it has no
-            // concrete dependencies and provides nothing; the mismatch
-            // itself is reported by the completion phase.
+          if (String(result.value) !== speculativeKey) {
+            // A rejected speculation fails the pass at the barrier's
+            // slot: the run cannot succeed anymore, and failing here
+            // keeps later-declared effects—prerequisite prompts among
+            // them—from running before the mismatch surfaces.  The
+            // completion phase reports the identical failure on paths
+            // that never reach barrier scheduling.
+            return branchMismatchFailure(result.value, speculativeKey);
+          }
+          if (branches[speculativeKey] == null) {
             return {
               orderingDependencyIds: [],
               activeProvidesSourceIds: new Set<symbol>(),
+              demandEdges: [],
             };
           }
           return await computeActiveBarrierDependencies(
@@ -16650,7 +16799,9 @@ export function conditional(
           }
           if (String(result.value) !== speculativeKey) return undefined;
           if (branches[speculativeKey] == null) return undefined;
-          return await ctx.schedule(expandGuessedBranchNodes());
+          const failure = await ctx.schedule(expandGuessedBranchNodes());
+          if (failure == null) return undefined;
+          return wrapCachedBarrierFailure(session, failure, speculativeKey);
         },
       });
       return nodes;
@@ -16780,6 +16931,7 @@ export function conditional(
       ...(mergedBarrierDependencies != null
         ? { barrierCompletionDependencies: mergedBarrierDependencies }
         : {}),
+      barrierDemandActivation: "after-resolution",
       resolveBarrier: async (ctx) => {
         const prepared = await resolvePreparedSelection(ctx);
         if (prepared == null) return undefined;
@@ -16787,6 +16939,7 @@ export function conditional(
           return {
             orderingDependencyIds: [],
             activeProvidesSourceIds: new Set<symbol>(),
+            demandEdges: [],
           };
         }
         return await computeActiveBarrierDependencies(
@@ -16796,7 +16949,13 @@ export function conditional(
       prepare: async (ctx) => {
         const prepared = await resolvePreparedSelection(ctx);
         if (prepared?.branchParser == null) return undefined;
-        return await ctx.schedule(expandPreparedBranchNodes(prepared));
+        const failure = await ctx.schedule(expandPreparedBranchNodes(prepared));
+        if (failure == null) return undefined;
+        return wrapCachedBarrierFailure(
+          ctx.exec?.effectfulCompletionSession,
+          failure,
+          prepared.branchKey,
+        );
       },
     });
     return nodes;
@@ -17203,24 +17362,15 @@ export function conditional(
       state.selectedBranch.kind === "branch" &&
       discriminatorValue !== state.selectedBranch.key
     ) {
-      const speculativeKey = state.selectedBranch.key;
       // `discriminatorValue` is statically `string | undefined`.  In
       // this branch it should always be a string (the only path that
       // sets `undefined` is the default-branch case, which is excluded
-      // by the `kind === "branch"` guard above).  Defensively coerce
-      // anyway: a buggy discriminator that violates its return-type
-      // contract by yielding a non-string would otherwise produce a
-      // confusing "resolved to ." message in both the default error
-      // and the `branchMismatch` hook.
-      const resolvedKey = typeof discriminatorValue === "string"
-        ? discriminatorValue
-        : "<unknown>";
-      return {
-        success: false,
-        error: options?.errors?.branchMismatch
-          ? options.errors.branchMismatch(resolvedKey, speculativeKey)
-          : message`Branch mismatch: tokens for ${speculativeKey} were consumed, but the discriminator resolved to ${resolvedKey}.`,
-      };
+      // by the `kind === "branch"` guard above); the shared helper
+      // coerces defensively.
+      return branchMismatchFailure(
+        discriminatorValue,
+        state.selectedBranch.key,
+      );
     }
 
     // Now that the speculative branch (if any) is verified, it is

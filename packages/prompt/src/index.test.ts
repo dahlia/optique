@@ -4372,11 +4372,12 @@ describe("branch completion dependencies across scheduling barriers", () => {
         return {};
       },
     };
-    // "--bx x" guesses condB's branch; its recomputed demand edge must
-    // chain the framework prerequisite into the seed pass so condA's
-    // discriminator becomes demanded and every prompt keeps declaration
-    // order.  Without the edge, condA's discriminator defers and the
-    // prompts run out of order.
+    // "--bx x" guesses condB's branch; its demand edge is gated on the
+    // discriminator's confirmation, so condB's discriminator answers
+    // first, and only the confirmation promotes the framework
+    // prerequisite—which demands condA's discriminator through the
+    // control edge.  The parked prerequisites then drain in dependency
+    // order within the same seed pass, ahead of the branch consumer.
     const parser = object({
       condA: conditional(
         prompt(option("--kind-a", kindA), { value: "a" }),
@@ -4411,9 +4412,9 @@ describe("branch completion dependencies across scheduling barriers", () => {
 
     assert.equal((result as { readonly level: string }).level, "silent");
     assert.deepEqual(calls, [
+      { value: "b" },
       { value: "a" },
       { value: "hono" },
-      { value: "b" },
       { value: "prod" },
     ]);
   });
@@ -4679,6 +4680,470 @@ describe("branch completion dependencies across scheduling barriers", () => {
     assert.ok(!result.success);
     assert.deepEqual(resolverCalls, []);
     assert.deepEqual(calls, [{ value: "b" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("does not demand a rejected speculative branch's prerequisites", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-rejected-speculation-demand"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    // "--a x" guesses the branch, but the discriminator answers "b":
+    // the framework prerequisite is needed only by the guessed branch's
+    // configuration, so rejecting the guess must leave it unprompted in
+    // every pass, and the run fails with the branch mismatch.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "b" }),
+        {
+          a: object({
+            ax: option("--a", choice(["x"] as const)),
+            mode: prompt(
+              option("--mode", mode),
+              derivePromptConfig(framework, (value) => ({
+                value: value === "hono" ? "prod" : "dev",
+              })),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      level: option("--level", level),
+    });
+
+    await assert.rejects(() =>
+      runWith(parser, "test", [dynamicContext], {
+        args: ["--a", "x", "--level", "silent"],
+      })
+    );
+
+    // Only the discriminator prompt ran; neither the guessed branch's
+    // prompt nor its framework prerequisite did.
+    assert.deepEqual(calls, [{ value: "b" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("stops a rejected speculation before later effects", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolverCalls: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    // Same rejection under an ordinary eager parse: the mismatch fails
+    // the run at the barrier, before the later-declared framework
+    // prompt executes.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "b" }),
+        {
+          a: object({
+            ax: option("--a", choice(["x"] as const)),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolverCalls.push(value);
+                return { value: "npm" };
+              }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, ["--a", "x"]);
+
+    assert.ok(!result.success);
+    assert.match(formatMessage(result.error), /Branch mismatch/);
+    assert.deepEqual(resolverCalls, []);
+    assert.deepEqual(calls, [{ value: "b" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("keeps an independently demanded prerequisite on rejection", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const level = dependency(framework.deriveSync({
+      metavar: "LEVEL",
+      factory: (value) =>
+        choice(value === "hono" ? (["silent"] as const) : (["debug"] as const)),
+      defaultValue: () => "hono" as const,
+    }));
+    const { mode } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-independent-prerequisite"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    // The framework prerequisite is demanded by the sibling --level
+    // consumer on its own, so it completes in its slot before the
+    // discriminator rejects the guessed branch that also reads it.
+    const parser = object({
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "b" }),
+        {
+          a: object({
+            ax: option("--a", choice(["x"] as const)),
+            mode: prompt(
+              option("--mode", mode),
+              derivePromptConfig(framework, (value) => ({
+                value: value === "hono" ? "prod" : "dev",
+              })),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      level: option("--level", level),
+    });
+
+    await assert.rejects(() =>
+      runWith(parser, "test", [dynamicContext], {
+        args: ["--a", "x", "--level", "silent"],
+      })
+    );
+
+    // The independently required prerequisite ran in its declaration
+    // slot; the rejection then stopped the pass at the barrier.
+    assert.deepEqual(calls, [{ value: "hono" }, { value: "b" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("keeps the confirmation boundary in a nested speculation", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i", "j"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { mode, level } = createModeFixture();
+    const resolverCalls: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-nested-confirmation-boundary"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    // "--a x" guesses (and the answer confirms) the outer branch, while
+    // "--i y" guesses the nested branch whose demanded mode consumer
+    // reads the framework prerequisite.  The outer confirmation must
+    // not promote the nested barrier's gated demand edge, and the inner
+    // discriminator's answer "j" rejects the nested guess before the
+    // prerequisite prompt declared after the outer conditional can run.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            ax: option("--a", choice(["x"] as const)),
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "j" }),
+              {
+                i: object({
+                  iy: option("--i", choice(["y"] as const)),
+                  mode: prompt(
+                    option("--mode", mode),
+                    derivePromptConfig(framework, (value) => {
+                      resolverCalls.push(value);
+                      return { value: value === "hono" ? "prod" : "dev" };
+                    }),
+                  ),
+                }),
+                j: object({ z: option("--z", choice(["9"] as const)) }),
+              },
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      level: option("--level", level),
+    });
+
+    await assert.rejects(() =>
+      runWith(parser, "test", [dynamicContext], {
+        args: ["--a", "x", "--i", "y", "--level", "silent"],
+      })
+    );
+
+    assert.deepEqual(resolverCalls, []);
+    // Outer and inner discriminators only; neither the rejected nested
+    // branch's prompt nor its framework prerequisite ran.
+    assert.deepEqual(calls, [{ value: "a" }, { value: "j" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("stops prerequisites after a cancelled speculative discriminator", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { mode } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a", reject: true }),
+        {
+          a: object({
+            ax: option("--a", choice(["x"] as const)),
+            mode: prompt(
+              option("--mode", mode),
+              derivePromptConfig(framework, (value) => ({
+                value: value === "hono" ? "prod" : "dev",
+              })),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, ["--a", "x"]);
+
+    assert.ok(!result.success);
+    // The cancelled discriminator stopped the pass; neither the guessed
+    // branch's prompt nor its prerequisite ran.
+    assert.equal(calls.length, 1);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("reports a custom mismatch from the scheduling barrier", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "b" }),
+        {
+          a: object({
+            ax: option("--a", choice(["x"] as const)),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => ({ value })),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+        constant("default"),
+        {
+          errors: {
+            branchMismatch: (resolvedKey: string, speculativeKey: string) =>
+              message`Expected ${speculativeKey}, got ${resolvedKey}.`,
+          },
+        },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, ["--a", "x"]);
+
+    assert.ok(!result.success);
+    assert.match(formatMessage(result.error), /Expected .* got/);
+    assert.deepEqual(calls, [{ value: "b" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("wraps a nested mismatch with the outer branchError hook", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i", "j"] as const));
+    const { prompt, calls } = createTestPrompt();
+    // The outer branch is confirmed speculatively, and the nested
+    // speculation is rejected: the mismatch must still surface through
+    // the outer conditional's branchError hook, as it does when the
+    // completion phase reports it.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            ax: option("--a", choice(["x"] as const)),
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "j" }),
+              {
+                i: object({ iy: option("--i", choice(["y"] as const)) }),
+                j: object({ z: option("--z", choice(["9"] as const)) }),
+              },
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+        constant("default"),
+        {
+          errors: {
+            branchError: (key: string | undefined, error) =>
+              message`Branch ${key ?? "?"} failed: ${error}`,
+          },
+        },
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--a", "x", "--i", "y"]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /Branch "a" failed: .*Branch mismatch/,
+    );
+    assert.deepEqual(calls, [{ value: "a" }, { value: "j" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("wraps a committed branch's nested mismatch with branchError", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i", "j"] as const));
+    const { prompt, calls } = createTestPrompt();
+    // The outer branch is committed by the command line; the nested
+    // speculation inside it is rejected, and the outer branchError hook
+    // must still wrap the mismatch.
+    const parser = object({
+      cond: conditional(
+        option("--kind", kindOuter),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "j" }),
+              {
+                i: object({ iy: option("--i", choice(["y"] as const)) }),
+                j: object({ z: option("--z", choice(["9"] as const)) }),
+              },
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+        constant("default"),
+        {
+          errors: {
+            branchError: (key: string | undefined, error) =>
+              message`Branch ${key ?? "?"} failed: ${error}`,
+          },
+        },
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--kind", "a", "--i", "y"]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /Branch "a" failed: .*Branch mismatch/,
+    );
+    assert.deepEqual(calls, [{ value: "j" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("completes a committed branch prompt once without a session", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { prompt, calls } = createTestPrompt();
+    // A bare completion exec without the run-scoped session must not
+    // run the committed branch's prompt during the scheduling pass:
+    // nothing would deduplicate it against the branch completion that
+    // follows, so the pre-expanded branch nodes the branchError wrap
+    // introduces have to stay session-only like any other expanded
+    // descendant.
+    const parser = object({
+      cond: conditional(
+        option("--kind", kind),
+        {
+          a: object({
+            p: prompt(option("--p", dependency(string())), { value: "v" }),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+        constant("default"),
+        {
+          errors: {
+            branchError: (key: string | undefined, error) =>
+              message`Branch ${key ?? "?"} failed: ${error}`,
+          },
+        },
+      ),
+    });
+
+    const parsed = await parser.parse({
+      buffer: ["--kind", "a"],
+      optionsTerminated: false,
+      usage: parser.usage,
+      state: parser.initialState,
+    });
+    assert.ok(parsed.success);
+    const completed = await parser.complete(parsed.next.state, {
+      usage: parser.usage,
+      phase: "complete",
+      path: [],
+    });
+
+    assert.ok(completed.success);
+    assert.deepEqual(calls, [{ value: "v" }]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  it("does not demand an unselected branch's prerequisites", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let phase2Framework: unknown = "unset";
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-unselected-branch-demand"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase2ContextRequest(request)) {
+          phase2Framework = (request.parsed as {
+            readonly framework?: unknown;
+          })?.framework;
+        }
+        return {};
+      },
+    };
+    // Both branches provide mode, but only branch a's occurrence reads
+    // framework.  The discriminator answers "b", so the merged static
+    // estimate's mode -> framework edge must not demand the framework
+    // prompt into the seed pass; it defers to the final pass instead.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "b" }),
+        {
+          a: object({
+            modeA: prompt(
+              option("--mode-a", mode),
+              derivePromptConfig(framework, (value) => ({
+                value: value === "hono" ? "prod" : "dev",
+              })),
+            ),
+          }),
+          b: object({
+            modeB: prompt(option("--mode-b", mode), { value: "prod" }),
+          }),
+        },
+      ),
+      framework: prompt(option("--framework", framework), { value: "hono" }),
+      level: option("--level", level),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--level", "silent"],
+    });
+
+    assert.equal((result as { readonly level: string }).level, "silent");
+    // The seed pass never demanded the unselected branch's framework
+    // prerequisite: the phase-two exchange saw it deferred, and its
+    // prompt ran only in the final pass, after the selected branch's.
+    assert.equal(phase2Framework, undefined);
+    assert.deepEqual(calls, [
+      { value: "b" },
+      { value: "prod" },
+      { value: "hono" },
+    ]);
   });
 
   it("shares one branch parser object across keys", async () => {

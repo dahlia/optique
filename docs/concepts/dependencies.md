@@ -663,7 +663,12 @@ branch occurrence hides an outer provider only when it will actively publish
 the source itself—through a guaranteed completion or default, or a value the
 branch already parsed or bound—so an absent `optional()` occurrence or an
 unselected nested alternative does not stop a later provider from serving the
-branch.
+branch.  The resolution is also a scheduling boundary for effects: a
+prerequisite that only a branch configuration reads runs after the
+discriminator has picked a branch that consumes it, never on the strength of
+the pre-selection estimate alone, and a speculative parse-time guess the
+discriminator rejects fails the run at that boundary before such a
+prerequisite runs.
 
 An invalid source never falls back to its default. The failure propagates
 through every derived source that consumes it—including prompts whose
