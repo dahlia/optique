@@ -709,30 +709,32 @@ Derived configurations also work inside a `conditional()` whose branch
 is selected only during completion.  The scheduler aggregates the
 completion dependencies of every selectable branch, so the conditional
 waits for the sources a branch configuration reads even when they are
-declared *after* the conditional, and the demand-only seed pass of a
-`runWith()` run reaches a prerequisite only through the branch consumer
-that actually reads it.  Once the discriminator resolves the selection,
-the scheduler replaces that estimate with the selected branch's actual
-dependencies.  A branch occurrence counts as an *active* provider only
-when it is guaranteed to publish—an unconditional prompt, a
-`withDefault()` fallback, or a nested conditional that provides the
-source on every selectable route—or when its state already holds a
-parsed or bound value.  A merely possible provider, such as an
-`optional()` occurrence that ends up parsing nothing or a provider in
-an unselected nested alternative, no longer hides a matching provider
-declared after the conditional: the branch configuration waits for that
-provider and reads its value.  An apparent dependency cycle whose edges
-come from branches that cannot be selected together—say, a completion
-consumer next to a conditional whose branch consumes the consumer's own
-source—is no longer rejected; only a cycle among the selected branch's
-actual providers and consumers still raises the circular dependency
-error.
+declared *after* the conditional.  Once the discriminator resolves the
+selection, the scheduler replaces that estimate with the selected
+branch's actual dependencies.  The demand-only seed pass of a
+`runWith()` run treats that resolution as a boundary: a prerequisite is
+demanded only once the discriminator has picked a branch whose consumer
+actually reads it, so a prerequisite that only an unselected branch
+would read is never demanded, and a speculative parse-time guess the
+discriminator ultimately rejects fails the run at that boundary with
+the branch-mismatch error, before any effect the guess alone would have
+scheduled.  The boundary also orders chained questions: a speculative
+discriminator answers before an earlier-declared prerequisite whose
+demand is discovered only by its confirmation.  A branch occurrence counts as
+an *active* provider only when it is guaranteed to publish—an unconditional
+prompt, a `withDefault()` fallback, or a nested conditional that provides the
+source on every selectable route—or when its state already holds a parsed or
+bound value.  A merely possible provider, such as an `optional()` occurrence
+that ends up parsing nothing or a provider in an unselected nested alternative,
+no longer hides a matching provider declared after the conditional: the branch
+configuration waits for that provider and reads its value.  An apparent
+dependency cycle whose edges come from branches that cannot be selected
+together—say, a completion consumer next to a conditional whose branch consumes
+the consumer's own source—is no longer rejected; only a cycle among the
+selected branch's actual providers and consumers still raises the circular
+dependency error.
 
-Two caveats remain.  A speculative selection that the discriminator
-ultimately rejects may already have demanded its configuration
-prerequisites, so a prerequisite prompt can run before the
-branch-mismatch error surfaces, although the rejected branch's own
-resolver never runs.  And a nested conditional that guarantees a source
+One caveat remains.  A nested conditional that guarantees a source
 on only *some* of its routes is treated as a merely possible provider,
 so the outer conditional waits for a later occurrence when one exists;
 if the nested route that does provide the source is then selected, its

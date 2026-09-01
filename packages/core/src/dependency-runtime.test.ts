@@ -2763,6 +2763,421 @@ describe("completeEffectfulSourcesAsync", () => {
     assert.ok(!session.demanded.has(prerequisiteId));
   });
 
+  // https://github.com/dahlia/optique/issues/925
+  test("withholds a gated barrier's demand edges until resolution", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("demand-only");
+    const consumerId = Symbol("consumer");
+    const prerequisiteId = Symbol("prerequisite");
+    const discriminatorId = Symbol("discriminator");
+    const order: string[] = [];
+    session.demanded.add(consumerId);
+    // The prerequisite is declared first: without parking it would pass
+    // its slot (and defer) before the barrier's resolution promotes it.
+    const prerequisite = createEffectfulSourceNode(
+      "prerequisite",
+      prerequisiteId,
+      (_state, exec) => {
+        const s = exec?.effectfulCompletionSession;
+        if (s?.policy === "demand-only" && !s.demanded.has(prerequisiteId)) {
+          order.push("prerequisite-deferred");
+          return Promise.resolve(undefined);
+        }
+        order.push("prerequisite");
+        return Promise.resolve({ success: true, value: "p" });
+      },
+    );
+    const discriminator = createEffectfulSourceNode(
+      "discriminator",
+      discriminatorId,
+      () => {
+        order.push("discriminator");
+        return Promise.resolve({ success: true, value: "a" });
+      },
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      requiresSourceId: discriminatorId,
+      providesSourceIds: new Set([consumerId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [prerequisiteId],
+        demandEdges: [{
+          consumerSourceId: consumerId,
+          dependencyIds: [prerequisiteId],
+        }],
+      },
+      barrierDemandActivation: "after-resolution",
+      resolveBarrier: () =>
+        Promise.resolve({
+          orderingDependencyIds: [prerequisiteId],
+          activeProvidesSourceIds: new Set([consumerId]),
+          demandEdges: [{
+            consumerSourceId: consumerId,
+            dependencyIds: [prerequisiteId],
+          }],
+        }),
+      prepare: () => {
+        order.push("barrier");
+        return Promise.resolve(undefined);
+      },
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [prerequisite, discriminator, barrier],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    // The resolution promoted the parked prerequisite into its
+    // dependency slot: discriminator, prerequisite provider, barrier.
+    assert.deepEqual(order, ["discriminator", "prerequisite", "barrier"]);
+    assert.ok(session.demanded.has(prerequisiteId));
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  test("leaves a gated prerequisite undemanded without promotion", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("demand-only");
+    const consumerId = Symbol("consumer");
+    const prerequisiteId = Symbol("prerequisite");
+    const discriminatorId = Symbol("discriminator");
+    const order: string[] = [];
+    session.demanded.add(consumerId);
+    const prerequisite = createEffectfulSourceNode(
+      "prerequisite",
+      prerequisiteId,
+      (_state, exec) => {
+        const s = exec?.effectfulCompletionSession;
+        if (s?.policy === "demand-only" && !s.demanded.has(prerequisiteId)) {
+          order.push("prerequisite-deferred");
+          return Promise.resolve(undefined);
+        }
+        order.push("prerequisite");
+        return Promise.resolve({ success: true, value: "p" });
+      },
+    );
+    const discriminator = createEffectfulSourceNode(
+      "discriminator",
+      discriminatorId,
+      () => {
+        order.push("discriminator");
+        return Promise.resolve({ success: true, value: "b" });
+      },
+    );
+    // The resolution keeps no demand edges (the selection does not read
+    // the prerequisite), so the parked prerequisite stays undemanded
+    // and defers once parking lifts.
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      requiresSourceId: discriminatorId,
+      providesSourceIds: new Set([consumerId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [prerequisiteId],
+        demandEdges: [{
+          consumerSourceId: consumerId,
+          dependencyIds: [prerequisiteId],
+        }],
+      },
+      barrierDemandActivation: "after-resolution",
+      resolveBarrier: () =>
+        Promise.resolve({
+          orderingDependencyIds: [],
+          activeProvidesSourceIds: new Set<symbol>(),
+          demandEdges: [],
+        }),
+      prepare: () => {
+        order.push("barrier");
+        return Promise.resolve(undefined);
+      },
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [prerequisite, discriminator, barrier],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(order, [
+      "discriminator",
+      "prerequisite-deferred",
+      "barrier",
+    ]);
+    assert.ok(!session.demanded.has(prerequisiteId));
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  test("terminates when gated barriers await each other's demand", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("demand-only");
+    const order: string[] = [];
+    const makeSide = (label: string): readonly RuntimeNode[] => {
+      const discriminatorId = Symbol(`${label}-discriminator`);
+      const branchId = Symbol(`${label}-branch`);
+      const discriminator = createEffectfulSourceNode(
+        `${label}-discriminator`,
+        discriminatorId,
+        (_state, exec) => {
+          const s = exec?.effectfulCompletionSession;
+          if (s?.policy === "demand-only" && !s.demanded.has(discriminatorId)) {
+            order.push(`${label}-deferred`);
+            return Promise.resolve(undefined);
+          }
+          order.push(label);
+          return Promise.resolve({ success: true, value: label });
+        },
+      );
+      const barrier: RuntimeNode = {
+        path: [`${label}-barrier`],
+        parser: {},
+        state: undefined,
+        requiresSourceId: discriminatorId,
+        providesSourceIds: new Set([branchId]),
+        barrierCompletionDependencies: {
+          orderingDependencyIds: [],
+          demandEdges: [],
+        },
+        barrierDemandActivation: "after-resolution",
+        // The discriminator never completed, so resolution reports
+        // "not yet resolvable" and the barrier becomes unresolvable.
+        resolveBarrier: () => Promise.resolve(undefined),
+        prepare: () => {
+          order.push(`${label}-barrier`);
+          return Promise.resolve(undefined);
+        },
+      };
+      return [discriminator, barrier];
+    };
+
+    // Neither discriminator is demanded, so both barriers are skipped
+    // and both discriminators parked: the all-blocked fallback must
+    // resolve the barriers (to unresolvable) and let the pass drain
+    // with both prompts deferring to the eager pass.
+    const result = await completeEffectfulSourcesAsync(
+      [...makeSide("a"), ...makeSide("b")],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(order, [
+      "a-deferred",
+      "a-barrier",
+      "b-deferred",
+      "b-barrier",
+    ]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  test("chains late demand through a resolved barrier's edges", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("demand-only");
+    const c1 = Symbol("firstConsumer");
+    const c2 = Symbol("secondConsumer");
+    const p1 = Symbol("prerequisite");
+    const disc1 = Symbol("firstDiscriminator");
+    const disc2 = Symbol("secondDiscriminator");
+    const order: string[] = [];
+    session.demanded.add(disc1);
+    session.demanded.add(c2);
+    const prerequisite = createEffectfulSourceNode(
+      "prerequisite",
+      p1,
+      (_state, exec) => {
+        const s = exec?.effectfulCompletionSession;
+        if (s?.policy === "demand-only" && !s.demanded.has(p1)) {
+          order.push("prerequisite-deferred");
+          return Promise.resolve(undefined);
+        }
+        order.push("prerequisite");
+        return Promise.resolve({ success: true, value: "p" });
+      },
+    );
+    const effectful = (key: string, sourceId: symbol): RuntimeNode =>
+      createEffectfulSourceNode(key, sourceId, () => {
+        order.push(key);
+        return Promise.resolve({ success: true, value: key });
+      });
+    const gatedBarrier = (options: {
+      readonly path: string;
+      readonly requires: symbol;
+      readonly provides: symbol;
+      readonly edges: readonly {
+        readonly consumerSourceId: symbol;
+        readonly dependencyIds: readonly symbol[];
+      }[];
+    }): RuntimeNode => ({
+      path: [options.path],
+      parser: {},
+      state: undefined,
+      requiresSourceId: options.requires,
+      providesSourceIds: new Set([options.provides]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [],
+        demandEdges: options.edges,
+      },
+      barrierDemandActivation: "after-resolution",
+      resolveBarrier: () =>
+        Promise.resolve({
+          orderingDependencyIds: [],
+          activeProvidesSourceIds: new Set([options.provides]),
+          demandEdges: options.edges,
+        }),
+      prepare: () => {
+        order.push(options.path);
+        return Promise.resolve(undefined);
+      },
+    });
+    // The first barrier resolves (and prepares) before its consumer is
+    // demanded; the second barrier's later resolution demands that
+    // consumer, and the chain must still reach the prerequisite through
+    // the first barrier's resolved edges even though the first barrier
+    // already left the pending list.
+    const first = gatedBarrier({
+      path: "first-barrier",
+      requires: disc1,
+      provides: c1,
+      edges: [{ consumerSourceId: c1, dependencyIds: [p1] }],
+    });
+    const second = gatedBarrier({
+      path: "second-barrier",
+      requires: disc2,
+      provides: c2,
+      edges: [{ consumerSourceId: c2, dependencyIds: [c1] }],
+    });
+
+    const result = await completeEffectfulSourcesAsync(
+      [
+        prerequisite,
+        effectful("first-discriminator", disc1),
+        first,
+        effectful("second-discriminator", disc2),
+        second,
+      ],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.ok(session.demanded.has(p1));
+    assert.deepEqual(order, [
+      "first-discriminator",
+      "first-barrier",
+      "second-discriminator",
+      "prerequisite",
+      "second-barrier",
+    ]);
+  });
+
+  // https://github.com/dahlia/optique/issues/925
+  test("parks hard-edge descendants of a parked provider", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession("demand-only");
+    const consumerId = Symbol("consumer");
+    const providerId = Symbol("provider");
+    const derivedId = Symbol("derivedSource");
+    const discriminatorId = Symbol("discriminator");
+    const order: string[] = [];
+    session.demanded.add(consumerId);
+    // The derived node consumed raw input, so visiting it replays
+    // immediately; the hard-edge closure must keep it parked behind
+    // its parked provider until the gated barrier's resolution
+    // promotes the provider.
+    const derivedNode: RuntimeNode = {
+      path: ["derived"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: derivedId,
+            metavar: "DERIVED",
+            extractSourceValue: () => undefined,
+            preservesSourceValue: true,
+          },
+          derived: {
+            kind: "derived",
+            dependencyIds: [providerId],
+            metavar: "DERIVED",
+            replayParse: (rawInput) => {
+              order.push("derived-replay");
+              return { success: true, value: rawInput };
+            },
+          },
+        },
+      },
+      state: undefined,
+      rawInput: "x",
+    };
+    const provider = createEffectfulSourceNode(
+      "provider",
+      providerId,
+      () => {
+        order.push("provider");
+        return Promise.resolve({ success: true, value: "p" });
+      },
+    );
+    const discriminator = createEffectfulSourceNode(
+      "discriminator",
+      discriminatorId,
+      () => {
+        order.push("discriminator");
+        return Promise.resolve({ success: true, value: "a" });
+      },
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      requiresSourceId: discriminatorId,
+      providesSourceIds: new Set([consumerId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [providerId],
+        demandEdges: [{
+          consumerSourceId: consumerId,
+          dependencyIds: [providerId],
+        }],
+      },
+      barrierDemandActivation: "after-resolution",
+      resolveBarrier: () =>
+        Promise.resolve({
+          orderingDependencyIds: [providerId],
+          activeProvidesSourceIds: new Set([consumerId]),
+          demandEdges: [{
+            consumerSourceId: consumerId,
+            dependencyIds: [providerId],
+          }],
+        }),
+      prepare: () => {
+        order.push("barrier");
+        return Promise.resolve(undefined);
+      },
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [derivedNode, provider, discriminator, barrier],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(order, [
+      "discriminator",
+      "provider",
+      "derived-replay",
+      "barrier",
+    ]);
+  });
+
   // https://github.com/dahlia/optique/issues/924
   test("resolves a barrier ahead of an advisory provider it refines away", async () => {
     const runtime = createDependencyRuntimeContext();
@@ -2788,6 +3203,7 @@ describe("completeEffectfulSourcesAsync", () => {
         Promise.resolve({
           orderingDependencyIds: [],
           activeProvidesSourceIds: new Set<symbol>(),
+          demandEdges: [],
         }),
       prepare: () => {
         order.push("barrier");
@@ -2847,6 +3263,7 @@ describe("completeEffectfulSourcesAsync", () => {
         Promise.resolve({
           orderingDependencyIds: [providerId],
           activeProvidesSourceIds: new Set<symbol>(),
+          demandEdges: [],
         }),
       prepare: () => {
         order.push("barrier");

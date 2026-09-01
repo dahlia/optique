@@ -32,8 +32,18 @@ To be released.
     Cycles among the selected branch's actual providers and consumers
     are rejected with the existing circular-dependency error, while an
     apparent cycle whose edges belong to branches that cannot be
-    selected together is no longer rejected.
-    [[#869], [#872], [#919], [#923], [#924], [#926]]
+    selected together is no longer rejected.  The discriminator's
+    resolution is also the boundary for branch-only effects: under the
+    demand-only seed pass a prerequisite that only a branch
+    configuration reads is demanded once the resolved selection
+    consumes it, never on the strength of the pre-selection estimate,
+    and a speculative parse-time guess the discriminator rejects now
+    fails the run at that boundary—so a prompt needed only by the
+    rejected guess is no longer asked right before the branch-mismatch
+    error.  When a guessed branch's prerequisites chain through an
+    earlier conditional, that discriminator now answers after the
+    confirming one instead of before it.
+    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
     description space under `maxWidth`.  The existing default and explicit
@@ -101,7 +111,9 @@ To be released.
 [#919]: https://github.com/dahlia/optique/issues/919
 [#923]: https://github.com/dahlia/optique/pull/923
 [#924]: https://github.com/dahlia/optique/issues/924
+[#925]: https://github.com/dahlia/optique/issues/925
 [#926]: https://github.com/dahlia/optique/pull/926
+[#927]: https://github.com/dahlia/optique/pull/927
 
 ### @optique/run
 

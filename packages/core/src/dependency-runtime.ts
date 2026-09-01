@@ -22,6 +22,7 @@ import {
 import type { InputTrace } from "./input-trace.ts";
 import { type Message, message } from "./message.ts";
 import {
+  type EffectfulCompletionSession,
   type ExecutionContext,
   unmatchedNonCliDependencySourceStateMarker,
 } from "./internal/parser.ts";
@@ -305,6 +306,23 @@ export interface RuntimeNode {
    * @since 1.3.0
    */
   readonly barrierCompletionDependencies?: BarrierCompletionDependencies;
+
+  /**
+   * When `"after-resolution"`, the demand edges in
+   * {@link RuntimeNode.barrierCompletionDependencies} join demand
+   * propagation only once {@link RuntimeNode.resolveBarrier} has
+   * replaced the static estimate with the resolved selection's actual
+   * edges.  Until then the demand-only pass parks not-yet-demanded
+   * effectful nodes instead of letting them defer, so a prerequisite
+   * demanded only by an unselected branch never runs, while one the
+   * resolved selection reads still completes in its dependency slot.
+   * A barrier the pass marks `"unresolvable"` never activates its
+   * edges within that pass.  Ordering and control edges are unaffected.
+   * Default: `"immediate"`.
+   *
+   * @since 1.3.0
+   */
+  readonly barrierDemandActivation?: "immediate" | "after-resolution";
 }
 
 /**
@@ -376,6 +394,20 @@ export interface BarrierResolution {
    * sibling consumer no longer waits for a merely possible provider.
    */
   readonly activeProvidesSourceIds: ReadonlySet<symbol>;
+
+  /**
+   * The demand edges of the resolved selection: empty when the
+   * selection was rejected or has no completion consumers.  A
+   * demand-only pass applies them once the barrier resolves, so a
+   * prerequisite is demanded only for a selection that actually reads
+   * it.  Edges belonging to a nested barrier whose own demand
+   * activation is `"after-resolution"` and which is still unresolved
+   * must not appear here; the nested barrier promotes them itself
+   * within its own scheduling pass.
+   *
+   * @since 1.3.0
+   */
+  readonly demandEdges: readonly BarrierCompletionDemandEdge[];
 }
 
 /**
@@ -2289,6 +2321,178 @@ export interface CompleteEffectfulSourcesOptions {
 }
 
 /**
+ * Runs the monotonic demand fixed point over the given nodes' metadata,
+ * adding to the session's demanded set until nothing changes:
+ *
+ * - a demanded derived source demands its dependency IDs;
+ * - a demanded source whose effectful completion consumes other
+ *   dependency values (a prompt with a derived configuration) demands
+ *   those prerequisites, unless this occurrence is already satisfied;
+ * - a barrier's demand edges mirror the flat completion rule for the
+ *   consumers hidden behind it—only when a branch consumer's own source
+ *   is demanded do its completion prerequisites become demanded—but a
+ *   barrier whose {@link RuntimeNode.barrierDemandActivation} is
+ *   `"after-resolution"` contributes its edges only once it has
+ *   resolved, so an unselected branch's prerequisites are never
+ *   demanded on the strength of a static estimate;
+ * - when a source a barrier can provide is demanded, the barrier's
+ *   control dependency (its discriminator source) becomes demanded.
+ *
+ * One barrier's branches can provide another barrier's discriminator
+ * source, and the chain must propagate regardless of declaration order.
+ * Each iteration adds at least one demanded ID, so the loop terminates.
+ * The scheduler re-runs this after a gated barrier resolves, passing
+ * the pass's metadata universe with resolved replacement nodes swapped
+ * in, so promotion chains through already-visited metadata as well.
+ */
+function propagateDemand(
+  universe: readonly RuntimeNode[],
+  session: EffectfulCompletionSession,
+): void {
+  let demandAdded = true;
+  while (demandAdded) {
+    demandAdded = false;
+    for (const node of universe) {
+      const metadata = node.parser.dependencyMetadata;
+      if (
+        metadata?.source != null && metadata.derived != null &&
+        session.demanded.has(metadata.source.sourceId)
+      ) {
+        for (const dependencySourceId of metadata.derived.dependencyIds) {
+          if (session.demanded.has(dependencySourceId)) continue;
+          session.demanded.add(dependencySourceId);
+          demandAdded = true;
+        }
+      }
+      if (
+        metadata?.source != null && metadata.completion != null &&
+        session.demanded.has(metadata.source.sourceId) &&
+        !hasInactiveCompletion(node)
+      ) {
+        for (const dependencySourceId of metadata.completion.dependencyIds) {
+          if (session.demanded.has(dependencySourceId)) continue;
+          session.demanded.add(dependencySourceId);
+          demandAdded = true;
+        }
+      }
+      if (
+        node.barrierCompletionDependencies != null &&
+        (node.barrierDemandActivation !== "after-resolution" ||
+          node.barrierResolutionState === "resolved")
+      ) {
+        for (const edge of node.barrierCompletionDependencies.demandEdges) {
+          if (!session.demanded.has(edge.consumerSourceId)) continue;
+          for (const dependencySourceId of edge.dependencyIds) {
+            if (session.demanded.has(dependencySourceId)) continue;
+            session.demanded.add(dependencySourceId);
+            demandAdded = true;
+          }
+        }
+      }
+      if (node.requiresSourceId == null || node.providesSourceIds == null) {
+        continue;
+      }
+      if (session.demanded.has(node.requiresSourceId)) continue;
+      for (const provided of node.providesSourceIds) {
+        if (session.demanded.has(provided)) {
+          session.demanded.add(node.requiresSourceId);
+          demandAdded = true;
+          break;
+        }
+      }
+    }
+  }
+}
+
+const barrierFailureDescription = "optique.barrierFailure";
+
+/**
+ * Replaces a barrier failure cached in the run-scoped session with a
+ * wrapped version of the same failure, identified by object identity.
+ * A construct that decorates a nested barrier failure on its way out—a
+ * `conditional()` applying its `branchError` hook—uses this so later
+ * passes sharing the session (the eager fallback after a failed seed
+ * pass) surface the wrapped error rather than the raw one.
+ *
+ * @param session The run-scoped effectful completion session.
+ * @param original The failure exactly as the scheduling pass returned
+ *   it.
+ * @param replacement The decorated failure to cache in its place.
+ * @returns Whether a cached barrier failure was found and replaced;
+ *   `false` means the failure did not come from a barrier resolution
+ *   and should propagate untouched.
+ * @internal
+ * @since 1.3.0
+ */
+export function replaceCachedBarrierFailure(
+  session: EffectfulCompletionSession | undefined,
+  original: { readonly success: false; readonly error: Message },
+  replacement: { readonly success: false; readonly error: Message },
+): boolean {
+  if (session == null) return false;
+  let replaced = false;
+  for (const [key, value] of session.results) {
+    if (key.description === barrierFailureDescription && value === original) {
+      session.results.set(key, replacement);
+      replaced = true;
+    }
+  }
+  return replaced;
+}
+
+/**
+ * Whether the node is a scheduling barrier whose demand edges are gated
+ * on resolution and whose resolution has not happened yet.  While any
+ * such barrier is pending in a demand-only pass, the scheduler parks
+ * not-yet-demanded effectful nodes instead of letting them defer, so a
+ * later resolution can still demand them into their dependency slot.
+ */
+function isGatedUnresolvedBarrier(node: RuntimeNode): boolean {
+  return node.resolveBarrier != null &&
+    node.barrierDemandActivation === "after-resolution" &&
+    node.barrierResolutionState == null;
+}
+
+/**
+ * Collects the nodes a demand-only pass must not visit yet while a
+ * gated barrier is unresolved: every effectful source node whose own
+ * source is not demanded (its completion would defer irrevocably for
+ * this pass, yet a barrier's resolution may still demand it), plus
+ * every node reachable from a parked node along hard (non-advisory)
+ * dependency edges, so a dependent—a derived replay, a barrier whose
+ * control dependency is a parked discriminator—never runs ahead of a
+ * parked provider.  The scheduling loop's all-blocked fallback keeps
+ * the pass progressing even when this parks every pending node.
+ */
+function collectParkedNodes(
+  pending: readonly RuntimeNode[],
+  session: EffectfulCompletionSession,
+): ReadonlySet<RuntimeNode> {
+  const parked = new Set<RuntimeNode>();
+  for (const node of pending) {
+    const source = node.parser.dependencyMetadata?.source;
+    if (
+      source?.completeSource != null &&
+      !session.demanded.has(source.sourceId)
+    ) {
+      parked.add(node);
+    }
+  }
+  if (parked.size === 0) return parked;
+  const graph = buildDependencyGraph(pending);
+  const queue = [...parked];
+  while (queue.length > 0) {
+    const provider = queue.pop()!;
+    for (const [consumer, advisoryOnly] of graph.outgoing.get(provider) ?? []) {
+      if (advisoryOnly || parked.has(consumer)) continue;
+      parked.add(consumer);
+      queue.push(consumer);
+    }
+  }
+  return parked;
+}
+
+/**
  * Runs effectful source completions (e.g., interactive prompts) serially
  * in declaration order for source nodes whose value is not yet registered.
  *
@@ -2365,71 +2569,7 @@ export async function completeEffectfulSourcesAsync(
     // A barrier's discriminator is a control dependency: when a source
     // it can provide is demanded, resolving the branch requires the
     // discriminator even though no consumer demands it directly.
-    // Iterate to a fixed point: one barrier's branches can provide
-    // another barrier's discriminator source, and the chain must
-    // propagate regardless of declaration order.  Each iteration adds
-    // at least one demanded ID, so the loop is bounded by the number
-    // of barriers.
-    let demandAdded = true;
-    while (demandAdded) {
-      demandAdded = false;
-      for (const node of nodes) {
-        const metadata = node.parser.dependencyMetadata;
-        if (
-          metadata?.source != null && metadata.derived != null &&
-          session.demanded.has(metadata.source.sourceId)
-        ) {
-          for (const dependencySourceId of metadata.derived.dependencyIds) {
-            if (session.demanded.has(dependencySourceId)) continue;
-            session.demanded.add(dependencySourceId);
-            demandAdded = true;
-          }
-        }
-        // A demanded source whose effectful completion consumes other
-        // dependency values (a prompt with a derived configuration)
-        // demands those prerequisites too—but only when its own value is
-        // demanded and this occurrence is not already satisfied, so a
-        // CLI- or binding-satisfied prompt never demands its upstream
-        // prompts.
-        if (
-          metadata?.source != null && metadata.completion != null &&
-          session.demanded.has(metadata.source.sourceId) &&
-          !hasInactiveCompletion(node)
-        ) {
-          for (const dependencySourceId of metadata.completion.dependencyIds) {
-            if (session.demanded.has(dependencySourceId)) continue;
-            session.demanded.add(dependencySourceId);
-            demandAdded = true;
-          }
-        }
-        // A barrier's demand edges mirror the flat completion rule for
-        // the consumers hidden behind it: only when a branch consumer's
-        // own source is demanded do its completion prerequisites become
-        // demanded, so a demanded discriminator or an unrelated branch
-        // source never forces another consumer's prerequisites.
-        if (node.barrierCompletionDependencies != null) {
-          for (const edge of node.barrierCompletionDependencies.demandEdges) {
-            if (!session.demanded.has(edge.consumerSourceId)) continue;
-            for (const dependencySourceId of edge.dependencyIds) {
-              if (session.demanded.has(dependencySourceId)) continue;
-              session.demanded.add(dependencySourceId);
-              demandAdded = true;
-            }
-          }
-        }
-        if (node.requiresSourceId == null || node.providesSourceIds == null) {
-          continue;
-        }
-        if (session.demanded.has(node.requiresSourceId)) continue;
-        for (const provided of node.providesSourceIds) {
-          if (session.demanded.has(provided)) {
-            session.demanded.add(node.requiresSourceId);
-            demandAdded = true;
-            break;
-          }
-        }
-      }
-    }
+    propagateDemand(nodes, session);
   }
 
   // A failed effectful completion cached in the run-scoped session (a
@@ -2476,9 +2616,16 @@ export async function completeEffectfulSourcesAsync(
   // so declaration order still breaks ties and a cycle among concrete
   // resolved edges surfaces as the usual circular-dependency error.
   const pending: RuntimeNode[] = [...nodes];
+  // The pass's metadata universe: the nodes whose derived, completion,
+  // control, and barrier metadata demand propagation scans.  Resolved
+  // barrier replacements take their original entry's place, so a later
+  // promotion still chains through a resolved barrier's actual demand
+  // edges even after the barrier itself left the pending list.
+  const metadataUniverse: RuntimeNode[] = [...nodes];
   const providesId = (node: RuntimeNode, id: symbol): boolean =>
     node.parser.dependencyMetadata?.source?.sourceId === id ||
     node.providesSourceIds?.has(id) === true;
+  const demandSession = session?.policy === "demand-only" ? session : undefined;
   const resolveBarrierAt = async (
     index: number,
   ): Promise<
@@ -2487,9 +2634,15 @@ export async function completeEffectfulSourcesAsync(
     const candidate = pending[index];
     const resolution = await candidate.resolveBarrier!(barrierContext);
     if (resolution != null && "success" in resolution) {
+      // A barrier failure (a rejected speculation) is terminal for the
+      // whole run, not just this pass: cache it in the run-scoped
+      // session so a later pass sharing the session—the eager fallback
+      // after a failed seed pass, or an outer pass around a failed
+      // nested one—aborts before running any further effect.
+      session?.results.set(Symbol(barrierFailureDescription), resolution);
       return resolution;
     }
-    pending[index] = resolution == null
+    const replacement: RuntimeNode = resolution == null
       ? { ...candidate, barrierResolutionState: "unresolvable" }
       : {
         ...candidate,
@@ -2497,12 +2650,27 @@ export async function completeEffectfulSourcesAsync(
         providesSourceIds: resolution.activeProvidesSourceIds,
         barrierCompletionDependencies: {
           orderingDependencyIds: resolution.orderingDependencyIds,
-          demandEdges: [],
+          demandEdges: resolution.demandEdges,
         },
       };
+    pending[index] = replacement;
+    const universeIndex = metadataUniverse.indexOf(candidate);
+    if (universeIndex >= 0) metadataUniverse[universeIndex] = replacement;
+    // A resolved selection's actual demand edges may demand
+    // prerequisites a gated estimate withheld: re-run the fixed point
+    // so parked providers are promoted into their dependency slots
+    // before the loop reaches them.
+    if (resolution != null && demandSession != null) {
+      propagateDemand(metadataUniverse, demandSession);
+    }
     return undefined;
   };
   while (pending.length > 0) {
+    // While a gated barrier is unresolved, a demand-only pass must not
+    // let a not-yet-demanded node pass its execution slot: the
+    // barrier's resolution may still demand it.
+    const parkingActive = demandSession != null &&
+      pending.some(isGatedUnresolvedBarrier);
     for (let i = 0; i < pending.length; i++) {
       const candidate = pending[i];
       if (
@@ -2518,6 +2686,19 @@ export async function completeEffectfulSourcesAsync(
       // node, which could reorder observable evaluations; it resolves
       // at its ordered position below instead.
       if (requires == null) continue;
+      // While a gated barrier is unresolved, a barrier whose
+      // discriminator is not (yet) demanded is left alone rather than
+      // resolved: its discriminator prompt is parked and could still be
+      // demanded by a gated barrier's resolution, and resolving now
+      // would freeze the barrier as unresolvable—or actively complete
+      // an effect-free discriminator ahead of the confirmation
+      // boundary.
+      if (
+        parkingActive && demandSession != null &&
+        !demandSession.demanded.has(requires)
+      ) {
+        continue;
+      }
       if (
         pending.some((other) =>
           other !== candidate && providesId(other, requires)
@@ -2528,7 +2709,42 @@ export async function completeEffectfulSourcesAsync(
       const failure = await resolveBarrierAt(i);
       if (failure != null) return failure;
     }
-    const node = orderDependencyNodes(pending)[0];
+    const ordered = orderDependencyNodes(pending);
+    let node = ordered[0];
+    // The early-resolution scan may have resolved the last gated
+    // barrier, so recompute before selecting: once none is unresolved,
+    // parking lifts within the same iteration.
+    const parkingStillActive = demandSession != null &&
+      pending.some(isGatedUnresolvedBarrier);
+    if (parkingStillActive && demandSession != null) {
+      const parked = collectParkedNodes(pending, demandSession);
+      const isSkippedBarrier = (candidate: RuntimeNode): boolean =>
+        candidate.resolveBarrier != null &&
+        candidate.barrierResolutionState == null &&
+        candidate.requiresSourceId != null &&
+        !demandSession.demanded.has(candidate.requiresSourceId);
+      const selectable = ordered.find((candidate) =>
+        !parked.has(candidate) && !isSkippedBarrier(candidate)
+      );
+      if (selectable != null) {
+        node = selectable;
+      } else {
+        // Every pending node is parked or skipped: resolve the
+        // earliest unresolved barrier at its ordered position anyway
+        // (it may become unresolvable) so the pass keeps making
+        // progress; once no gated unresolved barrier remains, parking
+        // lifts and the drain continues as usual.
+        const stalled = ordered.find((candidate) =>
+          candidate.resolveBarrier != null &&
+          candidate.barrierResolutionState == null
+        );
+        if (stalled != null) {
+          const failure = await resolveBarrierAt(pending.indexOf(stalled));
+          if (failure != null) return failure;
+          continue;
+        }
+      }
+    }
     if (node.resolveBarrier != null && node.barrierResolutionState == null) {
       // The barrier reached its execution position without early
       // resolution (no control dependency): resolve it here—exactly
