@@ -228,6 +228,39 @@ export interface RuntimeNode {
   >;
 
   /**
+   * Resolves this barrier's *active* dependencies once its control
+   * dependencies (see {@link RuntimeNode.requiresSourceId}) are
+   * satisfied, before the barrier itself executes.
+   *
+   * A `conditional()` resolves the selected branch here—completing an
+   * effect-free discriminator, or reading an effectful one's cached
+   * completion—and reports which completion dependencies the branch
+   * actually has and which sources it will actively provide, so the
+   * scheduler can replace the static advisory estimate with concrete
+   * edges (see issue #924).  Returning `undefined` leaves the static
+   * estimate in place; a failure aborts the pass.  The scheduler calls
+   * this at most once per pass, and never lets advisory ordering edges
+   * delay it.
+   *
+   * @since 1.3.0
+   */
+  readonly resolveBarrier?: (ctx: SchedulingBarrierContext) => Promise<
+    | { readonly success: false; readonly error: Message }
+    | BarrierResolution
+    | undefined
+  >;
+
+  /**
+   * Internal marker the effectful scheduler sets on the replacement
+   * node after {@link RuntimeNode.resolveBarrier} ran: `"resolved"`
+   * edges are concrete (a cycle through them is genuine), while
+   * `"unresolvable"` keeps the advisory estimate.
+   *
+   * @since 1.3.0
+   */
+  readonly barrierResolutionState?: "resolved" | "unresolvable";
+
+  /**
    * Source IDs that the subtree guarded by this barrier can provide.
    * Used by the demand-only pass: when any of them is demanded, the
    * barrier's {@link RuntimeNode.requiresSourceId} becomes demanded as
@@ -237,6 +270,16 @@ export interface RuntimeNode {
    * @since 1.3.0
    */
   readonly providesSourceIds?: ReadonlySet<symbol>;
+
+  /**
+   * Source IDs every selectable route through this barrier's subtree is
+   * guaranteed to provide, regardless of which branch is selected.  An
+   * enclosing barrier's resolution treats these as active provides; the
+   * rest of {@link RuntimeNode.providesSourceIds} stays merely possible.
+   *
+   * @since 1.3.0
+   */
+  readonly guaranteedProvidesSourceIds?: ReadonlySet<symbol>;
 
   /**
    * The source ID whose completion this barrier's preparation depends
@@ -308,6 +351,31 @@ export interface BarrierCompletionDependencies {
    * seed pass.
    */
   readonly demandEdges: readonly BarrierCompletionDemandEdge[];
+}
+
+/**
+ * The concrete dependencies a scheduling barrier reports from
+ * {@link RuntimeNode.resolveBarrier} once its selection is known.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface BarrierResolution {
+  /**
+   * The completion dependency IDs the selected subtree actually reads,
+   * minus the sources it actively provides itself.  These replace the
+   * static advisory ordering estimate with concrete edges.
+   */
+  readonly orderingDependencyIds: readonly symbol[];
+
+  /**
+   * The source IDs the selected subtree will actively publish: a
+   * guaranteed occurrence (an unconditional prompt or a publishable
+   * default) or one whose state already extracts a value.  These
+   * replace {@link RuntimeNode.providesSourceIds} for ordering, so a
+   * sibling consumer no longer waits for a merely possible provider.
+   */
+  readonly activeProvidesSourceIds: ReadonlySet<symbol>;
 }
 
 /**
@@ -954,6 +1022,32 @@ export async function collectExplicitSourceValuesAsync(
 export function orderDependencyNodes(
   nodes: readonly RuntimeNode[],
 ): readonly RuntimeNode[] {
+  return drainDependencyGraph(buildDependencyGraph(nodes));
+}
+
+/**
+ * The mutable edge graph {@link orderDependencyNodes} and the effectful
+ * completion scheduler drain.  `advisoryOnly` marks edges that exist
+ * solely because of an unresolved barrier's static ordering estimate;
+ * such an edge may be relaxed to break an apparent cycle that no single
+ * branch selection could produce (see issue #924).
+ */
+interface DependencyGraph {
+  readonly nodes: readonly RuntimeNode[];
+  readonly outgoing: Map<RuntimeNode, Map<RuntimeNode, boolean>>;
+  readonly indegree: Map<RuntimeNode, number>;
+  readonly declarationOrder: Map<RuntimeNode, number>;
+}
+
+/**
+ * Builds the provider-edge graph over runtime nodes.
+ *
+ * Scheduling barriers act as providers for the source IDs their
+ * selected subtree may expose and depend on their discriminator source
+ * as well as on outer providers of the completion dependencies their
+ * selectable subtrees aggregate.
+ */
+function buildDependencyGraph(nodes: readonly RuntimeNode[]): DependencyGraph {
   const providers = new Map<symbol, RuntimeNode[]>();
   const addProvider = (sourceId: symbol, node: RuntimeNode): void => {
     const existing = providers.get(sourceId);
@@ -968,13 +1062,22 @@ export function orderDependencyNodes(
     }
   }
 
-  const outgoing = new Map<RuntimeNode, Set<RuntimeNode>>();
+  const outgoing = new Map<RuntimeNode, Map<RuntimeNode, boolean>>();
   const indegree = new Map<RuntimeNode, number>();
   for (const node of nodes) indegree.set(node, 0);
-  const addEdge = (provider: RuntimeNode, consumer: RuntimeNode): void => {
-    const edges = outgoing.get(provider) ?? new Set<RuntimeNode>();
-    if (edges.has(consumer)) return;
-    edges.add(consumer);
+  const addEdge = (
+    provider: RuntimeNode,
+    consumer: RuntimeNode,
+    advisory: boolean,
+  ): void => {
+    const edges = outgoing.get(provider) ?? new Map<RuntimeNode, boolean>();
+    const existing = edges.get(consumer);
+    if (existing != null) {
+      // A non-advisory justification hardens an existing advisory edge.
+      if (existing && !advisory) edges.set(consumer, false);
+      return;
+    }
+    edges.set(consumer, advisory);
     outgoing.set(provider, edges);
     indegree.set(consumer, (indegree.get(consumer) ?? 0) + 1);
   };
@@ -984,7 +1087,7 @@ export function orderDependencyNodes(
     if (derived != null) {
       for (const dependencySourceId of derived.dependencyIds) {
         for (const provider of providers.get(dependencySourceId) ?? []) {
-          addEdge(provider, node);
+          addEdge(provider, node, false);
         }
       }
     }
@@ -1008,25 +1111,29 @@ export function orderDependencyNodes(
       for (const dependencySourceId of completion.dependencyIds) {
         if (dependencySourceId === ownSourceId) continue;
         for (const provider of providers.get(dependencySourceId) ?? []) {
-          if (provider !== node) addEdge(provider, node);
+          if (provider !== node) addEdge(provider, node, false);
         }
       }
     }
     if (node.requiresSourceId != null) {
       for (const provider of providers.get(node.requiresSourceId) ?? []) {
-        if (provider !== node) addEdge(provider, node);
+        if (provider !== node) addEdge(provider, node, false);
       }
     }
     // A scheduling barrier aggregates the completion dependencies its
     // selectable subtrees declare, so the barrier waits for outer
     // providers a branch's effectful completion reads.  The barrier
     // itself provides its branches' source IDs, so skipping self edges
-    // keeps a dependency on a sibling branch's source internal.
+    // keeps a dependency on a sibling branch's source internal.  Until
+    // the barrier resolves its selection, these edges are a static
+    // estimate over every selectable branch, so they stay advisory; a
+    // resolved barrier's edges are concrete.
     const barrierDeps = node.barrierCompletionDependencies;
     if (barrierDeps != null) {
+      const advisory = node.barrierResolutionState !== "resolved";
       for (const dependencySourceId of barrierDeps.orderingDependencyIds) {
         for (const provider of providers.get(dependencySourceId) ?? []) {
-          if (provider !== node) addEdge(provider, node);
+          if (provider !== node) addEdge(provider, node, advisory);
         }
       }
     }
@@ -1035,29 +1142,154 @@ export function orderDependencyNodes(
   const declarationOrder = new Map(
     nodes.map((node, index) => [node, index] as const),
   );
+  return { nodes, outgoing, indegree, declarationOrder };
+}
+
+/**
+ * Drains the graph in stable topological order.
+ *
+ * A stall—no node with indegree zero remains—normally means a genuine
+ * cycle.  When the stalled region contains an unresolved barrier's
+ * advisory ordering edges within one strongly connected component, the
+ * apparent cycle aggregates edges from branches that cannot be selected
+ * together, so those advisory edges are relaxed and the drain resumes;
+ * the barrier's own resolution later replaces the estimate with
+ * concrete edges, and a cycle among those still throws.
+ *
+ * @throws {TypeError} If active provider edges contain a cycle.
+ */
+function drainDependencyGraph(graph: DependencyGraph): readonly RuntimeNode[] {
+  const { nodes, outgoing, declarationOrder } = graph;
+  const indegree = new Map(graph.indegree);
   const ready = nodes.filter((node) => indegree.get(node) === 0);
   const ordered: RuntimeNode[] = [];
-  while (ready.length > 0) {
-    ready.sort((left, right) =>
-      declarationOrder.get(left)! - declarationOrder.get(right)!
-    );
-    const node = ready.shift()!;
-    ordered.push(node);
-    for (const consumer of outgoing.get(node) ?? []) {
-      const next = (indegree.get(consumer) ?? 0) - 1;
-      indegree.set(consumer, next);
-      if (next === 0) ready.push(consumer);
+  while (true) {
+    while (ready.length > 0) {
+      ready.sort((left, right) =>
+        declarationOrder.get(left)! - declarationOrder.get(right)!
+      );
+      const node = ready.shift()!;
+      ordered.push(node);
+      for (const consumer of outgoing.get(node)?.keys() ?? []) {
+        const next = (indegree.get(consumer) ?? 0) - 1;
+        indegree.set(consumer, next);
+        if (next === 0) ready.push(consumer);
+      }
+    }
+    if (ordered.length === nodes.length) return ordered;
+    const residual = nodes.filter((node) => (indegree.get(node) ?? 0) > 0);
+    const sccOf = findStronglyConnected(residual, outgoing);
+    let relaxed = false;
+    for (const provider of residual) {
+      const edges = outgoing.get(provider);
+      if (edges == null) continue;
+      for (const [consumer, advisory] of edges) {
+        if (!advisory) continue;
+        const providerScc = sccOf.get(provider);
+        if (providerScc == null || providerScc !== sccOf.get(consumer)) {
+          continue;
+        }
+        edges.delete(consumer);
+        const next = (indegree.get(consumer) ?? 0) - 1;
+        indegree.set(consumer, next);
+        if (next === 0) ready.push(consumer);
+        relaxed = true;
+      }
+    }
+    if (!relaxed) {
+      const labels = residual.map(formatDependencyNodeLabel).join(" -> ");
+      throw new TypeError(
+        `Circular dependency detected among dependency sources: ${labels}.`,
+      );
     }
   }
+}
 
-  if (ordered.length !== nodes.length) {
-    const cycle = nodes.filter((node) => (indegree.get(node) ?? 0) > 0);
-    const labels = cycle.map(formatDependencyNodeLabel).join(" -> ");
-    throw new TypeError(
-      `Circular dependency detected among dependency sources: ${labels}.`,
-    );
+/**
+ * Assigns each node in `subset` to a strongly connected component of
+ * the induced subgraph.  Only components with more than one node are
+ * recorded—an acyclic node cannot be part of an apparent cycle.
+ */
+function findStronglyConnected(
+  subset: readonly RuntimeNode[],
+  outgoing: ReadonlyMap<RuntimeNode, ReadonlyMap<RuntimeNode, boolean>>,
+): Map<RuntimeNode, number> {
+  const inSubset = new Set(subset);
+  const index = new Map<RuntimeNode, number>();
+  const lowLink = new Map<RuntimeNode, number>();
+  const onStack = new Set<RuntimeNode>();
+  const stack: RuntimeNode[] = [];
+  const sccOf = new Map<RuntimeNode, number>();
+  let nextIndex = 0;
+  let nextScc = 0;
+  const strongConnect = (root: RuntimeNode): void => {
+    // Iterative Tarjan: each frame tracks the node and its child cursor.
+    const frames: { node: RuntimeNode; children: RuntimeNode[]; i: number }[] =
+      [{
+        node: root,
+        children: [...(outgoing.get(root)?.keys() ?? [])].filter((child) =>
+          inSubset.has(child)
+        ),
+        i: 0,
+      }];
+    index.set(root, nextIndex);
+    lowLink.set(root, nextIndex);
+    nextIndex++;
+    stack.push(root);
+    onStack.add(root);
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1];
+      if (frame.i < frame.children.length) {
+        const child = frame.children[frame.i++];
+        if (!index.has(child)) {
+          index.set(child, nextIndex);
+          lowLink.set(child, nextIndex);
+          nextIndex++;
+          stack.push(child);
+          onStack.add(child);
+          frames.push({
+            node: child,
+            children: [...(outgoing.get(child)?.keys() ?? [])].filter((c) =>
+              inSubset.has(c)
+            ),
+            i: 0,
+          });
+        } else if (onStack.has(child)) {
+          lowLink.set(
+            frame.node,
+            Math.min(lowLink.get(frame.node)!, index.get(child)!),
+          );
+        }
+        continue;
+      }
+      frames.pop();
+      const node = frame.node;
+      if (lowLink.get(node) === index.get(node)) {
+        const members: RuntimeNode[] = [];
+        while (true) {
+          const member = stack.pop()!;
+          onStack.delete(member);
+          members.push(member);
+          if (member === node) break;
+        }
+        if (members.length > 1) {
+          for (const member of members) sccOf.set(member, nextScc);
+          nextScc++;
+        }
+      }
+      const parent = frames[frames.length - 1];
+      if (parent != null) {
+        lowLink.set(
+          parent.node,
+          Math.min(lowLink.get(parent.node)!, lowLink.get(node)!),
+        );
+      }
+    }
+  };
+  for (const node of subset) {
+    if (!index.has(node)) strongConnect(node);
   }
-  return ordered;
+  return sccOf;
 }
 
 /** Resolves and publishes matched derived sources in stable dependency order. */
@@ -1825,6 +2057,41 @@ export const staticSourceScopeKey: unique symbol = Symbol(
 );
 
 /**
+ * Static child parsers reachable only through a mutually exclusive
+ * selection, such as `or()` alternatives, a `conditional()`'s branches,
+ * or a `command()`'s inner parser.
+ *
+ * The walk unions sources and completion dependencies from this scope
+ * exactly like {@link staticSourceScopeKey}, but a source occurrence
+ * reached through an exclusive edge is never a *guaranteed* provider:
+ * the run may select a sibling instead, so a scheduling barrier must not
+ * assume the occurrence will publish.  See issue #924.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export const exclusiveSourceScopeKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/exclusiveSourceScope",
+);
+
+/**
+ * Source IDs a parser guarantees to provide on every successful route
+ * through it, regardless of which internal alternative is selected.
+ *
+ * A `conditional()` installs the intersection of its branches' guaranteed
+ * provides here (including the default branch when present), so an outer
+ * scheduling barrier can treat a source that *every* selectable route
+ * publishes as guaranteed even though each individual branch edge is
+ * exclusive.  See issue #924.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export const guaranteedStaticSourceIdsKey: unique symbol = Symbol(
+  "@optique/core/dependency-runtime/guaranteedStaticSourceIds",
+);
+
+/**
  * Forwards effectful scheduling through a shape-preserving wrapper such
  * as `map()`, `optional()`, `withDefault()`, or `nonEmpty()`, so the
  * wrapped parser—a selected exclusive or command branch, or an ordinary
@@ -2186,26 +2453,98 @@ export async function completeEffectfulSourcesAsync(
   }
 
   const completed: EffectfulSourceCompletion[] = [];
-  for (const node of orderDependencyNodes(nodes)) {
+  const barrierContext: SchedulingBarrierContext = {
+    runtime,
+    exec,
+    // The barrier's subtree is part of the construct's delivery
+    // scope: its structural values re-register at the barrier's
+    // declaration position (isCollected), while its completion
+    // results stay out of the owning construct's pre-completed
+    // cache (isReusable) and deduplicate through the session.
+    schedule: (barrierNodes) =>
+      completeEffectfulSourcesAsync(barrierNodes, state, runtime, exec, {
+        isReusable: () => false,
+        isCollected: () => true,
+        includeStructural: true,
+      }).then((result) => result.success ? undefined : result),
+  };
+  // Incremental scheduling: a barrier resolves its concrete dependencies
+  // as soon as its control dependencies are satisfied—advisory ordering
+  // edges never delay resolution—and the resolved edges replace the
+  // static estimate before the barrier itself executes.  Each iteration
+  // re-orders the remaining nodes and executes the earliest ready one,
+  // so declaration order still breaks ties and a cycle among concrete
+  // resolved edges surfaces as the usual circular-dependency error.
+  const pending: RuntimeNode[] = [...nodes];
+  const providesId = (node: RuntimeNode, id: symbol): boolean =>
+    node.parser.dependencyMetadata?.source?.sourceId === id ||
+    node.providesSourceIds?.has(id) === true;
+  const resolveBarrierAt = async (
+    index: number,
+  ): Promise<
+    { readonly success: false; readonly error: Message } | undefined
+  > => {
+    const candidate = pending[index];
+    const resolution = await candidate.resolveBarrier!(barrierContext);
+    if (resolution != null && "success" in resolution) {
+      return resolution;
+    }
+    pending[index] = resolution == null
+      ? { ...candidate, barrierResolutionState: "unresolvable" }
+      : {
+        ...candidate,
+        barrierResolutionState: "resolved",
+        providesSourceIds: resolution.activeProvidesSourceIds,
+        barrierCompletionDependencies: {
+          orderingDependencyIds: resolution.orderingDependencyIds,
+          demandEdges: [],
+        },
+      };
+    return undefined;
+  };
+  while (pending.length > 0) {
+    for (let i = 0; i < pending.length; i++) {
+      const candidate = pending[i];
+      if (
+        candidate.resolveBarrier == null ||
+        candidate.barrierResolutionState != null
+      ) {
+        continue;
+      }
+      const requires = candidate.requiresSourceId;
+      // A barrier without a control dependency (an effect-free
+      // discriminator that is not a dependency source) would have to
+      // complete its discriminator here, ahead of every other pending
+      // node, which could reorder observable evaluations; it resolves
+      // at its ordered position below instead.
+      if (requires == null) continue;
+      if (
+        pending.some((other) =>
+          other !== candidate && providesId(other, requires)
+        )
+      ) {
+        continue;
+      }
+      const failure = await resolveBarrierAt(i);
+      if (failure != null) return failure;
+    }
+    const node = orderDependencyNodes(pending)[0];
+    if (node.resolveBarrier != null && node.barrierResolutionState == null) {
+      // The barrier reached its execution position without early
+      // resolution (no control dependency): resolve it here—exactly
+      // where its preparation used to complete the discriminator—and
+      // re-order, so a concrete cycle in the refined edges still
+      // surfaces and stale advisory edges are replaced.
+      const failure = await resolveBarrierAt(pending.indexOf(node));
+      if (failure != null) return failure;
+      continue;
+    }
+    pending.splice(pending.indexOf(node), 1);
     // A scheduling barrier runs at its declaration position; its
     // preparation may schedule further nodes through the nested call,
     // which shares this pass's runtime, session, and exec.
     if (node.prepare != null) {
-      const barrierFailure = await node.prepare({
-        runtime,
-        exec,
-        // The barrier's subtree is part of the construct's delivery
-        // scope: its structural values re-register at the barrier's
-        // declaration position (isCollected), while its completion
-        // results stay out of the owning construct's pre-completed
-        // cache (isReusable) and deduplicate through the session.
-        schedule: (barrierNodes) =>
-          completeEffectfulSourcesAsync(barrierNodes, state, runtime, exec, {
-            isReusable: () => false,
-            isCollected: () => true,
-            includeStructural: true,
-          }).then((result) => result.success ? undefined : result),
-      });
+      const barrierFailure = await node.prepare(barrierContext);
       if (barrierFailure != null) return barrierFailure;
       continue;
     }
@@ -2272,6 +2611,66 @@ export async function completeEffectfulSourcesAsync(
       const extracted = await source.extractSourceValue(node.state);
       if (extracted?.success === true && extracted.value !== undefined) {
         runtime.registerSource(source.sourceId, extracted.value);
+        continue;
+      }
+      // Inside a barrier's nested pass (the only includeStructural
+      // caller), a structural occurrence with a publishable
+      // missing-value default (withDefault()) registers that default at
+      // its declaration position, so a branch-internal consumer reads
+      // it just like any other active provider, while a later outer
+      // occurrence still re-registers afterward and wins outside.  The
+      // ordinary missing-default phase runs only after this pass, so it
+      // cannot serve this occurrence in time.  Defaults stay fill-only,
+      // mirroring fillMissingSourceDefaults: a value another occurrence
+      // already registered—an explicit command-line value before the
+      // conditional, say—is never displaced, and explicit failures are
+      // never overridden.
+      if (
+        options?.includeStructural === true &&
+        extracted?.success !== false &&
+        node.matched !== true &&
+        source.preservesSourceValue &&
+        source.getMissingSourceValue != null &&
+        !runtime.hasSource(source.sourceId) &&
+        !runtime.isSourceFailed(source.sourceId)
+      ) {
+        // Cache by the occurrence's composed default function across
+        // the run's passes, so a non-idempotent default thunk evaluates
+        // once even when nested scheduling repeats, the registered
+        // value stays stable, and a changed branch selection between
+        // passes never reuses another branch's default.
+        let fallback = session?.missingDefaultsByOccurrence.get(
+          source.getMissingSourceValue,
+        );
+        if (fallback == null) {
+          try {
+            fallback = await source.getMissingSourceValue();
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            fallback = {
+              success: false,
+              error: message`Default value evaluation failed: ${msg}`,
+            };
+          }
+          session?.missingDefaultsByOccurrence.set(
+            source.getMissingSourceValue,
+            fallback,
+          );
+        }
+        if (fallback.success) {
+          runtime.registerSource(source.sourceId, fallback.value);
+        } else {
+          runtime.markSourceFailed(source.sourceId);
+          propagateRuntimeSourceFailures(nodes, runtime);
+          return {
+            success: false,
+            error: includeSourceFailureChain(
+              fallback.error,
+              source.sourceId,
+              runtime,
+            ),
+          };
+        }
       }
       continue;
     }

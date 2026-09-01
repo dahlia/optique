@@ -16,6 +16,7 @@ import {
 import {
   type BarrierCompletionDemandEdge,
   type BarrierCompletionDependencies,
+  type BarrierResolution,
   buildRuntimeNodesFromArray,
   buildRuntimeNodesFromPairs,
   collectExplicitSourceValues,
@@ -25,14 +26,17 @@ import {
   createDependencyRuntimeContext,
   type EffectfulSchedulingNodesFn,
   effectfulSchedulingNodesKey,
+  exclusiveSourceScopeKey,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
+  guaranteedStaticSourceIdsKey,
   hasInactiveCompletion,
   resolveDerivedSourceValues,
   resolveDerivedSourceValuesAsync,
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
   type RuntimeNode,
+  type SchedulingBarrierContext,
   serializeSchedulingPath,
   sourceCollectionExpansionKey,
   staticSourceScopeKey,
@@ -94,7 +98,10 @@ import {
   type ParseLane,
   unmatchedNonCliDependencySourceStateMarker,
 } from "./internal/parser.ts";
-import type { ParserDependencyMetadata } from "./dependency-metadata.ts";
+import type {
+  DependencySourceCapability,
+  ParserDependencyMetadata,
+} from "./dependency-metadata.ts";
 
 /**
  * Helper type to extract Mode from a Parser.
@@ -402,26 +409,92 @@ interface PreparedConditionalSelection {
 let conditionalInstanceCounter = 0;
 
 /**
- * Statically collects the dependency source IDs reachable through a
- * parser's composed metadata and flattened field pairs.  Used as the
- * `providesSourceIds` estimate for a conditional()'s branches: an
- * undercount only delays an effectful completion from the seed pass to
- * the final pass of a `runWith()` run.
+ * The statically estimated dependency sources a subtree can provide,
+ * split by how certain the publication is.
  */
-function collectStaticSourceIds(
+interface StaticProvidesEstimate {
+  /**
+   * Every source ID any occurrence in the subtree could publish.  An
+   * overcount only delays an effectful completion from the seed pass to
+   * the final pass of a `runWith()` run.
+   */
+  readonly may: Set<symbol>;
+
+  /**
+   * Source IDs some occurrence publishes whenever the subtree runs: an
+   * unconditional effectful completion (a prompt without a runtime
+   * condition) or a publishable missing-value default.  Only these may
+   * be subtracted from a branch's ordering dependencies—a merely
+   * possible provider must not hide a matching provider declared after
+   * the conditional (see issue #924).
+   */
+  readonly guaranteed: Set<symbol>;
+}
+
+/**
+ * Whether a source occurrence publishes a value even when its state
+ * holds no parsed one: its composed effectful completion always fires
+ * (`completesWhenMissing`), or it exposes a publishable missing-value
+ * default.
+ */
+function isGuaranteedSourceProvider(
+  source: DependencySourceCapability,
+): boolean {
+  return (
+    source.completeSource != null && source.completesWhenMissing === true
+  ) || (
+    source.getMissingSourceValue != null &&
+    source.preservesSourceValue !== false
+  );
+}
+
+/**
+ * Statically collects the dependency source IDs reachable through a
+ * parser's composed metadata and flattened field pairs, classifying each
+ * as merely possible or guaranteed.
+ *
+ * `exclusive` marks descent through a mutually exclusive edge (an `or()`
+ * alternative, a `conditional()` branch, an unmatched `command()`); an
+ * occurrence reached that way never counts as guaranteed.  `suppressId`
+ * carries the source ID of an enclosing wrapper whose composed metadata
+ * already decided that chain's classification, so the raw inner
+ * occurrence (e.g., the bare prompt inside `optional(prompt(...))`) does
+ * not overrule the wrapper.
+ */
+function collectStaticProvides(
   parser: Parser<Mode, unknown, unknown>,
-  out: Set<symbol>,
-  seen: Set<object>,
+  out: StaticProvidesEstimate,
+  exclusive: boolean,
+  suppressId: symbol | undefined,
+  seen: Map<object, number>,
 ): void {
-  if (seen.has(parser as object)) return;
-  seen.add(parser as object);
+  const visitBit = 1 << ((exclusive ? 1 : 0) | (suppressId != null ? 2 : 0));
+  const visited = seen.get(parser as object) ?? 0;
+  if ((visited & visitBit) !== 0) return;
+  seen.set(parser as object, visited | visitBit);
   const source = parser.dependencyMetadata?.source;
+  let childSuppressId = suppressId;
   if (source != null) {
     // A composed source (e.g., a mixed or() delegating to its committed
     // branch) can sit on a parser whose alternatives provide further
     // sources, so record it and keep walking the field and static
     // scopes rather than stopping here.
-    out.add(source.sourceId);
+    out.may.add(source.sourceId);
+    if (
+      !exclusive && source.sourceId !== suppressId &&
+      isGuaranteedSourceProvider(source)
+    ) {
+      out.guaranteed.add(source.sourceId);
+    }
+    childSuppressId = source.sourceId;
+  }
+  const routeGuaranteed = (parser as {
+    readonly [guaranteedStaticSourceIdsKey]?: ReadonlySet<symbol>;
+  })[guaranteedStaticSourceIdsKey];
+  if (routeGuaranteed != null && !exclusive) {
+    // A nested conditional() guarantees the IDs every selectable route
+    // publishes, even though each branch edge below is exclusive.
+    for (const id of routeGuaranteed) out.guaranteed.add(id);
   }
   const pairs = (parser as {
     readonly [fieldParsersKey]?: ReadonlyArray<
@@ -429,7 +502,9 @@ function collectStaticSourceIds(
     >;
   })[fieldParsersKey];
   if (pairs != null) {
-    for (const [, child] of pairs) collectStaticSourceIds(child, out, seen);
+    for (const [, child] of pairs) {
+      collectStaticProvides(child, out, exclusive, childSuppressId, seen);
+    }
   }
   const scope = (parser as {
     readonly [staticSourceScopeKey]?: ReadonlyArray<
@@ -437,7 +512,19 @@ function collectStaticSourceIds(
     >;
   })[staticSourceScopeKey];
   if (scope != null) {
-    for (const child of scope) collectStaticSourceIds(child, out, seen);
+    for (const child of scope) {
+      collectStaticProvides(child, out, exclusive, childSuppressId, seen);
+    }
+  }
+  const exclusiveScope = (parser as {
+    readonly [exclusiveSourceScopeKey]?: ReadonlyArray<
+      Parser<Mode, unknown, unknown>
+    >;
+  })[exclusiveSourceScopeKey];
+  if (exclusiveScope != null) {
+    for (const child of exclusiveScope) {
+      collectStaticProvides(child, out, true, childSuppressId, seen);
+    }
   }
 }
 
@@ -500,6 +587,81 @@ function collectStaticCompletionDependencies(
       );
     }
   }
+  // Completion consumers union across exclusive alternatives too: an
+  // unselected consumer merely overestimates the ordering wait.
+  const exclusiveScope = (parser as {
+    readonly [exclusiveSourceScopeKey]?: ReadonlyArray<
+      Parser<Mode, unknown, unknown>
+    >;
+  })[exclusiveSourceScopeKey];
+  if (exclusiveScope != null) {
+    for (const child of exclusiveScope) {
+      collectStaticCompletionDependencies(
+        child,
+        orderingDependencyIds,
+        demandEdges,
+        seen,
+      );
+    }
+  }
+}
+
+/**
+ * A branch's construction-time dependency estimate: the sources it may
+ * or certainly provides, and the barrier dependencies its completion
+ * consumers aggregate.
+ */
+interface BranchDependencyEstimate {
+  readonly mayProvides: ReadonlySet<symbol>;
+  readonly guaranteedProvides: ReadonlySet<symbol>;
+  readonly dependencies?: BarrierCompletionDependencies;
+}
+
+/**
+ * Collects the source IDs a set of expanded branch nodes will actively
+ * publish: a guaranteed occurrence (an unconditional effectful
+ * completion or a publishable default), an occurrence whose state
+ * already extracts a value, or a nested barrier's every-route
+ * guarantees.  Synchronous extraction only;
+ * {@link computeActiveBarrierDependencies} additionally awaits
+ * promise-shaped extractions, so a bound value that validates
+ * asynchronously still counts as active.
+ */
+function collectActiveProvidesSync(
+  nodes: readonly RuntimeNode[],
+): Set<symbol> {
+  const active = new Set<symbol>();
+  for (const node of nodes) {
+    const source = node.parser.dependencyMetadata?.source;
+    if (source != null && !active.has(source.sourceId)) {
+      if (isGuaranteedSourceProvider(source)) {
+        active.add(source.sourceId);
+      } else if (source.extractSourceValue != null) {
+        let extracted: ReturnType<typeof source.extractSourceValue>;
+        try {
+          extracted = source.extractSourceValue(node.state);
+        } catch {
+          extracted = undefined;
+        }
+        if (extracted != null && isPromiseLike(extracted)) {
+          // The synchronous estimate cannot await; discard the promise
+          // but never let its rejection surface as unhandled.
+          void Promise.resolve(extracted).catch(() => {});
+        } else if (
+          extracted?.success === true && extracted.value !== undefined
+        ) {
+          active.add(source.sourceId);
+        }
+      }
+    }
+    for (const id of node.guaranteedProvidesSourceIds ?? []) active.add(id);
+  }
+  return active;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return typeof (value as { readonly then?: unknown } | null)?.then ===
+    "function";
 }
 
 /**
@@ -507,12 +669,14 @@ function collectStaticCompletionDependencies(
  * guessed branch's expanded runtime nodes, so an occurrence already
  * satisfied by the command line or a binding contributes neither
  * ordering edges nor demand, mirroring the flat inactive-completion
- * rule.  Nested barriers contribute their own aggregates, which remain
- * static estimates.
+ * rule.  Only *active* provides are subtracted from the ordering
+ * union—a merely possible provider (an absent `optional()`, an
+ * unselected nested alternative) must not hide a matching provider
+ * declared after the conditional (issue #924).  Nested barriers
+ * contribute their own aggregates, which remain static estimates.
  */
 function computeBarrierDependenciesFromNodes(
   nodes: readonly RuntimeNode[],
-  provides: ReadonlySet<symbol>,
 ): BarrierCompletionDependencies | undefined {
   const ordering = new Set<symbol>();
   const demandEdges: BarrierCompletionDemandEdge[] = [];
@@ -535,11 +699,78 @@ function computeBarrierDependenciesFromNodes(
       demandEdges.push(...nested.demandEdges);
     }
   }
-  const orderingDependencyIds = [...ordering].filter((id) => !provides.has(id));
+  const active = collectActiveProvidesSync(nodes);
+  const orderingDependencyIds = [...ordering].filter((id) => !active.has(id));
   if (orderingDependencyIds.length < 1 && demandEdges.length < 1) {
     return undefined;
   }
   return { orderingDependencyIds, demandEdges };
+}
+
+/**
+ * Computes a resolved barrier's concrete dependencies from the selected
+ * branch's expanded runtime nodes: the completion dependencies its
+ * active consumers read, minus the sources the branch actively
+ * provides, and the active provides themselves.  Unlike the
+ * synchronous estimate, promise-shaped state extractions are awaited,
+ * so an asynchronously validating bound value counts as active.
+ */
+async function computeActiveBarrierDependencies(
+  nodes: readonly RuntimeNode[],
+): Promise<BarrierResolution> {
+  const active = new Set<symbol>();
+  const ordering = new Set<symbol>();
+  for (const node of nodes) {
+    const metadata = node.parser.dependencyMetadata;
+    const source = metadata?.source;
+    const completion = metadata?.completion;
+    // Each extractor is invoked at most once per node, and the single
+    // awaited result decides both provider activity and consumer
+    // inactivity, so a stateful or asynchronously validating extractor
+    // cannot make the two classifications disagree.  A rejected
+    // extraction counts as neither: the provider stays inactive (the
+    // barrier conservatively waits for an outer provider) and the
+    // consumer stays active (its completion is the recovery path).
+    const guaranteed = source != null && isGuaranteedSourceProvider(source);
+    let extracted: ValueParserResult<unknown> | undefined;
+    if (
+      source?.extractSourceValue != null &&
+      (completion != null || (!guaranteed && !active.has(source.sourceId)))
+    ) {
+      try {
+        extracted = await source.extractSourceValue(node.state);
+      } catch {
+        extracted = undefined;
+      }
+    }
+    if (source != null) {
+      if (
+        guaranteed ||
+        (extracted?.success === true && extracted.value !== undefined)
+      ) {
+        active.add(source.sourceId);
+      }
+    }
+    for (const id of node.guaranteedProvidesSourceIds ?? []) active.add(id);
+    if (completion != null) {
+      // Mirrors the memoized synchronous rule: an occurrence whose own
+      // state already extracts a value bypasses its completion.
+      const inactive = source?.extractSourceValue != null
+        ? extracted?.success === true
+        : hasInactiveCompletion(node);
+      if (!inactive) {
+        for (const id of completion.dependencyIds) ordering.add(id);
+      }
+    }
+    const nested = node.barrierCompletionDependencies;
+    if (nested != null) {
+      for (const id of nested.orderingDependencyIds) ordering.add(id);
+    }
+  }
+  return {
+    orderingDependencyIds: [...ordering].filter((id) => !active.has(id)),
+    activeProvidesSourceIds: active,
+  };
 }
 
 function isDeferredCompletionResult(result: unknown): boolean {
@@ -2192,7 +2423,9 @@ function defineExclusiveSchedulingNodes(
       enumerable: false,
     });
   }
-  Object.defineProperty(exclusiveParser, staticSourceScopeKey, {
+  // Alternatives are mutually exclusive, so a source occurrence inside
+  // one of them is never a guaranteed provider for the whole parser.
+  Object.defineProperty(exclusiveParser, exclusiveSourceScopeKey, {
     value: parsers,
     configurable: true,
     enumerable: false,
@@ -2240,6 +2473,11 @@ function composeExclusiveDependencyMetadata(
     source: {
       ...sharedSource,
       getMissingSourceValue: undefined,
+      // The composed completion delegates to the committed branch only,
+      // and the run may commit an alternative that is not the source,
+      // so the exclusive parser is never a guaranteed publisher even
+      // when a source alternative would be.
+      completesWhenMissing: false,
       preservesSourceValue: everyBranchPreserves,
       extractSourceValue(state) {
         if (
@@ -16144,23 +16382,23 @@ export function conditional(
   // branches must contribute to every branch's estimate.
   const {
     branchProvidedSourceIds,
+    branchGuaranteedIntersection,
     mergedBarrierDependencies,
     barrierDependenciesByKey,
   } = (() => {
     const provided = new Set<symbol>();
-    interface BranchDependencyEstimate {
-      readonly provides: ReadonlySet<symbol>;
-      readonly dependencies?: BarrierCompletionDependencies;
-    }
     const byParser = new Map<object, BranchDependencyEstimate>();
     const computeBranch = (
       branch: Parser<Mode, unknown, unknown>,
     ): BranchDependencyEstimate => {
       const memoized = byParser.get(branch as object);
       if (memoized != null) return memoized;
-      const provides = new Set<symbol>();
-      collectStaticSourceIds(branch, provides, new Set());
-      for (const id of provides) provided.add(id);
+      const provides: StaticProvidesEstimate = {
+        may: new Set(),
+        guaranteed: new Set(),
+      };
+      collectStaticProvides(branch, provides, false, undefined, new Map());
+      for (const id of provides.may) provided.add(id);
       const ordering = new Set<symbol>();
       const demandEdges: BarrierCompletionDemandEdge[] = [];
       collectStaticCompletionDependencies(
@@ -16169,16 +16407,20 @@ export function conditional(
         demandEdges,
         new Set(),
       );
-      // The ordering union subtracts the branch's own statically
-      // providable IDs: those prerequisites resolve inside the
-      // barrier's nested pass.  Demand edges keep them—a demanded
+      // The ordering union subtracts only the branch's *guaranteed*
+      // provides: those prerequisites certainly resolve inside the
+      // barrier's nested pass.  A merely possible provider—an
+      // `optional()` occurrence, an unselected nested alternative—must
+      // not hide a matching provider declared after the conditional
+      // (issue #924).  Demand edges keep every internal ID—a demanded
       // consumer must still demand a branch-internal source prompt so
       // it does not defer out of the seed pass.
       const orderingDependencyIds = [...ordering].filter(
-        (id) => !provides.has(id),
+        (id) => !provides.guaranteed.has(id),
       );
       const estimate: BranchDependencyEstimate = {
-        provides,
+        mayProvides: provides.may,
+        guaranteedProvides: provides.guaranteed,
         ...(orderingDependencyIds.length < 1 && demandEdges.length < 1
           ? {}
           : { dependencies: { orderingDependencyIds, demandEdges } }),
@@ -16186,12 +16428,26 @@ export function conditional(
       byParser.set(branch as object, estimate);
       return estimate;
     };
+    const routes: BranchDependencyEstimate[] = [];
     const byKey = new Map<string, BranchDependencyEstimate>();
     for (const key of Object.keys(branches)) {
       const estimate = computeBranch(branches[key]);
-      if (estimate.dependencies != null) byKey.set(key, estimate);
+      routes.push(estimate);
+      byKey.set(key, estimate);
     }
-    if (defaultBranch != null) computeBranch(defaultBranch);
+    if (defaultBranch != null) routes.push(computeBranch(defaultBranch));
+    // The IDs every selectable route guarantees stay guaranteed for an
+    // enclosing scope even though each branch edge is exclusive.
+    let intersection: Set<symbol> | undefined;
+    for (const route of routes) {
+      if (intersection == null) {
+        intersection = new Set(route.guaranteedProvides);
+      } else {
+        for (const id of intersection) {
+          if (!route.guaranteedProvides.has(id)) intersection.delete(id);
+        }
+      }
+    }
     const orderingUnion = new Set<symbol>();
     const mergedEdges: BarrierCompletionDemandEdge[] = [];
     for (const estimate of new Set(byParser.values())) {
@@ -16209,6 +16465,7 @@ export function conditional(
       };
     return {
       branchProvidedSourceIds: provided,
+      branchGuaranteedIntersection: intersection ?? new Set<symbol>(),
       mergedBarrierDependencies: merged,
       barrierDependenciesByKey: byKey,
     };
@@ -16310,28 +16567,31 @@ export function conditional(
       }
       teeDiscriminatorNode();
       const speculativeKey = selected.key;
+      const expandGuessedBranchNodes = (): readonly RuntimeNode[] => {
+        const branchParser = branches[speculativeKey];
+        if (branchParser == null) return [];
+        return expandEffectfulRuntimeNodes([{
+          path: [...(parentPath ?? []), "_branch"],
+          parser: branchParser,
+          state: getAnnotatedChildState(
+            conditionalState,
+            conditionalState.branchState,
+            branchParser,
+          ),
+        }]);
+      };
       // The guessed branch was parsed, so its occurrence states can
       // refine the static estimate: a consumer already satisfied by the
       // command line or a binding bypasses its completion, and its
       // prerequisites must contribute neither ordering edges nor
       // demand, mirroring the flat inactive-completion rule.
+      const speculativeEstimate = barrierDependenciesByKey.get(speculativeKey);
       const speculativeBarrierDependencies = (() => {
-        const estimate = barrierDependenciesByKey.get(speculativeKey);
-        if (estimate?.dependencies == null) return undefined;
-        const branchParser = branches[speculativeKey];
-        if (branchParser == null) return estimate.dependencies;
-        return computeBarrierDependenciesFromNodes(
-          expandEffectfulRuntimeNodes([{
-            path: [...(parentPath ?? []), "_branch"],
-            parser: branchParser,
-            state: getAnnotatedChildState(
-              conditionalState,
-              conditionalState.branchState,
-              branchParser,
-            ),
-          }]),
-          estimate.provides,
-        );
+        if (speculativeEstimate?.dependencies == null) return undefined;
+        if (branches[speculativeKey] == null) {
+          return speculativeEstimate.dependencies;
+        }
+        return computeBarrierDependenciesFromNodes(expandGuessedBranchNodes());
       })();
       nodes.push({
         path: [...(parentPath ?? []), "_branch"],
@@ -16341,9 +16601,42 @@ export function conditional(
           ? { requiresSourceId: discriminatorSource.sourceId }
           : {}),
         providesSourceIds: branchProvidedSourceIds,
+        ...(speculativeEstimate != null &&
+            speculativeEstimate.guaranteedProvides.size > 0
+          ? {
+            guaranteedProvidesSourceIds: speculativeEstimate.guaranteedProvides,
+          }
+          : {}),
         ...(speculativeBarrierDependencies != null
           ? { barrierCompletionDependencies: speculativeBarrierDependencies }
           : {}),
+        resolveBarrier: async (ctx) => {
+          const session = ctx.exec?.effectfulCompletionSession;
+          if (session == null) return undefined;
+          const result = cell.result ??
+            session.completedByPath.get(discriminatorPathKey);
+          if (
+            result == null || isDeferredCompletionResult(result) ||
+            result.success !== true
+          ) {
+            return undefined;
+          }
+          if (
+            String(result.value) !== speculativeKey ||
+            branches[speculativeKey] == null
+          ) {
+            // A rejected speculation schedules no branch, so it has no
+            // concrete dependencies and provides nothing; the mismatch
+            // itself is reported by the completion phase.
+            return {
+              orderingDependencyIds: [],
+              activeProvidesSourceIds: new Set<symbol>(),
+            };
+          }
+          return await computeActiveBarrierDependencies(
+            expandGuessedBranchNodes(),
+          );
+        },
         prepare: async (ctx) => {
           const session = ctx.exec?.effectfulCompletionSession;
           if (session == null) return undefined;
@@ -16356,17 +16649,8 @@ export function conditional(
             return undefined;
           }
           if (String(result.value) !== speculativeKey) return undefined;
-          const branchParser = branches[speculativeKey];
-          if (branchParser == null) return undefined;
-          return await ctx.schedule(expandEffectfulRuntimeNodes([{
-            path: [...(parentPath ?? []), "_branch"],
-            parser: branchParser,
-            state: getAnnotatedChildState(
-              conditionalState,
-              conditionalState.branchState,
-              branchParser,
-            ),
-          }]));
+          if (branches[speculativeKey] == null) return undefined;
+          return await ctx.schedule(expandGuessedBranchNodes());
         },
       });
       return nodes;
@@ -16385,6 +16669,103 @@ export function conditional(
     }
 
     teeDiscriminatorNode();
+    // Resolves the branch selection once per run: completes the
+    // discriminator (or reads the teed effectful result), replays the
+    // branch against an empty buffer, and caches the decision in the
+    // run-scoped session so barrier resolution, preparation, and final
+    // completion all consume the same selection.
+    const resolvePreparedSelection = async (
+      ctx: SchedulingBarrierContext,
+    ): Promise<PreparedConditionalSelection | undefined> => {
+      const session = ctx.exec?.effectfulCompletionSession;
+      if (session == null) return undefined;
+      const key = preparedKeyFor(parentPath);
+      let prepared = session.preparedByPath.get(key) as
+        | PreparedConditionalSelection
+        | undefined;
+      if (prepared == null) {
+        let discriminatorResult = cell.result ??
+          session.completedByPath.get(discriminatorPathKey);
+        if (
+          discriminatorResult == null && innerCompleteSource == null
+        ) {
+          // Effect-free discriminator: complete it once here; final
+          // completion reuses the prepared result, so non-idempotent
+          // completions (e.g., lazy defaults) still evaluate once.
+          const discriminatorExec = ctx.exec == null ? undefined : {
+            ...ctx.exec,
+            path: [...(parentPath ?? []), "_discriminator"],
+          };
+          discriminatorResult = unwrapCompleteResult(
+            await discriminator.complete(
+              annotatedDiscriminatorState,
+              discriminatorExec,
+            ),
+          );
+        }
+        if (
+          discriminatorResult == null ||
+          isDeferredCompletionResult(discriminatorResult)
+        ) {
+          return undefined;
+        }
+        const namedBranch = discriminatorResult.success
+          ? branches[String(discriminatorResult.value)]
+          : undefined;
+        const branchParser = namedBranch ?? defaultBranch;
+        let branchState: unknown;
+        if (branchParser != null) {
+          // Mirror final completion's empty-input replay parse so the
+          // prepared branch state matches what completion would build.
+          const branchExec = ctx.exec == null ? undefined : {
+            ...ctx.exec,
+            path: [...(parentPath ?? []), "_branch"],
+          };
+          const annotatedInitial = getAnnotatedChildState(
+            conditionalState,
+            branchParser.initialState,
+            branchParser,
+          );
+          const replayResult = await branchParser.parse({
+            buffer: [] as string[],
+            optionsTerminated: false,
+            usage: [] as never[],
+            exec: branchExec,
+            dependencyRegistry: ctx.exec?.dependencyRegistry,
+            state: annotatedInitial,
+          } as ParserContext<unknown>);
+          branchState = replayResult.success
+            ? replayResult.next.state
+            : annotatedInitial;
+        }
+        prepared = {
+          discriminatorResult,
+          branchParser,
+          branchKey: namedBranch != null
+            ? String(
+              (discriminatorResult as { readonly value: unknown }).value,
+            )
+            : undefined,
+          branchState,
+        };
+        session.preparedByPath.set(key, prepared);
+      }
+      return prepared;
+    };
+    const expandPreparedBranchNodes = (
+      prepared: PreparedConditionalSelection,
+    ): readonly RuntimeNode[] => {
+      if (prepared.branchParser == null) return [];
+      return expandEffectfulRuntimeNodes([{
+        path: [...(parentPath ?? []), "_branch"],
+        parser: prepared.branchParser,
+        state: getAnnotatedChildState(
+          conditionalState,
+          prepared.branchState,
+          prepared.branchParser,
+        ),
+      }]);
+    };
     nodes.push({
       path: [...(parentPath ?? []), "_branch"],
       parser: {},
@@ -16393,93 +16774,29 @@ export function conditional(
         ? { requiresSourceId: discriminatorSource.sourceId }
         : {}),
       providesSourceIds: branchProvidedSourceIds,
+      ...(branchGuaranteedIntersection.size > 0
+        ? { guaranteedProvidesSourceIds: branchGuaranteedIntersection }
+        : {}),
       ...(mergedBarrierDependencies != null
         ? { barrierCompletionDependencies: mergedBarrierDependencies }
         : {}),
-      prepare: async (ctx) => {
-        const session = ctx.exec?.effectfulCompletionSession;
-        if (session == null) return undefined;
-        const key = preparedKeyFor(parentPath);
-        let prepared = session.preparedByPath.get(key) as
-          | PreparedConditionalSelection
-          | undefined;
-        if (prepared == null) {
-          let discriminatorResult = cell.result ??
-            session.completedByPath.get(discriminatorPathKey);
-          if (
-            discriminatorResult == null && innerCompleteSource == null
-          ) {
-            // Effect-free discriminator: complete it once here; final
-            // completion reuses the prepared result, so non-idempotent
-            // completions (e.g., lazy defaults) still evaluate once.
-            const discriminatorExec = ctx.exec == null ? undefined : {
-              ...ctx.exec,
-              path: [...(parentPath ?? []), "_discriminator"],
-            };
-            discriminatorResult = unwrapCompleteResult(
-              await discriminator.complete(
-                annotatedDiscriminatorState,
-                discriminatorExec,
-              ),
-            );
-          }
-          if (
-            discriminatorResult == null ||
-            isDeferredCompletionResult(discriminatorResult)
-          ) {
-            return undefined;
-          }
-          const namedBranch = discriminatorResult.success
-            ? branches[String(discriminatorResult.value)]
-            : undefined;
-          const branchParser = namedBranch ?? defaultBranch;
-          let branchState: unknown;
-          if (branchParser != null) {
-            // Mirror final completion's empty-input replay parse so the
-            // prepared branch state matches what completion would build.
-            const branchExec = ctx.exec == null ? undefined : {
-              ...ctx.exec,
-              path: [...(parentPath ?? []), "_branch"],
-            };
-            const annotatedInitial = getAnnotatedChildState(
-              conditionalState,
-              branchParser.initialState,
-              branchParser,
-            );
-            const replayResult = await branchParser.parse({
-              buffer: [] as string[],
-              optionsTerminated: false,
-              usage: [] as never[],
-              exec: branchExec,
-              dependencyRegistry: ctx.exec?.dependencyRegistry,
-              state: annotatedInitial,
-            } as ParserContext<unknown>);
-            branchState = replayResult.success
-              ? replayResult.next.state
-              : annotatedInitial;
-          }
-          prepared = {
-            discriminatorResult,
-            branchParser,
-            branchKey: namedBranch != null
-              ? String(
-                (discriminatorResult as { readonly value: unknown }).value,
-              )
-              : undefined,
-            branchState,
+      resolveBarrier: async (ctx) => {
+        const prepared = await resolvePreparedSelection(ctx);
+        if (prepared == null) return undefined;
+        if (prepared.branchParser == null) {
+          return {
+            orderingDependencyIds: [],
+            activeProvidesSourceIds: new Set<symbol>(),
           };
-          session.preparedByPath.set(key, prepared);
         }
-        if (prepared.branchParser == null) return undefined;
-        return await ctx.schedule(expandEffectfulRuntimeNodes([{
-          path: [...(parentPath ?? []), "_branch"],
-          parser: prepared.branchParser,
-          state: getAnnotatedChildState(
-            conditionalState,
-            prepared.branchState,
-            prepared.branchParser,
-          ),
-        }]));
+        return await computeActiveBarrierDependencies(
+          expandPreparedBranchNodes(prepared),
+        );
+      },
+      prepare: async (ctx) => {
+        const prepared = await resolvePreparedSelection(ctx);
+        if (prepared?.branchParser == null) return undefined;
+        return await ctx.schedule(expandPreparedBranchNodes(prepared));
       },
     });
     return nodes;
@@ -17630,16 +17947,31 @@ export function conditional(
     configurable: true,
     enumerable: false,
   });
-  // Static source estimation reaches the discriminator and every branch
-  // (see staticSourceScopeKey); an overcount is harmless.
+  // Static source estimation reaches the discriminator and every branch;
+  // an overcount is harmless for the may-provide union.  The
+  // discriminator always runs when the conditional is active, so its
+  // sources keep their guarantees; branches are mutually exclusive, so
+  // their occurrences are merely possible providers—except the IDs every
+  // selectable route guarantees, which the conditional re-exposes below.
   Object.defineProperty(conditionalParser, staticSourceScopeKey, {
+    value: [discriminator],
+    configurable: true,
+    enumerable: false,
+  });
+  Object.defineProperty(conditionalParser, exclusiveSourceScopeKey, {
     value: [
-      discriminator,
       ...Object.values(branches),
       ...(defaultBranch != null ? [defaultBranch] : []),
     ],
     configurable: true,
     enumerable: false,
   });
+  if (branchGuaranteedIntersection.size > 0) {
+    Object.defineProperty(conditionalParser, guaranteedStaticSourceIdsKey, {
+      value: branchGuaranteedIntersection,
+      configurable: true,
+      enumerable: false,
+    });
+  }
   return fluent(conditionalParser);
 }

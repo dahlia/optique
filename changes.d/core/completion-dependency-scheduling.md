@@ -4,6 +4,8 @@ links:
   '#872': https://github.com/dahlia/optique/issues/872
   '#919': https://github.com/dahlia/optique/issues/919
   '#923': https://github.com/dahlia/optique/pull/923
+  '#924': https://github.com/dahlia/optique/issues/924
+  '#926': https://github.com/dahlia/optique/pull/926
 ---
  -  Added scheduling support for effectful completions that consume
     dependency values, such as prompts with derived configurations.  The
@@ -13,6 +15,17 @@ links:
     ordering and demand rules apply inside a `conditional()` whose branch is
     selected only during completion: the branches' completion dependencies
     propagate through the conditional's scheduling barrier, so a branch
-    configuration can read a source declared after the conditional.  Cycles
-    introduced this way are rejected with the existing circular-dependency
-    error.  [[#869], [#872], [#919], [#923]]
+    configuration can read a source declared after the conditional.  Once
+    the discriminator resolves the selection, the scheduler replaces the
+    static estimate with the selected branch's actual dependencies, and a
+    branch occurrence hides an outer provider only when it will actively
+    publish the source itself—an unconditional prompt, a `withDefault()`
+    fallback, a nested conditional providing the source on every route, or
+    a value the branch already parsed or bound—so an absent `optional()`
+    occurrence or an unselected nested alternative no longer keeps a
+    provider declared after the conditional from serving the branch.
+    Cycles among the selected branch's actual providers and consumers
+    are rejected with the existing circular-dependency error, while an
+    apparent cycle whose edges belong to branches that cannot be
+    selected together is no longer rejected.
+    [[#869], [#872], [#919], [#923], [#924], [#926]]

@@ -657,7 +657,13 @@ providers, so they resolve first, and the prompt runs after them regardless of
 field order.  A branch that a `conditional()` selects only during completion
 contributes its completion dependencies to the enclosing graph as well: the
 conditional waits for the providers its selectable branches read, even when
-they are declared after it.
+they are declared after it.  Once the discriminator resolves the selection,
+the estimate is replaced by the selected branch's actual dependencies, and a
+branch occurrence hides an outer provider only when it will actively publish
+the source itself—through a guaranteed completion or default, or a value the
+branch already parsed or bound—so an absent `optional()` occurrence or an
+unselected nested alternative does not stop a later provider from serving the
+branch.
 
 An invalid source never falls back to its default. The failure propagates
 through every derived source that consumes it—including prompts whose
@@ -666,3 +672,6 @@ path. Optique also rejects a cycle in the active runtime graph with the
 involved paths/metavars, although ordinary `derive()` and `deriveFrom()`
 composition constructs an acyclic graph by value; derived prompt
 configurations can introduce cycles, which fail with the same diagnostic.
+An apparent cycle whose edges belong to `conditional()` branches that cannot
+be selected together is not a real cycle and is not rejected: the judgment is
+made against the selected branch's actual providers and consumers.

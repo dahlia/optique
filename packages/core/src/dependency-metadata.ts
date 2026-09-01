@@ -101,6 +101,22 @@ export interface DependencySourceCapability {
   ) => Promise<ValueParserResult<unknown> | undefined>;
 
   /**
+   * Whether the composed {@link completeSource}, invoked on a state with
+   * no parsed value, publishes a registrable result.
+   *
+   * A prompt wrapper without a runtime condition sets this to `true`: the
+   * prompt always asks and registers its answer.  An `optional()` wrapper
+   * clears it, because an absent optional occurrence declines its inner
+   * completion and publishes nothing.  Scheduling barriers use this flag
+   * to tell a *guaranteed* branch provider (one that publishes whenever
+   * its branch runs) apart from a merely *possible* one, without running
+   * any effect.
+   *
+   * @since 1.3.0
+   */
+  readonly completesWhenMissing?: boolean;
+
+  /**
    * Whether the parser's output value is the actual dependency source value.
    * `false` when a transform like `map()` has been applied.
    */
@@ -429,6 +445,13 @@ export function composeDependencyMetadata(
             extractSourceValue: unwrapArrayThenExtract(
               inner.source.extractSourceValue,
             ),
+            // An absent optional occurrence legitimately holds no
+            // value—its completion declines, and even a wrapper added
+            // later (e.g. prompt() around this optional) may answer
+            // `undefined`, which the scheduler never registers—so the
+            // chain is not a guaranteed publisher.  Outer wrappers
+            // preserve an explicit `false`.
+            completesWhenMissing: false,
             ...(inner.source.completeSource != null && {
               completeSource: unwrapArrayThenComplete(
                 inner.source.completeSource,

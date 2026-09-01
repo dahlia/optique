@@ -1151,6 +1151,20 @@ export function createPromptAdapter<TConfig>(
           promptedParser.complete(state as TState, exec) as Promise<
             ValueParserResult<unknown>
           >,
+        // Without a runtime `when` condition, the prompt always asks and
+        // registers its answer, so an absent occurrence still publishes.
+        // A conditioned prompt publishes its `otherwise` value when the
+        // condition declines, so it stays guaranteed unless that value
+        // is `undefined`, which the scheduler never registers.  A
+        // wrapped parser whose own chain already declines when missing
+        // (e.g. prompt() around an optional()) keeps its explicit
+        // `false`: its answer may legitimately be `undefined`.
+        ...(source.preservesSourceValue !== false && {
+          completesWhenMissing: source.completesWhenMissing !== false &&
+            (config.when == null ||
+              (config as { readonly otherwise?: unknown }).otherwise !==
+                undefined),
+        }),
       }),
     );
     // A derived configuration makes this prompt a dependency consumer:

@@ -498,6 +498,32 @@ describe("composeDependencyMetadata", () => {
     assert.ok(afterOptional.source?.getMissingSourceValue !== undefined);
   });
 
+  // https://github.com/dahlia/optique/issues/924
+  test("optional clears completesWhenMissing; withDefault and map keep it", () => {
+    const env = createEnvSource();
+    const inner = extractDependencyMetadata(env);
+    assert.ok(inner?.source != null);
+    const effectful: ParserDependencyMetadata = {
+      ...inner,
+      source: {
+        ...inner.source,
+        completeSource: () =>
+          Promise.resolve({ success: true as const, value: "dev" }),
+        completesWhenMissing: true,
+      },
+    };
+    // An absent optional occurrence declines its inner completion, so
+    // the composed completion is no longer a guaranteed publisher.
+    const afterOptional = composeDependencyMetadata(effectful, "optional");
+    assert.equal(afterOptional?.source?.completesWhenMissing, false);
+    const afterDefault = composeDependencyMetadata(effectful, "withDefault", {
+      defaultValue: () => ({ success: true as const, value: "dev" }),
+    });
+    assert.equal(afterDefault?.source?.completesWhenMissing, true);
+    const afterMap = composeDependencyMetadata(effectful, "map");
+    assert.equal(afterMap?.source?.completesWhenMissing, true);
+  });
+
   test("optional extractSourceValue unwraps [state]", async () => {
     const env = createEnvSource();
     const inner = extractDependencyMetadata(env);
