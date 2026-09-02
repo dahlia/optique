@@ -670,6 +670,17 @@ the pre-selection estimate alone, and a speculative parse-time guess the
 discriminator rejects fails the run at that boundary before such a
 prerequisite runs.
 
+Declaration order holds across that wait as well.  When the conditional waited
+for a source occurrence declared after it and the selected branch then
+publishes the same source—through a nested route, a prompt, a parsed value, or
+a binding—the branch's value serves consumers inside the branch, while the
+later occurrence is restored for consumers outside the conditional.  A
+fill-only `withDefault()` occurrence supplies the source only while nothing
+has published it, so it never displaces the awaited later occurrence's value,
+not even for its own branch consumer.  This confinement applies to a branch
+selected during completion; a branch committed on the command line joins the
+enclosing scope directly and follows plain declaration order.
+
 An invalid source never falls back to its default. The failure propagates
 through every derived source that consumes it—including prompts whose
 configurations read it—and diagnostics show the metavars along that dependency

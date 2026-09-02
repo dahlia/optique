@@ -5894,4 +5894,762 @@ describe("branch completion dependencies across scheduling barriers", () => {
       { region: "eu", zone: "z2" },
     ]);
   });
+
+  // The remaining tests pin declaration-order precedence through nested
+  // conditional() branches (https://github.com/dahlia/optique/issues/928):
+  // a selected nested route's publish serves consumers inside its
+  // enclosing branch, while a matching occurrence declared after the
+  // outer conditional wins for consumers outside it.
+
+  it("confines a partial nested provider's publish to its branch", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // Only the i1 route provides the framework source, so the outer
+    // conditional waits for the later occurrence; when i1 is selected
+    // anyway, its publish serves the branch consumer, and the later
+    // occurrence is restored for the post-conditional consumer.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      { inner: ["i1", { fw: "fresh" }], pm: "deno" },
+    ]);
+    assert.equal(result.value.fw2, "hono");
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("confines a CLI-selected nested route's publish to its branch", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // The nested route is selected on the command line instead of by a
+    // prompted discriminator; the precedence rule is the same.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i2" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--inner", "i1", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("resolves both consumers from the later occurrence for a non-providing route", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    // The selected i2 route omits the framework source, so the branch
+    // consumer and the post-conditional consumer both read the later
+    // occurrence, and the unselected i1 route's prompt never runs.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i2" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "fresh" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["hono"]);
+    assert.equal(result.value.out, "npm");
+    assert.ok(!calls.some((config) => config.value === "fresh"));
+  });
+
+  it("confines a parsed nested provider while a later prompt wins outside", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // The selected route's occurrence is parsed from the command line
+    // rather than prompted; parsed, bound, and prompted publishes follow
+    // the same precedence rule.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({ fw: option("--fw", framework) }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--fw", "fresh", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("confines a prompted nested provider while a later parsed occurrence wins outside", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // The later occurrence is parsed from the command line; it still
+    // wins outside the conditional over the prompted branch publish.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: option("--fw2", framework),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, [
+      "--fw2",
+      "hono",
+      "--out",
+      "npm",
+    ]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("confines a nested provider while a later bound occurrence wins under runWith", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const resolved: unknown[] = [];
+    const resolvedOutside: unknown[] = [];
+    const context = createRegionConfigContext();
+    const { prompt } = createTestPrompt();
+    // The later occurrence takes its value from a configuration binding
+    // under the two-pass runWith() path; the bound value still wins for
+    // the consumer declared after it, outside the conditional, over the
+    // prompted branch publish.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  region: prompt(option("--region", region), { value: "us" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            zone: prompt(
+              option("--zone", dependency(choice(["z1", "z2"] as const))),
+              derivePromptConfig(region, (value) => {
+                resolved.push(value);
+                return { value: value === "us" ? "z1" : "z2" };
+              }, { defaultValue: () => "eu" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      region2: bindConfig(option("--region2", region), {
+        context,
+        key: "region",
+      }),
+      zone2: prompt(
+        option("--zone2", dependency(choice(["z1", "z2"] as const))),
+        derivePromptConfig(region, (value) => {
+          resolvedOutside.push(value);
+          return { value: value === "us" ? "z1" : "z2" };
+        }, { defaultValue: () => "us" as const }),
+      ),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      args: [],
+      contextOptions: {
+        load: () => ({
+          config: { region: "eu" as const },
+          meta: undefined,
+        }),
+      },
+    });
+
+    assert.deepEqual(resolved, ["us"]);
+    assert.deepEqual(resolvedOutside, ["eu"]);
+    assert.deepEqual(
+      (result as { readonly zone2: string }).zone2,
+      "z2",
+    );
+  });
+
+  it("keeps nested-branch precedence under the demand-only seed pass", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-nested-precedence-demand"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    // The two-pass demand-only path preserves the same precedence: the
+    // providing route serves its branch, the later occurrence wins
+    // outside, and the unselected i2 route's prompt never runs.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({
+                  other: prompt(
+                    option("--other", dependency(choice(["x"] as const))),
+                    { value: "x" },
+                  ),
+                }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--out", "npm"],
+    });
+
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.equal((result as { readonly out: string }).out, "npm");
+    assert.ok(!calls.some((config) => config.value === "x"));
+  });
+
+  it("keeps later-occurrence precedence for a non-providing route under runWith", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-nested-omitting-demand"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    // Selecting the route that omits the source under the two-pass path
+    // leaves both consumers on the later occurrence, and the unselected
+    // i1 route's prompt never runs.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i2" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "fresh" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--out", "npm"],
+    });
+
+    assert.deepEqual(resolved, ["hono"]);
+    assert.equal((result as { readonly out: string }).out, "npm");
+    assert.ok(!calls.some((config) => config.value === "fresh"));
+  });
+
+  it("keeps a nested fill-only default from displacing a later occurrence", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // The selected route's occurrence is a fill-only withDefault(): the
+    // later occurrence has already published when the route runs, so the
+    // default supplies nothing and both consumers read the later value.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: withDefault(option("--fw", framework), "fresh" as const),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "fresh" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["hono"]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("restores a later sibling conditional's publish over an earlier barrier's", async () => {
+    const kind1 = dependency(choice(["a", "b"] as const));
+    const kind2 = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const extra = dependency(choice(["e1", "e2"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    // The earlier conditional waits for a prerequisite declared after
+    // the later conditional, so it executes last; its publish must not
+    // displace the later conditional's occurrence for consumers outside
+    // both.
+    const parser = object({
+      cond1: conditional(
+        prompt(option("--kind1", kind1), { value: "a" }),
+        {
+          a: object({
+            fw: prompt(option("--fw", framework), { value: "fresh" }),
+            pa: prompt(
+              option("--pa", dependency(choice(["x", "y"] as const))),
+              derivePromptConfig(extra, (value) => ({
+                value: value === "e1" ? "x" : "y",
+              }), { defaultValue: () => "e2" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      cond2: conditional(
+        prompt(option("--kind2", kind2), { value: "a" }),
+        {
+          a: object({
+            fwB: prompt(option("--fw-b", framework), { value: "hono" }),
+          }),
+          b: object({ z: option("--z", choice(["3"] as const)) }),
+        },
+      ),
+      extra: prompt(option("--extra", extra), { value: "e1" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond1, ["a", { fw: "fresh", pa: "x" }]);
+    assert.deepEqual(result.value.cond2, ["a", { fwB: "hono" }]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("restores the latest later occurrence that actually published", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // The very last occurrence is an absent optional() that publishes
+    // nothing, so the restored value comes from the latest occurrence
+    // that actually published.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      fw3: optional(option("--fw3", framework)),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("keeps a command-line-committed branch in the enclosing scope", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // Committing the outer branch on the command line leaves no
+    // completion boundary to confine: the branch's nodes join the
+    // enclosing scope directly, so the branch consumer follows plain
+    // declaration order and reads the later occurrence.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--kind", "a", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["hono"]);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      { inner: ["i1", { fw: "fresh" }], pm: "npm" },
+    ]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("chains branch-confined publishes through three conditional levels", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindMid = dependency(choice(["m1", "m2"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const tool = dependency(choice(["t1", "t2"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // Three levels deep.  The innermost route waits for a tool
+    // prerequisite declared after the mid-level framework occurrence, so
+    // it executes after that occurrence and its publish must be confined
+    // at the inner boundary: the mid-level consumer reads the mid-level
+    // occurrence.  The whole branch's publish is in turn confined at the
+    // outer boundary, so the post-conditional consumer reads the
+    // occurrence declared after the outer conditional.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            mid: conditional(
+              prompt(option("--mid", kindMid), { value: "m1" }),
+              {
+                m1: object({
+                  inner: conditional(
+                    prompt(option("--inner", kindInner), { value: "i1" }),
+                    {
+                      i1: object({
+                        fw: prompt(option("--fw", framework), {
+                          value: "fresh",
+                        }),
+                        pi: prompt(
+                          option(
+                            "--pi",
+                            dependency(choice(["x", "y"] as const)),
+                          ),
+                          derivePromptConfig(tool, (value) => {
+                            resolved.push(["inner", value]);
+                            return { value: value === "t1" ? "x" : "y" };
+                          }, { defaultValue: () => "t2" as const }),
+                        ),
+                      }),
+                      i2: object({ z: constant("1") }),
+                    },
+                  ),
+                  fwMid: prompt(option("--fw-mid", framework), {
+                    value: "hono",
+                  }),
+                  toolP: prompt(option("--tool", tool), { value: "t1" }),
+                  pmMid: prompt(
+                    option(
+                      "--pm-mid",
+                      dependency(choice(["deno", "npm"] as const)),
+                    ),
+                    derivePromptConfig(framework, (value) => {
+                      resolved.push(["mid", value]);
+                      return { value: value === "fresh" ? "deno" : "npm" };
+                    }, { defaultValue: () => "fresh" as const }),
+                  ),
+                }),
+                m2: object({ w: constant("2") }),
+              },
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, [["inner", "t1"], ["mid", "hono"]]);
+    assert.equal(result.value.out, "npm");
+  });
 });

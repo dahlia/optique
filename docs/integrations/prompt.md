@@ -721,25 +721,35 @@ the branch-mismatch error, before any effect the guess alone would have
 scheduled.  The boundary also orders chained questions: a speculative
 discriminator answers before an earlier-declared prerequisite whose
 demand is discovered only by its confirmation.  A branch occurrence counts as
-an *active* provider only when it is guaranteed to publish—an unconditional
-prompt, a `withDefault()` fallback, or a nested conditional that provides the
-source on every selectable route—or when its state already holds a parsed or
-bound value.  A merely possible provider, such as an `optional()` occurrence
-that ends up parsing nothing or a provider in an unselected nested alternative,
-no longer hides a matching provider declared after the conditional: the branch
-configuration waits for that provider and reads its value.  An apparent
-dependency cycle whose edges come from branches that cannot be selected
-together—say, a completion consumer next to a conditional whose branch consumes
-the consumer's own source—is no longer rejected; only a cycle among the
-selected branch's actual providers and consumers still raises the circular
-dependency error.
+an *active* provider only when it is guaranteed to supply the source—an
+unconditional prompt, a `withDefault()` fallback (a default guarantees
+availability rather than an unconditional write), or a nested conditional that
+provides the source on every selectable route—or when its state already holds
+a parsed or bound value.  A merely possible provider, such as an `optional()`
+occurrence that ends up parsing nothing or a provider in an unselected nested
+alternative, no longer hides a matching provider declared after the
+conditional: the branch configuration waits for that provider and reads its
+value.  An apparent dependency cycle whose edges come from branches that
+cannot be selected together—say, a completion consumer next to a conditional
+whose branch consumes the consumer's own source—is no longer rejected; only a
+cycle among the selected branch's actual providers and consumers still raises
+the circular dependency error.
 
-One caveat remains.  A nested conditional that guarantees a source
-on only *some* of its routes is treated as a merely possible provider,
-so the outer conditional waits for a later occurrence when one exists;
-if the nested route that does provide the source is then selected, its
-value publishes after that occurrence and wins for consumers declared
-after the outer conditional.
+A branch's publish is also confined to its scope.  A nested conditional that
+guarantees a source on only *some* of its routes stays a merely possible
+provider, so the outer conditional waits for a matching occurrence declared
+after it, and a selected route that omits the source reads that later value.
+When the selected route does provide the source, its explicit publish—a prompt
+answer, a parsed value, or a bound value—serves consumers inside the enclosing
+branch, and the later occurrence is restored afterward, so consumers declared
+after the outer conditional read the later occurrence, exactly as declaration
+order promises.  A fill-only `withDefault()` occurrence in such a route
+supplies the source only while nothing has published it: once the awaited
+later occurrence has published, the default fills nothing and even the branch
+consumer reads the later value.  The confinement belongs to the completion
+boundary: a branch committed on the command line joins the enclosing scope
+directly, so its consumers follow plain declaration order and read the last
+occurrence of that whole scope.
 
 
 Testing adapters
