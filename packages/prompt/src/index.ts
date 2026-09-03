@@ -702,9 +702,8 @@ export type PromptConfigInput<TConfig, TValue> =
  * @param adapter Library-specific prompt executor.
  * @returns A `prompt(parser, config, options?)` wrapper that always produces
  *          an async parser.  The configuration may be a static `TConfig` or a
- *          {@link DerivedPromptConfig} whose resolver returns `TConfig`.  The
- *          returned wrapper throws a `RangeError` when `maxAttempts` is not a
- *          positive integer.
+ *          {@link DerivedPromptConfig} whose resolver returns `TConfig`.
+ * @throws {RangeError} If `maxAttempts` is not a positive integer.
  * @since 1.2.0
  */
 export function createPromptAdapter<TConfig>(
