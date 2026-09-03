@@ -698,12 +698,16 @@ export function bindConfig<
       configBindStateKey in value;
   }
 
-  function shouldDeferPromptUntilConfigResolves(
-    state: unknown,
-    _exec?: ExecutionContext,
+  function shouldDeferCompletion(
+    state: TState,
+    exec?: ExecutionContext,
   ): boolean {
     const annotations = getAnnotations(state);
-    return annotations?.[options.context.id] === phase1ConfigAnnotationMarker;
+    if (annotations?.[options.context.id] === phase1ConfigAnnotationMarker) {
+      return true;
+    }
+    return typeof parser.shouldDeferCompletion === "function" &&
+      parser.shouldDeferCompletion(getInnerState(state), exec) === true;
   }
 
   // bindConfig() resolves fallbacks through config annotations at completion
@@ -870,7 +874,14 @@ export function bindConfig<
       // No CLI value, check config.  Thread the inner parser through so
       // that fallback values are re-validated against its constraints
       // (see issue #414).
-      return getConfigOrDefault(state, options, parser.mode, parser);
+      return getConfigOrDefault(
+        state,
+        options,
+        parser.mode,
+        parser,
+        getInnerState(state),
+        exec,
+      );
     },
 
     suggest: (context, prefix) => {
@@ -880,7 +891,7 @@ export function bindConfig<
         : context;
       return parser.suggest(innerContext, prefix);
     },
-    shouldDeferCompletion: shouldDeferPromptUntilConfigResolves,
+    shouldDeferCompletion,
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
       return parser.getDocFragments(state, defaultValue);
@@ -1003,6 +1014,8 @@ export function bindConfig<
  *                 config-sourced value or the configured `default`
  *                 against the inner CLI parser's constraints (see
  *                 issue #414).
+ * @throws {Error} Propagates errors thrown by `innerParser.complete()` when
+ *                 falling through to a deferred inner parser.
  */
 function getConfigOrDefault<
   M extends "sync" | "async",
@@ -1014,6 +1027,8 @@ function getConfigOrDefault<
   options: BindConfigOptions<T, TValue, TConfigMeta>,
   mode: M,
   innerParser?: Parser<M, TValue, unknown>,
+  innerState?: unknown,
+  exec?: ExecutionContext,
 ): ModeValue<M, Result<TValue>> {
   // Read from the per-instance context id so that the correct config data is
   // selected even when annotations from multiple config contexts are merged.
@@ -1033,6 +1048,8 @@ function getConfigOrDefault<
   // to avoid misleading low-level callers.
   const configContextAbsent = annotations != null &&
     !(contextId in annotations);
+  const configPending = annotations?.[contextId] ===
+    phase1ConfigAnnotationMarker;
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
@@ -1072,15 +1089,52 @@ function getConfigOrDefault<
     return validateFallbackValue(mode, innerParser, options.default);
   }
 
-  // Distinguish between the config context not being registered at all
-  // (key absent from annotations) and a registered context with no matching
-  // value (file not found, key absent in config data, etc.).
+  if (
+    configPending &&
+    innerParser != null &&
+    typeof innerParser.shouldDeferCompletion === "function" &&
+    innerParser.shouldDeferCompletion(
+        innerState ?? innerParser.initialState,
+        exec,
+      ) === true
+  ) {
+    return wrapForMode(mode, {
+      success: true as const,
+      value: undefined as TValue,
+      deferred: true as const,
+    });
+  }
+
+  // Preserve the targeted error for an omitted config context before a
+  // deferred inner wrapper gets a chance to run.  Calling prompt() here would
+  // execute it once for the seed pass and again for the final pass.
   if (configContextAbsent) {
     return wrapForMode(mode, {
       success: false,
       error:
         message`Configuration value could not be read: the config context was not passed to run()'s contexts option.`,
     });
+  }
+
+  // A deferred inner wrapper can provide its own fallback after configuration
+  // has resolved.  In particular, bindConfig(prompt(...)) must let the prompt
+  // run when the loaded config has no matching key.  Keep ordinary bound
+  // parsers on the established config-specific error path below.
+  if (
+    !configPending &&
+    annotations != null &&
+    contextId in annotations &&
+    innerParser != null &&
+    typeof innerParser.shouldDeferCompletion === "function" &&
+    innerParser.shouldDeferCompletion(
+        innerState ?? innerParser.initialState,
+        exec,
+      ) === true
+  ) {
+    return innerParser.complete(
+      innerState ?? innerParser.initialState,
+      exec,
+    );
   }
 
   return wrapForMode(mode, {

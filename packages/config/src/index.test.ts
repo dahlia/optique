@@ -417,6 +417,38 @@ describe("bindConfig", () => {
     assert.equal(result.value, "localhost");
   });
 
+  test("does not delegate to a resolved nested config binding", () => {
+    const schema = z.object({
+      outer: z.string().optional(),
+      inner: z.string().optional(),
+    });
+    const outerContext = createConfigContext({ schema });
+    const innerContext = createConfigContext({ schema });
+    const parser = bindConfig(
+      bindConfig(option("--value", string()), {
+        context: innerContext,
+        key: "inner",
+      }),
+      {
+        context: outerContext,
+        key: "outer",
+      },
+    );
+    const annotations: Annotations = {
+      [outerContext.id]: { data: {} },
+      [innerContext.id]: { data: { inner: "inner-value" } },
+    };
+
+    const result = parse(parser, [], { annotations });
+
+    assert.ok(!result.success);
+    if (result.success) return;
+    assert.equal(
+      formatMessage(result.error),
+      "Missing required configuration value.",
+    );
+  });
+
   test("lets seq skip config-bound positional defaults before commands", () => {
     const schema = z.object({
       profile: z.string().optional(),
