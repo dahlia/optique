@@ -190,6 +190,21 @@ To be released.
     earlier-declared non-source prompt.  [[#869], [#870], [#912]]
 
 
+Version 1.2.5
+-------------
+
+Released on September 3, 2026.
+
+### @optique/config
+
+ -  Fixed `bindConfig()` around prompt wrappers to supply configuration or
+    prompted values to sibling dependency consumers during two-pass runs.
+    [[#930], [#933]]
+
+[#930]: https://github.com/dahlia/optique/issues/930
+[#933]: https://github.com/dahlia/optique/pull/933
+
+
 Version 1.2.4
 -------------
 
