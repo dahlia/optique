@@ -552,7 +552,9 @@ export interface EffectfulCompletionSession {
    * owning nested construct's own scheduling pass reuses it instead of
    * completing the same node again—keeping lazy wrapper defaults at one
    * evaluation per pass and the registered dependency value identical to
-   * the field's final value.
+   * the field's final value.  A pass whose execution context carries
+   * {@link ExecutionContext.republishCachedCompletions} re-registers a
+   * reused result's value at the node's declaration position.
    */
   readonly completedByPath: Map<string, ValueParserResult<unknown>>;
 
@@ -687,6 +689,30 @@ export interface ExecutionContext {
    * @internal
    */
   readonly preCompletedByParser?: ReadonlyMap<string | symbol, unknown>;
+
+  /**
+   * Re-registers effectful completion results already cached in the
+   * run-scoped session at their declaration positions during the
+   * receiving construct's own effectful scheduling pass.  A
+   * `conditional()` sets this for the completion of a branch it selected
+   * during completion: the branch completes against a fresh runtime
+   * cloned after the enclosing pass restored later-declared occurrences,
+   * and the branch's cached publishes have no structural carrier, so
+   * without this the branch's deferred derived consumers would read the
+   * outer occurrence instead of the branch's own publish.  No effect
+   * re-runs; only the cached value is re-registered.
+   *
+   * Path-transparent wrappers (`command()`, `or()`, modifiers) forward
+   * it unchanged.  A construct that runs the scheduling pass consumes it
+   * there and must drop it from the execution contexts of its own
+   * children, exactly as it drops {@link preCompletedByParser}, so nested
+   * passes keep skipping cached completions instead of re-asserting them
+   * over a later sibling occurrence.
+   *
+   * @see https://github.com/dahlia/optique/issues/929
+   * @internal
+   */
+  readonly republishCachedCompletions?: boolean;
 
   /**
    * Field names that should be ignored when a construct seeds dependency

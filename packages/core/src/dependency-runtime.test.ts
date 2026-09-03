@@ -3639,6 +3639,199 @@ describe("completeEffectfulSourcesAsync", () => {
     assert.deepEqual(executed, []);
     assert.equal(runtime.registry.get(sourceId), "branch");
   });
+
+  // The remaining tests pin the one-shot re-publication instruction a
+  // conditional() hands to the completion of a branch it selected during
+  // completion (https://github.com/dahlia/optique/issues/929): a cached
+  // completion re-registers its value at its declaration position without
+  // re-running, so declaration order within the pass still decides.
+  test("re-registers a cached completion when asked to republish", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const executed: string[] = [];
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push(value);
+      originalRegister(id, value);
+    };
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "branch" }),
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      prepare: (ctx) => ctx.schedule([branchProvider]),
+    };
+    const cached = createEffectfulSourceNode(
+      "cached",
+      sourceId,
+      () => {
+        executed.push("cached");
+        return Promise.resolve({ success: true, value: "cached" });
+      },
+    );
+    session.completedByPath.set(
+      serializeSchedulingPath(cached.path),
+      { success: true, value: "cached" },
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, cached],
+      undefined,
+      runtime,
+      {
+        ...createCompleteExecFixture(session),
+        republishCachedCompletions: true,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(executed, []);
+    assert.deepEqual(writes, ["branch", "cached"]);
+    assert.equal(runtime.registry.get(sourceId), "cached");
+  });
+
+  test("lets a later occurrence win over a republished cached completion", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push(value);
+      originalRegister(id, value);
+    };
+    const cached = createEffectfulSourceNode(
+      "cached",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "cached" }),
+    );
+    session.completedByPath.set(
+      serializeSchedulingPath(cached.path),
+      { success: true, value: "cached" },
+    );
+    const later = createEffectfulSourceNode(
+      "later",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "later" }),
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [cached, later],
+      undefined,
+      runtime,
+      {
+        ...createCompleteExecFixture(session),
+        republishCachedCompletions: true,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(writes, ["cached", "later"]);
+    assert.equal(runtime.registry.get(sourceId), "later");
+  });
+
+  test("never republishes a cached successful undefined completion", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push(value);
+      originalRegister(id, value);
+    };
+    const cached = createEffectfulSourceNode(
+      "cached",
+      sourceId,
+      () => Promise.resolve({ success: true, value: undefined }),
+    );
+    session.completedByPath.set(
+      serializeSchedulingPath(cached.path),
+      { success: true, value: undefined },
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [cached],
+      undefined,
+      runtime,
+      {
+        ...createCompleteExecFixture(session),
+        republishCachedCompletions: true,
+      },
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(writes, []);
+    assert.ok(!runtime.hasSource(sourceId));
+  });
+
+  test("republishes through a barrier's nested pass but not into completions", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const otherId = Symbol("other");
+    const executed: string[] = [];
+    const seenFlags: unknown[] = [];
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push(value);
+      originalRegister(id, value);
+    };
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => {
+        executed.push("branch");
+        return Promise.resolve({ success: true, value: "branch" });
+      },
+    );
+    session.completedByPath.set(
+      serializeSchedulingPath(branchProvider.path),
+      { success: true, value: "branch" },
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      prepare: (ctx) => ctx.schedule([branchProvider]),
+    };
+    const fresh = createEffectfulSourceNode(
+      "fresh",
+      otherId,
+      (_state, exec) => {
+        seenFlags.push(exec?.republishCachedCompletions);
+        return Promise.resolve({ success: true, value: "fresh" });
+      },
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, fresh],
+      undefined,
+      runtime,
+      {
+        ...createCompleteExecFixture(session),
+        republishCachedCompletions: true,
+      },
+    );
+
+    // The nested pass shares the instruction, so the cached branch
+    // completion re-registers without running; the effect itself never
+    // sees the instruction on its execution context.
+    assert.ok(result.success);
+    assert.deepEqual(executed, []);
+    assert.deepEqual(writes, ["branch", "fresh"]);
+    assert.deepEqual(seenFlags, [undefined]);
+    assert.equal(runtime.registry.get(sourceId), "branch");
+  });
 });
 
 describe("collectDemandedDependencyIds", () => {
