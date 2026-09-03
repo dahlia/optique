@@ -1,6 +1,6 @@
 {
   "name": "@optique/prompt",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Generic prompt adapter support for Optique",
   "keywords": [
     "CLI",

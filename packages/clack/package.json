@@ -1,6 +1,6 @@
 {
   "name": "@optique/clack",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Interactive prompt support for Optique via Clack",
   "keywords": [
     "CLI",
