@@ -672,6 +672,10 @@ rules apply when a `conditional()` chooses its branch during completion:
 | A selected route contains only a `withDefault()` occurrence                                 | The default fills the source only if no awaited occurrence has published it.                                  |
 | The command line already committed the branch                                               | The branch joins the enclosing scope and ordinary declaration precedence applies.                             |
 
+For a repeated source, the branch's publish stays confined to that branch.  It
+serves the branch's consumers without replacing the later outer occurrence seen
+by consumers after the conditional.
+
 Cycles are checked against the selected branch's actual providers and
 consumers.  Edges from branches that cannot be selected together do not form a
 cycle.
