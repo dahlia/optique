@@ -2903,8 +2903,18 @@ export async function completeEffectfulSourcesAsync(
       if (source.extractSourceValue == null || collected === false) {
         continue;
       }
+      // The extraction contract distinguishes a successful `undefined`
+      // value from an unpopulated `undefined` result, and explicit
+      // source collection registers the former (see
+      // registerExplicitSourceValue), so it re-registers here like any
+      // other successful extraction: the publication carries the
+      // occurrence's declaration position, letting a barrier exit
+      // re-assert it over a branch publish.  An absent occurrence (a
+      // withDefault() or optional() whose inner parsed nothing) yields
+      // an unpopulated result instead and still reaches the fill-only
+      // default below.
       const extracted = await source.extractSourceValue(node.state);
-      if (extracted?.success === true && extracted.value !== undefined) {
+      if (extracted?.success === true) {
         publishFromNode(node, source.sourceId, extracted.value);
         continue;
       }

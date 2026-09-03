@@ -3539,6 +3539,62 @@ describe("completeEffectfulSourcesAsync", () => {
     assert.equal(runtime.registry.get(sourceId), "second");
   });
 
+  test("re-asserts a later occurrence whose successful value is undefined", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push(value);
+      originalRegister(id, value);
+    };
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "branch" }),
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [sourceId],
+        demandEdges: [],
+      },
+      prepare: (ctx) => ctx.schedule([branchProvider]),
+    };
+    // The extraction contract allows a successful `undefined` value, and
+    // explicit source collection registers it; the pass must record such
+    // a publication too, so the barrier exit can restore it.
+    const later: RuntimeNode = {
+      path: ["later"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: () => ({ success: true, value: undefined }),
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: undefined,
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, later],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.deepEqual(writes, [undefined, "branch", undefined]);
+  });
+
   test("reuses a cached completion without a spurious re-assertion", async () => {
     const runtime = createDependencyRuntimeContext();
     const session = createEffectfulCompletionSession();
