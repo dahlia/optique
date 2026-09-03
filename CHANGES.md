@@ -6,7 +6,7 @@ Optique changelog
 Version 1.2.5
 -------------
 
-To be released.
+Released on September 3, 2026.
 
 ### @optique/config
 
