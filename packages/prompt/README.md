@@ -27,7 +27,8 @@ Documentation
 
 For full documentation, visit the [prompt integration docs].
 The guide covers dependency-derived configurations with
-`derivePromptConfig()` as well as adapter construction.
+`derivePromptConfig()`, shared validation and retries, abort signals, and
+adapter construction.
 
 [prompt integration docs]: https://optique.dev/integrations/prompt
 

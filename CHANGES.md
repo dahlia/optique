@@ -131,6 +131,11 @@ To be released.
     now skip a fallback with a synchronous or asynchronous `when` check and
     return a typed `otherwise` value.  The check runs only when parsing reaches
     the prompt fallback.  [[#882]]
+ -  Added shared validation and retry options to prompt adapters.  Generated
+    prompt wrappers can validate returned values synchronously or
+    asynchronously, pass the preceding validation message to another attempt,
+    limit attempts, and abort active prompt or validator work without
+    publishing rejected answers.  [[#873], [#935], [#938]]
  -  Fixed `prompt()` so that a prompted value for a wrapped dependency
     source registers in the dependency runtime, letting derived parsers
     observe the selected value during the same parse operation.  The fix
@@ -138,6 +143,10 @@ To be released.
     *@optique/inquirer* and *@optique/clack*.  A dependency-source prompt
     now runs before dependency replay, so it may be displayed before an
     earlier-declared non-source prompt.  [[#869], [#870], [#912]]
+
+[#873]: https://github.com/dahlia/optique/issues/873
+[#935]: https://github.com/dahlia/optique/issues/935
+[#938]: https://github.com/dahlia/optique/pull/938
 
 
 Version 1.2.5

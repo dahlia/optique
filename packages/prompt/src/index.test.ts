@@ -47,6 +47,9 @@ import {
   createPromptAdapter,
   derivePromptConfig,
   type PromptCondition,
+  type PromptExecutionContext,
+  type PromptOptions,
+  type PromptValidator,
 } from "@optique/prompt";
 
 type TestPromptConfig<TValue> = {
@@ -54,11 +57,18 @@ type TestPromptConfig<TValue> = {
   readonly reject?: boolean;
 };
 
+type EmptyPromptConfig = Record<never, never>;
+
 function createTestPrompt() {
   const calls: TestPromptConfig<unknown>[] = [];
+  const contexts: PromptExecutionContext[] = [];
   const prompt = createPromptAdapter<TestPromptConfig<unknown>>({
-    execute<TValue>(config: TestPromptConfig<unknown>) {
+    execute<TValue>(
+      config: TestPromptConfig<unknown>,
+      context: PromptExecutionContext,
+    ) {
       calls.push(config);
+      contexts.push(context);
       if (config.reject === true) {
         return Promise.resolve({
           success: false,
@@ -68,7 +78,23 @@ function createTestPrompt() {
       return Promise.resolve({ success: true, value: config.value as TValue });
     },
   });
-  return { prompt, calls };
+  return { prompt, calls, contexts };
+}
+
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason: unknown) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 function createRegionConfigContext() {
@@ -155,7 +181,7 @@ describe("createPromptAdapter()", () => {
   });
 
   it("runs the adapter when the CLI value is absent", async () => {
-    const { prompt, calls } = createTestPrompt();
+    const { prompt, calls, contexts } = createTestPrompt();
     const config = { value: "Bob" };
     const parser = prompt(option("--name", string()), config);
 
@@ -164,6 +190,421 @@ describe("createPromptAdapter()", () => {
     assert.ok(result.success);
     assert.equal(result.value, "Bob");
     assert.deepEqual(calls, [config]);
+    assert.deepEqual(contexts, [{ attempt: 1 }]);
+  });
+
+  it("should infer shared validator values from the wrapped parser", () => {
+    const { prompt } = createTestPrompt();
+    const validator =
+      ((value) =>
+        value.length > 0
+          ? undefined
+          : message`Enter a name.`) satisfies PromptValidator<string>;
+    const options = { validate: validator } satisfies PromptOptions<string>;
+
+    const parser = prompt(
+      option("--name", string()),
+      { value: "Alice" },
+      options,
+    );
+    prompt(option("--name", string()), { value: "Alice" }, {
+      // @ts-expect-error The parser, not the validator, determines TValue.
+      validate: (_value: number) => undefined,
+    });
+    // @ts-expect-error Validators reject with Message, not string.
+    const invalidValidator: PromptValidator<string> = (_value: string) =>
+      "Enter a name.";
+
+    assert.equal(parser.mode, "async");
+    assert.equal(options.validate, validator);
+    assert.equal(invalidValidator(""), "Enter a name.");
+  });
+
+  it("should reject invalid maximum attempt counts at construction", () => {
+    const { prompt, calls } = createTestPrompt();
+
+    for (const maxAttempts of [0, -1, 1.5, Number.NaN, Infinity]) {
+      assert.throws(
+        () =>
+          prompt(option("--name", string()), { value: "Alice" }, {
+            maxAttempts,
+          }),
+        {
+          name: "RangeError",
+          message: "maxAttempts must be an integer greater than or equal to 1.",
+        },
+      );
+    }
+    assert.throws(
+      () =>
+        prompt(option("--name", string()), { value: "Alice" }, {
+          validate: () => undefined,
+          maxAttempts: 0,
+        }),
+      RangeError,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("should accept a synchronously validated prompt value", async () => {
+    const { prompt, calls, contexts } = createTestPrompt();
+    const validated: string[] = [];
+    const parser = prompt(option("--name", string()), { value: "Alice" }, {
+      validate(value) {
+        validated.push(value);
+        return undefined;
+      },
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "Alice");
+    assert.deepEqual(validated, ["Alice"]);
+    assert.deepEqual(calls, [{ value: "Alice" }]);
+    assert.deepEqual(contexts, [{ attempt: 1 }]);
+  });
+
+  it("should retry asynchronous validation with the previous message", async () => {
+    const values = ["npm", "pnpm", "deno"] as const;
+    const contexts: PromptExecutionContext[] = [];
+    const verdicts = [
+      message`npm is unavailable.`,
+      message`pnpm is unavailable.`,
+    ] as const;
+    let validationCalls = 0;
+    const prompt = createPromptAdapter<{
+      readonly values: readonly string[];
+    }>({
+      execute<TValue>(
+        config: { readonly values: readonly string[] },
+        context: PromptExecutionContext,
+      ) {
+        contexts.push(context);
+        return Promise.resolve({
+          success: true,
+          value: config.values[context.attempt - 1] as TValue,
+        });
+      },
+    });
+    const parser = prompt(option("--pm", string()), { values }, {
+      async validate(value) {
+        await Promise.resolve();
+        const verdict = verdicts[validationCalls];
+        validationCalls++;
+        return value === "deno" ? undefined : verdict;
+      },
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "deno");
+    assert.equal(validationCalls, 3);
+    assert.deepEqual(contexts, [
+      { attempt: 1 },
+      { attempt: 2, previousValidationMessage: verdicts[0] },
+      { attempt: 3, previousValidationMessage: verdicts[1] },
+    ]);
+    assert.equal(contexts[1].previousValidationMessage, verdicts[0]);
+    assert.equal(contexts[2].previousValidationMessage, verdicts[1]);
+  });
+
+  it("should return the final validation message when attempts are exhausted", async () => {
+    const verdicts = [message`Try again.`, []] as const;
+    let attempt = 0;
+    const { prompt, contexts } = createTestPrompt();
+    const parser = prompt(option("--name", string()), { value: "Alice" }, {
+      maxAttempts: 2,
+      validate() {
+        return verdicts[attempt++];
+      },
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.equal(result.error, verdicts[1]);
+    assert.equal(attempt, 2);
+    assert.deepEqual(contexts, [
+      { attempt: 1 },
+      { attempt: 2, previousValidationMessage: verdicts[0] },
+    ]);
+  });
+
+  it("should keep attempt counts and limits consistent", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 6 }),
+        fc.integer({ min: 1, max: 7 }),
+        async (maxAttempts, requestedAcceptanceAttempt) => {
+          const acceptanceAttempt = Math.min(
+            requestedAcceptanceAttempt,
+            maxAttempts + 1,
+          );
+          const attempts: number[] = [];
+          let validationCalls = 0;
+          const prompt = createPromptAdapter<EmptyPromptConfig>({
+            execute<TValue>(
+              _config: EmptyPromptConfig,
+              context: PromptExecutionContext,
+            ) {
+              attempts.push(context.attempt);
+              return Promise.resolve({
+                success: true,
+                value: "answer" as TValue,
+              });
+            },
+          });
+          const parser = prompt(option("--answer", string()), {}, {
+            maxAttempts,
+            validate() {
+              validationCalls++;
+              return validationCalls === acceptanceAttempt
+                ? undefined
+                : message`Try again.`;
+            },
+          });
+
+          const result = await parseAsync(parser, []);
+          const expectedAttempts = Math.min(
+            acceptanceAttempt,
+            maxAttempts,
+          );
+
+          assert.deepEqual(
+            attempts,
+            Array.from({ length: expectedAttempts }, (_, index) => index + 1),
+          );
+          assert.equal(validationCalls, expectedAttempts);
+          assert.equal(result.success, acceptanceAttempt <= maxAttempts);
+        },
+      ),
+    );
+  });
+
+  it("should stop retrying when a later adapter attempt fails", async () => {
+    const firstRejection = message`Try again.`;
+    const cancellation = message`Prompt cancelled.`;
+    const contexts: PromptExecutionContext[] = [];
+    let validationCalls = 0;
+    const prompt = createPromptAdapter<EmptyPromptConfig>({
+      execute<TValue>(
+        _config: EmptyPromptConfig,
+        context: PromptExecutionContext,
+      ) {
+        contexts.push(context);
+        return Promise.resolve(
+          context.attempt === 1
+            ? { success: true, value: "first" as TValue }
+            : { success: false, error: cancellation },
+        );
+      },
+    });
+    const parser = prompt(option("--name", string()), {}, {
+      validate() {
+        validationCalls++;
+        return firstRejection;
+      },
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.equal(result.error, cancellation);
+    assert.equal(validationCalls, 1);
+    assert.deepEqual(contexts, [
+      { attempt: 1 },
+      { attempt: 2, previousValidationMessage: firstRejection },
+    ]);
+  });
+
+  it("should propagate adapter and validator exceptions without retrying", async () => {
+    const adapterError = new TypeError("Prompt failed.");
+    const validatorError = new TypeError("Validation failed.");
+    let adapterCalls = 0;
+    const throwingPrompt = createPromptAdapter<EmptyPromptConfig>({
+      execute<TValue>(
+        _config: EmptyPromptConfig,
+        _context: PromptExecutionContext,
+      ) {
+        adapterCalls++;
+        throw adapterError;
+      },
+    });
+    const validatorPrompt = createPromptAdapter<EmptyPromptConfig>({
+      execute<TValue>(
+        _config: EmptyPromptConfig,
+        _context: PromptExecutionContext,
+      ) {
+        return Promise.resolve({ success: true, value: "Alice" as TValue });
+      },
+    });
+
+    await assert.rejects(
+      () =>
+        parseAsync(
+          throwingPrompt(option("--name", string()), {}, {
+            validate: () => message`Unused.`,
+          }),
+          [],
+        ),
+      (error: unknown) => error === adapterError,
+    );
+    for (
+      const validate of [
+        () => {
+          throw validatorError;
+        },
+        () => Promise.reject(validatorError),
+      ]
+    ) {
+      await assert.rejects(
+        () =>
+          parseAsync(
+            validatorPrompt(option("--name", string()), {}, {
+              validate,
+            }),
+            [],
+          ),
+        (error: unknown) => error === validatorError,
+      );
+    }
+    assert.equal(adapterCalls, 1);
+  });
+
+  it("should ignore an aborted signal when no prompt attempt runs", async () => {
+    const controller = new AbortController();
+    const reason = new Error("Stopped.");
+    controller.abort(reason);
+    const { prompt, calls } = createTestPrompt();
+    let validationCalls = 0;
+    const skipped = prompt(
+      option("--name", string()),
+      { value: "Prompted", when: () => false, otherwise: "Skipped" },
+      {
+        signal: controller.signal,
+        validate() {
+          validationCalls++;
+          return undefined;
+        },
+      },
+    );
+    const fromCli = prompt(option("--other", string()), { value: "Prompted" }, {
+      signal: controller.signal,
+      validate() {
+        validationCalls++;
+        return undefined;
+      },
+    });
+
+    const skippedResult = await parseAsync(skipped, []);
+    const cliResult = await parseAsync(fromCli, ["--other", "CLI"]);
+
+    assert.ok(skippedResult.success);
+    assert.equal(skippedResult.value, "Skipped");
+    assert.ok(cliResult.success);
+    assert.equal(cliResult.value, "CLI");
+    assert.deepEqual(calls, []);
+    assert.equal(validationCalls, 0);
+  });
+
+  it("should propagate a pre-aborted signal before an adapter attempt", async () => {
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    controller.abort(reason);
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(option("--name", string()), { value: "Prompted" }, {
+      signal: controller.signal,
+    });
+
+    await assert.rejects(
+      () => parseAsync(parser, []),
+      (error: unknown) => error === reason,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("should abort an active adapter attempt and observe a late rejection", async () => {
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    const started = deferred<void>();
+    const attempt = deferred<never>();
+    const contexts: PromptExecutionContext[] = [];
+    const prompt = createPromptAdapter<EmptyPromptConfig>({
+      execute<TValue>(
+        _config: EmptyPromptConfig,
+        context: PromptExecutionContext,
+      ) {
+        contexts.push(context);
+        started.resolve();
+        return attempt.promise;
+      },
+    });
+    const parser = prompt(option("--name", string()), {}, {
+      signal: controller.signal,
+    });
+
+    const parsing = parseAsync(parser, []);
+    await started.promise;
+    controller.abort(reason);
+    await assert.rejects(
+      () => parsing,
+      (error: unknown) => error === reason,
+    );
+    attempt.reject(new Error("Late prompt failure."));
+    await Promise.resolve();
+    assert.equal(contexts.length, 1);
+    assert.equal(contexts[0].signal, controller.signal);
+  });
+
+  it("should abort an active asynchronous validator", async () => {
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    const started = deferred<void>();
+    const validation = deferred<undefined>();
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(option("--name", string()), { value: "Alice" }, {
+      signal: controller.signal,
+      validate() {
+        started.resolve();
+        return validation.promise;
+      },
+    });
+
+    const parsing = parseAsync(parser, []);
+    await started.promise;
+    controller.abort(reason);
+
+    await assert.rejects(
+      () => parsing,
+      (error: unknown) => error === reason,
+    );
+    validation.resolve(undefined);
+    await Promise.resolve();
+    assert.deepEqual(calls, [{ value: "Alice" }]);
+  });
+
+  it("should observe an abort triggered synchronously by the adapter", async () => {
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    const prompt = createPromptAdapter<EmptyPromptConfig>({
+      execute<TValue>(
+        _config: EmptyPromptConfig,
+        _context: PromptExecutionContext,
+      ) {
+        controller.abort(reason);
+        return Promise.resolve({ success: true, value: "Alice" as TValue });
+      },
+    });
+    const parser = prompt(option("--name", string()), {}, {
+      signal: controller.signal,
+    });
+
+    await assert.rejects(
+      () => parseAsync(parser, []),
+      (error: unknown) => error === reason,
+    );
   });
 
   it("should run the adapter when a synchronous condition is true", async () => {
@@ -412,6 +853,7 @@ describe("createPromptAdapter()", () => {
     }
     const { prompt, calls } = createTestPrompt();
     let conditionCalls = 0;
+    let validationCalls = 0;
     const parser = prompt(
       bindEnv(option("--name", string()), {
         context: envContext,
@@ -426,6 +868,12 @@ describe("createPromptAdapter()", () => {
         },
         otherwise: "SkippedName",
       },
+      {
+        validate() {
+          validationCalls++;
+          return undefined;
+        },
+      },
     );
 
     const result = await parseAsync(parser, [], { annotations });
@@ -433,6 +881,7 @@ describe("createPromptAdapter()", () => {
     assert.ok(result.success);
     assert.equal(result.value, "EnvName");
     assert.equal(conditionCalls, 0);
+    assert.equal(validationCalls, 0);
     assert.deepEqual(calls, []);
   });
 
@@ -1298,6 +1747,111 @@ describe("prompted values as dependency sources", () => {
     assert.equal(calls.length, 1);
   });
 
+  it("publishes only the value that passes shared validation", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const level = mode.deriveSync({
+      metavar: "LEVEL",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev" ? (["debug"] as const) : (["silent"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const answers = ["dev", "prod"] as const;
+    const attempts: number[] = [];
+    const prompt = createPromptAdapter<{
+      readonly answers: readonly ("dev" | "prod")[];
+    }>({
+      execute<TValue>(
+        config: { readonly answers: readonly ("dev" | "prod")[] },
+        context: PromptExecutionContext,
+      ) {
+        attempts.push(context.attempt);
+        return Promise.resolve({
+          success: true,
+          value: config.answers[context.attempt - 1] as TValue,
+        });
+      },
+    });
+    const parser = object({
+      mode: prompt(option("--mode", mode), { answers }, {
+        validate: (value) =>
+          value === "dev"
+            ? message`Development mode is unavailable.`
+            : undefined,
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "silent"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, { mode: "prod", level: "silent" });
+    assert.deepEqual(attempts, [1, 2]);
+  });
+
+  it("stops later source prompts when validation attempts are exhausted", async () => {
+    const first = createModeFixture();
+    const second = createModeFixture();
+    const rejection = message`No supported mode was selected.`;
+    const { prompt, calls } = createTestPrompt();
+    let validationCalls = 0;
+    const parser = object({
+      a: prompt(option("--a", first.mode), { value: "dev" }, {
+        maxAttempts: 2,
+        validate() {
+          validationCalls++;
+          return rejection;
+        },
+      }),
+      b: prompt(option("--b", second.mode), { value: "dev" }),
+      aLevel: option("--a-level", first.level),
+      bLevel: option("--b-level", second.level),
+    });
+
+    const result = await parseAsync(parser, [
+      "--a-level",
+      "debug",
+      "--b-level",
+      "debug",
+    ]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /^No supported mode was selected\. Dependency chain:/,
+    );
+    assert.equal(validationCalls, 2);
+    assert.equal(calls.length, 2);
+  });
+
+  it("propagates adapter exceptions through source scheduling", async () => {
+    const { mode, level } = createModeFixture();
+    const expected = new TypeError("Prompt library failed.");
+    const prompt = createPromptAdapter<EmptyPromptConfig>({
+      execute<TValue>(
+        _config: EmptyPromptConfig,
+        _context: PromptExecutionContext,
+      ) {
+        throw expected;
+      },
+    });
+    const later = createTestPrompt();
+    const parser = object({
+      mode: prompt(option("--mode", mode), {}, {
+        validate: () => message`Unused.`,
+      }),
+      level: option("--level", level),
+      name: later.prompt(option("--name", string()), { value: "Alice" }),
+    });
+
+    await assert.rejects(
+      () => parseAsync(parser, ["--level", "silent"]),
+      (error: unknown) => error === expected,
+    );
+    assert.deepEqual(later.calls, []);
+  });
+
   it("does not register a successful undefined prompt value", async () => {
     const { mode, level } = createModeFixture();
     const { prompt, calls } = createTestPrompt();
@@ -1354,6 +1908,7 @@ describe("prompted values as dependency sources", () => {
     async () => {
       const { mode, level } = createModeFixture();
       const { prompt, calls } = createTestPrompt();
+      const seenValues: string[] = [];
       let phase2Parsed:
         | { readonly mode?: string; readonly level?: string }
         | undefined;
@@ -1369,7 +1924,12 @@ describe("prompted values as dependency sources", () => {
         },
       };
       const parser = object({
-        mode: prompt(option("--mode", mode), { value: "prod" }),
+        mode: prompt(option("--mode", mode), { value: "prod" }, {
+          validate(value) {
+            seenValues.push(value);
+            return seenValues.length === 1 ? message`Try again.` : undefined;
+          },
+        }),
         level: option("--level", level),
       });
 
@@ -1380,7 +1940,8 @@ describe("prompted values as dependency sources", () => {
       assert.deepEqual(result, { mode: "prod", level: "silent" });
       assert.equal(phase2Parsed?.mode, "prod");
       assert.equal(phase2Parsed?.level, "silent");
-      assert.equal(calls.length, 1);
+      assert.equal(calls.length, 2);
+      assert.deepEqual(seenValues, ["prod", "prod"]);
     },
   );
 
@@ -1607,9 +2168,17 @@ describe("prompted values as dependency sources", () => {
         defaultValue: () => "dev" as const,
       });
       const { prompt, calls } = createTestPrompt();
+      let laterValidationCalls = 0;
       const parser = object({
         a: prompt(option("--a", shared), { value: "dev" }),
-        b: prompt(option("--b", shared), { value: "prod" }),
+        b: prompt(option("--b", shared), { value: "prod" }, {
+          validate() {
+            laterValidationCalls++;
+            return laterValidationCalls === 1
+              ? message`Confirm production mode.`
+              : undefined;
+          },
+        }),
         level: option("--level", level),
       });
 
@@ -1621,7 +2190,8 @@ describe("prompted values as dependency sources", () => {
       assert.equal(result.value.a, "dev");
       assert.equal(result.value.b, "prod");
       assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 2);
+      assert.equal(laterValidationCalls, 2);
+      assert.equal(calls.length, 3);
     },
   );
 
@@ -2519,6 +3089,7 @@ describe("prompted values as dependency sources", () => {
       const mode = dependency(choice(["dev", "prod"] as const));
       const other = dependency(string());
       const { prompt, calls } = createTestPrompt();
+      let branchValidationCalls = 0;
       // "--d 1" speculatively selects the dev branch, but the prompted
       // discriminator answers "prod": the guessed branch must produce no
       // interactive side effects before the mismatch is verified.
@@ -2527,7 +3098,12 @@ describe("prompted values as dependency sources", () => {
         {
           dev: object({
             d: option("--d", string()),
-            dp: prompt(option("--dp", other), { value: "DP" }),
+            dp: prompt(option("--dp", other), { value: "DP" }, {
+              validate() {
+                branchValidationCalls++;
+                return undefined;
+              },
+            }),
           }),
           prod: object({ p: option("--p", string()) }),
         },
@@ -2537,6 +3113,7 @@ describe("prompted values as dependency sources", () => {
 
       assert.ok(!result.success);
       assert.deepEqual(calls, [{ value: "prod" }]);
+      assert.equal(branchValidationCalls, 0);
     },
   );
 
@@ -2713,6 +3290,7 @@ describe("prompted values as dependency sources", () => {
       const kind = dependency(choice(["a", "b"] as const));
       const { mode, level } = createModeFixture();
       const { prompt, calls } = createTestPrompt();
+      let branchValidationCalls = 0;
       // "--a x" speculatively selects branch a while the prompted
       // discriminator defers; the answer "b" rejects the guess, so the
       // parent's scheduling pass must not run the guessed branch's
@@ -2723,7 +3301,12 @@ describe("prompted values as dependency sources", () => {
           {
             a: object({
               ax: option("--a", choice(["x"] as const)),
-              mode: prompt(option("--mode", mode), { value: "prod" }),
+              mode: prompt(option("--mode", mode), { value: "prod" }, {
+                validate() {
+                  branchValidationCalls++;
+                  return undefined;
+                },
+              }),
             }),
             b: object({ y: option("--y", choice(["2"] as const)) }),
           },
@@ -2739,6 +3322,7 @@ describe("prompted values as dependency sources", () => {
       assert.ok(!result.success);
       // Only the discriminator prompt ran.
       assert.equal(calls.length, 1);
+      assert.equal(branchValidationCalls, 0);
     },
   );
 
@@ -3393,6 +3977,102 @@ describe("derived prompt configurations", () => {
       storage: "redis",
     });
     assert.deepEqual(calls, [{ value: "hono" }, { value: "npm" }]);
+  });
+
+  it("resolves a derived configuration once across validation retries", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const resolvedConfig = { value: "npm" };
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    let validationCalls = 0;
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManager: prompt(
+        option("--package-manager", string()),
+        derivePromptConfig(framework, () => {
+          resolverCalls++;
+          return resolvedConfig;
+        }),
+        {
+          validate() {
+            validationCalls++;
+            return validationCalls === 1 ? message`Try again.` : undefined;
+          },
+        },
+      ),
+    });
+
+    const result = await parseAsync(parser, ["--framework", "hono"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, {
+      framework: "hono",
+      packageManager: "npm",
+    });
+    assert.equal(resolverCalls, 1);
+    assert.equal(validationCalls, 2);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0], resolvedConfig);
+    assert.equal(calls[1], resolvedConfig);
+  });
+
+  it("checks an aborted signal before resolving a derived configuration", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    controller.abort(reason);
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManager: prompt(
+        option("--package-manager", string()),
+        derivePromptConfig(framework, () => {
+          resolverCalls++;
+          return { value: "npm" };
+        }),
+        { signal: controller.signal },
+      ),
+    });
+
+    await assert.rejects(
+      () => parseAsync(parser, ["--framework", "hono"]),
+      (error: unknown) => error === reason,
+    );
+    assert.equal(resolverCalls, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  it("observes abort after a pending derived configuration settles", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    const started = deferred<void>();
+    const resolution = deferred<void>();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      framework: option("--framework", framework),
+      packageManager: prompt(
+        option("--package-manager", string()),
+        derivePromptConfig(framework, async () => {
+          started.resolve();
+          await resolution.promise;
+          throw new TypeError("Late resolver failure.");
+        }),
+        { signal: controller.signal },
+      ),
+    });
+
+    const parsing = parseAsync(parser, ["--framework", "hono"]);
+    await started.promise;
+    controller.abort(reason);
+    resolution.resolve();
+
+    await assert.rejects(
+      () => parsing,
+      (error: unknown) => error === reason,
+    );
+    assert.deepEqual(calls, []);
   });
 
   it("orders prompts topologically regardless of field order", async () => {
