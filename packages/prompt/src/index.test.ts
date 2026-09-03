@@ -6513,6 +6513,60 @@ describe("branch completion dependencies across scheduling barriers", () => {
     assert.equal(result.value.out, "npm");
   });
 
+  it("restores a later occurrence nested in a sibling object", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "FW_DERIVED",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    // The later prompted occurrence sits inside a sibling plain
+    // object(); its node still joins the enclosing pass, so the branch
+    // publish is confined and the nested later occurrence wins outside.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: prompt(
+              option("--pm", dependency(choice(["deno", "npm"] as const))),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "deno" : "npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      later: object({
+        fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.deepEqual(result.value.later, { fw2: "hono" });
+    assert.equal(result.value.out, "npm");
+  });
+
   it("keeps a command-line-committed branch in the enclosing scope", async () => {
     const kindOuter = dependency(choice(["a", "b"] as const));
     const kindInner = dependency(choice(["i1", "i2"] as const));
