@@ -42,8 +42,14 @@ To be released.
     rejected guess is no longer asked right before the branch-mismatch
     error.  When a guessed branch's prerequisites chain through an
     earlier conditional, that discriminator now answers after the
-    confirming one instead of before it.
-    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927]]
+    confirming one instead of before it.  Declaration order also holds
+    when the conditional waited for a source occurrence declared after
+    it and the selected branch then publishes the same source—through a
+    nested route that provides it on only some of its routes, a prompt,
+    a parsed value, or a binding: the branch's value serves consumers
+    inside the branch, while consumers outside the conditional read the
+    later occurrence, which no longer loses to the branch's publish.
+    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#931]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
     description space under `maxWidth`.  The existing default and explicit
@@ -114,6 +120,8 @@ To be released.
 [#925]: https://github.com/dahlia/optique/issues/925
 [#926]: https://github.com/dahlia/optique/pull/926
 [#927]: https://github.com/dahlia/optique/pull/927
+[#928]: https://github.com/dahlia/optique/issues/928
+[#931]: https://github.com/dahlia/optique/pull/931
 
 ### @optique/run
 

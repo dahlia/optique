@@ -2318,6 +2318,18 @@ export interface CompleteEffectfulSourcesOptions {
    * return.
    */
   readonly includeStructural?: boolean;
+
+  /**
+   * Observes every source value this pass registers, including values a
+   * nested barrier pass reports through its own callback and values a
+   * barrier exit re-asserts.  A barrier's nested scheduling call sets
+   * this so the enclosing pass can attribute the branch's publications
+   * to the barrier's declaration position and restore a later-declared
+   * occurrence the branch overwrote; the callback carries no positional
+   * information of its own, because declaration indices are meaningful
+   * only within a single pass.
+   */
+  readonly onPublish?: (sourceId: symbol, value: unknown) => void;
 }
 
 /**
@@ -2622,6 +2634,42 @@ export async function completeEffectfulSourcesAsync(
   // promotion still chains through a resolved barrier's actual demand
   // edges even after the barrier itself left the pending list.
   const metadataUniverse: RuntimeNode[] = [...nodes];
+  // Publication provenance for declaration-order re-assertion through
+  // scheduling barriers (https://github.com/dahlia/optique/issues/928).
+  // Every registration this pass performs is recorded under the
+  // publishing node's declaration index, keeping the latest-declared
+  // occurrence's value (`>=` lets a later write at the same position
+  // replace an earlier one).  A barrier attributes its branch's
+  // publications to its own position through a per-barrier callback (see
+  // the preparation site below), and every registration also reports to
+  // an enclosing pass through `options.onPublish`, which carries no
+  // index: declaration indices are meaningful only within one pass.
+  const declarationIndex = new Map<RuntimeNode, number>(
+    nodes.map((node, index) => [node, index] as const),
+  );
+  const lastPublicationBySource = new Map<
+    symbol,
+    { readonly index: number; readonly value: unknown }
+  >();
+  const recordPublication = (
+    index: number,
+    sourceId: symbol,
+    value: unknown,
+  ): void => {
+    const existing = lastPublicationBySource.get(sourceId);
+    if (existing == null || index >= existing.index) {
+      lastPublicationBySource.set(sourceId, { index, value });
+    }
+    options?.onPublish?.(sourceId, value);
+  };
+  const publishFromNode = (
+    node: RuntimeNode,
+    sourceId: symbol,
+    value: unknown,
+  ): void => {
+    runtime.registerSource(sourceId, value);
+    recordPublication(declarationIndex.get(node) ?? 0, sourceId, value);
+  };
   const providesId = (node: RuntimeNode, id: symbol): boolean =>
     node.parser.dependencyMetadata?.source?.sourceId === id ||
     node.providesSourceIds?.has(id) === true;
@@ -2654,6 +2702,8 @@ export async function completeEffectfulSourcesAsync(
         },
       };
     pending[index] = replacement;
+    const originalIndex = declarationIndex.get(candidate);
+    if (originalIndex != null) declarationIndex.set(replacement, originalIndex);
     const universeIndex = metadataUniverse.indexOf(candidate);
     if (universeIndex >= 0) metadataUniverse[universeIndex] = replacement;
     // A resolved selection's actual demand edges may demand
@@ -2758,10 +2808,39 @@ export async function completeEffectfulSourcesAsync(
     pending.splice(pending.indexOf(node), 1);
     // A scheduling barrier runs at its declaration position; its
     // preparation may schedule further nodes through the nested call,
-    // which shares this pass's runtime, session, and exec.
+    // which shares this pass's runtime, session, and exec.  The nested
+    // pass reports every registration through the per-barrier callback:
+    // observation is unconditional, while the provenance entry keeps the
+    // latest-declared occurrence.  After a successful preparation, any
+    // source the branch published over a later-declared occurrence is
+    // re-asserted from that occurrence's recorded value, so the branch's
+    // publish serves its own consumers while declaration order keeps
+    // holding outside (https://github.com/dahlia/optique/issues/928).
     if (node.prepare != null) {
-      const barrierFailure = await node.prepare(barrierContext);
+      const barrierIndex = declarationIndex.get(node) ?? 0;
+      const publishedDuringPrepare = new Set<symbol>();
+      const nodeBarrierContext: SchedulingBarrierContext = {
+        ...barrierContext,
+        schedule: (barrierNodes) =>
+          completeEffectfulSourcesAsync(barrierNodes, state, runtime, exec, {
+            isReusable: () => false,
+            isCollected: () => true,
+            includeStructural: true,
+            onPublish: (sourceId, value) => {
+              publishedDuringPrepare.add(sourceId);
+              recordPublication(barrierIndex, sourceId, value);
+            },
+          }).then((result) => result.success ? undefined : result),
+      };
+      const barrierFailure = await node.prepare(nodeBarrierContext);
       if (barrierFailure != null) return barrierFailure;
+      for (const sourceId of publishedDuringPrepare) {
+        const entry = lastPublicationBySource.get(sourceId);
+        if (entry != null && entry.index > barrierIndex) {
+          runtime.registerSource(sourceId, entry.value);
+          options?.onPublish?.(sourceId, entry.value);
+        }
+      }
       continue;
     }
     const source = node.parser.dependencyMetadata?.source;
@@ -2798,7 +2877,7 @@ export async function completeEffectfulSourcesAsync(
           };
         }
         if (replayed.deferred === true) continue;
-        runtime.registerSource(source.sourceId, replayed.value);
+        publishFromNode(node, source.sourceId, replayed.value);
         if (
           source.preservesSourceValue &&
           (options?.isReusable?.(node) ?? true)
@@ -2824,9 +2903,19 @@ export async function completeEffectfulSourcesAsync(
       if (source.extractSourceValue == null || collected === false) {
         continue;
       }
+      // The extraction contract distinguishes a successful `undefined`
+      // value from an unpopulated `undefined` result, and explicit
+      // source collection registers the former (see
+      // registerExplicitSourceValue), so it re-registers here like any
+      // other successful extraction: the publication carries the
+      // occurrence's declaration position, letting a barrier exit
+      // re-assert it over a branch publish.  An absent occurrence (a
+      // withDefault() or optional() whose inner parsed nothing) yields
+      // an unpopulated result instead and still reaches the fill-only
+      // default below.
       const extracted = await source.extractSourceValue(node.state);
-      if (extracted?.success === true && extracted.value !== undefined) {
-        runtime.registerSource(source.sourceId, extracted.value);
+      if (extracted?.success === true) {
+        publishFromNode(node, source.sourceId, extracted.value);
         continue;
       }
       // Inside a barrier's nested pass (the only includeStructural
@@ -2874,7 +2963,7 @@ export async function completeEffectfulSourcesAsync(
           );
         }
         if (fallback.success) {
-          runtime.registerSource(source.sourceId, fallback.value);
+          publishFromNode(node, source.sourceId, fallback.value);
         } else {
           runtime.markSourceFailed(source.sourceId);
           propagateRuntimeSourceFailures(nodes, runtime);
@@ -2958,7 +3047,7 @@ export async function completeEffectfulSourcesAsync(
       completed.push({ key: node.path[node.path.length - 1], result });
     }
     if (result.value !== undefined) {
-      runtime.registerSource(source.sourceId, result.value);
+      publishFromNode(node, source.sourceId, result.value);
     }
   }
   return { success: true, completed };

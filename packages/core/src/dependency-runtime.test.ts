@@ -28,6 +28,7 @@ import {
   resolveStateWithRuntime,
   resolveStateWithRuntimeAsync,
   type RuntimeNode,
+  serializeSchedulingPath,
 } from "#src/dependency-runtime.ts";
 import { createInputTrace } from "#src/input-trace.ts";
 import type { ParserDependencyMetadata } from "#src/dependency-metadata.ts";
@@ -3299,6 +3300,344 @@ describe("completeEffectfulSourcesAsync", () => {
 
     assert.ok(result.success);
     assert.deepEqual(order, ["provider", "barrier"]);
+  });
+
+  // The remaining tests pin publication provenance and barrier-exit
+  // re-assertion (https://github.com/dahlia/optique/issues/928): a
+  // barrier's branch publish is confined to the branch when a
+  // later-declared occurrence has already published, while earlier
+  // occurrences and untouched sources keep the plain write order.
+  test("re-asserts a later occurrence over a barrier's branch publish", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "branch" }),
+    );
+    // The ordering dependency ranks the later provider ahead of the
+    // barrier, so the branch publish lands on top of the later value.
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [sourceId],
+        demandEdges: [],
+      },
+      prepare: (ctx) => ctx.schedule([branchProvider]),
+    };
+    const later = createEffectfulSourceNode(
+      "later",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "later" }),
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, later],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.equal(runtime.registry.get(sourceId), "later");
+  });
+
+  test("keeps a branch publish over an earlier-declared occurrence", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const earlier = createEffectfulSourceNode(
+      "earlier",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "earlier" }),
+    );
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "branch" }),
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      prepare: (ctx) => ctx.schedule([branchProvider]),
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [earlier, barrier],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.equal(runtime.registry.get(sourceId), "branch");
+  });
+
+  test("re-registers nothing when the branch does not publish", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push([id, value]);
+      originalRegister(id, value);
+    };
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [sourceId],
+        demandEdges: [],
+      },
+      prepare: (ctx) => ctx.schedule([]),
+    };
+    const later = createEffectfulSourceNode(
+      "later",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "later" }),
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, later],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.equal(runtime.registry.get(sourceId), "later");
+    assert.deepEqual(writes, [[sourceId, "later"]]);
+  });
+
+  test("skips re-assertion when the barrier's preparation fails", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const laterExecuted: string[] = [];
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push(value);
+      originalRegister(id, value);
+    };
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "branch" }),
+    );
+    const failing = createEffectfulSourceNode(
+      "failing",
+      Symbol("failing"),
+      () =>
+        Promise.resolve({
+          success: false,
+          error: message`Cancelled.`,
+        }),
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [sourceId],
+        demandEdges: [],
+      },
+      prepare: (ctx) => ctx.schedule([branchProvider, failing]),
+    };
+    const later = createEffectfulSourceNode(
+      "later",
+      sourceId,
+      () => {
+        laterExecuted.push("later");
+        return Promise.resolve({ success: true, value: "later" });
+      },
+    );
+    const trailing = createEffectfulSourceNode(
+      "trailing",
+      Symbol("trailing"),
+      () => {
+        laterExecuted.push("trailing");
+        return Promise.resolve({ success: true, value: "t" });
+      },
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, later, trailing],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    // The nested failure aborts the pass at the barrier: the branch's
+    // publish is the last write, and no later effect runs after it.
+    assert.ok(!result.success);
+    assert.deepEqual(laterExecuted, ["later"]);
+    assert.deepEqual(writes, ["later", "branch"]);
+  });
+
+  test("restores a later sibling barrier's publish over an earlier barrier's", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const prerequisiteId = Symbol("prerequisite");
+    const firstBranch = createEffectfulSourceNode(
+      "firstBranch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "first" }),
+    );
+    const secondBranch = createEffectfulSourceNode(
+      "secondBranch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "second" }),
+    );
+    // The earlier barrier waits for a prerequisite declared after the
+    // later barrier, so it executes last; its publish loses the
+    // provenance comparison against the later barrier's, but must still
+    // be observed as an overwrite and re-asserted away.
+    const firstBarrier: RuntimeNode = {
+      path: ["firstBarrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [prerequisiteId],
+        demandEdges: [],
+      },
+      prepare: (ctx) => ctx.schedule([firstBranch]),
+    };
+    const secondBarrier: RuntimeNode = {
+      path: ["secondBarrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      prepare: (ctx) => ctx.schedule([secondBranch]),
+    };
+    const prerequisite = createEffectfulSourceNode(
+      "prerequisite",
+      prerequisiteId,
+      () => Promise.resolve({ success: true, value: "p" }),
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [firstBarrier, secondBarrier, prerequisite],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.equal(runtime.registry.get(sourceId), "second");
+  });
+
+  test("re-asserts a later occurrence whose successful value is undefined", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const writes: unknown[] = [];
+    const originalRegister = runtime.registerSource.bind(runtime);
+    runtime.registerSource = (id, value) => {
+      writes.push(value);
+      originalRegister(id, value);
+    };
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "branch" }),
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      barrierCompletionDependencies: {
+        orderingDependencyIds: [sourceId],
+        demandEdges: [],
+      },
+      prepare: (ctx) => ctx.schedule([branchProvider]),
+    };
+    // The extraction contract allows a successful `undefined` value, and
+    // explicit source collection registers it; the pass must record such
+    // a publication too, so the barrier exit can restore it.
+    const later: RuntimeNode = {
+      path: ["later"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId,
+            extractSourceValue: () => ({ success: true, value: undefined }),
+            preservesSourceValue: true,
+          },
+        },
+      },
+      state: undefined,
+    };
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, later],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    assert.ok(result.success);
+    assert.ok(runtime.hasSource(sourceId));
+    assert.deepEqual(writes, [undefined, "branch", undefined]);
+  });
+
+  test("reuses a cached completion without a spurious re-assertion", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const session = createEffectfulCompletionSession();
+    const sourceId = Symbol("framework");
+    const executed: string[] = [];
+    const branchProvider = createEffectfulSourceNode(
+      "branch",
+      sourceId,
+      () => Promise.resolve({ success: true, value: "branch" }),
+    );
+    const barrier: RuntimeNode = {
+      path: ["barrier"],
+      parser: {},
+      state: undefined,
+      providesSourceIds: new Set([sourceId]),
+      prepare: (ctx) => ctx.schedule([branchProvider]),
+    };
+    const cached = createEffectfulSourceNode(
+      "cached",
+      sourceId,
+      () => {
+        executed.push("cached");
+        return Promise.resolve({ success: true, value: "cached" });
+      },
+    );
+    session.completedByPath.set(
+      serializeSchedulingPath(cached.path),
+      { success: true, value: "cached" },
+    );
+
+    const result = await completeEffectfulSourcesAsync(
+      [barrier, cached],
+      undefined,
+      runtime,
+      createCompleteExecFixture(session),
+    );
+
+    // The cached occurrence neither re-runs its effect nor registers a
+    // new value, so the barrier's publish stands and no re-assertion
+    // fires for it.
+    assert.ok(result.success);
+    assert.deepEqual(executed, []);
+    assert.equal(runtime.registry.get(sourceId), "branch");
   });
 });
 
