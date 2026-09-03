@@ -13,43 +13,10 @@ links:
   '#931': https://github.com/dahlia/optique/pull/931
   '#932': https://github.com/dahlia/optique/pull/932
 ---
- -  Added scheduling support for effectful completions that consume
-    dependency values, such as prompts with derived configurations.  The
-    dependency scheduler now orders such a parser after the sources its
-    completion reads, propagates demand to them when the parser's own value
-    is demanded, and includes them in failure-chain diagnostics.  The same
-    ordering and demand rules apply inside a `conditional()` whose branch is
-    selected only during completion: the branches' completion dependencies
-    propagate through the conditional's scheduling barrier, so a branch
-    configuration can read a source declared after the conditional.  Once
-    the discriminator resolves the selection, the scheduler replaces the
-    static estimate with the selected branch's actual dependencies, and a
-    branch occurrence hides an outer provider only when it will actively
-    publish the source itself—an unconditional prompt, a `withDefault()`
-    fallback, a nested conditional providing the source on every route, or
-    a value the branch already parsed or bound—so an absent `optional()`
-    occurrence or an unselected nested alternative no longer keeps a
-    provider declared after the conditional from serving the branch.
-    Cycles among the selected branch's actual providers and consumers
-    are rejected with the existing circular-dependency error, while an
-    apparent cycle whose edges belong to branches that cannot be
-    selected together is no longer rejected.  The discriminator's
-    resolution is also the boundary for branch-only effects: under the
-    demand-only seed pass a prerequisite that only a branch
-    configuration reads is demanded once the resolved selection
-    consumes it, never on the strength of the pre-selection estimate,
-    and a speculative parse-time guess the discriminator rejects now
-    fails the run at that boundary—so a prompt needed only by the
-    rejected guess is no longer asked right before the branch-mismatch
-    error.  When a guessed branch's prerequisites chain through an
-    earlier conditional, that discriminator now answers after the
-    confirming one instead of before it.  Declaration order also holds
-    when the conditional waited for a source occurrence declared after
-    it and the selected branch then publishes the same source—through a
-    nested route that provides it on only some of its routes, a prompt,
-    a parsed value, or a binding: the branch's value serves every
-    consumer inside the branch, a derived value parser such as
-    `option("--pm", source.deriveSync(...))` as much as a derived prompt
-    configuration, while consumers outside the conditional read the
-    later occurrence, which no longer loses to the branch's publish.
+ -  Fixed dependency-aware completion inside `conditional()` so only the
+    selected branch determines ordering, effects, provider precedence, and
+    cycle detection.  Unselected or rejected speculative branches no longer
+    run prompts or create false cycles.  Consumers inside a selected branch
+    read its active source values, while later outer occurrences remain in
+    effect for consumers outside the branch.
     [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932]]

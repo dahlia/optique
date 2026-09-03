@@ -289,7 +289,7 @@ is *CLI argument > environment variable > config file > static default*. The
 order is determined by how you nest the bindings: an outer wrapper overrides an
 inner one. Derived defaults slot in wherever you wrap them in that chain.
 
-Two more points worth knowing:
+A few more points worth knowing:
 
  -  *A derived parser needs `dependency()` before another parser can depend on
     it.* Write `dependency(source.deriveSync(...))` for the middle level of a
@@ -306,7 +306,10 @@ Two more points worth knowing:
     configuration with
     [`derivePromptConfig()`](./integrations/prompt.md#derived-prompt-configurations)
     instead of duplicating the dependency logic outside the parser or
-    presenting an unconditional list.
+    presenting an unconditional list. This changes the prompt, not the inner
+    parser's CLI constraints. Derive the inner parser as well when the CLI
+    domain should change, and wrap it with `dependency()` only when its result
+    must feed another consumer.
  -  *For config-only or environment-only values, wrap `fail()`, not
     `constant()`.* `constant()` always succeeds, so `bindConfig()` treats it as
     a value the user supplied and skips the file lookup entirely. `fail()`

@@ -64,6 +64,8 @@ Features
     testing
  -  *Transparent composition* with `bindEnv()` and `bindConfig()` — the
     prompt fires only when no higher-priority source supplies a value
+ -  *Dependency-derived configurations* with `derivePromptConfig()` — later
+    questions can adapt to values supplied by CLI input, bindings, or prompts
  -  *Prompt-only values* via `prompt(fail<T>(), …)` when a value should not
     be exposed as a CLI option
  -  *TTY-free testing* via the `prompter` escape hatch on every config type
