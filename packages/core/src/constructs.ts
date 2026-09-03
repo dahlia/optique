@@ -165,6 +165,25 @@ function withDependencyRuntimeExec(
   };
 }
 
+/**
+ * Drops a parent's one-shot
+ * {@link ExecutionContext.republishCachedCompletions} instruction from an
+ * execution context handed to a child parser.  A construct that runs the
+ * effectful scheduling pass consumes the instruction in that pass; its
+ * children must not inherit it, or their own passes would re-assert cached
+ * completions over a later sibling occurrence.
+ */
+function withoutRepublishInstruction(exec: ExecutionContext): ExecutionContext;
+function withoutRepublishInstruction(
+  exec: ExecutionContext | undefined,
+): ExecutionContext | undefined;
+function withoutRepublishInstruction(
+  exec: ExecutionContext | undefined,
+): ExecutionContext | undefined {
+  if (exec?.republishCachedCompletions == null) return exec;
+  return { ...exec, republishCachedCompletions: undefined };
+}
+
 function withChildContext<TState>(
   context: ParserContext<unknown>,
   segment: PropertyKey,
@@ -904,6 +923,14 @@ async function scheduleEffectfulSourceCompletions(
       if (optedIn || expandedNode === node) collected.add(expandedNode);
     }
   }
+  // A pass asked to re-publish cached completions (the first pass of a
+  // branch a conditional() selected during completion) replays the
+  // barrier's nested pass onto the branch's fresh runtime: every expanded
+  // node re-registers structurally at its declaration position, and the
+  // pass runs even when the branch holds no effectful node, so a bound or
+  // parsed branch occurrence lands in declaration order beside the cached
+  // effectful ones (https://github.com/dahlia/optique/issues/929).
+  const republish = exec?.republishCachedCompletions === true;
   const effectful = await completeEffectfulSourcesAsync(
     expandedNodes,
     state,
@@ -914,7 +941,8 @@ async function scheduleEffectfulSourceCompletions(
         ? { demandNodes: expandEffectfulRuntimeNodes(demandNodes) }
         : {}),
       isReusable: (node) => direct.has(node),
-      isCollected: (node) => collected.has(node),
+      isCollected: republish ? () => true : (node) => collected.has(node),
+      ...(republish ? { includeStructural: true } : {}),
     },
   );
   if (!effectful.success) {
@@ -7506,6 +7534,7 @@ export function object<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state tree
@@ -7636,6 +7665,7 @@ export function object<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
 
           // Phase 2: Build the full annotated state, then resolve the
@@ -7813,6 +7843,7 @@ export function object<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
 
           const getFieldState = createFieldStateGetter(state);
@@ -7925,6 +7956,7 @@ export function object<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
 
           const getFieldState = createFieldStateGetter(state);
@@ -8767,6 +8799,7 @@ function createSeqComplete(
         const phase3Exec: ExecutionContext = {
           ...childExec,
           preCompletedByParser: undefined,
+          republishCachedCompletions: undefined,
         } as ExecutionContext;
         const resolvedArray = resolveStateWithRuntime(
           stateArray,
@@ -8870,6 +8903,7 @@ function createSeqComplete(
         const phase3Exec: ExecutionContext = {
           ...childExec,
           preCompletedByParser: undefined,
+          republishCachedCompletions: undefined,
         } as ExecutionContext;
         const resolvedArray = await resolveStateWithRuntimeAsync(
           stateArray,
@@ -9866,6 +9900,7 @@ export function tuple<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
@@ -9983,6 +10018,7 @@ export function tuple<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
@@ -10084,6 +10120,7 @@ export function tuple<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
           const resolvedArray = resolveStateWithRuntime(
             stateArray,
@@ -10191,6 +10228,7 @@ export function tuple<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
           const resolvedArray = await resolveStateWithRuntimeAsync(
             stateArray,
@@ -10717,6 +10755,7 @@ export function seq<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
           const resolvedArray = resolveStateWithRuntime(
             stateArray,
@@ -10824,6 +10863,7 @@ export function seq<
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
           const resolvedArray = await resolveStateWithRuntimeAsync(
             stateArray,
@@ -12315,7 +12355,10 @@ export function merge(
           const parser = syncParsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
           const { cache, excludedSourceFields } = perChildPhase1[i];
-          const childCompleteExec = withChildExecPath(childExec, i);
+          const childCompleteExec = withChildExecPath(
+            withoutRepublishInstruction(childExec),
+            i,
+          );
           // Keep duplicate-key exclusion at the merge level.  A child that
           // owns duplicate output keys still needs to seed its own local
           // dependency sources during completion, but those sources must not
@@ -12514,7 +12557,10 @@ export function merge(
           const parser = parsers[i];
           const parserState = extractCompleteState(parser, resolvedState, i);
           const { cache: asyncCache, excludedSourceFields } = perChildPhase1[i];
-          const childCompleteExec = withChildExecPath(childExec, i);
+          const childCompleteExec = withChildExecPath(
+            withoutRepublishInstruction(childExec),
+            i,
+          );
           const completeExec = excludedSourceFields == null
             ? {
               ...childCompleteExec,
@@ -12691,7 +12737,10 @@ export function merge(
               i,
             );
             const { cache, excludedSourceFields } = perChildPhase1[i];
-            const childCompleteExec = withChildExecPath(childExec, i);
+            const childCompleteExec = withChildExecPath(
+              withoutRepublishInstruction(childExec),
+              i,
+            );
             const completeExec = excludedSourceFields == null
               ? {
                 ...childCompleteExec,
@@ -12874,7 +12923,10 @@ export function merge(
             const { cache: asyncCache, excludedSourceFields } = perChildPhase1[
               i
             ];
-            const childCompleteExec = withChildExecPath(childExec, i);
+            const childCompleteExec = withChildExecPath(
+              withoutRepublishInstruction(childExec),
+              i,
+            );
             const completeExec = excludedSourceFields == null
               ? {
                 ...childCompleteExec,
@@ -14187,6 +14239,7 @@ export function concat(
     const phase3Exec: ExecutionContext = {
       ...childExec,
       preCompletedByParser: undefined,
+      republishCachedCompletions: undefined,
     } as ExecutionContext;
 
     // Phase 2: Resolve deferred parse states across all tuples using runtime.
@@ -14318,6 +14371,7 @@ export function concat(
     const phase3Exec: ExecutionContext = {
       ...childExec,
       preCompletedByParser: undefined,
+      republishCachedCompletions: undefined,
     } as ExecutionContext;
 
     // Phase 2: Resolve deferred parse states across all tuples using runtime.
@@ -14465,6 +14519,7 @@ export function concat(
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
           const resolvedArray = resolveStateWithRuntime(
             stateArray,
@@ -14561,6 +14616,7 @@ export function concat(
           const phase3Exec: ExecutionContext = {
             ...childExec,
             preCompletedByParser: undefined,
+            republishCachedCompletions: undefined,
           } as ExecutionContext;
           const resolvedArray = await resolveStateWithRuntimeAsync(
             stateArray,
@@ -16846,6 +16902,7 @@ export function conditional(
           const discriminatorExec = ctx.exec == null ? undefined : {
             ...ctx.exec,
             path: [...(parentPath ?? []), "_discriminator"],
+            republishCachedCompletions: undefined,
           };
           discriminatorResult = unwrapCompleteResult(
             await discriminator.complete(
@@ -16871,6 +16928,7 @@ export function conditional(
           const branchExec = ctx.exec == null ? undefined : {
             ...ctx.exec,
             path: [...(parentPath ?? []), "_branch"],
+            republishCachedCompletions: undefined,
           };
           const annotatedInitial = getAnnotatedChildState(
             conditionalState,
@@ -17034,6 +17092,10 @@ export function conditional(
           state.discriminatorState,
           discriminator,
         );
+        // The scheduling pass above consumed any re-publication
+        // instruction a parent conditional handed down; the children
+        // completed below must not inherit it.
+        const childExec = withoutRepublishInstruction(exec);
         // Consume the prepared decision instead of re-completing the
         // discriminator, so a non-idempotent completion cannot select
         // a different branch than the one whose sources were scheduled.
@@ -17042,14 +17104,14 @@ export function conditional(
           : unwrapCompleteResult(
             await discriminator.complete(
               annotatedDiscriminatorStateForDeferred,
-              withChildExecPath(exec, "_discriminator"),
+              withChildExecPath(childExec, "_discriminator"),
             ),
           );
         if (deferredDiscriminatorResult.success) {
           const deferredValue = deferredDiscriminatorResult.value as string;
           const deferredBranch = branches[deferredValue];
           if (deferredBranch) {
-            const branchExec = withChildExecPath(exec, "_branch");
+            const branchExec = withChildExecPath(childExec, "_branch");
             let branchState: unknown;
             if (prepared != null && prepared.branchKey === deferredValue) {
               branchState = prepared.branchState;
@@ -17169,7 +17231,7 @@ export function conditional(
         const defaultResult = unwrapCompleteResult(
           await defaultBranch.complete(
             branchState,
-            withChildExecPath(exec, "_branch"),
+            withChildExecPath(withoutRepublishInstruction(exec), "_branch"),
           ),
         );
         if (!defaultResult.success) {
@@ -17278,6 +17340,11 @@ export function conditional(
       );
       if (schedulingFailure != null) return schedulingFailure;
     }
+    // The scheduling pass above consumed any re-publication instruction
+    // a parent conditional handed down (see the branch completion below
+    // for the instruction this conditional issues itself); the
+    // discriminator and branch completions must not inherit it.
+    const childCompletionExec = withoutRepublishInstruction(completionExec);
     // Only complete the discriminator when needed
     // (see sync counterpart for rationale).
     const needsDiscriminatorCompletion = state.selectedBranch.kind !==
@@ -17294,7 +17361,7 @@ export function conditional(
     // the same source key as the discriminator could circularly
     // confirm itself.  Build a discriminator-only runtime so that
     // the verification is independent of branch-local sources.
-    let discriminatorCompletionExec = completionExec;
+    let discriminatorCompletionExec = childCompletionExec;
     if (wasSpeculative && needsDiscriminatorCompletion) {
       const discOnlyState = { _discriminator: annotatedDiscriminatorState };
       const discOnlyRuntime = createDependencyRuntimeContext(
@@ -17312,7 +17379,7 @@ export function conditional(
       );
       collectSourcesFromState(discOnlyState, discOnlyRuntime);
       discriminatorCompletionExec = {
-        ...completionExec,
+        ...childCompletionExec,
         dependencyRuntime: discOnlyRuntime,
         dependencyRegistry: discOnlyRuntime.registry,
       };
@@ -17373,6 +17440,61 @@ export function conditional(
       );
     }
 
+    // A branch confirmed only now completes against this conditional's
+    // fresh runtime, whose registry was cloned after the enclosing pass
+    // restored the occurrences declared after the conditional.  The
+    // branch's effectful completions already ran in that pass and are
+    // cached in the run-scoped session, and its bound occurrences have
+    // no carrier in the branch state, so the branch's publications are
+    // replayed onto this runtime in declaration order before the branch
+    // completes: once here, over the branch's expanded nodes (the only
+    // replay a branch without a scheduling pass of its own, such as a
+    // synchronous object(), ever gets), and again in the branch's own
+    // first pass, which follows its structural re-collection.  No effect
+    // runs twice; only cached values re-register, so the branch's
+    // deferred derived consumers read the branch's own publish
+    // (https://github.com/dahlia/optique/issues/929).  A branch
+    // committed on the command line has no completion boundary and
+    // keeps the enclosing scope's declaration order instead.
+    const branchCompletionExec: ExecutionContext = {
+      ...childCompletionExec,
+      path: [...childCompletionExec.path, "_branch"],
+      ...(wasSpeculative ? { republishCachedCompletions: true } : {}),
+    };
+    if (wasSpeculative) {
+      // The first node is the discriminator, already completed above.
+      const replayFailure = await scheduleEffectfulSourceCompletions(
+        buildConditionalSchedulingNodes(state, exec?.path).slice(1),
+        combinedState,
+        runtime,
+        { ...completionExec, republishCachedCompletions: true },
+        new Map<string | symbol, unknown>(),
+      );
+      if (replayFailure != null) {
+        // Without an enclosing pass this replay is where the branch's
+        // effects first run, so a failing one (a cancelled prompt) gets
+        // the branchError wrap the branch completion below applies.  A
+        // nested barrier's failure already carries the wrap from its
+        // pre-expanded node (see wrapBranchBarrierNodes) and is cached
+        // in the session, which is how it is told apart here.
+        const branchError = options?.errors?.branchError;
+        if (
+          branchError == null || discriminatorValue === undefined ||
+          replaceCachedBarrierFailure(
+            completionExec.effectfulCompletionSession,
+            replayFailure,
+            replayFailure,
+          )
+        ) {
+          return replayFailure;
+        }
+        return {
+          success: false,
+          error: branchError(discriminatorValue, replayFailure.error),
+        };
+      }
+    }
+
     // Now that the speculative branch (if any) is verified, it is
     // safe to replay deferred dependency parsing for the chosen
     // branch state.  Doing this before the mismatch check above
@@ -17384,10 +17506,7 @@ export function conditional(
     );
 
     const branchResult = unwrapCompleteResult(
-      await branchParser.complete(
-        resolvedBranchState,
-        withChildExecPath(completionExec, "_branch"),
-      ),
+      await branchParser.complete(resolvedBranchState, branchCompletionExec),
     );
 
     if (!branchResult.success) {

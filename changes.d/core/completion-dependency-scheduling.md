@@ -9,7 +9,9 @@ links:
   '#926': https://github.com/dahlia/optique/pull/926
   '#927': https://github.com/dahlia/optique/pull/927
   '#928': https://github.com/dahlia/optique/issues/928
+  '#929': https://github.com/dahlia/optique/issues/929
   '#931': https://github.com/dahlia/optique/pull/931
+  '#932': https://github.com/dahlia/optique/pull/932
 ---
  -  Added scheduling support for effectful completions that consume
     dependency values, such as prompts with derived configurations.  The
@@ -45,7 +47,9 @@ links:
     when the conditional waited for a source occurrence declared after
     it and the selected branch then publishes the same source—through a
     nested route that provides it on only some of its routes, a prompt,
-    a parsed value, or a binding: the branch's value serves consumers
-    inside the branch, while consumers outside the conditional read the
+    a parsed value, or a binding: the branch's value serves every
+    consumer inside the branch, a derived value parser such as
+    `option("--pm", source.deriveSync(...))` as much as a derived prompt
+    configuration, while consumers outside the conditional read the
     later occurrence, which no longer loses to the branch's publish.
-    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#931]]
+    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932]]

@@ -2918,10 +2918,11 @@ export async function completeEffectfulSourcesAsync(
         publishFromNode(node, source.sourceId, extracted.value);
         continue;
       }
-      // Inside a barrier's nested pass (the only includeStructural
-      // caller), a structural occurrence with a publishable
-      // missing-value default (withDefault()) registers that default at
-      // its declaration position, so a branch-internal consumer reads
+      // Inside a barrier's nested pass or a branch's re-publishing pass
+      // (the includeStructural callers), a structural occurrence with a
+      // publishable missing-value default (withDefault()) registers that
+      // default at its declaration position, so a branch-internal
+      // consumer reads
       // it just like any other active provider, while a later outer
       // occurrence still re-registers afterward and wins outside.  The
       // ordinary missing-default phase runs only after this pass, so it
@@ -2996,6 +2997,19 @@ export async function completeEffectfulSourcesAsync(
           result: priorResult,
         });
       }
+      // A pass asked to re-publish (the first pass of a branch that a
+      // conditional() selected during completion, which runs against a
+      // runtime the cached completion never published into) re-registers
+      // the reused value at this node's declaration position, so
+      // declaration order within the pass still decides while no effect
+      // runs again.  A successful `undefined` stays unpublished, exactly
+      // as it did when the completion first ran.
+      if (
+        exec.republishCachedCompletions === true &&
+        priorResult.success && priorResult.value !== undefined
+      ) {
+        publishFromNode(node, source.sourceId, priorResult.value);
+      }
       continue;
     }
 
@@ -3024,7 +3038,13 @@ export async function completeEffectfulSourcesAsync(
     // is deduplicated through the run-scoped session.
     if (!reusable && session == null) continue;
 
-    const childExec: ExecutionContext = { ...exec, path: node.path };
+    // The re-publication instruction belongs to this pass alone; an
+    // effect must not carry it into a scheduler of its own.
+    const childExec: ExecutionContext = {
+      ...exec,
+      path: node.path,
+      republishCachedCompletions: undefined,
+    };
     const result = await source.completeSource(node.state, childExec);
     if (result == null) continue;
     if (!result.success) {

@@ -6706,4 +6706,595 @@ describe("branch completion dependencies across scheduling barriers", () => {
     assert.deepEqual(resolved, [["inner", "t1"], ["mid", "hono"]]);
     assert.equal(result.value.out, "npm");
   });
+
+  // The remaining tests pin that a branch selected during completion serves
+  // its own publish to deferred derived consumers (parse-time derived value
+  // parsers) exactly as it serves derived prompt configurations
+  // (https://github.com/dahlia/optique/issues/929).
+  it("serves a deferred derived consumer from a nested route's publish", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    // `--pm deno` commits the outer branch speculatively; the nested route
+    // publishes framework = "fresh", so the branch's deferred consumer
+    // validates against "fresh" while the consumer declared after the
+    // conditional reads the later occurrence.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: object({
+            inner: conditional(
+              prompt(option("--inner", kindInner), { value: "i1" }),
+              {
+                i1: object({
+                  fw: prompt(option("--fw", framework), { value: "fresh" }),
+                }),
+                i2: object({ z: constant("1") }),
+              },
+            ),
+            pm: option("--pm", frameworkDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--pm", "deno", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      { inner: ["i1", { fw: "fresh" }], pm: "deno" },
+    ]);
+    assert.equal(result.value.fw2, "hono");
+    assert.equal(result.value.out, "npm");
+    assert.deepEqual(
+      calls.map((call) => call.value),
+      ["a", "i1", "fresh", "hono"],
+    );
+  });
+
+  it("serves deferred and completion consumers alike from a branch publish", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const resolved: unknown[] = [];
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: prompt(option("--fw", framework), { value: "fresh" }),
+            pm: option("--pm", frameworkDerived),
+            tool: prompt(
+              option(
+                "--tool",
+                dependency(choice(["t-deno", "t-npm"] as const)),
+              ),
+              derivePromptConfig(framework, (value) => {
+                resolved.push(value);
+                return { value: value === "fresh" ? "t-deno" : "t-npm" };
+              }, { defaultValue: () => "hono" as const }),
+            ),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--pm", "deno", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      { fw: "fresh", pm: "deno", tool: "t-deno" },
+    ]);
+    assert.deepEqual(resolved, ["fresh"]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("follows a later prompted branch occurrence over an earlier parsed one", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    // Inside the branch, declaration order still decides: the prompted
+    // occurrence nested in a plain object() is declared after the parsed
+    // one, so the branch consumer reads the prompted value even though
+    // the branch's own completion re-collects the parsed value first.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw0: option("--fw0", framework),
+            inner: object({
+              fw: prompt(option("--fw", framework), { value: "hono" }),
+            }),
+            pm: option("--pm", frameworkDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "fresh" }),
+    });
+
+    const result = await parseAsync(parser, ["--fw0", "fresh", "--pm", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      { fw0: "fresh", inner: { fw: "hono" }, pm: "npm" },
+    ]);
+  });
+
+  it("keeps a later parsed branch occurrence over an earlier prompted one", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            inner: object({
+              fw: prompt(option("--fw", framework), { value: "hono" }),
+            }),
+            fw0: option("--fw0", framework),
+            pm: option("--pm", frameworkDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, ["--fw0", "fresh", "--pm", "deno"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      { inner: { fw: "hono" }, fw0: "fresh", pm: "deno" },
+    ]);
+  });
+
+  it("keeps a later prompted sibling over a nested object's earlier publish", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    // The nested object's own completion must not re-assert its cached
+    // publish over the later sibling occurrence in the same branch.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            inner: object({
+              fw: prompt(option("--fw", framework), { value: "hono" }),
+            }),
+            fw3: prompt(option("--fw3", framework), { value: "fresh" }),
+            pm: option("--pm", frameworkDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+    });
+
+    const result = await parseAsync(parser, ["--pm", "deno"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      { inner: { fw: "hono" }, fw3: "fresh", pm: "deno" },
+    ]);
+  });
+
+  it("serves a deferred consumer from a prompted occurrence behind bindEnv()", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const envContext = createEnvContext({ source: () => undefined });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: bindEnv(
+              prompt(option("--fw", framework), { value: "fresh" }),
+              { context: envContext, key: "FW", parser: framework },
+            ),
+            pm: option("--pm", frameworkDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--pm", "deno", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, ["a", { fw: "fresh", pm: "deno" }]);
+    assert.equal(result.value.out, "npm");
+    assert.deepEqual(calls.map((call) => call.value), ["a", "fresh", "hono"]);
+  });
+
+  it("serves a deferred consumer from a bound branch occurrence under runWith", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const zoneDerived = region.deriveSync({
+      metavar: "ZONE",
+      factory: (value: "us" | "eu") =>
+        choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
+      defaultValue: () => "us" as const,
+    });
+    const context = createRegionConfigContext();
+    const { prompt, calls } = createTestPrompt();
+    // The branch occurrence takes its value from a configuration binding
+    // under the two-pass runWith() path; the branch consumer validates
+    // against that bound value, and the consumer declared after the
+    // conditional against the later prompted occurrence.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            region: bindConfig(option("--region", region), {
+              context,
+              key: "region",
+            }),
+            zone: option("--zone", zoneDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      region2: prompt(option("--region2", region), { value: "eu" }),
+      zone2: option("--zone2", zoneDerived),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      args: ["--zone", "z1", "--zone2", "z2"],
+      contextOptions: {
+        load: () => ({
+          config: { region: "us" as const },
+          meta: undefined,
+        }),
+      },
+    });
+
+    assert.deepEqual(result, {
+      cond: ["a", { region: "us", zone: "z1" }],
+      region2: "eu",
+      zone2: "z2",
+    });
+    assert.deepEqual(calls.map((call) => call.value), ["a", "eu"]);
+  });
+
+  it("serves a deferred consumer through an outer branchError hook", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    // A branchError hook makes the conditional pre-expand its confirmed
+    // branch's nodes; the deferred consumer still reads the branch value.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: prompt(option("--fw", framework), { value: "fresh" }),
+            pm: option("--pm", frameworkDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+        constant("default"),
+        {
+          errors: {
+            branchError: (key: string | undefined, error) =>
+              message`Branch ${key ?? "?"} failed: ${error}`,
+          },
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--pm", "deno", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, ["a", { fw: "fresh", pm: "deno" }]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("keeps a command-line-committed branch's deferred consumer in the enclosing scope", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    // Committing the branch on the command line leaves no completion
+    // boundary: the deferred consumer follows plain declaration order and
+    // reads the later occurrence, like the completion consumer pinned by
+    // "keeps a command-line-committed branch in the enclosing scope".
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: object({
+            fw: prompt(option("--fw", framework), { value: "fresh" }),
+            pm: option("--pm", frameworkDerived),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const accepted = await parseAsync(
+      parser,
+      ["--kind", "a", "--pm", "npm", "--out", "npm"],
+    );
+    assert.ok(accepted.success);
+    assert.deepEqual(accepted.value.cond, ["a", { fw: "fresh", pm: "npm" }]);
+
+    const rejected = await parseAsync(
+      parser,
+      ["--kind", "a", "--pm", "deno", "--out", "npm"],
+    );
+    assert.ok(!rejected.success);
+    assert.match(formatMessage(rejected.error), /--pm/);
+  });
+
+  it("serves a top-level speculative branch's deferred consumer once", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "hono" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    // Without an enclosing construct nothing is cached ahead of the
+    // branch's own pass, which runs each effect exactly once.
+    const parser = conditional(
+      prompt(option("--kind", kind), { value: "a" }),
+      {
+        a: object({
+          fw: prompt(option("--fw", framework), { value: "fresh" }),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      },
+    );
+
+    const result = await parseAsync(parser, ["--pm", "deno"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["a", { fw: "fresh", pm: "deno" }]);
+    assert.deepEqual(calls.map((call) => call.value), ["a", "fresh"]);
+  });
+
+  it("wraps a top-level speculative branch's failed effect with branchError", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "hono" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    // Without an enclosing construct the branch's effects first run while
+    // the conditional replays the branch's publications; a failure there
+    // still reports through the branchError hook, like a failure of the
+    // branch's own completion.
+    const parser = conditional(
+      prompt(option("--kind", kind), { value: "a" }),
+      {
+        a: object({
+          fw: prompt(option("--fw", framework), {
+            value: "fresh",
+            reject: true,
+          }),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      },
+      constant("default"),
+      {
+        errors: {
+          branchError: (key: string | undefined, error) =>
+            message`Branch ${key ?? "?"} failed: ${error}`,
+        },
+      },
+    );
+
+    const result = await parseAsync(parser, ["--pm", "deno"]);
+
+    assert.ok(!result.success);
+    assert.match(
+      formatMessage(result.error),
+      /Branch "a" failed: .*Prompt rejected/,
+    );
+    assert.deepEqual(calls.map((call) => call.value), ["a", "fresh"]);
+  });
+
+  it("serves a deferred consumer through transparent branch wrappers", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    // command() and or() own no scheduling pass of their own; they forward
+    // the branch completion to the first construct that does, singly and
+    // chained.
+    const branch = () =>
+      object({
+        fw: prompt(option("--fw", framework), { value: "fresh" }),
+        pm: option("--pm", frameworkDerived),
+      });
+    const other = object({ q: option("--q", string()) });
+    const wrappers = {
+      command: [command("x", branch()), ["x", "--pm", "deno"]],
+      or: [or(branch(), other), ["--pm", "deno"]],
+      orCommand: [or(command("x", branch()), other), ["x", "--pm", "deno"]],
+    } as const;
+
+    for (const [name, [wrapped, args]] of Object.entries(wrappers)) {
+      const parser = object({
+        cond: conditional(
+          prompt(option("--kind", kind), { value: "a" }),
+          { a: wrapped, b: object({ y: constant("2") }) },
+        ),
+        fw2: prompt(option("--fw2", framework), { value: "hono" }),
+        out: option("--out", frameworkDerived),
+      });
+
+      const result = await parseAsync(parser, [...args, "--out", "npm"]);
+
+      assert.ok(result.success, name);
+      assert.deepEqual(
+        result.value.cond,
+        ["a", { fw: "fresh", pm: "deno" }],
+        name,
+      );
+      assert.equal(result.value.out, "npm", name);
+    }
+  });
+
+  it("serves a deferred consumer when the branch is itself a conditional", async () => {
+    const kindOuter = dependency(choice(["a", "b"] as const));
+    const kindInner = dependency(choice(["i1", "i2"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    // The inner conditional is committed on the command line and is the
+    // first pass owner under the outer branch's completion.
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kindOuter), { value: "a" }),
+        {
+          a: conditional(option("--inner", kindInner), {
+            i1: object({
+              fw: prompt(option("--fw", framework), { value: "fresh" }),
+              pm: option("--pm", frameworkDerived),
+            }),
+            i2: object({ z: constant("1") }),
+          }),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(
+      parser,
+      ["--inner", "i1", "--pm", "deno", "--out", "npm"],
+    );
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, [
+      "a",
+      ["i1", { fw: "fresh", pm: "deno" }],
+    ]);
+    assert.equal(result.value.out, "npm");
+  });
+
+  it("serves a deferred consumer when the branch is a merge()", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const frameworkDerived = framework.deriveSync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a" }),
+        {
+          a: merge(
+            object({
+              fw: prompt(option("--fw", framework), { value: "fresh" }),
+            }),
+            object({ pm: option("--pm", frameworkDerived) }),
+          ),
+          b: object({ y: constant("2") }),
+        },
+      ),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", frameworkDerived),
+    });
+
+    const result = await parseAsync(parser, ["--pm", "deno", "--out", "npm"]);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value.cond, ["a", { fw: "fresh", pm: "deno" }]);
+    assert.equal(result.value.out, "npm");
+  });
 });

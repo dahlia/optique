@@ -741,7 +741,8 @@ provider, so the outer conditional waits for a matching occurrence declared
 after it, and a selected route that omits the source reads that later value.
 When the selected route does provide the source, its explicit publish—a prompt
 answer, a parsed value, or a bound value—serves consumers inside the enclosing
-branch, and the later occurrence is restored afterward, so consumers declared
+branch, derived value parsers and derived prompt configurations alike, and the
+later occurrence is restored afterward, so consumers declared
 after the outer conditional read the later occurrence, exactly as declaration
 order promises.  A fill-only `withDefault()` occurrence in such a route
 supplies the source only while nothing has published it: once the awaited

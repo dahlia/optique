@@ -673,7 +673,8 @@ prerequisite runs.
 Declaration order holds across that wait as well.  When the conditional waited
 for a source occurrence declared after it and the selected branch then
 publishes the same source—through a nested route, a prompt, a parsed value, or
-a binding—the branch's value serves consumers inside the branch, while the
+a binding—the branch's value serves every consumer inside the branch, a
+derived value parser and a derived prompt configuration alike, while the
 later occurrence is restored for consumers outside the conditional.  A
 fill-only `withDefault()` occurrence supplies the source only while nothing
 has published it, so it never displaces the awaited later occurrence's value,
