@@ -60,7 +60,11 @@ Core rules
     re-exported by *@optique/inquirer* and *@optique/clack*) when a prompt's
     choices or message depend on another parsed value. The resolver may be
     async and runs only at the real prompt fallback, after the named sources
-    resolve; keep static prompt configs for everything else.
+    resolve; pass `[sourceA, sourceB]` when it reads several sources. The
+    resolver's prompt kind must return the wrapped parser's value type. Derive
+    the wrapped parser separately when the CLI domain should change, and make
+    it a dependency source only if another consumer needs its answer. Keep
+    static prompt configs for everything else.
  -  Build subcommands with `command()` combined by `or()`. Put a literal field
     such as `command: constant("serve")` in each branch when you want a
     discriminated union.
@@ -257,6 +261,7 @@ Reference links
  -  Construct combinators: <https://optique.dev/concepts/constructs.md>
  -  Modifiers: <https://optique.dev/concepts/modifiers.md>
  -  Value parser catalog: <https://optique.dev/concepts/valueparsers.md>
+ -  Inter-option dependencies: <https://optique.dev/concepts/dependencies.md>
  -  Structured messages: <https://optique.dev/concepts/messages.md>
  -  Shell completion: <https://optique.dev/concepts/completion.md>
  -  Command discovery: <https://optique.dev/concepts/discover.md>

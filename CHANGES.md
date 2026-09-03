@@ -12,46 +12,6 @@ To be released.
 
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
     with fixed flags and customizable parse errors.  [[#906], [#909]]
- -  Added scheduling support for effectful completions that consume
-    dependency values, such as prompts with derived configurations.  The
-    dependency scheduler now orders such a parser after the sources its
-    completion reads, propagates demand to them when the parser's own value
-    is demanded, and includes them in failure-chain diagnostics.  The same
-    ordering and demand rules apply inside a `conditional()` whose branch is
-    selected only during completion: the branches' completion dependencies
-    propagate through the conditional's scheduling barrier, so a branch
-    configuration can read a source declared after the conditional.  Once
-    the discriminator resolves the selection, the scheduler replaces the
-    static estimate with the selected branch's actual dependencies, and a
-    branch occurrence hides an outer provider only when it will actively
-    publish the source itself—an unconditional prompt, a `withDefault()`
-    fallback, a nested conditional providing the source on every route, or
-    a value the branch already parsed or bound—so an absent `optional()`
-    occurrence or an unselected nested alternative no longer keeps a
-    provider declared after the conditional from serving the branch.
-    Cycles among the selected branch's actual providers and consumers
-    are rejected with the existing circular-dependency error, while an
-    apparent cycle whose edges belong to branches that cannot be
-    selected together is no longer rejected.  The discriminator's
-    resolution is also the boundary for branch-only effects: under the
-    demand-only seed pass a prerequisite that only a branch
-    configuration reads is demanded once the resolved selection
-    consumes it, never on the strength of the pre-selection estimate,
-    and a speculative parse-time guess the discriminator rejects now
-    fails the run at that boundary—so a prompt needed only by the
-    rejected guess is no longer asked right before the branch-mismatch
-    error.  When a guessed branch's prerequisites chain through an
-    earlier conditional, that discriminator now answers after the
-    confirming one instead of before it.  Declaration order also holds
-    when the conditional waited for a source occurrence declared after
-    it and the selected branch then publishes the same source—through a
-    nested route that provides it on only some of its routes, a prompt,
-    a parsed value, or a binding: the branch's value serves every
-    consumer inside the branch, a derived value parser such as
-    `option("--pm", source.deriveSync(...))` as much as a derived prompt
-    configuration, while consumers outside the conditional read the
-    later occurrence, which no longer loses to the branch's publish.
-    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
     description space under `maxWidth`.  The existing default and explicit
@@ -60,24 +20,6 @@ To be released.
     now replace the generated root synopsis or derive one from a callback,
     while subcommand help and usage-only error output remain unchanged.
     [[#879]]
- -  Fixed dependency sources completed by a prompt fallback to register
-    their value in the dependency runtime, so a parser derived from such a
-    source now sees the value the user actually selected instead of the
-    source's default.  A derived parser now behaves identically whether its
-    dependency value came from the command line or from an interactive
-    prompt, across `object()`, `tuple()`, `seq()`, `concat()`, and
-    `merge()` compositions—including sources nested in child constructs
-    such as `concat()` child tuples, and sources transformed with `map()`,
-    which register their pre-transform value.  Interactive source
-    completions run serially in
-    declaration order before dependency replay, at most once per parse
-    operation, and never during help, suggestion, or probe phases; a
-    cancelled prompt fails the parse without running later prompts.  Under
-    `runWith()` with two-pass source contexts, a source prompt now runs at
-    most once per run: it runs during the seed pass only when a phase-one
-    consumer demands its value and otherwise defers to the final pass, so
-    an undemanded source prompt no longer exposes its value to phase-two
-    contexts.  [[#869], [#870], [#912]]
  -  Fixed dependency sources inside `conditional()` and `command()` to
     reach derived parsers declared next to those constructs when their
     value comes from the command line, matching how a prompted value
@@ -93,21 +35,29 @@ To be released.
     sibling parsers against the answered values.  A prompted
     discriminator that does not wrap a dependency source cannot take part
     in this early resolution.  [[#869], [#913], [#914]]
+ -  Fixed dependency-aware completion inside `conditional()` so only the
+    selected branch determines ordering, effects, provider precedence, and
+    cycle detection.  Unselected or rejected speculative branches no longer
+    run prompts or create false cycles.  Consumers inside a selected branch
+    read its active source values, while later outer occurrences remain in
+    effect for consumers outside the branch.
+    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932]]
  -  Fixed derived parsers so they can act as dependency sources for later
     parsers, allowing multi-level parsing, defaults, and shell suggestions to
     resolve independently of object/tuple field order. [[#869], [#871], [#915]]
- -  Removed the unused `DependencyValueOrigin` type and `registerSource()`
-    origin argument from `@optique/core/dependency-runtime`.  Both APIs were
-    marked `@internal`; dependency resolution behavior is unchanged.
-    [[#869], [#874], [#889]]
+ -  Fixed prompt fallbacks around dependency sources to publish the selected
+    value before dependent parsers and prompts run.  Source prompts now run
+    serially in dependency order, with declaration order breaking ties, and
+    each prompt occurrence runs at most once per parse or two-pass `runWith()`
+    run.  Values from CLI input, bindings, and prompts behave consistently
+    across parser compositions, while cancellation stops later prompts.
+    [[#869], [#870], [#912]]
 
 [#869]: https://github.com/dahlia/optique/issues/869
 [#870]: https://github.com/dahlia/optique/issues/870
 [#871]: https://github.com/dahlia/optique/issues/871
 [#872]: https://github.com/dahlia/optique/issues/872
-[#874]: https://github.com/dahlia/optique/issues/874
 [#879]: https://github.com/dahlia/optique/issues/879
-[#889]: https://github.com/dahlia/optique/pull/889
 [#904]: https://github.com/dahlia/optique/issues/904
 [#906]: https://github.com/dahlia/optique/issues/906
 [#909]: https://github.com/dahlia/optique/pull/909

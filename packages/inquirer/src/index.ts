@@ -397,7 +397,8 @@ type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
  *
  * Derived prompt configurations resolve against this union: the adapter's
  * configuration type supplies the resolver's return type, so a resolver
- * may produce any prompt kind the adapter supports.
+ * may produce any prompt kind the adapter supports.  The resolver author must
+ * choose a kind whose result matches the wrapped parser's value type.
  *
  * @since 1.3.0
  */

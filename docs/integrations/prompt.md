@@ -560,19 +560,22 @@ that source observe the value the user actually selected.  A derived parser
 behaves identically whether its dependency value came from the command line,
 a source binding, or an interactive prompt.
 
-To make the value available before derived parsers re-evaluate, a
-dependency-source prompt runs earlier than ordinary prompts: source prompts
-run serially in declaration order before dependency replay, while non-source
-prompts keep running after the other fields complete.  As a consequence, a
-dependency-source prompt may be displayed before a non-source prompt declared
-earlier in the same object.  Structural precedence applies per field: a
+To make the value available before derived parsers re-evaluate,
+dependency-source prompts run serially in dependency order before dependency
+replay.  Declaration order breaks ties between independent prompts, while
+non-source prompts keep running after the other fields complete.  As a
+consequence, a dependency-source prompt may be displayed before a non-source
+prompt declared earlier in the same object.  Structural precedence applies per
+field: a
 prompted field whose own value already came from the command line or a
 source binding does not prompt, while another prompted field sharing the
 same source still does, and its answer registers last.
 
-Each source prompt runs at most once per parse operation, and never during
-help, shell suggestion, or probe phases.  When the user cancels a source
-prompt, the parse fails immediately and later prompts do not run.  A source
+Each source-prompt occurrence runs at most once per parse operation, and never
+during help, shell suggestion, or probe phases.  Reusing one prompt parser at
+several paths creates a separate occurrence at each path.  When the user
+cancels a source prompt, the parse fails immediately and later prompts do not
+run.  A source
 prompt transformed with `map()` registers its pre-transform value, and a
 source prompt nested in a child construct (such as a `concat()` child tuple)
 still completes before sibling consumers.  A source prompt wrapped in
@@ -588,10 +591,10 @@ Likewise, when several prompted fields share one dependency source, every
 prompt runs and the last occurrence's value registers, matching how
 repeated command-line source occurrences overwrite earlier ones.
 
-Under `runWith()` with two-pass source contexts, a source prompt runs at most
-once per run.  During the phase-two seed pass it runs only when another
-parser's command-line input demands the source value; otherwise it defers to
-the final pass, and phase-two contexts see the field as deferred.
+Under `runWith()` with two-pass source contexts, each source-prompt occurrence
+runs at most once per run.  During the phase-two seed pass it runs only when
+another parser's command-line input demands the source value; otherwise it
+defers to the final pass, and phase-two contexts see the field as deferred.
 
 Inside a `conditional()`, a prompted source discriminator and the
 prompted sources of the selected branch both run before sibling derived
@@ -600,7 +603,9 @@ branch: the discriminator's answer resolves the branch once, and the
 same selection is reused when the conditional completes.  A prompted
 discriminator that does not wrap a dependency source cannot take part in
 this early resolution, so the branch it selects prompts only during the
-conditional's own completion.
+conditional's own completion.  Wrap the discriminator's value parser with
+`dependency()` when sibling consumers need sources from the selected branch
+before dependency replay.
 
 One pre-existing limitation carries over: a prompt used directly as an
 `or()`/`longestMatch()` branch never executes when no command-line input
@@ -643,7 +648,7 @@ const prompt = createPromptAdapter<SelectConfig>({
 });
 
 const framework = dependency(choice(["fresh", "hono"] as const));
-const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
+const packageManager = choice(["deno", "npm", "pnpm"] as const);
 
 const parser = object({
   framework: prompt(option("--framework", framework), {
@@ -659,6 +664,12 @@ const parser = object({
   ),
 });
 ~~~~
+
+This example changes the interactive choices, not the values accepted from the
+command line: `--package-manager deno` is still valid with `--framework hono`.
+If the framework should also constrain CLI input, derive the wrapped value
+parser from `framework`.  Wrap that derived parser with `dependency()` only
+when its result must serve another dependency consumer.
 
 The named sources must publish their values before the resolver runs, so
 the scheduler orders prompts by the dependency graph: in the example
@@ -705,52 +716,19 @@ during the phase-two seed pass and resolves in the final pass, after
 every source has published.  If phase-two contexts need its value, make
 the wrapped parser a source with `dependency()`.
 
-Derived configurations also work inside a `conditional()` whose branch
-is selected only during completion.  The scheduler aggregates the
-completion dependencies of every selectable branch, so the conditional
-waits for the sources a branch configuration reads even when they are
-declared *after* the conditional.  Once the discriminator resolves the
-selection, the scheduler replaces that estimate with the selected
-branch's actual dependencies.  The demand-only seed pass of a
-`runWith()` run treats that resolution as a boundary: a prerequisite is
-demanded only once the discriminator has picked a branch whose consumer
-actually reads it, so a prerequisite that only an unselected branch
-would read is never demanded, and a speculative parse-time guess the
-discriminator ultimately rejects fails the run at that boundary with
-the branch-mismatch error, before any effect the guess alone would have
-scheduled.  The boundary also orders chained questions: a speculative
-discriminator answers before an earlier-declared prerequisite whose
-demand is discovered only by its confirmation.  A branch occurrence counts as
-an *active* provider only when it is guaranteed to supply the source—an
-unconditional prompt, a `withDefault()` fallback (a default guarantees
-availability rather than an unconditional write), or a nested conditional that
-provides the source on every selectable route—or when its state already holds
-a parsed or bound value.  A merely possible provider, such as an `optional()`
-occurrence that ends up parsing nothing or a provider in an unselected nested
-alternative, no longer hides a matching provider declared after the
-conditional: the branch configuration waits for that provider and reads its
-value.  An apparent dependency cycle whose edges come from branches that
-cannot be selected together—say, a completion consumer next to a conditional
-whose branch consumes the consumer's own source—is no longer rejected; only a
-cycle among the selected branch's actual providers and consumers still raises
-the circular dependency error.
+Derived configurations also work inside a `conditional()` whose branch is
+selected only during completion.  Only the selected branch's actual
+dependencies determine which sources and effects run, which provider each
+consumer reads, and whether the active graph contains a cycle.  A prompt needed
+only by an unselected or rejected speculative branch does not run.
 
-A branch's publish is also confined to its scope.  A nested conditional that
-guarantees a source on only *some* of its routes stays a merely possible
-provider, so the outer conditional waits for a matching occurrence declared
-after it, and a selected route that omits the source reads that later value.
-When the selected route does provide the source, its explicit publish—a prompt
-answer, a parsed value, or a bound value—serves consumers inside the enclosing
-branch, derived value parsers and derived prompt configurations alike, and the
-later occurrence is restored afterward, so consumers declared
-after the outer conditional read the later occurrence, exactly as declaration
-order promises.  A fill-only `withDefault()` occurrence in such a route
-supplies the source only while nothing has published it: once the awaited
-later occurrence has published, the default fills nothing and even the branch
-consumer reads the later value.  The confinement belongs to the completion
-boundary: a branch committed on the command line joins the enclosing scope
-directly, so its consumers follow plain declaration order and read the last
-occurrence of that whole scope.
+Values published inside a completion-selected branch serve that branch's
+derived value parsers and derived prompt configurations without leaking to
+consumers outside it.  An absent `optional()` occurrence, an unselected nested
+alternative, or a fill-only default does not hide a later value that was
+actually published.  See
+[Evaluation order and failures](../concepts/dependencies.md#evaluation-order-and-failures)
+for the full branch and repeated-source rules.
 
 
 Testing adapters
@@ -768,7 +746,8 @@ The core behavior to test is:
  -  Runtime conditions run only at the real prompt fallback.
  -  A false runtime condition returns `otherwise` without calling `execute()`.
  -  Prompt failures are returned as parse failures.
- -  Multiple prompt fields run in parser order.
+ -  Prompt fields run serially in dependency order, with parser order breaking
+    ties between independent prompts.
 
 A minimal test adapter can record calls:
 

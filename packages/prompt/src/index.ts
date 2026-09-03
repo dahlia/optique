@@ -586,10 +586,11 @@ export type PromptConfigInput<TConfig, TValue> =
 /**
  * Creates a `prompt()` parser wrapper for a prompt library adapter.
  *
- * The generated wrapper tries the inner parser first.  If CLI tokens, source
- * bindings, or defaults satisfy the parser, the prompt is skipped.  Otherwise
- * the adapter runs during the real completion phase and provides a fallback
- * value.
+ * The generated wrapper tries the inner parser first.  If CLI tokens or source
+ * bindings satisfy the parser, the prompt is skipped.  Otherwise the adapter
+ * runs during the real completion phase and provides a fallback value.  An
+ * inner `withDefault()` does not suppress the prompt; wrap the prompt itself
+ * with `withDefault()` when the default should take precedence.
  *
  * @typeParam TConfig Prompt configuration accepted by the adapter.
  * @param adapter Library-specific prompt executor.

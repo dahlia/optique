@@ -483,7 +483,7 @@ import { choice } from "@optique/core/valueparser";
 import { derivePromptConfig, prompt } from "@optique/clack";
 
 const framework = dependency(choice(["fresh", "hono"] as const));
-const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
+const packageManager = choice(["deno", "npm", "pnpm"] as const);
 
 const parser = object({
   framework: prompt(option("--framework", framework), {
@@ -502,6 +502,12 @@ const parser = object({
   ),
 });
 ~~~~
+
+This changes the options shown by the prompt, not the values accepted from the
+command line: `--package-manager deno` is still valid with `--framework hono`.
+If the framework should also constrain CLI input, derive the wrapped value
+parser from `framework`.  Wrap that derived parser with `dependency()` only
+when its result must serve another dependency consumer.
 
 The resolver may be synchronous or asynchronous and runs right before the
 prompt opens, after the named sources have published their values—whether
@@ -566,6 +572,10 @@ The union of every prompt configuration this package can execute,
 regardless of the parser value type.  A `derivePromptConfig()` resolver
 returns a member of this union; the per-value-type narrowing of
 [`PromptConfig<T>`] applies only to static configurations.
+The resolver must therefore return a prompt kind whose result has the wrapped
+parser's value type.  For example, do not return a `number` configuration for a
+parser that produces a string.  See
+[Prompt and inner parser independence](#prompt-and-inner-parser-independence).
 
 ### `Option`
 
@@ -670,8 +680,9 @@ Limitations
  -  *No shell completion* — Interactive prompts do not contribute to shell
     tab-completion suggestions.  Only the wrapped inner parser's suggestions
     are used.
- -  *Single prompt per field* — Each `prompt()` call runs the prompter exactly
-    once per parse, even when used inside `object()`.
+ -  *Per-occurrence caching* — A reached `prompt()` occurrence runs its
+    prompter at most once per parse.  Reusing one prompt parser at several
+    positions creates a separate occurrence at each position.
  -  *TTY required*: Clack requires an interactive terminal (TTY).  In
     non-interactive environments (CI pipelines, piped input), prompts may
     error.  Use the `prompter` override for non-interactive testing.

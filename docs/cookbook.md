@@ -2726,9 +2726,8 @@ Use `prompt()` from *@optique/inquirer* as the outermost wrapper when you want
 an interactive fallback *after* checking CLI arguments, environment variables,
 and config files.
 
-A practical approach is to preload config annotations once and expose them via
-a single-pass context. This keeps the fallback order predictable while still
-using `bindEnv()` and `bindConfig()` together:
+Register the ordinary environment and config contexts with `runAsync()`.
+`runAsync()` handles the two-pass config lookup before the prompt fallback:
 
 ~~~~ typescript twoslash
 import { z } from "zod";
@@ -2741,19 +2740,6 @@ import { bindEnv, createEnvContext } from "@optique/env";
 import { prompt } from "@optique/inquirer";
 import { runAsync } from "@optique/run";
 
-function getConfigPathFromArgs(args: readonly string[]): string | undefined {
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index];
-    if (arg === "-c" || arg === "--config") {
-      return args[index + 1];
-    }
-    if (arg.startsWith("--config=")) {
-      return arg.slice("--config=".length);
-    }
-  }
-  return undefined;
-}
-
 const configSchema = z.object({
   host: z.string().optional(),
   port: z.number().int().min(1).max(65535).optional(),
@@ -2761,23 +2747,6 @@ const configSchema = z.object({
 
 const envContext = createEnvContext({ prefix: "MYAPP_" });
 const configContext = createConfigContext({ schema: configSchema });
-const args = ["--config", "./config.json"] as const;
-
-const configAnnotations = await configContext.getAnnotations(
-  {
-    phase: "phase2",
-    parsed: { config: getConfigPathFromArgs(args) },
-  },
-  { getConfigPath: (parsed: { readonly config?: string }) => parsed.config },
-);
-
-const staticConfigContext = {
-  id: configContext.id,
-  phase: "single-pass" as const,
-  getAnnotations() {
-    return configAnnotations;
-  },
-};
 
 const parser = object({
   config: optional(option("-c", "--config", string())),
@@ -2808,16 +2777,12 @@ const parser = object({
 });
 
 const result = await runAsync(parser, {
-  args,
-  contexts: [envContext, staticConfigContext],
+  contexts: [envContext, configContext],
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
 });
 ~~~~
-
-When you preload annotations manually like this, you still need to thread
-them back into parsing explicitly, either by wrapping them in a static
-context as shown here or by passing them directly to low-level APIs such
-as `parse()`, `parseAsync()`, or `parser.complete()`. The
-`getAnnotations()` call itself does not change later parses.
 
 This preserves the priority chain:
 

@@ -587,7 +587,12 @@ import { choice } from "@optique/core/valueparser";
 import { derivePromptConfig, prompt } from "@optique/inquirer";
 
 const framework = dependency(choice(["fresh", "hono"] as const));
-const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
+const packageManager = dependency(framework.deriveSync({
+  metavar: "PACKAGE_MANAGER",
+  factory: (value) =>
+    choice(value === "fresh" ? ["deno"] : ["npm", "pnpm"]),
+  defaultValue: () => "fresh" as const,
+}));
 const storage = packageManager.deriveSync({
   metavar: "STORAGE",
   factory: (pm) => choice(pm === "deno" ? ["kv"] : ["redis", "postgres"]),
@@ -611,8 +616,8 @@ const parser = object({
   storage: option("--storage", storage),
 });
 // The package manager prompt derives its choices from the framework
-// answer, and its own answer then determines which storages --storage
-// accepts.
+// answer. The same answer constrains --package-manager on the CLI, then
+// determines which storages --storage accepts.
 ~~~~
 
 Such a prompt is a consumer in the dependency graph, and it may be a
@@ -634,7 +639,9 @@ before derived parsers re-evaluate, and the same selection is reused by
 the final completion.  One limitation: a prompted discriminator that
 does not wrap a dependency source cannot participate in this early
 branch resolution, so sources inside the branch it selects only complete
-during the conditional's own completion.
+during the conditional's own completion.  Wrap the discriminator's value
+parser with `dependency()` when sibling consumers need those branch sources
+before dependency replay.
 
 
 Evaluation order and failures
@@ -651,36 +658,23 @@ prompts, prompt configuration resolvers, or other effectful completions. During
 real completion, effectful sources run serially and at most once per parse
 operation. Their results and failures are scoped to that operation.
 
-A prompt whose configuration is derived with `derivePromptConfig()` is a
-consumer node in the same graph: the sources its resolver reads count as its
-providers, so they resolve first, and the prompt runs after them regardless of
-field order.  A branch that a `conditional()` selects only during completion
-contributes its completion dependencies to the enclosing graph as well: the
-conditional waits for the providers its selectable branches read, even when
-they are declared after it.  Once the discriminator resolves the selection,
-the estimate is replaced by the selected branch's actual dependencies, and a
-branch occurrence hides an outer provider only when it will actively publish
-the source itself—through a guaranteed completion or default, or a value the
-branch already parsed or bound—so an absent `optional()` occurrence or an
-unselected nested alternative does not stop a later provider from serving the
-branch.  The resolution is also a scheduling boundary for effects: a
-prerequisite that only a branch configuration reads runs after the
-discriminator has picked a branch that consumes it, never on the strength of
-the pre-selection estimate alone, and a speculative parse-time guess the
-discriminator rejects fails the run at that boundary before such a
-prerequisite runs.
+A prompt configured with `derivePromptConfig()` is a consumer in this graph,
+so its sources resolve before the prompt regardless of field order.  The same
+rules apply when a `conditional()` chooses its branch during completion:
 
-Declaration order holds across that wait as well.  When the conditional waited
-for a source occurrence declared after it and the selected branch then
-publishes the same source—through a nested route, a prompt, a parsed value, or
-a binding—the branch's value serves every consumer inside the branch, a
-derived value parser and a derived prompt configuration alike, while the
-later occurrence is restored for consumers outside the conditional.  A
-fill-only `withDefault()` occurrence supplies the source only while nothing
-has published it, so it never displaces the awaited later occurrence's value,
-not even for its own branch consumer.  This confinement applies to a branch
-selected during completion; a branch committed on the command line joins the
-enclosing scope directly and follows plain declaration order.
+| Situation                                                                                   | Result                                                                                                        |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| A selected branch reads a source declared after the conditional                             | The source resolves before the branch consumer.                                                               |
+| Only an unselected branch reads an effectful source                                         | The source's prompt or other effect does not run.                                                             |
+| A speculative branch conflicts with the completed discriminator                             | The parse fails before effects needed only by the rejected branch run.                                        |
+| An absent `optional()` occurrence or unselected nested alternative could provide the source | It does not hide a later occurrence that actually publishes a value.                                          |
+| The selected branch publishes a repeated source                                             | Consumers inside the branch read that value; consumers after the conditional read the later outer occurrence. |
+| A selected route contains only a `withDefault()` occurrence                                 | The default fills the source only if no awaited occurrence has published it.                                  |
+| The command line already committed the branch                                               | The branch joins the enclosing scope and ordinary declaration precedence applies.                             |
+
+Cycles are checked against the selected branch's actual providers and
+consumers.  Edges from branches that cannot be selected together do not form a
+cycle.
 
 An invalid source never falls back to its default. The failure propagates
 through every derived source that consumes it—including prompts whose
