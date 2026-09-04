@@ -59,12 +59,71 @@ export type PromptCondition<TValue> =
   };
 
 /**
+ * Validates a value returned by a prompt adapter.
+ *
+ * Return `undefined` to accept the value, or a structured message to reject it
+ * and ask the adapter to try again.  The validator receives the prompted value
+ * directly; it is not converted back into command-line input or passed through
+ * the wrapped value parser.
+ *
+ * @typeParam TValue Value type produced by the wrapped parser.
+ * @since 1.3.0
+ */
+export type PromptValidator<TValue> = (
+  value: TValue,
+) => Message | undefined | Promise<Message | undefined>;
+
+/**
+ * Shared validation, retry, and cancellation options for a prompt fallback.
+ *
+ * These options are separate from adapter-native validation fields.  They
+ * apply only when the interactive fallback runs; CLI values, source-bound
+ * values, and skipped runtime conditions do not consult them.
+ *
+ * @typeParam TValue Value type produced by the wrapped parser.
+ * @since 1.3.0
+ */
+export interface PromptOptions<TValue> {
+  /** Validator applied to each value returned by the adapter. */
+  readonly validate?: PromptValidator<TValue>;
+
+  /**
+   * Maximum number of adapter executions in one completion.  Must be a
+   * positive integer.  When omitted, validation may retry without a limit.
+   */
+  readonly maxAttempts?: number;
+
+  /**
+   * Signal that stops the active adapter execution or validator.  Its reason
+   * is propagated to the caller without becoming a parse failure.
+   */
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Context passed to one execution of a prompt adapter.
+ *
+ * @since 1.3.0
+ */
+export interface PromptExecutionContext {
+  /** One-based number of the current adapter execution. */
+  readonly attempt: number;
+
+  /** Message returned by the validator after the preceding execution. */
+  readonly previousValidationMessage?: Message;
+
+  /** Signal supplied through the prompt's shared options, when present. */
+  readonly signal?: AbortSignal;
+}
+
+/**
  * Prompt adapter used by {@link createPromptAdapter}.
  *
  * The adapter owns library-specific prompt execution and maps the result into
  * Optique's value-parser result shape.  The shared parser wrapping behavior,
  * including CLI priority, source bindings, deferred completion, suggestions,
- * and usage metadata, is handled by *@optique/prompt*.
+ * usage metadata, validation retries, and abort handling, is handled by
+ * *@optique/prompt*.
  *
  * @typeParam TConfig Prompt configuration accepted by the adapter.
  * @since 1.2.0
@@ -76,11 +135,14 @@ export interface PromptAdapter<TConfig> {
    * @typeParam TValue Value type produced by the wrapped parser.
    * @param config Prompt configuration supplied to the generated `prompt()`
    *               wrapper.
+   * @param context Attempt number, preceding validation message, and optional
+   *                abort signal for this execution.
    * @returns The prompted value or a prompt failure.
    * @throws Any unexpected prompt execution failure.
    */
   readonly execute: <TValue>(
     config: TConfig,
+    context: PromptExecutionContext,
   ) => Promise<ValueParserResult<TValue>>;
 
   /**
@@ -569,6 +631,50 @@ function unwrapCompleteResult<TValue>(
   };
 }
 
+function throwIfPromptAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) throw signal.reason;
+}
+
+function racePromptWorkWithAbort<T>(
+  signal: AbortSignal | undefined,
+  work: () => Promise<T>,
+): Promise<T> {
+  if (signal == null) {
+    try {
+      return work();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(signal.reason);
+    };
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
+    let outcome: Promise<T>;
+    try {
+      outcome = work();
+    } catch (error) {
+      cleanup();
+      reject(error);
+      return;
+    }
+    outcome.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Prompt configuration accepted by a generated `prompt()` wrapper: either
  * a static adapter configuration (optionally with a runtime condition) or
@@ -594,9 +700,10 @@ export type PromptConfigInput<TConfig, TValue> =
  *
  * @typeParam TConfig Prompt configuration accepted by the adapter.
  * @param adapter Library-specific prompt executor.
- * @returns A `prompt(parser, config)` wrapper that always produces an async
- *          parser.  The configuration may be a static `TConfig` or a
+ * @returns A `prompt(parser, config, options?)` wrapper that always produces
+ *          an async parser.  The configuration may be a static `TConfig` or a
  *          {@link DerivedPromptConfig} whose resolver returns `TConfig`.
+ * @throws {RangeError} If `maxAttempts` is not a positive integer.
  * @since 1.2.0
  */
 export function createPromptAdapter<TConfig>(
@@ -604,11 +711,22 @@ export function createPromptAdapter<TConfig>(
 ): <M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   config: PromptConfigInput<TConfig, TValue>,
+  options?: PromptOptions<NoInfer<TValue>>,
 ) => FluentParser<"async", TValue, TState> {
   return function prompt<M extends Mode, TValue, TState>(
     parser: Parser<M, TValue, TState>,
     config: PromptConfigInput<TConfig, TValue>,
+    options: PromptOptions<NoInfer<TValue>> = {},
   ): FluentParser<"async", TValue, TState> {
+    if (
+      options.maxAttempts !== undefined &&
+      (!Number.isInteger(options.maxAttempts) || options.maxAttempts < 1)
+    ) {
+      throw new RangeError(
+        "maxAttempts must be an integer greater than or equal to 1.",
+      );
+    }
+    const { validate, maxAttempts, signal } = options;
     const promptBindStateKey: unique symbol = Symbol(
       "@optique/prompt/promptState",
     );
@@ -718,18 +836,47 @@ export function createPromptAdapter<TConfig>(
       if (config.when != null && !(await config.when())) {
         return { success: true, value: config.otherwise as TValue };
       }
+      throwIfPromptAborted(signal);
+      let resolvedConfig: TConfig;
       if (!isDerivedPromptConfig(config)) {
-        return adapter.execute<TValue>(config as TConfig);
+        resolvedConfig = config as TConfig;
+      } else {
+        const source = promptedParser.dependencyMetadata?.source;
+        const resolved = await resolveDerivedPromptConfig(
+          config as DerivedPromptConfig<TConfig, unknown>,
+          exec,
+          source?.sourceId,
+          source?.metavar,
+        );
+        throwIfPromptAborted(signal);
+        if (!resolved.ok) return { success: false, error: resolved.error };
+        resolvedConfig = resolved.config;
       }
-      const source = promptedParser.dependencyMetadata?.source;
-      const resolved = await resolveDerivedPromptConfig(
-        config as DerivedPromptConfig<TConfig, unknown>,
-        exec,
-        source?.sourceId,
-        source?.metavar,
-      );
-      if (!resolved.ok) return { success: false, error: resolved.error };
-      return adapter.execute<TValue>(resolved.config);
+
+      let previousValidationMessage: Message | undefined;
+      for (let attempt = 1;; attempt++) {
+        const context: PromptExecutionContext = {
+          attempt,
+          ...(previousValidationMessage === undefined
+            ? {}
+            : { previousValidationMessage }),
+          ...(signal === undefined ? {} : { signal }),
+        };
+        const result = await racePromptWorkWithAbort(
+          signal,
+          () => adapter.execute<TValue>(resolvedConfig, context),
+        );
+        if (!result.success || validate == null) return result;
+        const validationMessage = await racePromptWorkWithAbort(
+          signal,
+          () => Promise.resolve(validate(result.value)),
+        );
+        if (validationMessage === undefined) return result;
+        if (maxAttempts !== undefined && attempt >= maxAttempts) {
+          return { success: false, error: validationMessage };
+        }
+        previousValidationMessage = validationMessage;
+      }
     }
 
     const parserInheritsAnnotations = getTraits(parser).inheritsAnnotations ===

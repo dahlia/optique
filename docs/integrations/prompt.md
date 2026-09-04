@@ -63,8 +63,8 @@ integration:
 
 The shared wrapper exists so each integration does not need to reimplement the
 same parser semantics.  Your integration supplies a config type and an
-`execute()` function; *@optique/prompt* supplies the `prompt(parser, config)`
-wrapper.
+`execute()` function; *@optique/prompt* supplies the
+`prompt(parser, config, options?)` wrapper.
 
 
 Basic usage
@@ -184,11 +184,16 @@ Adapter contract
 
 `createPromptAdapter(adapter)` accepts a small object:
 
-`execute(config)`
+`execute(config, context)`
 :   Runs the prompt library and returns a `ValueParserResult<TValue>`.
     Return `{ success: true, value }` for a prompted value, or
     `{ success: false, error }` for a prompt-level failure such as
-    cancellation.
+    cancellation.  `context.attempt` identifies this execution, starting from 1.
+    After shared validation rejects a value,
+    `context.previousValidationMessage` contains that message on the next
+    execution.  An adapter should display it before asking again.
+    `context.signal`, when present, should also be forwarded to prompt-library
+    APIs that support cancellation.
 
 `getDefaultValue(config)`
 :   *(optional)* Returns a config default for documentation fragments.  If it
@@ -224,8 +229,8 @@ turn thrown exceptions into parse failures; they propagate to the caller.
 Generated parser behavior
 -------------------------
 
-The generated `prompt(parser, config)` wrapper preserves the inner parser's
-shape while changing how missing values are completed.
+The generated `prompt(parser, config, options?)` wrapper preserves the inner
+parser's shape while changing how missing values are completed.
 
 ### CLI values skip prompting
 
@@ -349,6 +354,74 @@ failure.
 `otherwise` is a static value with the parser's result type.  It is returned
 as-is, without running the inner parser's validation or normalization, and it
 is not used as a documented default.
+
+### Shared validation and retries
+
+Pass a validator in the wrapper's third argument when a prompted value needs a
+recoverable check.  It receives the typed value returned by the adapter.  Return
+`undefined` to accept the value, or a `Message` to reject it and run another
+adapter execution:
+
+~~~~ typescript twoslash
+declare function askPackageManager(attempt: number): Promise<string>;
+declare function commandExists(command: string): Promise<boolean>;
+// ---cut-before---
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import {
+  createPromptAdapter,
+  type PromptExecutionContext,
+} from "@optique/prompt";
+
+interface PromptConfig {
+  readonly message: string;
+}
+
+const prompt = createPromptAdapter<PromptConfig>({
+  async execute<TValue>(
+    _config: PromptConfig,
+    context: PromptExecutionContext,
+  ) {
+    const value = await askPackageManager(context.attempt);
+    return { success: true, value: value as TValue };
+  },
+});
+
+const packageManager = prompt(
+  option("--package-manager", string()),
+  { message: "Package manager:" },
+  {
+    maxAttempts: 3,
+    async validate(value) {
+      return await commandExists(value)
+        ? undefined
+        : message`${value} is not available.`;
+    },
+  },
+);
+~~~~
+
+Each `execute()` call is one attempt inside a single prompt completion.  A
+validator may be synchronous or asynchronous.  Adapter-native validation stays
+inside an attempt, while shared validation runs only after the adapter returns
+a successful value.  Cancellation or another failed `ValueParserResult` ends
+the completion without another retry.  Exceptions from the adapter or
+validator propagate unchanged.
+
+`maxAttempts` must be a positive integer and defaults to no limit.  Exhausting
+the limit returns the last validation message as a parse failure.  A derived
+prompt configuration resolves only once, and every attempt receives that same
+resolved config.  Rejected values are not cached or published as dependency
+values; only the terminal result reaches the existing completion cache.
+
+An optional `AbortSignal` stops an active adapter execution or validator and
+propagates its reason.  CLI values, source-bound values, a false runtime
+condition, help, suggestions, and completion probes do not consult the signal.
+The signal does not add general cancellation to parsing, dependency scheduling,
+or derived configuration resolution.  If it aborts while a resolver is
+pending, the reason is observed immediately after the resolver settles and
+before an adapter starts.
 
 ### Missing values run the adapter
 
@@ -503,10 +576,11 @@ a value comes from the CLI, the inner parser's full constraint pipeline
 is applied.  When a value comes from a prompt, it is whatever your adapter
 returns.
 
-This is intentional: prompt libraries usually already validate prompted
-values, and combinators like `map()` can transform the value domain in ways
-that are not valid CLI input.  Your integration should validate prompted
-values before returning `{ success: true, value }`.
+This is intentional: combinators like `map()` can transform the value domain in
+ways that are not valid CLI input.  An adapter can validate a library-native
+answer before returning `{ success: true, value }`; callers can then use the
+shared `validate` option for recoverable checks on the returned typed value.
+Neither path feeds a prompted value through the wrapped parser.
 
 For example, a number prompt adapter should parse and validate the prompt's
 string result before returning a number:
@@ -699,11 +773,11 @@ dependency chain in the diagnostic.  A failed upstream source likewise
 fails the prompt before the resolver runs.  Mutually dependent
 configurations are rejected with a circular dependency error.
 
-The optional third argument accepts the same `when`/`otherwise` pair as
-static configurations, evaluated before the resolver, so a skipped
-prompt performs no configuration work.  Note that upstream sources may
-already have prompted by then: the condition skips this prompt's own
-question, not the dependency resolution that scheduled before it.
+The optional third argument to `derivePromptConfig()` accepts the same
+`when`/`otherwise` pair as static configurations, evaluated before the
+resolver, so a skipped prompt performs no configuration work.  Note that
+upstream sources may already have prompted by then: the condition skips this
+prompt's own question, not the dependency resolution that scheduled before it.
 
 Because probes, help, and suggestions never run resolvers, generated
 documentation cannot reflect a derived configuration.  `getDocFragments`
@@ -745,6 +819,10 @@ The core behavior to test is:
  -  Source bindings such as `bindEnv()` skip prompt execution.
  -  Runtime conditions run only at the real prompt fallback.
  -  A false runtime condition returns `otherwise` without calling `execute()`.
+ -  Shared validation retries with increasing attempt numbers and the preceding
+    message.
+ -  Retry exhaustion, cancellation, abort, and thrown errors remain distinct
+    terminal outcomes.
  -  Prompt failures are returned as parse failures.
  -  Prompt fields run serially in dependency order, with parser order breaking
     ties between independent prompts.
@@ -786,7 +864,7 @@ API reference
 
 ### `createPromptAdapter(adapter)`
 
-Creates a `prompt(parser, config)` wrapper for one prompt library.
+Creates a `prompt(parser, config, options?)` wrapper for one prompt library.
 
 Parameters
 :   `adapter`: A [`PromptAdapter<TConfig>`](#promptadaptertconfig) that
@@ -797,7 +875,11 @@ Returns
     `FluentParser<"async", TValue, TState>`.  Its config accepts the adapter's
     fields together with [`PromptCondition<TValue>`](#promptconditiontvalue),
     or a [`DerivedPromptConfig`](#derivepromptconfigsource-resolver-options)
-    whose resolver returns the adapter's config type.
+    whose resolver returns the adapter's config type.  The optional third
+    argument accepts [`PromptOptions<TValue>`](#promptoptionstvalue).
+
+Throws
+:   `RangeError` when `options.maxAttempts` is not a positive integer.
 
 ### `PromptCondition<TValue>`
 
@@ -815,13 +897,52 @@ Provide both fields or neither:
 
 Adapter object accepted by `createPromptAdapter()`.
 
-`execute(config)`
+`execute(config, context)`
 :   Executes the library-specific prompt and returns a
-    `Promise<ValueParserResult<TValue>>`.
+    `Promise<ValueParserResult<TValue>>`.  Each call represents one attempt.
+    The context is a [`PromptExecutionContext`](#promptexecutioncontext).
 
 `getDefaultValue(config)`
 :   Optional function that returns a prompt-level default for documentation
     fragments.  Never called with a derived configuration.
+
+### `PromptValidator<TValue>`
+
+*Available since Optique 1.3.0.*
+
+Validates the typed value returned by an adapter.  It returns `undefined` to
+accept the value, or a `Message` to reject it and request another attempt.  A
+promise of either result is also accepted.
+
+### `PromptOptions<TValue>`
+
+*Available since Optique 1.3.0.*
+
+`validate`
+:   Optional [`PromptValidator<TValue>`](#promptvalidatortvalue) applied after
+    each successful adapter execution.
+
+`maxAttempts`
+:   Optional positive integer limiting adapter executions within one
+    completion.  Omit it for unlimited retries.
+
+`signal`
+:   Optional `AbortSignal` for the interactive fallback.  Its reason propagates
+    when it stops an active adapter execution or validator.
+
+### `PromptExecutionContext`
+
+*Available since Optique 1.3.0.*
+
+`attempt`
+:   One-based number of the current adapter execution.
+
+`previousValidationMessage`
+:   Message returned by shared validation after the preceding execution.  It
+    is absent on the first attempt.
+
+`signal`
+:   Signal supplied through `PromptOptions`, when present.
 
 ### `derivePromptConfig(source, resolver, options?)`
 
@@ -874,7 +995,11 @@ When adding a concrete prompt integration, make sure it:
  -  Returns failed `ValueParserResult` values for expected outcomes such as
     cancellation.
  -  Throws only for unexpected prompt-library failures.
- -  Validates and converts prompted values before returning success.
+ -  Validates and converts library-native values before returning success.
+ -  Accepts shared `PromptOptions` in its public wrapper and passes the options
+    to the generated prompt function.
+ -  Displays `previousValidationMessage` before another attempt and forwards
+    the signal where the prompt library supports it.
  -  Exposes prompt-level defaults through `getDefaultValue()` if the library
     does not use a `default` config property.
  -  Accepts `derivePromptConfig()` results in its public `prompt()`
