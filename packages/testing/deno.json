@@ -9,9 +9,6 @@
     "./parser": "./src/parser.ts",
     "./run": "./src/run.ts"
   },
-  "imports": {
-    "@optique/core/parser": "../core/src/parser.ts"
-  },
   "exclude": [
     "dist/",
     "node_modules",

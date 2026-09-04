@@ -95,16 +95,23 @@ Always prefer the latest stable version unless there is a specific reason
 to use an older version.
 
 > [!IMPORTANT]
-> Because this project supports both Deno and Node.js/Bun, dependencies must
-> be added to *both* configuration files:
+> Because this project supports both Deno and Node.js/Bun, third-party
+> dependencies must be added to *both* configuration files:
 >
 >  -  *deno.json*: Add to the `imports` field (for Deno)
 >  -  *package.json*: Add to `dependencies` or `devDependencies` (for
 >     Node.js/Bun)
 >
-> For workspace packages, use the pnpm catalog (*pnpm-workspace.yaml*) to manage
-> versions centrally.  In *package.json*, reference catalog versions with
-> `"catalog:"` instead of hardcoding version numbers.
+> Dependencies on another Optique workspace package are different.  Declare
+> them only in the consuming package's *package.json*, using the `workspace:`
+> protocol.  Do not add a *deno.json* import that points to a sibling package
+> through a `../` path.  Deno resolves workspace members locally and rewrites
+> workspace references when publishing to JSR.
+>
+> For third-party versions shared across workspace packages, use the pnpm
+> catalog (*pnpm-workspace.yaml*) to manage versions centrally.  In
+> *package.json*, reference catalog versions with `"catalog:"` instead of
+> hardcoding version numbers.
 >
 > Forgetting to add a dependency to *package.json* will cause Node.js and Bun
 > tests to fail with `ERR_MODULE_NOT_FOUND`, even if Deno tests pass.
