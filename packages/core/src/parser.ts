@@ -1,6 +1,7 @@
 export type { ParseOptions } from "./annotations.ts";
 export type {
   CombineModes,
+  DetailedParseResult,
   DocState,
   EffectfulCompletionSession,
   ExecutionContext,
@@ -24,6 +25,7 @@ export {
   getDocPageSync,
   parse,
   parseAsync,
+  parseDetailed,
   parseSync,
   suggest,
   suggestAsync,

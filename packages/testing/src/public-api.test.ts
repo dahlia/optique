@@ -124,18 +124,19 @@ describe("public surface", () => {
     assert.equal(captured.stderr, "");
   });
 
-  it("should resolve every reserved subpath without runtime exports", async () => {
-    // The root is limited to types shared across layers, and the four layer
-    // subpaths are reserved but not yet implemented, so none of them
-    // contributes a runtime export.  A subpath that starts exporting a helper
-    // has to say so here.
+  it("should expose only the implemented parser helpers", async () => {
+    // The root is limited to contracts shared across layers.  The remaining
+    // layer subpaths stay reserved until their helpers land.
     assert.deepEqual(Object.keys(await import("@optique/testing")), []);
     assert.deepEqual(Object.keys(await import("@optique/testing/cli")), []);
     assert.deepEqual(
       Object.keys(await import("@optique/testing/discover")),
       [],
     );
-    assert.deepEqual(Object.keys(await import("@optique/testing/parser")), []);
+    assert.deepEqual(
+      Object.keys(await import("@optique/testing/parser")).sort(),
+      ["parseArgs", "parseArgsSync"],
+    );
     assert.deepEqual(Object.keys(await import("@optique/testing/run")), []);
   });
 });
@@ -164,12 +165,14 @@ describe("npm build output", () => {
 
     const require = createRequire(import.meta.url);
 
-    // The CommonJS surface has to stay empty for the same reason the ESM one
-    // does, so that the two cannot drift apart unnoticed.
+    // Keep the CommonJS surface aligned with ESM.
     assert.deepEqual(Object.keys(require("@optique/testing")), []);
     assert.deepEqual(Object.keys(require("@optique/testing/cli")), []);
     assert.deepEqual(Object.keys(require("@optique/testing/discover")), []);
-    assert.deepEqual(Object.keys(require("@optique/testing/parser")), []);
+    assert.deepEqual(
+      Object.keys(require("@optique/testing/parser")).sort(),
+      ["parseArgs", "parseArgsSync"],
+    );
     assert.deepEqual(Object.keys(require("@optique/testing/run")), []);
   });
 });

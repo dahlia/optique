@@ -21,6 +21,7 @@ import {
   getDocPageSync,
   parse,
   parseAsync,
+  parseDetailed,
   type Parser,
   parseSync,
   suggestAsync,
@@ -102,6 +103,79 @@ function createIssue184SuggestionParsers() {
 }
 
 describe("parse", () => {
+  it("should preserve failure progress in parseDetailed()", () => {
+    const parser = command("serve", option("--port"));
+    const result = parseDetailed(parser, ["serve", "--unknown"]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.remainingArgs, ["--unknown"]);
+      assert.deepEqual(result.commandPath, ["serve"]);
+    }
+  });
+
+  it("should preserve deferred result metadata in parseDetailed()", () => {
+    const deferredKeys = new Map<PropertyKey, null>([["value", null]]);
+    const base = constant({ value: "placeholder" });
+    const parser = {
+      ...base,
+      complete() {
+        return {
+          success: true as const,
+          value: { value: "placeholder" },
+          deferred: true as const,
+          deferredKeys,
+        };
+      },
+    };
+
+    assert.deepEqual(parseDetailed(parser, []), {
+      success: true,
+      value: { value: "placeholder" },
+      deferred: true,
+      deferredKeys,
+    });
+  });
+
+  it("should use claimed progress when a parser stalls", () => {
+    const parser: Parser<"sync", string, undefined> = {
+      mode: "sync",
+      $valueType: [],
+      $stateType: [],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: true,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: true,
+          consumed: [context.buffer[0] ?? ""],
+          next: {
+            ...context,
+            exec: context.exec == null
+              ? undefined
+              : { ...context.exec, commandPath: ["canonical"] },
+          },
+        };
+      },
+      complete() {
+        return { success: true, value: "unreachable" };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+
+    const result = parseDetailed(parser, ["first", "second"]);
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.deepEqual(result.remainingArgs, ["second"]);
+      assert.deepEqual(result.commandPath, ["canonical"]);
+    }
+  });
+
   it("should parse simple option successfully", () => {
     const parser = option("-v");
     const result = parse(parser, ["-v"]);

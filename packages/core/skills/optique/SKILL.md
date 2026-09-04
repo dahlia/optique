@@ -22,11 +22,11 @@ they cover the parts agents most often get wrong.
 Core rules
 ----------
 
- -  Use `run()` from *@optique/run* for real CLI applications. It reads
-    `process.argv`/`Deno.args`, handles help, version output, errors, exit
-    codes, colors, terminal width, and shell completion. Use `parse()` from
-    `@optique/core/parser` or `runParser()` from `@optique/core/facade` when
-    embedding Optique in tests, libraries, tools, or custom runtimes.
+ -  Use `run()` from *@optique/run* for applications; use `parse()` or
+    `runParser()` for embedded and custom runtimes.
+ -  In parser-focused tests, use `parseArgs()` or `parseArgsSync()` from
+    *@optique/testing/parser* for inferred values and detailed failures without
+    running help, output, exits, or command handlers.
  -  Compose parsers with `object()`, `tuple()`, `seq()`, `or()`, `merge()`, and
     modifiers. Do not write imperative `if`/`else` argument scanners around
     Optique parsers.

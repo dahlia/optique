@@ -523,6 +523,10 @@ importers:
         version: 5.8.3
 
   packages/testing:
+    dependencies:
+      '@optique/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

@@ -10,6 +10,8 @@ To be released.
 
 ### @optique/core
 
+ -  Added `parseDetailed()` to preserve remaining arguments and the matched
+    command path on structured parse failures.  [[#890], [#892], [#943]]
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
     with fixed flags and customizable parse errors.  [[#906], [#909]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
@@ -58,6 +60,8 @@ To be released.
 [#871]: https://github.com/dahlia/optique/issues/871
 [#872]: https://github.com/dahlia/optique/issues/872
 [#879]: https://github.com/dahlia/optique/issues/879
+[#890]: https://github.com/dahlia/optique/issues/890
+[#892]: https://github.com/dahlia/optique/issues/892
 [#904]: https://github.com/dahlia/optique/issues/904
 [#906]: https://github.com/dahlia/optique/issues/906
 [#909]: https://github.com/dahlia/optique/pull/909
@@ -76,6 +80,7 @@ To be released.
 [#929]: https://github.com/dahlia/optique/issues/929
 [#931]: https://github.com/dahlia/optique/pull/931
 [#932]: https://github.com/dahlia/optique/pull/932
+[#943]: https://github.com/dahlia/optique/pull/943
 
 ### @optique/run
 
@@ -166,8 +171,11 @@ To be released.
 ### @optique/testing
 
  -  Added the `@optique/testing` package with a shared `CapturedOutput` type
-    and reserved entry points for parser, runner, command discovery, and
-    subprocess testing.  [[#891], [#942]]
+    and layered entry points for parser, runner, command discovery, and
+    subprocess testing.  The parser entry point can run a complete argument
+    list and report an inferred value or a structured failure with remaining
+    arguments and the matched command path.
+    [[#890], [#891], [#892], [#942], [#943]]
 
 [#891]: https://github.com/dahlia/optique/issues/891
 [#942]: https://github.com/dahlia/optique/pull/942
