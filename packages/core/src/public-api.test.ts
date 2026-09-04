@@ -141,6 +141,7 @@ test("parser module hides constructs and parser-internal helpers", () => {
     "getDocPageSync",
     "parse",
     "parseAsync",
+    "parseDetailed",
     "parseSync",
     "suggest",
     "suggestAsync",
@@ -154,6 +155,7 @@ test("root module keeps user-facing APIs but not internal machinery", () => {
   assert.equal(typeof root.option, "function");
   assert.equal(typeof root.negatableFlag, "function");
   assert.equal(typeof root.parse, "function");
+  assert.equal(typeof root.parseDetailed, "function");
   assert.equal(typeof root.dependency, "function");
   assert.equal(typeof root.fluent, "function");
   assert.ok(!Object.hasOwn(root, "annotationKey"));

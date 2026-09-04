@@ -23,7 +23,7 @@ import {
   type ParseOptions,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
-import { dispatchByMode } from "./mode-dispatch.ts";
+import { dispatchByMode, dispatchParserByMode } from "./mode-dispatch.ts";
 import type { ParserDependencyMetadata } from "../dependency-metadata.ts";
 import {
   collectExplicitSourceValues,
@@ -1049,11 +1049,317 @@ export type Result<T> =
     readonly error: Message;
   };
 
+/**
+ * The result of a whole parser operation with failure progress preserved.
+ *
+ * Successful results have the same shape as {@link Result}.  Failures also
+ * identify the unconsumed argument suffix and the canonical command path
+ * matched before the failure.
+ *
+ * @template T The type of the value produced by the parser.
+ * @since 1.3.0
+ */
+export type DetailedParseResult<T> =
+  | Extract<Result<T>, { readonly success: true }>
+  | {
+    /** Indicates that the parsing operation failed. */
+    readonly success: false;
+    /** The error message describing why parsing failed. */
+    readonly error: Message;
+    /** The arguments that remained at the point of failure. */
+    readonly remainingArgs: readonly string[];
+    /** The canonical names of commands matched before the failure. */
+    readonly commandPath: readonly string[];
+  };
+
+/** @internal */
+export type ParseAttempt<T> =
+  | {
+    readonly kind: "success";
+    readonly result: Extract<Result<T>, { readonly success: true }>;
+  }
+  | {
+    readonly kind: "failure";
+    readonly error: Message;
+    readonly remainingArgs: readonly string[];
+    readonly consumedCount: number;
+    readonly optionsTerminated: boolean;
+    readonly commandPath: readonly string[];
+  };
+
+interface ParseAttemptOptions {
+  readonly mode?: "complete" | "parse-only";
+  readonly session?: EffectfulCompletionSession;
+  readonly parseOptions?: ParseOptions;
+}
+
 function injectAnnotationsIntoState<TState>(
   state: TState,
   options?: ParseOptions,
 ): TState {
   return injectAnnotations(state, options?.annotations);
+}
+
+function getFailureProgress(
+  args: readonly string[],
+  buffer: readonly string[],
+  consumedInStep: number,
+): {
+  readonly remainingArgs: readonly string[];
+  readonly consumedCount: number;
+} {
+  return {
+    remainingArgs: buffer.slice(consumedInStep),
+    consumedCount: args.length - buffer.length + consumedInStep,
+  };
+}
+
+function createParseExec(
+  parser: Parser<Mode, unknown, unknown>,
+): ExecutionContext {
+  return {
+    usage: parser.usage,
+    phase: "parse",
+    path: [],
+    commandPath: [],
+    trace: createInputTrace(),
+  };
+}
+
+function getCommandPath(exec: ExecutionContext | undefined): readonly string[] {
+  return [...(exec?.commandPath ?? [])];
+}
+
+function createCompleteExec(
+  exec: ExecutionContext,
+  context: {
+    readonly exec?: ExecutionContext;
+    readonly trace?: InputTrace;
+  },
+  session?: EffectfulCompletionSession,
+): ExecutionContext {
+  const runtime = createDependencyRuntimeContext();
+  return {
+    ...exec,
+    phase: "complete",
+    dependencyRuntime: runtime,
+    dependencyRegistry: runtime.registry,
+    commandPath: context.exec?.commandPath ?? exec.commandPath,
+    trace: context.exec?.trace ?? context.trace ?? exec.trace,
+    effectfulCompletionSession: session ?? createEffectfulCompletionSession(),
+  };
+}
+
+/** @internal */
+export function attemptParseSync<T>(
+  parser: Parser<"sync", T, unknown>,
+  args: readonly string[],
+  options?: ParseAttemptOptions,
+): ParseAttempt<T>;
+/** @internal */
+export function attemptParseSync(
+  parser: Parser<"sync", unknown, unknown>,
+  args: readonly string[],
+  options: ParseAttemptOptions & { readonly mode: "parse-only" },
+): ParseAttempt<undefined>;
+export function attemptParseSync<T>(
+  parser: Parser<"sync", T, unknown>,
+  args: readonly string[],
+  options: ParseAttemptOptions = {},
+): ParseAttempt<T | undefined> {
+  const initialState = injectAnnotationsIntoState(
+    parser.initialState,
+    options.parseOptions,
+  );
+  const shouldUnwrapAnnotatedValue =
+    hasMeaningfulAnnotations(options.parseOptions?.annotations) ||
+    isInjectedAnnotationWrapper(parser.initialState);
+  const exec = createParseExec(parser);
+  let context: ParserContext<unknown> = createParserContext(
+    {
+      buffer: [...args],
+      state: initialState,
+      optionsTerminated: false,
+    },
+    exec,
+  );
+
+  do {
+    const result = parser.parse(context);
+    if (!result.success) {
+      const progress = getFailureProgress(
+        args,
+        context.buffer,
+        result.consumed,
+      );
+      return {
+        kind: "failure",
+        error: result.error,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      const progress = getFailureProgress(
+        args,
+        previousBuffer,
+        result.consumed.length,
+      );
+      return {
+        kind: "failure",
+        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+  } while (context.buffer.length > 0);
+
+  if (options.mode === "parse-only") {
+    return {
+      kind: "success",
+      result: { success: true, value: undefined },
+    };
+  }
+
+  const endResult = parser.complete(
+    context.state,
+    createCompleteExec(exec, context, options.session),
+  );
+  if (!endResult.success) {
+    return {
+      kind: "failure",
+      error: endResult.error,
+      remainingArgs: [],
+      consumedCount: args.length,
+      optionsTerminated: context.optionsTerminated,
+      commandPath: getCommandPath(context.exec),
+    };
+  }
+  return {
+    kind: "success",
+    result: {
+      success: true,
+      value: shouldUnwrapAnnotatedValue
+        ? unwrapInjectedAnnotationWrapper(endResult.value)
+        : endResult.value,
+      ...(endResult.deferred ? { deferred: true as const } : {}),
+      ...(endResult.deferredKeys
+        ? { deferredKeys: endResult.deferredKeys }
+        : {}),
+    },
+  };
+}
+
+/** @internal */
+export async function attemptParseAsync<T>(
+  parser: Parser<Mode, T, unknown>,
+  args: readonly string[],
+  options?: ParseAttemptOptions,
+): Promise<ParseAttempt<T>>;
+/** @internal */
+export async function attemptParseAsync(
+  parser: Parser<Mode, unknown, unknown>,
+  args: readonly string[],
+  options: ParseAttemptOptions & { readonly mode: "parse-only" },
+): Promise<ParseAttempt<undefined>>;
+export async function attemptParseAsync<T>(
+  parser: Parser<Mode, T, unknown>,
+  args: readonly string[],
+  options: ParseAttemptOptions = {},
+): Promise<ParseAttempt<T | undefined>> {
+  const initialState = injectAnnotationsIntoState(
+    parser.initialState,
+    options.parseOptions,
+  );
+  const shouldUnwrapAnnotatedValue =
+    hasMeaningfulAnnotations(options.parseOptions?.annotations) ||
+    isInjectedAnnotationWrapper(parser.initialState);
+  const exec = createParseExec(parser);
+  let context: ParserContext<unknown> = createParserContext(
+    {
+      buffer: [...args],
+      state: initialState,
+      optionsTerminated: false,
+    },
+    exec,
+  );
+
+  do {
+    const result = await parser.parse(context);
+    if (!result.success) {
+      const progress = getFailureProgress(
+        args,
+        context.buffer,
+        result.consumed,
+      );
+      return {
+        kind: "failure",
+        error: result.error,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+    const previousBuffer = context.buffer;
+    context = result.next;
+    if (isBufferUnchanged(previousBuffer, context.buffer)) {
+      const progress = getFailureProgress(
+        args,
+        previousBuffer,
+        result.consumed.length,
+      );
+      return {
+        kind: "failure",
+        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
+        remainingArgs: progress.remainingArgs,
+        consumedCount: progress.consumedCount,
+        optionsTerminated: context.optionsTerminated,
+        commandPath: getCommandPath(context.exec),
+      };
+    }
+  } while (context.buffer.length > 0);
+
+  if (options.mode === "parse-only") {
+    return {
+      kind: "success",
+      result: { success: true, value: undefined },
+    };
+  }
+
+  const endResult = await parser.complete(
+    context.state,
+    createCompleteExec(exec, context, options.session),
+  );
+  if (!endResult.success) {
+    return {
+      kind: "failure",
+      error: endResult.error,
+      remainingArgs: [],
+      consumedCount: args.length,
+      optionsTerminated: context.optionsTerminated,
+      commandPath: getCommandPath(context.exec),
+    };
+  }
+  return {
+    kind: "success",
+    result: {
+      success: true,
+      value: shouldUnwrapAnnotatedValue
+        ? unwrapInjectedAnnotationWrapper(endResult.value)
+        : endResult.value,
+      ...(endResult.deferred ? { deferred: true as const } : {}),
+      ...(endResult.deferredKeys
+        ? { deferredKeys: endResult.deferredKeys }
+        : {}),
+    },
+  };
 }
 
 /**
@@ -1085,58 +1391,10 @@ export function parseSync<T>(
   args: readonly string[],
   options?: ParseOptions,
 ): Result<T> {
-  const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const shouldUnwrapAnnotatedValue =
-    hasMeaningfulAnnotations(options?.annotations) ||
-    isInjectedAnnotationWrapper(parser.initialState);
-
-  const exec: ExecutionContext = {
-    usage: parser.usage,
-    phase: "parse",
-    path: [],
-    trace: createInputTrace(),
-  };
-  let context: ParserContext<unknown> = createParserContext(
-    { buffer: args, state: initialState, optionsTerminated: false },
-    exec,
-  );
-  do {
-    const result = parser.parse(context);
-    if (!result.success) {
-      return { success: false, error: result.error };
-    }
-    const previousBuffer = context.buffer;
-    context = result.next;
-    if (isBufferUnchanged(previousBuffer, context.buffer)) {
-      return {
-        success: false,
-        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
-      };
-    }
-  } while (context.buffer.length > 0);
-  const runtime = createDependencyRuntimeContext();
-  const completeExec: ExecutionContext = {
-    ...exec,
-    phase: "complete",
-    dependencyRuntime: runtime,
-    dependencyRegistry: runtime.registry,
-    commandPath: context.exec?.commandPath ?? exec.commandPath,
-    trace: context.exec?.trace ?? context.trace ?? exec.trace,
-    effectfulCompletionSession: createEffectfulCompletionSession(),
-  };
-  const endResult = parser.complete(context.state, completeExec);
-  return endResult.success
-    ? {
-      success: true,
-      value: shouldUnwrapAnnotatedValue
-        ? unwrapInjectedAnnotationWrapper(endResult.value)
-        : endResult.value,
-      ...(endResult.deferred ? { deferred: true as const } : {}),
-      ...(endResult.deferredKeys
-        ? { deferredKeys: endResult.deferredKeys }
-        : {}),
-    }
-    : { success: false, error: endResult.error };
+  const attempted = attemptParseSync(parser, args, { parseOptions: options });
+  return attempted.kind === "success"
+    ? attempted.result
+    : { success: false, error: attempted.error };
 }
 
 /**
@@ -1178,58 +1436,63 @@ export async function parseAsync<T>(
   args: readonly string[],
   options?: ParseOptions,
 ): Promise<Result<T>> {
-  const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const shouldUnwrapAnnotatedValue =
-    hasMeaningfulAnnotations(options?.annotations) ||
-    isInjectedAnnotationWrapper(parser.initialState);
+  const attempted = await attemptParseAsync(parser, args, {
+    parseOptions: options,
+  });
+  return attempted.kind === "success"
+    ? attempted.result
+    : { success: false, error: attempted.error };
+}
 
-  const exec: ExecutionContext = {
-    usage: parser.usage,
-    phase: "parse",
-    path: [],
-    trace: createInputTrace(),
-  };
-  let context: ParserContext<unknown> = createParserContext(
-    { buffer: args, state: initialState, optionsTerminated: false },
-    exec,
-  );
-  do {
-    const result = await parser.parse(context);
-    if (!result.success) {
-      return { success: false, error: result.error };
-    }
-    const previousBuffer = context.buffer;
-    context = result.next;
-    if (isBufferUnchanged(previousBuffer, context.buffer)) {
-      return {
-        success: false,
-        error: message`Unexpected option or argument: ${context.buffer[0]}.`,
+/**
+ * Parses a complete argument list while preserving failure progress.
+ *
+ * The return mode follows the parser: synchronous parsers return immediately,
+ * while asynchronous parsers return a promise.  Use this lower-level API when
+ * a caller needs the unconsumed argument suffix or matched command path.
+ *
+ * @template M The execution mode of the parser.
+ * @template T The type of the value produced by the parser.
+ * @param parser The parser to run.
+ * @param args The complete argument list to parse.
+ * @param options Optional parsing annotations.
+ * @returns A detailed success or failure result in the parser's mode.
+ * @throws {TypeError} When a synchronous dependency source extractor returns a
+ *         thenable during completion-time dependency seeding.
+ * @since 1.3.0
+ */
+export function parseDetailed<M extends Mode, T>(
+  parser: Parser<M, T, unknown>,
+  args: readonly string[],
+  options?: ParseOptions,
+): ModeValue<M, DetailedParseResult<T>> {
+  return dispatchParserByMode(
+    parser,
+    (parser) => {
+      const attempted = attemptParseSync(
+        parser,
+        args,
+        { parseOptions: options },
+      );
+      return attempted.kind === "success" ? attempted.result : {
+        success: false as const,
+        error: attempted.error,
+        remainingArgs: attempted.remainingArgs,
+        commandPath: attempted.commandPath,
       };
-    }
-  } while (context.buffer.length > 0);
-  const runtime = createDependencyRuntimeContext();
-  const completeExec: ExecutionContext = {
-    ...exec,
-    phase: "complete",
-    dependencyRuntime: runtime,
-    dependencyRegistry: runtime.registry,
-    commandPath: context.exec?.commandPath ?? exec.commandPath,
-    trace: context.exec?.trace ?? context.trace ?? exec.trace,
-    effectfulCompletionSession: createEffectfulCompletionSession(),
-  };
-  const endResult = await parser.complete(context.state, completeExec);
-  return endResult.success
-    ? {
-      success: true,
-      value: shouldUnwrapAnnotatedValue
-        ? unwrapInjectedAnnotationWrapper(endResult.value)
-        : endResult.value,
-      ...(endResult.deferred ? { deferred: true as const } : {}),
-      ...(endResult.deferredKeys
-        ? { deferredKeys: endResult.deferredKeys }
-        : {}),
-    }
-    : { success: false, error: endResult.error };
+    },
+    async (parser) => {
+      const attempted = await attemptParseAsync(parser, args, {
+        parseOptions: options,
+      });
+      return attempted.kind === "success" ? attempted.result : {
+        success: false as const,
+        error: attempted.error,
+        remainingArgs: attempted.remainingArgs,
+        commandPath: attempted.commandPath,
+      };
+    },
+  );
 }
 
 /**

@@ -85,6 +85,9 @@
     }
   },
   "sideEffects": false,
+  "dependencies": {
+    "@optique/core": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsdown": "catalog:",

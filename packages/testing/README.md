@@ -18,6 +18,23 @@ visible from its import:
 The package root holds only the contracts that mean the same thing at more than
 one boundary.  It depends on no test framework and no assertion library.
 
+The parser layer is available through `parseArgs()` and `parseArgsSync()`:
+
+~~~~ typescript
+import { option } from "@optique/core/primitives";
+import { parseArgsSync } from "@optique/testing/parser";
+
+const result = parseArgsSync(option("--verbose"), ["--verbose"]);
+if (result.success) {
+  console.log(result.value);
+} else {
+  console.error(result.error, result.remainingArgs, result.commandPath);
+}
+~~~~
+
+The runner, discovery, and child-process entry points remain reserved while
+their helpers are developed.
+
 [Optique]: https://optique.dev/
 
 

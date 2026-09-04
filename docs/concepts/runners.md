@@ -152,6 +152,12 @@ Use `parse()` when you need complete control over error handling, want to
 integrate parsing into a larger application flow, or need to handle multiple
 parsing attempts.
 
+When the caller also needs to know where a failure occurred, use
+`parseDetailed()`.  It runs the same parse and completion phases as `parse()`,
+but its failure result also contains `remainingArgs` and the canonical
+`commandPath`.  Parser-focused tests can use the corresponding `parseArgs()`
+and `parseArgsSync()` helpers from *@optique/testing/parser*.
+
 
 Mid-level execution with `@optique/core/facade`
 -----------------------------------------------

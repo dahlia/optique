@@ -23,10 +23,8 @@ import { /* ... */ } from "@optique/testing/discover";
 import { /* ... */ } from "@optique/testing/cli";
 ~~~~
 
-> [!NOTE]
-> The package currently ships the shared contracts below and reserves the four
-> entry points.  The helpers for each layer are still landing; follow
-> [issue #890] for progress.
+The parser helpers are available now.  The runner, discovery, and child-process
+helpers remain reserved while their respective parts of [issue #890] land.
 
 [issue #890]: https://github.com/dahlia/optique/issues/890
 
@@ -80,6 +78,43 @@ Prefer the narrowest layer that still exercises what you are asserting about.
 These layers are complements, not alternatives.  A parser test that runs in
 milliseconds is a poor substitute for one end-to-end check that the binary
 starts at all, and the reverse is equally true.
+
+
+Testing a parser
+----------------
+
+Use `parseArgsSync()` with a synchronous parser, or `parseArgs()` when the
+parser may be asynchronous.  The latter always returns a promise, including
+when given a synchronous parser.
+
+~~~~ typescript twoslash
+import { command, option } from "@optique/core/primitives";
+import { parseArgsSync } from "@optique/testing/parser";
+
+const parser = command("serve", option("--watch"));
+const result = parseArgsSync(parser, ["serve", "--watch"]);
+//    ^?
+
+if (result.success) {
+  result.value; // boolean
+} else {
+  result.error;
+  result.remainingArgs;
+  result.commandPath;
+}
+~~~~
+
+A failure reports the argument suffix that remained where parsing stopped.
+`commandPath` contains the canonical names of commands matched before that
+point, even when the input used a command alias.  Completion-time failures have
+an empty `remainingArgs` array because the complete argument list was already
+consumed.
+
+Both helpers accept the same `ParseOptions` as the core parsing APIs, including
+annotations.  They return parser failures as values, but exceptions thrown by
+the parser still propagate.  `parseArgs()` likewise preserves promise
+rejections.  Neither helper renders help, interprets `--help`/`--version`,
+writes output, exits, or dispatches a command handler.
 
 
 Shared contracts
