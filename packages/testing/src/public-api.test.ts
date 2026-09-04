@@ -124,16 +124,19 @@ describe("public surface", () => {
     assert.equal(captured.stderr, "");
   });
 
-  it("should resolve every reserved subpath", async () => {
-    const root = await import("@optique/testing");
-    await import("@optique/testing/cli");
-    await import("@optique/testing/discover");
-    await import("@optique/testing/parser");
-    await import("@optique/testing/run");
-
-    // The root is limited to types shared across layers, so it contributes no
-    // runtime exports.  Test functions belong to the layer subpaths instead.
-    assert.deepEqual(Object.keys(root), []);
+  it("should resolve every reserved subpath without runtime exports", async () => {
+    // The root is limited to types shared across layers, and the four layer
+    // subpaths are reserved but not yet implemented, so none of them
+    // contributes a runtime export.  A subpath that starts exporting a helper
+    // has to say so here.
+    assert.deepEqual(Object.keys(await import("@optique/testing")), []);
+    assert.deepEqual(Object.keys(await import("@optique/testing/cli")), []);
+    assert.deepEqual(
+      Object.keys(await import("@optique/testing/discover")),
+      [],
+    );
+    assert.deepEqual(Object.keys(await import("@optique/testing/parser")), []);
+    assert.deepEqual(Object.keys(await import("@optique/testing/run")), []);
   });
 });
 
@@ -161,10 +164,12 @@ describe("npm build output", () => {
 
     const require = createRequire(import.meta.url);
 
-    assert.equal(typeof require("@optique/testing"), "object");
-    require("@optique/testing/cli");
-    require("@optique/testing/discover");
-    require("@optique/testing/parser");
-    require("@optique/testing/run");
+    // The CommonJS surface has to stay empty for the same reason the ESM one
+    // does, so that the two cannot drift apart unnoticed.
+    assert.deepEqual(Object.keys(require("@optique/testing")), []);
+    assert.deepEqual(Object.keys(require("@optique/testing/cli")), []);
+    assert.deepEqual(Object.keys(require("@optique/testing/discover")), []);
+    assert.deepEqual(Object.keys(require("@optique/testing/parser")), []);
+    assert.deepEqual(Object.keys(require("@optique/testing/run")), []);
   });
 });
