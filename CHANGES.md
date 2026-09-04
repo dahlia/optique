@@ -108,15 +108,24 @@ To be released.
 
 ### @optique/inquirer
 
- -  Added conditional prompt skipping to Inquirer prompt configurations with
+ -  Added conditional prompt skipping to Inquirer.js prompt configurations with
     `when` and `otherwise`, allowing applications to avoid prompts whose
     runtime prerequisites are unavailable.  [[#882]]
+ -  Added shared validation, retry limits, and abort signals to `prompt()`.
+    Every Inquirer.js prompt type can now reject a returned answer and prompt
+    again, while `input`, `password`, and `editor` retain their native
+    validation.  Custom prompters receive the shared attempt context, whose
+    types are re-exported for convenience.  [[#873], [#937], [#939]]
  -  Added support for prompt configurations derived from dependency sources.
     `prompt()` now also accepts a `derivePromptConfig()` result whose
     resolver returns any of this package's prompt configurations, exposed
     through the new `RuntimePromptConfig` union, so a later question can
     adapt its choices to earlier answers.  `derivePromptConfig()` and its
     types are re-exported for convenience.  [[#869], [#872]]
+
+[#873]: https://github.com/dahlia/optique/issues/873
+[#937]: https://github.com/dahlia/optique/issues/937
+[#939]: https://github.com/dahlia/optique/pull/939
 
 ### @optique/prompt
 
@@ -144,7 +153,6 @@ To be released.
     now runs before dependency replay, so it may be displayed before an
     earlier-declared non-source prompt.  [[#869], [#870], [#912]]
 
-[#873]: https://github.com/dahlia/optique/issues/873
 [#935]: https://github.com/dahlia/optique/issues/935
 [#938]: https://github.com/dahlia/optique/pull/938
 
@@ -2992,11 +3000,6 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
     cleanly with `bindEnv()` and `bindConfig()`—the prompt is skipped
     whenever the CLI, environment variable, or config file supplies a value.
 
- -  Added `validate` support to `SelectConfig`, `RawlistConfig`,
-    `ExpandConfig`, and `CheckboxConfig` prompt configurations.  Return
-    `true` to accept, or a string error message to reject and re-prompt.
-    [[#620], [#625]]
-
 #### Prompt resolution and wrapper behavior
 
  -  *Behavioral change:* `prompt()` no longer re-validates prompted values
@@ -3068,9 +3071,7 @@ interactive prompt fallback integration via Inquirer.js.  [[#87], [#137]]
 [#612]: https://github.com/dahlia/optique/pull/612
 [#613]: https://github.com/dahlia/optique/pull/613
 [#615]: https://github.com/dahlia/optique/issues/615
-[#620]: https://github.com/dahlia/optique/issues/620
 [#621]: https://github.com/dahlia/optique/pull/621
-[#625]: https://github.com/dahlia/optique/pull/625
 
 ### @optique/logtape
 

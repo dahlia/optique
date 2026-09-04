@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import process from "node:process";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
 import { type Annotations, getAnnotations } from "@optique/core/annotations";
@@ -12,7 +13,7 @@ import type {
 } from "@optique/core/context";
 import type { DocFragments } from "@optique/core/doc";
 import { runWith } from "@optique/core/facade";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import {
   parseAsync,
   type Parser,
@@ -24,7 +25,14 @@ import { constant, fail, flag, option } from "@optique/core/primitives";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
-import { derivePromptConfig, prompt, Separator } from "@optique/inquirer";
+import {
+  derivePromptConfig,
+  prompt,
+  type PromptExecutionContext,
+  type PromptOptions,
+  type PromptValidator,
+  Separator,
+} from "@optique/inquirer";
 import { bindConfig, createConfigContext } from "@optique/config";
 import { runAsync } from "@optique/run/run";
 
@@ -36,6 +44,45 @@ const propertyParameters = { numRuns: 120 } as const;
 const cliStringValueArbitrary = fc.string().map((value) => `value${value}`);
 
 let promptFunctionsOverrideQueue = Promise.resolve();
+
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason?: unknown) => void;
+}
+
+interface InquirerPromptContext {
+  readonly signal?: AbortSignal;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function withCapturedStderr<T>(
+  callback: (chunks: string[]) => Promise<T>,
+  observeWrite?: (chunk: string) => void,
+): Promise<T> {
+  const chunks: string[] = [];
+  const originalWrite = process.stderr.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    const text = String(chunk);
+    chunks.push(text);
+    observeWrite?.(text);
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    return await callback(chunks);
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+}
 
 function isPhase2ContextRequest(
   request: unknown,
@@ -730,6 +777,386 @@ describe("prompt()", () => {
           return true;
         },
       );
+    });
+  });
+
+  describe("shared validation, retries, and aborts", {
+    concurrency: false,
+  }, () => {
+    async function assertSelectionPromptRetries<TValue, TState>(
+      promptName: "select" | "rawlist" | "expand" | "checkbox",
+      answers: readonly [TValue, TValue],
+      createParser: (
+        options: PromptOptions<TValue>,
+      ) => Parser<"async", TValue, TState>,
+    ): Promise<void> {
+      const validationMessage = message`That value is not available.`;
+      const events: string[] = [];
+      let promptCalls = 0;
+      let validationCalls = 0;
+
+      await withCapturedStderr(
+        async (chunks) => {
+          await withPromptFunctionsOverride(
+            {
+              [promptName]: () => {
+                promptCalls++;
+                events.push(`prompt:${promptCalls}`);
+                return Promise.resolve(answers[promptCalls - 1]);
+              },
+            },
+            async () => {
+              const parser = createParser({
+                async validate() {
+                  validationCalls++;
+                  events.push(`validate:${validationCalls}`);
+                  await Promise.resolve();
+                  return validationCalls === 1 ? validationMessage : undefined;
+                },
+              });
+
+              const result = await parseAsync(parser, []);
+
+              assert.ok(result.success);
+              assert.deepEqual(result.value, answers[1]);
+            },
+          );
+
+          assert.deepEqual(chunks, [formatMessage(validationMessage) + "\n"]);
+        },
+        () => events.push("stderr"),
+      );
+
+      assert.deepEqual(events, [
+        "prompt:1",
+        "validate:1",
+        "stderr",
+        "prompt:2",
+        "validate:2",
+      ]);
+    }
+
+    it("should infer shared validator values from the wrapped parser", () => {
+      const validator = ((value) =>
+        value.length > 0
+          ? undefined
+          : message`Enter a name.`) satisfies PromptValidator<string>;
+      const options = { validate: validator } satisfies PromptOptions<string>;
+      const parser = prompt(
+        option("--name", string()),
+        { type: "input", message: "Enter name:" },
+        options,
+      );
+
+      prompt(option("--name", string()), {
+        type: "input",
+        message: "Enter name:",
+      }, {
+        // @ts-expect-error The wrapped parser determines the validator value.
+        validate: (_value: number) =>
+          undefined,
+      });
+
+      assert.equal(parser.mode, "async");
+    });
+
+    it("should retry select prompts after shared validation", async () => {
+      await assertSelectionPromptRetries<string, undefined>(
+        "select",
+        ["development", "production"],
+        (options) =>
+          prompt(fail<string>(), {
+            type: "select",
+            message: "Choose environment:",
+            choices: ["development", "production"],
+          }, options),
+      );
+    });
+
+    it("should retry rawlist prompts after shared validation", async () => {
+      await assertSelectionPromptRetries<string, undefined>(
+        "rawlist",
+        ["json", "yaml"],
+        (options) =>
+          prompt(fail<string>(), {
+            type: "rawlist",
+            message: "Choose format:",
+            choices: ["json", "yaml"],
+          }, options),
+      );
+    });
+
+    it("should retry expand prompts after shared validation", async () => {
+      await assertSelectionPromptRetries<string, undefined>(
+        "expand",
+        ["skip", "overwrite"],
+        (options) =>
+          prompt(fail<string>(), {
+            type: "expand",
+            message: "Choose action:",
+            choices: [
+              { value: "skip", key: "s" },
+              { value: "overwrite", key: "o" },
+            ],
+          }, options),
+      );
+    });
+
+    it("should retry checkbox prompts after shared validation", async () => {
+      await assertSelectionPromptRetries<readonly string[], undefined>(
+        "checkbox",
+        [["typescript"], ["typescript", "deno"]],
+        (options) =>
+          prompt(fail<readonly string[]>(), {
+            type: "checkbox",
+            message: "Choose runtimes:",
+            choices: ["typescript", "deno"],
+          }, options),
+      );
+    });
+
+    it("should pass retry context to a custom prompter without writing", async () => {
+      const controller = new AbortController();
+      const validationMessage = message`Choose production.`;
+      const contexts: PromptExecutionContext[] = [];
+      const answers = ["development", "production"] as const;
+
+      await withCapturedStderr(async (chunks) => {
+        const parser = prompt(fail<string>(), {
+          type: "select",
+          message: "Choose environment:",
+          choices: answers,
+          prompter: (context) => {
+            contexts.push(context);
+            return Promise.resolve(answers[context.attempt - 1]);
+          },
+        }, {
+          signal: controller.signal,
+          validate(value) {
+            return value === "production" ? undefined : validationMessage;
+          },
+        });
+
+        const result = await parseAsync(parser, []);
+
+        assert.ok(result.success);
+        assert.equal(result.value, "production");
+        assert.deepEqual(chunks, []);
+      });
+
+      assert.deepEqual(contexts, [
+        { attempt: 1, signal: controller.signal },
+        {
+          attempt: 2,
+          previousValidationMessage: validationMessage,
+          signal: controller.signal,
+        },
+      ]);
+      assert.equal(contexts[1].previousValidationMessage, validationMessage);
+    });
+
+    it("should finish native validation within one shared attempt", async () => {
+      const events: string[] = [];
+      let promptCalls = 0;
+      let nativeValidationCalls = 0;
+      let sharedValidationCalls = 0;
+
+      await withPromptFunctionsOverride(
+        {
+          input: async (config: {
+            readonly validate?: (
+              value: string,
+            ) => boolean | string | Promise<boolean | string>;
+          }) => {
+            promptCalls++;
+            nativeValidationCalls++;
+            events.push("native:invalid");
+            assert.equal(
+              await config.validate?.(""),
+              "Name is required.",
+            );
+            nativeValidationCalls++;
+            events.push("native:valid");
+            assert.equal(await config.validate?.("Alice"), true);
+            return "Alice";
+          },
+        },
+        async () => {
+          const parser = prompt(fail<string>(), {
+            type: "input",
+            message: "Enter name:",
+            validate: (value) => value.length > 0 || "Name is required.",
+          }, {
+            validate(value) {
+              sharedValidationCalls++;
+              events.push("shared");
+              assert.equal(value, "Alice");
+              return undefined;
+            },
+          });
+
+          const result = await parseAsync(parser, []);
+
+          assert.ok(result.success);
+          assert.equal(result.value, "Alice");
+        },
+      );
+
+      assert.equal(promptCalls, 1);
+      assert.equal(nativeValidationCalls, 2);
+      assert.equal(sharedValidationCalls, 1);
+      assert.deepEqual(events, ["native:invalid", "native:valid", "shared"]);
+    });
+
+    it("should honor the shared maximum attempt limit", async () => {
+      const validationMessage = message`Production is required.`;
+      let promptCalls = 0;
+
+      await withCapturedStderr(async (chunks) => {
+        await withPromptFunctionsOverride(
+          {
+            select: () => {
+              promptCalls++;
+              return Promise.resolve("development");
+            },
+          },
+          async () => {
+            const parser = prompt(fail<string>(), {
+              type: "select",
+              message: "Choose environment:",
+              choices: ["development", "production"],
+            }, {
+              maxAttempts: 1,
+              validate: () => validationMessage,
+            });
+
+            const result = await parseAsync(parser, []);
+
+            assert.ok(!result.success);
+            assert.equal(result.error, validationMessage);
+          },
+        );
+
+        assert.deepEqual(chunks, []);
+      });
+
+      assert.equal(promptCalls, 1);
+    });
+
+    it("should treat user cancellation during a retry as terminal", async () => {
+      const validationMessage = message`Production is required.`;
+      let promptCalls = 0;
+      let validationCalls = 0;
+
+      await withCapturedStderr(async () => {
+        await withPromptFunctionsOverride(
+          {
+            select: () => {
+              promptCalls++;
+              if (promptCalls === 1) return Promise.resolve("development");
+              const error = new Error("User cancelled the prompt.");
+              error.name = "ExitPromptError";
+              throw error;
+            },
+          },
+          async () => {
+            const parser = prompt(fail<string>(), {
+              type: "select",
+              message: "Choose environment:",
+              choices: ["development", "production"],
+            }, {
+              validate() {
+                validationCalls++;
+                return validationMessage;
+              },
+            });
+
+            const result = await parseAsync(parser, []);
+
+            assert.ok(!result.success);
+            assert.equal(formatMessage(result.error), "Prompt cancelled.");
+          },
+        );
+      });
+
+      assert.equal(promptCalls, 2);
+      assert.equal(validationCalls, 1);
+    });
+
+    it("should reject a pre-aborted signal before invoking Inquirer.js", async () => {
+      const controller = new AbortController();
+      const reason = { code: "stopped" };
+      controller.abort(reason);
+
+      await withCapturedStderr(async (chunks) => {
+        await withPromptFunctionsOverride(
+          {
+            input: () => {
+              assert.fail("Inquirer.js should not be called.");
+            },
+          },
+          async () => {
+            const parser = prompt(fail<string>(), {
+              type: "input",
+              message: "Enter name:",
+            }, { signal: controller.signal });
+
+            await assert.rejects(
+              () => parseAsync(parser, []),
+              (error: unknown) => error === reason,
+            );
+          },
+        );
+
+        assert.deepEqual(chunks, []);
+      });
+    });
+
+    it("should reject with the signal reason during an active prompt", async () => {
+      const controller = new AbortController();
+      const reason = { code: "stopped" };
+      const started = deferred<void>();
+      const attempt = deferred<string>();
+      const contexts: (InquirerPromptContext | undefined)[] = [];
+
+      await withCapturedStderr(async (chunks) => {
+        await withPromptFunctionsOverride(
+          {
+            input: (
+              _config: Record<string, unknown>,
+              context?: InquirerPromptContext,
+            ) => {
+              contexts.push(context);
+              started.resolve(undefined);
+              return attempt.promise;
+            },
+          },
+          async () => {
+            const parser = prompt(fail<string>(), {
+              type: "input",
+              message: "Enter name:",
+            }, { signal: controller.signal });
+
+            const parsing = parseAsync(parser, []);
+            await started.promise;
+            controller.abort(reason);
+
+            await assert.rejects(
+              () => parsing,
+              (error: unknown) => error === reason,
+            );
+
+            const abortError = new Error("Prompt aborted.");
+            abortError.name = "AbortPromptError";
+            attempt.reject(abortError);
+            await Promise.resolve();
+          },
+        );
+
+        assert.deepEqual(chunks, []);
+      });
+
+      assert.deepEqual(contexts, [{ signal: controller.signal }]);
     });
   });
 
@@ -4049,44 +4476,75 @@ describe("prompt()", () => {
     );
 
     it("executes built-in prompt branches via prompt-function override", async () => {
-      const calls: Array<{ name: string; config: Record<string, unknown> }> =
-        [];
+      const controller = new AbortController();
+      const calls: Array<{
+        name: string;
+        config: Record<string, unknown>;
+        context?: InquirerPromptContext;
+      }> = [];
       await withPromptFunctionsOverride(
         {
-          confirm: (config: Record<string, unknown>) => {
-            calls.push({ name: "confirm", config });
+          confirm: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "confirm", config, context });
             return true;
           },
-          number: (config: Record<string, unknown>) => {
-            calls.push({ name: "number", config });
+          number: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "number", config, context });
             return 42;
           },
-          input: (config: Record<string, unknown>) => {
-            calls.push({ name: "input", config });
+          input: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "input", config, context });
             return "hello";
           },
-          password: (config: Record<string, unknown>) => {
-            calls.push({ name: "password", config });
+          password: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "password", config, context });
             return "secret";
           },
-          editor: (config: Record<string, unknown>) => {
-            calls.push({ name: "editor", config });
+          editor: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "editor", config, context });
             return "edited";
           },
-          select: (config: Record<string, unknown>) => {
-            calls.push({ name: "select", config });
+          select: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "select", config, context });
             return "green";
           },
-          rawlist: (config: Record<string, unknown>) => {
-            calls.push({ name: "rawlist", config });
+          rawlist: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "rawlist", config, context });
             return "prod";
           },
-          expand: (config: Record<string, unknown>) => {
-            calls.push({ name: "expand", config });
+          expand: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "expand", config, context });
             return "info";
           },
-          checkbox: (config: Record<string, unknown>) => {
-            calls.push({ name: "checkbox", config });
+          checkbox: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            calls.push({ name: "checkbox", config, context });
             return ["a", "c"];
           },
         },
@@ -4097,7 +4555,7 @@ describe("prompt()", () => {
                 type: "confirm",
                 message: "confirm?",
                 default: true,
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4111,7 +4569,7 @@ describe("prompt()", () => {
                 min: 1,
                 max: 10,
                 step: 1,
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4123,7 +4581,7 @@ describe("prompt()", () => {
                 message: "input?",
                 default: "x",
                 validate: (value) => value.length > 0,
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4135,7 +4593,7 @@ describe("prompt()", () => {
                 message: "password?",
                 mask: true,
                 validate: (value) => value.length > 0,
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4147,7 +4605,7 @@ describe("prompt()", () => {
                 message: "editor?",
                 default: "draft",
                 validate: (value) => value.length > 0,
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4168,7 +4626,7 @@ describe("prompt()", () => {
                   },
                   { value: "blue", name: "Blue", disabled: "skip" },
                 ],
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4183,7 +4641,7 @@ describe("prompt()", () => {
                   "dev",
                   { value: "prod", name: "Production" },
                 ],
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4198,7 +4656,7 @@ describe("prompt()", () => {
                   { value: "debug", key: "d" },
                   { value: "info", key: "i", name: "Info" },
                 ],
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4212,7 +4670,7 @@ describe("prompt()", () => {
                   "a",
                   { value: "c", name: "C", disabled: false },
                 ],
-              }),
+              }, { signal: controller.signal }),
               [],
             )).success,
           );
@@ -4229,14 +4687,23 @@ describe("prompt()", () => {
       assert.ok(names.includes("rawlist"));
       assert.ok(names.includes("expand"));
       assert.ok(names.includes("checkbox"));
+      assert.deepEqual(
+        calls.map((call) => call.context),
+        calls.map(() => ({ signal: controller.signal })),
+      );
     });
 
     it("covers prompt config spreads when optional fields are absent", async () => {
       const calls: Array<{ name: string; config: Record<string, unknown> }> =
         [];
+      let inquirerContext: InquirerPromptContext | undefined;
       await withPromptFunctionsOverride(
         {
-          confirm: (config: Record<string, unknown>) => {
+          confirm: (
+            config: Record<string, unknown>,
+            context?: InquirerPromptContext,
+          ) => {
+            inquirerContext = context;
             calls.push({ name: "confirm", config });
             return true;
           },
@@ -4343,6 +4810,7 @@ describe("prompt()", () => {
         !("name" in (((byName.get("select")?.choices as unknown[])?.[0] ??
           {}) as object)),
       );
+      assert.deepEqual(inquirerContext, {});
     });
 
     it("covers suggest() state unwrapping branches", async () => {

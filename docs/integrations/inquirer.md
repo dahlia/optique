@@ -504,7 +504,8 @@ const useGitHubCli = prompt(fail<boolean>(), {
 The condition runs only when an actual parse reaches this fallback.  CLI
 values and configured sources take priority without running it, and Optique
 also skips it while generating help, version output, or shell completion.
-When `when` returns `false`, `otherwise` is returned without opening Inquirer.
+When `when` returns `false`, `otherwise` is returned without opening an
+Inquirer.js prompt.
 If the condition throws or rejects, the error propagates to the caller.
 
 
@@ -557,23 +558,79 @@ they came from the command line, a binding, or another prompt.  See the
 for declared defaults, failure behavior, and the runtime condition form.
 
 
-Testing
--------
+Shared validation, retries, and aborts
+--------------------------------------
 
-All prompt configuration types accept an optional `prompter` property for
-testing.  When provided, the function is called instead of launching an
-interactive Inquirer.js prompt:
+*Available since Optique 1.3.0.*
+
+Pass shared prompt options as the third argument to `prompt()` when a prompted
+value needs a recoverable check.  The validator may be synchronous or
+asynchronous.  Return `undefined` to accept the value, or a structured
+`Message` to show an explanation and open the prompt again:
 
 ~~~~ typescript twoslash
-import { parseAsync } from "@optique/core/parser";
+declare function canDeployTo(environment: string): Promise<boolean>;
+// ---cut-before---
+import { message } from "@optique/core/message";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import { prompt } from "@optique/inquirer";
 
+const environment = prompt(option("--environment", string()), {
+  type: "select",
+  message: "Choose the deployment environment:",
+  choices: ["development", "staging", "production"],
+}, {
+  maxAttempts: 3,
+  async validate(value) {
+    return await canDeployTo(value)
+      ? undefined
+      : message`Cannot deploy to ${value}.`;
+  },
+});
+~~~~
+
+This shared validator runs after Inquirer.js returns a value and works with
+every prompt type.  The `input`, `password`, and `editor` configs also retain
+their native `validate` callbacks.  Native validation keeps the same
+Inquirer.js prompt open, so rejected native submissions do not advance the
+shared attempt count.
+
+Before retrying a built-in Inquirer.js prompt, Optique writes the previous
+shared validation message to stderr.  A custom `prompter` receives that message
+in its attempt context and is responsible for displaying it.  `maxAttempts`
+must be a positive integer; when the limit is reached, the last validation
+message becomes the parse failure.  Omitting the limit allows retries until the
+answer passes or the prompt ends.
+
+Pass an `AbortSignal` as `signal` to stop an active prompt or validator.  The
+parse rejects with the signal's reason.  User cancellation, such as Ctrl+C,
+instead produces a `Prompt cancelled.` parse failure.  Unexpected errors from
+Inquirer.js, a custom prompter, or a shared validator propagate unchanged.
+
+
+Testing
+-------
+
+All prompt configuration types accept an optional `prompter` property for
+testing.  It receives the shared attempt context and runs instead of an
+interactive Inquirer.js prompt:
+
+~~~~ typescript twoslash
+import { parseAsync } from "@optique/core/parser";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { prompt } from "@optique/inquirer";
+
+const answers = ["", "Alice"];
 const parser = prompt(option("--name", string()), {
   type: "input",
   message: "Enter your name:",
-  prompter: () => Promise.resolve("Alice"),  // used in tests
+  prompter: ({ attempt }) =>
+    Promise.resolve(answers[attempt - 1] ?? "Alice"),
+}, {
+  validate: (value) => value === "" ? message`Enter a name.` : undefined,
 });
 
 const result = await parseAsync(parser, []);
@@ -584,7 +641,7 @@ const result = await parseAsync(parser, []);
 API reference
 -------------
 
-### `prompt(parser, config)`
+### `prompt(parser, config, options?)`
 
 Wraps a parser with an Inquirer.js prompt fallback.
 
@@ -598,11 +655,16 @@ Parameters
         resolver may return any [`RuntimePromptConfig`] member; see the
         [*@optique/prompt* documentation](./prompt.md#derived-prompt-configurations)
         for the resolver contract.
+     -  `options`: Shared validation, retry-limit, and abort options.  See
+        [`PromptOptions<T>`](#promptoptionst).
 
 Returns
 :   A new parser with `mode: "async"` and Inquirer.js prompt fallback.
     The `usage` is wrapped in an `optional` term since the prompt handles
     the missing-value case.
+
+Throws
+:   `RangeError` when `options.maxAttempts` is not a positive integer.
 
 [`PromptConfig<T>`]: #promptconfigt
 [`RuntimePromptConfig`]: #runtimepromptconfig
@@ -642,6 +704,31 @@ parser's value type.  For example, do not return a `number` configuration for a
 parser that produces a string.  See
 [Prompt and inner parser independence](#prompt-and-inner-parser-independence).
 
+### `PromptValidator<T>`
+
+*Available since Optique 1.3.0.*
+
+Re-exported from *@optique/prompt*.  It validates a returned prompt value and
+returns `undefined` to accept it or a `Message` to retry.  See the
+[*@optique/prompt* API reference](./prompt.md#promptvalidatortvalue).
+
+### `PromptOptions<T>`
+
+*Available since Optique 1.3.0.*
+
+Re-exported from *@optique/prompt*.  It supplies the shared `validate`,
+`maxAttempts`, and `signal` options.  See the
+[*@optique/prompt* API reference](./prompt.md#promptoptionstvalue).
+
+### `PromptExecutionContext`
+
+*Available since Optique 1.3.0.*
+
+Re-exported from *@optique/prompt*.  A custom `prompter` receives the one-based
+attempt number, previous validation message, and optional abort signal through
+this context.  See the
+[*@optique/prompt* API reference](./prompt.md#promptexecutioncontext).
+
 ### `Choice`
 
 An object with `value`, optional `name`, `description`, `short`, and
@@ -672,9 +759,10 @@ value domain, making the prompted value incompatible with the inner
 parser's input path.  Treating the two paths independently avoids false
 rejections and keeps the architecture sound.
 
-As a consequence, any runtime validation you need on prompted values
-must be configured in the prompt config itself.  Some prompt types
-provide a `validate` option for this purpose.
+Use the shared `validate` option in the third argument to `prompt()` for
+recoverable checks on any prompted value.  The `input`, `password`, and
+`editor` configs also provide native `validate` callbacks for feedback within
+one Inquirer.js prompt.
 
 ### Matching constraints between CLI and prompt
 
@@ -733,17 +821,29 @@ prompt config.
     ~~~~
 
 `checkbox` with `multiple()` cardinality
-:   The `checkbox` prompt type does not currently support a `validate`
-    callback, so cardinality constraints from `multiple(..., { min, max })`
-    cannot be enforced at the prompt level.  This is a known limitation;
-    prompted checkbox values may violate the inner parser's cardinality
-    bounds.
+:   Use shared validation to mirror cardinality constraints from
+    `multiple(..., { min, max })`:
 
-> [!IMPORTANT]
-> `select`, `rawlist`, `expand`, and `checkbox` prompt types do not
-> expose a `validate` callback.  For these types, there is currently no
-> way to add custom runtime validation on prompted values.  This is a
-> known limitation that may be addressed in a future release.
+    ~~~~ typescript twoslash
+    import { message } from "@optique/core/message";
+    import { option } from "@optique/core/primitives";
+    import { multiple } from "@optique/core/modifiers";
+    import { string } from "@optique/core/valueparser";
+    import { prompt } from "@optique/inquirer";
+
+    const tags = prompt(
+      multiple(option("--tag", string()), { min: 2 }),
+      {
+        type: "checkbox",
+        message: "Select at least two tags:",
+        choices: ["typescript", "deno", "node", "bun"],
+      },
+      {
+        validate: (values) =>
+          values.length >= 2 ? undefined : message`Select at least two tags.`,
+      },
+    );
+    ~~~~
 
 
 Limitations
@@ -755,9 +855,11 @@ Limitations
  -  *No shell completion* — Interactive prompts do not contribute to shell
     tab-completion suggestions.  Only the wrapped inner parser's suggestions
     are used.
- -  *Per-occurrence caching* — A reached `prompt()` occurrence runs its
-    prompter at most once per parse.  Reusing one prompt parser at several
-    positions creates a separate occurrence at each position.
+ -  *Per-occurrence caching* — A reached `prompt()` occurrence completes once
+    per parse.  Shared validation may call Inquirer.js or a custom `prompter`
+    several times inside that completion, but only the terminal result is
+    cached.  Reusing one prompt parser at several positions creates a separate
+    occurrence at each position.
  -  *TTY required*: Inquirer.js requires an interactive terminal (TTY).
     In non-interactive environments (CI pipelines, piped input), prompts
     will error.  Use the `prompter` override for non-interactive testing.

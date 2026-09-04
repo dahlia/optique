@@ -175,7 +175,7 @@ export const prompt = createPromptAdapter<TextConfig>({
 ~~~~
 
 Concrete integrations can keep their own naming conventions.  For example,
-*@optique/inquirer* uses Inquirer-style `input` and `checkbox` names, while
+*@optique/inquirer* uses Inquirer.js-style `input` and `checkbox` names, while
 *@optique/clack* uses Clack-style `text` and `multiselect` names.
 
 
