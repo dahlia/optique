@@ -26,8 +26,9 @@ Documentation
 -------------
 
 For full documentation, visit <https://optique.dev/integrations/clack>.
-The guide includes dependency-derived prompt options with
-`derivePromptConfig()`.
+The guide covers dependency-derived prompt options with
+`derivePromptConfig()`, along with shared validation, retry limits, and
+abort signals.
 
 
 Quick start

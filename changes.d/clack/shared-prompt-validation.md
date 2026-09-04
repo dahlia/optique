@@ -7,4 +7,5 @@ links:
  -  Added shared validation, retry limits, and abort handling to `prompt()`
     for every Clack prompt type, including selection prompts.  Custom
     `prompter` callbacks now receive the attempt number, previous validation
-    message, and signal.  [[#873], [#936], [#940]]
+    message, and signal, whose types are re-exported for convenience.
+    [[#873], [#936], [#940]]

@@ -423,6 +423,10 @@ or derived configuration resolution.  If it aborts while a resolver is
 pending, the reason is observed immediately after the resolver settles and
 before an adapter starts.
 
+> [!IMPORTANT]
+> Shared validation applies only to prompted values.  It does not re-run the
+> wrapped parser's value parser, modifiers, or mappings.
+
 ### Missing values run the adapter
 
 If the inner parser does not consume CLI tokens and no source binding supplies
