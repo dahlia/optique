@@ -70,7 +70,7 @@ Core rules
     *@optique/clack*. The validator returns `undefined` to accept the prompted
     value or a structured `Message` to retry, synchronously or asynchronously.
     Attempt limits must be positive integers and default to unlimited retries.
-    Selection prompts use shared validation instead of a prompt config.
+    Selection prompts keep their config and use the shared `validate` option.
  -  Implement a custom adapter's `execute(config, context)` so retries can show
     `context.previousValidationMessage`, and forward `context.signal` when the
     prompt library supports aborting active work. Adapter-native validation
