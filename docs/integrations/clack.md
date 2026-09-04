@@ -468,10 +468,14 @@ const environment = prompt(option("--environment", string()), {
 
 The validator may be synchronous or asynchronous.  When it rejects a value,
 the prompt runs again and Clack displays the preceding validation message
-before opening the next prompt.  `maxAttempts` limits the number of Clack
-executions in that completion and must be a positive integer.  It defaults to
-unlimited retries; when the limit is exhausted, parsing fails with the last
-validation message.
+before opening the next prompt.  A failed adapter result ends parsing with that
+failure.  If the adapter or shared validator throws or rejects, the exception
+propagates unchanged and no retry runs.
+
+Each built-in Clack prompt execution or custom `prompter` invocation is one
+shared attempt.  `maxAttempts` limits these adapter executions in a completion
+and must be a positive integer.  It defaults to unlimited retries; when the
+limit is exhausted, parsing fails with the last validation message.
 
 Configuration-level `validate` fields on `text`, `password`, and `number` are
 native Clack validation.  They run within one Clack execution and can reject
@@ -597,10 +601,11 @@ Parameters
         resolver may return any [`RuntimePromptConfig`] member; see the
         [*@optique/prompt* documentation](./prompt.md#derived-prompt-configurations)
         for the resolver contract.
-     -  `options`: Optional shared [`PromptOptions<T>`] with `validate`,
-        `maxAttempts`, and `signal`.  These options apply after the adapter
-        returns a prompted value, independently of config-level native
-        validation.
+     -  `options`: Optional shared [`PromptOptions<T>`].  `validate` runs after
+        each successful adapter execution, independently of config-level native
+        validation.  `maxAttempts` limits adapter executions, including custom
+        `prompter` invocations.  `signal` can stop an active adapter execution
+        or validator.
 
 Returns
 :   A new parser with `mode: "async"` and Clack prompt fallback.  The `usage`
