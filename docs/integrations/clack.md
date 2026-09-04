@@ -612,7 +612,7 @@ re-exported from *@optique/prompt* for callers that need to name these types.
 
 [`PromptConfig<T>`]: #promptconfigt
 [`RuntimePromptConfig`]: #runtimepromptconfig
-[`PromptOptions<T>`]: ./prompt.md#promptoptions-tvalue
+[`PromptOptions<T>`]: ./prompt.md#promptoptionstvalue
 
 ### `PromptConfig<T>`
 
