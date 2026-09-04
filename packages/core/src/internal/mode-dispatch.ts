@@ -10,7 +10,7 @@
  * @since 0.10.0
  */
 
-import type { Mode, ModeIterable, ModeValue } from "../parser.ts";
+import type { Mode, ModeIterable, ModeValue, Parser } from "../parser.ts";
 
 /**
  * Dispatches to sync or async implementation based on mode.
@@ -34,6 +34,33 @@ export function dispatchByMode<M extends Mode, T>(
     return asyncFn() as ModeValue<M, T>;
   }
   return syncFn() as ModeValue<M, T>;
+}
+
+/**
+ * Dispatches a parser to a callback narrowed to its runtime mode.
+ *
+ * TypeScript cannot narrow the generic mode parameter of a {@link Parser}
+ * from its `mode` property.  This helper keeps the necessary parser assertions
+ * at the mode-dispatch boundary while giving each callback a precise parser
+ * type.
+ *
+ * @param parser The parser whose mode selects the callback.
+ * @param syncFn Function to call with a synchronous parser.
+ * @param asyncFn Function to call with an asynchronous parser.
+ * @returns The callback result with the parser's mode wrapping.
+ * @internal
+ * @since 1.3.0
+ */
+export function dispatchParserByMode<M extends Mode, T, S, R>(
+  parser: Parser<M, T, S>,
+  syncFn: (parser: Parser<"sync", T, S>) => R,
+  asyncFn: (parser: Parser<"async", T, S>) => Promise<R>,
+): ModeValue<M, R> {
+  return dispatchByMode(
+    parser.mode,
+    () => syncFn(parser as Parser<"sync", T, S>),
+    () => asyncFn(parser as Parser<"async", T, S>),
+  );
 }
 
 /**

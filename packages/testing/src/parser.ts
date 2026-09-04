@@ -42,7 +42,11 @@ export async function parseArgs<
   args: readonly string[],
   options?: ParseOptions,
 ): Promise<ParseArgsResult<InferValue<TParser>>> {
-  return await parseDetailed(parser, args, options);
+  return await parseDetailed<TParser["mode"], InferValue<TParser>>(
+    parser,
+    args,
+    options,
+  );
 }
 
 /**
@@ -72,5 +76,5 @@ export function parseArgsSync<
       "Cannot use an async parser with parseArgsSync(). Use parseArgs() instead.",
     );
   }
-  return parseDetailed(parser, args, options);
+  return parseDetailed<"sync", InferValue<TParser>>(parser, args, options);
 }

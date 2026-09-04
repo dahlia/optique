@@ -23,7 +23,7 @@ import {
   type ParseOptions,
   unwrapInjectedAnnotationWrapper,
 } from "./annotations.ts";
-import { dispatchByMode } from "./mode-dispatch.ts";
+import { dispatchByMode, dispatchParserByMode } from "./mode-dispatch.ts";
 import type { ParserDependencyMetadata } from "../dependency-metadata.ts";
 import {
   collectExplicitSourceValues,
@@ -1466,11 +1466,11 @@ export function parseDetailed<M extends Mode, T>(
   args: readonly string[],
   options?: ParseOptions,
 ): ModeValue<M, DetailedParseResult<T>> {
-  return dispatchByMode(
-    parser.mode,
-    () => {
+  return dispatchParserByMode(
+    parser,
+    (parser) => {
       const attempted = attemptParseSync(
-        parser as Parser<"sync", T, unknown>,
+        parser,
         args,
         { parseOptions: options },
       );
@@ -1481,7 +1481,7 @@ export function parseDetailed<M extends Mode, T>(
         commandPath: attempted.commandPath,
       };
     },
-    async () => {
+    async (parser) => {
       const attempted = await attemptParseAsync(parser, args, {
         parseOptions: options,
       });
