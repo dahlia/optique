@@ -202,6 +202,7 @@ The following is a list of the available packages:
 | [@optique/zod](/packages/zod/)                           | [JSR][jsr:@optique/zod]              | [npm][npm:@optique/zod]              | [Zod] schema integration for validation     |
 | [@optique/inquirer](/packages/inquirer/)                 | [JSR][jsr:@optique/inquirer]         | [npm][npm:@optique/inquirer]         | [Inquirer.js] prompt support                |
 | [@optique/prompt](/packages/prompt/)                     | [JSR][jsr:@optique/prompt]           | [npm][npm:@optique/prompt]           | Generic prompt adapter foundation           |
+| [@optique/testing](/packages/testing/)                   | [JSR][jsr:@optique/testing]          | [npm][npm:@optique/testing]          | Layered testing support for CLIs            |
 
 [jsr:@optique/core]: https://jsr.io/@optique/core
 [npm:@optique/core]: https://www.npmjs.com/package/@optique/core
@@ -241,6 +242,8 @@ The following is a list of the available packages:
 [Inquirer.js]: https://github.com/SBoudrias/Inquirer.js
 [jsr:@optique/prompt]: https://jsr.io/@optique/prompt
 [npm:@optique/prompt]: https://www.npmjs.com/package/@optique/prompt
+[jsr:@optique/testing]: https://jsr.io/@optique/testing
+[npm:@optique/testing]: https://www.npmjs.com/package/@optique/testing
 
 
 Contributing

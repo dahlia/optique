@@ -1,0 +1,102 @@
+{
+  "name": "@optique/testing",
+  "version": "1.3.0",
+  "description": "Testing support for Optique command-line interfaces",
+  "keywords": [
+    "CLI",
+    "command-line",
+    "commandline",
+    "parser",
+    "testing",
+    "subprocess"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Hong Minhee",
+    "email": "hong@minhee.org",
+    "url": "https://hongminhee.org/"
+  },
+  "homepage": "https://optique.dev/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dahlia/optique.git",
+    "directory": "packages/testing/"
+  },
+  "bugs": {
+    "url": "https://github.com/dahlia/optique/issues"
+  },
+  "funding": [
+    "https://github.com/sponsors/dahlia"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.2.0",
+    "deno": ">=2.3.0"
+  },
+  "files": [
+    "dist/",
+    "package.json",
+    "README.md"
+  ],
+  "type": "module",
+  "module": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./cli": {
+      "types": {
+        "import": "./dist/cli.d.ts",
+        "require": "./dist/cli.d.cts"
+      },
+      "import": "./dist/cli.js",
+      "require": "./dist/cli.cjs"
+    },
+    "./discover": {
+      "types": {
+        "import": "./dist/discover.d.ts",
+        "require": "./dist/discover.d.cts"
+      },
+      "import": "./dist/discover.js",
+      "require": "./dist/discover.cjs"
+    },
+    "./parser": {
+      "types": {
+        "import": "./dist/parser.d.ts",
+        "require": "./dist/parser.d.cts"
+      },
+      "import": "./dist/parser.js",
+      "require": "./dist/parser.cjs"
+    },
+    "./run": {
+      "types": {
+        "import": "./dist/run.d.ts",
+        "require": "./dist/run.d.cts"
+      },
+      "import": "./dist/run.js",
+      "require": "./dist/run.cjs"
+    }
+  },
+  "sideEffects": false,
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown",
+    "prepublish": "tsdown",
+    "test": "node --test",
+    "test:bun": "bun test",
+    "test:deno": "deno test --allow-read",
+    "test-all": "tsdown && node --test && bun test && deno test --allow-read"
+  }
+}

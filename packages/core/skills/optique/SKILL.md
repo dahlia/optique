@@ -245,8 +245,7 @@ Common mistakes checklist
  -  Do not expect `multiple(p)` to fail when absent; it returns `[]`. Wrap with
     `nonEmpty()` when at least one value is required.
  -  Do not confuse free-order parsing with `seq()`. Most constructs let child
-    parsers compete by priority; use `seq()` only when the grammar is truly
-    ordered.
+    parsers compete by priority; use `seq()` only for truly ordered grammars.
  -  Do not concatenate plain strings for errors or descriptions. Use structured
     `message` values.
  -  Do not forget to register source contexts when using `bindEnv()`,
@@ -297,3 +296,4 @@ Integration packages
 | `@optique/logtape`          | LogTape levels and formatter/output options | <https://optique.dev/integrations/logtape.md>         |
 | `@optique/man`              | Man page generation                         | <https://optique.dev/concepts/man.md>                 |
 | `@optique/discover`         | File-based command discovery                | <https://optique.dev/concepts/discover.md>            |
+| `@optique/testing`          | Layered CLI testing at a chosen boundary    | <https://optique.dev/concepts/testing.md>             |

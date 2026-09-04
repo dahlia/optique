@@ -97,3 +97,8 @@ paths = ["packages/inquirer/**"]
 id = "@optique/prompt"
 directory = "prompt"
 paths = ["packages/prompt/**"]
+
+[[sections]]
+id = "@optique/testing"
+directory = "testing"
+paths = ["packages/testing/**"]
