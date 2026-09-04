@@ -4,6 +4,7 @@
  * @module
  * @since 1.0.0
  */
+import process from "node:process";
 import {
   checkbox,
   confirm,
@@ -17,13 +18,15 @@ import {
   Separator,
 } from "@inquirer/prompts";
 import type { FluentParser } from "@optique/core/fluent";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import type { Mode, Parser } from "@optique/core/parser";
 import type { ValueParserResult } from "@optique/core/valueparser";
 import {
   createPromptAdapter,
   type DerivedPromptConfig,
   type PromptCondition,
+  type PromptExecutionContext,
+  type PromptOptions,
 } from "@optique/prompt";
 
 export { derivePromptConfig, isDerivedPromptConfig } from "@optique/prompt";
@@ -33,6 +36,9 @@ export type {
   DerivePromptConfigOptions,
   DerivePromptConfigsContext,
   DerivePromptConfigsOptions,
+  PromptExecutionContext,
+  PromptOptions,
+  PromptValidator,
 } from "@optique/prompt";
 
 // Re-export Separator for use in choice lists.
@@ -56,6 +62,10 @@ interface PromptFunctions {
   readonly rawlist: typeof rawlist;
   readonly expand: typeof expand;
   readonly checkbox: typeof checkbox;
+}
+
+interface InquirerPromptContext {
+  readonly signal?: AbortSignal;
 }
 
 const promptFunctionsOverrideSymbol = Symbol.for(
@@ -122,7 +132,7 @@ function getPromptFunctions(): PromptFunctions {
 }
 
 /**
- * Determines whether an error came from an interrupted Inquirer prompt.
+ * Determines whether an error came from an interrupted Inquirer.js prompt.
  */
 function isExitPromptError(error: unknown): boolean {
   return typeof error === "object" &&
@@ -214,8 +224,11 @@ export interface ConfirmConfig {
   readonly message: string;
   /** Default answer when the user just presses Enter. */
   readonly default?: boolean;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<boolean>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<boolean>;
 }
 
 /**
@@ -235,8 +248,13 @@ export interface NumberPromptConfig {
   readonly max?: number;
   /** Granularity of valid values. Use `"any"` for arbitrary decimals. */
   readonly step?: number | "any";
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<number | undefined>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (
+    context: PromptExecutionContext,
+  ) => Promise<number | undefined>;
 }
 
 /**
@@ -254,8 +272,11 @@ export interface InputConfig {
   readonly validate?: (
     value: string,
   ) => boolean | string | Promise<boolean | string>;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -273,8 +294,11 @@ export interface PasswordConfig {
   readonly validate?: (
     value: string,
   ) => boolean | string | Promise<boolean | string>;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -292,8 +316,11 @@ export interface EditorConfig {
   readonly validate?: (
     value: string,
   ) => boolean | string | Promise<boolean | string>;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -309,8 +336,11 @@ export interface SelectConfig {
   readonly choices: readonly (string | Choice | Separator)[];
   /** Initially highlighted choice value. */
   readonly default?: string;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -326,8 +356,11 @@ export interface RawlistConfig {
   readonly choices: readonly (string | Choice)[];
   /** Pre-selected choice value. */
   readonly default?: string;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -343,8 +376,11 @@ export interface ExpandConfig {
   readonly choices: readonly ExpandChoice[];
   /** Default choice key. */
   readonly default?: string;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -358,8 +394,13 @@ export interface CheckboxConfig {
   readonly message: string;
   /** Available choices. */
   readonly choices: readonly (string | CheckboxChoice | Separator)[];
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<readonly string[]>;
+  /**
+   * Override the prompt execution. Useful for testing.
+   * @since 1.3.0 The callback receives the current attempt context.
+   */
+  readonly prompter?: (
+    context: PromptExecutionContext,
+  ) => Promise<readonly string[]>;
 }
 
 /**
@@ -427,28 +468,34 @@ const validPromptTypes: ReadonlySet<string> = new Set([
  *
  * When the inner parser finds a value in the CLI arguments, that value is used
  * directly.  When no CLI value is found, an interactive prompt is shown to the
- * user.
+ * user.  If the supplied signal is aborted, parsing rejects with the signal's
+ * reason.
  *
  * @param parser Inner parser that reads CLI values.
  * @param config Type-safe Inquirer.js prompt configuration, or a
  *               configuration derived from dependency sources via
  *               `derivePromptConfig()`.
+ * @param options Shared validation, retry, and abort options for the
+ *                interactive fallback.
  * @returns A parser with interactive prompt fallback, always in async mode.
+ * @throws {RangeError} If `options.maxAttempts` is not a positive integer.
  * @throws {Error} If prompt execution fails with an unexpected error or if the
  *                 inner parser throws while parsing or completing.
  * @since 1.0.0
+ * @since 1.3.0 Added the `options` parameter.
  */
 export function prompt<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   config:
     | PromptConfig<TValue>
     | DerivedPromptConfig<RuntimePromptConfig, NoInfer<TValue>>,
+  options?: PromptOptions<NoInfer<TValue>>,
 ): FluentParser<"async", TValue, TState> {
   const promptWithAdapter = createPromptAdapter<RuntimePromptConfig>({
     execute: executePromptRaw,
     getDefaultValue: getConfigDefault,
   });
-  return promptWithAdapter(parser, config);
+  return promptWithAdapter(parser, config, options);
 }
 
 function getConfigDefault(config: unknown): unknown {
@@ -460,6 +507,7 @@ function getConfigDefault(config: unknown): unknown {
 
 async function executePromptRaw<TValue>(
   config: RuntimePromptConfig,
+  context: PromptExecutionContext,
 ): Promise<ValueParserResult<TValue>> {
   const cfg = config;
   const prompts = getPromptFunctions();
@@ -471,12 +519,21 @@ async function executePromptRaw<TValue>(
     }
 
     if ("prompter" in cfg && cfg.prompter != null) {
-      const value = await cfg.prompter();
+      const value = await cfg.prompter(context);
       if (cfg.type === "number" && value === undefined) {
         return { success: false, error: message`No number provided.` };
       }
       return { success: true, value: value as TValue };
     }
+
+    if (context.previousValidationMessage !== undefined) {
+      process.stderr.write(
+        formatMessage(context.previousValidationMessage) + "\n",
+      );
+    }
+    const inquirerContext: InquirerPromptContext = {
+      ...(context.signal === undefined ? {} : { signal: context.signal }),
+    };
 
     switch (cfg.type) {
       case "confirm":
@@ -485,7 +542,7 @@ async function executePromptRaw<TValue>(
           value: await prompts.confirm({
             message: cfg.message,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
 
       case "number": {
@@ -495,7 +552,7 @@ async function executePromptRaw<TValue>(
           ...(cfg.min !== undefined ? { min: cfg.min } : {}),
           ...(cfg.max !== undefined ? { max: cfg.max } : {}),
           ...(cfg.step !== undefined ? { step: cfg.step } : {}),
-        });
+        }, inquirerContext);
         if (numResult === undefined) {
           return { success: false, error: message`No number provided.` };
         }
@@ -509,7 +566,7 @@ async function executePromptRaw<TValue>(
             message: cfg.message,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
             ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
 
       case "password":
@@ -519,7 +576,7 @@ async function executePromptRaw<TValue>(
             message: cfg.message,
             ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
             ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
 
       case "editor":
@@ -529,7 +586,7 @@ async function executePromptRaw<TValue>(
             message: cfg.message,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
             ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
 
       case "select":
@@ -539,7 +596,7 @@ async function executePromptRaw<TValue>(
             message: cfg.message,
             choices: normalizeChoices(cfg.choices),
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
 
       case "rawlist":
@@ -549,21 +606,28 @@ async function executePromptRaw<TValue>(
             message: cfg.message,
             choices: normalizeChoices(cfg.choices),
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
 
       case "expand":
         return {
           success: true,
-          value: await (prompts.expand as (config: {
-            message: string;
-            choices: readonly { value: string; name?: string; key: string }[];
-            default?: string;
-          }) => Promise<string>)({
+          value: await (prompts.expand as (
+            config: {
+              message: string;
+              choices: readonly {
+                value: string;
+                name?: string;
+                key: string;
+              }[];
+              default?: string;
+            },
+            context?: InquirerPromptContext,
+          ) => Promise<string>)({
             message: cfg.message,
             choices: cfg.choices,
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
 
       case "checkbox":
@@ -572,13 +636,15 @@ async function executePromptRaw<TValue>(
           value: await prompts.checkbox({
             message: cfg.message,
             choices: normalizeChoices(cfg.choices),
-          }) as TValue,
+          }, inquirerContext) as TValue,
         };
     }
   } catch (error) {
     if (isExitPromptError(error)) {
       return { success: false, error: message`Prompt cancelled.` };
     }
+    // Inquirer.js uses AbortPromptError for an AbortSignal.  The shared adapter
+    // race propagates signal.reason, so do not treat it as user cancellation.
     throw error;
   }
 }

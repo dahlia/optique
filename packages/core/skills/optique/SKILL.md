@@ -65,12 +65,12 @@ Core rules
     the wrapped parser separately when the CLI domain should change, and make
     it a dependency source only if another consumer needs its answer. Keep
     static prompt configs for everything else.
- -  For a custom adapter built with `createPromptAdapter()`, pass shared
-    validation options as the generated wrapper's third argument:
-    `{ validate, maxAttempts, signal }`. The validator receives the prompted
-    value and returns `undefined` to accept it or a structured `Message` to
-    retry; it may be synchronous or asynchronous. Attempt limits must be
-    positive integers and default to unlimited retries.
+ -  Pass `{ validate, maxAttempts, signal }` as a generated prompt wrapper's
+    third argument, including `prompt()` from *@optique/inquirer*. The validator
+    returns `undefined` to accept the prompted value or a structured `Message`
+    to retry, synchronously or asynchronously. Attempt limits must be positive
+    integers and default to unlimited retries. Inquirer.js selection prompts use
+    this shared validation rather than their prompt config.
  -  Implement a custom adapter's `execute(config, context)` so retries can show
     `context.previousValidationMessage`, and forward `context.signal` when the
     prompt library supports aborting active work. Adapter-native validation
