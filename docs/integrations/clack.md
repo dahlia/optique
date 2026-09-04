@@ -435,8 +435,8 @@ When `when` returns `false`, `otherwise` is returned without opening Clack.  If
 the condition throws or rejects, the error propagates to the caller.
 
 
-Shared validation, retries, and cancellation
---------------------------------------------
+Shared validation, retries, and aborts
+--------------------------------------
 
 *This API is available since Optique 1.3.0.*
 
@@ -612,12 +612,12 @@ Returns
     is wrapped in an `optional` term since the prompt handles the
     missing-value case.
 
-`PromptOptions`, `PromptValidator`, and `PromptExecutionContext` are
-re-exported from *@optique/prompt* for callers that need to name these types.
+Throws
+:   `RangeError` when `options.maxAttempts` is not a positive integer.
 
 [`PromptConfig<T>`]: #promptconfigt
 [`RuntimePromptConfig`]: #runtimepromptconfig
-[`PromptOptions<T>`]: ./prompt.md#promptoptionstvalue
+[`PromptOptions<T>`]: #promptoptionst
 
 ### `PromptConfig<T>`
 
@@ -653,6 +653,31 @@ The resolver must therefore return a prompt kind whose result has the wrapped
 parser's value type.  For example, do not return a `number` configuration for a
 parser that produces a string.  See
 [Prompt and inner parser independence](#prompt-and-inner-parser-independence).
+
+### `PromptValidator<T>`
+
+*Available since Optique 1.3.0.*
+
+Re-exported from *@optique/prompt*.  It validates a returned prompt value and
+returns `undefined` to accept it or a `Message` to retry.  See the
+[*@optique/prompt* API reference](./prompt.md#promptvalidatortvalue).
+
+### `PromptOptions<T>`
+
+*Available since Optique 1.3.0.*
+
+Re-exported from *@optique/prompt*.  It supplies the shared `validate`,
+`maxAttempts`, and `signal` options.  See the
+[*@optique/prompt* API reference](./prompt.md#promptoptionstvalue).
+
+### `PromptExecutionContext`
+
+*Available since Optique 1.3.0.*
+
+Re-exported from *@optique/prompt*.  A custom `prompter` receives the one-based
+attempt number, previous validation message, and optional abort signal through
+this context.  See the
+[*@optique/prompt* API reference](./prompt.md#promptexecutioncontext).
 
 ### `Option`
 

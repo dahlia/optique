@@ -561,7 +561,7 @@ for declared defaults, failure behavior, and the runtime condition form.
 Shared validation, retries, and aborts
 --------------------------------------
 
-*Available since Optique 1.3.0.*
+*This API is available since Optique 1.3.0.*
 
 Pass shared prompt options as the third argument to `prompt()` when a prompted
 value needs a recoverable check.  The validator may be synchronous or
@@ -844,6 +844,10 @@ prompt config.
       },
     );
     ~~~~
+
+> [!IMPORTANT]
+> Shared validation applies only to prompted values.  It does not re-run the
+> wrapped parser's value parser, modifiers, or mappings.
 
 
 Limitations
