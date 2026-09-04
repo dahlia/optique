@@ -86,7 +86,8 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "@optique/core": "workspace:*"
+    "@optique/core": "workspace:*",
+    "@optique/run": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -24,9 +24,9 @@ Core rules
 
  -  Use `run()` from *@optique/run* for applications; use `parse()` or
     `runParser()` for embedded and custom runtimes.
- -  In parser-focused tests, use `parseArgs()` or `parseArgsSync()` from
-    *@optique/testing/parser* for inferred values and detailed failures without
-    running help, output, exits, or command handlers.
+ -  In tests, use `parseArgs()`/`parseArgsSync()` from *@optique/testing/parser*
+    for structured parser results, or `captureRun()` from
+    *@optique/testing/run* for runner-rendered output and exits.
  -  Compose parsers with `object()`, `tuple()`, `seq()`, `or()`, `merge()`, and
     modifiers. Do not write imperative `if`/`else` argument scanners around
     Optique parsers.

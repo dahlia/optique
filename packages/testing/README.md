@@ -32,8 +32,26 @@ if (result.success) {
 }
 ~~~~
 
-The runner, discovery, and child-process entry points remain reserved while
-their helpers are developed.
+The runner layer is available through `captureRun()`:
+
+~~~~ typescript
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { captureRun } from "@optique/testing/run";
+
+const result = await captureRun(argument(string()), {
+  args: ["--help"],
+  programName: "greet",
+  help: "option",
+  colors: false,
+  maxWidth: 80,
+});
+
+console.log(result.kind, result.exitCode, result.stdout, result.stderr);
+~~~~
+
+The discovery and child-process entry points remain reserved while their
+helpers are developed.
 
 [Optique]: https://optique.dev/
 

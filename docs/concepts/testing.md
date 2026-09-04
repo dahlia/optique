@@ -23,8 +23,9 @@ import { /* ... */ } from "@optique/testing/discover";
 import { /* ... */ } from "@optique/testing/cli";
 ~~~~
 
-The parser helpers are available now.  The runner, discovery, and child-process
-helpers remain reserved while their respective parts of [issue #890] land.
+The parser and runner helpers are available now.  The discovery and
+child-process helpers remain reserved while their respective parts of
+[issue #890] land.
 
 [issue #890]: https://github.com/dahlia/optique/issues/890
 
@@ -115,6 +116,52 @@ annotations.  They return parser failures as values, but exceptions thrown by
 the parser still propagate.  `parseArgs()` likewise preserves promise
 rejections.  Neither helper renders help, interprets `--help`/`--version`,
 writes output, exits, or dispatches a command handler.
+
+
+Testing a run
+-------------
+
+Use `captureRun()` to exercise the same runner behavior as `runAsync()` without
+writing to process streams or terminating the test process.  It accepts either
+a parser or a `Program` and always returns a promise.
+
+~~~~ typescript twoslash
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { captureRun } from "@optique/testing/run";
+
+const parser = argument(string());
+const result = await captureRun(parser, {
+  args: ["--help"],
+  programName: "greet",
+  help: "option",
+  colors: false,
+  maxWidth: 80,
+});
+
+if (result.kind === "returned") {
+  result.value; // string
+} else {
+  result.exitCode; // number
+}
+~~~~
+
+A normal parse produces a `returned` result with the inferred parser value and
+an exit code of zero.  Help, version, completion, and parse errors produce an
+`exited` result with the requested exit code.  Both variants include separate
+`stdout` and `stderr` strings with the same trailing newlines as the default
+runner writers.
+
+The `colors` and `maxWidth` options keep `runAsync()`'s defaults, which depend
+on the test process's terminal.  Set both explicitly when asserting rendered
+text so the result is stable between local terminals and CI.
+
+The capture helper supplies `stdout`, `stderr`, and `onExit`, so callers cannot
+override them.  Exceptions from parsers, contexts, option callbacks, or
+resource disposal still reject the returned promise.  Output written directly
+through `console.log()`, `print()`, or a process stream bypasses these callbacks
+and is not captured.  Use the child-process layer when a test needs to observe
+that output or run the application code that consumes the parsed value.
 
 
 Shared contracts

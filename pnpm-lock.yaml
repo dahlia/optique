@@ -527,6 +527,9 @@ importers:
       '@optique/core':
         specifier: workspace:*
         version: link:../core
+      '@optique/run':
+        specifier: workspace:*
+        version: link:../run
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
