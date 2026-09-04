@@ -39,6 +39,7 @@ const groups = [
       { name: "@optique/discover", desc: "File-based command discovery and dispatch.", link: "/concepts/discover" },
       { name: "@optique/man", desc: "Unix man pages from parsers.", link: "/concepts/man" },
       { name: "@optique/logtape", desc: "Log-level options for LogTape.", link: "/integrations/logtape" },
+      { name: "@optique/testing", desc: "Shared contracts for layered CLI testing.", link: "/concepts/testing" },
     ],
   },
 ];

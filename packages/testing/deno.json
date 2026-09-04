@@ -1,0 +1,40 @@
+{
+  "name": "@optique/testing",
+  "version": "1.3.0",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli.ts",
+    "./discover": "./src/discover.ts",
+    "./parser": "./src/parser.ts",
+    "./run": "./src/run.ts"
+  },
+  "exclude": [
+    "dist/",
+    "node_modules",
+    "tsdown.config.ts"
+  ],
+  "tasks": {
+    "build": "pnpm build",
+    "test": "deno test --allow-read",
+    "test:node": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "node --test"
+    },
+    "test:bun": {
+      "dependencies": [
+        "build"
+      ],
+      "command": "bun test"
+    },
+    "test-all": {
+      "dependencies": [
+        "test",
+        "test:node",
+        "test:bun"
+      ]
+    }
+  }
+}

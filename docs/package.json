@@ -15,6 +15,7 @@
     "@optique/run": "workspace:",
     "@optique/standard-schema": "workspace:",
     "@optique/temporal": "workspace:",
+    "@optique/testing": "workspace:",
     "@optique/valibot": "workspace:",
     "@optique/zod": "workspace:",
     "@optique/inquirer": "workspace:",

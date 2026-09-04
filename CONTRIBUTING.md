@@ -160,6 +160,10 @@ Architecture
     as a value parser.
  -  *@optique/inquirer* (*packages/inquirer/*): Inquirer.js prompt integration.
     Provides `prompt()` for interactive fallback using Inquirer.js prompts.
+ -  *@optique/testing* (*packages/testing/*): Layered testing support.
+    Reserves `@optique/testing/parser`, `/run`, `/discover`, and `/cli` for
+    helpers that exercise a CLI at a chosen execution boundary, and holds the
+    contracts shared across them.
 
 ### Dual publishing
 
@@ -191,6 +195,10 @@ When adding a new package to the monorepo, update the following files:
     matching role group (Foundation, Value parsers, Value sources, or
     Surfaces & tooling) so the package shows up in the landing page's
     ecosystem grid
+ -  *docs/.vitepress/config.mts*: Add the package to the `REFERENCES` group, and
+    to `CONCEPTS` or `INTEGRATIONS` if it ships a guide page
+ -  *packages/core/skills/optique/SKILL.md*: Add the package to the integration
+    package table
 
 ### Keeping the landing page in sync
 

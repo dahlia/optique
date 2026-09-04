@@ -70,6 +70,7 @@ const CONCEPTS = {
     { text: "Messages", link: "/concepts/messages" },
     { text: "Runners and execution", link: "/concepts/runners" },
     { text: "Runtime context extension", link: "/concepts/extend" },
+    { text: "Testing", link: "/concepts/testing" },
   ],
 };
 
@@ -121,6 +122,7 @@ const REFERENCES = {
     { text: "@optique/temporal", link: "https://jsr.io/@optique/temporal/doc" },
     { text: "@optique/valibot", link: "https://jsr.io/@optique/valibot/doc" },
     { text: "@optique/zod", link: "https://jsr.io/@optique/zod/doc" },
+    { text: "@optique/testing", link: "https://jsr.io/@optique/testing/doc" },
   ],
 };
 
