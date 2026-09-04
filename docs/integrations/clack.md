@@ -435,14 +435,71 @@ When `when` returns `false`, `otherwise` is returned without opening Clack.  If
 the condition throws or rejects, the error propagates to the caller.
 
 
+Shared validation, retries, and cancellation
+--------------------------------------------
+
+*This API is available since Optique 1.3.0.*
+
+Pass a third options argument to `prompt()` to validate any value returned by
+Clack, including `select` and `multiselect` results.  The validator returns a
+structured [`Message`](../concepts/messages.md) to reject the value, or
+`undefined` to accept it:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { prompt } from "@optique/clack";
+
+const environment = prompt(option("--environment", string()), {
+  type: "select",
+  message: "Choose the deployment environment:",
+  options: ["development", "production"],
+}, {
+  validate: async (value) => {
+    await Promise.resolve();
+    return value === "production"
+      ? undefined
+      : message`Production access is required.`;
+  },
+  maxAttempts: 3,
+});
+~~~~
+
+The validator may be synchronous or asynchronous.  When it rejects a value,
+the prompt runs again and Clack displays the preceding validation message
+before opening the next prompt.  A failed adapter result ends parsing with that
+failure.  If the adapter or shared validator throws or rejects, the exception
+propagates unchanged and no retry runs.
+
+Each built-in Clack prompt execution or custom `prompter` invocation is one
+shared attempt.  `maxAttempts` limits these adapter executions in a completion
+and must be a positive integer.  It defaults to unlimited retries; when the
+limit is exhausted, parsing fails with the last validation message.
+
+Configuration-level `validate` fields on `text`, `password`, and `number` are
+native Clack validation.  They run within one Clack execution and can reject
+several submissions without consuming another shared attempt.  The third
+argument's shared validator runs once after Clack returns a value.
+
+Pass an `AbortSignal` as `signal` to stop an active prompt or validator.  An
+abort rejects parsing with the signal's exact `reason`; it is not converted to
+a `Prompt cancelled.` failure.  CLI values, configured sources, and skipped
+runtime conditions do not consult these shared options because no prompt
+attempt runs.
+
+
 Testing
 -------
 
 All prompt configuration types accept an optional `prompter` property for
 testing.  When provided, the function is called instead of launching an
-interactive Clack prompt:
+interactive Clack prompt.  It receives the one-based `attempt`, the
+`previousValidationMessage` from the preceding shared validation failure, and
+the shared `signal`:
 
 ~~~~ typescript twoslash
+import { message } from "@optique/core/message";
 import { parseAsync } from "@optique/core/parser";
 import { option } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
@@ -451,19 +508,30 @@ import { prompt } from "@optique/clack";
 const parser = prompt(option("--name", string()), {
   type: "text",
   message: "Enter your name:",
-  prompter: () => Promise.resolve("Alice"),  // used in tests
+  prompter: ({ attempt }) =>
+    Promise.resolve(attempt === 1 ? "taken" : "Alice"),
+}, {
+  validate: (value) => value === "taken"
+    ? message`That name is already taken.`
+    : undefined,
 });
 
 const result = await parseAsync(parser, []);
 // result.value === "Alice"
 ~~~~
 
+A custom `prompter` replaces the Clack UI completely, so the adapter does not
+log `previousValidationMessage` automatically.  The function can inspect or
+display that message itself.  Each invocation is one shared attempt.
+
 
 Cancellation
 ------------
 
 When Clack reports cancellation through `isCancel()`, *@optique/clack* returns
-a parse failure with the message `Prompt cancelled.` instead of throwing.
+a parse failure with the message `Prompt cancelled.` instead of throwing.  If
+an `AbortSignal` caused Clack to cancel while closing its UI, parsing instead
+rejects with that signal's exact reason.
 
 
 Dependency-derived configurations
@@ -519,7 +587,7 @@ for declared defaults, failure behavior, and the runtime condition form.
 API reference
 -------------
 
-### `prompt(parser, config)`
+### `prompt(parser, config, options?)`
 
 Wraps a parser with a Clack prompt fallback.
 
@@ -533,14 +601,23 @@ Parameters
         resolver may return any [`RuntimePromptConfig`] member; see the
         [*@optique/prompt* documentation](./prompt.md#derived-prompt-configurations)
         for the resolver contract.
+     -  `options`: Optional shared [`PromptOptions<T>`].  `validate` runs after
+        each successful adapter execution, independently of config-level native
+        validation.  `maxAttempts` limits adapter executions, including custom
+        `prompter` invocations.  `signal` can stop an active adapter execution
+        or validator.
 
 Returns
 :   A new parser with `mode: "async"` and Clack prompt fallback.  The `usage`
     is wrapped in an `optional` term since the prompt handles the
     missing-value case.
 
+`PromptOptions`, `PromptValidator`, and `PromptExecutionContext` are
+re-exported from *@optique/prompt* for callers that need to name these types.
+
 [`PromptConfig<T>`]: #promptconfigt
 [`RuntimePromptConfig`]: #runtimepromptconfig
+[`PromptOptions<T>`]: ./prompt.md#promptoptionstvalue
 
 ### `PromptConfig<T>`
 
@@ -597,9 +674,10 @@ value domain, making the prompted value incompatible with the inner
 parser's input path.  Treating the two paths independently avoids false
 rejections and keeps the architecture sound.
 
-As a consequence, any runtime validation you need on prompted values
-must be configured in the prompt config itself.  Some prompt types
-provide a `validate` option for this purpose.
+As a consequence, runtime constraints that should apply to both paths must be
+declared for each path.  Use config-level native validation when the prompt
+type supports it, and use the third argument's shared `validate` option for
+validation after any prompt type returns a value.
 
 ### Matching constraints between CLI and prompt
 
@@ -643,8 +721,8 @@ prompt config.
 
 `select` with `choice()` values
 :   Keep the prompt `options` array consistent with the inner parser's
-    `choice()` domain.  Ensuring this consistency is the caller's
-    responsibility.
+    `choice()` domain.  Shared validation can additionally reject a selected
+    value at runtime.
 
     ~~~~ typescript twoslash
     import { option } from "@optique/core/primitives";
@@ -659,16 +737,13 @@ prompt config.
     ~~~~
 
 `multiselect` with `multiple()` cardinality
-:   The `required` option can require at least one selected value.  Clack's
-    `multiselect` prompt does not expose a custom `validate` callback here,
-    so constraints such as `max` or `min` greater than `1` from `multiple()`
-    cannot be enforced at the prompt level.
+:   The native `required` option can require at least one selected value.  Use
+    shared validation for other constraints such as a maximum or a minimum
+    greater than one.
 
 > [!IMPORTANT]
-> `select` and `multiselect` prompt types do not expose a `validate`
-> callback.  For these types, there is currently no way to add custom runtime
-> validation on prompted values other than disabling individual options or,
-> for `multiselect`, setting `required`.
+> Shared validation applies only to prompted values.  It does not re-run the
+> wrapped parser's value parser, modifiers, or mappings.
 
 
 Limitations
@@ -681,8 +756,10 @@ Limitations
     tab-completion suggestions.  Only the wrapped inner parser's suggestions
     are used.
  -  *Per-occurrence caching* — A reached `prompt()` occurrence runs its
-    prompter at most once per parse.  Reusing one prompt parser at several
-    positions creates a separate occurrence at each position.
+    prompter once per shared attempt, so validation can invoke it several
+    times.  The terminal result is still cached across internal completion
+    passes.  Reusing one prompt parser at several positions creates a separate
+    occurrence at each position.
  -  *TTY required*: Clack requires an interactive terminal (TTY).  In
     non-interactive environments (CI pipelines, piped input), prompts may
     error.  Use the `prompter` override for non-interactive testing.
