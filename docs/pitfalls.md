@@ -311,12 +311,13 @@ A few more points worth knowing:
     domain should change, and wrap it with `dependency()` only when its result
     must feed another consumer.
  -  *Prompted values are not re-validated by the inner parser.* A check that
-    can only run after the answer arrives—whether a package manager is
-    installed, whether a store suits the chosen runtime—belongs in the
+    can only run after the answer arrives, such as whether a package manager
+    is installed or whether a store suits the chosen runtime, belongs in the
     [shared `validate`](./integrations/prompt.md#shared-validation-and-retries)
     option of the prompt wrapper's third argument. It receives the value the
     prompt produced rather than raw command-line input, and rejecting it asks
-    the same question again instead of failing the parse.
+    the same question again as long as attempts remain. Set `maxAttempts` to
+    bound that loop; the last rejection then becomes the parse failure.
  -  *For config-only or environment-only values, wrap `fail()`, not
     `constant()`.* `constant()` always succeeds, so `bindConfig()` treats it as
     a value the user supplied and skips the file lookup entirely. `fail()`
