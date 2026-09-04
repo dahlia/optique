@@ -97,6 +97,10 @@ To be released.
  -  Added conditional prompt skipping to Clack prompt configurations with
     `when` and `otherwise`, allowing applications to avoid prompts whose
     runtime prerequisites are unavailable.  [[#882]]
+ -  Added shared validation, retry limits, and abort handling to `prompt()`
+    for every Clack prompt type, including selection prompts.  Custom
+    `prompter` callbacks now receive the attempt number, previous validation
+    message, and signal.  [[#873], [#936], [#940]]
  -  Added support for prompt configurations derived from dependency sources.
     `prompt()` now also accepts a `derivePromptConfig()` result whose
     resolver returns any of this package's prompt configurations, exposed
@@ -104,7 +108,10 @@ To be released.
     adapt its options to earlier answers.  `derivePromptConfig()` and its
     types are re-exported for convenience.  [[#869], [#872]]
 
+[#873]: https://github.com/dahlia/optique/issues/873
 [#882]: https://github.com/dahlia/optique/issues/882
+[#936]: https://github.com/dahlia/optique/issues/936
+[#940]: https://github.com/dahlia/optique/pull/940
 
 ### @optique/inquirer
 
@@ -123,7 +130,6 @@ To be released.
     adapt its choices to earlier answers.  `derivePromptConfig()` and its
     types are re-exported for convenience.  [[#869], [#872]]
 
-[#873]: https://github.com/dahlia/optique/issues/873
 [#937]: https://github.com/dahlia/optique/issues/937
 [#939]: https://github.com/dahlia/optique/pull/939
 

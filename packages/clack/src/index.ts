@@ -7,19 +7,22 @@
 import {
   confirm,
   isCancel,
+  log,
   multiselect,
   password,
   select,
   text,
 } from "@clack/prompts";
 import type { FluentParser } from "@optique/core/fluent";
-import { message } from "@optique/core/message";
+import { formatMessage, message } from "@optique/core/message";
 import type { Mode, Parser } from "@optique/core/parser";
 import type { ValueParserResult } from "@optique/core/valueparser";
 import {
   createPromptAdapter,
   type DerivedPromptConfig,
   type PromptCondition,
+  type PromptExecutionContext,
+  type PromptOptions,
 } from "@optique/prompt";
 
 export { derivePromptConfig, isDerivedPromptConfig } from "@optique/prompt";
@@ -29,6 +32,9 @@ export type {
   DerivePromptConfigOptions,
   DerivePromptConfigsContext,
   DerivePromptConfigsOptions,
+  PromptExecutionContext,
+  PromptOptions,
+  PromptValidator,
 } from "@optique/prompt";
 
 /**
@@ -46,6 +52,7 @@ interface PromptFunctions {
   readonly select: typeof select;
   readonly multiselect: typeof multiselect;
   readonly isCancel: typeof isCancel;
+  readonly logError: (value: string) => void;
 }
 
 const promptFunctionsOverrideSymbol = Symbol.for(
@@ -59,6 +66,7 @@ const defaultPromptFunctions: PromptFunctions = {
   select,
   multiselect,
   isCancel,
+  logError: (value) => log.error(value),
 };
 
 function promptFunctionKeys(): readonly (keyof PromptFunctions)[] {
@@ -146,8 +154,11 @@ export interface TextConfig {
   readonly validate?: (
     value: string,
   ) => string | void | Promise<string | void>;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Overrides prompt execution. Useful for testing.
+   * @since 1.3.0 Added the execution context parameter.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -165,8 +176,11 @@ export interface PasswordConfig {
   readonly validate?: (
     value: string,
   ) => string | void | Promise<string | void>;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Overrides prompt execution. Useful for testing.
+   * @since 1.3.0 Added the execution context parameter.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -180,8 +194,11 @@ export interface ConfirmConfig {
   readonly message: string;
   /** Initial Boolean value. */
   readonly initialValue?: boolean;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<boolean>;
+  /**
+   * Overrides prompt execution. Useful for testing.
+   * @since 1.3.0 Added the execution context parameter.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<boolean>;
 }
 
 /**
@@ -208,8 +225,13 @@ export interface NumberPromptConfig {
   readonly validate?: (
     value: number,
   ) => string | void | Promise<string | void>;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<number | undefined>;
+  /**
+   * Overrides prompt execution. Useful for testing.
+   * @since 1.3.0 Added the execution context parameter.
+   */
+  readonly prompter?: (
+    context: PromptExecutionContext,
+  ) => Promise<number | undefined>;
 }
 
 /**
@@ -225,8 +247,11 @@ export interface SelectConfig {
   readonly options: readonly (string | Option)[];
   /** Initially selected option value. */
   readonly initialValue?: string;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<string>;
+  /**
+   * Overrides prompt execution. Useful for testing.
+   * @since 1.3.0 Added the execution context parameter.
+   */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
 }
 
 /**
@@ -242,8 +267,13 @@ export interface MultiselectConfig {
   readonly options: readonly (string | Option)[];
   /** Whether at least one option must be selected. */
   readonly required?: boolean;
-  /** Override the prompt execution. Useful for testing. */
-  readonly prompter?: () => Promise<readonly string[]>;
+  /**
+   * Overrides prompt execution. Useful for testing.
+   * @since 1.3.0 Added the execution context parameter.
+   */
+  readonly prompter?: (
+    context: PromptExecutionContext,
+  ) => Promise<readonly string[]>;
 }
 
 /**
@@ -288,6 +318,7 @@ export type RuntimePromptConfig =
 
 type ClackText = (config: {
   readonly message: string;
+  readonly signal?: AbortSignal;
   readonly placeholder?: string;
   readonly initialValue?: string;
   readonly validate?: (
@@ -297,6 +328,7 @@ type ClackText = (config: {
 
 type ClackPassword = (config: {
   readonly message: string;
+  readonly signal?: AbortSignal;
   readonly mask?: string;
   readonly validate?: (
     value: string,
@@ -305,17 +337,20 @@ type ClackPassword = (config: {
 
 type ClackConfirm = (config: {
   readonly message: string;
+  readonly signal?: AbortSignal;
   readonly initialValue?: boolean;
 }) => Promise<unknown>;
 
 type ClackSelect = (config: {
   readonly message: string;
+  readonly signal?: AbortSignal;
   readonly options: readonly Option[];
   readonly initialValue?: string;
 }) => Promise<unknown>;
 
 type ClackMultiselect = (config: {
   readonly message: string;
+  readonly signal?: AbortSignal;
   readonly options: readonly Option[];
   readonly required?: boolean;
 }) => Promise<unknown>;
@@ -326,22 +361,26 @@ type ClackMultiselect = (config: {
  * @param parser Inner parser that reads CLI values.
  * @param config Type-safe Clack prompt configuration, or a configuration
  *               derived from dependency sources via `derivePromptConfig()`.
+ * @param options Shared validation, retry, and cancellation options.
  * @returns A parser with interactive prompt fallback, always in async mode.
+ * @throws {RangeError} If `maxAttempts` is not a positive integer.
  * @throws {Error} If prompt execution fails with an unexpected error or if the
  *                 inner parser throws while parsing or completing.
  * @since 1.2.0
+ * @since 1.3.0 Added shared options and the prompter context.
  */
 export function prompt<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   config:
     | PromptConfig<TValue>
     | DerivedPromptConfig<RuntimePromptConfig, NoInfer<TValue>>,
+  options?: PromptOptions<NoInfer<TValue>>,
 ): FluentParser<"async", TValue, TState> {
   const promptWithAdapter = createPromptAdapter<RuntimePromptConfig>({
     execute: executePromptRaw,
     getDefaultValue: getConfigDefault,
   });
-  return promptWithAdapter(parser, config);
+  return promptWithAdapter(parser, config, options);
 }
 
 function getConfigDefault(config: unknown): unknown {
@@ -355,6 +394,7 @@ function getConfigDefault(config: unknown): unknown {
 
 async function executePromptRaw<TValue>(
   config: RuntimePromptConfig,
+  context: PromptExecutionContext,
 ): Promise<ValueParserResult<TValue>> {
   const cfg = config;
   const type = cfg.type;
@@ -363,22 +403,18 @@ async function executePromptRaw<TValue>(
   }
   const prompts = getPromptFunctions();
 
+  let result: unknown;
   if ("prompter" in cfg && cfg.prompter != null) {
-    const value = await cfg.prompter();
-    if (prompts.isCancel(value)) {
-      return { success: false, error: message`Prompt cancelled.` };
+    result = await cfg.prompter(context);
+  } else {
+    if (context.previousValidationMessage !== undefined) {
+      prompts.logError(formatMessage(context.previousValidationMessage));
     }
-    if (cfg.type === "number") {
-      return normalizeNumberResult(value);
-    }
-    if (cfg.type === "multiselect") {
-      return normalizeMultiselectResult(value, cfg);
-    }
-    return { success: true, value: value as TValue };
+    result = await executeClackPromptWithSignal(cfg, prompts, context.signal);
   }
 
-  const result = await executeClackPrompt(cfg, prompts);
   if (prompts.isCancel(result)) {
+    if (context.signal?.aborted === true) throw context.signal.reason;
     return { success: false, error: message`Prompt cancelled.` };
   }
   if (cfg.type === "number") {
@@ -390,6 +426,27 @@ async function executePromptRaw<TValue>(
   return { success: true, value: result as TValue };
 }
 
+async function executeClackPromptWithSignal(
+  cfg: RuntimePromptConfig,
+  prompts: PromptFunctions,
+  signal: AbortSignal | undefined,
+): Promise<unknown> {
+  if (signal === undefined) return await executeClackPrompt(cfg, prompts);
+
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal.reason);
+  if (signal.aborted) {
+    abort();
+  } else {
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  try {
+    return await executeClackPrompt(cfg, prompts, controller.signal);
+  } finally {
+    signal.removeEventListener("abort", abort);
+  }
+}
+
 function isPromptType(value: unknown): value is RuntimePromptConfig["type"] {
   return value === "text" || value === "password" || value === "confirm" ||
     value === "number" || value === "select" || value === "multiselect";
@@ -398,11 +455,13 @@ function isPromptType(value: unknown): value is RuntimePromptConfig["type"] {
 function executeClackPrompt(
   cfg: RuntimePromptConfig,
   prompts: PromptFunctions,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   switch (cfg.type) {
     case "text":
       return (prompts.text as ClackText)({
         message: cfg.message,
+        ...(signal === undefined ? {} : { signal }),
         ...(cfg.placeholder !== undefined
           ? { placeholder: cfg.placeholder }
           : {}),
@@ -415,6 +474,7 @@ function executeClackPrompt(
     case "password":
       return (prompts.password as ClackPassword)({
         message: cfg.message,
+        ...(signal === undefined ? {} : { signal }),
         ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
         ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
       });
@@ -422,6 +482,7 @@ function executeClackPrompt(
     case "confirm":
       return (prompts.confirm as ClackConfirm)({
         message: cfg.message,
+        ...(signal === undefined ? {} : { signal }),
         ...(cfg.initialValue !== undefined
           ? { initialValue: cfg.initialValue }
           : {}),
@@ -430,6 +491,7 @@ function executeClackPrompt(
     case "number":
       return (prompts.text as ClackText)({
         message: cfg.message,
+        ...(signal === undefined ? {} : { signal }),
         ...(cfg.placeholder !== undefined
           ? { placeholder: cfg.placeholder }
           : {}),
@@ -452,6 +514,7 @@ function executeClackPrompt(
     case "select":
       return (prompts.select as ClackSelect)({
         message: cfg.message,
+        ...(signal === undefined ? {} : { signal }),
         options: normalizeOptions(cfg.options),
         ...(cfg.initialValue !== undefined
           ? { initialValue: cfg.initialValue }
@@ -461,6 +524,7 @@ function executeClackPrompt(
     case "multiselect":
       return (prompts.multiselect as ClackMultiselect)({
         message: cfg.message,
+        ...(signal === undefined ? {} : { signal }),
         options: normalizeOptions(cfg.options),
         ...(cfg.required !== undefined ? { required: cfg.required } : {}),
       });
