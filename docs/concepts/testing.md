@@ -23,11 +23,6 @@ import { /* ... */ } from "@optique/testing/discover";
 import { /* ... */ } from "@optique/testing/cli";
 ~~~~
 
-The parser, runner, and discovery helpers are available now.  The child-process
-helpers remain reserved while the remaining part of [issue #890] lands.
-
-[issue #890]: https://github.com/dahlia/optique/issues/890
-
 
 Execution boundaries
 --------------------
@@ -259,6 +254,142 @@ the promise according to `runProgram()`'s error handling, including its
 run in the test process, so their side effects are real.  Direct writes through
 `console.log()`, `print()`, or process streams bypass capture; use a child
 process to assert on those writes.
+
+
+Testing a real CLI
+------------------
+
+Use `createCliRunner()` when the test needs to observe the complete application,
+including direct console output, stdin, and process exit status:
+
+~~~~ typescript twoslash
+import assert from "node:assert/strict";
+import { createCliRunner } from "@optique/testing/cli";
+
+const cli = createCliRunner({
+  entrypoint: new URL("./cli.mjs", import.meta.url),
+});
+const help = await cli.invoke("--help");
+assert.equal(help.exitCode, 0);
+assert.match(help.stdout, /Usage:/);
+
+const result = await cli.invoke({
+  args: ["greet"],
+  stdin: "Ada\n",
+  env: { GREETING: "Hello", DEBUG: undefined },
+  timeout: 10_000,
+});
+assert.equal(result.stdout, "Hello, Ada!\n");
+~~~~
+
+`CliResult` contains separate UTF-8 `stdout` and `stderr` strings,
+`exitCode: number | null`, and `signal: string | null`.  A nonzero exit code
+is a result, including a CLI's parse error or uncaught handler exception.
+A signal termination reports its signal instead of an exit code.  Output is
+preserved without trimming, including CRLF, ANSI escapes, and trailing newlines.
+The runner does not force color or terminal width settings; configure these in
+your CLI or environment when asserting rendered text.
+
+### Selecting a runtime
+
+With `entrypoint`, the child uses the current runtime's executable.  Deno
+receives `run` before the entry point; Node.js and Bun receive the entry point
+directly.  `runtimeArgs` goes before the entry point.  Parent runtime flags are
+not inherited, and the helper does not install dependencies, build TypeScript,
+or infer a loader.  Use runnable JavaScript on Node.js versions that cannot
+execute your TypeScript source directly, or supply an explicit loader.
+
+Deno permissions must be explicit:
+
+~~~~ typescript twoslash
+import { createCliRunner } from "@optique/testing/cli";
+
+const cli = createCliRunner({
+  entrypoint: new URL("./cli.ts", import.meta.url),
+  runtimeArgs: ["--allow-read", "--allow-env"],
+});
+~~~~
+
+To select a different executable, supply a nonempty `command` array instead of
+`entrypoint` and `runtimeArgs`:
+
+~~~~ typescript twoslash
+import { createCliRunner } from "@optique/testing/cli";
+
+const cli = createCliRunner({ command: ["node", "./dist/cli.js"] });
+await cli.invoke("--version");
+~~~~
+
+Commands and arguments are passed without a shell.  Spaces and shell
+metacharacters remain literal; no quoting, splitting, or expansion is applied.
+
+### Invocation settings
+
+`invoke(...args)` accepts individual string arguments.  `invoke({ args, ... })`
+adds per-call options; `args` defaults to an empty array.  `stdin` is a UTF-8
+string and the input pipe always receives EOF, even when stdin is omitted.
+The runner reads stdout and stderr concurrently while writing input.
+
+`cwd`, `env`, `timeout`, `signal`, and `cleanup` can be set on the factory and
+overridden on each invocation.  The factory fixes its working directory and
+entry point to absolute paths when created.  A relative invocation `cwd` is
+resolved against that factory directory and does not relocate the entry point.
+Factory arrays, environment settings, and URL paths are copied, so later edits
+to them do not change the runner.
+
+The child inherits the parent's environment at invocation time, then applies
+factory and per-call overrides in that order.  An `undefined` value removes a
+variable from the supplied environment, although the runtime or operating
+system may restore system variables such as `PATH`.  Environment names are
+case-insensitive on Windows.  Invocations do
+not change the parent process's environment or working directory and can run
+concurrently.
+
+The default `timeout` is 5,000 milliseconds; `0` disables it.  Values must be
+integers between `0` and `2147483647`.  The limit includes output collection,
+so an exited CLI whose descendants keep its pipes open can still time out.
+An invocation `signal` replaces the factory signal.  An already-aborted signal
+prevents the child from starting.
+
+### Failures and cleanup
+
+Execution failures, timeouts, cancellation, input/output failures, and cleanup
+failures reject with `CliInvocationError`.  Its `reason` is `"spawn"`,
+`"timeout"`, `"aborted"`, `"io"`, or `"cleanup"`, respectively.  The error
+contains partial `stdout` and `stderr`, observed `exitCode` and `signal`, and
+an underlying `cause` when available:
+
+~~~~ typescript twoslash
+import { CliInvocationError, createCliRunner } from "@optique/testing/cli";
+
+const cli = createCliRunner({ entrypoint: "./cli.mjs", timeout: 1_000 });
+try {
+  await cli.invoke("serve");
+} catch (error) {
+  if (!(error instanceof CliInvocationError)) throw error;
+  console.error(error.reason, error.stdout, error.stderr);
+}
+~~~~
+
+Invalid factory options throw `TypeError` or `RangeError`; invalid invocation
+options reject the promise.  If cleanup also fails, `reason` becomes
+`"cleanup"` and an `AggregateError` cause preserves the original failure and
+cleanup errors.
+
+`cleanup: "child"` is the default and terminates only the direct child on
+failure.  Choose `cleanup: "tree"` when the CLI starts other processes that
+should also be terminated on failure.  On POSIX systems this creates a process
+group, sends `SIGTERM`, waits up to one second, and then sends `SIGKILL` if
+needed, allowing another second for final cleanup.  Windows terminates the
+child forcibly; tree cleanup uses the system `taskkill.exe /T /F` with a
+combined two-second bound for the tool and subsequent cleanup.  Cleanup time
+is additional to the invocation timeout.
+
+Tree cleanup handles ordinary descendants, not processes that escape their
+group or become orphaned.  On Windows, if the direct child has already exited,
+the runner does not start a new `taskkill` using its old PID.  Normal completion
+does not trigger a process-tree sweep.  This helper is not a process sandbox;
+fixtures that deliberately detach descendants need their own cleanup.
 
 
 Shared contracts

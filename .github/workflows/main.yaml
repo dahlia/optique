@@ -78,9 +78,32 @@ jobs:
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: mise run test:bun
 
+  test-cli-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [deno, node, bun]
+    env:
+      MISE_NO_HOOKS: "1"
+      MISE_AUTO_INSTALL: "0"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v4
+      with:
+        experimental: true
+        install: true
+        install_args: node deno bun github:pnpm/pnpm
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
+    - run: mise deps
+    - run: mise run --jobs 1 testing:cli:${{ matrix.runtime }}
+      timeout-minutes: 3
+
   publish:
     if: github.event_name == 'push'
-    needs: [test-node, test-deno, test-bun, check]
+    needs: [test-node, test-deno, test-bun, test-cli-windows, check]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
