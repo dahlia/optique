@@ -466,7 +466,7 @@ function runProcess(
         return false;
       }
     }
-    async function taskkill(deadline: number) {
+    async function taskkill(deadline: number, pid: number) {
       let helper: ChildProcessWithoutNullStreams;
       const root = process.env.SystemRoot ?? process.env.windir;
       if (root === undefined || !isAbsolute(root)) {
@@ -479,7 +479,7 @@ function runProcess(
       try {
         helper = spawn(join(root, "System32", "taskkill.exe"), [
           "/PID",
-          String(child?.pid),
+          String(pid),
           "/T",
           "/F",
         ], {
@@ -562,7 +562,7 @@ function runProcess(
                       "Cannot trace a Windows process tree after its root exits.",
                     ),
                   );
-                } else await taskkill(deadline);
+                } else await taskkill(deadline, child.pid);
               } else killChild("SIGKILL");
             } else if (options.cleanup === "tree") {
               const found = groupSignal("SIGTERM");
