@@ -50,8 +50,27 @@ const result = await captureRun(argument(string()), {
 console.log(result.kind, result.exitCode, result.stdout, result.stderr);
 ~~~~
 
-The discovery and child-process entry points remain reserved while their
-helpers are developed.
+Use `captureProgramRun()` to include command discovery and handler dispatch:
+
+~~~~ typescript
+import { captureProgramRun } from "@optique/testing/discover";
+
+const result = await captureProgramRun({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: { name: "example" },
+  args: ["--help"],
+  colors: false,
+  maxWidth: 80,
+});
+
+console.log(result.exitCode, result.stdout, result.stderr);
+~~~~
+
+The helper runs real command modules, hooks, and handlers.  It captures
+Optique's output callbacks; direct console or process-stream writes bypass
+capture.  Unexpected errors reject the promise.
+
+The child-process entry point remains reserved while its helpers are developed.
 
 [Optique]: https://optique.dev/
 

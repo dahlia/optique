@@ -527,6 +527,9 @@ importers:
       '@optique/core':
         specifier: workspace:*
         version: link:../core
+      '@optique/discover':
+        specifier: workspace:*
+        version: link:../discover
       '@optique/run':
         specifier: workspace:*
         version: link:../run

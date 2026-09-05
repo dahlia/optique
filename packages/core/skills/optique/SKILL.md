@@ -25,11 +25,11 @@ Core rules
  -  Use `run()` from *@optique/run* for applications; use `parse()` or
     `runParser()` for embedded and custom runtimes.
  -  In tests, use `parseArgs()`/`parseArgsSync()` from *@optique/testing/parser*
-    for structured parser results, or `captureRun()` from
-    *@optique/testing/run* for runner-rendered output and exits.
+    for parser results, `captureRun()` from *@optique/testing/run* for runner
+    output/exits, or `captureProgramRun()` from *@optique/testing/discover* for
+    dispatch/hooks. Direct console/process writes bypass capture.
  -  Compose parsers with `object()`, `tuple()`, `seq()`, `or()`, `merge()`, and
-    modifiers. Do not write imperative `if`/`else` argument scanners around
-    Optique parsers.
+    modifiers. Do not hand-write argument scanners around Optique parsers.
  -  Let TypeScript infer the parsed value type from the parser. Do not
     hand-maintain a separate interface for the result unless another API
     boundary requires it.
