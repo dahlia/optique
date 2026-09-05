@@ -79,6 +79,8 @@ jobs:
     - run: mise run test:bun
 
   test-cli-windows:
+    permissions:
+      contents: read
     runs-on: windows-latest
     timeout-minutes: 10
     strategy:
@@ -90,8 +92,10 @@ jobs:
       MISE_AUTO_INSTALL: "0"
       MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
-    - uses: actions/checkout@v6
-    - uses: jdx/mise-action@v4
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      with:
+        persist-credentials: false
+    - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
       with:
         experimental: true
         install: true
