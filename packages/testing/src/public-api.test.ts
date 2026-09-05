@@ -125,10 +125,13 @@ describe("public surface", () => {
   });
 
   it("should expose only the implemented helpers", async () => {
-    // The root is limited to contracts shared across layers.  The remaining
-    // layer subpaths stay reserved until their helpers land.
+    // The root is limited to contracts shared across layers; each execution
+    // boundary exposes its helpers through its own subpath.
     assert.deepEqual(Object.keys(await import("@optique/testing")), []);
-    assert.deepEqual(Object.keys(await import("@optique/testing/cli")), []);
+    assert.deepEqual(Object.keys(await import("@optique/testing/cli")).sort(), [
+      "CliInvocationError",
+      "createCliRunner",
+    ]);
     assert.deepEqual(
       Object.keys(await import("@optique/testing/discover")),
       ["captureProgramRun"],
@@ -169,7 +172,10 @@ describe("npm build output", () => {
 
     // Keep the CommonJS surface aligned with ESM.
     assert.deepEqual(Object.keys(require("@optique/testing")), []);
-    assert.deepEqual(Object.keys(require("@optique/testing/cli")), []);
+    assert.deepEqual(Object.keys(require("@optique/testing/cli")).sort(), [
+      "CliInvocationError",
+      "createCliRunner",
+    ]);
     assert.deepEqual(Object.keys(require("@optique/testing/discover")), [
       "captureProgramRun",
     ]);

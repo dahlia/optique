@@ -179,15 +179,20 @@ To be released.
     exit codes without writing to process streams or running downstream
     application handlers.  The discovery entry point's `captureProgramRun()`
     captures output and exit codes while executing command discovery, hooks,
-    and handler dispatch in the test process.
-    [[#887], [#890], [#891], [#892], [#893], [#942], [#943], [#944], [#945]]
+    and handler dispatch in the test process.  The CLI entry point's
+    `createCliRunner()` runs a real process, capturing stdout, stderr, and exit
+    status with stdin, environment, timeout, cancellation, and optional
+    process-tree cleanup controls.
+    [[#887], [#890], [#891], [#892], [#893], [#894], [#942], [#943], [#944], [#945], [#946]]
 
 [#887]: https://github.com/dahlia/optique/issues/887
 [#891]: https://github.com/dahlia/optique/issues/891
 [#893]: https://github.com/dahlia/optique/issues/893
+[#894]: https://github.com/dahlia/optique/issues/894
 [#942]: https://github.com/dahlia/optique/pull/942
 [#944]: https://github.com/dahlia/optique/pull/944
 [#945]: https://github.com/dahlia/optique/pull/945
+[#946]: https://github.com/dahlia/optique/pull/946
 
 
 Version 1.2.5

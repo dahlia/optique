@@ -3,7 +3,7 @@ experimental = true
 
 [tools]
 "aqua:dahlia/hongdown" = "0.5.3"
-"aqua:fish-shell/fish-shell" = "latest"
+"aqua:fish-shell/fish-shell" = { version = "latest", os = ["linux", "macos"] }
 bun = "1.3"
 deno = "2.9"
 "github:dahlia/sacho" = "0.3.2"
@@ -115,6 +115,32 @@ depends = ["check", "test:*"]
 [tasks.build]
 description = "Build all packages for npm publishing"
 run = "pnpm run --filter '!{docs}' -r build"
+
+[tasks."testing:cli:build"]
+description = "Build the testing package and its dependencies"
+run = 'pnpm --filter "@optique/testing..." -r build'
+
+[tasks."testing:cli:deno"]
+description = "Test the CLI boundary using Deno"
+depends = ["testing:cli:build"]
+dir = "packages/testing"
+run = "deno test --allow-read --allow-write --allow-env --allow-run src/cli.test.ts src/public-api.test.ts"
+
+[tasks."testing:cli:node"]
+description = "Test the CLI boundary using Node.js"
+depends = ["testing:cli:build"]
+dir = "packages/testing"
+run = "node --test src/cli.test.ts src/public-api.test.ts"
+
+[tasks."testing:cli:bun"]
+description = "Test the CLI boundary using Bun"
+depends = ["testing:cli:build"]
+dir = "packages/testing"
+run = "bun test src/cli.test.ts src/public-api.test.ts"
+
+[tasks."testing:cli"]
+description = "Test the CLI boundary across all runtimes"
+depends = ["testing:cli:deno", "testing:cli:node", "testing:cli:bun"]
 
 [tasks.coverage]
 description = "Measure test coverage"

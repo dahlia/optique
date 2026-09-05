@@ -70,9 +70,29 @@ The helper runs real command modules, hooks, and handlers.  It captures
 Optique's output callbacks; direct console or process-stream writes bypass
 capture.  Unexpected errors reject the promise.
 
-The child-process entry point remains reserved while its helpers are developed.
+Use `createCliRunner()` to capture the complete process, including direct
+console writes and application exit codes:
+
+~~~~ typescript
+import { createCliRunner } from "@optique/testing/cli";
+
+const cli = createCliRunner({
+  entrypoint: new URL("./cli.mjs", import.meta.url),
+});
+const result = await cli.invoke("--help");
+console.log(result.exitCode, result.signal, result.stdout, result.stderr);
+~~~~
+
+The runner uses the current runtime.  Set `runtimeArgs` for explicit runtime
+flags, including Deno permissions, or use `command: ["node", "./cli.mjs"]`
+for a specific executable.  Calls accept stdin, cwd, environment overrides,
+and cancellation.  The default timeout is five seconds; `timeout: 0` disables
+it.  Nonzero exits return results; execution failures, timeouts, and
+cancellation reject with `CliInvocationError`, including partial output.
+See the [testing guide] for process-tree cleanup and runtime details.
 
 [Optique]: https://optique.dev/
+[testing guide]: https://optique.dev/concepts/testing
 
 
 Installation
@@ -92,5 +112,3 @@ Documentation
 
 For full documentation, visit the [testing guide], which explains what each
 layer does and does not execute, and how to choose between them.
-
-[testing guide]: https://optique.dev/concepts/testing
