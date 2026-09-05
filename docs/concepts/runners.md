@@ -1045,6 +1045,11 @@ try {
 }
 ~~~~
 
+Tests rarely need to assemble those handlers by hand.  The `captureRun()`
+helper from *@optique/testing/run* packages exactly this pattern, returning the
+captured output and exit code instead of writing to process streams.  See
+[*Testing*](./testing.md) for the rest of the testing helpers.
+
 
 Async parser execution
 ----------------------
@@ -1371,7 +1376,9 @@ see [*Bundling parsers with metadata*](#bundling-parsers-with-metadata).
 
 ### Use `parse()` when:
 
- -  *Testing parsers*: You need to inspect parsing results in tests
+ -  *Testing parsers*: You need to inspect parsing results in tests, which the
+    `parseArgs()` and `parseArgsSync()` helpers from *@optique/testing/parser*
+    wrap for you
  -  *Complex integration*: Parsing is part of a larger application flow
  -  *Custom error handling*: You need application-specific error recovery
  -  *Multiple attempts*: You want to try different parsers or arguments

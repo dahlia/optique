@@ -384,6 +384,9 @@ inspect for success. The mid-level `runParser()` behaves more like `run()`: it
 returns the parsed value directly, invokes `onHelp` / `onError` callbacks, or
 throws a `RunParserError` by default, rather than returning a `Result`. During
 testing you can also pass an `onExit` callback to `run()` to intercept the exit.
+*@optique/testing* provides ready-made helpers for both routes: `captureRun()`
+runs `run()` with its output and exit code captured, and `parseArgs()` runs a
+parser without any runner behavior. See [*Testing*](./concepts/testing.md).
 
 
 Other sharp edges
