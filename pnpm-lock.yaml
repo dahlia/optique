@@ -421,6 +421,9 @@ importers:
         specifier: 'workspace:'
         version: link:../run
     devDependencies:
+      '@optique/testing':
+        specifier: 'workspace:'
+        version: link:../testing
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4

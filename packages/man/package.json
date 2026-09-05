@@ -94,6 +94,7 @@
     "@optique/run": "workspace:"
   },
   "devDependencies": {
+    "@optique/testing": "workspace:",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "tsx": "catalog:",
