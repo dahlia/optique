@@ -8,6 +8,7 @@
 /packages/*/dist/
 /packages/*/coverage/
 /packages/*/node_modules/
+/packages/tmp/
 /PLAN.md
 /coverage/
 /tmp/
