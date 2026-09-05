@@ -374,7 +374,7 @@ function runner() {
 }
 
 function scratch(): string {
-  const directory = fileURLToPath(new URL("../../../../tmp/", import.meta.url));
+  const directory = fileURLToPath(new URL("../../../tmp/", import.meta.url));
   mkdirSync(directory, { recursive: true });
   return mkdtempSync(resolve(directory, "cli-"));
 }
