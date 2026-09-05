@@ -1,56 +1,44 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { runParser } from "@optique/core/facade";
+import { type CapturedRunResult, captureRun } from "@optique/testing/run";
 import { program } from "./index.ts";
 
 function parseGitique(args: readonly string[]): unknown {
   return runParser(program, args);
 }
 
-interface CliRunResult {
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-function runGitique(args: readonly string[]): CliRunResult {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  const result = runParser(program, args, {
+function runGitique(
+  args: readonly string[],
+): Promise<CapturedRunResult<unknown>> {
+  return captureRun(program, {
+    args,
     help: {
       command: { group: "Meta commands" },
       option: { group: "Meta commands" },
-      onShow: (code) => code,
     },
     version: {
       value: program.metadata.version!,
       command: { group: "Meta commands" },
       option: { group: "Meta commands" },
-      onShow: (code) => code,
     },
     completion: {
       command: { group: "Meta commands" },
       option: { group: "Meta commands" },
-      onShow: (code) => code,
     },
     aboveError: "usage",
     showDefault: true,
     showChoices: true,
-    stdout: (line) => stdout.push(line),
-    stderr: (line) => stderr.push(line),
-    onError: (code) => code,
+    // Pin the rendering so assertions do not depend on the terminal that
+    // happens to run the tests.
+    colors: false,
+    maxWidth: 200,
   });
-
-  return {
-    exitCode: typeof result === "number" ? result : 0,
-    stdout: stdout.join("\n"),
-    stderr: stderr.join("\n"),
-  };
 }
 
 describe("gitique CLI", () => {
-  it("shows grouped top-level help", () => {
-    const result = runGitique(["--help"]);
+  it("shows grouped top-level help", async () => {
+    const result = await runGitique(["--help"]);
 
     assert.equal(result.exitCode, 0);
     assert.match(result.stdout, /Meta commands:/);
@@ -62,8 +50,8 @@ describe("gitique CLI", () => {
     assert.equal(result.stderr, "");
   });
 
-  it("reports invalid author input at parse time", () => {
-    const result = runGitique([
+  it("reports invalid author input at parse time", async () => {
+    const result = await runGitique([
       "commit",
       "--allow-empty",
       "--author",
@@ -79,15 +67,15 @@ describe("gitique CLI", () => {
     );
   });
 
-  it("shows AUTHOR metavar when --author is missing a value", () => {
-    const result = runGitique(["commit", "--author"]);
+  it("shows AUTHOR metavar when --author is missing a value", async () => {
+    const result = await runGitique(["commit", "--author"]);
 
     assert.equal(result.exitCode, 1);
     assert.match(result.stderr, /Error: `--author` requires `AUTHOR`\./);
   });
 
-  it("rejects impossible ISO dates before execution", () => {
-    const result = runGitique(["log", "--since", "2024-02-31"]);
+  it("rejects impossible ISO dates before execution", async () => {
+    const result = await runGitique(["log", "--since", "2024-02-31"]);
 
     assert.equal(result.exitCode, 1);
     assert.match(
@@ -96,8 +84,8 @@ describe("gitique CLI", () => {
     );
   });
 
-  it("uses custom choice errors for status format", () => {
-    const result = runGitique(["status", "--format", "weird"]);
+  it("uses custom choice errors for status format", async () => {
+    const result = await runGitique(["status", "--format", "weird"]);
 
     assert.equal(result.exitCode, 1);
     assert.match(
@@ -155,8 +143,8 @@ describe("gitique CLI", () => {
     });
   });
 
-  it("rejects blank commit messages", () => {
-    const result = runGitique(["commit", "-m", "   "]);
+  it("rejects blank commit messages", async () => {
+    const result = await runGitique(["commit", "-m", "   "]);
 
     assert.equal(result.exitCode, 1);
     assert.match(
@@ -199,8 +187,8 @@ describe("gitique CLI", () => {
     );
   });
 
-  it("rejects too many diff commit references", () => {
-    const result = runGitique(["diff", "HEAD~2", "HEAD~1", "HEAD"]);
+  it("rejects too many diff commit references", async () => {
+    const result = await runGitique(["diff", "HEAD~2", "HEAD~1", "HEAD"]);
 
     assert.equal(result.exitCode, 1);
     assert.match(
@@ -256,8 +244,8 @@ describe("gitique CLI", () => {
     );
   });
 
-  it("rejects malformed log dates", () => {
-    const result = runGitique(["log", "--until", "yesterday"]);
+  it("rejects malformed log dates", async () => {
+    const result = await runGitique(["log", "--until", "yesterday"]);
 
     assert.equal(result.exitCode, 1);
     assert.match(
@@ -325,8 +313,8 @@ describe("gitique CLI", () => {
     );
   });
 
-  it("rejects invalid reset mode choices", () => {
-    const result = runGitique(["reset", "--mode", "keep"]);
+  it("rejects invalid reset mode choices", async () => {
+    const result = await runGitique(["reset", "--mode", "keep"]);
 
     assert.equal(result.exitCode, 1);
     assert.match(
