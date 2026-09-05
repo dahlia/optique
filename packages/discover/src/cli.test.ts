@@ -1,82 +1,55 @@
 import assert from "node:assert/strict";
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { createCliRunner } from "@optique/testing/cli";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cliPathTs = join(__dirname, "cli.ts");
 const cliPathJs = join(__dirname, "..", "dist", "cli.js");
 
-interface RunResult {
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode: number;
-}
-
-function isSubprocessReliable(): boolean {
+async function isSubprocessReliable(): Promise<boolean> {
   try {
-    const probe = spawnSync(
-      process.execPath,
-      ["-e", "process.stdout.write('ok')"],
-      {
-        encoding: "utf8",
-        timeout: 5000,
-      },
-    );
-    return probe.status === 0 && probe.stdout === "ok";
+    const probe = await createCliRunner({
+      command: [process.execPath, "-e", "process.stdout.write('ok')"],
+      cwd: __dirname,
+    }).invoke();
+    return probe.exitCode === 0 && probe.stdout === "ok";
   } catch {
     return false;
   }
 }
 
-const hasReliableSubprocess = isSubprocessReliable();
+const hasReliableSubprocess = await isSubprocessReliable();
 
-function runCli(args: readonly string[]): Promise<RunResult> {
-  return new Promise((resolve) => {
-    let child: ChildProcess;
-
-    if ("Deno" in globalThis) {
-      child = spawn("deno", [
-        "run",
-        "--allow-read",
-        "--allow-write",
-        "--allow-env",
-        cliPathTs,
-        ...args,
-      ], { cwd: __dirname });
-    } else if ("Bun" in globalThis) {
-      child = spawn("bun", [cliPathJs, ...args], { cwd: __dirname });
-    } else {
-      child = spawn("node", ["--no-warnings", cliPathJs, ...args], {
-        cwd: __dirname,
-      });
+// Deno runs the TypeScript source with explicit permissions, while Node.js and
+// Bun run the built JavaScript entry point.  The generous timeout leaves room
+// for a cold module cache.
+const cli = createCliRunner(
+  "Deno" in globalThis
+    ? {
+      entrypoint: cliPathTs,
+      runtimeArgs: ["--allow-read", "--allow-write", "--allow-env"],
+      cwd: __dirname,
+      timeout: 60_000,
     }
-
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-    child.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-    child.on("close", (code) => {
-      resolve({ stdout, stderr, exitCode: code ?? 0 });
-    });
-    child.on("error", (error) => {
-      resolve({ stdout, stderr: String(error), exitCode: 1 });
-    });
-  });
-}
+    : "Bun" in globalThis
+    ? { entrypoint: cliPathJs, cwd: __dirname, timeout: 60_000 }
+    : {
+      entrypoint: cliPathJs,
+      runtimeArgs: ["--no-warnings"],
+      cwd: __dirname,
+      timeout: 60_000,
+    },
+);
 
 describe("optique-discover CLI", { skip: !hasReliableSubprocess }, () => {
   it("should show help", async () => {
     if (!hasReliableSubprocess) return;
 
-    const result = await runCli(["--help"]);
+    const result = await cli.invoke("--help");
 
     assert.equal(result.exitCode, 0);
     assert.ok(result.stdout.includes("optique-discover"));
@@ -97,13 +70,13 @@ describe("optique-discover CLI", { skip: !hasReliableSubprocess }, () => {
       await writeText(join(commandsDir, "build.ts"), "");
       await writeText(join(commandsDir, "user", "add.ts"), "");
 
-      const result = await runCli([
+      const result = await cli.invoke(
         commandsDir,
         "--output",
         outputFile,
         "--extension",
         ".ts",
-      ]);
+      );
 
       assert.equal(result.exitCode, 0, result.stderr);
       assert.equal(result.stderr, "");
@@ -134,11 +107,7 @@ describe("optique-discover CLI", { skip: !hasReliableSubprocess }, () => {
       const commandsDir = join(dir, "commands");
       await writeText(join(commandsDir, "build.ts"), "");
 
-      const result = await runCli([
-        commandsDir,
-        "--extension",
-        ".ts",
-      ]);
+      const result = await cli.invoke(commandsDir, "--extension", ".ts");
 
       assert.equal(result.exitCode, 1);
       assert.equal(result.stdout, "");
