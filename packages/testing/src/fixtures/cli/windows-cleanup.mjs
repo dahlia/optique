@@ -19,7 +19,7 @@ try {
     runtimeArgs: "Deno" in globalThis ? ["-A"] : [],
     env: { SystemRoot: systemRoot, windir },
     cleanup: "tree",
-    timeout: 1000,
+    timeout: 4000,
   }).invoke("tree", ready, "hang");
   throw new Error("Expected tree cleanup to fail.");
 } catch (error) {
