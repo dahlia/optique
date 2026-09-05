@@ -18,11 +18,15 @@ const cliPathTs = join(__dirname, "cli.ts");
 const cliPathJs = join(__dirname, "..", "dist", "cli.js");
 
 async function isSubprocessReliable(): Promise<boolean> {
-  const probe = await createCliRunner({
-    command: [process.execPath, "-e", "process.stdout.write('ok')"],
-    cwd: __dirname,
-  }).invoke();
-  return probe.exitCode === 0 && probe.stdout === "ok";
+  try {
+    const probe = await createCliRunner({
+      command: [process.execPath, "-e", "process.stdout.write('ok')"],
+      cwd: __dirname,
+    }).invoke();
+    return probe.exitCode === 0 && probe.stdout === "ok";
+  } catch {
+    return false;
+  }
 }
 
 const hasReliableSubprocess = await isSubprocessReliable();
