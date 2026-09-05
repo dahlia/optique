@@ -124,7 +124,7 @@ describe("public surface", () => {
     assert.equal(captured.stderr, "");
   });
 
-  it("should expose only the implemented parser helpers", async () => {
+  it("should expose only the implemented helpers", async () => {
     // The root is limited to contracts shared across layers.  The remaining
     // layer subpaths stay reserved until their helpers land.
     assert.deepEqual(Object.keys(await import("@optique/testing")), []);
@@ -137,7 +137,9 @@ describe("public surface", () => {
       Object.keys(await import("@optique/testing/parser")).sort(),
       ["parseArgs", "parseArgsSync"],
     );
-    assert.deepEqual(Object.keys(await import("@optique/testing/run")), []);
+    assert.deepEqual(Object.keys(await import("@optique/testing/run")), [
+      "captureRun",
+    ]);
   });
 });
 
@@ -173,6 +175,8 @@ describe("npm build output", () => {
       Object.keys(require("@optique/testing/parser")).sort(),
       ["parseArgs", "parseArgsSync"],
     );
-    assert.deepEqual(Object.keys(require("@optique/testing/run")), []);
+    assert.deepEqual(Object.keys(require("@optique/testing/run")), [
+      "captureRun",
+    ]);
   });
 });
