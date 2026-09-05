@@ -1427,6 +1427,104 @@ See the [cookbook](./cookbook.md#combining-with-interactive-prompts) for a
 complete example.
 
 
+Testing your CLI
+----------------
+
+A CLI can be tested at more than one depth, and choosing the depth is most of
+the work. Checking that `--timeout 10000` becomes the number `10000` does not
+require rendering help text or starting a process, and checking what `--help`
+prints does not require running the code that consumes the parsed value. The
+*@optique/testing* package gives each of those boundaries its own entry point,
+so the scope of a test is visible from its import: *@optique/testing/parser*
+for a parser alone, *@optique/testing/run* for what the runner writes and how
+it exits, *@optique/testing/discover* for command dispatch, and
+*@optique/testing/cli* for a real entry point in a child process.
+
+The narrowest layer runs the parser over a complete argument list and hands the
+outcome back as a value. Nothing is rendered and nothing exits, so the
+assertions are about the data your parser produces. Here is the `test` command
+from the build tool above:
+
+~~~~ typescript twoslash
+import assert from "node:assert/strict";
+import { object } from "@optique/core/constructs";
+import { optional, withDefault } from "@optique/core/modifiers";
+import { command, constant, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+import { parseArgsSync } from "@optique/testing/parser";
+
+const testCommand = command("test", object({
+  action: constant("test"),
+  watch: optional(option("-w", "--watch")),
+  coverage: optional(option("--coverage")),
+  pattern: optional(option("--pattern", string())),
+  timeout: withDefault(option("--timeout", integer({ min: 1 })), 5000)
+}));
+
+const result = parseArgsSync(testCommand, [
+  "test",
+  "--coverage",
+  "--timeout",
+  "10000",
+]);
+
+if (result.success) {
+  assert.equal(result.value.timeout, 10000);
+  assert.ok(result.value.coverage);
+} else {
+  assert.fail(`Unexpected failure: ${result.remainingArgs.join(" ")}`);
+}
+~~~~
+
+Use `parseArgsSync()` for synchronous parsers and `parseArgs()` when a parser
+may be asynchronous. Both return failures as values instead of throwing, so a
+test can assert on the error the same way it asserts on a success.
+
+Once help text is what you care about, move one layer out. `captureRun()` runs
+what `run()` runs, but writes into strings and records the exit code instead of
+touching process streams:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { optional, withDefault } from "@optique/core/modifiers";
+import { command, constant, option } from "@optique/core/primitives";
+import { integer, string } from "@optique/core/valueparser";
+
+const testCommand = command("test", object({
+  action: constant("test"),
+  watch: optional(option("-w", "--watch")),
+  coverage: optional(option("--coverage")),
+  pattern: optional(option("--pattern", string())),
+  timeout: withDefault(option("--timeout", integer({ min: 1 })), 5000)
+}));
+// ---cut-before---
+import assert from "node:assert/strict";
+import { captureRun } from "@optique/testing/run";
+
+const result = await captureRun(testCommand, {
+  args: ["test", "--help"],
+  programName: "build-tool",
+  help: "option",
+  colors: false,
+  maxWidth: 80,
+});
+
+assert.equal(result.kind, "exited");
+assert.match(result.stdout, /--coverage/);
+assert.equal(result.stderr, "");
+~~~~
+
+Setting `colors` and `maxWidth` explicitly matters here. Without them the
+runner keeps its usual defaults, which depend on the terminal the test happens
+to run in, and the rendered text differs between your machine and CI.
+
+Command dispatch and full process behavior have their own layers, which the
+[testing guide](./concepts/testing.md) covers along with the one rule that
+catches people out: output written directly through `console.log()` or
+`print()` bypasses the in-process captures, so asserting on it needs a child
+process.
+
+
 Next steps
 ----------
 

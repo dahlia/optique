@@ -407,6 +407,17 @@ preflight, see the [program-level lifecycle hooks
 recipe](../cookbook.md#program-level-lifecycle-hooks) in the cookbook.
 
 
+Testing a discovered program
+----------------------------
+
+`captureProgramRun()` from *@optique/testing/discover* runs `runProgram()` with
+its output and exit code captured, covering discovery, lifecycle hooks, and
+handler dispatch without touching process streams.  Output that a handler
+writes directly through `console.log()` or `print()` bypasses that capture, so
+assert on it with the child-process layer instead: `createCliRunner()` from
+*@optique/testing/cli*.  See [*Testing*](./testing.md) for both helpers.
+
+
 File names and extensions
 -------------------------
 

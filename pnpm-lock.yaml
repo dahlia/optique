@@ -175,6 +175,9 @@ importers:
         specifier: ^0.4.0
         version: 0.4.0
     devDependencies:
+      '@optique/testing':
+        specifier: 'workspace:'
+        version: link:../../packages/testing
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
@@ -299,6 +302,9 @@ importers:
         specifier: workspace:*
         version: link:../run
     devDependencies:
+      '@optique/testing':
+        specifier: workspace:*
+        version: link:../testing
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4
@@ -418,6 +424,9 @@ importers:
         specifier: 'workspace:'
         version: link:../run
     devDependencies:
+      '@optique/testing':
+        specifier: 'workspace:'
+        version: link:../testing
       '@types/node':
         specifier: 'catalog:'
         version: 24.12.4

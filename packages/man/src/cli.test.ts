@@ -3,12 +3,12 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import process from "node:process";
+import { createCliRunner } from "@optique/testing/cli";
 import { formatDateForMan } from "#src/man.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -17,78 +17,51 @@ const fixturesDir = join(__dirname, "..", "test", "fixtures");
 const cliPathTs = join(__dirname, "cli.ts");
 const cliPathJs = join(__dirname, "..", "dist", "cli.js");
 
-interface RunResult {
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode: number;
+async function isSubprocessReliable(): Promise<boolean> {
+  try {
+    const probe = await createCliRunner({
+      command: [process.execPath, "-e", "process.stdout.write('ok')"],
+      cwd: __dirname,
+    }).invoke();
+    return probe.exitCode === 0 && probe.stdout === "ok";
+  } catch {
+    return false;
+  }
 }
 
-function isSubprocessReliable(): boolean {
-  const probe = spawnSync(
-    process.execPath,
-    ["-e", "process.stdout.write('ok')"],
-    {
-      encoding: "utf8",
-      timeout: 5000,
-    },
-  );
-  return probe.status === 0 && probe.stdout === "ok";
-}
+const hasReliableSubprocess = await isSubprocessReliable();
 
-const hasReliableSubprocess = isSubprocessReliable();
-
-/**
- * Runs the CLI with the given arguments and returns the result.
- */
-function runCli(args: readonly string[]): Promise<RunResult> {
-  return new Promise((resolve) => {
-    // Determine which runtime to use
-    let child: ChildProcess;
-
-    if ("Deno" in globalThis) {
-      // Deno: use TypeScript source directly
-      child = spawn("deno", [
-        "run",
+// Deno runs the TypeScript source with explicit permissions, while Node.js and
+// Bun run the built JavaScript entry point.  Bun still loads the TypeScript
+// fixtures by itself.  The generous timeout leaves room for a cold module
+// cache and for the on-the-fly fixture transpilation the CLI performs.
+const cli = createCliRunner(
+  "Deno" in globalThis
+    ? {
+      entrypoint: cliPathTs,
+      runtimeArgs: [
         "--allow-read",
         "--allow-write",
         "--allow-env",
         "--allow-sys",
-        cliPathTs,
-        ...args,
-      ], { cwd: __dirname });
-    } else if ("Bun" in globalThis) {
-      // Bun: use built JS file (fixtures are still TS, Bun handles them)
-      child = spawn("bun", [cliPathJs, ...args], { cwd: __dirname });
-    } else {
-      // Node.js: use built JS file
-      child = spawn("node", [
-        "--no-warnings",
-        cliPathJs,
-        ...args,
-      ], { cwd: __dirname });
+      ],
+      cwd: __dirname,
+      timeout: 60_000,
     }
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    child.on("close", (code) => {
-      resolve({ stdout, stderr, exitCode: code ?? 0 });
-    });
-  });
-}
+    : "Bun" in globalThis
+    ? { entrypoint: cliPathJs, cwd: __dirname, timeout: 60_000 }
+    : {
+      entrypoint: cliPathJs,
+      runtimeArgs: ["--no-warnings"],
+      cwd: __dirname,
+      timeout: 60_000,
+    },
+);
 
 describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
   describe("help and version", () => {
     it("shows help with --help", async () => {
-      const result = await runCli(["--help"]);
+      const result = await cli.invoke("--help");
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes("optique-man"));
@@ -97,7 +70,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
     });
 
     it("shows version with --version", async () => {
-      const result = await runCli(["--version"]);
+      const result = await cli.invoke("--version");
 
       assert.equal(result.exitCode, 0);
       assert.ok(/\d+\.\d+\.\d+/.test(result.stdout));
@@ -107,7 +80,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
   describe("man page generation", () => {
     it("generates man page from Program export", async () => {
       const programFile = join(fixturesDir, "program.ts");
-      const result = await runCli([programFile, "-s", "1"]);
+      const result = await cli.invoke(programFile, "-s", "1");
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('.TH "GREET" 1'));
@@ -118,13 +91,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("generates man page from Parser export", async () => {
       const parserFile = join(fixturesDir, "parser.ts");
-      const result = await runCli([
+      const result = await cli.invoke(
         parserFile,
         "-s",
         "1",
         "--name",
         "myparser",
-      ]);
+      );
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('.TH "MYPARSER" 1'));
@@ -133,7 +106,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("generates man page from .tsx input", async () => {
       const tsxFile = join(fixturesDir, "program.tsx");
-      const result = await runCli([tsxFile, "-s", "1"]);
+      const result = await cli.invoke(tsxFile, "-s", "1");
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('.TH "GREET" 1'));
@@ -142,7 +115,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("generates man page from .jsx input", async () => {
       const jsxFile = join(fixturesDir, "program.jsx");
-      const result = await runCli([jsxFile, "-s", "1"]);
+      const result = await cli.invoke(jsxFile, "-s", "1");
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('.TH "GREET" 1'));
@@ -151,7 +124,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("generates man page from .ts entry that imports .tsx", async () => {
       const tsFile = join(fixturesDir, "imports-tsx.ts");
-      const result = await runCli([tsFile, "-s", "1"]);
+      const result = await cli.invoke(tsFile, "-s", "1");
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('.TH "GREET" 1'));
@@ -168,13 +141,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       try {
         await writeFile(parserFile, await readFile(sourceFile, "utf-8"));
 
-        const result = await runCli([
+        const result = await cli.invoke(
           parserFile,
           "-s",
           "1",
           "--name",
           "hashparser",
-        ]);
+        );
 
         assert.equal(result.exitCode, 0);
         assert.ok(result.stdout.includes('.TH "HASHPARSER" 1'));
@@ -193,11 +166,11 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       try {
         await writeFile(parserFile, await readFile(sourceFile, "utf-8"));
 
-        const result = await runCli([
+        const result = await cli.invoke(
           parserFile,
           "-s",
           "1",
-        ]);
+        );
 
         assert.equal(result.exitCode, 0);
         assert.ok(result.stdout.includes('.TH "MYAPP" 1'));
@@ -208,7 +181,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("generates man page from named export", async () => {
       const namedFile = join(fixturesDir, "named-export.ts");
-      const result = await runCli([namedFile, "-s", "1", "-e", "myProgram"]);
+      const result = await cli.invoke(namedFile, "-s", "1", "-e", "myProgram");
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('.TH "NAMED\\-APP" 1'));
@@ -221,13 +194,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       const outputFile = join(tempDir, "greet.1");
 
       try {
-        const result = await runCli([
+        const result = await cli.invoke(
           programFile,
           "-s",
           "1",
           "-o",
           outputFile,
-        ]);
+        );
 
         assert.equal(result.exitCode, 0);
 
@@ -241,11 +214,11 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
     it("defaults --date to the current date", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const before = new Date();
-      const result = await runCli([
+      const result = await cli.invoke(
         programFile,
         "-s",
         "1",
-      ]);
+      );
       const after = new Date();
 
       assert.equal(result.exitCode, 0);
@@ -272,13 +245,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
     it("defaults --date to the current date for Parser export", async () => {
       const parserFile = join(fixturesDir, "parser.ts");
       const before = new Date();
-      const result = await runCli([
+      const result = await cli.invoke(
         parserFile,
         "-s",
         "1",
         "--name",
         "myapp",
-      ]);
+      );
       const after = new Date();
 
       assert.equal(result.exitCode, 0);
@@ -302,13 +275,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("accepts --date option", async () => {
       const programFile = join(fixturesDir, "program.ts");
-      const result = await runCli([
+      const result = await cli.invoke(
         programFile,
         "-s",
         "1",
         "--date",
         "January 2026",
-      ]);
+      );
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('"January 2026"'));
@@ -316,7 +289,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("accepts --version-string option", async () => {
       const parserFile = join(fixturesDir, "parser.ts");
-      const result = await runCli([
+      const result = await cli.invoke(
         parserFile,
         "-s",
         "1",
@@ -324,7 +297,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
         "myapp",
         "--version-string",
         "2.0.0-beta",
-      ]);
+      );
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('"myapp 2.0.0-beta"'));
@@ -332,13 +305,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("accepts --manual option", async () => {
       const programFile = join(fixturesDir, "program.ts");
-      const result = await runCli([
+      const result = await cli.invoke(
         programFile,
         "-s",
         "1",
         "--manual",
         "User Commands",
-      ]);
+      );
 
       assert.equal(result.exitCode, 0);
       assert.ok(result.stdout.includes('"User Commands"'));
@@ -347,7 +320,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
   describe("error handling", () => {
     it("fails with exit code 1 for non-existent file", async () => {
-      const result = await runCli(["nonexistent.ts", "-s", "1"]);
+      const result = await cli.invoke("nonexistent.ts", "-s", "1");
 
       assert.equal(result.exitCode, 1);
       assert.ok(result.stderr.includes("not found"));
@@ -355,7 +328,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("fails with exit code 2 for missing export", async () => {
       const namedFile = join(fixturesDir, "named-export.ts");
-      const result = await runCli([namedFile, "-s", "1", "-e", "nonexistent"]);
+      const result = await cli.invoke(
+        namedFile,
+        "-s",
+        "1",
+        "-e",
+        "nonexistent",
+      );
 
       assert.equal(result.exitCode, 2);
       assert.ok(result.stderr.includes("No"));
@@ -368,7 +347,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("fails with exit code 2 for missing default export", async () => {
       const noDefaultFile = join(fixturesDir, "no-default.ts");
-      const result = await runCli([noDefaultFile, "-s", "1"]);
+      const result = await cli.invoke(noDefaultFile, "-s", "1");
 
       assert.equal(result.exitCode, 2);
       assert.ok(result.stderr.includes("default export"));
@@ -376,7 +355,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("fails with exit code 3 for invalid export type", async () => {
       const invalidFile = join(fixturesDir, "invalid-export.ts");
-      const result = await runCli([invalidFile, "-s", "1"]);
+      const result = await cli.invoke(invalidFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
       assert.ok(result.stderr.includes("not a Program or Parser"));
@@ -384,7 +363,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("fails with exit code 3 for malformed parser-like export", async () => {
       const malformedFile = join(fixturesDir, "malformed-parser.ts");
-      const result = await runCli([malformedFile, "-s", "1"]);
+      const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
       assert.ok(result.stderr.includes("not a Program or Parser"));
@@ -392,7 +371,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("fails with exit code 3 for malformed program with bad parser", async () => {
       const malformedFile = join(fixturesDir, "malformed-program.ts");
-      const result = await runCli([malformedFile, "-s", "1"]);
+      const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
       assert.ok(result.stderr.includes("not a Program or Parser"));
@@ -403,7 +382,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
         fixturesDir,
         "malformed-program-metadata.ts",
       );
-      const result = await runCli([malformedFile, "-s", "1"]);
+      const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
       assert.ok(result.stderr.includes("not a Program or Parser"));
@@ -414,7 +393,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
         fixturesDir,
         "throwing-getter-parser.ts",
       );
-      const result = await runCli([malformedFile, "-s", "1"]);
+      const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
       assert.ok(result.stderr.includes("not a Program or Parser"));
@@ -425,7 +404,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
         fixturesDir,
         "throwing-getter-program.ts",
       );
-      const result = await runCli([malformedFile, "-s", "1"]);
+      const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
       assert.ok(result.stderr.includes("not a Program or Parser"));
@@ -433,7 +412,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("rejects empty --name", async () => {
       const programFile = join(fixturesDir, "program.ts");
-      const result = await runCli([programFile, "-s", "1", "--name", ""]);
+      const result = await cli.invoke(programFile, "-s", "1", "--name", "");
 
       assert.notEqual(result.exitCode, 0);
       assert.ok(result.stderr.includes("Program name must not be empty"));
@@ -441,7 +420,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("rejects empty --date", async () => {
       const programFile = join(fixturesDir, "program.ts");
-      const result = await runCli([programFile, "-s", "1", "--date", ""]);
+      const result = await cli.invoke(programFile, "-s", "1", "--date", "");
 
       assert.notEqual(result.exitCode, 0);
       assert.ok(result.stderr.includes("Date must not be empty"));
@@ -449,13 +428,13 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("rejects empty --version-string", async () => {
       const programFile = join(fixturesDir, "program.ts");
-      const result = await runCli([
+      const result = await cli.invoke(
         programFile,
         "-s",
         "1",
         "--version-string",
         "",
-      ]);
+      );
 
       assert.notEqual(result.exitCode, 0);
       assert.ok(
@@ -465,7 +444,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("rejects empty --manual", async () => {
       const programFile = join(fixturesDir, "program.ts");
-      const result = await runCli([programFile, "-s", "1", "--manual", ""]);
+      const result = await cli.invoke(programFile, "-s", "1", "--manual", "");
 
       assert.notEqual(result.exitCode, 0);
       assert.ok(result.stderr.includes("Manual name must not be empty"));
