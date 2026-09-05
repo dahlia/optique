@@ -23,9 +23,8 @@ import { /* ... */ } from "@optique/testing/discover";
 import { /* ... */ } from "@optique/testing/cli";
 ~~~~
 
-The parser and runner helpers are available now.  The discovery and
-child-process helpers remain reserved while their respective parts of
-[issue #890] land.
+The parser, runner, and discovery helpers are available now.  The child-process
+helpers remain reserved while the remaining part of [issue #890] lands.
 
 [issue #890]: https://github.com/dahlia/optique/issues/890
 
@@ -162,6 +161,104 @@ resource disposal still reject the returned promise.  Output written directly
 through `console.log()`, `print()`, or a process stream bypasses these callbacks
 and is not captured.  Use the child-process layer when a test needs to observe
 that output or run the application code that consumes the parsed value.
+
+
+Testing command discovery and dispatch
+--------------------------------------
+
+Use `captureProgramRun()` to exercise `runProgram()`, including command loading,
+lifecycle hooks, and handler dispatch.  Pass either a `dir` to discover command
+modules or `commands` for a static registry, including entries returned by
+`commandsFromModules()`.
+
+This test checks both help and a parse error without running the handler:
+
+~~~~ typescript twoslash
+import assert from "node:assert/strict";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand } from "@optique/discover/command";
+import { captureProgramRun } from "@optique/testing/discover";
+
+let calls = 0;
+const greet = defineCommand({
+  path: ["greet"],
+  parser: argument(string()),
+  handler() {
+    calls++;
+  },
+});
+
+const options = {
+  commands: [greet],
+  metadata: { name: "example" },
+  colors: false,
+  maxWidth: 80,
+};
+
+const help = await captureProgramRun({
+  ...options,
+  args: ["greet", "--help"],
+});
+assert.equal(help.exitCode, 0);
+assert.match(help.stdout, /Usage:/);
+assert.equal(help.stderr, "");
+
+const failure = await captureProgramRun({ ...options, args: ["greet"] });
+assert.equal(failure.exitCode, 1);
+assert.notEqual(failure.stderr, "");
+assert.equal(calls, 0);
+~~~~
+
+For dispatch, assert on an observable handler effect.  The helper waits for
+asynchronous handlers and lifecycle cleanup before resolving:
+
+~~~~ typescript twoslash
+import assert from "node:assert/strict";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand } from "@optique/discover/command";
+import { captureProgramRun } from "@optique/testing/discover";
+
+const greeted: string[] = [];
+const greet = defineCommand({
+  path: ["greet"],
+  parser: argument(string()),
+  async handler(name) {
+    await Promise.resolve();
+    greeted.push(name);
+  },
+});
+
+const result = await captureProgramRun({
+  commands: [greet],
+  metadata: { name: "example" },
+  args: ["greet", "Ada"],
+  colors: false,
+  maxWidth: 80,
+});
+assert.equal(result.exitCode, 0);
+assert.deepEqual(greeted, ["Ada"]);
+~~~~
+
+`ProgramRunResult` contains `exitCode`, `stdout`, and `stderr`.  A normal
+completion has exit code zero; help, version, completion, and parse errors
+report the requested exit code.  It has no parsed value or `kind` field because
+`runProgram()` dispatches the value to the selected handler.
+
+`CaptureProgramRunOptions<R>` preserves `RunProgramOptions<R>`, including hook
+resource types, but reserves `stdout`, `stderr`, and `onExit` for capture.
+Each output callback appends its string followed by one newline, matching the
+default writers, even when the string is empty or already ends in a newline.
+The helper inherits argument, color, and width defaults from `runProgram()`;
+set `args`, `colors`, and `maxWidth` explicitly for repeatable tests.
+
+Errors from discovery, imports, handlers, hooks, and resource disposal reject
+the promise according to `runProgram()`'s error handling, including its
+`onError` rules.  They are not converted into exit results.  Commands and hooks
+run in the test process, so their side effects are real.  Direct writes through
+`console.log()`, `print()`, or process streams bypass capture; use a child
+process to assert on those writes.
 
 
 Shared contracts

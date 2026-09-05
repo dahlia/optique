@@ -87,6 +87,7 @@
   "sideEffects": false,
   "dependencies": {
     "@optique/core": "workspace:*",
+    "@optique/discover": "workspace:*",
     "@optique/run": "workspace:*"
   },
   "devDependencies": {

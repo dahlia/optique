@@ -177,13 +177,17 @@ To be released.
     arguments and the matched command path.  The runner entry point can capture
     returned values, help, version, completion, parse errors, and intentional
     exit codes without writing to process streams or running downstream
-    application handlers.
-    [[#890], [#891], [#892], [#893], [#942], [#943], [#944]]
+    application handlers.  The discovery entry point's `captureProgramRun()`
+    captures output and exit codes while executing command discovery, hooks,
+    and handler dispatch in the test process.
+    [[#887], [#890], [#891], [#892], [#893], [#942], [#943], [#944], [#945]]
 
+[#887]: https://github.com/dahlia/optique/issues/887
 [#891]: https://github.com/dahlia/optique/issues/891
 [#893]: https://github.com/dahlia/optique/issues/893
 [#942]: https://github.com/dahlia/optique/pull/942
 [#944]: https://github.com/dahlia/optique/pull/944
+[#945]: https://github.com/dahlia/optique/pull/945
 
 
 Version 1.2.5

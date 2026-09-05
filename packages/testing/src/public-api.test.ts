@@ -131,7 +131,7 @@ describe("public surface", () => {
     assert.deepEqual(Object.keys(await import("@optique/testing/cli")), []);
     assert.deepEqual(
       Object.keys(await import("@optique/testing/discover")),
-      [],
+      ["captureProgramRun"],
     );
     assert.deepEqual(
       Object.keys(await import("@optique/testing/parser")).sort(),
@@ -170,7 +170,9 @@ describe("npm build output", () => {
     // Keep the CommonJS surface aligned with ESM.
     assert.deepEqual(Object.keys(require("@optique/testing")), []);
     assert.deepEqual(Object.keys(require("@optique/testing/cli")), []);
-    assert.deepEqual(Object.keys(require("@optique/testing/discover")), []);
+    assert.deepEqual(Object.keys(require("@optique/testing/discover")), [
+      "captureProgramRun",
+    ]);
     assert.deepEqual(
       Object.keys(require("@optique/testing/parser")).sort(),
       ["parseArgs", "parseArgsSync"],
