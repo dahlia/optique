@@ -23,6 +23,11 @@ To be released.
     after the widest visible term using terminal display width while reserving
     description space under `maxWidth`.  The existing default and explicit
     numeric widths remain unchanged.  [[#904], [#911]]
+ -  Added the final `DocPage` as the second argument to `help.onShow`, so
+    custom help renderers can use runner-provided entries and selected
+    command documentation without reconstructing them. Existing zero-argument
+    and one-argument handlers remain compatible. Wrappers that invoke the
+    callback must now pass the page after the exit code.  [[#899], [#950]]
  -  Added `usageLine` to the core runner `RunOptions`.  Top-level full help can
     now replace the generated root synopsis or derive one from a callback,
     while subcommand help and usage-only error output remain unchanged.
@@ -68,6 +73,7 @@ To be released.
 [#890]: https://github.com/dahlia/optique/issues/890
 [#892]: https://github.com/dahlia/optique/issues/892
 [#897]: https://github.com/dahlia/optique/issues/897
+[#899]: https://github.com/dahlia/optique/issues/899
 [#904]: https://github.com/dahlia/optique/issues/904
 [#906]: https://github.com/dahlia/optique/issues/906
 [#909]: https://github.com/dahlia/optique/pull/909
@@ -88,6 +94,7 @@ To be released.
 [#932]: https://github.com/dahlia/optique/pull/932
 [#943]: https://github.com/dahlia/optique/pull/943
 [#949]: https://github.com/dahlia/optique/pull/949
+[#950]: https://github.com/dahlia/optique/pull/950
 
 ### @optique/run
 

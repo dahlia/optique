@@ -365,6 +365,48 @@ width.  When `maxWidth` constrains the layout, automatic sizing reserves at
 least half of the available space for descriptions.  Numeric widths retain
 their existing fallback behavior.
 
+### Structured help callbacks
+
+*The page argument is available since Optique 1.3.0.*
+
+Core runners pass `help.onShow(exitCode, page)` the final `DocPage` used for
+help output. This includes runner-provided help, version, and completion
+entries, program metadata, and root `usageLine` and `commandList` changes.
+Subcommand and meta-command help receive the selected command's page, with
+its own brief and description and the run-level footer as a fallback.
+
+The runner writes its usual output before calling the callback. To render the
+page yourself, supply a no-op `stdout` function:
+
+~~~~ typescript twoslash
+import { formatDocPage } from "@optique/core/doc";
+import { runParser } from "@optique/core/facade";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+runParser(argument(string()), "myapp", ["--help"], {
+  stdout: () => {},
+  help: {
+    option: true,
+    onShow(exitCode, page) {
+      console.log(formatDocPage("myapp", page, { colors: false }));
+      process.exit(exitCode);
+    },
+  },
+});
+~~~~
+
+Treat the page as read-only. It is the formatter's input: colors, widths,
+section ordering, and settings such as `showUsage` still belong to
+`formatDocPage()`. Optional fields may be `undefined`.
+
+The callback works with `runParserSync()`, `runParserAsync()`, and the
+`runWith()` family. Existing handlers accepting only the exit code or no
+arguments still work. Wrappers that invoke the callback must forward both
+arguments. Help printed on an error path, including `aboveError: "help"`,
+does not invoke this callback. The higher-level *@optique/run* API continues
+to use `onExit(code)`.
+
 ### Structured error callbacks
 
 *The message argument is available since Optique 1.3.0.*

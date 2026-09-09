@@ -3174,3 +3174,27 @@ describe("runSync async parser rejection", () => {
     );
   });
 });
+
+describe("help callback compatibility", () => {
+  it("should write help before the injected exit callback", () => {
+    const events: unknown[] = [];
+    const exit = new Error("Help exit.");
+    assert.throws(() =>
+      run(argument(string()), {
+        args: ["--help"],
+        programName: "test",
+        help: "option",
+        colors: false,
+        stdout: (chunk) => {
+          events.push(chunk);
+        },
+        onExit: (code) => {
+          events.push(code);
+          throw exit;
+        },
+      }), (error) => error === exit);
+    assert.equal(events.length, 2);
+    assert.equal(typeof events[0], "string");
+    assert.equal(events[1], 0);
+  });
+});

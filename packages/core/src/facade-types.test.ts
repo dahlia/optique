@@ -13,6 +13,7 @@ import {
   runWithSync,
 } from "#src/facade.ts";
 import { type Message, message } from "#src/message.ts";
+import type { DocPage } from "#src/doc.ts";
 import { argument } from "#src/primitives.ts";
 import { string } from "#src/valueparser.ts";
 
@@ -123,6 +124,97 @@ test("Structured error callbacks preserve runner return inference", async () => 
   const program = runParser(
     { parser, metadata: { name: "test" } },
     ["value"],
+    options,
+  );
+  type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
+    (<T>() => T extends B ? 1 : 2) ? true : false;
+  const types: [
+    Equal<typeof inferred, string>,
+    Equal<typeof sync, string>,
+    Equal<typeof async, Promise<string>>,
+    Equal<typeof withContext, Promise<string>>,
+    Equal<typeof withSync, string>,
+    Equal<typeof withAsync, Promise<string>>,
+    Equal<typeof program, string>,
+  ] = [true, true, true, true, true, true, true];
+  void types;
+  assert.deepEqual(
+    await Promise.all([
+      inferred,
+      sync,
+      async,
+      withContext,
+      withSync,
+      withAsync,
+      program,
+    ]),
+    Array.from({ length: 7 }, () => "value"),
+  );
+});
+
+test("Help callbacks preserve assignability and infer the final page", () => {
+  const legacy: {
+    readonly option: true;
+    readonly onShow?: (() => string) | ((code: number) => string);
+  } = { option: true, onShow: (code) => String(code) };
+  const callbacks: readonly RunOptions<string, never>[] = [
+    { help: { option: true, onShow: () => "shown" } },
+    { help: { option: true, onShow: (code) => String(code) } },
+    { help: { option: true, onShow: (code?: number) => String(code) } },
+    { help: legacy },
+    { help: { option: true, onShow: process.exit } },
+  ];
+  const options: RunWithOptions<string, never> = {
+    help: {
+      option: true,
+      onShow(code, page) {
+        const exitCode: number = code;
+        const structured: DocPage = page;
+        function invalidAssignments() {
+          // @ts-expect-error The exit code is not any or a string.
+          const text: string = code;
+          // @ts-expect-error The page is structured, not any or a string.
+          const rendered: string = page;
+          // @ts-expect-error The page is read-only.
+          page.sections = [];
+          void [text, rendered];
+        }
+        void invalidAssignments;
+        return `${exitCode}:${structured.sections.length}`;
+      },
+    },
+  };
+  function invalidInvocations() {
+    // @ts-expect-error Forwarders must supply the final page.
+    options.help?.onShow?.(0);
+    // @ts-expect-error The page cannot be undefined.
+    options.help?.onShow?.(0, undefined);
+    // @ts-expect-error Rendered text is not a DocPage.
+    options.help?.onShow?.(0, "help");
+  }
+  void invalidInvocations;
+  void callbacks;
+  assert.equal(options.help?.onShow?.(0, { sections: [] }), "0:0");
+});
+
+test("Help page callbacks preserve runner return inference", async () => {
+  const parser = argument(string());
+  const options = {
+    args: ["value"],
+    help: {
+      option: true as const,
+      onShow: (_code: number, _page: DocPage) => 42,
+    },
+  };
+  const inferred = runParser(parser, "test", options.args, options);
+  const sync = runParserSync(parser, "test", options.args, options);
+  const async = runParserAsync(parser, "test", options.args, options);
+  const withContext = runWith(parser, "test", [], options);
+  const withSync = runWithSync(parser, "test", [], options);
+  const withAsync = runWithAsync(parser, "test", [], options);
+  const program = runParser(
+    { parser, metadata: { name: "test" } },
+    options.args,
     options,
   );
   type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
