@@ -2192,6 +2192,8 @@ function validateVersionValue(value: unknown): string {
  * @param args Command-line arguments to parse (typically from
  *             `process.argv.slice(2)` on Node.js or `Deno.args` on Deno).
  * @param options Configuration options for output formatting and callbacks.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result value, or the return value of `onHelp`/`onError`
  *          callbacks.
  * @throws {TypeError} If `programName` (or `program.metadata.name`) is not
@@ -3048,6 +3050,8 @@ export function runParser<
  * @param programName The name of the program for help messages.
  * @param args The command-line arguments to parse.
  * @param options Configuration options for customizing behavior.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result if successful.
  * @throws {TypeError} If an async parser is passed at runtime.  Use
  * {@link runParser} or {@link runParserAsync} for async parsers.
@@ -3086,6 +3090,8 @@ export function runParserSync<
  * @param programName The name of the program for help messages.
  * @param args The command-line arguments to parse.
  * @param options Configuration options for customizing behavior.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns A Promise of the parsed result if successful.
  * @since 0.9.0
  */
@@ -3898,6 +3904,8 @@ async function runWithBody<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
@@ -4088,6 +4096,8 @@ function runWithSyncBody<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result.
  * @throws {TypeError} If an async parser is passed at runtime.  Use
  * {@link runWith} or {@link runWithAsync} for async parsers.
@@ -4172,6 +4182,8 @@ export function runWithSync<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.

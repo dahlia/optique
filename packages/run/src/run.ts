@@ -484,6 +484,8 @@ function resolveProgramInput<
  * @param parser The command-line parser to execute.
  * @param options Configuration options for customizing behavior.
  *                See {@link RunOptions} for available settings.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result if successful. On help display or parse errors,
  *          the function will call `process.exit()` and not return.
  *
@@ -663,6 +665,8 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
  * @template T The sync parser type being executed.
  * @param parser The synchronous command-line parser to execute.
  * @param options Configuration options for customizing behavior.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result if successful.
  * @throws {TypeError} If an async parser (or a {@link Program} wrapping one)
  * is passed at runtime.  Use {@link run} or {@link runAsync} instead.
@@ -774,6 +778,8 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
  * @template T The parser type being executed.
  * @param parser The command-line parser to execute.
  * @param options Configuration options for customizing behavior.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns A Promise of the parsed result if successful.
  * @since 0.9.0
  */

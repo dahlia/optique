@@ -575,6 +575,8 @@ export function createProgramParser(
  *
  * @template R The resource made available by program-level lifecycle hooks.
  * @param options Program options.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns A promise that resolves after the selected command handler
  *          completes.
  * @throws {TypeError} If discovery or command loading fails, or `hooks` is

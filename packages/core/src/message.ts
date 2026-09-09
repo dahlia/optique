@@ -617,9 +617,9 @@ export type MessageFormatter = (
 /**
  * Creates a message formatter using a snapshot of the supplied theme.
  * @param theme Semantic leaf formatters and annotation styles.
- * @returns A reusable message formatter.
- * @throws {TypeError} If initialWidth is not a finite integer.
- * @throws {RangeError} If initialWidth is negative or a color is invalid.
+ * @returns A reusable message formatter. Invoking it throws `TypeError` if
+ * `initialWidth` is not a finite integer, or `RangeError` if `initialWidth`
+ * is negative or a theme color is invalid (even with colors disabled).
  * @since 1.3.0
  */
 export function createMessageFormatter(theme: TerminalTheme): MessageFormatter {
