@@ -1334,14 +1334,21 @@ export interface RunOptions<THelp, TError> {
   readonly aboveError?: "usage" | "help" | "none";
 
   /**
-   * Callback function invoked when parsing fails. The function can
-   * optionally receive an exit code parameter.
+   * Callback invoked after error output for a parse failure, an invalid
+   * command path before help, or a missing or unsupported completion shell.
+   * Receives the exit code and the structured error message used for output.
+   * The message does not include the runner's `Error: ` prefix or usage/help
+   * output.  The runner preserves any formatting terms in the original message.
+   *
+   * Handlers may ignore either argument.  Wrappers that invoke this callback
+   * themselves must forward both the exit code and the message.
    *
    * You usually want to pass `process.exit` on Node.js or Bun and `Deno.exit`
    * on Deno to this option.
    * @default Throws a {@link RunParserError}.
+   * @since 1.3.0 Added the `error` parameter.
    */
-  readonly onError?: (() => TError) | ((exitCode: number) => TError);
+  readonly onError?: (exitCode: number, error: Message) => TError;
 
   /**
    * Function used to output error messages.  Assumes it prints the ending
@@ -1414,7 +1421,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   stdout: (text: string) => void,
   stderr: (text: string) => void,
   onCompletion: (() => THelp) | ((exitCode: number) => THelp),
-  onError: (() => TError) | ((exitCode: number) => TError),
+  onError: (exitCode: number, error: Message) => TError,
   availableShells: Record<string, ShellCompletion>,
   colors?: boolean,
   maxWidth?: number,
@@ -1429,13 +1436,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
 
-  const callOnError = (code: number): TError => onError(code);
+  const callOnError = (code: number, error: Message): TError =>
+    onError(code, error);
 
   const callOnCompletion = (code: number): THelp => onCompletion(code);
 
   // Check if shell name is empty
   if (!shellName) {
-    stderr("Error: Missing shell name for completion.\n");
+    const error = message`Missing shell name for completion.`;
+    stderr(`Error: ${formatMessage(error, { colors, quotes: !colors })}\n`);
 
     // Show help for completion command if parser is available
     if (completionParser) {
@@ -1459,14 +1468,14 @@ function handleCompletion<M extends Mode, THelp, TError>(
     return dispatchByMode(
       parser.mode,
       () => {
-        const result = callOnError(1);
+        const result = callOnError(1, error);
         if (result instanceof Promise) {
           throw new RunParserError("Synchronous parser returned async result.");
         }
         return result;
       },
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
-      async () => callOnError(1),
+      async () => callOnError(1, error),
     );
   }
 
@@ -1478,23 +1487,20 @@ function handleCompletion<M extends Mode, THelp, TError>(
       if (available.length > 0) available.push(text(", "));
       available.push(value(name));
     }
-    stderr(
-      formatMessage(
-        message`Error: Unsupported shell ${shellName}. Available shells: ${available}.`,
-        { colors, quotes: !colors },
-      ),
-    );
+    const error =
+      message`Unsupported shell ${shellName}. Available shells: ${available}.`;
+    stderr(`Error: ${formatMessage(error, { colors, quotes: !colors })}`);
     return dispatchByMode(
       parser.mode,
       () => {
-        const result = callOnError(1);
+        const result = callOnError(1, error);
         if (result instanceof Promise) {
           throw new RunParserError("Synchronous parser returned async result.");
         }
         return result;
       },
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
-      async () => callOnError(1),
+      async () => callOnError(1, error),
     );
   }
 
@@ -2294,8 +2300,8 @@ export function runParser<
   const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
   const onCompletionResult = (code: number): InferValue<TParser> =>
     onCompletion(code) as InferValue<TParser>;
-  const onErrorResult = (code: number): InferValue<TParser> =>
-    onError(code) as InferValue<TParser>;
+  const onErrorResult = (code: number, error: Message): InferValue<TParser> =>
+    onError(code, error) as InferValue<TParser>;
 
   // Validate meta names eagerly
   if (helpOptionConfig?.names) {
@@ -2643,7 +2649,7 @@ export function runParser<
             quotes: !colors,
           });
           stderr(`Error: ${errorMessage}`);
-          return onError(1);
+          return onError(1, validationError);
         };
 
         // Helper function to display help and return
@@ -2864,7 +2870,7 @@ export function runParser<
             quotes: !colors,
           });
           stderr(`Error: ${errorMessage}`);
-          return onError(1);
+          return onError(1, classified.error);
         };
 
         // Error handling

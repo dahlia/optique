@@ -10,6 +10,11 @@ To be released.
 
 ### @optique/core
 
+ -  Added a structured `Message` argument to core runner `onError` callbacks,
+    allowing applications to handle errors without parsing rendered stderr.
+    Existing zero-argument and one-argument handlers remain compatible.
+    Wrappers that invoke `onError` must now pass the message after the exit
+    code.  [[#897], [#949]]
  -  Added `parseDetailed()` to preserve remaining arguments and the matched
     command path on structured parse failures.  [[#890], [#892], [#943]]
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
@@ -62,6 +67,7 @@ To be released.
 [#879]: https://github.com/dahlia/optique/issues/879
 [#890]: https://github.com/dahlia/optique/issues/890
 [#892]: https://github.com/dahlia/optique/issues/892
+[#897]: https://github.com/dahlia/optique/issues/897
 [#904]: https://github.com/dahlia/optique/issues/904
 [#906]: https://github.com/dahlia/optique/issues/906
 [#909]: https://github.com/dahlia/optique/pull/909
@@ -81,6 +87,7 @@ To be released.
 [#931]: https://github.com/dahlia/optique/pull/931
 [#932]: https://github.com/dahlia/optique/pull/932
 [#943]: https://github.com/dahlia/optique/pull/943
+[#949]: https://github.com/dahlia/optique/pull/949
 
 ### @optique/run
 

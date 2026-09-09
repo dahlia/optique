@@ -1,3 +1,4 @@
+import { bash } from "@optique/core/completion";
 import {
   conditional,
   group,
@@ -24,13 +25,19 @@ import {
 import {
   type RunOptions,
   runParser,
+  runParserAsync,
   RunParserError,
   runParserSync,
   runWith,
   runWithAsync,
   runWithSync,
 } from "@optique/core/facade";
-import { message } from "@optique/core/message";
+import {
+  type Message,
+  message,
+  optionName,
+  optionNames,
+} from "@optique/core/message";
 import {
   map,
   multiple,
@@ -15819,3 +15826,457 @@ describe("options terminator (--) handling", () => {
     });
   });
 });
+
+describe("structured runner errors", () => {
+  // Fixed output captured before adding the structured callback argument.
+  for (
+    const { colors, args, chunks } of [
+      {
+        colors: false,
+        args: ["completion"],
+        chunks: [
+          [
+            "Error: Missing shell name for completion.",
+            "",
+          ].join("\n"),
+          [
+            "Generate shell completion script or provide completions.",
+            "Usage: test completion [SHELL] [ARG...]",
+            "",
+            "Generate shell completion script or provide completions.",
+            "",
+            '  SHELL                       Shell type ("bash", "fish", "nu", "pwsh", "zsh"). Generate completion script when used alone, or provide completions when followed by arguments.',
+            "  ARG                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+            "",
+            "Examples:",
+            '  Bash:       `eval "$(test completion bash)"`',
+            '  zsh:        `eval "$(test completion zsh)"`',
+            '  fish:       `eval "$(test completion fish)"`',
+            "  PowerShell: `test completion pwsh > test-completion.ps1; . ./test-completion.ps1`",
+            "  Nushell:    `test completion nu | save test-completion.nu; source ./test-completion.nu`",
+          ].join("\n"),
+        ],
+      },
+      {
+        colors: false,
+        args: ["--completion"],
+        chunks: [
+          [
+            "Error: Missing shell name for completion.",
+            "",
+          ].join("\n"),
+          [
+            "Usage: test --completion SHELL [[ARG...]]",
+            "",
+            "  --completion SHELL          Generate shell completion script.",
+            "  ARG                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+            "",
+          ].join("\n"),
+        ],
+      },
+      {
+        colors: true,
+        args: ["completion"],
+        chunks: [
+          [
+            "Error: Missing shell name for completion.",
+            "",
+          ].join("\n"),
+          [
+            "Generate shell completion script or provide completions.",
+            "\u001b[1;2mUsage:\u001b[0m \u001b[1mtest\u001b[0m \u001b[1mcompletion\u001b[0m \u001b[2m[\u001b[0m\u001b[4mSHELL\u001b[0m\u001b[2m]\u001b[0m \u001b[2m[\u001b[0m\u001b[4mARG\u001b[0m\u001b[2m...\u001b[0m\u001b[2m]\u001b[0m",
+            "",
+            "Generate shell completion script or provide completions.",
+            "",
+            "  \u001b[4mSHELL\u001b[0m                       Shell type (\u001b[32mbash\u001b[0m, \u001b[32mfish\u001b[0m, \u001b[32mnu\u001b[0m, \u001b[32mpwsh\u001b[0m, \u001b[32mzsh\u001b[0m). Generate completion script when used alone, or provide completions when followed by arguments.",
+            "  \u001b[4mARG\u001b[0m                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+            "",
+            "Examples:",
+            '  Bash:       \u001b[36meval "$(test completion bash)"\u001b[0m',
+            '  zsh:        \u001b[36meval "$(test completion zsh)"\u001b[0m',
+            '  fish:       \u001b[36meval "$(test completion fish)"\u001b[0m',
+            "  PowerShell: \u001b[36mtest completion pwsh > test-completion.ps1; . ./test-completion.ps1\u001b[0m",
+            "  Nushell:    \u001b[36mtest completion nu | save test-completion.nu; source ./test-completion.nu\u001b[0m",
+          ].join("\n"),
+        ],
+      },
+      {
+        colors: true,
+        args: ["--completion"],
+        chunks: [
+          [
+            "Error: Missing shell name for completion.",
+            "",
+          ].join("\n"),
+          [
+            "\u001b[1;2mUsage:\u001b[0m \u001b[1mtest\u001b[0m \u001b[3m--completion\u001b[0m \u001b[4m\u001b[2mSHELL\u001b[0m \u001b[2m[\u001b[0m\u001b[2m[\u001b[0m\u001b[4mARG\u001b[0m\u001b[2m...\u001b[0m\u001b[2m]\u001b[0m\u001b[2m]\u001b[0m",
+            "",
+            "  \u001b[3m--completion\u001b[0m \u001b[4m\u001b[2mSHELL\u001b[0m          Generate shell completion script.",
+            "  \u001b[4mARG\u001b[0m                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+            "",
+          ].join("\n"),
+        ],
+      },
+    ]
+  ) {
+    it(`should preserve completion help chunks for ${args[0]} colors=${colors}`, () => {
+      const events: unknown[] = [];
+      runParser(object({}), "test", args, {
+        colors,
+        completion: { command: true, option: true },
+        stdout: () => assert.fail("Unexpected stdout."),
+        stderr: (chunk) => events.push(chunk),
+        onError: (...args: unknown[]) => {
+          events.push(args);
+        },
+      });
+      assert.deepEqual(events, [...chunks, [
+        1,
+        message`Missing shell name for completion.`,
+      ]]);
+    });
+  }
+
+  const modes = [
+    { name: "sync", create: structuredFailureParser },
+    { name: "async", create: asyncStructuredFailureParser },
+  ] as const;
+
+  for (const { name, create } of modes) {
+    for (const consumed of [0, 1]) {
+      it(`should forward the original ${name} error with consumed=${consumed}`, async () => {
+        const error = message`Error: Invalid ${optionName("--port")}.`;
+        const events: unknown[] = [];
+        const result = runParser(create(error, consumed), "test", ["bad"], {
+          aboveError: "none",
+          stdout: (chunk) => events.push(["stdout", chunk]),
+          stderr: (chunk) => events.push(["stderr", chunk]),
+          onError: (...args: unknown[]) => {
+            events.push(["onError", ...args]);
+            assert.strictEqual(args[1], error);
+            return "handled";
+          },
+        });
+        if (name === "sync") assert.equal(result, "handled");
+        else assert.ok(result instanceof Promise);
+        assert.equal(await result, "handled");
+        assert.deepEqual(events, [
+          ["stderr", "Error: Error: Invalid `--port`."],
+          ["onError", 1, error],
+        ]);
+      });
+    }
+
+    for (const aboveError of ["usage", "help", "none"] as const) {
+      it(`should report a ${name} error after aboveError=${aboveError}`, async () => {
+        const error = message`Invalid input.`;
+        const events: unknown[] = [];
+        await runParser(create(error), "test", ["bad"], {
+          aboveError,
+          stdout: (chunk) => events.push(["stdout", chunk]),
+          stderr: (chunk) => events.push(["stderr", chunk]),
+          onError: (...args: unknown[]) => {
+            events.push(["onError", ...args]);
+            return "handled";
+          },
+        });
+        assert.deepEqual(events, [
+          ...(aboveError === "none" ? [] : [[
+            "stderr",
+            aboveError === "help" ? "Usage: test\n" : "Usage: test",
+          ]]),
+          ["stderr", "Error: Invalid input."],
+          ["onError", 1, error],
+        ]);
+      });
+    }
+
+    for (
+      const args of [
+        ["completion"],
+        ["--completion"],
+        ["--completion="],
+        ["completions"],
+        ["--complete"],
+        ["--complete="],
+      ]
+    ) {
+      it(`should pass the missing-shell message for ${name} ${args[0]}`, async () => {
+        const events: unknown[] = [];
+        const result = await runParser(
+          create(message`Unused failure.`),
+          "test",
+          args,
+          {
+            aboveError: "none",
+            completion: {
+              command: { names: ["completion", "completions"] },
+              option: { names: ["--completion", "--complete"] },
+            },
+            stdout: (chunk) => events.push(["stdout", chunk]),
+            stderr: (chunk) => events.push(["stderr", chunk]),
+            onError: (...received: unknown[]) => {
+              events.push(["onError", ...received]);
+              return "handled";
+            },
+          },
+        );
+        assert.equal(result, "handled");
+        assert.equal(events.length, 3);
+        assert.deepEqual(events[0], [
+          "stderr",
+          "Error: Missing shell name for completion.\n",
+        ]);
+        assert.deepEqual(events[2], [
+          "onError",
+          1,
+          message`Missing shell name for completion.`,
+        ]);
+        const helpEvent = events[1];
+        assert.ok(Array.isArray(helpEvent));
+        assert.equal(helpEvent[0], "stderr");
+        assert.equal(typeof helpEvent[1], "string");
+        assert.match(
+          helpEvent[1],
+          args[0].startsWith("--")
+            ? /Usage: test \(.*--completion SHELL/
+            : /Usage: test completion/,
+        );
+      });
+    }
+
+    for (const colors of [false, true]) {
+      for (
+        const args of [
+          ["completion", "unknown"],
+          ["--completion", "unknown"],
+          ["--completion=unknown"],
+          ["completions", "unknown"],
+          ["--complete=unknown"],
+        ]
+      ) {
+        it(`should preserve ${name} unsupported-shell output for ${args.join(" ")} colors=${colors}`, async () => {
+          const events: unknown[] = [];
+          await runParser(create(message`Unused failure.`), "test", args, {
+            colors,
+            completion: {
+              command: { names: ["completion", "completions"] },
+              option: { names: ["--completion", "--complete"] },
+              shells: { custom: bash },
+            },
+            stdout: (chunk) => events.push(["stdout", chunk]),
+            stderr: (chunk) => events.push(["stderr", chunk]),
+            onError: (...received: unknown[]) => {
+              events.push(["onError", ...received]);
+              return "handled";
+            },
+          });
+          assert.deepEqual(events, [
+            [
+              "stderr",
+              colors
+                ? "Error: Unsupported shell \x1b[32munknown\x1b[0m. Available shells: \x1b[32mbash\x1b[0m, \x1b[32mfish\x1b[0m, \x1b[32mnu\x1b[0m, \x1b[32mpwsh\x1b[0m, \x1b[32mzsh\x1b[0m, \x1b[32mcustom\x1b[0m."
+                : 'Error: Unsupported shell "unknown". Available shells: "bash", "fish", "nu", "pwsh", "zsh", "custom".',
+            ],
+            [
+              "onError",
+              1,
+              message`Unsupported shell ${"unknown"}. Available shells: ${message`${"bash"}, ${"fish"}, ${"nu"}, ${"pwsh"}, ${"zsh"}, ${"custom"}`}.`,
+            ],
+          ]);
+        });
+      }
+    }
+
+    it(`should pass ${name} errors through the context runners before disposal`, async () => {
+      const error = message`Missing context value.`;
+      for (const phase of ["single-pass", "two-pass"] as const) {
+        for (const runner of [runWith, runWithAsync]) {
+          const events: unknown[] = [];
+          const context: SourceContext = {
+            id: Symbol("structured-errors"),
+            phase,
+            getAnnotations: () => ({}),
+            [Symbol.dispose]: () => {
+              events.push("dispose");
+            },
+          };
+          const result = await runner(create(error), "test", [context], {
+            args: ["bad"],
+            aboveError: "none",
+            stderr: (chunk) => events.push(chunk),
+            onError: (...args: unknown[]) => {
+              events.push(args);
+              return "handled";
+            },
+          });
+          assert.equal(result, "handled");
+          assert.deepEqual(events, [
+            "Error: Missing context value.",
+            [1, error],
+            "dispose",
+          ]);
+        }
+      }
+    });
+
+    it(`should preserve exceptions thrown by the ${name} error callback`, async () => {
+      const error = message`Invalid input.`;
+      const thrown = new TypeError("Application error handler failed.");
+      const invoke = () =>
+        runParser(create(error), "test", ["bad"], {
+          stderr: () => {},
+          onError: (...args: unknown[]): never => {
+            assert.strictEqual(args[1], error);
+            throw thrown;
+          },
+        });
+      if (name === "sync") assert.throws(invoke, (e) => e === thrown);
+      else {await assert.rejects(async () =>
+          await invoke(), (e) =>
+          e === thrown);}
+    });
+  }
+
+  it("should pass structured value errors without changing the rendered text", () => {
+    const events: unknown[] = [];
+    runParser(option("--port", integer()), "test", ["--port", "bad"], {
+      aboveError: "none",
+      stderr: (chunk) => events.push(chunk),
+      onError: (...args: unknown[]) => {
+        events.push(args);
+      },
+    });
+    assert.deepEqual(events, [
+      'Error: `--port`: Expected a valid integer, but got "bad".',
+      [
+        1,
+        message`${
+          optionNames(["--port"])
+        }: ${message`Expected a valid integer, but got ${"bad"}.`}`,
+      ],
+    ]);
+  });
+
+  it("should pass errors through Program and explicit runner variants", async () => {
+    const error = message`Invalid input.`;
+    const parser = structuredFailureParser(error);
+    const received: unknown[] = [];
+    const options = {
+      aboveError: "none" as const,
+      stderr: () => {},
+      onError: (...args: unknown[]) => {
+        received.push(args);
+        return "handled";
+      },
+    };
+    assert.equal(
+      runParser({ parser, metadata: { name: "test" } }, ["bad"], options),
+      "handled",
+    );
+    assert.equal(runParserSync(parser, "test", ["bad"], options), "handled");
+    assert.equal(
+      await runParserAsync(parser, "test", ["bad"], options),
+      "handled",
+    );
+    for (const phase of ["single-pass", "two-pass"] as const) {
+      const events: string[] = [];
+      const context: SourceContext = {
+        id: Symbol("sync-error-context"),
+        phase,
+        getAnnotations: () => ({}),
+        [Symbol.dispose]: () => {
+          events.push("dispose");
+        },
+      };
+      assert.equal(
+        runWithSync(parser, "test", [context], { ...options, args: ["bad"] }),
+        "handled",
+      );
+      assert.deepEqual(events, ["dispose"]);
+    }
+    assert.deepEqual(received, Array.from({ length: 5 }, () => [1, error]));
+  });
+
+  for (
+    const parser of [
+      command("known", constant("ok")),
+      command("parent", command("known", constant("ok"))),
+      object({ maybe: optional(option("--ok")) }),
+      asyncStructuredFailureParser(message`Unknown command.`),
+    ]
+  ) {
+    it(`should pass help-validation errors for ${JSON.stringify(parser.usage)} (${parser.mode})`, async () => {
+      const events: unknown[] = [];
+      const nested = parser.usage.some((term) =>
+        term.type === "command" && term.name === "parent"
+      );
+      await runParser(
+        parser,
+        "test",
+        nested ? ["parent", "bad", "--help"] : ["bad", "--help"],
+        {
+          aboveError: "none",
+          help: {
+            option: true,
+            onShow: () => assert.fail("Unexpected help callback."),
+          },
+          stdout: () => assert.fail("Unexpected help output."),
+          stderr: (chunk) => events.push(chunk),
+          onError: (...args: unknown[]) => {
+            events.push(args);
+            return "handled";
+          },
+        },
+      );
+      assert.equal(events.length, 3);
+      assert.equal(typeof events[0], "string");
+      assert.match(String(events[0]), /^Usage: test/);
+      assert.deepEqual(events.slice(1), [
+        "Error: Unexpected option or subcommand: `bad`.",
+        [1, message`Unexpected option or subcommand: ${optionName("bad")}.`],
+      ]);
+    });
+  }
+});
+
+// Helpers for structured runner error tests.
+function structuredFailureParser(
+  error: Message,
+  consumed = 0,
+): Parser<"sync", string, undefined> {
+  return {
+    mode: "sync",
+    $valueType: [],
+    $stateType: [],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse: () => ({ success: false, error, consumed }),
+    complete: () => ({ success: false, error }),
+    *suggest() {},
+    getDocFragments: () => ({ fragments: [] }),
+  };
+}
+
+function asyncStructuredFailureParser(
+  error: Message,
+  consumed = 0,
+): Parser<"async", string, undefined> {
+  return {
+    mode: "async",
+    $valueType: [],
+    $stateType: [],
+    priority: 0,
+    usage: [],
+    leadingNames: new Set(),
+    acceptingAnyToken: false,
+    initialState: undefined,
+    parse: () => Promise.resolve({ success: false, error, consumed }),
+    complete: () => Promise.resolve({ success: false, error }),
+    async *suggest() {},
+    getDocFragments: () => ({ fragments: [] }),
+  };
+}
