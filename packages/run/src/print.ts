@@ -64,6 +64,8 @@ export interface PrinterOptions extends MessageFormatOptions {
 /**
  * A printer function that outputs formatted messages.
  * @param message The structured message to print.
+ * @throws {TypeError} If the configured initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
  * @since 0.3.0
  */
 export type Printer = (message: Message) => void;
@@ -77,6 +79,8 @@ export type Printer = (message: Message) => void;
  *
  * @param message The structured message to print.
  * @param options Optional formatting options to override defaults.
+ * @throws {TypeError} If initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
  *
  * @example
  * ```typescript
@@ -193,7 +197,9 @@ export function printError(
  * operations or when you want to override the automatic terminal detection.
  *
  * @param options Formatting options for the printer.
- * @returns A printer function that can be called with messages.
+ * @returns A printer function that can be called with messages. The returned
+ * function validates initialWidth and theme colors when formatting a message
+ * and can throw the exceptions documented on {@link Printer}.
  *
  * @example
  * ```typescript

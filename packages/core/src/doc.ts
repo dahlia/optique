@@ -565,7 +565,8 @@ function defaultSectionOrder(a: DocSection, b: DocSection): number {
  * control characters, or if `maxWidth` is not a finite integer.
  * @throws {RangeError} If any entry needs a description column and `maxWidth`
  * is too small to fit the minimum layout (less than `termIndent + 4`), or if
- * `showChoices.maxItems` is less than `1`.
+ * `showChoices.maxItems` is less than `1`, or if a theme color is invalid
+ * (even when colors are disabled).
  *
  * @example
  * ```typescript
