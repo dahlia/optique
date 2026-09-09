@@ -2342,7 +2342,8 @@ export function runParser<
       theme,
       colors,
     ) + " ";
-  const usageLabelWidth = () => getDisplayWidth(usageLabel());
+  const usageLabelWidth = () =>
+    getDisplayWidth(usageLabel().split("\n").at(-1) ?? "");
 
   // Normalize sub-configs: true -> {}, undefined stays undefined
   const norm = <T>(c: true | T | undefined): T | undefined =>

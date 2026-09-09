@@ -641,7 +641,7 @@ export function formatDocPage(
   const usageLabel = page.usage != null && options.showUsage !== false
     ? label("Usage:", "usage") + " "
     : "";
-  const usageLabelWidth = getDisplayWidth(usageLabel);
+  const usageLabelWidth = getDisplayWidth(usageLabel.split("\n").at(-1) ?? "");
   const defaultStyle = styleCode(
     options.theme?.annotationStyles?.default ?? { dim: true },
   );

@@ -606,3 +606,62 @@ it("wraps usage summaries beneath the themed label", () => {
   assert.equal(output[0].split("\n")[0], "Invocation: app");
   assert.equal(output[0].split("\n")[1], "            --name");
 });
+
+it("measures only the final line of a multiline usage label", () => {
+  const theme: TerminalTheme = {
+    label: (term, context) =>
+      term.kind === "usage"
+        ? { type: "text", text: "Header\nUse:" }
+        : defaultTerminalTheme.label(term, context),
+  };
+  assert.equal(
+    formatDocPage("app", { usage: [], sections: [] }, { theme, maxWidth: 8 }),
+    "Header\nUse: app\n",
+  );
+  assert.equal(
+    formatDocPage("app", {
+      usage: [{ type: "literal", value: "x" }],
+      sections: [],
+    }, {
+      theme,
+      maxWidth: 8,
+    }),
+    "Header\nUse: app\n     x\n",
+  );
+});
+
+for (const async of [false, true]) {
+  it(`measures multiline usage labels in ${async ? "async" : "sync"} runner errors`, async () => {
+    for (const args of [[], ["help", "unknown"]]) {
+      const output: string[] = [];
+      let calls = 0;
+      const options = {
+        maxWidth: 20,
+        help: { command: true as const, onShow: () => "help" },
+        theme: {
+          label: (
+            term: Parameters<typeof defaultTerminalTheme.label>[0],
+            context: Parameters<typeof defaultTerminalTheme.label>[1],
+          ) => {
+            if (term.kind !== "usageSummary") {
+              return defaultTerminalTheme.label(term, context);
+            }
+            calls++;
+            return { type: "text" as const, text: "Header\nUse:" };
+          },
+        },
+        stderr: (line: string) => output.push(line),
+        onError: () => "error",
+      };
+      const parser = option("--name", string());
+      if (async) await runParserAsync(parser, "app", args, options);
+      else runParserSync(parser, "app", args, options);
+      assert.equal(calls, 1);
+      assert.ok(output[0].startsWith("Header\nUse: app"));
+      assert.equal(output[0].split("\n")[2]?.match(/^ */)?.[0].length, 5);
+      for (const line of output[0].split("\n")) {
+        assert.ok(getDisplayWidth(line) <= 20, JSON.stringify(line));
+      }
+    }
+  });
+}
