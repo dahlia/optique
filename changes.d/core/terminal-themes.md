@@ -11,4 +11,6 @@ links:
     receive the runner's configured `maxWidth` and the rendered error prefix's
     occupied width so wrapping accounts for the prefix. Multiline usage labels
     reserve only their final line's width for wrapping and indentation.
+    Multiline examples, author, and bugs labels use their widest line when
+    checking the minimum page width.
     [[#907], [#952]]

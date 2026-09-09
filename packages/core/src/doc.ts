@@ -846,19 +846,25 @@ export function formatDocPage(
     if (hasContent(page.examples)) {
       sectionMin = Math.max(
         sectionMin,
-        getDisplayWidth(label("Examples:", "examples")),
+        ...label("Examples:", "examples").split("\n").map((line) =>
+          getDisplayWidth(line)
+        ),
       );
     }
     if (hasContent(page.author)) {
       sectionMin = Math.max(
         sectionMin,
-        getDisplayWidth(label("Author:", "author")),
+        ...label("Author:", "author").split("\n").map((line) =>
+          getDisplayWidth(line)
+        ),
       );
     }
     if (hasContent(page.bugs)) {
       sectionMin = Math.max(
         sectionMin,
-        getDisplayWidth(label("Bugs:", "bugs")),
+        ...label("Bugs:", "bugs").split("\n").map((line) =>
+          getDisplayWidth(line)
+        ),
       );
     }
     const minWidth = Math.max(entryMin, usageMin, sectionMin);

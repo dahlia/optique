@@ -665,3 +665,34 @@ for (const async of [false, true]) {
     }
   });
 }
+
+for (const kind of ["examples", "author", "bugs"] as const) {
+  it(`measures multiline ${kind} labels by their widest line`, () => {
+    for (const label of ["Head\nEx:", "Ex:\nHead", "問題\nEx:"]) {
+      const theme: TerminalTheme = {
+        label: (term, context) =>
+          term.kind === kind
+            ? {
+              type: "style",
+              style: { foreground: "red" },
+              children: [{ type: "text", text: label }],
+            }
+            : defaultTerminalTheme.label(term, context),
+      };
+      const page = { sections: [], [kind]: message`x` };
+      const output = formatDocPage("app", page, {
+        theme,
+        colors: true,
+        maxWidth: 5,
+      });
+      assert.ok(output.includes(label));
+      for (const line of output.split("\n")) {
+        assert.ok(getDisplayWidth(line) <= 5, JSON.stringify(line));
+      }
+      assert.throws(
+        () => formatDocPage("app", page, { theme, maxWidth: 3 }),
+        RangeError,
+      );
+    }
+  });
+}
