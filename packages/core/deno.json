@@ -22,7 +22,9 @@
     "./program": "./src/program.ts",
     "./suggestion": "./src/suggestion.ts",
     "./usage": "./src/usage.ts",
-    "./valueparser": "./src/valueparser.ts"
+    "./valueparser": "./src/valueparser.ts",
+    "./terminal": "./src/terminal.ts",
+    "./internal/terminal": "./src/internal/terminal.ts"
   },
   "imports": {
     "#src/": "./src/"

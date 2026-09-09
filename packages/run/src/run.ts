@@ -1,3 +1,5 @@
+import type { MessageFormatter } from "@optique/core/message";
+import type { TerminalTheme } from "@optique/core/terminal";
 import type { ShellCompletion } from "@optique/core/completion";
 import type { SourceContext } from "@optique/core/context";
 import { runParser, runWith, runWithSync } from "@optique/core/facade";
@@ -30,6 +32,11 @@ import process from "node:process";
  * Configuration options for the {@link run} function.
  */
 export interface RunOptions {
+  /** Custom message renderer, taking precedence over theme for messages. @since 1.3.0 */
+  readonly messageFormatter?: MessageFormatter;
+  /** Semantic terminal theme. @since 1.3.0 */
+  readonly theme?: TerminalTheme;
+
   /**
    * The name of the program to display in usage and help messages.
    *
@@ -937,6 +944,8 @@ function buildCoreOptions(
   const coreOptions: CoreRunOptions<never, never> = {
     stderr,
     stdout,
+    messageFormatter: options.messageFormatter,
+    theme: options.theme,
     colors,
     maxWidth,
     termWidth,
@@ -975,6 +984,8 @@ const knownRunOptionsKeyList = [
   "stderr",
   "onExit",
   "colors",
+  "messageFormatter",
+  "theme",
   "maxWidth",
   "termWidth",
   "showDefault",

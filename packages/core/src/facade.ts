@@ -1,3 +1,7 @@
+import { resolveMessageFormatter } from "./message-renderer.ts";
+import { renderTerminalTerm } from "./terminal-internal.ts";
+import type { TerminalTheme } from "./terminal.ts";
+import { getDisplayWidth } from "./displaywidth.ts";
 import {
   bash,
   fish,
@@ -22,10 +26,10 @@ import {
 } from "./doc.ts";
 import {
   commandLine,
-  formatMessage,
   lineBreak,
   type Message,
   message,
+  type MessageFormatter,
   type MessageTerm,
   optionName,
   text,
@@ -1145,6 +1149,17 @@ function classifyParseFailure(
  */
 export interface RunOptions<THelp, TError> {
   /**
+   * Custom message renderer, taking precedence over theme for messages.
+   * @since 1.3.0
+   */
+  readonly messageFormatter?: MessageFormatter;
+  /**
+   * Semantic terminal theme.
+   * @since 1.3.0
+   */
+  readonly theme?: TerminalTheme;
+
+  /**
    * Enable colored output in help and error messages.
    *
    * @default `false`
@@ -1443,7 +1458,13 @@ function handleCompletion<M extends Mode, THelp, TError>(
   sectionOrder?: (a: DocSection, b: DocSection) => number,
   showUsage?: boolean,
   rootOptionSuggestions: readonly LiteralSuggestion[] = [],
+  messageFormatter?: MessageFormatter,
+  theme?: TerminalTheme,
 ): ModeValue<M, THelp | TError> {
+  const formatMessage = resolveMessageFormatter({ messageFormatter, theme });
+  const errorLabel = () =>
+    renderTerminalTerm({ type: "errorLabel", label: "Error:" }, theme, colors) +
+    " ";
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
 
@@ -1455,7 +1476,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
   // Check if shell name is empty
   if (!shellName) {
     const error = message`Missing shell name for completion.`;
-    stderr(`Error: ${formatMessage(error, { colors, quotes: !colors })}\n`);
+    stderr(
+      `${errorLabel()}${formatMessage(error, { colors, quotes: !colors })}\n`,
+    );
 
     // Show help for completion command if parser is available
     if (completionParser) {
@@ -1466,6 +1489,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
       if (doc) {
         stderr(
           formatDocPage(programName, doc, {
+            messageFormatter,
+            theme,
             colors,
             maxWidth,
             termWidth,
@@ -1500,7 +1525,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
     }
     const error =
       message`Unsupported shell ${shellName}. Available shells: ${available}.`;
-    stderr(`Error: ${formatMessage(error, { colors, quotes: !colors })}`);
+    stderr(
+      `${errorLabel()}${formatMessage(error, { colors, quotes: !colors })}`,
+    );
     return dispatchByMode(
       parser.mode,
       () => {
@@ -2262,6 +2289,8 @@ export function runParser<
   // Extract all options first
   const {
     colors,
+    messageFormatter,
+    theme,
     maxWidth,
     termWidth,
     showDefault,
@@ -2283,6 +2312,19 @@ export function runParser<
     bugs,
     footer,
   } = options;
+
+  const formatMessage = resolveMessageFormatter({ messageFormatter, theme });
+  const errorLabel = () =>
+    renderTerminalTerm({ type: "errorLabel", label: "Error:" }, theme, colors) +
+    " ";
+  let usagePrefix: string | undefined;
+  const usageLabel = () =>
+    usagePrefix ??= renderTerminalTerm(
+      { type: "label", label: "Usage:", kind: "usageSummary" },
+      theme,
+      colors,
+    ) + " ";
+  const usageLabelWidth = () => getDisplayWidth(usageLabel());
 
   // Normalize sub-configs: true -> {}, undefined stays undefined
   const norm = <T>(c: true | T | undefined): T | undefined =>
@@ -2590,6 +2632,8 @@ export function runParser<
           sectionOrder,
           showUsage,
           rootOptionSuggestions,
+          messageFormatter,
+          theme,
         ) as InferValue<TParser>;
 
       case "help": {
@@ -2644,14 +2688,17 @@ export function runParser<
           validationError: Message,
         ): InferValue<TParser> => {
           stderr(
-            `Usage: ${
+            `${usageLabel()}${
               indentLines(
                 formatUsage(programName, augmentedParser.usage, {
+                  theme,
                   colors,
-                  maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                  maxWidth: maxWidth == null
+                    ? undefined
+                    : maxWidth - usageLabelWidth(),
                   expandCommands: true,
                 }),
-                7,
+                usageLabelWidth(),
               )
             }`,
           );
@@ -2659,7 +2706,7 @@ export function runParser<
             colors,
             quotes: !colors,
           });
-          stderr(`Error: ${errorMessage}`);
+          stderr(`${errorLabel()}${errorMessage}`);
           return onError(1, validationError);
         };
 
@@ -2717,6 +2764,8 @@ export function runParser<
               ? applyUsageLine(augmentedDoc, usageLine)
               : augmentedDoc;
             stdout(formatDocPage(programName, renderedDoc, {
+              messageFormatter,
+              theme,
               colors,
               maxWidth,
               termWidth,
@@ -2852,6 +2901,8 @@ export function runParser<
                 )
                 : augmentedDoc;
               stderr(formatDocPage(programName, renderedDoc, {
+                messageFormatter,
+                theme,
                 colors,
                 maxWidth,
                 termWidth,
@@ -2864,14 +2915,17 @@ export function runParser<
           }
           if (effectiveAboveError === "usage") {
             stderr(
-              `Usage: ${
+              `${usageLabel()}${
                 indentLines(
                   formatUsage(programName, augmentedParser.usage, {
+                    theme,
                     colors,
-                    maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                    maxWidth: maxWidth == null
+                      ? undefined
+                      : maxWidth - usageLabelWidth(),
                     expandCommands: true,
                   }),
-                  7,
+                  usageLabelWidth(),
                 )
               }`,
             );
@@ -2881,7 +2935,7 @@ export function runParser<
             colors,
             quotes: !colors,
           });
-          stderr(`Error: ${errorMessage}`);
+          stderr(`${errorLabel()}${errorMessage}`);
           return onError(1, classified.error);
         };
 

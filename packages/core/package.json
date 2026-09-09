@@ -211,6 +211,22 @@
       },
       "import": "./dist/valueparser.js",
       "require": "./dist/valueparser.cjs"
+    },
+    "./terminal": {
+      "types": {
+        "import": "./dist/terminal.d.ts",
+        "require": "./dist/terminal.d.cts"
+      },
+      "import": "./dist/terminal.js",
+      "require": "./dist/terminal.cjs"
+    },
+    "./internal/terminal": {
+      "types": {
+        "import": "./dist/internal/terminal.d.ts",
+        "require": "./dist/internal/terminal.d.cts"
+      },
+      "import": "./dist/internal/terminal.js",
+      "require": "./dist/internal/terminal.cjs"
     }
   },
   "imports": {

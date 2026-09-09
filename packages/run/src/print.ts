@@ -1,7 +1,13 @@
+import type { TerminalTheme } from "@optique/core/terminal";
 import {
-  formatMessage,
-  type Message,
-  type MessageFormatOptions,
+  getDisplayWidth,
+  renderTerminalTerm,
+  resolveMessageFormatter,
+} from "@optique/core/internal/terminal";
+import type {
+  Message,
+  MessageFormatOptions,
+  MessageFormatter,
 } from "@optique/core/message";
 import process from "node:process";
 
@@ -10,6 +16,10 @@ import process from "node:process";
  * @since 0.3.0
  */
 export interface PrintOptions extends MessageFormatOptions {
+  /** Custom message renderer, taking precedence over theme for messages. @since 1.3.0 */
+  readonly messageFormatter?: MessageFormatter;
+  /** Semantic terminal theme. @since 1.3.0 */
+  readonly theme?: TerminalTheme;
   /**
    * The output stream to write to.
    * @default `"stdout"`
@@ -40,6 +50,10 @@ export interface PrintErrorOptions extends PrintOptions {
  * @since 0.3.0
  */
 export interface PrinterOptions extends MessageFormatOptions {
+  /** Custom message renderer, taking precedence over theme for messages. @since 1.3.0 */
+  readonly messageFormatter?: MessageFormatter;
+  /** Semantic terminal theme. @since 1.3.0 */
+  readonly theme?: TerminalTheme;
   /**
    * The output stream to write to.
    * @default `"stdout"`
@@ -80,6 +94,7 @@ export type Printer = (message: Message) => void;
  */
 export function print(message: Message, options: PrintOptions = {}): void {
   const printer = createPrinter({
+    ...options,
     stream: options.stream ?? "stdout",
     colors: options.colors,
     quotes: options.quotes,
@@ -98,6 +113,8 @@ export function print(message: Message, options: PrintOptions = {}): void {
  *
  * @param message The structured error message to print.
  * @param options Optional formatting options and exit code.
+ * @throws {TypeError} If initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
  *
  * @example
  * ```typescript
@@ -133,20 +150,36 @@ export function printError(
   // Special handling for printError: use quotes in non-TTY environments by default
   const quotes = options.quotes ?? !output.isTTY;
 
-  const printer = createPrinter({
-    stream,
-    colors: options.colors,
+  const colors = options.colors ?? output.isTTY;
+  const useColors = typeof colors === "object" ? true : colors;
+  const maxWidth = options.maxWidth ?? output.columns;
+  const occupied = options.initialWidth ?? 0;
+  if (!Number.isFinite(occupied) || !Number.isInteger(occupied)) {
+    throw new TypeError("Initial width must be a finite integer.");
+  }
+  if (occupied < 0) throw new RangeError("Initial width must be nonnegative.");
+  let prefix = renderTerminalTerm(
+    { type: "errorLabel", label: "Error:" },
+    options.theme,
+    useColors,
+  ) + " ";
+  if (
+    maxWidth != null && occupied > 0 &&
+    occupied + getDisplayWidth(prefix.split("\n")[0]) > maxWidth
+  ) {
+    prefix = "\n" + prefix;
+  }
+  const prefixLines = prefix.split("\n");
+  const initialWidth = getDisplayWidth(prefixLines.at(-1) ?? "") +
+    (prefixLines.length === 1 ? options.initialWidth ?? 0 : 0);
+  const formatMessage = resolveMessageFormatter(options);
+  const formatted = formatMessage(message, {
+    colors,
     quotes,
-    maxWidth: options.maxWidth,
+    maxWidth,
+    initialWidth,
   });
-
-  // Format the message with Error prefix
-  const errorMessage: Message = [
-    { type: "text", text: "Error: " },
-    ...message,
-  ];
-
-  printer(errorMessage);
+  output.write(prefix + formatted + "\n");
 
   if (options.exitCode != null) {
     process.exit(options.exitCode);
@@ -184,7 +217,9 @@ export function createPrinter(options: PrinterOptions = {}): Printer {
   const stream = options.stream ?? "stdout";
   const output = process[stream];
 
+  const formatMessage = resolveMessageFormatter(options);
   const formatOptions: MessageFormatOptions = {
+    initialWidth: options.initialWidth,
     colors: options.colors ?? output.isTTY,
     quotes: options.quotes,
     maxWidth: options.maxWidth ?? output.columns,

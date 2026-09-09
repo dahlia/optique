@@ -37,9 +37,9 @@ Core rules
     `undefined`; `withDefault(p, value)` yields a fallback value. For Boolean
     flags, use `withDefault(flag("--name"), false)` when absence should mean
     `false`.
- -  Use `message` from *@optique/core/message* for descriptions, help text, and
-    custom errors. Prefer semantic message helpers such as `optionName()` and
-    `metavar()` over string concatenation when naming CLI elements.
+ -  Use semantic `message` helpers for descriptions and errors. Since 1.3.0,
+    customize terminal output with `theme` or `messageFormatter`, preserving
+    `initialWidth`, quoting, and width options. Keep canonical errors unthemed.
  -  Use value parsers such as `integer()`, `choice()`, `biject()`, `regExp()`,
     `url()`, and `uuid()` instead of validating raw strings after parsing. Use
     `regExp({ flags })` for user-supplied regular expression sources,

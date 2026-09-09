@@ -348,3 +348,60 @@ describe("print module", () => {
     });
   });
 });
+
+describe("printer formatter injection", () => {
+  it("passes the original error and themed prefix width to the formatter", () => {
+    const originalWrite = process.stderr.write;
+    const writeMock = createMockFn();
+    process.stderr.write = writeMock.fn as typeof process.stderr.write;
+    const error = message`Something failed.`;
+    try {
+      printError(error, {
+        colors: { resetSuffix: "ignored" },
+        maxWidth: 30,
+        initialWidth: 2,
+        theme: { errorLabel: () => ({ type: "text", text: "실패:" }) },
+        messageFormatter: (received, options) => {
+          assert.equal(received, error);
+          assert.equal(options?.initialWidth, 8);
+          assert.equal(options?.maxWidth, 30);
+          assert.ok(options?.colors);
+          return "CUSTOM";
+        },
+      });
+      assert.equal(writeMock.calls[0].arguments[0], "실패: CUSTOM\n");
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+  it("snapshots theme callbacks for a reusable printer", () => {
+    const originalWrite = process.stdout.write;
+    const writeMock = createMockFn();
+    process.stdout.write = writeMock.fn as typeof process.stdout.write;
+    try {
+      const theme = {
+        value: () => ({ type: "text" as const, text: "before" }),
+      };
+      const printer = createPrinter({ colors: false, theme });
+      theme.value = () => ({ type: "text", text: "after" });
+      printer(message`${"value"}`);
+      assert.equal(writeMock.calls[0].arguments[0], "before\n");
+      print(message`${"value"}`, { theme, messageFormatter: () => "CUSTOM" });
+      assert.equal(writeMock.calls[1].arguments[0], "CUSTOM\n");
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
+});
+
+it("drops the occupied width when the error label moves to a new line", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    printError(message`x`, { colors: false, maxWidth: 8, initialWidth: 5 });
+    assert.equal(writeMock.calls[0].arguments[0], "\nError: x\n");
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});

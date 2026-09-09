@@ -11,6 +11,7 @@ export * from "./facade.ts";
 export * from "./fluent.ts";
 export {
   commandLine,
+  createMessageFormatter,
   envVar,
   formatMessage,
   lineBreak,
@@ -18,6 +19,8 @@ export {
   type Message,
   message,
   type MessageFormatOptions,
+  type MessageFormatter,
+  type MessageFormatterOptions,
   type MessageTerm,
   metavar,
   optionName,
@@ -35,3 +38,4 @@ export * from "./parser.ts";
 export * from "./primitives.ts";
 export * from "./usage.ts";
 export * from "./valueparser.ts";
+export * from "./terminal.ts";
