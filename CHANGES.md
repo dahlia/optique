@@ -8,6 +8,14 @@ Version 1.0.8
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `formatMessage()` leaving text green after a single-item `values()`
+    term.  The term now resets its color and restores `resetSuffix` when
+    provided, with or without quotes.  [[#951]]
+
+[#951]: https://github.com/dahlia/optique/issues/951
+
 
 Version 1.0.7
 -------------

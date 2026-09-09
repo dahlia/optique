@@ -892,6 +892,28 @@ describe("integration tests", () => {
     );
   });
 
+  for (const quotes of [false, true]) {
+    it(`should reset color after a single value with quotes=${quotes}`, () => {
+      const msg = message`List: ${values(["one"])} tail`;
+      assert.equal(
+        formatMessage(msg, { colors: true, quotes }),
+        quotes
+          ? 'List: \x1b[32m"one"\x1b[0m tail'
+          : "List: \x1b[32mone\x1b[0m tail",
+      );
+    });
+
+    it(`should restore parent style after a single value with quotes=${quotes}`, () => {
+      const msg = message`List: ${values(["one"])} tail`;
+      assert.equal(
+        formatMessage(msg, { colors: { resetSuffix: "\x1b[2m" }, quotes }),
+        quotes
+          ? 'List: \x1b[32m"one"\x1b[0m\x1b[2m tail'
+          : "List: \x1b[32mone\x1b[0m\x1b[2m tail",
+      );
+    });
+  }
+
   it("should not apply resetSuffix when colors is false", () => {
     const msg = message`Port: ${value("8080")}`;
     const formatted = formatMessage(msg, {

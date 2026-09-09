@@ -706,11 +706,9 @@ export function formatMessage(
             : term.values[i];
           yield {
             text: useColors
-              ? i <= 0
-                ? `\x1b[32m${value}`
-                : i + 1 >= term.values.length
-                ? `${value}${resetSequence}`
-                : value
+              ? `${i === 0 ? "\x1b[32m" : ""}${value}${
+                i + 1 === term.values.length ? resetSequence : ""
+              }`
               : value,
             width: getDisplayWidth(value),
           };
