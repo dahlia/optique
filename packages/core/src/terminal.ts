@@ -100,7 +100,8 @@ export interface TerminalStyle {
   readonly underline?: boolean;
 }
 /**
- * Structured output. Each text leaf is an indivisible wrapping unit.
+ * Structured output. Newlines in text leaves force line breaks; each line
+ * within a leaf is an indivisible wrapping unit.
  * @since 1.3.0
  */
 export type TerminalFragment =

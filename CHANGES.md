@@ -28,7 +28,8 @@ To be released.
     occupied width so wrapping accounts for the prefix. Multiline usage labels
     reserve only their final line's width for wrapping and indentation.
     Multiline examples, author, and bugs labels use their widest line when
-    checking the minimum page width.
+    checking the minimum page width. Newlines inside themed text force line
+    breaks while preserving styles and hyperlinks.
     [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving

@@ -696,3 +696,49 @@ for (const kind of ["examples", "author", "bugs"] as const) {
     }
   });
 }
+
+it("resets message width at newlines inside themed leaves", () => {
+  const format = createMessageFormatter({
+    optionName: () => ({ type: "text", text: "AA\nB" }),
+  });
+  assert.equal(
+    format(message`x ${optionNames(["-x"])} y`, { maxWidth: 5 }),
+    "x AA\nB y",
+  );
+});
+
+it("keeps styles and links around embedded blank and trailing lines", () => {
+  const format = createMessageFormatter({
+    optionName: () => ({
+      type: "style",
+      style: { bold: true },
+      children: [{
+        type: "link",
+        href: "https://example.com/",
+        children: [{ type: "text", text: "\nAA\n\nB\n" }],
+      }],
+    }),
+  });
+  assert.equal(
+    format(message`x ${optionNames(["-x"])} y`, { maxWidth: 5 }),
+    "x \nAA\n\nB\n y",
+  );
+  assert.equal(
+    format(message`x ${optionNames(["-x"])} y`, { colors: true, maxWidth: 5 }),
+    "x \x1b[1m\x1b]8;;https://example.com/\x1b\\\nAA\n\nB\n" +
+      "\x1b]8;;\x1b\\\x1b[0m y",
+  );
+});
+
+it("resets usage width at newlines in program names and option leaves", () => {
+  assert.equal(
+    formatUsage("app", [{ type: "option", names: ["-x"] }], {
+      maxWidth: 5,
+      theme: {
+        programName: () => ({ type: "text", text: "AA\nB" }),
+        optionName: () => ({ type: "text", text: "C\nD" }),
+      },
+    }),
+    "AA\nB C\nD",
+  );
+});

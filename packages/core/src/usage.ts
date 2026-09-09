@@ -989,6 +989,11 @@ function layoutUsageTokens(
   let lineWidth = initialWidth;
   const output: TerminalToken[] = [];
   for (const token of input) {
+    if (token.width === -1) {
+      output.push(token);
+      lineWidth = 0;
+      continue;
+    }
     if (
       options.maxWidth != null && lineWidth > 0 &&
       lineWidth + token.width > options.maxWidth

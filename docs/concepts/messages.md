@@ -1381,8 +1381,9 @@ to customize the surrounding default/choice style; `{}` removes the default dim
 styling while preserving child value styles.
 
 A `TerminalFragment` is a tree of `text`, `concat`, `style`, and `link` nodes. A
-text leaf is an indivisible wrapping unit. Use several leaves when a replacement
-should allow wrapping between its parts. Styles support named basic/bright
+newline in a text leaf forces a line break; each line within a leaf is an
+indivisible wrapping unit. Use several leaves when a replacement should allow
+wrapping between its parts. Styles support named basic/bright
 colors, RGB tuples, indexed colors (`{ index: 123 }`), and `bold`, `dim`,
 `italic`, and `underline`. A `false` attribute cancels an inherited attribute.
 Color channels and indices must be integers from 0 to 255; invalid values throw

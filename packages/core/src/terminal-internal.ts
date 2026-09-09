@@ -183,11 +183,13 @@ export function* fragmentTokens(
   inherited: TerminalStyle = {},
 ): Generator<TerminalToken> {
   if (fragment.type === "text") {
-    yield {
-      text: fragment.text,
-      width: getDisplayWidth(fragment.text),
-      scopes,
-    };
+    const lines = fragment.text.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0) yield { text: "\n", width: -1, scopes };
+      if (lines[i].length > 0 || lines.length === 1) {
+        yield { text: lines[i], width: getDisplayWidth(lines[i]), scopes };
+      }
+    }
     return;
   }
   let next = scopes;
@@ -258,7 +260,7 @@ export function serializeTokens(
   const items = [...tokens];
   for (let i = 0; i < items.length; i++) {
     const token = items[i];
-    if (colors && token.width === -1) {
+    if (colors && token.width === -1 && token.scopes.length === 0) {
       const next = items.slice(i + 1).find((t) => t.width !== -1)?.scopes ?? [];
       let common = 0;
       while (
