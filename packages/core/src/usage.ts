@@ -567,6 +567,8 @@ export interface UsageFormatOptions {
  * @returns A formatted string representation of the usage description.
  * @throws {TypeError} If `programName` is not a string, is empty,
  *         whitespace-only, or contains control characters.
+ * @throws {RangeError} If a theme supplies an invalid RGB channel or palette
+ *                      index, even when colors are disabled.
  */
 export function formatUsage(
   programName: string,
