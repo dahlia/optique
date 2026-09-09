@@ -950,6 +950,8 @@ export interface UsageTermFormatOptions extends UsageFormatOptions {
  * @param options Optional formatting options to customize the output.
  *                See {@link UsageTermFormatOptions} for available options.
  * @returns A formatted string representation of the usage term.
+ * @throws {RangeError} If a theme supplies an invalid RGB channel or palette
+ *                      index, even when colors are disabled.
  */
 export function formatUsageTerm(
   term: UsageTerm,
