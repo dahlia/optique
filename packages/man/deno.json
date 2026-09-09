@@ -1,6 +1,6 @@
 {
   "name": "@optique/man",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
