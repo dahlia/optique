@@ -1476,9 +1476,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
   // Check if shell name is empty
   if (!shellName) {
     const error = message`Missing shell name for completion.`;
+    const prefix = errorLabel();
     stderr(
-      `${errorLabel()}${
-        formatMessage(error, { colors, quotes: !colors, maxWidth })
+      `${prefix}${
+        formatMessage(error, {
+          colors,
+          quotes: !colors,
+          maxWidth,
+          initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
+        })
       }\n`,
     );
 
@@ -1527,9 +1533,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
     }
     const error =
       message`Unsupported shell ${shellName}. Available shells: ${available}.`;
+    const prefix = errorLabel();
     stderr(
-      `${errorLabel()}${
-        formatMessage(error, { colors, quotes: !colors, maxWidth })
+      `${prefix}${
+        formatMessage(error, {
+          colors,
+          quotes: !colors,
+          maxWidth,
+          initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
+        })
       }`,
     );
     return dispatchByMode(
@@ -2706,12 +2718,14 @@ export function runParser<
               )
             }`,
           );
+          const prefix = errorLabel();
           const errorMessage = formatMessage(validationError, {
+            initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
             maxWidth,
             colors,
             quotes: !colors,
           });
-          stderr(`${errorLabel()}${errorMessage}`);
+          stderr(`${prefix}${errorMessage}`);
           return onError(1, validationError);
         };
 
@@ -2936,12 +2950,14 @@ export function runParser<
             );
           }
           // classified.error is now typed as Message
+          const prefix = errorLabel();
           const errorMessage = formatMessage(classified.error, {
+            initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
             maxWidth,
             colors,
             quotes: !colors,
           });
-          stderr(`${errorLabel()}${errorMessage}`);
+          stderr(`${prefix}${errorMessage}`);
           return onError(1, classified.error);
         };
 

@@ -1,3 +1,4 @@
+import { getDisplayWidth } from "./displaywidth.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -231,6 +232,7 @@ describe("theme integration", () => {
           onError: (_code: number, error: unknown) => {
             errors.push(error);
             assert.equal(seen.get(error)?.maxWidth, 50);
+            assert.equal(seen.get(error)?.initialWidth, 9);
             return "error";
           },
         };
@@ -248,6 +250,40 @@ describe("theme integration", () => {
     });
   }
 });
+
+for (const async of [false, true]) {
+  it(`wraps ${async ? "async" : "sync"} errors after the rendered prefix`, async () => {
+    for (const label of ["Error:", "問題:", "Header\n問題:"]) {
+      const output: string[] = [];
+      let calls = 0;
+      const options = {
+        colors: true,
+        maxWidth: 20,
+        aboveError: "none" as const,
+        theme: {
+          errorLabel: () => {
+            calls++;
+            return {
+              type: "style" as const,
+              style: { foreground: "red" as const },
+              children: [{ type: "text" as const, text: label }],
+            };
+          },
+        },
+        stderr: (line: string) => output.push(line),
+        onError: () => "error",
+      };
+      const parser = option("--name", string());
+      if (async) await runParserAsync(parser, "app", ["--unknown"], options);
+      else runParserSync(parser, "app", ["--unknown"], options);
+      assert.equal(calls, 1);
+      assert.ok(output[0].startsWith("\x1b[31m" + label));
+      for (const line of output[0].split("\n")) {
+        assert.ok(getDisplayWidth(line) <= 20, JSON.stringify(line));
+      }
+    }
+  });
+}
 
 describe("structured fragment boundaries", () => {
   it("should keep plural color scopes across wraps and close singleton scopes", () => {

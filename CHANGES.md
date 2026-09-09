@@ -24,7 +24,8 @@ To be released.
     `initialWidth` support so custom renderers can honor the space already
     occupied on a description's first line. Scalar value themes also control
     values within lists, including uncolored output. Custom error formatters
-    receive the runner's configured `maxWidth`. [[#907], [#952]]
+    receive the runner's configured `maxWidth` and the rendered error prefix's
+    occupied width so wrapping accounts for the prefix. [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
     description space under `maxWidth`.  The existing default and explicit
