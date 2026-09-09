@@ -742,3 +742,105 @@ it("resets usage width at newlines in program names and option leaves", () => {
     "AA\nB C\nD",
   );
 });
+
+it("validates preceding usage label lines without inflating indentation", () => {
+  const theme: TerminalTheme = {
+    label: (term, context) =>
+      term.kind === "usage"
+        ? { type: "text", text: "123456789\nU:" }
+        : defaultTerminalTheme.label(term, context),
+  };
+  const page = { usage: [], sections: [] };
+  assert.throws(
+    () => formatDocPage("a", page, { theme, maxWidth: 4 }),
+    RangeError,
+  );
+  assert.equal(
+    formatDocPage("a", page, { theme, maxWidth: 9 }),
+    "123456789\nU: a\n",
+  );
+});
+
+it("measures choices prefixes and labels as combined physical lines", () => {
+  for (
+    const [prefix, label, last] of [
+      [" (", "Head\nC:", "C:"],
+      [" (", "12345\nC:", "C:"],
+      [" (\nP", "C:", "PC:"],
+      [" (\nP", "Head\nC:", "C:"],
+    ]
+  ) {
+    const theme: TerminalTheme = {
+      label: (term, context) =>
+        term.kind === "choices"
+          ? { type: "text", text: label }
+          : defaultTerminalTheme.label(term, context),
+      syntaxPunctuation: (term, context) =>
+        term.kind === "choicesPrefix"
+          ? { type: "text", text: prefix }
+          : defaultTerminalTheme.syntaxPunctuation(term, context),
+    };
+    const page = {
+      sections: [{
+        entries: [{
+          term: { type: "literal" as const, value: "x" },
+          choices: message`x`,
+        }],
+      }],
+    };
+    const output = formatDocPage("app", page, {
+      theme,
+      maxWidth: 12,
+      termWidth: 1,
+      showChoices: true,
+    });
+    assert.ok(output.includes(`\n     ${last}x)`), output);
+    assert.ok(
+      output.includes("\n  x  " + (prefix + label).split("\n")[0]),
+      output,
+    );
+    for (const line of output.split("\n")) {
+      assert.ok(getDisplayWidth(line) <= 12, JSON.stringify(line));
+    }
+    const widths: (number | undefined)[] = [];
+    formatDocPage("app", page, {
+      theme,
+      maxWidth: 20,
+      termWidth: 1,
+      showChoices: true,
+      messageFormatter: (_message, options) => {
+        widths.push(options?.initialWidth);
+        return "x";
+      },
+    });
+    assert.deepEqual(widths, [last.length]);
+  }
+});
+
+it("resets occupied width after multiline default prefixes", () => {
+  const widths: (number | undefined)[] = [];
+  const output = formatDocPage("app", {
+    sections: [{
+      entries: [{
+        term: { type: "literal", value: "x" },
+        default: message`x`,
+      }],
+    }],
+  }, {
+    maxWidth: 12,
+    termWidth: 1,
+    showDefault: true,
+    theme: {
+      syntaxPunctuation: (term, context) =>
+        term.kind === "defaultPrefix"
+          ? { type: "text", text: "Head\nD:" }
+          : defaultTerminalTheme.syntaxPunctuation(term, context),
+    },
+    messageFormatter: (_message, options) => {
+      widths.push(options?.initialWidth);
+      return "x";
+    },
+  });
+  assert.deepEqual(widths, [2]);
+  assert.ok(output.includes("\n     D:x]"), output);
+});

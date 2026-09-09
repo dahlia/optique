@@ -770,7 +770,7 @@ export function formatDocPage(
             : " [",
           "defaultPrefix",
         );
-        minDescWidth = Math.max(minDescWidth, getDisplayWidth(prefix));
+        minDescWidth = Math.max(minDescWidth, maxLineVisibleLength(prefix));
       }
       if (
         options.showChoices &&
@@ -790,7 +790,7 @@ export function formatDocPage(
         );
         minDescWidth = Math.max(
           minDescWidth,
-          getDisplayWidth(prefix) + getDisplayWidth(choicesLabelText),
+          maxLineVisibleLength(prefix + choicesLabelText),
         );
       }
     }
@@ -831,11 +831,14 @@ export function formatDocPage(
       )
       : 0;
     const usageMin = page.usage != null && showUsage
-      ? usageLabelWidth + Math.max(
-        programNameWidth,
-        Math.min(
-          maxVisibleAtomicWidth(page.usage, options.theme),
-          programNameWidth + usageLabelWidth,
+      ? Math.max(
+        maxLineVisibleLength(usageLabel),
+        usageLabelWidth + Math.max(
+          programNameWidth,
+          Math.min(
+            maxVisibleAtomicWidth(page.usage, options.theme),
+            programNameWidth + usageLabelWidth,
+          ),
         ),
       )
       : 1;
@@ -1009,18 +1012,26 @@ export function formatDocPage(
         // continues correctly from the current line position.
         // effectiveLastW adds the extra physical offset for the first line
         // when the term extends past termWidth.
-        const prefixWidth = getDisplayWidth(prefix);
+        const prefixWidth = getDisplayWidth(prefix.split("\n")[0]);
         const suffixWidth = getDisplayWidth(suffix);
         let defaultStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
           const effectiveLastW = lastW + currentExtraOffset();
-          if (effectiveLastW + prefixWidth >= descColumnWidth) {
+          if (
+            prefix.includes("\n")
+              ? effectiveLastW + prefixWidth > descColumnWidth
+              : effectiveLastW + prefixWidth >= descColumnWidth
+          ) {
             description += "\n";
             defaultStartWidth = prefixWidth;
           } else {
             defaultStartWidth = effectiveLastW + prefixWidth;
           }
+        }
+
+        if (prefix.includes("\n")) {
+          defaultStartWidth = lastLineVisibleLength(prefix);
         }
 
         // maxWidth is reduced by suffixWidth so that the closing suffix
@@ -1099,20 +1110,27 @@ export function formatDocPage(
         // continues correctly from the current line position.
         // effectiveLastW adds the extra physical offset for the first line
         // when the term extends past termWidth.
-        const choicesPrefixWidth = getDisplayWidth(prefix);
+        const prefixLabel = prefix + choicesLabelText;
         const choicesSuffixWidth = getDisplayWidth(suffix);
-        const choicesLabelWidth = getDisplayWidth(choicesLabelText);
         let choicesStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
           const effectiveLastW = lastW + currentExtraOffset();
-          const prefixLabelLen = choicesPrefixWidth + choicesLabelWidth;
-          if (effectiveLastW + prefixLabelLen >= descColumnWidth) {
+          const prefixLabelLen = getDisplayWidth(prefixLabel.split("\n")[0]);
+          if (
+            prefixLabel.includes("\n")
+              ? effectiveLastW + prefixLabelLen > descColumnWidth
+              : effectiveLastW + prefixLabelLen >= descColumnWidth
+          ) {
             description += "\n";
             choicesStartWidth = prefixLabelLen;
           } else {
             choicesStartWidth = effectiveLastW + prefixLabelLen;
           }
+        }
+
+        if (prefixLabel.includes("\n")) {
+          choicesStartWidth = lastLineVisibleLength(prefixLabel);
         }
 
         // maxWidth is reduced by choicesSuffixWidth so that the closing
@@ -1232,6 +1250,10 @@ function ansiAwareRightPad(
     return text;
   }
   return text + char.repeat(length - visibleWidth);
+}
+
+function maxLineVisibleLength(text: string): number {
+  return Math.max(...text.split("\n").map((line) => getDisplayWidth(line)));
 }
 
 function lastLineVisibleLength(text: string): number {

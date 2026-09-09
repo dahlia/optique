@@ -13,5 +13,7 @@ links:
     reserve only their final line's width for wrapping and indentation.
     Multiline examples, author, and bugs labels use their widest line when
     checking the minimum page width. Newlines inside themed text force line
-    breaks while preserving styles and hyperlinks.
+    breaks while preserving styles and hyperlinks. Usage labels and
+    annotation prefixes are measured per line for minimum widths and message
+    continuation.
     [[#907], [#952]]
