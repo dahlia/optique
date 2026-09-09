@@ -365,6 +365,44 @@ width.  When `maxWidth` constrains the layout, automatic sizing reserves at
 least half of the available space for descriptions.  Numeric widths retain
 their existing fallback behavior.
 
+### Structured error callbacks
+
+*The message argument is available since Optique 1.3.0.*
+
+Core runners pass `onError(exitCode, error)` the structured
+[`Message`](./messages.md) used to render an error.  This covers parse failures,
+invalid command paths before help, and missing or unsupported completion
+shells.  You can inspect the message terms or format them for your application
+without extracting a reason from rendered stderr text.
+
+The runner writes its usual output before calling `onError`.  The message
+argument contains the error itself; the runner's `Error: ` prefix, usage/help
+output, and output-framing newlines are added only when rendering.  If your
+application handles all error reporting, supply a `stderr` callback to suppress
+or redirect the default output:
+
+~~~~ typescript twoslash
+import { runParser } from "@optique/core/facade";
+import { formatMessage } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+
+const parser = option("--port", integer({ min: 1, max: 65535 }));
+
+runParser(parser, "myserver", ["--port", "invalid"], {
+  stderr: () => {},
+  onError(exitCode, error) {
+    console.error(`myserver: ${formatMessage(error, { colors: false })}`);
+    process.exit(exitCode);
+  },
+});
+~~~~
+
+The same callback works with `runParserSync()`, `runParserAsync()`, and the
+`runWith()` family.  Existing handlers that accept only the exit code, or no
+arguments, still work.  A wrapper that calls `onError` itself must pass both
+arguments.  The higher-level *@optique/run* API continues to use `onExit(code)`.
+
 ### Explicit sync/async variants
 
 *This API is available since Optique 0.9.0.*

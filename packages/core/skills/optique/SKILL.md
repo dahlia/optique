@@ -11,19 +11,19 @@ description: >
 license: MIT
 ---
 
-Optique is a type-safe combinatorial CLI parser. Use it by describing the CLI
-grammar with parsers and combinators, not by manually walking `argv`.
+Build CLI grammars by composing Optique parsers instead of walking `argv`.
 
-If web access is available, start from <https://optique.dev/llms.txt> for the
-maintained documentation index. Keep the rules below in mind even when offline;
-they cover the parts agents most often get wrong.
+If online, start at <https://optique.dev/llms.txt> for maintained docs. These
+rules also cover common pitfalls when offline.
 
 
 Core rules
 ----------
 
  -  Use `run()` from *@optique/run* for applications; use `parse()` or
-    `runParser()` for embedded and custom runtimes.
+    `runParser()` for embedded and custom runtimes. With `runParser()`,
+    `onError(exitCode, error)` receives a structured `Message` after stderr
+    output; use that argument instead of parsing rendered error text.
  -  In tests, use `parseArgs()`/`parseArgsSync()` from *@optique/testing/parser*
     for parser results, `captureRun()` from *@optique/testing/run* for runner
     output/exits, `captureProgramRun()` from *@optique/testing/discover* for
