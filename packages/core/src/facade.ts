@@ -1256,8 +1256,19 @@ export interface RunOptions<THelp, TError> {
    */
   readonly help?:
     & {
-      /** Callback invoked when help is requested. */
-      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+      /**
+       * Callback invoked after help output, with the exit code and the final
+       * page passed to {@link formatDocPage}. Treat the page as read-only.
+       * It includes runner-provided entries and root usage customization.
+       * Subcommand and meta-command help use the selected command's docs,
+       * with the run-level footer as a fallback. Formatting options remain
+       * separate from the page.
+       *
+       * Handlers may ignore either argument. Wrappers that invoke this
+       * callback themselves must forward both arguments.
+       * @since 1.3.0 Added the `page` parameter.
+       */
+      readonly onShow?: (exitCode: number, page: DocPage) => THelp;
     }
     & (
       | {
@@ -2148,7 +2159,7 @@ function validateVersionValue(value: unknown): string {
  *          whitespace or control characters, or (for option names) lacks a
  *          valid prefix (`--`, `-`, `/`, or `+`).
  * @throws {RunParserError} When parsing fails and no `onError` callback is
- *          provided.
+ *          provided, or if the requested help page cannot be generated.
  * @since 0.10.0 Added support for {@link Program} objects.
  */
 // Overload: Program with sync parser
@@ -2714,8 +2725,9 @@ export function runParser<
               sectionOrder,
               showUsage,
             }));
+            return onHelp(0, renderedDoc);
           }
-          return onHelp(0);
+          throw new RunParserError("Failed to generate help page.");
         };
 
         // Validate that the commands before --help are actually valid

@@ -11,19 +11,19 @@ description: >
 license: MIT
 ---
 
-Build CLI grammars by composing Optique parsers instead of walking `argv`.
-
-If online, start at <https://optique.dev/llms.txt> for maintained docs. These
-rules also cover common pitfalls when offline.
+Start at <https://optique.dev/llms.txt> when online. These rules cover the
+combinatorial parser model and common pitfalls offline.
 
 
 Core rules
 ----------
 
  -  Use `run()` from *@optique/run* for applications; use `parse()` or
-    `runParser()` for embedded and custom runtimes. With `runParser()`,
-    `onError(exitCode, error)` receives a structured `Message` after stderr
-    output; use that argument instead of parsing rendered error text.
+    `runParser()` for embedded and custom runtimes.
+ -  With `runParser()`, `onError(exitCode, error)` supplies a structured
+    `Message`; `help.onShow(exitCode, page)` supplies the final `DocPage`. Both
+    follow output. Supply `stdout: () => {}` for custom help rendering. See
+    <https://optique.dev/concepts/runners.md#structured-help-callbacks>.
  -  In tests, use `parseArgs()`/`parseArgsSync()` from *@optique/testing/parser*
     for parser results, `captureRun()` from *@optique/testing/run* for runner
     output/exits, `captureProgramRun()` from *@optique/testing/discover* for

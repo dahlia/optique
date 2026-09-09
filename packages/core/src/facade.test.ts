@@ -15,7 +15,11 @@ import type {
   SourceContextPhase2Request,
   SourceContextRequest,
 } from "@optique/core/context";
-import type { DocSection } from "@optique/core/doc";
+import {
+  type DocPage,
+  type DocSection,
+  formatDocPage,
+} from "@optique/core/doc";
 import { defineInheritedAnnotationParser } from "#src/internal/parser.ts";
 import {
   createParserContext,
@@ -16280,3 +16284,378 @@ function asyncStructuredFailureParser(
     getDocFragments: () => ({ fragments: [] }),
   };
 }
+
+describe("structured help callbacks", () => {
+  it("should pass the page after writing help", () => {
+    const chunks: string[] = [];
+    const result = runParser(argument(string()), "test", ["--help"], {
+      colors: false,
+      help: {
+        option: true,
+        onShow: (...args: unknown[]) => {
+          assert.equal(chunks.length, 1);
+          assert.equal(args.length, 2);
+          assert.equal(args[0], 0);
+          assert.ok(args[1]);
+          return "shown";
+        },
+      },
+      stdout: (chunk) => chunks.push(chunk),
+    });
+    assert.equal(result, "shown");
+    // Fixed output captured before adding the callback argument.
+    assert.deepEqual(chunks, [
+      "Usage: test STRING\n       test --help\n\n" +
+      "  STRING                    \n" +
+      "  --help                      Show help information.\n",
+    ]);
+  });
+});
+
+describe("final help pages", () => {
+  const syncString = string();
+  const asyncString: ValueParser<"async", string> = {
+    metavar: syncString.metavar,
+    placeholder: syncString.placeholder,
+    format: (value) => value,
+    mode: "async",
+    parse: (input) => Promise.resolve(syncString.parse(input)),
+  };
+  const formats = { colors: false, maxWidth: 80 } as const;
+  for (const valueParser of [syncString, asyncString]) {
+    const mode = valueParser.mode;
+    for (const args of [["--help"], ["help"]]) {
+      it(`should expose augmented root help for ${mode} ${args[0]}`, async () => {
+        const chunks: string[] = [];
+        const events: string[] = [];
+        let usageCalls = 0;
+        const program = {
+          metadata: {
+            name: "test",
+            brief: message`Program brief.`,
+            description: message`Program description.`,
+            examples: message`Program examples.`,
+            author: message`Program author.`,
+            bugs: message`Program bugs.`,
+            footer: message`Program footer.`,
+          },
+        };
+        const invoke = (options: RunOptions<string, never>) =>
+          valueParser.mode === "sync"
+            ? runParser(
+              { ...program, parser: option("--name", valueParser) },
+              args,
+              options,
+            )
+            : runParser(
+              { ...program, parser: option("--name", valueParser) },
+              args,
+              options,
+            );
+        const result = invoke({
+          ...formats,
+          showUsage: false,
+          brief: message`Overridden brief.`,
+          usageLine(defaultUsage) {
+            usageCalls++;
+            assert.match(JSON.stringify(defaultUsage), /--completion/);
+            return [{ type: "ellipsis" }];
+          },
+          help: {
+            command: true,
+            option: true,
+            onShow(code, page) {
+              events.push("help");
+              assert.equal(code, 0);
+              assert.deepEqual(page.usage, [{ type: "ellipsis" }]);
+              assert.deepEqual(page.brief, message`Overridden brief.`);
+              assert.deepEqual(page.description, message`Program description.`);
+              assert.deepEqual(page.examples, message`Program examples.`);
+              assert.deepEqual(page.author, message`Program author.`);
+              assert.deepEqual(page.bugs, message`Program bugs.`);
+              assert.deepEqual(page.footer, message`Program footer.`);
+              const terms = page.sections.flatMap((section) => section.entries)
+                .map((entry) => entry.term);
+              for (
+                const name of ["--help", "--version", "--completion"] as const
+              ) {
+                assert.ok(
+                  terms.some((term) =>
+                    term.type === "option" && term.names.includes(name)
+                  ),
+                );
+              }
+              for (const name of ["help", "version", "completion"]) {
+                assert.ok(
+                  terms.some((term) =>
+                    term.type === "command" && term.name === name
+                  ),
+                );
+              }
+              assert.deepEqual(chunks, [formatDocPage("test", page, {
+                ...formats,
+                showUsage: false,
+              })]);
+              return "shown";
+            },
+          },
+          version: { value: "1.0", option: true, command: true },
+          completion: { option: true, command: true },
+          stdout(chunk) {
+            events.push("stdout");
+            chunks.push(chunk);
+          },
+        });
+        if (mode === "sync") assert.ok(!(result instanceof Promise));
+        else assert.ok(result instanceof Promise);
+        assert.equal(await result, "shown");
+        assert.equal(usageCalls, 1);
+        assert.deepEqual(events, ["stdout", "help"]);
+      });
+    }
+
+    for (
+      const args of [
+        ["remote", "add", "--help"],
+        ["help", "remote", "add"],
+        ["assist", "remote", "add"],
+        ["help", "help"],
+        ["help", "version"],
+        ["help", "completion"],
+        ["help", "--help"],
+        ["ver", "--help"],
+        ["completion", "--help"],
+      ]
+    ) {
+      it(`should forward selected ${mode} help for ${args.join(" ")}`, async () => {
+        const parser = command(
+          "remote",
+          command("add", argument(valueParser), {
+            brief: message`Add brief.`,
+            description: message`Add a remote.`,
+          }),
+        );
+        const chunks: string[] = [];
+        let calls = 0;
+        const result = await runParser(parser, "test", args, {
+          ...formats,
+          brief: message`Root brief.`,
+          description: message`Root description.`,
+          examples: message`Root examples.`,
+          author: message`Root author.`,
+          bugs: message`Root bugs.`,
+          footer: message`Global footer.`,
+          usageLine: () => assert.fail("Root usage override on command help."),
+          help: {
+            command: { names: ["help", "assist"] },
+            option: true,
+            onShow(code, page) {
+              calls++;
+              assert.equal(code, 0);
+              assert.equal(page.examples, undefined);
+              assert.equal(page.author, undefined);
+              assert.equal(page.bugs, undefined);
+              if (args.includes("completion")) {
+                // The completion command's own footer takes precedence.
+                assert.match(
+                  JSON.stringify(page.footer),
+                  /test completion bash/,
+                );
+              } else {
+                assert.deepEqual(page.footer, message`Global footer.`);
+              }
+              assert.notDeepEqual(page.brief, message`Root brief.`);
+              assert.notDeepEqual(page.description, message`Root description.`);
+              assert.deepEqual(chunks, [formatDocPage("test", page, formats)]);
+              if (args.includes("remote")) {
+                assert.deepEqual(page.brief, message`Add brief.`);
+                assert.deepEqual(page.description, message`Add a remote.`);
+                assert.match(chunks[0], /Usage: test remote add STRING/);
+              } else {
+                const selected = args.includes("completion")
+                  ? "completion"
+                  : args.includes("version") || args.includes("ver")
+                  ? "version"
+                  : "help";
+                assert.match(
+                  chunks[0],
+                  new RegExp(`Usage: test ${selected}\\b`),
+                );
+              }
+              return "shown";
+            },
+          },
+          version: { value: "1.0", command: { names: ["version", "ver"] } },
+          completion: { command: true },
+          stdout: (chunk) => chunks.push(chunk),
+        });
+        assert.equal(result, "shown");
+        assert.equal(calls, 1);
+      });
+    }
+
+    for (const runner of [runWith, runWithAsync]) {
+      for (const phase of ["single-pass", "two-pass"] as const) {
+        it(`should forward ${mode} help through ${runner.name} with ${phase} sources`, async () => {
+          const events: string[] = [];
+          const context: SourceContext = {
+            id: Symbol("help-page"),
+            phase,
+            getAnnotations(request) {
+              assert.ok(isPhase1ContextRequest(request));
+              events.push("phase1");
+              return {};
+            },
+            [Symbol.dispose]() {
+              events.push("dispose");
+            },
+          };
+          const result = await runner(
+            argument(valueParser),
+            "test",
+            [context],
+            {
+              args: ["--help"],
+              help: {
+                option: true,
+                onShow(code, page) {
+                  assert.equal(code, 0);
+                  assert.ok(page.sections.length > 0);
+                  events.push("help");
+                  return "shown";
+                },
+              },
+              stdout: () => {
+                events.push("stdout");
+              },
+            },
+          );
+          assert.equal(result, "shown");
+          assert.deepEqual(events, ["phase1", "stdout", "help", "dispose"]);
+        });
+      }
+    }
+
+    for (
+      const args of [
+        ["--name", "value"],
+        ["--version"],
+        ["--completion", "bash"],
+        ["--completion"],
+        ["--completion", "unknown"],
+        [],
+      ]
+    ) {
+      it(`should not call help for ${mode} non-help input ${JSON.stringify(args)}`, async () => {
+        await runParser(
+          option("--name", valueParser),
+          "test",
+          args,
+          {
+            aboveError: "help",
+            help: {
+              option: true,
+              onShow: () => assert.fail("Unexpected help."),
+            },
+            version: { option: true, value: "1.0", onShow: () => "version" },
+            completion: { option: true, onShow: () => "completion" },
+            onError: () => "error",
+            stdout: () => {},
+            stderr: () => {},
+          },
+        );
+      });
+    }
+    for (const throwing of ["stdout", "callback"] as const) {
+      it(`should propagate ${mode} ${throwing} exceptions without retrying`, async () => {
+        const error = new TypeError("Help output failed.");
+        let calls = 0;
+        const invoke = () =>
+          runParser(argument(valueParser), "test", ["--help"], {
+            stdout: () => {
+              if (throwing === "stdout") throw error;
+            },
+            help: {
+              option: true,
+              onShow(_code, page) {
+                calls++;
+                assert.ok(page);
+                throw error;
+              },
+            },
+          });
+        if (mode === "sync") assert.throws(invoke, (e) => e === error);
+        else {await assert.rejects(async () =>
+            await invoke(), (e) =>
+            e === error);}
+        assert.equal(calls, throwing === "stdout" ? 0 : 1);
+      });
+    }
+  }
+
+  it("should pass collapsed command entries to the callback", () => {
+    runParser(createFlatCommandDocParser(), "test", ["--help"], {
+      commandList: "top-level",
+      help: {
+        option: true,
+        onShow(_code, page) {
+          const names = page.sections.flatMap((section) => section.entries)
+            .flatMap((entry) =>
+              entry.term.type === "command" ? [entry.term.name] : []
+            );
+          assert.deepEqual(names, ["remote", "config"]);
+        },
+      },
+      stdout: () => {},
+    });
+  });
+
+  it("should forward help through explicit runners", async () => {
+    const options = {
+      args: ["--help"],
+      help: {
+        option: true as const,
+        onShow(code: number, page: DocPage) {
+          assert.equal(code, 0);
+          assert.ok(page.usage);
+          return "shown";
+        },
+      },
+      stdout: () => {},
+    };
+    const parser = argument(string());
+    assert.equal(runParserSync(parser, "test", options.args, options), "shown");
+    assert.equal(
+      await runParserAsync(parser, "test", options.args, options),
+      "shown",
+    );
+    for (const phase of ["single-pass", "two-pass"] as const) {
+      const events: string[] = [];
+      const context: SourceContext = {
+        id: Symbol("sync-help"),
+        phase,
+        getAnnotations(request) {
+          assert.ok(isPhase1ContextRequest(request));
+          return {};
+        },
+        [Symbol.dispose]() {
+          events.push("dispose");
+        },
+      };
+      assert.equal(
+        runWithSync(parser, "test", [context], {
+          ...options,
+          help: {
+            ...options.help,
+            onShow(code, page) {
+              events.push("help");
+              return options.help.onShow(code, page);
+            },
+          },
+        }),
+        "shown",
+      );
+      assert.deepEqual(events, ["help", "dispose"]);
+    }
+  });
+});
