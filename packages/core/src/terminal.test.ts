@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   createMessageFormatter,
   formatMessage,
+  type Message,
   message,
   optionNames,
   values,
@@ -208,19 +209,28 @@ describe("theme integration", () => {
       ) {
         const output: string[] = [];
         const errors: unknown[] = [];
+        const seen = new Map<unknown, MessageFormatterOptions | undefined>();
         const options = {
           theme,
+          maxWidth: 50,
           help: {
             option: true as const,
             command: true as const,
             onShow: () => "help",
           },
           completion: { option: true as const, onShow: () => "completion" },
-          messageFormatter: () => "CUSTOM MESSAGE",
+          messageFormatter: (
+            error: Message,
+            options?: MessageFormatterOptions,
+          ) => {
+            seen.set(error, options);
+            return "CUSTOM MESSAGE";
+          },
           stdout: (s: string) => output.push(s),
           stderr: (s: string) => output.push(s),
           onError: (_code: number, error: unknown) => {
             errors.push(error);
+            assert.equal(seen.get(error)?.maxWidth, 50);
             return "error";
           },
         };

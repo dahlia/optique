@@ -1477,7 +1477,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
   if (!shellName) {
     const error = message`Missing shell name for completion.`;
     stderr(
-      `${errorLabel()}${formatMessage(error, { colors, quotes: !colors })}\n`,
+      `${errorLabel()}${
+        formatMessage(error, { colors, quotes: !colors, maxWidth })
+      }\n`,
     );
 
     // Show help for completion command if parser is available
@@ -1526,7 +1528,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
     const error =
       message`Unsupported shell ${shellName}. Available shells: ${available}.`;
     stderr(
-      `${errorLabel()}${formatMessage(error, { colors, quotes: !colors })}`,
+      `${errorLabel()}${
+        formatMessage(error, { colors, quotes: !colors, maxWidth })
+      }`,
     );
     return dispatchByMode(
       parser.mode,
@@ -2703,6 +2707,7 @@ export function runParser<
             }`,
           );
           const errorMessage = formatMessage(validationError, {
+            maxWidth,
             colors,
             quotes: !colors,
           });
@@ -2932,6 +2937,7 @@ export function runParser<
           }
           // classified.error is now typed as Message
           const errorMessage = formatMessage(classified.error, {
+            maxWidth,
             colors,
             quotes: !colors,
           });
