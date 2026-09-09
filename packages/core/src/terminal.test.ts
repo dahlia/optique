@@ -24,6 +24,26 @@ describe("terminal themes", () => {
       '<"a"> <"b"> {`-x`}/{`--extra`}',
     );
   });
+  it("should let scalar themes remove list coloring", () => {
+    for (const delegate of [false, true]) {
+      const format = createMessageFormatter({
+        value: (_term, context) => ({ type: "text", text: context.text }),
+        ...(delegate ? { values: defaultTerminalTheme.values } : {}),
+      });
+      assert.equal(
+        format(message`${values(["a", "b"])}`, { colors: true }),
+        '"a" "b"',
+      );
+      assert.equal(
+        format(message`${values(["a", "b"])}`, {
+          colors: true,
+          quotes: false,
+          maxWidth: 2,
+        }),
+        "a \nb",
+      );
+    }
+  });
   it("should account for initial width without adding padding", () => {
     assert.equal(
       formatMessage(message`one two`, { maxWidth: 7, initialWidth: 3 }),
@@ -222,6 +242,13 @@ describe("theme integration", () => {
 describe("structured fragment boundaries", () => {
   it("should keep plural color scopes across wraps and close singleton scopes", () => {
     const format = createMessageFormatter({});
+    assert.equal(
+      createMessageFormatter(defaultTerminalTheme)(
+        message`${values(["a", "b"])}`,
+        { colors: true, quotes: false, maxWidth: 2 },
+      ),
+      "\x1b[32ma \nb\x1b[0m",
+    );
     assert.equal(
       format(message`${values(["a", "b"])}`, {
         colors: true,

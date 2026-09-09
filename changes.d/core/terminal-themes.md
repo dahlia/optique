@@ -6,4 +6,5 @@ links:
  -  Added semantic terminal themes and `MessageFormatter` injection for help,
     usage, and errors. Added `createMessageFormatter()` and public
     `initialWidth` support so custom renderers can honor the space already
-    occupied on a description's first line. [[#907], [#952]]
+    occupied on a description's first line. Scalar value themes also control
+    values within lists, including uncolored output. [[#907], [#952]]

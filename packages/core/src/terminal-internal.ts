@@ -22,6 +22,24 @@ export interface TerminalToken {
 export function terminalText(text: string): TerminalFragment {
   return { type: "text", text };
 }
+// Keep the legacy continuous green scope only when both value roles use
+// their defaults. Custom scalar formatters own their children's styling.
+function valuesFormatter(theme: TerminalTheme) {
+  if (theme.values != null && theme.values !== defaultTerminalTheme.values) {
+    return theme.values;
+  }
+  if (theme.value != null && theme.value !== defaultTerminalTheme.value) {
+    return defaultTerminalTheme.values;
+  }
+  return (
+    term: Extract<TerminalTerm, { readonly type: "values" }>,
+    context: TerminalFormatContext,
+  ): TerminalFragment => ({
+    type: "style",
+    style: { foreground: "green" },
+    children: [defaultTerminalTheme.values(term, context)],
+  });
+}
 export function formatTerminalTerm(
   term: TerminalTerm,
   theme: TerminalTheme = {},
@@ -89,7 +107,7 @@ export function formatTerminalTerm(
     case "value":
       return (theme.value ?? defaultTerminalTheme.value)(term, ctx);
     case "values":
-      return (theme.values ?? defaultTerminalTheme.values)(term, ctx);
+      return valuesFormatter(theme)(term, ctx);
     case "envVar":
       return (theme.envVar ?? defaultTerminalTheme.envVar)(term, ctx);
     case "commandLine":
@@ -303,7 +321,7 @@ export function cacheTerminalTheme(theme: TerminalTheme = {}): TerminalTheme {
     optionNames: cache(theme.optionNames ?? defaultTerminalTheme.optionNames),
     metavar: cache(theme.metavar ?? defaultTerminalTheme.metavar),
     value: cache(theme.value ?? defaultTerminalTheme.value),
-    values: cache(theme.values ?? defaultTerminalTheme.values),
+    values: cache(valuesFormatter(theme)),
     envVar: cache(theme.envVar ?? defaultTerminalTheme.envVar),
     commandLine: cache(theme.commandLine ?? defaultTerminalTheme.commandLine),
     url: cache(theme.url ?? defaultTerminalTheme.url),

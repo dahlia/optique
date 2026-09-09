@@ -207,8 +207,7 @@ export const defaultTerminalTheme: Formatters & {
       ? plain(ctx.text)
       : styled(ctx.text, { foreground: "green" }),
   values: (term, ctx) => ({
-    type: "style",
-    style: { foreground: "green" },
+    type: "concat",
     children: term.values.flatMap((value, i) => [
       ...(i === 0 ? [] : [plain(" ")]),
       ctx.format({ type: "value", value }),
