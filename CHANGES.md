@@ -8,6 +8,15 @@ Version 1.2.6
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `formatMessage()` leaving text green after a single-item `values()`
+    term.  The term now resets its color and restores `resetSuffix` when
+    provided, with or without quotes.
+    [[#951]]
+
+[#951]: https://github.com/dahlia/optique/issues/951
+
 
 Version 1.2.5
 -------------
@@ -321,6 +330,18 @@ Released on July 21, 2026.
     selection behavior remains unchanged.  [[#867]]
 
 [#867]: https://github.com/dahlia/optique/pull/867
+
+
+Version 1.1.6
+-------------
+
+Released on September 9, 2026.
+
+### @optique/core
+
+ -  Fixed `formatMessage()` leaving text green after a single-item `values()`
+    term.  The term now resets its color and restores `resetSuffix` when
+    provided, with or without quotes.  [[#951]]
 
 
 Version 1.1.5
@@ -647,6 +668,18 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.8
+-------------
+
+Released on September 9, 2026.
+
+### @optique/core
+
+ -  Fixed `formatMessage()` leaving text green after a single-item `values()`
+    term.  The term now resets its color and restores `resetSuffix` when
+    provided, with or without quotes.  [[#951]]
 
 
 Version 1.0.7
