@@ -3,6 +3,8 @@ packages:
 - examples/*
 - docs
 
+ignoreWorkspaceCycles: true
+
 catalog:
   "@inquirer/prompts": ^8.3.0
   "@logtape/file": ^2.0.4
