@@ -627,8 +627,17 @@ export function formatUsage(
     (n, token) => token.width === -1 ? 0 : n + token.width,
     0,
   );
+  // Empty themed leaves do not separate the program from its first term.
+  // A hard break on either side already does; preserve explicit consecutive
+  // breaks without inserting an extra space or blank line between them.
+  const firstTerm = terms.find((token) => token.text !== "") ?? terms[0];
+  const lastProgram = programTokens.findLast((token) => token.text !== "");
+  if (lastProgram?.width === -1 || firstTerm.width === -1) {
+    return serializeTokens(programTokens, options.colors) +
+      wrapUsageTokens(terms, options, width);
+  }
   const separator: TerminalToken =
-    options.maxWidth != null && width + 1 + terms[0].width > options.maxWidth
+    options.maxWidth != null && width + 1 + firstTerm.width > options.maxWidth
       ? { text: "\n", width: -1, scopes: [] }
       : { text: " ", width: 1, scopes: [] };
   return serializeTokens([...programTokens, separator], options.colors) +
@@ -995,7 +1004,7 @@ function layoutUsageTokens(
       continue;
     }
     if (
-      options.maxWidth != null && lineWidth > 0 &&
+      options.maxWidth != null && lineWidth > 0 && token.width > 0 &&
       lineWidth + token.width > options.maxWidth
     ) {
       const last = output.at(-1);

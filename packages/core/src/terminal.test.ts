@@ -11,7 +11,7 @@ import {
   optionNames,
   values,
 } from "@optique/core/message";
-import type { TerminalTheme } from "@optique/core/terminal";
+import type { TerminalFragment, TerminalTheme } from "@optique/core/terminal";
 
 describe("terminal themes", () => {
   it("should apply scalar overrides to lists without losing quoting", () => {
@@ -1133,4 +1133,56 @@ describe("multiline themed entry indentation", () => {
       assert.ok(getDisplayWidth(line) <= 12, JSON.stringify(line));
     }
   });
+});
+
+describe("usage boundary hard breaks", () => {
+  it("should not append a space before a leading themed line break", () => {
+    const output = formatDocPage("app", {
+      usage: [{ type: "option", names: ["-x"] }],
+      sections: [],
+    }, {
+      maxWidth: 10,
+      theme: { optionName: () => ({ type: "text", text: "\nX" }) },
+    });
+    assert.equal(output, "Usage: app\n       X\n");
+  });
+  for (const colors of [false, true]) {
+    it(`should preserve boundary breaks with colors=${colors}`, () => {
+      for (
+        const [program, option, maxWidth, expected] of [
+          ["app", "\nX", 3, "app\nX"],
+          ["app\n", "X", 3, "app\nX"],
+          ["app\n", "XXXX", 3, "app\nXXXX"],
+          ["app\n", "\nX", 3, "app\n\nX"],
+          ["app\n\n", "\n\nX", undefined, "app\n\n\n\nX"],
+          ["app", "X", 3, "app\nX"],
+          ["app", "X", 4, "app\nX"],
+          ["app", "X", undefined, "app X"],
+        ] as const
+      ) {
+        const decorate = (text: string): TerminalFragment => ({
+          type: "style",
+          style: { foreground: "red" },
+          children: [{
+            type: "link",
+            href: "https://example.com/",
+            children: [
+              { type: "text", text: "" },
+              { type: "text", text },
+              { type: "text", text: "" },
+            ],
+          }],
+        });
+        const output = formatUsage("app", [{ type: "option", names: ["-x"] }], {
+          colors,
+          maxWidth,
+          theme: {
+            programName: () => decorate(program),
+            optionName: () => decorate(option),
+          },
+        });
+        assert.equal(stripAnsi(output), expected);
+      }
+    });
+  }
 });

@@ -32,7 +32,9 @@ To be released.
     breaks while preserving styles and hyperlinks. Usage labels and
     annotation prefixes and suffixes are measured per line for minimum widths
     and message continuation. Help entries keep explicitly multiline themed
-    terms indented, with descriptions attached to their final line.
+    terms indented, with descriptions attached to their final line. Usage
+    separators respect explicit themed line breaks without adding spaces or
+    blank lines.
     [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
