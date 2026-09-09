@@ -30,8 +30,8 @@ To be released.
     Multiline examples, author, and bugs labels use their widest line when
     checking the minimum page width. Newlines inside themed text force line
     breaks while preserving styles and hyperlinks. Usage labels and
-    annotation prefixes are measured per line for minimum widths and message
-    continuation.
+    annotation prefixes and suffixes are measured per line for minimum widths
+    and message continuation.
     [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving

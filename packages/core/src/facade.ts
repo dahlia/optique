@@ -1,7 +1,7 @@
 import { resolveMessageFormatter } from "./message-renderer.ts";
 import { renderTerminalTerm } from "./terminal-internal.ts";
 import type { TerminalTheme } from "./terminal.ts";
-import { getDisplayWidth } from "./displaywidth.ts";
+import { measureText } from "./text-layout.ts";
 import {
   bash,
   fish,
@@ -1483,7 +1483,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
           colors,
           quotes: !colors,
           maxWidth,
-          initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
+          initialWidth: measureText(prefix).lastLineWidth,
         })
       }\n`,
     );
@@ -1540,7 +1540,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
           colors,
           quotes: !colors,
           maxWidth,
-          initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
+          initialWidth: measureText(prefix).lastLineWidth,
         })
       }`,
     );
@@ -2342,8 +2342,7 @@ export function runParser<
       theme,
       colors,
     ) + " ";
-  const usageLabelWidth = () =>
-    getDisplayWidth(usageLabel().split("\n").at(-1) ?? "");
+  const usageLabelWidth = () => measureText(usageLabel()).lastLineWidth;
 
   // Normalize sub-configs: true -> {}, undefined stays undefined
   const norm = <T>(c: true | T | undefined): T | undefined =>
@@ -2723,7 +2722,7 @@ export function runParser<
           );
           const prefix = errorLabel();
           const errorMessage = formatMessage(validationError, {
-            initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
+            initialWidth: measureText(prefix).lastLineWidth,
             maxWidth,
             colors,
             quotes: !colors,
@@ -2955,7 +2954,7 @@ export function runParser<
           // classified.error is now typed as Message
           const prefix = errorLabel();
           const errorMessage = formatMessage(classified.error, {
-            initialWidth: getDisplayWidth(prefix.split("\n").at(-1) ?? ""),
+            initialWidth: measureText(prefix).lastLineWidth,
             maxWidth,
             colors,
             quotes: !colors,

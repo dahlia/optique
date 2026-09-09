@@ -1,3 +1,5 @@
+import * as fc from "fast-check";
+import { stripAnsi } from "./displaywidth.ts";
 import { getDisplayWidth } from "./displaywidth.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -843,4 +845,229 @@ it("resets occupied width after multiline default prefixes", () => {
   });
   assert.deepEqual(widths, [2]);
   assert.ok(output.includes("\n     D:x]"), output);
+});
+
+describe("physical-line annotation layout", () => {
+  for (const kind of ["default", "choices"] as const) {
+    it(`should reserve only the first line of a ${kind} suffix`, () => {
+      const result = formatDocPage("app", {
+        sections: [{
+          entries: [{
+            term: { type: "literal", value: "x" },
+            [kind]: message`abc`,
+          }],
+        }],
+      }, {
+        maxWidth: 12,
+        termWidth: 1,
+        showDefault: { prefix: "[" },
+        showChoices: { prefix: "[", label: "" },
+        theme: {
+          syntaxPunctuation: (term, context) =>
+            term.kind === `${kind}Suffix`
+              ? { type: "text", text: "]\n123456" }
+              : defaultTerminalTheme.syntaxPunctuation(term, context),
+        },
+      });
+      assert.ok(result.includes("[abc]\n     123456"), result);
+      for (const line of result.split("\n")) {
+        assert.ok(getDisplayWidth(line) <= 12, JSON.stringify(line));
+      }
+    });
+    it(`should reject a ${kind} suffix that cannot fit the column`, () => {
+      assert.throws(() =>
+        formatDocPage("app", {
+          sections: [{
+            entries: [{
+              term: { type: "literal", value: "x" },
+              [kind]: message`x`,
+            }],
+          }],
+        }, {
+          maxWidth: 12,
+          termWidth: 1,
+          showDefault: true,
+          showChoices: { label: "" },
+          theme: {
+            syntaxPunctuation: (term, context) =>
+              term.kind === `${kind}Suffix`
+                ? { type: "text", text: "\n12345678" }
+                : defaultTerminalTheme.syntaxPunctuation(term, context),
+          },
+        }), RangeError);
+    });
+  }
+  it("should keep long section titles usable in narrow terminals", () => {
+    const page = {
+      usage: [{ type: "literal" as const, value: "app" }],
+      sections: [{
+        title: "Configuration file options",
+        entries: [{
+          term: { type: "option" as const, names: ["--config"] as const },
+        }],
+      }],
+    };
+    assert.ok(
+      formatDocPage("app", page, { maxWidth: 26 }).includes(
+        "Configuration file options:",
+      ),
+    );
+    assert.ok(
+      formatDocPage("app", page, {
+        maxWidth: 26,
+        theme: {
+          label: (term, context) =>
+            term.kind === "section"
+              ? {
+                type: "text",
+                text: "A heading wider than the terminal\nOptions:",
+              }
+              : defaultTerminalTheme.label(term, context),
+        },
+      }).includes("A heading wider than the terminal\nOptions:"),
+    );
+  });
+  it("should reserve room for content below a short fixed label", () => {
+    assert.throws(() =>
+      formatDocPage("app", {
+        sections: [],
+        examples: message`x`,
+      }, {
+        maxWidth: 2,
+        theme: { label: () => ({ type: "text", text: "E" }) },
+      }), RangeError);
+  });
+});
+
+it("continues choices from the last line of a default suffix", () => {
+  const starts: (number | undefined)[] = [];
+  const result = formatDocPage("app", {
+    sections: [{
+      entries: [{
+        term: { type: "literal", value: "x" },
+        default: message`default`,
+        choices: message`choice`,
+      }],
+    }],
+  }, {
+    maxWidth: 20,
+    termWidth: 1,
+    showDefault: { prefix: "[", suffix: "]\nS" },
+    showChoices: { prefix: " (", label: "C:" },
+    messageFormatter: (_message, options) => {
+      starts.push(options?.initialWidth);
+      return "x";
+    },
+  });
+  assert.deepEqual(starts, [1, 5]);
+  assert.ok(result.includes("[x]\n     S (C:x)"), result);
+});
+
+it("places suffixes after empty formatter output without reflowing it", () => {
+  const result = formatDocPage("app", {
+    sections: [{
+      entries: [{
+        term: { type: "literal", value: "x" },
+        default: message`ignored`,
+      }],
+    }],
+  }, {
+    maxWidth: 12,
+    termWidth: 1,
+    showDefault: { prefix: "123456", suffix: "]]\nS" },
+    messageFormatter: () => "",
+  });
+  assert.ok(result.includes("123456\n     ]]\n     S"), result);
+});
+
+describe("annotation composition properties", () => {
+  it("should fit feasible affixes and preserve text with or without styles", () => {
+    const affix = fc.constantFrom(
+      "",
+      "[",
+      "한",
+      "e\u0301",
+      "👩‍💻",
+      "\n",
+      "A\nB",
+      "\n\nC\n",
+    );
+    fc.assert(
+      fc.property(affix, affix, affix, (prefix, label, suffix) => {
+        const page = {
+          sections: [{
+            entries: [{
+              term: { type: "literal" as const, value: "x" },
+              description: message`d`,
+              default: message`a b`,
+              choices: message`x y`,
+            }],
+          }],
+        };
+        const theme: TerminalTheme = {
+          syntaxPunctuation: (term, context) => ({
+            type: "style",
+            style: { foreground: "red" },
+            children: [{
+              type: "text",
+              text: term.kind.endsWith("Prefix")
+                ? prefix
+                : term.kind.endsWith("Suffix")
+                ? suffix
+                : context.text,
+            }],
+          }),
+          label: (term, context) => ({
+            type: "link",
+            href: "https://example.com/",
+            children: [{
+              type: "text",
+              text: term.kind === "choices" ? label : context.text,
+            }],
+          }),
+        };
+        const options = {
+          theme,
+          maxWidth: 12,
+          termWidth: 1,
+          showDefault: true,
+          showChoices: true,
+        };
+        const plain = formatDocPage("app", page, options);
+        const colored = formatDocPage("app", page, {
+          ...options,
+          colors: true,
+        });
+        assert.equal(stripAnsi(colored), plain);
+        for (const line of plain.split("\n")) {
+          assert.ok(
+            getDisplayWidth(line) <= 12,
+            JSON.stringify({ prefix, label, suffix, line }),
+          );
+        }
+      }),
+      { seed: 952, numRuns: 300 },
+    );
+  });
+});
+
+it("does not add breaks for empty suffix lines after an overflowing atom", () => {
+  for (const suffix of ["", "\nS"]) {
+    const result = formatDocPage("app", {
+      sections: [{
+        entries: [{
+          term: { type: "literal", value: "x" },
+          default: message`abcdefghijk`,
+        }],
+      }],
+    }, {
+      maxWidth: 12,
+      termWidth: 1,
+      showDefault: { prefix: "", suffix },
+    });
+    assert.equal(
+      result,
+      `\n  x  abcdefghijk${suffix.replaceAll("\n", "\n     ")}\n`,
+    );
+  }
 });

@@ -1,6 +1,6 @@
 import type { TerminalTheme } from "@optique/core/terminal";
 import {
-  getDisplayWidth,
+  placeText,
   renderTerminalTerm,
   resolveMessageFormatter,
 } from "@optique/core/internal/terminal";
@@ -162,28 +162,23 @@ export function printError(
     throw new TypeError("Initial width must be a finite integer.");
   }
   if (occupied < 0) throw new RangeError("Initial width must be nonnegative.");
-  let prefix = renderTerminalTerm(
-    { type: "errorLabel", label: "Error:" },
-    options.theme,
-    useColors,
-  ) + " ";
-  if (
-    maxWidth != null && occupied > 0 &&
-    occupied + getDisplayWidth(prefix.split("\n")[0]) > maxWidth
-  ) {
-    prefix = "\n" + prefix;
-  }
-  const prefixLines = prefix.split("\n");
-  const initialWidth = getDisplayWidth(prefixLines.at(-1) ?? "") +
-    (prefixLines.length === 1 ? options.initialWidth ?? 0 : 0);
+  const prefix = placeText(
+    renderTerminalTerm(
+      { type: "errorLabel", label: "Error:" },
+      options.theme,
+      useColors,
+    ) + " ",
+    { line: "", column: occupied },
+    maxWidth,
+  );
   const formatMessage = resolveMessageFormatter(options);
   const formatted = formatMessage(message, {
     colors,
     quotes,
     maxWidth,
-    initialWidth,
+    initialWidth: prefix.cursor.column,
   });
-  output.write(prefix + formatted + "\n");
+  output.write(prefix.text + formatted + "\n");
 
   if (options.exitCode != null) {
     process.exit(options.exitCode);

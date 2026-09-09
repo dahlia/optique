@@ -405,3 +405,30 @@ it("drops the occupied width when the error label moves to a new line", () => {
     process.stderr.write = originalWrite;
   }
 });
+
+it("resets occupied width after a styled multiline error label", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    printError(message`x`, {
+      colors: true,
+      maxWidth: 8,
+      initialWidth: 6,
+      theme: {
+        errorLabel: () => ({
+          type: "style",
+          style: { foreground: "red" },
+          children: [{ type: "text", text: "AB\n한:" }],
+        }),
+      },
+      messageFormatter: (_message, options) => {
+        assert.equal(options?.initialWidth, 4);
+        return "x";
+      },
+    });
+    assert.equal(writeMock.calls[0].arguments[0], "\x1b[31mAB\n한:\x1b[0m x\n");
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});

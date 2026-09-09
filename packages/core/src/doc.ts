@@ -10,9 +10,15 @@ import {
 import type {
   LabelTerm,
   SyntaxPunctuationTerm,
+  TerminalStyle,
   TerminalTheme,
 } from "./terminal.ts";
-import { getDisplayWidth } from "./displaywidth.ts";
+import {
+  type AnnotationLayout,
+  measureAnnotation,
+  measureText,
+  placeText,
+} from "./text-layout.ts";
 import {
   cloneMessage,
   type Message,
@@ -641,7 +647,7 @@ export function formatDocPage(
   const usageLabel = page.usage != null && options.showUsage !== false
     ? label("Usage:", "usage") + " "
     : "";
-  const usageLabelWidth = getDisplayWidth(usageLabel.split("\n").at(-1) ?? "");
+  const usageLabelWidth = measureText(usageLabel).lastLineWidth;
   const defaultStyle = styleCode(
     options.theme?.annotationStyles?.default ?? { dim: true },
   );
@@ -701,6 +707,41 @@ export function formatDocPage(
       hasContent(entry.default) ||
     (options.showChoices === true || typeof options.showChoices === "object") &&
       hasContent(entry.choices);
+  const annotations = new Map<"default" | "choices", AnnotationLayout>();
+  const annotation = (kind: "default" | "choices"): AnnotationLayout => {
+    const cached = annotations.get(kind);
+    if (cached != null) return cached;
+    const config = kind === "default"
+      ? options.showDefault
+      : options.showChoices;
+    const prefix = punctuation(
+      typeof config === "object"
+        ? config.prefix ?? (kind === "default" ? " [" : " (")
+        : kind === "default"
+        ? " ["
+        : " (",
+      kind === "default" ? "defaultPrefix" : "choicesPrefix",
+    );
+    const suffix = punctuation(
+      typeof config === "object"
+        ? config.suffix ?? (kind === "default" ? "]" : ")")
+        : kind === "default"
+        ? "]"
+        : ")",
+      kind === "default" ? "defaultSuffix" : "choicesSuffix",
+    );
+    const choicesLabel = kind === "choices"
+      ? label(
+        typeof options.showChoices === "object"
+          ? options.showChoices.label ?? "choices: "
+          : "choices: ",
+        "choices",
+      )
+      : "";
+    const layout = measureAnnotation(prefix + choicesLabel, suffix);
+    annotations.set(kind, layout);
+    return layout;
+  };
   const automaticTermWidth = (): number | undefined => {
     let widest: number | undefined;
     for (const section of page.sections) {
@@ -712,9 +753,7 @@ export function formatDocPage(
           optionsSeparator: ", ",
           context: "doc",
         });
-        const width = Math.max(
-          ...rendered.split("\n").map((line) => getDisplayWidth(line)),
-        );
+        const width = measureText(rendered).maxLineWidth;
         widest = widest == null ? width : Math.max(widest, width);
       }
     }
@@ -749,49 +788,23 @@ export function formatDocPage(
       : evenlySplitTermWidth;
   }
   if (options.maxWidth != null) {
-    // The formatter skips empty default/choices arrays, so the
-    // validation must match: use hasContent() (which checks length > 0)
-    // rather than just `!= null`.
-    // Compute minimum description column width for showDefault/showChoices.
-    // When the rendered content is non-empty, only the prefix (or
-    // prefix + label for choices) must fit on one line; the suffix
-    // trails the content's last line.  When the content is empty
-    // (e.g., default: []), prefix + suffix land on the same line, so
-    // the suffix must be included in the minimum.
+    // Validate the exact fixed text that rendering will use. Content arrays
+    // with no terms do not render an annotation. The first suffix line is
+    // reserved from the content budget; later suffix lines stand alone.
     let minDescWidth = 1;
     if (needsDescColumn) {
-      if (
-        options.showDefault &&
-        page.sections.some((s) => s.entries.some((e) => hasContent(e.default)))
-      ) {
-        const prefix = punctuation(
-          typeof options.showDefault === "object"
-            ? options.showDefault.prefix ?? " ["
-            : " [",
-          "defaultPrefix",
-        );
-        minDescWidth = Math.max(minDescWidth, maxLineVisibleLength(prefix));
-      }
-      if (
-        options.showChoices &&
-        page.sections.some((s) => s.entries.some((e) => hasContent(e.choices)))
-      ) {
-        const prefix = punctuation(
-          typeof options.showChoices === "object"
-            ? options.showChoices.prefix ?? " ("
-            : " (",
-          "choicesPrefix",
-        );
-        const choicesLabelText = label(
-          typeof options.showChoices === "object"
-            ? options.showChoices.label ?? "choices: "
-            : "choices: ",
-          "choices",
-        );
-        minDescWidth = Math.max(
-          minDescWidth,
-          maxLineVisibleLength(prefix + choicesLabelText),
-        );
+      for (const kind of ["default", "choices"] as const) {
+        const enabled = kind === "default"
+          ? options.showDefault
+          : options.showChoices;
+        if (
+          enabled &&
+          page.sections.some((section) =>
+            section.entries.some((entry) => hasContent(entry[kind]))
+          )
+        ) {
+          minDescWidth = Math.max(minDescWidth, annotation(kind).minWidth);
+        }
       }
     }
     // Entry minimum: the layout needs enough space for the term column,
@@ -832,7 +845,7 @@ export function formatDocPage(
       : 0;
     const usageMin = page.usage != null && showUsage
       ? Math.max(
-        maxLineVisibleLength(usageLabel),
+        measureText(usageLabel).maxLineWidth,
         usageLabelWidth + Math.max(
           programNameWidth,
           Math.min(
@@ -842,34 +855,24 @@ export function formatDocPage(
         ),
       )
       : 1;
-    // Examples/Author/Bugs have fixed-width label lines that cannot be
-    // wrapped.  The content is indented by 2 chars (needing maxWidth >= 3),
-    // but the label width is always the binding constraint.
+    // Fixed labels cannot wrap. Examples/Author/Bugs also need two
+    // indentation columns and at least one column for their content.
     let sectionMin = 1;
-    if (hasContent(page.examples)) {
+    for (const kind of ["examples", "author", "bugs"] as const) {
+      if (!hasContent(page[kind])) continue;
+      const title = kind === "examples"
+        ? "Examples:"
+        : kind === "author"
+        ? "Author:"
+        : "Bugs:";
       sectionMin = Math.max(
         sectionMin,
-        ...label("Examples:", "examples").split("\n").map((line) =>
-          getDisplayWidth(line)
-        ),
+        3,
+        measureText(label(title, kind)).maxLineWidth,
       );
     }
-    if (hasContent(page.author)) {
-      sectionMin = Math.max(
-        sectionMin,
-        ...label("Author:", "author").split("\n").map((line) =>
-          getDisplayWidth(line)
-        ),
-      );
-    }
-    if (hasContent(page.bugs)) {
-      sectionMin = Math.max(
-        sectionMin,
-        ...label("Bugs:", "bugs").split("\n").map((line) =>
-          getDisplayWidth(line)
-        ),
-      );
-    }
+    // User-supplied section titles, like indivisible usage leaves, may
+    // overflow. Including them here would make existing narrow --help fail.
     const minWidth = Math.max(entryMin, usageMin, sectionMin);
     if (options.maxWidth < minWidth) {
       throw new RangeError(
@@ -970,18 +973,10 @@ export function formatDocPage(
       // shrinking the first-line budget.  extraTermOffset captures that
       // surplus so we can pass it as initialWidth to formatMessage, making
       // word-wrapping account for the narrower first-line space.
-      const termVisibleWidth = lastLineVisibleLength(term);
+      const termVisibleWidth = measureText(term).lastLineWidth;
       const extraTermOffset = descColumnWidth != null
         ? Math.max(0, termVisibleWidth - effectiveTermWidth)
         : 0;
-
-      // Once any content has caused a line break inside the description
-      // string, the extra physical offset no longer applies—subsequent
-      // content lands on a fresh continuation line indented by
-      // termIndent + effectiveTermWidth + 2, not by
-      // termIndent + termVisibleWidth + 2.
-      const currentExtraOffset = () =>
-        description.includes("\n") ? 0 : extraTermOffset;
 
       const descFormatOptions: MessageFormatOptions = {
         colors: options.colors,
@@ -993,91 +988,59 @@ export function formatDocPage(
         ? ""
         : formatMessage(entry.description, descFormatOptions);
 
-      // Append default value if showDefault is enabled and default exists
-      if (options.showDefault && hasContent(entry.default)) {
-        const prefix = punctuation(
-          typeof options.showDefault === "object"
-            ? options.showDefault.prefix ?? " ["
-            : " [",
-          "defaultPrefix",
-        );
-        const suffix = punctuation(
-          typeof options.showDefault === "object"
-            ? options.showDefault.suffix ?? "]"
-            : "]",
-          "defaultSuffix",
-        );
-
-        // Determine initialWidth so that word-wrapping in the default value
-        // continues correctly from the current line position.
-        // effectiveLastW adds the extra physical offset for the first line
-        // when the term extends past termWidth.
-        const prefixWidth = getDisplayWidth(prefix.split("\n")[0]);
-        const suffixWidth = getDisplayWidth(suffix);
-        let defaultStartWidth: number | undefined;
-        if (descColumnWidth != null) {
-          const lastW = lastLineVisibleLength(description);
-          const effectiveLastW = lastW + currentExtraOffset();
-          if (
-            prefix.includes("\n")
-              ? effectiveLastW + prefixWidth > descColumnWidth
-              : effectiveLastW + prefixWidth >= descColumnWidth
-          ) {
-            description += "\n";
-            defaultStartWidth = prefixWidth;
-          } else {
-            defaultStartWidth = effectiveLastW + prefixWidth;
-          }
-        }
-
-        if (prefix.includes("\n")) {
-          defaultStartWidth = lastLineVisibleLength(prefix);
-        }
-
-        // maxWidth is reduced by suffixWidth so that the closing suffix
-        // (e.g. "]") can always be appended without exceeding descColumnWidth.
-        const defaultFormatOptions: MessageFormatOptions = {
-          colors: options.colors ? { resetSuffix: defaultStyle } : false,
-          quotes: !options.colors,
+      let cursor = placeText(description, {
+        line: "",
+        column: extraTermOffset,
+      }).cursor;
+      const appendAnnotation = (
+        content: Message,
+        layout: AnnotationLayout,
+        style: string,
+        ambient: TerminalStyle,
+        quotes: boolean,
+      ) => {
+        const prefix = placeText(layout.prefix, cursor, descColumnWidth, 1);
+        // Keep a layout-inserted break outside the ambient style, as before.
+        if (prefix.text !== layout.prefix) description += "\n";
+        const rendered = formatMessage(content, {
+          colors: options.colors ? { resetSuffix: style } : false,
+          quotes,
           maxWidth: descColumnWidth == null
             ? undefined
-            : descColumnWidth - suffixWidth,
-          initialWidth: defaultStartWidth,
-        };
-        const defaultContent = formatMessage(
-          entry.default,
-          defaultFormatOptions,
-          options.theme?.annotationStyles?.default ?? { dim: true },
+            : descColumnWidth - layout.suffixMetrics.firstLineWidth,
+          initialWidth: descColumnWidth != null ||
+              layout.prefixMetrics.lineCount > 1
+            ? prefix.cursor.column
+            : undefined,
+        }, ambient);
+        // Content can be empty or an opaque formatter's unbreakable output.
+        // Place the suffix at its boundary without reflowing that output.
+        const suffix = placeText(
+          layout.suffix,
+          placeText(rendered, prefix.cursor).cursor,
+          descColumnWidth,
         );
-        const defaultText = `${prefix}${defaultContent}${
-          opaqueFormatter && options.colors ? defaultStyle : ""
-        }${suffix}`;
-        const formattedDefault = options.colors
-          ? `${defaultStyle}${defaultText}${defaultStyle ? "\x1b[0m" : ""}`
-          : defaultText;
-        description += formattedDefault;
+        const annotationText = `${layout.prefix}${rendered}${
+          opaqueFormatter && options.colors ? style : ""
+        }${suffix.text}`;
+        description += options.colors
+          ? `${style}${annotationText}${style ? "\x1b[0m" : ""}`
+          : annotationText;
+        cursor = suffix.cursor;
+      };
+
+      if (options.showDefault && hasContent(entry.default)) {
+        appendAnnotation(
+          entry.default,
+          annotation("default"),
+          defaultStyle,
+          defaultAmbient,
+          !options.colors,
+        );
       }
 
       // Append choices if showChoices is enabled and choices exist
       if (options.showChoices && hasContent(entry.choices)) {
-        const prefix = punctuation(
-          typeof options.showChoices === "object"
-            ? options.showChoices.prefix ?? " ("
-            : " (",
-          "choicesPrefix",
-        );
-        const suffix = punctuation(
-          typeof options.showChoices === "object"
-            ? options.showChoices.suffix ?? ")"
-            : ")",
-          "choicesSuffix",
-        );
-        const choicesLabelText = label(
-          typeof options.showChoices === "object"
-            ? options.showChoices.label ?? "choices: "
-            : "choices: ",
-          "choices",
-        );
         const maxItems = typeof options.showChoices === "object"
           ? options.showChoices.maxItems ?? 8
           : 8;
@@ -1106,56 +1069,13 @@ export function formatDocPage(
             ];
           }
         }
-        // Determine initialWidth so that word-wrapping in the choices list
-        // continues correctly from the current line position.
-        // effectiveLastW adds the extra physical offset for the first line
-        // when the term extends past termWidth.
-        const prefixLabel = prefix + choicesLabelText;
-        const choicesSuffixWidth = getDisplayWidth(suffix);
-        let choicesStartWidth: number | undefined;
-        if (descColumnWidth != null) {
-          const lastW = lastLineVisibleLength(description);
-          const effectiveLastW = lastW + currentExtraOffset();
-          const prefixLabelLen = getDisplayWidth(prefixLabel.split("\n")[0]);
-          if (
-            prefixLabel.includes("\n")
-              ? effectiveLastW + prefixLabelLen > descColumnWidth
-              : effectiveLastW + prefixLabelLen >= descColumnWidth
-          ) {
-            description += "\n";
-            choicesStartWidth = prefixLabelLen;
-          } else {
-            choicesStartWidth = effectiveLastW + prefixLabelLen;
-          }
-        }
-
-        if (prefixLabel.includes("\n")) {
-          choicesStartWidth = lastLineVisibleLength(prefixLabel);
-        }
-
-        // maxWidth is reduced by choicesSuffixWidth so that the closing
-        // suffix (e.g. ")") can always be appended without exceeding
-        // descColumnWidth.
-        const choicesFormatOptions: MessageFormatOptions = {
-          colors: options.colors ? { resetSuffix: choicesStyle } : false,
-          quotes: false,
-          maxWidth: descColumnWidth == null
-            ? undefined
-            : descColumnWidth - choicesSuffixWidth,
-          initialWidth: choicesStartWidth,
-        };
-        const choicesDisplay = formatMessage(
+        appendAnnotation(
           truncatedTerms,
-          choicesFormatOptions,
-          options.theme?.annotationStyles?.choices ?? { dim: true },
+          annotation("choices"),
+          choicesStyle,
+          choicesAmbient,
+          false,
         );
-        const choicesText = `${prefix}${choicesLabelText}${choicesDisplay}${
-          opaqueFormatter && options.colors ? choicesStyle : ""
-        }${suffix}`;
-        const formattedChoices = options.colors
-          ? `${choicesStyle}${choicesText}${choicesStyle ? "\x1b[0m" : ""}`
-          : choicesText;
-        description += formattedChoices;
       }
 
       output += `${" ".repeat(termIndent)}${
@@ -1228,14 +1148,11 @@ function indentLines(text: string, indent: number): string {
  * contribute to the rendered width.
  */
 function maxVisibleAtomicWidth(usage: Usage, theme?: TerminalTheme): number {
-  return Math.max(
-    0,
-    ...usage.flatMap((term) =>
-      formatUsageTerm(term, { theme, maxWidth: 1 }).split("\n").map(
-        getDisplayWidth,
-      )
-    ),
-  );
+  return usage.reduce((widest, term) =>
+    Math.max(
+      widest,
+      measureText(formatUsageTerm(term, { theme, maxWidth: 1 })).maxLineWidth,
+    ), 0);
 }
 
 function ansiAwareRightPad(
@@ -1245,19 +1162,9 @@ function ansiAwareRightPad(
 ): string {
   // Padding is appended at the end, so only the last line's width
   // matters for deciding how many spaces to add.
-  const visibleWidth = lastLineVisibleLength(text);
+  const visibleWidth = measureText(text).lastLineWidth;
   if (visibleWidth >= length) {
     return text;
   }
   return text + char.repeat(length - visibleWidth);
-}
-
-function maxLineVisibleLength(text: string): number {
-  return Math.max(...text.split("\n").map((line) => getDisplayWidth(line)));
-}
-
-function lastLineVisibleLength(text: string): number {
-  const lastNewline = text.lastIndexOf("\n");
-  const lastLine = lastNewline === -1 ? text : text.slice(lastNewline + 1);
-  return getDisplayWidth(lastLine);
 }

@@ -6,6 +6,16 @@
 const ansiRegex = // deno-lint-ignore no-control-regex
   /\x1B(?:\[[0-9;:]*[@-~]|\][^\x1B\x07]*(?:\x1B\\|\x07))/g;
 
+/**
+ * Removes ANSI CSI and OSC sequences before measuring visible text.
+ * @param text Rendered terminal text.
+ * @returns Text without terminal escape sequences.
+ * @internal
+ */
+export function stripAnsi(text: string): string {
+  return text.replace(ansiRegex, "");
+}
+
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 /**
@@ -17,7 +27,7 @@ const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
  * @internal
  */
 export function getDisplayWidth(text: string): number {
-  const stripped = text.replace(ansiRegex, "");
+  const stripped = stripAnsi(text);
   let width = 0;
   for (const { segment } of segmenter.segment(stripped)) {
     width += graphemeWidth(segment);

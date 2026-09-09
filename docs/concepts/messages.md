@@ -1383,13 +1383,15 @@ styling while preserving child value styles.
 A `TerminalFragment` is a tree of `text`, `concat`, `style`, and `link` nodes. A
 newline in a text leaf forces a line break; each line within a leaf is an
 indivisible wrapping unit. Use several leaves when a replacement should allow
-wrapping between its parts. Styles support named basic/bright
-colors, RGB tuples, indexed colors (`{ index: 123 }`), and `bold`, `dim`,
-`italic`, and `underline`. A `false` attribute cancels an inherited attribute.
-Color channels and indices must be integers from 0 to 255; invalid values throw
-`RangeError` when rendered. Links use an `href` and child fragments. With
-`colors: false`, styles and hyperlink escape sequences are omitted while
-replacement text remains visible.
+wrapping between its parts. Help labels and annotation affixes are measured per
+line. A multiline suffix reserves space beside the message only for its first
+line; its remaining lines must fit the description column. Styles support named
+basic/bright colors, RGB tuples, indexed colors (`{ index: 123 }`), and `bold`,
+`dim`, `italic`, and `underline`. A `false` attribute cancels an inherited
+attribute. Color channels and indices must be integers from 0 to 255; invalid
+values throw `RangeError` when rendered. Links use an `href` and child
+fragments. With `colors: false`, styles and hyperlink escape sequences are
+omitted while replacement text remains visible.
 
 Themes should use pure callbacks. A layout pass may cache a leaf while measuring
 and rendering it. `createMessageFormatter()` and `createPrinter()` snapshot
