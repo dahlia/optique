@@ -34,6 +34,7 @@ import {
   isDocHidden,
   type Usage,
   type UsageTerm,
+  type UsageTermFormatOptions,
 } from "./usage.ts";
 import { validateLabel, validateProgramName } from "./validate.ts";
 
@@ -954,15 +955,23 @@ export function formatDocPage(
       output += sectionLabel;
     }
     for (const entry of section.entries) {
-      const term = formatUsageTerm(entry.term, {
+      const termOptions: UsageTermFormatOptions = {
         colors: options.colors,
         theme: options.theme,
         optionsSeparator: ", ",
         context: "doc",
-        maxWidth: options.maxWidth == null
-          ? undefined
-          : options.maxWidth - termIndent,
-      });
+      };
+      // Inspect the unwrapped replacement to distinguish explicit hard breaks
+      // from the legacy automatic wrapping of ordinary single-line terms.
+      // The page's theme cache avoids invoking callbacks again for layout.
+      const unwrappedTerm = formatUsageTerm(entry.term, termOptions);
+      const multilineReplacement = measureText(unwrappedTerm).lineCount > 1;
+      const term = options.maxWidth == null
+        ? unwrappedTerm
+        : formatUsageTerm(entry.term, {
+          ...termOptions,
+          maxWidth: options.maxWidth - termIndent,
+        });
 
       const descColumnWidth = options.maxWidth == null
         ? undefined
@@ -1078,8 +1087,9 @@ export function formatDocPage(
         );
       }
 
+      const paddedTerm = ansiAwareRightPad(term, effectiveTermWidth);
       output += `${" ".repeat(termIndent)}${
-        ansiAwareRightPad(term, effectiveTermWidth)
+        multilineReplacement ? indentLines(paddedTerm, termIndent) : paddedTerm
       }${
         description === "" ? "" : `  ${
           indentLines(

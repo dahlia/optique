@@ -1071,3 +1071,66 @@ it("does not add breaks for empty suffix lines after an overflowing atom", () =>
     );
   }
 });
+
+describe("multiline themed entry indentation", () => {
+  for (const role of ["optionName", "metavar"] as const) {
+    for (const colors of [false, true]) {
+      it(`indents every ${role} line with colors=${colors}`, () => {
+        let calls = 0;
+        const theme: TerminalTheme = {
+          [role]: () => {
+            calls++;
+            return {
+              type: "style",
+              style: { foreground: "red" },
+              children: [{
+                type: "link",
+                href: "https://example.com/",
+                children: [
+                  { type: "text", text: "AA\nB" },
+                ],
+              }],
+            };
+          },
+        };
+        for (const maxWidth of [undefined, 14]) {
+          calls = 0;
+          const term = role === "optionName"
+            ? { type: "option" as const, names: ["-x"] as const }
+            : { type: "argument" as const, metavar: "X" as const };
+          const output = formatDocPage("app", {
+            sections: [{ entries: [{ term, description: message`one two` }] }],
+          }, { theme, colors, termWidth: 3, termIndent: 2, maxWidth });
+          assert.equal(stripAnsi(output), "\n  AA\n  B    one two\n");
+          assert.equal(calls, 1);
+        }
+      });
+    }
+  }
+  it("indents wrapped lines within an explicitly multiline replacement", () => {
+    const output = formatDocPage("app", {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["-x"] },
+          description: message`one two three`,
+        }],
+      }],
+    }, {
+      maxWidth: 12,
+      termWidth: 3,
+      theme: {
+        optionName: () => ({
+          type: "concat",
+          children: [
+            { type: "text", text: "AA\nBBBBBB" },
+            { type: "text", text: "CCCCCC" },
+          ],
+        }),
+      },
+    });
+    assert.ok(output.includes("\n  AA\n  BBBBBB\n  CCCCCC"), output);
+    for (const line of output.split("\n")) {
+      assert.ok(getDisplayWidth(line) <= 12, JSON.stringify(line));
+    }
+  });
+});

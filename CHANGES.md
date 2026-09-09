@@ -31,7 +31,8 @@ To be released.
     checking the minimum page width. Newlines inside themed text force line
     breaks while preserving styles and hyperlinks. Usage labels and
     annotation prefixes and suffixes are measured per line for minimum widths
-    and message continuation.
+    and message continuation. Help entries keep explicitly multiline themed
+    terms indented, with descriptions attached to their final line.
     [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
