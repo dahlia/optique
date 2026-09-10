@@ -4,11 +4,11 @@
  * @module
  * @since 1.3.0
  */
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { isAbsolute, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import type { CapturedOutput } from "./index.ts";
+import { cleanupCliProcess, createCleanupWaiter } from "./cli-cleanup.ts";
 import { type CliProcess, spawnCliProcess } from "./cli-process.ts";
 
 interface ProcessOptions {
@@ -376,7 +376,7 @@ function runProcess(
     } | undefined;
     const cleanupErrors: unknown[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const waiters = new Set<() => void>();
+    const waiter = createCleanupWaiter();
     const snapshot = (): CliResult => ({
       stdout: stdout.join(""),
       stderr: stderr.join(""),
@@ -391,6 +391,7 @@ function runProcess(
     };
     function release() {
       clearInvocation();
+      if (settled) waiter.dispose();
       child?.stdout.removeListener("data", onOut);
       child?.stderr.removeListener("data", onErr);
       // Error listeners remain until close, including after a cleanup deadline.
@@ -400,7 +401,7 @@ function runProcess(
       if (inClose) child?.stdin.removeListener("error", onInputError);
     }
     function update() {
-      for (const wake of [...waiters]) wake();
+      waiter.notify();
       if (settled) {
         release();
         return;
@@ -413,27 +414,6 @@ function runProcess(
         release();
         resolveResult(snapshot());
       }
-    }
-    function waitFor(
-      predicate: () => boolean,
-      milliseconds: number,
-    ): Promise<boolean> {
-      if (predicate()) return Promise.resolve(true);
-      return new Promise((done) => {
-        const finish = (value: boolean) => {
-          clearTimeout(timeout);
-          waiters.delete(wake);
-          done(value);
-        };
-        const wake = () => {
-          if (predicate()) finish(true);
-        };
-        const timeout = setTimeout(
-          () => finish(false),
-          Math.max(0, milliseconds),
-        );
-        waiters.add(wake);
-      });
     }
     function fail(
       reason: CliInvocationError["reason"],
@@ -448,179 +428,22 @@ function runProcess(
         void cleanup();
       });
     }
-    function killChild(kind: NodeJS.Signals) {
-      if (!child?.pid || exited || closed) return;
-      try {
-        child.kill(kind);
-      } catch (error) {
-        cleanupErrors.push(error);
-      }
-    }
-    function groupSignal(kind: NodeJS.Signals | 0): boolean {
-      if (!child?.pid) return false;
-      try {
-        process.kill(-child.pid, kind);
-        return true;
-      } catch (error) {
-        if (errorCode(error) !== "ESRCH") cleanupErrors.push(error);
-        return false;
-      }
-    }
-    async function taskkill(deadline: number, pid: number) {
-      let helper: ChildProcessWithoutNullStreams;
-      const root = process.env.SystemRoot ?? process.env.windir;
-      if (root === undefined || !isAbsolute(root)) {
-        cleanupErrors.push(
-          new Error("Windows system directory is unavailable."),
-        );
-        killChild("SIGKILL");
-        return;
-      }
-      try {
-        helper = spawn(join(root, "System32", "taskkill.exe"), [
-          "/PID",
-          String(pid),
-          "/T",
-          "/F",
-        ], {
-          shell: false,
-          windowsHide: true,
-          stdio: "pipe",
-        });
-      } catch (error) {
-        cleanupErrors.push(error);
-        killChild("SIGKILL");
-        return;
-      }
-      let helperClosed = false;
-      let helperError: unknown;
-      let helperCode: number | null = null;
-      let diagnostic = "";
-      helper.stdout.resume();
-      helper.stderr.setEncoding("utf8");
-      helper.stderr.on("data", (text: string) => {
-        diagnostic += text;
-      });
-      helper.stdin.on("error", () => {});
-      helper.stdout.on("error", (error) => {
-        helperError = error;
-      });
-      helper.stderr.on("error", (error) => {
-        helperError = error;
-      });
-      helper.on("error", (error) => {
-        helperError = error;
-        killChild("SIGKILL");
-      });
-      helper.on("close", (code) => {
-        helperClosed = true;
-        helperCode = code;
-        update();
-      });
-      helper.stdin.end();
-      if (
-        !await waitFor(
-          () => helperClosed,
-          Math.min(1000, deadline - Date.now()),
-        )
-      ) {
-        cleanupErrors.push(new Error("Tree cleanup command timed out."));
-        try {
-          helper.kill("SIGKILL");
-        } catch (error) {
-          cleanupErrors.push(error);
-        }
-        killChild("SIGKILL");
-        helper.stdin.destroy();
-        helper.stdout.destroy();
-        helper.stderr.destroy();
-        if (!await waitFor(() => helperClosed, deadline - Date.now())) {
-          cleanupErrors.push(new Error("Tree cleanup command did not close."));
-          helper.unref();
-        }
-      } else if (helperError !== undefined || helperCode !== 0) {
-        cleanupErrors.push(
-          helperError ??
-            new Error(
-              `Tree cleanup exited with code ${helperCode}: ${diagnostic}`,
-            ),
-        );
-        killChild("SIGKILL");
-      }
-    }
     async function cleanup() {
-      const deadline = Date.now() + 2000;
-      try {
-        if (child !== undefined) {
-          child.stdin.destroy();
-          if (child.pid !== undefined) {
-            if (process.platform === "win32") {
-              if (options.cleanup === "tree") {
-                if (exited || closed) {
-                  cleanupErrors.push(
-                    new Error(
-                      "Cannot trace a Windows process tree after its root exits.",
-                    ),
-                  );
-                } else await taskkill(deadline, child.pid);
-              } else killChild("SIGKILL");
-            } else if (options.cleanup === "tree") {
-              const found = groupSignal("SIGTERM");
-              if (!found && !exited && !closed) {
-                cleanupErrors.push(
-                  new Error("The child process group is unavailable."),
-                );
-              }
-              killChild("SIGTERM");
-              if (
-                found &&
-                !await waitFor(
-                  () => (exited || closed) && !groupSignal(0),
-                  1000,
-                )
-              ) {
-                groupSignal("SIGKILL");
-              }
-              killChild("SIGKILL");
-            } else {
-              killChild("SIGTERM");
-              if (!await waitFor(() => exited || closed, 1000)) {
-                killChild("SIGKILL");
-              }
-            }
-          }
-          if (!await waitFor(() => exited || closed, deadline - Date.now())) {
-            cleanupErrors.push(
-              new Error("The CLI process did not exit during cleanup."),
-            );
-          }
-          // Exit can precede the last pipe reads.  Allow a bounded drain even
-          // when descendants still hold the descriptors, then close our ends.
-          await waitFor(() => closed, Math.min(250, deadline - Date.now()));
-          child.stdout.destroy();
-          child.stderr.destroy();
-          if (
-            !await waitFor(
-              () => closed && outClose && errClose && inClose,
-              deadline - Date.now(),
-            )
-          ) {
-            cleanupErrors.push(
-              new Error(
-                "The CLI process streams did not close during cleanup.",
-              ),
-            );
-            child.unref();
-          }
-        }
-      } catch (error) {
-        cleanupErrors.push(error);
-        killChild("SIGKILL");
-        child?.stdin.destroy();
-        child?.stdout.destroy();
-        child?.stderr.destroy();
-        child?.unref();
-      }
+      await cleanupCliProcess({
+        child,
+        mode: options.cleanup,
+        getState: () => ({
+          exited,
+          closed,
+          stdinClosed: inClose,
+          stdoutClosed: outClose,
+          stderrClosed: errClose,
+        }),
+        waiter,
+        recordError: (error) => {
+          if (!settled) cleanupErrors.push(error);
+        },
+      });
       if (failure === undefined || settled) return;
       const result = snapshot();
       const primary = new CliInvocationError(
@@ -652,10 +475,29 @@ function runProcess(
       stderr.push(text);
     }
     function onError(error: Error) {
-      if (failure) cleanupErrors.push(error);
-      else fail(spawned ? "io" : "spawn", "Could not execute the CLI.", error);
+      if (settled) return;
+      if (failure) {
+        cleanupErrors.push(
+          new Error("The CLI process failed during cleanup.", { cause: error }),
+        );
+      } else {
+        fail(
+          spawned ? "io" : "spawn",
+          "Could not execute the CLI.",
+          error,
+        );
+      }
     }
     function onIoError(error: Error) {
+      if (settled) return;
+      if (failure) {
+        cleanupErrors.push(
+          new Error("CLI output could not be read during cleanup.", {
+            cause: error,
+          }),
+        );
+        return;
+      }
       fail("io", "Could not capture CLI output.", error);
     }
     function onInputError(error: Error) {

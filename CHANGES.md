@@ -224,8 +224,10 @@ To be released.
     and handler dispatch in the test process.  The CLI entry point's
     `createCliRunner()` runs a real process, capturing stdout, stderr, and exit
     status with stdin, environment, timeout, cancellation, and optional
-    process-tree cleanup controls.
-    [[#887], [#890], [#891], [#892], [#893], [#894], [#942], [#943], [#944], [#945], [#946]]
+    process-tree cleanup controls.  On Windows, tree cleanup lets `taskkill`
+    use the shared cleanup deadline and preserves process and pipe errors
+    alongside the original invocation failure.
+    [[#887], [#890], [#891], [#892], [#893], [#894], [#942], [#943], [#944], [#945], [#946], [#953], [#954]]
 
 [#887]: https://github.com/dahlia/optique/issues/887
 [#891]: https://github.com/dahlia/optique/issues/891
@@ -235,6 +237,8 @@ To be released.
 [#944]: https://github.com/dahlia/optique/pull/944
 [#945]: https://github.com/dahlia/optique/pull/945
 [#946]: https://github.com/dahlia/optique/pull/946
+[#953]: https://github.com/dahlia/optique/issues/953
+[#954]: https://github.com/dahlia/optique/pull/954
 
 
 Version 1.2.6

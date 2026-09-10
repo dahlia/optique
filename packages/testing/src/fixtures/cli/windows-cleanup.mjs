@@ -24,10 +24,23 @@ try {
   throw new Error("Expected tree cleanup to fail.");
 } catch (error) {
   if (!(error instanceof CliInvocationError)) throw error;
+  const primary = error.cause instanceof AggregateError
+    ? error.cause.errors[0]
+    : undefined;
   console.log(JSON.stringify({
     reason: error.reason,
     stdout: error.stdout,
     aggregate: error.cause instanceof AggregateError,
+    primaryReason: primary instanceof CliInvocationError
+      ? primary.reason
+      : null,
+    primaryStdout: primary instanceof CliInvocationError
+      ? primary.stdout
+      : null,
+    cleanupCause: error.cause instanceof AggregateError &&
+      error.cause.errors.slice(1).some(
+        (failure) => failure instanceof Error && failure.cause instanceof Error,
+      ),
   }));
 } finally {
   try {

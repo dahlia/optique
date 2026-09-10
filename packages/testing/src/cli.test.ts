@@ -13,6 +13,7 @@ import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { describe, it } from "node:test";
+import { inspect } from "node:util";
 
 const fixture = new URL("./fixtures/cli/program.mjs", import.meta.url);
 const runtimeArgs = "Deno" in globalThis ? ["-A"] : [];
@@ -531,34 +532,42 @@ describe("CLI process cleanup", () => {
     }
   });
 
-  it("should stop descendants on Windows with tree cleanup", {
-    skip: process.platform !== "win32",
-  }, async () => {
-    if (process.platform !== "win32") return;
-    const directory = scratch();
-    const ready = resolve(directory, "ready");
-    const controller = new AbortController();
-    const settled = runner().invoke({
-      args: ["tree", ready, "hang"],
-      cleanup: "tree",
-      signal: controller.signal,
-    })
-      .then((value) => ({ value }), (error: unknown) => ({ error }));
-    try {
-      const pid = await waitReady(ready);
-      controller.abort();
-      const result = await settled;
-      assert.ok("error" in result);
-      assert.ok(result.error instanceof CliInvocationError);
-      assert.equal(result.error.reason, "aborted");
-      assert.ok(!alive(pid));
-    } finally {
-      controller.abort();
-      await settled;
-      killFixture(ready);
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
+  for (const reason of ["aborted", "timeout"] as const) {
+    it(`should stop descendants on Windows after ${reason}`, {
+      timeout: 20_000,
+      skip: process.platform !== "win32",
+    }, async () => {
+      if (process.platform !== "win32") return;
+      const directory = scratch();
+      const ready = resolve(directory, "ready");
+      const controller = new AbortController();
+      const settled = runner().invoke({
+        args: ["tree", ready, "hang"],
+        cleanup: "tree",
+        signal: controller.signal,
+        timeout: reason === "timeout" ? 6000 : 8000,
+      })
+        .then((value) => ({ value }), (error: unknown) => ({ error }));
+      try {
+        const pid = await waitReady(ready);
+        if (reason === "aborted") controller.abort();
+        const result = await settled;
+        assert.ok("error" in result);
+        assert.ok(result.error instanceof CliInvocationError);
+        assert.equal(
+          result.error.reason,
+          reason,
+          inspect(result.error, { depth: null, colors: false }),
+        );
+        assert.ok(!alive(pid));
+      } finally {
+        controller.abort();
+        await settled;
+        killFixture(ready);
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  }
 });
 
 describe("Optique CLI entrypoints", () => {
@@ -610,6 +619,7 @@ describe("Windows CLI failures", () => {
   });
 
   it("should report taskkill failures without losing the original timeout", {
+    timeout: 20_000,
     skip: process.platform !== "win32",
   }, async () => {
     if (process.platform !== "win32") return;
@@ -622,13 +632,16 @@ describe("Windows CLI failures", () => {
           import.meta.url,
         ),
         runtimeArgs,
-        timeout: 10_000,
+        timeout: 12_000,
       }).invoke(ready);
       assert.equal(result.exitCode, 0, result.stderr);
       assert.deepEqual(JSON.parse(result.stdout), {
         reason: "cleanup",
         stdout: "ready\n",
         aggregate: true,
+        primaryReason: "timeout",
+        primaryStdout: "ready\n",
+        cleanupCause: true,
       });
     } finally {
       killFixture(ready);
