@@ -1,7 +1,12 @@
+import type { TerminalTheme } from "@optique/core/terminal";
 import {
-  formatMessage,
-  type Message,
-  type MessageFormatOptions,
+  renderErrorMessage,
+  resolveMessageFormatter,
+} from "@optique/core/internal/terminal";
+import type {
+  Message,
+  MessageFormatOptions,
+  MessageFormatter,
 } from "@optique/core/message";
 import process from "node:process";
 
@@ -10,6 +15,10 @@ import process from "node:process";
  * @since 0.3.0
  */
 export interface PrintOptions extends MessageFormatOptions {
+  /** Custom message renderer, taking precedence over theme for messages. @since 1.3.0 */
+  readonly messageFormatter?: MessageFormatter;
+  /** Semantic terminal theme. @since 1.3.0 */
+  readonly theme?: TerminalTheme;
   /**
    * The output stream to write to.
    * @default `"stdout"`
@@ -40,6 +49,10 @@ export interface PrintErrorOptions extends PrintOptions {
  * @since 0.3.0
  */
 export interface PrinterOptions extends MessageFormatOptions {
+  /** Custom message renderer, taking precedence over theme for messages. @since 1.3.0 */
+  readonly messageFormatter?: MessageFormatter;
+  /** Semantic terminal theme. @since 1.3.0 */
+  readonly theme?: TerminalTheme;
   /**
    * The output stream to write to.
    * @default `"stdout"`
@@ -50,6 +63,8 @@ export interface PrinterOptions extends MessageFormatOptions {
 /**
  * A printer function that outputs formatted messages.
  * @param message The structured message to print.
+ * @throws {TypeError} If the configured initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
  * @since 0.3.0
  */
 export type Printer = (message: Message) => void;
@@ -63,6 +78,8 @@ export type Printer = (message: Message) => void;
  *
  * @param message The structured message to print.
  * @param options Optional formatting options to override defaults.
+ * @throws {TypeError} If initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
  *
  * @example
  * ```typescript
@@ -80,6 +97,7 @@ export type Printer = (message: Message) => void;
  */
 export function print(message: Message, options: PrintOptions = {}): void {
   const printer = createPrinter({
+    ...options,
     stream: options.stream ?? "stdout",
     colors: options.colors,
     quotes: options.quotes,
@@ -98,6 +116,8 @@ export function print(message: Message, options: PrintOptions = {}): void {
  *
  * @param message The structured error message to print.
  * @param options Optional formatting options and exit code.
+ * @throws {TypeError} If initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
  *
  * @example
  * ```typescript
@@ -133,20 +153,14 @@ export function printError(
   // Special handling for printError: use quotes in non-TTY environments by default
   const quotes = options.quotes ?? !output.isTTY;
 
-  const printer = createPrinter({
-    stream,
-    colors: options.colors,
+  const colors = options.colors ?? output.isTTY;
+  const formatted = renderErrorMessage(message, {
+    ...options,
+    colors,
     quotes,
-    maxWidth: options.maxWidth,
+    maxWidth: options.maxWidth ?? output.columns,
   });
-
-  // Format the message with Error prefix
-  const errorMessage: Message = [
-    { type: "text", text: "Error: " },
-    ...message,
-  ];
-
-  printer(errorMessage);
+  output.write(formatted + "\n");
 
   if (options.exitCode != null) {
     process.exit(options.exitCode);
@@ -160,7 +174,9 @@ export function printError(
  * operations or when you want to override the automatic terminal detection.
  *
  * @param options Formatting options for the printer.
- * @returns A printer function that can be called with messages.
+ * @returns A printer function that can be called with messages. The returned
+ * function validates initialWidth and theme colors when formatting a message
+ * and can throw the exceptions documented on {@link Printer}.
  *
  * @example
  * ```typescript
@@ -184,7 +200,9 @@ export function createPrinter(options: PrinterOptions = {}): Printer {
   const stream = options.stream ?? "stdout";
   const output = process[stream];
 
+  const formatMessage = resolveMessageFormatter(options);
   const formatOptions: MessageFormatOptions = {
+    initialWidth: options.initialWidth,
     colors: options.colors ?? output.isTTY,
     quotes: options.quotes,
     maxWidth: options.maxWidth ?? output.columns,

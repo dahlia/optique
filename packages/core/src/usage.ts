@@ -1,3 +1,16 @@
+import type {
+  SyntaxPunctuationTerm,
+  TerminalFormatContext,
+  TerminalTerm,
+  TerminalTheme,
+} from "./terminal.ts";
+import {
+  cacheTerminalTheme,
+  formatTerminalLeaf,
+  fragmentTokens,
+  serializeTokens,
+  type TerminalToken,
+} from "./terminal-internal.ts";
 import { getDisplayWidth } from "./displaywidth.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import { validateProgramName } from "./validate.ts";
@@ -499,6 +512,11 @@ export function extractArgumentMetavars(usage: Usage): Set<string> {
  */
 export interface UsageFormatOptions {
   /**
+   * Semantic terminal theme.
+   * @since 1.3.0
+   */
+  readonly theme?: TerminalTheme;
+  /**
    * When `true`, expands commands in the usage description
    * to multiple lines, showing each command on a new line.
    * This is useful for commands with many subcommands, making it easier
@@ -549,12 +567,15 @@ export interface UsageFormatOptions {
  * @returns A formatted string representation of the usage description.
  * @throws {TypeError} If `programName` is not a string, is empty,
  *         whitespace-only, or contains control characters.
+ * @throws {RangeError} If a theme supplies an invalid RGB channel or palette
+ *                      index, even when colors are disabled.
  */
 export function formatUsage(
   programName: string,
   usage: Usage,
   options: UsageFormatOptions = {},
 ): string {
+  options = { ...options, theme: cacheTerminalTheme(options.theme) };
   validateProgramName(programName);
   usage = normalizeUsage(filterUsageForDisplay(usage));
   if (options.expandCommands) {
@@ -594,37 +615,14 @@ export function formatUsage(
     }
   }
 
-  let output = options.colors ? `\x1b[1m${programName}\x1b[0m` : programName;
-  let lineWidth = getDisplayWidth(programName);
-  let first = true;
-  for (const { text, width } of formatUsageTerms(usage, options)) {
-    if (first) {
-      first = false;
-      if (
-        options.maxWidth != null &&
-        lineWidth + 1 + width > options.maxWidth
-      ) {
-        output += "\n";
-        lineWidth = 0;
-      } else {
-        output += " ";
-        lineWidth += 1;
-      }
-    } else if (
-      options.maxWidth != null && lineWidth > 0 &&
-      lineWidth + width > options.maxWidth
-    ) {
-      if (output.endsWith(" ")) {
-        output = output.slice(0, -1);
-      }
-      output += "\n";
-      lineWidth = 0;
-      if (text === " ") continue;
-    }
-    output += text;
-    lineWidth += width;
-  }
-  return output;
+  return wrapUsageTokens(
+    (function* () {
+      yield* usageLeafTokens({ type: "programName", programName }, options);
+      yield { ...usageSpace, programBoundary: true };
+      yield* formatUsageTerms(usage, options);
+    })(),
+    options,
+  );
 }
 
 /**
@@ -900,14 +898,37 @@ function filterUsageForDisplay(
   return terms;
 }
 
+const usageSpace: TerminalToken = {
+  text: " ",
+  width: 1,
+  scopes: [],
+  separator: true,
+};
+
+function* usageLeafTokens(
+  term: TerminalTerm,
+  options: UsageFormatOptions,
+  usage?: TerminalFormatContext["usage"],
+): Generator<TerminalToken> {
+  const { fragment, defaultOrigin } = formatTerminalLeaf(
+    term,
+    options.theme,
+    false,
+    usage,
+  );
+  for (const token of fragmentTokens(fragment)) {
+    yield { ...token, legacyWhitespace: defaultOrigin };
+  }
+}
+
 function* formatUsageTerms(
   terms: readonly UsageTerm[],
   options: UsageFormatOptions,
-): Generator<{ text: string; width: number }> {
+): Generator<TerminalToken> {
   let i = 0;
   for (const t of terms) {
     if (i > 0) {
-      yield { text: " ", width: 1 };
+      yield usageSpace;
     }
     yield* formatUsageTermInternal(t, options);
     i++;
@@ -944,33 +965,116 @@ export interface UsageTermFormatOptions extends UsageFormatOptions {
  * @param options Optional formatting options to customize the output.
  *                See {@link UsageTermFormatOptions} for available options.
  * @returns A formatted string representation of the usage term.
+ * @throws {RangeError} If a theme supplies an invalid RGB channel or palette
+ *                      index, even when colors are disabled.
  */
 export function formatUsageTerm(
   term: UsageTerm,
   options: UsageTermFormatOptions = {},
 ): string {
+  options = { ...options, theme: cacheTerminalTheme(options.theme) };
   const hiddenCheck = options.context === "doc" ? isDocHidden : isUsageHidden;
   const visibleTerms = filterUsageForDisplay([term], hiddenCheck);
   if (visibleTerms.length < 1) return "";
 
-  let lineWidth = 0;
-  let output = "";
-  for (
-    const { text, width } of formatUsageTermInternal(visibleTerms[0], options)
-  ) {
-    if (
-      options.maxWidth != null && lineWidth > 0 &&
-      lineWidth + width > options.maxWidth
-    ) {
-      if (output.endsWith(" ")) {
-        output = output.slice(0, -1);
-      }
-      output += "\n";
-      lineWidth = 0;
-      if (text === " ") continue;
+  return wrapUsageTokens(
+    formatUsageTermInternal(visibleTerms[0], options),
+    options,
+  );
+}
+
+function wrapUsageTokens(
+  input: Iterable<TerminalToken>,
+  options: UsageFormatOptions,
+): string {
+  return serializeTokens(
+    layoutUsageTokens(input, options),
+    options.colors,
+  );
+}
+
+/** Keeps one layout-owned space between nonempty outputs on the same line. */
+function* normalizeUsageSeparators(
+  input: Iterable<TerminalToken>,
+): Generator<TerminalToken> {
+  let previous: TerminalToken | undefined;
+  let pending: TerminalToken[] = [];
+  for (const token of input) {
+    if (token.separator || token.text === "") {
+      pending.push(token);
+      continue;
     }
-    output += text;
-    lineWidth += width;
+    let separated = false;
+    for (const item of pending) {
+      if (!item.separator) yield item;
+      else if (
+        !separated && previous != null &&
+        previous.width !== -1 && token.width !== -1
+      ) {
+        yield item;
+        separated = true;
+      }
+    }
+    pending = [];
+    yield token;
+    previous = token;
+  }
+  for (const item of pending) {
+    if (!item.separator) yield item;
+  }
+}
+
+function layoutUsageTokens(
+  input: Iterable<TerminalToken>,
+  options: UsageFormatOptions,
+): TerminalToken[] {
+  let lineWidth = 0;
+  const output: TerminalToken[] = [];
+  const tokens = [...normalizeUsageSeparators(input)];
+  for (const [index, token] of tokens.entries()) {
+    if (token.programBoundary && options.maxWidth != null) {
+      const next = tokens.find((item, i) => i > index && item.text !== "");
+      if (
+        next != null && lineWidth + token.width + next.width > options.maxWidth
+      ) {
+        output.push({ text: "\n", width: -1, scopes: [] });
+        lineWidth = 0;
+        continue;
+      }
+    }
+    if (token.width === -1) {
+      output.push(token);
+      lineWidth = 0;
+      continue;
+    }
+    if (
+      options.maxWidth != null && lineWidth > 0 && token.width > 0 &&
+      lineWidth + token.width > options.maxWidth
+    ) {
+      let lastIndex = output.length - 1;
+      while (lastIndex >= 0 && output[lastIndex].text === "") lastIndex--;
+      const last = output[lastIndex];
+      // Only generated separators are generally disposable. Default leaves
+      // retain the historical one-space trim, including its color exception.
+      if (
+        last?.text.endsWith(" ") &&
+        (last.separator || last.legacyWhitespace &&
+            (!options.colors || last.scopes.length === 0))
+      ) {
+        output[lastIndex] = {
+          ...last,
+          text: last.text.slice(0, -1),
+          width: last.width - 1,
+        };
+      }
+      output.push({ text: "\n", width: -1, scopes: [] });
+      lineWidth = 0;
+      if (token.separator || token.legacyWhitespace && token.text === " ") {
+        continue;
+      }
+    }
+    output.push(token);
+    lineWidth += token.width;
   }
   return output;
 }
@@ -978,141 +1082,71 @@ export function formatUsageTerm(
 function* formatUsageTermInternal(
   term: UsageTerm,
   options: UsageTermFormatOptions,
-): Generator<{ text: string; width: number }> {
-  const optionsSeparator = options.optionsSeparator ?? "/";
+): Generator<TerminalToken> {
+  function leaf(t: TerminalTerm, usage?: TerminalFormatContext["usage"]) {
+    return usageLeafTokens(t, options, usage);
+  }
+  function punctuation(
+    punctuation: string,
+    kind: SyntaxPunctuationTerm["kind"],
+  ) {
+    return leaf({ type: "syntaxPunctuation", punctuation, kind });
+  }
+  const space = usageSpace;
   if (term.type === "argument") {
-    yield {
-      text: options?.colors
-        ? `\x1b[4m${term.metavar}\x1b[0m` // Underlined
-        : term.metavar,
-      width: getDisplayWidth(term.metavar),
-    };
+    yield* leaf({ type: "metavar", metavar: term.metavar }, "argument");
   } else if (term.type === "option") {
-    if (options?.onlyShortestOptions) {
-      const shortestName = term.names.reduce((a, b) =>
-        getDisplayWidth(a) <= getDisplayWidth(b) ? a : b
-      );
-      yield {
-        text: options?.colors
-          ? `\x1b[3m${shortestName}\x1b[0m` // Italic
-          : shortestName,
-        width: getDisplayWidth(shortestName),
-      };
-    } else {
-      let i = 0;
-      for (const optionName of term.names) {
-        if (i > 0) {
-          yield {
-            text: options?.colors
-              ? `\x1b[2m${optionsSeparator}\x1b[0m`
-              : optionsSeparator, // Dim
-            width: getDisplayWidth(optionsSeparator),
-          };
-        }
-        yield {
-          text: options?.colors
-            ? `\x1b[3m${optionName}\x1b[0m` // Italic
-            : optionName,
-          width: getDisplayWidth(optionName),
-        };
-        i++;
+    const names = options.onlyShortestOptions
+      ? [
+        term.names.reduce((a, b) =>
+          getDisplayWidth(a) <= getDisplayWidth(b) ? a : b
+        ),
+      ]
+      : term.names;
+    for (let i = 0; i < names.length; i++) {
+      if (i > 0) {
+        yield* punctuation(options.optionsSeparator ?? "/", "optionSeparator");
       }
-      if (term.metavar != null) {
-        yield {
-          text: " ",
-          width: 1,
-        };
-        yield {
-          text: options?.colors
-            ? `\x1b[4m\x1b[2m${term.metavar}\x1b[0m` // Dim & underlined
-            : term.metavar,
-          width: getDisplayWidth(term.metavar),
-        };
-      }
+      yield* leaf({ type: "optionName", optionName: names[i] });
+    }
+    if (!options.onlyShortestOptions && term.metavar != null) {
+      yield space;
+      yield* leaf({ type: "metavar", metavar: term.metavar }, "optionValue");
     }
   } else if (term.type === "command") {
-    yield {
-      text: options?.colors
-        ? `\x1b[1m${term.name}\x1b[0m` // Bold
-        : term.name,
-      width: getDisplayWidth(term.name),
-    };
+    yield* leaf({ type: "optionName", optionName: term.name }, "command");
   } else if (term.type === "optional") {
-    yield {
-      text: options?.colors ? `\x1b[2m[\x1b[0m` : "[", // Dim
-      width: 1,
-    };
+    yield* punctuation("[", "optionalOpen");
     yield* formatUsageTerms(term.terms, options);
-    yield {
-      text: options?.colors ? `\x1b[2m]\x1b[0m` : "]", // Dim
-      width: 1,
-    };
+    yield* punctuation("]", "optionalClose");
   } else if (term.type === "exclusive") {
-    yield {
-      text: options?.colors ? `\x1b[2m(\x1b[0m` : "(", // Dim
-      width: 1,
-    };
-    let i = 0;
-    for (const termGroup of term.terms) {
+    yield* punctuation("(", "groupOpen");
+    for (let i = 0; i < term.terms.length; i++) {
       if (i > 0) {
-        yield { text: " ", width: 1 };
-        yield { text: "|", width: 1 };
-        yield { text: " ", width: 1 };
+        yield space;
+        yield* punctuation("|", "alternative");
+        yield space;
       }
-      yield* formatUsageTerms(termGroup, options);
-      i++;
+      yield* formatUsageTerms(term.terms[i], options);
     }
-    yield {
-      text: options?.colors ? `\x1b[2m)\x1b[0m` : ")", // Dim
-      width: 1,
-    };
+    yield* punctuation(")", "groupClose");
   } else if (term.type === "sequence") {
     yield* formatUsageTerms(term.terms, options);
   } else if (term.type === "multiple") {
-    if (term.min < 1) {
-      yield {
-        text: options?.colors ? `\x1b[2m[\x1b[0m` : "[", // Dim
-        width: 1,
-      };
-    }
+    if (term.min < 1) yield* punctuation("[", "optionalOpen");
     for (let i = 0; i < Math.max(1, term.min); i++) {
-      if (i > 0) {
-        yield { text: " ", width: 1 };
-      }
+      if (i > 0) yield space;
       yield* formatUsageTerms(term.terms, options);
     }
-    yield {
-      text: options?.colors ? `\x1b[2m...\x1b[0m` : "...", // Dim
-      width: 3,
-    };
-    if (term.min < 1) {
-      yield {
-        text: options?.colors ? `\x1b[2m]\x1b[0m` : "]", // Dim
-        width: 1,
-      };
-    }
+    yield* punctuation("...", "ellipsis");
+    if (term.min < 1) yield* punctuation("]", "optionalClose");
   } else if (term.type === "literal") {
-    // Literal values are displayed as-is without special formatting
-    yield {
-      text: term.value,
-      width: getDisplayWidth(term.value),
-    };
+    yield* leaf({ type: "value", value: term.value }, "literal");
   } else if (term.type === "passthrough") {
-    // Pass-through options are displayed with a special format
-    const text = "[...]";
-    yield {
-      text: options?.colors ? `\x1b[2m${text}\x1b[0m` : text, // Dim
-      width: text.length,
-    };
+    yield* punctuation("[...]", "passthrough");
   } else if (term.type === "ellipsis") {
-    const text = "...";
-    yield {
-      text: options?.colors ? `\x1b[2m${text}\x1b[0m` : text, // Dim
-      width: text.length,
-    };
+    yield* punctuation("...", "ellipsis");
   } else {
-    throw new TypeError(
-      `Unknown usage term type: ${term["type"]}.`,
-    );
+    throw new TypeError(`Unknown usage term type: ${term["type"]}.`);
   }
 }

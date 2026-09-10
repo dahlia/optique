@@ -348,3 +348,134 @@ describe("print module", () => {
     });
   });
 });
+
+describe("printer formatter injection", () => {
+  it("passes the original error and themed prefix width to the formatter", () => {
+    const originalWrite = process.stderr.write;
+    const writeMock = createMockFn();
+    process.stderr.write = writeMock.fn as typeof process.stderr.write;
+    const error = message`Something failed.`;
+    try {
+      printError(error, {
+        colors: { resetSuffix: "ignored" },
+        maxWidth: 30,
+        initialWidth: 2,
+        theme: { errorLabel: () => ({ type: "text", text: "실패:" }) },
+        messageFormatter: (received, options) => {
+          assert.equal(received, error);
+          assert.equal(options?.initialWidth, 8);
+          assert.equal(options?.maxWidth, 30);
+          assert.ok(options?.colors);
+          return "CUSTOM";
+        },
+      });
+      assert.equal(writeMock.calls[0].arguments[0], "실패: CUSTOM\n");
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+  it("snapshots theme callbacks for a reusable printer", () => {
+    const originalWrite = process.stdout.write;
+    const writeMock = createMockFn();
+    process.stdout.write = writeMock.fn as typeof process.stdout.write;
+    try {
+      const theme = {
+        value: () => ({ type: "text" as const, text: "before" }),
+      };
+      const printer = createPrinter({ colors: false, theme });
+      theme.value = () => ({ type: "text", text: "after" });
+      printer(message`${"value"}`);
+      assert.equal(writeMock.calls[0].arguments[0], "before\n");
+      print(message`${"value"}`, { theme, messageFormatter: () => "CUSTOM" });
+      assert.equal(writeMock.calls[1].arguments[0], "CUSTOM\n");
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+  });
+});
+
+it("drops the occupied width when the error label moves to a new line", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    printError(message`x`, { colors: false, maxWidth: 8, initialWidth: 5 });
+    assert.equal(writeMock.calls[0].arguments[0], "\nError: x\n");
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});
+
+it("resets occupied width after a styled multiline error label", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    printError(message`x`, {
+      colors: true,
+      maxWidth: 8,
+      initialWidth: 6,
+      theme: {
+        errorLabel: () => ({
+          type: "style",
+          style: { foreground: "red" },
+          children: [{ type: "text", text: "AB\n한:" }],
+        }),
+      },
+      messageFormatter: (_message, options) => {
+        assert.equal(options?.initialWidth, 4);
+        return "x";
+      },
+    });
+    assert.equal(writeMock.calls[0].arguments[0], "\x1b[31mAB\n한:\x1b[0m x\n");
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});
+
+it("does not reserve spacing for an empty final error-label line", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    for (const label of ["", "Error\n"]) {
+      printError(message`x`, {
+        colors: false,
+        initialWidth: 2,
+        theme: { errorLabel: () => ({ type: "text", text: label }) },
+        messageFormatter: (_message, options) => {
+          assert.equal(options?.initialWidth, label === "" ? 2 : 0);
+          return "x";
+        },
+      });
+      assert.equal(writeMock.calls.at(-1)?.arguments[0], `${label}x\n`);
+    }
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});
+
+it("restores the caller's style after a themed error label", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    printError(message`x`, {
+      colors: { resetSuffix: "\x1b[4m" },
+      theme: {
+        errorLabel: () => ({
+          type: "style",
+          style: { bold: true },
+          children: [{ type: "text", text: "Oops:" }],
+        }),
+      },
+      messageFormatter: () => "x",
+    });
+    assert.equal(
+      writeMock.calls[0].arguments[0],
+      "\x1b[1mOops:\x1b[0m\x1b[4m x\n",
+    );
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});

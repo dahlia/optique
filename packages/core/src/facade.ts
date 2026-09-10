@@ -1,3 +1,7 @@
+import { renderErrorMessage } from "./message-renderer.ts";
+import { renderTerminalTerm } from "./terminal-internal.ts";
+import type { TerminalTheme } from "./terminal.ts";
+import { measureText, spaceAfterLabel } from "./text-layout.ts";
 import {
   bash,
   fish,
@@ -22,10 +26,10 @@ import {
 } from "./doc.ts";
 import {
   commandLine,
-  formatMessage,
   lineBreak,
   type Message,
   message,
+  type MessageFormatter,
   type MessageTerm,
   optionName,
   text,
@@ -1145,6 +1149,17 @@ function classifyParseFailure(
  */
 export interface RunOptions<THelp, TError> {
   /**
+   * Custom message renderer, taking precedence over theme for messages.
+   * @since 1.3.0
+   */
+  readonly messageFormatter?: MessageFormatter;
+  /**
+   * Semantic terminal theme.
+   * @since 1.3.0
+   */
+  readonly theme?: TerminalTheme;
+
+  /**
    * Enable colored output in help and error messages.
    *
    * @default `false`
@@ -1443,6 +1458,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
   sectionOrder?: (a: DocSection, b: DocSection) => number,
   showUsage?: boolean,
   rootOptionSuggestions: readonly LiteralSuggestion[] = [],
+  messageFormatter?: MessageFormatter,
+  theme?: TerminalTheme,
 ): ModeValue<M, THelp | TError> {
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -1455,7 +1472,15 @@ function handleCompletion<M extends Mode, THelp, TError>(
   // Check if shell name is empty
   if (!shellName) {
     const error = message`Missing shell name for completion.`;
-    stderr(`Error: ${formatMessage(error, { colors, quotes: !colors })}\n`);
+    stderr(
+      renderErrorMessage(error, {
+        messageFormatter,
+        theme,
+        colors,
+        quotes: !colors,
+        maxWidth,
+      }) + "\n",
+    );
 
     // Show help for completion command if parser is available
     if (completionParser) {
@@ -1466,6 +1491,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
       if (doc) {
         stderr(
           formatDocPage(programName, doc, {
+            messageFormatter,
+            theme,
             colors,
             maxWidth,
             termWidth,
@@ -1500,7 +1527,13 @@ function handleCompletion<M extends Mode, THelp, TError>(
     }
     const error =
       message`Unsupported shell ${shellName}. Available shells: ${available}.`;
-    stderr(`Error: ${formatMessage(error, { colors, quotes: !colors })}`);
+    stderr(renderErrorMessage(error, {
+      messageFormatter,
+      theme,
+      colors,
+      quotes: !colors,
+      maxWidth,
+    }));
     return dispatchByMode(
       parser.mode,
       () => {
@@ -2149,6 +2182,8 @@ function validateVersionValue(value: unknown): string {
  * @param args Command-line arguments to parse (typically from
  *             `process.argv.slice(2)` on Node.js or `Deno.args` on Deno).
  * @param options Configuration options for output formatting and callbacks.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result value, or the return value of `onHelp`/`onError`
  *          callbacks.
  * @throws {TypeError} If `programName` (or `program.metadata.name`) is not
@@ -2262,6 +2297,8 @@ export function runParser<
   // Extract all options first
   const {
     colors,
+    messageFormatter,
+    theme,
     maxWidth,
     termWidth,
     showDefault,
@@ -2283,6 +2320,15 @@ export function runParser<
     bugs,
     footer,
   } = options;
+
+  let usagePrefix: string | undefined;
+  const usageLabel = () =>
+    usagePrefix ??= spaceAfterLabel(renderTerminalTerm(
+      { type: "label", label: "Usage:", kind: "usageSummary" },
+      theme,
+      colors,
+    ));
+  const usageLabelWidth = () => measureText(usageLabel()).lastLineWidth;
 
   // Normalize sub-configs: true -> {}, undefined stays undefined
   const norm = <T>(c: true | T | undefined): T | undefined =>
@@ -2590,6 +2636,8 @@ export function runParser<
           sectionOrder,
           showUsage,
           rootOptionSuggestions,
+          messageFormatter,
+          theme,
         ) as InferValue<TParser>;
 
       case "help": {
@@ -2644,22 +2692,27 @@ export function runParser<
           validationError: Message,
         ): InferValue<TParser> => {
           stderr(
-            `Usage: ${
+            `${usageLabel()}${
               indentLines(
                 formatUsage(programName, augmentedParser.usage, {
+                  theme,
                   colors,
-                  maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                  maxWidth: maxWidth == null
+                    ? undefined
+                    : maxWidth - usageLabelWidth(),
                   expandCommands: true,
                 }),
-                7,
+                usageLabelWidth(),
               )
             }`,
           );
-          const errorMessage = formatMessage(validationError, {
+          stderr(renderErrorMessage(validationError, {
+            messageFormatter,
+            theme,
             colors,
             quotes: !colors,
-          });
-          stderr(`Error: ${errorMessage}`);
+            maxWidth,
+          }));
           return onError(1, validationError);
         };
 
@@ -2717,6 +2770,8 @@ export function runParser<
               ? applyUsageLine(augmentedDoc, usageLine)
               : augmentedDoc;
             stdout(formatDocPage(programName, renderedDoc, {
+              messageFormatter,
+              theme,
               colors,
               maxWidth,
               termWidth,
@@ -2852,6 +2907,8 @@ export function runParser<
                 )
                 : augmentedDoc;
               stderr(formatDocPage(programName, renderedDoc, {
+                messageFormatter,
+                theme,
                 colors,
                 maxWidth,
                 termWidth,
@@ -2864,24 +2921,29 @@ export function runParser<
           }
           if (effectiveAboveError === "usage") {
             stderr(
-              `Usage: ${
+              `${usageLabel()}${
                 indentLines(
                   formatUsage(programName, augmentedParser.usage, {
+                    theme,
                     colors,
-                    maxWidth: maxWidth == null ? undefined : maxWidth - 7,
+                    maxWidth: maxWidth == null
+                      ? undefined
+                      : maxWidth - usageLabelWidth(),
                     expandCommands: true,
                   }),
-                  7,
+                  usageLabelWidth(),
                 )
               }`,
             );
           }
           // classified.error is now typed as Message
-          const errorMessage = formatMessage(classified.error, {
+          stderr(renderErrorMessage(classified.error, {
+            messageFormatter,
+            theme,
             colors,
             quotes: !colors,
-          });
-          stderr(`Error: ${errorMessage}`);
+            maxWidth,
+          }));
           return onError(1, classified.error);
         };
 
@@ -2972,6 +3034,8 @@ export function runParser<
  * @param programName The name of the program for help messages.
  * @param args The command-line arguments to parse.
  * @param options Configuration options for customizing behavior.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result if successful.
  * @throws {TypeError} If an async parser is passed at runtime.  Use
  * {@link runParser} or {@link runParserAsync} for async parsers.
@@ -3010,6 +3074,8 @@ export function runParserSync<
  * @param programName The name of the program for help messages.
  * @param args The command-line arguments to parse.
  * @param options Configuration options for customizing behavior.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns A Promise of the parsed result if successful.
  * @since 0.9.0
  */
@@ -3822,6 +3888,8 @@ async function runWithBody<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.
@@ -4012,6 +4080,8 @@ function runWithSyncBody<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns The parsed result.
  * @throws {TypeError} If an async parser is passed at runtime.  Use
  * {@link runWith} or {@link runWithAsync} for async parsers.
@@ -4096,6 +4166,8 @@ export function runWithSync<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {RangeError} If rendering help or errors encounters an invalid theme
+ * color, even when colors are disabled.
  * @returns Promise that resolves to the parsed result.
  * @throws {TypeError} If two or more contexts share the same
  * {@link SourceContext.id}.

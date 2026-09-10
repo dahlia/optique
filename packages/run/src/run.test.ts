@@ -3198,3 +3198,28 @@ describe("help callback compatibility", () => {
     assert.equal(events[1], 0);
   });
 });
+
+describe("terminal presentation options", () => {
+  for (const invoke of [runSync, runAsync]) {
+    it(`forwards theme and formatter through ${invoke.name}`, async () => {
+      const output: string[] = [];
+      const exited = new Error("Expected exit.");
+      const parser = option("--name", string());
+      await assert.rejects(async () => {
+        await invoke(parser, {
+          programName: "app",
+          args: [],
+          colors: false,
+          theme: { errorLabel: () => ({ type: "text", text: "Failure:" }) },
+          messageFormatter: () => "CUSTOM",
+          stdout: (s) => output.push(s),
+          stderr: (s) => output.push(s),
+          onExit: () => {
+            throw exited;
+          },
+        });
+      }, (error) => error === exited);
+      assert.ok(output.some((s) => s.includes("Failure: CUSTOM")));
+    });
+  }
+});

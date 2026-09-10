@@ -3398,3 +3398,32 @@ function wrapSourceBackedOptionParseResult(
     consumed: result.consumed,
   };
 }
+
+describe("runProgram terminal presentation", () => {
+  it("forwards the formatter and theme through command dispatch", async () => {
+    const output: string[] = [];
+    const exited = new Error("Expected exit.");
+    const command = defineCommand({
+      path: ["write"],
+      parser: option("--value", string()),
+      handler() {
+        assert.fail("The invalid command must not run.");
+      },
+    });
+    await assert.rejects(() =>
+      runProgram({
+        commands: [command],
+        metadata: { name: "app" },
+        args: ["write"],
+        colors: false,
+        theme: { errorLabel: () => ({ type: "text", text: "Failure:" }) },
+        messageFormatter: () => "CUSTOM",
+        stdout: (s) => output.push(s),
+        stderr: (s) => output.push(s),
+        onExit: () => {
+          throw exited;
+        },
+      }), (error) => error === exited);
+    assert.ok(output.some((s) => s.includes("Failure: CUSTOM")));
+  });
+});

@@ -19,6 +19,26 @@ To be released.
     command path on structured parse failures.  [[#890], [#892], [#943]]
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
     with fixed flags and customizable parse errors.  [[#906], [#909]]
+ -  Added semantic terminal themes and `MessageFormatter` injection for help,
+    usage, and errors. Added `createMessageFormatter()` and public
+    `initialWidth` support so custom renderers can honor the space already
+    occupied on a description's first line. Scalar value themes also control
+    values within lists, including uncolored output. Custom error formatters
+    receive the runner's configured `maxWidth` and the rendered error prefix's
+    occupied width so wrapping accounts for the prefix. Multiline usage labels
+    reserve only their final line's width for wrapping and indentation.
+    Multiline examples, author, and bugs labels use their widest line when
+    checking the minimum page width. Newlines inside themed text force line
+    breaks while preserving styles and hyperlinks. Usage labels and
+    annotation prefixes and suffixes are measured per line for minimum widths
+    and message continuation. Help entries keep explicitly multiline themed
+    terms indented, with descriptions attached to their final line. Usage
+    separators between program names, terms, and option values respect explicit
+    themed line breaks without adding spaces or blank lines. Empty themed
+    usage terms do not leave redundant separators. Usage and error labels
+    reserve spacing only when their final line has content. Automatic usage
+    wrapping preserves spaces supplied by custom theme fragments.
+    [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
     description space under `maxWidth`.  The existing default and explicit
@@ -76,6 +96,7 @@ To be released.
 [#899]: https://github.com/dahlia/optique/issues/899
 [#904]: https://github.com/dahlia/optique/issues/904
 [#906]: https://github.com/dahlia/optique/issues/906
+[#907]: https://github.com/dahlia/optique/issues/907
 [#909]: https://github.com/dahlia/optique/pull/909
 [#911]: https://github.com/dahlia/optique/pull/911
 [#912]: https://github.com/dahlia/optique/pull/912
@@ -95,18 +116,25 @@ To be released.
 [#943]: https://github.com/dahlia/optique/pull/943
 [#949]: https://github.com/dahlia/optique/pull/949
 [#950]: https://github.com/dahlia/optique/pull/950
+[#952]: https://github.com/dahlia/optique/pull/952
 
 ### @optique/run
 
  -  Added `termWidth` to the core and high-level runner options.  Automatic
     sizing measures the final help page after built-in help, version, and shell
     completion entries have been added.  [[#904], [#911]]
+ -  Added `theme` and `messageFormatter` options to runners and printers,
+    including themed error labels in `printError()`. Themed labels honor
+    `colors.resetSuffix` so caller styling resumes after the label.
+    [[#907], [#952]]
  -  Added `usageLine` to `RunOptions`.  `run()`, `runSync()`, and `runAsync()`
     can now replace the root synopsis in full help without changing parsing or
     subcommand help.  [[#879]]
 
 ### @optique/discover
 
+ -  Added `theme` and `messageFormatter` options to `runProgram()` for custom
+    help and error presentation. [[#907], [#952]]
  -  Added `usageLine` to `runProgram()` so large discovered command trees can
     show a compact root synopsis such as `Usage: my-tool ...` while keeping
     their full command menu.  [[#879]]

@@ -1333,3 +1333,115 @@ Suggestions are automatically appended to error messages with proper formatting,
 including appropriate line breaks for readability. They work seamlessly with
 both colored and non-colored terminal output, and integrate with custom error
 messages you may have defined.
+
+
+Terminal themes
+---------------
+
+_This API is available since Optique 1.3.0._
+
+Pass a `theme` to customize semantic elements throughout help and errors.
+`TerminalTheme` and the related fragment types are exported from
+_@optique/core/terminal_ and _@optique/core_. Each callback receives the
+original term and a context containing its default, unstyled display text:
+
+~~~~ typescript twoslash
+import { createMessageFormatter, message } from "@optique/core/message";
+import type { TerminalTheme } from "@optique/core/terminal";
+
+const theme: TerminalTheme = {
+  value: (_term, context) => ({
+    type: "style",
+    style: { foreground: [230, 160, 80] },
+    children: [{ type: "text", text: context.text }],
+  }),
+  errorLabel: () => ({ type: "text", text: "Problem:" }),
+};
+const format = createMessageFormatter(theme);
+format(message`Invalid value ${"example"}.`, { colors: true });
+~~~~
+
+Omitted roles retain their defaults. The default `values` and `optionNames`
+callbacks format their children through the effective scalar callbacks, so a
+`value` override also affects lists. A callback can delegate children with
+`context.format(term)` or explicitly delegate its own role with
+`defaultTerminalTheme.value(term, context)`. Calling `context.format()` on its
+own role without a terminating condition causes recursion.
+
+`context.text` includes the default quoting selected by `context.quotes`.
+`context.usage` distinguishes command names, positional arguments, option
+values, and literal values in usage output. Message text retains its existing
+whitespace normalization; `text` and `lineBreak` are not theme callback roles.
+
+In addition to the message roles, themes cover `programName`, `label`,
+`syntaxPunctuation`, and `errorLabel`. Labels and punctuation include a `kind`
+field to distinguish headings, usage separators, optional brackets, and
+annotation affixes. Set `annotationStyles.default` or `annotationStyles.choices`
+to customize the surrounding default/choice style; `{}` removes the default dim
+styling while preserving child value styles.
+
+A `TerminalFragment` is a tree of `text`, `concat`, `style`, and `link` nodes. A
+newline in a text leaf forces a line break; each line within a leaf is an
+indivisible wrapping unit. Use several leaves when a replacement should allow
+wrapping between its parts. Help labels and annotation affixes are measured per
+line. A multiline suffix reserves space beside the message only for its first
+line; its remaining lines must fit the description column. Styles support named
+basic/bright colors, RGB tuples, indexed colors (`{ index: 123 }`), and `bold`,
+`dim`, `italic`, and `underline`. A `false` attribute cancels an inherited
+attribute. Color channels and indices must be integers from 0 to 255; invalid
+values throw `RangeError` when rendered. Links use an `href` and child
+fragments. With `colors: false`, styles and hyperlink escape sequences are
+omitted while replacement text remains visible.
+
+Themes should use pure callbacks. A layout pass may cache a leaf while measuring
+and rendering it. `createMessageFormatter()` and `createPrinter()` snapshot
+callback selection when created; changing the supplied theme object later does
+not replace those callbacks.
+
+
+Injecting a message formatter
+-----------------------------
+
+_This API is available since Optique 1.3.0._
+
+Use `messageFormatter` when you need to replace whole-message rendering. The
+callback receives the original `Message` and optional `MessageFormatterOptions`:
+`colors`, `quotes`, `maxWidth`, and `initialWidth`. It owns the returned text,
+including any terminal styling.
+
+~~~~ typescript twoslash
+import { formatMessage, type MessageFormatter } from "@optique/core/message";
+import { run } from "@optique/run";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const messageFormatter: MessageFormatter = (message, options) =>
+  formatMessage(message, options);
+
+run(option("--name", string()), {
+  messageFormatter,
+  help: "option",
+});
+~~~~
+
+`formatDocPage()`, the core runner functions, `run()` and its variants,
+`runProgram()`, `print()`, `printError()`, and `createPrinter()` accept both
+`messageFormatter` and `theme`. An explicit formatter takes precedence for
+messages; the theme still formats surrounding headings, usage, and error labels.
+With only a theme, these APIs derive the message formatter from it.
+`formatUsage()` and `formatUsageTerm()` accept `theme`.
+
+`initialWidth` counts columns already occupied on the first line, without
+inserting padding. It resets after a line break. In help entries it accounts for
+an overlong option beside the description; in `printError()` it includes the
+error label. `formatMessage()` accepts it too. A negative width throws
+`RangeError`; a fractional or nonfinite width throws `TypeError`.
+
+The legacy `formatMessage()` color object with `resetSuffix` remains supported.
+An injected formatter receives a boolean `colors` value instead. Optique does
+not inspect or rewrite ANSI resets in arbitrary formatter output.
+
+These options affect terminal presentation. Structured error callbacks,
+canonical exception messages, completion protocol descriptions, and version
+strings keep their original content. Themes customize semantic leaves within
+Optique's existing layouts; they do not replace the help-page layout itself.

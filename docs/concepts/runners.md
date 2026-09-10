@@ -1488,3 +1488,19 @@ convenience. Start with the highest-level approach that meets your needs, then
 move to lower-level functions only when you need the additional control.
 
 <!-- cSpell: ignore myapp mmyapp -->
+
+
+Custom terminal presentation
+----------------------------
+
+_This API is available since Optique 1.3.0._
+
+Pass `theme` to customize semantic roles throughout help, usage, and errors.
+Pass `messageFormatter` to replace message rendering while retaining the
+runner's output streams, exit handling, and structured error callbacks. These
+options also work with context-aware runners and `runProgram()`. An explicit
+`messageFormatter` overrides the theme for message content; non-message roles
+still use the theme.
+
+See [terminal themes and formatter injection](./messages.md#terminal-themes) for
+examples, fragment composition, and the width/quoting contract.

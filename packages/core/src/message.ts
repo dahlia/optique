@@ -1,3 +1,11 @@
+import { messageRenderers } from "./message-registry.ts";
+import type { TerminalStyle, TerminalTheme } from "./terminal.ts";
+import {
+  formatTerminalTerm,
+  fragmentTokens,
+  serializeTokens,
+  type TerminalToken,
+} from "./terminal-internal.ts";
 import { getDisplayWidth } from "./displaywidth.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 
@@ -525,6 +533,11 @@ export function valueSet(
  */
 export interface MessageFormatOptions {
   /**
+   * Columns already occupied on the first line.
+   * @since 1.3.0
+   */
+  readonly initialWidth?: number;
+  /**
    * Whether to use colors in the formatted message.  If `true`,
    * the formatted message will include ANSI escape codes for colors.
    * If `false`, the message will be plain text without colors.
@@ -568,31 +581,79 @@ export interface MessageFormatOptions {
  *              {@link MessageTerm} objects.
  * @param options Optional formatting options to customize the output.
  * @returns A formatted string representation of the message.
+ * @throws {TypeError} If initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative.
  */
 export function formatMessage(
   msg: Message,
   options?: MessageFormatOptions,
 ): string;
-// The implementation accepts an additional `startWidth` field that is not
-// part of the public API.  Other formatters within this package (e.g.,
-// formatDocPage() in doc.ts) pass it as a plain object variable—not as
-// an inline object literal—so TypeScript's excess-property check does not
-// apply and the field reaches the implementation without being part of the
-// declared public type.
 export function formatMessage(
   msg: Message,
-  options: MessageFormatOptions & { readonly startWidth?: number } = {},
+  options: MessageFormatOptions = {},
 ): string {
-  // Apply defaults
+  return renderMessage(msg, options, {});
+}
+
+/**
+ * Options passed to an injected message formatter.
+ * @since 1.3.0
+ */
+export interface MessageFormatterOptions
+  extends Omit<MessageFormatOptions, "colors"> {
+  /** Whether to emit terminal colors and hyperlinks. */
+  readonly colors?: boolean;
+}
+
+/**
+ * Formats a structured message for terminal output.
+ * @since 1.3.0
+ */
+export type MessageFormatter = (
+  message: Message,
+  options?: MessageFormatterOptions,
+) => string;
+
+/**
+ * Creates a message formatter using a snapshot of the supplied theme.
+ * @param theme Semantic leaf formatters and annotation styles.
+ * @returns A reusable message formatter. Invoking it throws `TypeError` if
+ * `initialWidth` is not a finite integer, or `RangeError` if `initialWidth`
+ * is negative or a theme color is invalid (even with colors disabled).
+ * @since 1.3.0
+ */
+export function createMessageFormatter(theme: TerminalTheme): MessageFormatter {
+  const snapshot = { ...theme };
+  const formatter: MessageFormatter = (msg, options = {}) =>
+    renderMessage(msg, options, snapshot);
+  messageRenderers.set(
+    formatter,
+    (msg, options, ambient) => renderMessage(msg, options, snapshot, ambient),
+  );
+  return formatter;
+}
+
+function renderMessage(
+  msg: Message,
+  options: MessageFormatOptions,
+  theme: TerminalTheme,
+  ambient?: TerminalStyle,
+): string {
+  const initialWidth = options.initialWidth ?? 0;
+  if (!Number.isFinite(initialWidth) || !Number.isInteger(initialWidth)) {
+    throw new TypeError("Initial width must be a finite integer.");
+  }
+  if (initialWidth < 0) {
+    throw new RangeError("Initial width must be nonnegative.");
+  }
   const colorConfig = options.colors ?? false;
   const useColors = typeof colorConfig === "boolean" ? colorConfig : true;
   const resetSuffix = typeof colorConfig === "object"
-    ? (colorConfig.resetSuffix ?? "")
+    ? colorConfig.resetSuffix ?? ""
     : "";
   const useQuotes = options.quotes ?? true;
-  const resetSequence = `\x1b[0m${resetSuffix}`;
 
-  function* stream(): Generator<{ text: string; width: number }> {
+  function* stream(): Generator<TerminalToken> {
     const wordPattern = /\s*\S+\s*/g;
     let prevWasLineBreak = false;
     for (const term of msg) {
@@ -631,7 +692,7 @@ export function formatMessage(
               const breakText = isAfterLineBreak && paragraphIndex === 1
                 ? "\n"
                 : "\n\n";
-              yield { text: breakText, width: -1 };
+              yield { text: breakText, width: -1, scopes: [] };
             }
 
             // Within each paragraph, replace single \n with space
@@ -640,7 +701,11 @@ export function formatMessage(
             while (true) {
               const match = wordPattern.exec(paragraph);
               if (match == null) break;
-              yield { text: match[0], width: getDisplayWidth(match[0]) };
+              yield {
+                text: match[0],
+                width: getDisplayWidth(match[0]),
+                scopes: [],
+              };
             }
           }
         } else {
@@ -649,136 +714,56 @@ export function formatMessage(
 
           // Handle whitespace-only text specially to preserve spaces
           if (normalizedText.trim() === "" && normalizedText.length > 0) {
-            yield { text: " ", width: 1 };
+            yield { text: " ", width: 1, scopes: [] };
           } else {
             wordPattern.lastIndex = 0;
             while (true) {
               const match = wordPattern.exec(normalizedText);
               if (match == null) break;
-              yield { text: match[0], width: getDisplayWidth(match[0]) };
+              yield {
+                text: match[0],
+                width: getDisplayWidth(match[0]),
+                scopes: [],
+              };
             }
           }
         }
-      } else if (term.type === "optionName") {
-        const name = useQuotes ? `\`${term.optionName}\`` : term.optionName;
-        yield {
-          text: useColors
-            ? `\x1b[3m${name}${resetSequence}` // Italic for option names
-            : name,
-          width: getDisplayWidth(name),
-        };
-      } else if (term.type === "optionNames") {
-        const names = term.optionNames.map((name) =>
-          useQuotes ? `\`${name}\`` : name
-        );
-        let i = 0;
-        for (const name of names) {
-          if (i > 0) yield { text: "/", width: 1 };
-          yield {
-            text: useColors
-              ? `\x1b[3m${name}${resetSequence}` // Italic for option names
-              : name,
-            width: getDisplayWidth(name),
-          };
-          i++;
-        }
-      } else if (term.type === "metavar") {
-        const metavar = useQuotes ? `\`${term.metavar}\`` : term.metavar;
-        yield {
-          text: useColors
-            ? `\x1b[1m${metavar}${resetSequence}` // Bold for metavariables
-            : metavar,
-          width: getDisplayWidth(metavar),
-        };
-      } else if (term.type === "value") {
-        const value = useQuotes ? `${JSON.stringify(term.value)}` : term.value;
-        yield {
-          text: useColors
-            ? `\x1b[32m${value}${resetSequence}` // Green for values
-            : value,
-          width: getDisplayWidth(value),
-        };
-      } else if (term.type === "values") {
-        for (let i = 0; i < term.values.length; i++) {
-          if (i > 0) yield { text: " ", width: 1 };
-          const value = useQuotes
-            ? JSON.stringify(term.values[i])
-            : term.values[i];
-          yield {
-            text: useColors
-              ? `${i === 0 ? "\x1b[32m" : ""}${value}${
-                i + 1 === term.values.length ? resetSequence : ""
-              }`
-              : value,
-            width: getDisplayWidth(value),
-          };
-        }
-      } else if (term.type === "envVar") {
-        const envVar = useQuotes ? `\`${term.envVar}\`` : term.envVar;
-        yield {
-          text: useColors
-            ? `\x1b[1;4m${envVar}${resetSequence}` // Bold and underlined for environment variables
-            : envVar,
-          width: getDisplayWidth(envVar),
-        };
-      } else if (term.type === "commandLine") {
-        const cmd = useQuotes ? `\`${term.commandLine}\`` : term.commandLine;
-        yield {
-          text: useColors
-            ? `\x1b[36m${cmd}${resetSequence}` // Cyan for command-line examples
-            : cmd,
-          width: getDisplayWidth(cmd),
-        };
       } else if (term.type === "lineBreak") {
-        // Explicit hard line break
-        yield { text: "\n", width: -1 };
+        yield { text: "\n", width: -1, scopes: [] };
         prevWasLineBreak = true;
-      } else if (term.type === "url") {
-        const urlString = term.url.href;
-        const displayText = useQuotes ? `<${urlString}>` : urlString;
-
-        if (useColors) {
-          // OSC 8 hyperlink: \x1b]8;;URL\x1b\\TEXT\x1b]8;;\x1b\\
-          const hyperlink =
-            `\x1b]8;;${urlString}\x1b\\${displayText}\x1b]8;;\x1b\\${resetSuffix}`;
-          yield {
-            text: hyperlink,
-            width: getDisplayWidth(displayText),
-          };
-        } else {
-          yield {
-            text: displayText,
-            width: getDisplayWidth(displayText),
-          };
-        }
       } else {
-        throw new TypeError(
-          `Invalid MessageTerm type: ${term["type"]}.`,
-        );
+        yield* fragmentTokens(formatTerminalTerm(term, theme, useQuotes));
       }
     }
   }
 
-  let output = "";
-  let totalWidth = options.startWidth ?? 0;
-  for (const { text, width } of stream()) {
-    // Handle hard line breaks (marked with width -1)
-    if (width === -1) {
-      output += text; // Add the newline
-      totalWidth = 0; // Reset width tracking
+  const tokens: TerminalToken[] = [];
+  let totalWidth = initialWidth;
+  for (const token of stream()) {
+    if (token.width === -1) {
+      tokens.push(token);
+      totalWidth = 0;
       continue;
     }
-
-    // Handle automatic word wrapping
     if (
       options.maxWidth != null && totalWidth > 0 &&
-      totalWidth + width > options.maxWidth
+      totalWidth + token.width > options.maxWidth
     ) {
-      output += "\n";
+      tokens.push({ text: "\n", width: -1, scopes: [] });
       totalWidth = 0;
     }
-    output += text;
-    totalWidth += width;
+    tokens.push(token);
+    totalWidth += token.width;
   }
-  return output;
+  return serializeTokens(
+    tokens,
+    useColors,
+    ambient == null ? resetSuffix : "",
+    ambient,
+  );
 }
+
+messageRenderers.set(
+  formatMessage,
+  (msg, options, ambient) => renderMessage(msg, options, {}, ambient),
+);
