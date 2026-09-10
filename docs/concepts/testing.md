@@ -374,7 +374,8 @@ try {
 Invalid factory options throw `TypeError` or `RangeError`; invalid invocation
 options reject the promise.  If cleanup also fails, `reason` becomes
 `"cleanup"` and an `AggregateError` cause preserves the original failure and
-cleanup errors.
+cleanup errors, in that order.  Cleanup errors identify the failed stage and
+preserve underlying process or pipe errors as their own `cause`.
 
 `cleanup: "child"` is the default and terminates only the direct child on
 failure.  Choose `cleanup: "tree"` when the CLI starts other processes that
@@ -382,8 +383,9 @@ should also be terminated on failure.  On POSIX systems this creates a process
 group, sends `SIGTERM`, waits up to one second, and then sends `SIGKILL` if
 needed, allowing another second for final cleanup.  Windows terminates the
 child forcibly; tree cleanup uses the system `taskkill.exe /T /F` with a
-combined two-second bound for the tool and subsequent cleanup.  Cleanup time
-is additional to the invocation timeout.
+combined two-second bound for the tool and subsequent cleanup.  The tool can
+use the remaining cleanup time without a separate one-second cutoff.  Cleanup
+time is additional to the invocation timeout.
 
 Tree cleanup handles ordinary descendants, not processes that escape their
 group or become orphaned.  On Windows, if the direct child has already exited,

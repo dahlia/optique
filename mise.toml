@@ -124,19 +124,19 @@ run = 'pnpm --filter "@optique/testing..." -r build'
 description = "Test the CLI boundary using Deno"
 depends = ["testing:cli:build"]
 dir = "packages/testing"
-run = "deno test --allow-read --allow-write --allow-env --allow-run src/cli.test.ts src/public-api.test.ts"
+run = "deno test --allow-read --allow-write --allow-env --allow-run src/cli.test.ts src/cli-cleanup.test.ts src/public-api.test.ts"
 
 [tasks."testing:cli:node"]
 description = "Test the CLI boundary using Node.js"
 depends = ["testing:cli:build"]
 dir = "packages/testing"
-run = "node --test src/cli.test.ts src/public-api.test.ts"
+run = "node --test src/cli.test.ts src/cli-cleanup.test.ts src/public-api.test.ts"
 
 [tasks."testing:cli:bun"]
 description = "Test the CLI boundary using Bun"
 depends = ["testing:cli:build"]
 dir = "packages/testing"
-run = "bun test src/cli.test.ts src/public-api.test.ts"
+run = "bun test src/cli.test.ts src/cli-cleanup.test.ts src/public-api.test.ts"
 
 [tasks."testing:cli"]
 description = "Test the CLI boundary across all runtimes"
