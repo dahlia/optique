@@ -18,6 +18,7 @@ links:
     and message continuation. Help entries keep explicitly multiline themed
     terms indented, with descriptions attached to their final line. Usage
     separators between program names, terms, and option values respect explicit
-    themed line breaks without adding spaces or blank lines. Empty usage
-    labels do not reserve spacing or indentation.
+    themed line breaks without adding spaces or blank lines. Empty themed
+    usage terms do not leave redundant separators. Usage and error labels
+    reserve spacing only when their final line has content.
     [[#907], [#952]]

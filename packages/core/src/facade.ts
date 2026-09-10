@@ -1463,8 +1463,13 @@ function handleCompletion<M extends Mode, THelp, TError>(
 ): ModeValue<M, THelp | TError> {
   const formatMessage = resolveMessageFormatter({ messageFormatter, theme });
   const errorLabel = () =>
-    renderTerminalTerm({ type: "errorLabel", label: "Error:" }, theme, colors) +
-    " ";
+    spaceAfterLabel(
+      renderTerminalTerm(
+        { type: "errorLabel", label: "Error:" },
+        theme,
+        colors,
+      ),
+    );
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
 
@@ -2333,8 +2338,13 @@ export function runParser<
 
   const formatMessage = resolveMessageFormatter({ messageFormatter, theme });
   const errorLabel = () =>
-    renderTerminalTerm({ type: "errorLabel", label: "Error:" }, theme, colors) +
-    " ";
+    spaceAfterLabel(
+      renderTerminalTerm(
+        { type: "errorLabel", label: "Error:" },
+        theme,
+        colors,
+      ),
+    );
   let usagePrefix: string | undefined;
   const usageLabel = () =>
     usagePrefix ??= spaceAfterLabel(renderTerminalTerm(

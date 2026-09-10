@@ -432,3 +432,25 @@ it("resets occupied width after a styled multiline error label", () => {
     process.stderr.write = originalWrite;
   }
 });
+
+it("does not reserve spacing for an empty final error-label line", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    for (const label of ["", "Error\n"]) {
+      printError(message`x`, {
+        colors: false,
+        initialWidth: 2,
+        theme: { errorLabel: () => ({ type: "text", text: label }) },
+        messageFormatter: (_message, options) => {
+          assert.equal(options?.initialWidth, label === "" ? 2 : 0);
+          return "x";
+        },
+      });
+      assert.equal(writeMock.calls.at(-1)?.arguments[0], `${label}x\n`);
+    }
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});

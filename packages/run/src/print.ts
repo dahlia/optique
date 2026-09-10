@@ -3,6 +3,7 @@ import {
   placeText,
   renderTerminalTerm,
   resolveMessageFormatter,
+  spaceAfterLabel,
 } from "@optique/core/internal/terminal";
 import type {
   Message,
@@ -163,11 +164,11 @@ export function printError(
   }
   if (occupied < 0) throw new RangeError("Initial width must be nonnegative.");
   const prefix = placeText(
-    renderTerminalTerm(
+    spaceAfterLabel(renderTerminalTerm(
       { type: "errorLabel", label: "Error:" },
       options.theme,
       useColors,
-    ) + " ",
+    )),
     { line: "", column: occupied },
     maxWidth,
   );

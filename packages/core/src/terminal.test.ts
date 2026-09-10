@@ -1285,3 +1285,91 @@ describe("empty usage label spacing", () => {
     });
   }
 });
+
+it("separates only nonempty themed usage output", () => {
+  for (const colors of [false, true]) {
+    for (const hidden of [[], [0], [1], [2], [0, 1, 2]]) {
+      const names: readonly `--${string}`[] = [
+        "--first",
+        "--second",
+        "--third",
+      ];
+      for (const program of ["app", ""]) {
+        assert.equal(
+          stripAnsi(formatUsage(
+            "app",
+            names.map((name) => ({
+              type: "option" as const,
+              names: [name],
+            })),
+            {
+              colors,
+              theme: {
+                programName: () => ({ type: "text", text: program }),
+                optionName: (term) => ({
+                  type: "style",
+                  style: { bold: true },
+                  children: [{
+                    type: "text",
+                    text: hidden.includes(names.findIndex((name) =>
+                        name === term.optionName
+                      ))
+                      ? ""
+                      : term.optionName,
+                  }],
+                }),
+              },
+            },
+          )),
+          [program, ...names.filter((_, i) => !hidden.includes(i))].filter(
+            Boolean,
+          ).join(" "),
+        );
+      }
+    }
+  }
+});
+
+it("spaces error labels consistently across runner failure paths", async () => {
+  for (const async of [false, true]) {
+    for (const label of ["", "Error\n", "Error:"]) {
+      for (
+        const args of [[], ["--bad"], ["--completion"], [
+          "--completion",
+          "unknown",
+        ]]
+      ) {
+        const output: string[] = [];
+        const widths = new Map<Message, number | undefined>();
+        const options = {
+          help: { command: true as const, onShow: () => "help" },
+          completion: { option: true as const, onShow: () => "completion" },
+          theme: { errorLabel: () => ({ type: "text" as const, text: label }) },
+          messageFormatter: (
+            _message: Message,
+            options?: MessageFormatterOptions,
+          ) => {
+            widths.set(_message, options?.initialWidth);
+            return "CUSTOM";
+          },
+          stderr: (line: string) => output.push(line),
+          stdout: () => {},
+          onError: (_code: number, error: Message) => {
+            assert.equal(widths.get(error), label === "Error:" ? 7 : 0);
+            return "error";
+          },
+        };
+        const parser = option("--name", string());
+        if (async) await runParserAsync(parser, "app", args, options);
+        else runParserSync(parser, "app", args, options);
+        assert.ok(
+          output.some((line) =>
+            line === `${label}${label === "Error:" ? " " : ""}CUSTOM` ||
+            line === `${label}${label === "Error:" ? " " : ""}CUSTOM\n`
+          ),
+          JSON.stringify({ args, async, label, output }),
+        );
+      }
+    }
+  }
+});

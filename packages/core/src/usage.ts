@@ -630,9 +630,12 @@ export function formatUsage(
   // Empty themed leaves do not separate the program from its first term.
   // A hard break on either side already does; preserve explicit consecutive
   // breaks without inserting an extra space or blank line between them.
-  const firstTerm = terms.find((token) => token.text !== "") ?? terms[0];
+  const firstTerm = terms.find((token) => token.text !== "");
   const lastProgram = programTokens.findLast((token) => token.text !== "");
-  if (lastProgram?.width === -1 || firstTerm.width === -1) {
+  if (
+    lastProgram == null || firstTerm == null ||
+    lastProgram.width === -1 || firstTerm.width === -1
+  ) {
     return serializeTokens(programTokens, options.colors) +
       wrapUsageTokens(terms, options, width);
   }
@@ -990,7 +993,7 @@ function wrapUsageTokens(
   );
 }
 
-/** Removes only layout-owned spaces adjacent to explicit hard breaks. */
+/** Keeps one layout-owned space between nonempty outputs on the same line. */
 function* normalizeUsageSeparators(
   input: Iterable<TerminalToken>,
 ): Generator<TerminalToken> {
@@ -1001,9 +1004,15 @@ function* normalizeUsageSeparators(
       pending.push(token);
       continue;
     }
+    let separated = false;
     for (const item of pending) {
-      if (!item.separator || previous?.width !== -1 && token.width !== -1) {
+      if (!item.separator) yield item;
+      else if (
+        !separated && previous != null &&
+        previous.width !== -1 && token.width !== -1
+      ) {
         yield item;
+        separated = true;
       }
     }
     pending = [];
@@ -1011,7 +1020,7 @@ function* normalizeUsageSeparators(
     previous = token;
   }
   for (const item of pending) {
-    if (!item.separator || previous?.width !== -1) yield item;
+    if (!item.separator) yield item;
   }
 }
 
