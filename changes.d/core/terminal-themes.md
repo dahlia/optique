@@ -20,5 +20,6 @@ links:
     separators between program names, terms, and option values respect explicit
     themed line breaks without adding spaces or blank lines. Empty themed
     usage terms do not leave redundant separators. Usage and error labels
-    reserve spacing only when their final line has content.
+    reserve spacing only when their final line has content. Automatic usage
+    wrapping preserves spaces supplied by custom theme fragments.
     [[#907], [#952]]

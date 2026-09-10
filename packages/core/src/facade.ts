@@ -1,4 +1,4 @@
-import { resolveMessageFormatter } from "./message-renderer.ts";
+import { renderErrorMessage } from "./message-renderer.ts";
 import { renderTerminalTerm } from "./terminal-internal.ts";
 import type { TerminalTheme } from "./terminal.ts";
 import { measureText, spaceAfterLabel } from "./text-layout.ts";
@@ -1461,15 +1461,6 @@ function handleCompletion<M extends Mode, THelp, TError>(
   messageFormatter?: MessageFormatter,
   theme?: TerminalTheme,
 ): ModeValue<M, THelp | TError> {
-  const formatMessage = resolveMessageFormatter({ messageFormatter, theme });
-  const errorLabel = () =>
-    spaceAfterLabel(
-      renderTerminalTerm(
-        { type: "errorLabel", label: "Error:" },
-        theme,
-        colors,
-      ),
-    );
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
 
@@ -1481,16 +1472,14 @@ function handleCompletion<M extends Mode, THelp, TError>(
   // Check if shell name is empty
   if (!shellName) {
     const error = message`Missing shell name for completion.`;
-    const prefix = errorLabel();
     stderr(
-      `${prefix}${
-        formatMessage(error, {
-          colors,
-          quotes: !colors,
-          maxWidth,
-          initialWidth: measureText(prefix).lastLineWidth,
-        })
-      }\n`,
+      renderErrorMessage(error, {
+        messageFormatter,
+        theme,
+        colors,
+        quotes: !colors,
+        maxWidth,
+      }) + "\n",
     );
 
     // Show help for completion command if parser is available
@@ -1538,17 +1527,13 @@ function handleCompletion<M extends Mode, THelp, TError>(
     }
     const error =
       message`Unsupported shell ${shellName}. Available shells: ${available}.`;
-    const prefix = errorLabel();
-    stderr(
-      `${prefix}${
-        formatMessage(error, {
-          colors,
-          quotes: !colors,
-          maxWidth,
-          initialWidth: measureText(prefix).lastLineWidth,
-        })
-      }`,
-    );
+    stderr(renderErrorMessage(error, {
+      messageFormatter,
+      theme,
+      colors,
+      quotes: !colors,
+      maxWidth,
+    }));
     return dispatchByMode(
       parser.mode,
       () => {
@@ -2336,15 +2321,6 @@ export function runParser<
     footer,
   } = options;
 
-  const formatMessage = resolveMessageFormatter({ messageFormatter, theme });
-  const errorLabel = () =>
-    spaceAfterLabel(
-      renderTerminalTerm(
-        { type: "errorLabel", label: "Error:" },
-        theme,
-        colors,
-      ),
-    );
   let usagePrefix: string | undefined;
   const usageLabel = () =>
     usagePrefix ??= spaceAfterLabel(renderTerminalTerm(
@@ -2730,14 +2706,13 @@ export function runParser<
               )
             }`,
           );
-          const prefix = errorLabel();
-          const errorMessage = formatMessage(validationError, {
-            initialWidth: measureText(prefix).lastLineWidth,
-            maxWidth,
+          stderr(renderErrorMessage(validationError, {
+            messageFormatter,
+            theme,
             colors,
             quotes: !colors,
-          });
-          stderr(`${prefix}${errorMessage}`);
+            maxWidth,
+          }));
           return onError(1, validationError);
         };
 
@@ -2962,14 +2937,13 @@ export function runParser<
             );
           }
           // classified.error is now typed as Message
-          const prefix = errorLabel();
-          const errorMessage = formatMessage(classified.error, {
-            initialWidth: measureText(prefix).lastLineWidth,
-            maxWidth,
+          stderr(renderErrorMessage(classified.error, {
+            messageFormatter,
+            theme,
             colors,
             quotes: !colors,
-          });
-          stderr(`${prefix}${errorMessage}`);
+            maxWidth,
+          }));
           return onError(1, classified.error);
         };
 

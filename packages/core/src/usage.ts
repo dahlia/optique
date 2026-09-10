@@ -6,7 +6,7 @@ import type {
 } from "./terminal.ts";
 import {
   cacheTerminalTheme,
-  formatTerminalTerm,
+  formatTerminalLeaf,
   fragmentTokens,
   serializeTokens,
   type TerminalToken,
@@ -615,36 +615,14 @@ export function formatUsage(
     }
   }
 
-  const programTokens = layoutUsageTokens(
-    fragmentTokens(
-      formatTerminalTerm({ type: "programName", programName }, options.theme),
-    ),
+  return wrapUsageTokens(
+    (function* () {
+      yield* usageLeafTokens({ type: "programName", programName }, options);
+      yield { ...usageSpace, programBoundary: true };
+      yield* formatUsageTerms(usage, options);
+    })(),
     options,
   );
-  const terms = [...normalizeUsageSeparators(formatUsageTerms(usage, options))];
-  if (terms.length === 0) return serializeTokens(programTokens, options.colors);
-  const width = programTokens.reduce(
-    (n, token) => token.width === -1 ? 0 : n + token.width,
-    0,
-  );
-  // Empty themed leaves do not separate the program from its first term.
-  // A hard break on either side already does; preserve explicit consecutive
-  // breaks without inserting an extra space or blank line between them.
-  const firstTerm = terms.find((token) => token.text !== "");
-  const lastProgram = programTokens.findLast((token) => token.text !== "");
-  if (
-    lastProgram == null || firstTerm == null ||
-    lastProgram.width === -1 || firstTerm.width === -1
-  ) {
-    return serializeTokens(programTokens, options.colors) +
-      wrapUsageTokens(terms, options, width);
-  }
-  const separator: TerminalToken =
-    options.maxWidth != null && width + 1 + firstTerm.width > options.maxWidth
-      ? { text: "\n", width: -1, scopes: [] }
-      : { text: " ", width: 1, scopes: [] };
-  return serializeTokens([...programTokens, separator], options.colors) +
-    wrapUsageTokens(terms, options, separator.width === -1 ? 0 : width + 1);
 }
 
 /**
@@ -920,6 +898,29 @@ function filterUsageForDisplay(
   return terms;
 }
 
+const usageSpace: TerminalToken = {
+  text: " ",
+  width: 1,
+  scopes: [],
+  separator: true,
+};
+
+function* usageLeafTokens(
+  term: TerminalTerm,
+  options: UsageFormatOptions,
+  usage?: TerminalFormatContext["usage"],
+): Generator<TerminalToken> {
+  const { fragment, defaultOrigin } = formatTerminalLeaf(
+    term,
+    options.theme,
+    false,
+    usage,
+  );
+  for (const token of fragmentTokens(fragment)) {
+    yield { ...token, legacyWhitespace: defaultOrigin };
+  }
+}
+
 function* formatUsageTerms(
   terms: readonly UsageTerm[],
   options: UsageFormatOptions,
@@ -927,7 +928,7 @@ function* formatUsageTerms(
   let i = 0;
   for (const t of terms) {
     if (i > 0) {
-      yield { text: " ", width: 1, scopes: [], separator: true };
+      yield usageSpace;
     }
     yield* formatUsageTermInternal(t, options);
     i++;
@@ -985,10 +986,9 @@ export function formatUsageTerm(
 function wrapUsageTokens(
   input: Iterable<TerminalToken>,
   options: UsageFormatOptions,
-  initialWidth = 0,
 ): string {
   return serializeTokens(
-    layoutUsageTokens(input, options, initialWidth),
+    layoutUsageTokens(input, options),
     options.colors,
   );
 }
@@ -1027,11 +1027,21 @@ function* normalizeUsageSeparators(
 function layoutUsageTokens(
   input: Iterable<TerminalToken>,
   options: UsageFormatOptions,
-  initialWidth = 0,
 ): TerminalToken[] {
-  let lineWidth = initialWidth;
+  let lineWidth = 0;
   const output: TerminalToken[] = [];
-  for (const token of normalizeUsageSeparators(input)) {
+  const tokens = [...normalizeUsageSeparators(input)];
+  for (const [index, token] of tokens.entries()) {
+    if (token.programBoundary && options.maxWidth != null) {
+      const next = tokens.find((item, i) => i > index && item.text !== "");
+      if (
+        next != null && lineWidth + token.width + next.width > options.maxWidth
+      ) {
+        output.push({ text: "\n", width: -1, scopes: [] });
+        lineWidth = 0;
+        continue;
+      }
+    }
     if (token.width === -1) {
       output.push(token);
       lineWidth = 0;
@@ -1041,13 +1051,17 @@ function layoutUsageTokens(
       options.maxWidth != null && lineWidth > 0 && token.width > 0 &&
       lineWidth + token.width > options.maxWidth
     ) {
-      const last = output.at(-1);
-      // A closing style/link is the last serialization event for a styled leaf.
+      let lastIndex = output.length - 1;
+      while (lastIndex >= 0 && output[lastIndex].text === "") lastIndex--;
+      const last = output[lastIndex];
+      // Only generated separators are generally disposable. Default leaves
+      // retain the historical one-space trim, including its color exception.
       if (
         last?.text.endsWith(" ") &&
-        (!options.colors || last.scopes.length === 0)
+        (last.separator || last.legacyWhitespace &&
+            (!options.colors || last.scopes.length === 0))
       ) {
-        output[output.length - 1] = {
+        output[lastIndex] = {
           ...last,
           text: last.text.slice(0, -1),
           width: last.width - 1,
@@ -1055,7 +1069,9 @@ function layoutUsageTokens(
       }
       output.push({ text: "\n", width: -1, scopes: [] });
       lineWidth = 0;
-      if (token.text === " ") continue;
+      if (token.separator || token.legacyWhitespace && token.text === " ") {
+        continue;
+      }
     }
     output.push(token);
     lineWidth += token.width;
@@ -1068,7 +1084,7 @@ function* formatUsageTermInternal(
   options: UsageTermFormatOptions,
 ): Generator<TerminalToken> {
   function leaf(t: TerminalTerm, usage?: TerminalFormatContext["usage"]) {
-    return fragmentTokens(formatTerminalTerm(t, options.theme, false, usage));
+    return usageLeafTokens(t, options, usage);
   }
   function punctuation(
     punctuation: string,
@@ -1076,12 +1092,7 @@ function* formatUsageTermInternal(
   ) {
     return leaf({ type: "syntaxPunctuation", punctuation, kind });
   }
-  const space: TerminalToken = {
-    text: " ",
-    width: 1,
-    scopes: [],
-    separator: true,
-  };
+  const space = usageSpace;
   if (term.type === "argument") {
     yield* leaf({ type: "metavar", metavar: term.metavar }, "argument");
   } else if (term.type === "option") {

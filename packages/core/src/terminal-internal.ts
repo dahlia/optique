@@ -20,6 +20,10 @@ export interface TerminalToken {
   readonly scopes: readonly Scope[];
   /** Layout-owned space, removable beside an explicit hard break. */
   readonly separator?: boolean;
+  /** The historical program separator wraps before its following atom. */
+  readonly programBoundary?: boolean;
+  /** Enables only the legacy default formatter whitespace behavior. */
+  readonly legacyWhitespace?: boolean;
 }
 export function terminalText(text: string): TerminalFragment {
   return { type: "text", text };
@@ -42,17 +46,43 @@ function valuesFormatter(theme: TerminalTheme) {
     children: [defaultTerminalTheme.values(term, context)],
   });
 }
+/** Default callback identity survives any number of per-pass caches. */
+const defaultFormatters = new WeakSet<object>(
+  Object.values(defaultTerminalTheme).filter((value) =>
+    typeof value === "function"
+  ),
+);
+
 export function formatTerminalTerm(
   term: TerminalTerm,
   theme: TerminalTheme = {},
   quotes = false,
   usage?: TerminalFormatContext["usage"],
 ): TerminalFragment {
+  return formatTerminalLeaf(term, theme, quotes, usage).fragment;
+}
+
+/**
+ * Renders a semantic leaf and records the selected callback's provenance.
+ * @param term The semantic leaf to render.
+ * @param theme The optional role overrides.
+ * @param quotes Whether values should use their quoted representation.
+ * @param usage The leaf's position within a usage expression.
+ * @returns The fragment and whether its callback has default origin.
+ * @throws {TypeError} If the term is invalid or is a message-level hard break.
+ * @internal
+ */
+export function formatTerminalLeaf(
+  term: TerminalTerm,
+  theme: TerminalTheme = {},
+  quotes = false,
+  usage?: TerminalFormatContext["usage"],
+): { readonly fragment: TerminalFragment; readonly defaultOrigin: boolean } {
   const quote = (s: string) => quotes ? `\`${s}\`` : s;
   let text: string;
   switch (term.type) {
     case "text":
-      return terminalText(term.text);
+      return { fragment: terminalText(term.text), defaultOrigin: true };
     case "lineBreak":
       throw new TypeError("Hard breaks must be rendered at the message level.");
     case "optionName":
@@ -98,33 +128,54 @@ export function formatTerminalTerm(
     usage,
     format: (child) => formatTerminalTerm(child, theme, quotes, usage),
   };
+  function render<T extends TerminalTerm>(
+    formatter: (term: T, context: TerminalFormatContext) => TerminalFragment,
+    value: T,
+  ) {
+    return {
+      fragment: formatter(value, ctx),
+      defaultOrigin: defaultFormatters.has(formatter),
+    };
+  }
   // Explicit dispatch preserves the correlation between a role and its callback.
   switch (term.type) {
     case "optionName":
-      return (theme.optionName ?? defaultTerminalTheme.optionName)(term, ctx);
+      return render(theme.optionName ?? defaultTerminalTheme.optionName, term);
     case "optionNames":
-      return (theme.optionNames ?? defaultTerminalTheme.optionNames)(term, ctx);
+      return render(
+        theme.optionNames ?? defaultTerminalTheme.optionNames,
+        term,
+      );
     case "metavar":
-      return (theme.metavar ?? defaultTerminalTheme.metavar)(term, ctx);
+      return render(theme.metavar ?? defaultTerminalTheme.metavar, term);
     case "value":
-      return (theme.value ?? defaultTerminalTheme.value)(term, ctx);
+      return render(theme.value ?? defaultTerminalTheme.value, term);
     case "values":
-      return valuesFormatter(theme)(term, ctx);
+      return render(valuesFormatter(theme), term);
     case "envVar":
-      return (theme.envVar ?? defaultTerminalTheme.envVar)(term, ctx);
+      return render(theme.envVar ?? defaultTerminalTheme.envVar, term);
     case "commandLine":
-      return (theme.commandLine ?? defaultTerminalTheme.commandLine)(term, ctx);
+      return render(
+        theme.commandLine ?? defaultTerminalTheme.commandLine,
+        term,
+      );
     case "url":
-      return (theme.url ?? defaultTerminalTheme.url)(term, ctx);
+      return render(theme.url ?? defaultTerminalTheme.url, term);
     case "programName":
-      return (theme.programName ?? defaultTerminalTheme.programName)(term, ctx);
+      return render(
+        theme.programName ?? defaultTerminalTheme.programName,
+        term,
+      );
     case "label":
-      return (theme.label ?? defaultTerminalTheme.label)(term, ctx);
+      return render(theme.label ?? defaultTerminalTheme.label, term);
     case "syntaxPunctuation":
-      return (theme.syntaxPunctuation ??
-        defaultTerminalTheme.syntaxPunctuation)(term, ctx);
+      return render(
+        theme.syntaxPunctuation ??
+          defaultTerminalTheme.syntaxPunctuation,
+        term,
+      );
     case "errorLabel":
-      return (theme.errorLabel ?? defaultTerminalTheme.errorLabel)(term, ctx);
+      return render(theme.errorLabel ?? defaultTerminalTheme.errorLabel, term);
   }
 }
 const colorNames = [
@@ -295,11 +346,12 @@ export function renderTerminalTerm(
   colors?: boolean,
   usage?: TerminalFormatContext["usage"],
   ambient?: TerminalStyle,
+  resetSuffix = "",
 ): string {
   return serializeTokens(
     fragmentTokens(formatTerminalTerm(term, theme, false, usage)),
     colors,
-    "",
+    resetSuffix,
     ambient,
   );
 }
@@ -310,7 +362,10 @@ export function cacheTerminalTheme(theme: TerminalTheme = {}): TerminalTheme {
     formatter: (term: T, context: TerminalFormatContext) => TerminalFragment,
   ) {
     const fragments = new Map<string, TerminalFragment>();
-    return (term: T, context: TerminalFormatContext): TerminalFragment => {
+    const cached = (
+      term: T,
+      context: TerminalFormatContext,
+    ): TerminalFragment => {
       const key = JSON.stringify([term, context.quotes, context.usage]);
       let fragment = fragments.get(key);
       if (fragment == null) {
@@ -319,6 +374,8 @@ export function cacheTerminalTheme(theme: TerminalTheme = {}): TerminalTheme {
       }
       return fragment;
     };
+    if (defaultFormatters.has(formatter)) defaultFormatters.add(cached);
+    return cached;
   }
   return {
     optionName: cache(theme.optionName ?? defaultTerminalTheme.optionName),

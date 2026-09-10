@@ -1373,3 +1373,96 @@ it("spaces error labels consistently across runner failure paths", async () => {
     }
   }
 });
+
+it("preserves custom usage whitespace through automatic wrapping", () => {
+  for (const colors of [false, true]) {
+    for (const chunks of [["A ", "B"], ["A", " ", "B"], ["A", " ", "", "B"]]) {
+      const theme: TerminalTheme = {
+        optionName: () => ({
+          type: "style",
+          style: { bold: true },
+          children: [{
+            type: "link",
+            href: "https://example.com/",
+            children: chunks.map((text) => ({ type: "text", text })),
+          }],
+        }),
+      };
+      const output = formatUsageTerm({ type: "option", names: ["-x"] }, {
+        theme,
+        colors,
+        maxWidth: 1,
+      });
+      assert.equal(stripAnsi(output).replaceAll("\n", ""), chunks.join(""));
+    }
+    assert.equal(
+      stripAnsi(formatUsage("p", [
+        { type: "option", names: ["-a"] },
+        { type: "option", names: ["-b"] },
+      ], {
+        colors,
+        maxWidth: 3,
+        theme: {
+          optionName: (term) => ({
+            type: "concat",
+            children: [
+              { type: "text", text: "" },
+              { type: "text", text: term.optionName === "-a" ? "A" : "BB" },
+            ],
+          }),
+        },
+      })),
+      "p A\nBB",
+    );
+  }
+});
+
+it("uses the same usage boundaries for program and command fragments", () => {
+  for (const colors of [false, true]) {
+    for (const maxWidth of [undefined, 1, 2, 4, 8]) {
+      for (const program of ["", "A", "A\n", "\nA", "A ", " "]) {
+        for (const term of ["", "B", "\nB", "B\n", " "]) {
+          const decorate = (text: string): TerminalFragment => ({
+            type: "style",
+            style: { bold: true },
+            children: [{
+              type: "link",
+              href: "https://example.com/",
+              children: [{ type: "text", text: "" }, { type: "text", text }],
+            }],
+          });
+          const theme: TerminalTheme = {
+            programName: () => decorate(program),
+            optionName: (t) =>
+              decorate(t.optionName === "cmd" ? program : term),
+          };
+          const options = { theme, colors, maxWidth };
+          assert.equal(
+            stripAnsi(
+              formatUsage("app", [{ type: "option", names: ["-x"] }], options),
+            ),
+            stripAnsi(formatUsageTerm({
+              type: "sequence",
+              terms: [
+                { type: "command", name: "cmd" },
+                { type: "option", names: ["-x"] },
+              ],
+            }, options)),
+            JSON.stringify({ program, term, colors, maxWidth }),
+          );
+        }
+      }
+    }
+  }
+});
+
+it("preserves legacy program-boundary whitespace when the first term wraps", () => {
+  assert.equal(
+    formatUsage("p", [{ type: "literal", value: " " }], { maxWidth: 2 }),
+    "p\n ",
+  );
+  assert.equal(
+    formatUsage("p ", [{ type: "option", names: ["-x"] }], { maxWidth: 2 }),
+    "p \n-x",
+  );
+});

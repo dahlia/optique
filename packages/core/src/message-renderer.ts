@@ -1,3 +1,5 @@
+import { renderTerminalTerm } from "./terminal-internal.ts";
+import { placeText, spaceAfterLabel } from "./text-layout.ts";
 import {
   createMessageFormatter,
   formatMessage,
@@ -37,4 +39,49 @@ export function resolveMessageFormatter(
       colors: typeof options.colors === "object" ? true : options.colors,
     });
   };
+}
+
+/**
+ * Assembles a themed error prefix and a message at one layout boundary.
+ * Callers own streams, trailing newlines, and the default quoting policy.
+ * Opaque formatter output is appended unchanged, including empty output.
+ * @param message The original, unprefixed error message.
+ * @param options Theme, formatter, and physical-line layout options.
+ * @returns The prefixed message without an added trailing newline.
+ * @throws {TypeError} If initialWidth is not a finite integer.
+ * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
+ * @internal
+ */
+export function renderErrorMessage(
+  message: Message,
+  options: MessageFormatOptions & {
+    readonly theme?: TerminalTheme;
+    readonly messageFormatter?: MessageFormatter;
+  } = {},
+): string {
+  const occupied = options.initialWidth ?? 0;
+  if (!Number.isFinite(occupied) || !Number.isInteger(occupied)) {
+    throw new TypeError("Initial width must be a finite integer.");
+  }
+  if (occupied < 0) throw new RangeError("Initial width must be nonnegative.");
+  const colors = options.colors;
+  const prefix = placeText(
+    spaceAfterLabel(renderTerminalTerm(
+      { type: "errorLabel", label: "Error:" },
+      options.theme,
+      typeof colors === "object" ? true : colors,
+      undefined,
+      undefined,
+      typeof colors === "object" ? colors.resetSuffix : undefined,
+    )),
+    { line: "", column: occupied },
+    options.maxWidth,
+  );
+  const formatted = resolveMessageFormatter(options)(message, {
+    colors,
+    quotes: options.quotes,
+    maxWidth: options.maxWidth,
+    initialWidth: prefix.cursor.column,
+  });
+  return prefix.text + formatted;
 }

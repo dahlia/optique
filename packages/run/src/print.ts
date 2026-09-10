@@ -1,9 +1,7 @@
 import type { TerminalTheme } from "@optique/core/terminal";
 import {
-  placeText,
-  renderTerminalTerm,
+  renderErrorMessage,
   resolveMessageFormatter,
-  spaceAfterLabel,
 } from "@optique/core/internal/terminal";
 import type {
   Message,
@@ -156,30 +154,13 @@ export function printError(
   const quotes = options.quotes ?? !output.isTTY;
 
   const colors = options.colors ?? output.isTTY;
-  const useColors = typeof colors === "object" ? true : colors;
-  const maxWidth = options.maxWidth ?? output.columns;
-  const occupied = options.initialWidth ?? 0;
-  if (!Number.isFinite(occupied) || !Number.isInteger(occupied)) {
-    throw new TypeError("Initial width must be a finite integer.");
-  }
-  if (occupied < 0) throw new RangeError("Initial width must be nonnegative.");
-  const prefix = placeText(
-    spaceAfterLabel(renderTerminalTerm(
-      { type: "errorLabel", label: "Error:" },
-      options.theme,
-      useColors,
-    )),
-    { line: "", column: occupied },
-    maxWidth,
-  );
-  const formatMessage = resolveMessageFormatter(options);
-  const formatted = formatMessage(message, {
+  const formatted = renderErrorMessage(message, {
+    ...options,
     colors,
     quotes,
-    maxWidth,
-    initialWidth: prefix.cursor.column,
+    maxWidth: options.maxWidth ?? output.columns,
   });
-  output.write(prefix.text + formatted + "\n");
+  output.write(formatted + "\n");
 
   if (options.exitCode != null) {
     process.exit(options.exitCode);

@@ -454,3 +454,28 @@ it("does not reserve spacing for an empty final error-label line", () => {
     process.stderr.write = originalWrite;
   }
 });
+
+it("restores the caller's style after a themed error label", () => {
+  const originalWrite = process.stderr.write;
+  const writeMock = createMockFn();
+  process.stderr.write = writeMock.fn as typeof process.stderr.write;
+  try {
+    printError(message`x`, {
+      colors: { resetSuffix: "\x1b[4m" },
+      theme: {
+        errorLabel: () => ({
+          type: "style",
+          style: { bold: true },
+          children: [{ type: "text", text: "Oops:" }],
+        }),
+      },
+      messageFormatter: () => "x",
+    });
+    assert.equal(
+      writeMock.calls[0].arguments[0],
+      "\x1b[1mOops:\x1b[0m\x1b[4m x\n",
+    );
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+});

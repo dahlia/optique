@@ -36,7 +36,8 @@ To be released.
     separators between program names, terms, and option values respect explicit
     themed line breaks without adding spaces or blank lines. Empty themed
     usage terms do not leave redundant separators. Usage and error labels
-    reserve spacing only when their final line has content.
+    reserve spacing only when their final line has content. Automatic usage
+    wrapping preserves spaces supplied by custom theme fragments.
     [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
@@ -123,7 +124,9 @@ To be released.
     sizing measures the final help page after built-in help, version, and shell
     completion entries have been added.  [[#904], [#911]]
  -  Added `theme` and `messageFormatter` options to runners and printers,
-    including themed error labels in `printError()`. [[#907], [#952]]
+    including themed error labels in `printError()`. Themed labels honor
+    `colors.resetSuffix` so caller styling resumes after the label.
+    [[#907], [#952]]
  -  Added `usageLine` to `RunOptions`.  `run()`, `runSync()`, and `runAsync()`
     can now replace the root synopsis in full help without changing parsing or
     subcommand help.  [[#879]]
