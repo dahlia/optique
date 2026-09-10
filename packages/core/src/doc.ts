@@ -18,6 +18,7 @@ import {
   measureAnnotation,
   measureText,
   placeText,
+  spaceAfterLabel,
 } from "./text-layout.ts";
 import {
   cloneMessage,
@@ -646,7 +647,7 @@ export function formatDocPage(
     return rendered;
   };
   const usageLabel = page.usage != null && options.showUsage !== false
-    ? label("Usage:", "usage") + " "
+    ? spaceAfterLabel(label("Usage:", "usage"))
     : "";
   const usageLabelWidth = measureText(usageLabel).lastLineWidth;
   const defaultStyle = styleCode(

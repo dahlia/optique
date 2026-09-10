@@ -1,7 +1,7 @@
 import { resolveMessageFormatter } from "./message-renderer.ts";
 import { renderTerminalTerm } from "./terminal-internal.ts";
 import type { TerminalTheme } from "./terminal.ts";
-import { measureText } from "./text-layout.ts";
+import { measureText, spaceAfterLabel } from "./text-layout.ts";
 import {
   bash,
   fish,
@@ -2337,11 +2337,11 @@ export function runParser<
     " ";
   let usagePrefix: string | undefined;
   const usageLabel = () =>
-    usagePrefix ??= renderTerminalTerm(
+    usagePrefix ??= spaceAfterLabel(renderTerminalTerm(
       { type: "label", label: "Usage:", kind: "usageSummary" },
       theme,
       colors,
-    ) + " ";
+    ));
   const usageLabelWidth = () => measureText(usageLabel()).lastLineWidth;
 
   // Normalize sub-configs: true -> {}, undefined stays undefined

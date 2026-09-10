@@ -621,7 +621,7 @@ export function formatUsage(
     ),
     options,
   );
-  const terms = [...formatUsageTerms(usage, options)];
+  const terms = [...normalizeUsageSeparators(formatUsageTerms(usage, options))];
   if (terms.length === 0) return serializeTokens(programTokens, options.colors);
   const width = programTokens.reduce(
     (n, token) => token.width === -1 ? 0 : n + token.width,
@@ -924,7 +924,7 @@ function* formatUsageTerms(
   let i = 0;
   for (const t of terms) {
     if (i > 0) {
-      yield { text: " ", width: 1, scopes: [] };
+      yield { text: " ", width: 1, scopes: [], separator: true };
     }
     yield* formatUsageTermInternal(t, options);
     i++;
@@ -990,6 +990,31 @@ function wrapUsageTokens(
   );
 }
 
+/** Removes only layout-owned spaces adjacent to explicit hard breaks. */
+function* normalizeUsageSeparators(
+  input: Iterable<TerminalToken>,
+): Generator<TerminalToken> {
+  let previous: TerminalToken | undefined;
+  let pending: TerminalToken[] = [];
+  for (const token of input) {
+    if (token.separator || token.text === "") {
+      pending.push(token);
+      continue;
+    }
+    for (const item of pending) {
+      if (!item.separator || previous?.width !== -1 && token.width !== -1) {
+        yield item;
+      }
+    }
+    pending = [];
+    yield token;
+    previous = token;
+  }
+  for (const item of pending) {
+    if (!item.separator || previous?.width !== -1) yield item;
+  }
+}
+
 function layoutUsageTokens(
   input: Iterable<TerminalToken>,
   options: UsageFormatOptions,
@@ -997,7 +1022,7 @@ function layoutUsageTokens(
 ): TerminalToken[] {
   let lineWidth = initialWidth;
   const output: TerminalToken[] = [];
-  for (const token of input) {
+  for (const token of normalizeUsageSeparators(input)) {
     if (token.width === -1) {
       output.push(token);
       lineWidth = 0;
@@ -1042,7 +1067,12 @@ function* formatUsageTermInternal(
   ) {
     return leaf({ type: "syntaxPunctuation", punctuation, kind });
   }
-  const space: TerminalToken = { text: " ", width: 1, scopes: [] };
+  const space: TerminalToken = {
+    text: " ",
+    width: 1,
+    scopes: [],
+    separator: true,
+  };
   if (term.type === "argument") {
     yield* leaf({ type: "metavar", metavar: term.metavar }, "argument");
   } else if (term.type === "option") {

@@ -1186,3 +1186,102 @@ describe("usage boundary hard breaks", () => {
     });
   }
 });
+
+describe("usage spacing around themed breaks", () => {
+  it("should omit automatic spaces next to hard breaks across term structures", () => {
+    for (const colors of [false, true]) {
+      const theme: TerminalTheme = {
+        optionName: (term) => ({
+          type: "style",
+          style: { foreground: "red" },
+          children: [
+            { type: "text", text: "" },
+            { type: "text", text: term.optionName === "-a" ? "A\n" : "-b" },
+            { type: "text", text: "" },
+          ],
+        }),
+        metavar: () => ({ type: "text", text: "\nX" }),
+      };
+      assert.equal(
+        stripAnsi(formatUsage("p", [
+          { type: "option", names: ["-a"] },
+          { type: "option", names: ["-b"] },
+        ], { theme, colors, maxWidth: 2 })),
+        "p\nA\n-b",
+      );
+      assert.equal(
+        stripAnsi(formatUsageTerm({
+          type: "option",
+          names: ["-a"],
+          metavar: "X",
+        }, { theme, colors })),
+        "A\n\nX",
+      );
+      assert.equal(
+        stripAnsi(formatUsageTerm({
+          type: "multiple",
+          min: 2,
+          terms: [{ type: "option", names: ["-a"] }],
+        }, { theme, colors })),
+        "A\nA\n...",
+      );
+    }
+  });
+  it("should keep a theme's own spaces beside its hard breaks", () => {
+    assert.equal(
+      formatUsage("p", [
+        { type: "option", names: ["-a"] },
+        { type: "option", names: ["-b"] },
+      ], {
+        theme: {
+          optionName: (term) => ({
+            type: "text",
+            text: term.optionName === "-a" ? "A \n" : " B",
+          }),
+        },
+      }),
+      "p A \n B",
+    );
+  });
+});
+
+describe("empty usage label spacing", () => {
+  for (const label of ["", "\n", "L\n"]) {
+    it(`should avoid a separator on an empty final label line: ${JSON.stringify(label)}`, () => {
+      for (const colors of [false, true]) {
+        const output = formatDocPage("app", { usage: [], sections: [] }, {
+          maxWidth: 3,
+          colors,
+          theme: {
+            label: () => ({
+              type: "style",
+              style: { bold: true },
+              children: [{ type: "text", text: label }],
+            }),
+          },
+        });
+        assert.equal(stripAnsi(output), `${label}app\n`);
+      }
+    });
+  }
+  for (const async of [false, true]) {
+    it(`should omit empty summary-label spacing in ${async ? "async" : "sync"} runners`, async () => {
+      for (const label of ["", "Header\n"]) {
+        for (const args of [[], ["help", "unknown"]]) {
+          const output: string[] = [];
+          const options = {
+            maxWidth: 20,
+            help: { command: true as const, onShow: () => "help" },
+            theme: { label: () => ({ type: "text" as const, text: label }) },
+            stderr: (line: string) => output.push(line),
+            onError: () => "error",
+          };
+          const parser = option("--name", string());
+          if (async) await runParserAsync(parser, "app", args, options);
+          else runParserSync(parser, "app", args, options);
+          assert.ok(output[0].startsWith(`${label}app `), output[0]);
+        }
+      }
+    });
+  }
+});

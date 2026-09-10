@@ -18,6 +18,8 @@ export interface TerminalToken {
   readonly text: string;
   readonly width: number;
   readonly scopes: readonly Scope[];
+  /** Layout-owned space, removable beside an explicit hard break. */
+  readonly separator?: boolean;
 }
 export function terminalText(text: string): TerminalFragment {
   return { type: "text", text };

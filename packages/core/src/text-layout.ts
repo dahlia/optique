@@ -110,3 +110,13 @@ export function measureAnnotation(
     ),
   };
 }
+
+/**
+ * Adds a separating space only when a label occupies its final physical line.
+ * @param label The rendered label, including any styles and hard breaks.
+ * @returns The label with spacing for the text that follows it.
+ * @internal
+ */
+export function spaceAfterLabel(label: string): string {
+  return measureText(label).lastLineWidth > 0 ? label + " " : label;
+}
