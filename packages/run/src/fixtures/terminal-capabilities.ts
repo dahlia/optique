@@ -12,8 +12,16 @@ interface Scenario {
   readonly tty?: boolean;
   readonly colors?: boolean;
   readonly width?: string;
-  readonly request?: "help" | "error" | "success";
+  readonly request?:
+    | "help"
+    | "error"
+    | "error-only"
+    | "error-help"
+    | "unsupported-shell"
+    | "completion-error"
+    | "success";
   readonly distinguishColors?: boolean;
+  readonly formatterThrows?: boolean;
   readonly expectedError?: "RangeError" | "TypeError";
 }
 
@@ -39,6 +47,7 @@ const formatting: {
   readonly maxWidth: number | null;
 }[] = [];
 let exitCode: number | undefined;
+let exitCalls = 0;
 let failure: { readonly name: string; readonly message: string } | undefined;
 let value: unknown;
 const exit = new Error("Fixture runner exited.");
@@ -52,11 +61,22 @@ const context: SourceContext = {
 const options: RunOptions = {
   args: scenario.request === "success"
     ? ["--value", "ok"]
-    : scenario.request === "error"
+    : scenario.request === "unsupported-shell"
+    ? ["--completion", "unknown-shell"]
+    : scenario.request === "completion-error"
+    ? ["--completion"]
+    : scenario.request === "error" || scenario.request === "error-help" ||
+        scenario.request === "error-only"
     ? ["--invalid"]
     : ["--help"],
   programName: "test",
   help: "option",
+  completion: "option",
+  aboveError: scenario.request === "error-help"
+    ? "help"
+    : scenario.request === "error-only"
+    ? "none"
+    : "usage",
   brief:
     message`One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty.`,
   colors: scenario.colors,
@@ -65,6 +85,7 @@ const options: RunOptions = {
   stdout: (text) => stdout.push(text),
   stderr: (text) => stderr.push(text),
   onExit(code) {
+    exitCalls++;
     exitCode = code;
     throw exit;
   },
@@ -73,6 +94,9 @@ const options: RunOptions = {
       colors: options?.colors ?? null,
       maxWidth: options?.maxWidth ?? null,
     });
+    if (scenario.formatterThrows) {
+      throw new RangeError("Custom formatter failed.");
+    }
     return scenario.distinguishColors
       ? options?.colors === undefined
         ? "UNSET"
@@ -135,6 +159,9 @@ process.stdout.write(
     stderr: stderr.join("\n"),
     formatting,
     exitCode,
+    exitCalls,
+    stdoutCalls: stdout.length,
+    stderrCalls: stderr.length,
     failure,
     value,
   }) + "\n",

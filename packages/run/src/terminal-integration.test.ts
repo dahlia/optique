@@ -149,6 +149,91 @@ describe("runner terminal detection", () => {
     });
   }
 
+  for (
+    const request of [
+      "help",
+      "error",
+      "error-help",
+      "error-only",
+      "unsupported-shell",
+      "completion-error",
+    ] as const
+  ) {
+    it(`should render ${request} once without wrapping when automatic widths are too narrow`, async () => {
+      const baseline = await invoke({ request, colors: false });
+      if (request === "completion-error") {
+        assert.ok(
+          baseline.stderr.startsWith(
+            "Error: Missing shell name for completion.",
+          ),
+        );
+      }
+      for (
+        const width
+          of request === "error-only" || request === "unsupported-shell"
+            ? ["1"]
+            : ["1", "10"]
+      ) {
+        for (const source of ["stream", "environment"]) {
+          const result = await invoke({
+            request,
+            colors: false,
+            columns: source === "stream" ? width : undefined,
+          }, { COLUMNS: source === "environment" ? width : "60" });
+          assert.equal(result.stdout, baseline.stdout);
+          assert.equal(result.stderr, baseline.stderr);
+          assert.equal(result.exitCode, request === "help" ? 0 : 1);
+          assert.equal(result.exitCalls, 1);
+          assert.equal(result.stdoutCalls, baseline.stdoutCalls);
+          assert.equal(result.stderrCalls, baseline.stderrCalls);
+          assert.deepEqual(result.formatting, baseline.formatting);
+        }
+      }
+    });
+  }
+
+  for (
+    const mode of [
+      "runSync",
+      "runAsync",
+      "async-parser",
+      "run-context",
+      "runSync-context",
+      "program",
+    ]
+  ) {
+    it(`should preserve automatic width provenance through ${mode}`, async () => {
+      const result = await invoke({ mode, colors: false }, { COLUMNS: "1" });
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.exitCalls, 1);
+      assert.ok(result.formatting.every(({ maxWidth }) => maxWidth === null));
+    });
+  }
+
+  it("should preserve explicit narrow-width validation", async () => {
+    const result = await invoke({
+      width: "1",
+      colors: false,
+      expectedError: "RangeError",
+    });
+    assert.equal(result.failure?.name, "RangeError");
+    assert.equal(result.exitCalls, 0);
+  });
+
+  it("should propagate custom formatter errors without retrying", async () => {
+    for (const COLUMNS of ["1", "60"]) {
+      const result = await invoke({
+        colors: false,
+        formatterThrows: true,
+        expectedError: "RangeError",
+      }, { COLUMNS });
+      assert.equal(result.failure?.message, "Custom formatter failed.");
+      assert.equal(result.formatting.length, 1);
+      assert.equal(result.exitCalls, 0);
+      assert.equal(result.stdoutCalls, 0);
+    }
+  });
+
   it("should preserve explicit invalid-width errors", async () => {
     for (const width of ["0", "-1", "1.5", "NaN", "Infinity"]) {
       const expectedError = width === "0" || width === "-1"
@@ -217,8 +302,16 @@ interface Scenario {
   readonly tty?: boolean;
   readonly colors?: boolean;
   readonly width?: string;
-  readonly request?: "help" | "error" | "success";
+  readonly request?:
+    | "help"
+    | "error"
+    | "error-only"
+    | "error-help"
+    | "unsupported-shell"
+    | "completion-error"
+    | "success";
   readonly distinguishColors?: boolean;
+  readonly formatterThrows?: boolean;
   readonly expectedError?: "RangeError" | "TypeError";
 }
 
@@ -231,6 +324,9 @@ interface Result {
     readonly maxWidth: number | null;
   }[];
   readonly exitCode?: number;
+  readonly exitCalls: number;
+  readonly stdoutCalls: number;
+  readonly stderrCalls: number;
   readonly failure?: { readonly name: string; readonly message: string };
   readonly value?: unknown;
 }

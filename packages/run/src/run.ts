@@ -1,3 +1,4 @@
+import { withAutomaticWidth } from "@optique/core/internal/terminal";
 import type { MessageFormatter } from "@optique/core/message";
 import type { TerminalTheme } from "@optique/core/terminal";
 import type { ShellCompletion } from "@optique/core/completion";
@@ -95,7 +96,8 @@ export interface RunOptions {
    * Maximum width for output formatting. Text will be wrapped to fit within
    * this width. If not specified, uses a positive finite integer from the
    * terminal width, then a positive decimal integer from `COLUMNS`. Invalid
-   * or inaccessible detected values are ignored; explicit values retain the
+   * or inaccessible detected values are ignored. Automatic widths too narrow
+   * for the output layout disable wrapping; explicit values retain the
    * formatter's validation.
    *
    * @default Valid `process.stdout.columns`, then `COLUMNS`, or no wrapping
@@ -991,7 +993,13 @@ function buildCoreOptions(
     },
   };
 
-  return { programName, args, coreOptions };
+  return {
+    programName,
+    args,
+    coreOptions: options.maxWidth == null
+      ? withAutomaticWidth(coreOptions)
+      : coreOptions,
+  };
 }
 
 /**

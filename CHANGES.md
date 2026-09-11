@@ -143,6 +143,8 @@ To be released.
 
     Invalid reported terminal widths now fall back to a positive decimal
     `COLUMNS` value, or leave output unwrapped when neither is valid.
+    Automatically detected widths too narrow for the output layout also
+    leave output unwrapped instead of failing.
     Explicit `maxWidth` keeps its existing validation. Deno ignores
     inaccessible environment variables without requesting permission.
     These defaults do not change the printer functions.  [[#903], [#955]]

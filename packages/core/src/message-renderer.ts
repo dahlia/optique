@@ -1,5 +1,6 @@
+import { hasAutomaticWidth, reportAutomaticWidth } from "./terminal-width.ts";
 import { renderTerminalTerm } from "./terminal-internal.ts";
-import { placeText, spaceAfterLabel } from "./text-layout.ts";
+import { measureText, placeText, spaceAfterLabel } from "./text-layout.ts";
 import {
   createMessageFormatter,
   formatMessage,
@@ -65,15 +66,26 @@ export function renderErrorMessage(
   }
   if (occupied < 0) throw new RangeError("Initial width must be nonnegative.");
   const colors = options.colors;
+  const label = spaceAfterLabel(renderTerminalTerm(
+    { type: "errorLabel", label: "Error:" },
+    options.theme,
+    typeof colors === "object" ? true : colors,
+    undefined,
+    undefined,
+    typeof colors === "object" ? colors.resetSuffix : undefined,
+  ));
+  if (hasAutomaticWidth(options) && options.maxWidth != null) {
+    const size = measureText(label);
+    if (
+      options.maxWidth <
+        Math.max(size.maxLineWidth, occupied + size.lastLineWidth + 1)
+    ) {
+      options = { ...options, maxWidth: undefined };
+    }
+  }
+  reportAutomaticWidth(options, options.maxWidth);
   const prefix = placeText(
-    spaceAfterLabel(renderTerminalTerm(
-      { type: "errorLabel", label: "Error:" },
-      options.theme,
-      typeof colors === "object" ? true : colors,
-      undefined,
-      undefined,
-      typeof colors === "object" ? colors.resetSuffix : undefined,
-    )),
+    label,
     { line: "", column: occupied },
     options.maxWidth,
   );

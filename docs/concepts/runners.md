@@ -582,7 +582,9 @@ When `maxWidth` is omitted, the runner uses `process.stdout.columns` if it is a
 positive finite integer. Otherwise, it tries `COLUMNS`, which must contain
 only decimal digits and represent a positive finite integer. Leading zeros
 are allowed; whitespace, fractions, and values such as `80px` are not. If
-neither source is valid, output remains unwrapped. An explicit `maxWidth`
+neither source is valid, output remains unwrapped. An automatically detected
+width that cannot fit the help or error layout also leaves that output
+unwrapped. An explicit `maxWidth`
 overrides detection and retains the formatter's validation, including errors
 for widths too narrow for the content.
 
