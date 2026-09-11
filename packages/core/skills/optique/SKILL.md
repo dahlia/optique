@@ -18,8 +18,7 @@ combinatorial parser model and common pitfalls offline.
 Core rules
 ----------
 
- -  Use `run()` from *@optique/run* for applications; use `parse()` or
-    `runParser()` for embedded and custom runtimes.
+ -  Use `run()` from *@optique/run* for apps, `parse()`/`runParser()` to embed.
  -  With `runParser()`, `onError(exitCode, error)` supplies a structured
     `Message`; `help.onShow(exitCode, page)` supplies the final `DocPage`. Both
     follow output. Supply `stdout: () => {}` for custom help rendering. See
@@ -28,6 +27,7 @@ Core rules
     for parser results, `captureRun()` from *@optique/testing/run* for runner
     output/exits, `captureProgramRun()` from *@optique/testing/discover* for
     dispatch, and `createCliRunner()` from *@optique/testing/cli* for real CLIs.
+    Pin `colors`/`maxWidth` in tests; defaults use terminal and environment.
  -  Compose parsers with `object()`, `tuple()`, `seq()`, `or()`, `merge()`, and
     modifiers. Do not hand-write argument scanners around Optique parsers.
  -  Let TypeScript infer the parsed value type from the parser. Do not

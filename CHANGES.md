@@ -123,13 +123,34 @@ To be released.
  -  Added `termWidth` to the core and high-level runner options.  Automatic
     sizing measures the final help page after built-in help, version, and shell
     completion entries have been added.  [[#904], [#911]]
+
  -  Added `theme` and `messageFormatter` options to runners and printers,
     including themed error labels in `printError()`. Themed labels honor
     `colors.resetSuffix` so caller styling resumes after the label.
     [[#907], [#952]]
+
  -  Added `usageLine` to `RunOptions`.  `run()`, `runSync()`, and `runAsync()`
     can now replace the root synopsis in full help without changing parsing or
     subcommand help.  [[#879]]
+
+ -  Improved automatic color and width defaults for help, usage, and errors
+    from `run()`, `runSync()`, and `runAsync()`.
+
+    Any nonempty `FORCE_COLOR` enables colors, including `0`; otherwise a
+    nonempty `NO_COLOR` or any `NODE_DISABLE_COLORS` disables them. Empty
+    `FORCE_COLOR` and `NO_COLOR` values are ignored. Explicit `colors` still
+    takes precedence.
+
+    Invalid reported terminal widths now fall back to a positive decimal
+    `COLUMNS` value, or leave output unwrapped when neither is valid.
+    Automatically detected widths too narrow for the output layout also
+    leave output unwrapped instead of failing.
+    Explicit `maxWidth` keeps its existing validation. Deno ignores
+    inaccessible environment variables without requesting permission.
+    These defaults do not change the printer functions.  [[#903], [#955]]
+
+[#903]: https://github.com/dahlia/optique/issues/903
+[#955]: https://github.com/dahlia/optique/pull/955
 
 ### @optique/discover
 

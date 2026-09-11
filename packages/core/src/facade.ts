@@ -1,5 +1,10 @@
+import {
+  hasAutomaticWidth,
+  minimumUsageWidth,
+  withAutomaticWidth,
+} from "./terminal-width.ts";
 import { renderErrorMessage } from "./message-renderer.ts";
-import { renderTerminalTerm } from "./terminal-internal.ts";
+import { cacheTerminalTheme, renderTerminalTerm } from "./terminal-internal.ts";
 import type { TerminalTheme } from "./terminal.ts";
 import { measureText, spaceAfterLabel } from "./text-layout.ts";
 import {
@@ -19,6 +24,7 @@ import {
 import {
   type DocEntry,
   type DocPage,
+  type DocPageFormatOptions,
   type DocSection,
   formatDocPage,
   type ShowChoicesOptions,
@@ -1460,7 +1466,14 @@ function handleCompletion<M extends Mode, THelp, TError>(
   rootOptionSuggestions: readonly LiteralSuggestion[] = [],
   messageFormatter?: MessageFormatter,
   theme?: TerminalTheme,
+  automaticWidth = false,
 ): ModeValue<M, THelp | TError> {
+  const errorOptions = <T extends object>(format: T): T =>
+    automaticWidth
+      ? withAutomaticWidth(format, (width) => {
+        maxWidth = width;
+      })
+      : format;
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
 
@@ -1472,16 +1485,30 @@ function handleCompletion<M extends Mode, THelp, TError>(
   // Check if shell name is empty
   if (!shellName) {
     const error = message`Missing shell name for completion.`;
-    stderr(
-      renderErrorMessage(error, {
-        messageFormatter,
-        theme,
-        colors,
-        quotes: !colors,
-        maxWidth,
-      }) + "\n",
-    );
+    const writeError = () =>
+      stderr(
+        renderErrorMessage(
+          error,
+          errorOptions({
+            messageFormatter,
+            theme,
+            colors,
+            quotes: !colors,
+            maxWidth,
+          }),
+        ) + "\n",
+      );
 
+    if (!automaticWidth) writeError();
+    let wroteError = !automaticWidth;
+    const completionDocOptions = (format: DocPageFormatOptions) =>
+      automaticWidth
+        ? withAutomaticWidth(format, (width) => {
+          maxWidth = width;
+          writeError();
+          wroteError = true;
+        })
+        : format;
     // Show help for completion command if parser is available
     if (completionParser) {
       const displayName = isOptionMode
@@ -1490,18 +1517,24 @@ function handleCompletion<M extends Mode, THelp, TError>(
       const doc = getDocPage(completionParser, [displayName]);
       if (doc) {
         stderr(
-          formatDocPage(programName, doc, {
-            messageFormatter,
-            theme,
-            colors,
-            maxWidth,
-            termWidth,
-            sectionOrder,
-            showUsage,
-          }),
+          formatDocPage(
+            programName,
+            doc,
+            completionDocOptions({
+              messageFormatter,
+              theme,
+              colors,
+              maxWidth,
+              termWidth,
+              sectionOrder,
+              showUsage,
+            }),
+          ),
         );
       }
     }
+
+    if (!wroteError) writeError();
 
     return dispatchByMode(
       parser.mode,
@@ -1527,13 +1560,16 @@ function handleCompletion<M extends Mode, THelp, TError>(
     }
     const error =
       message`Unsupported shell ${shellName}. Available shells: ${available}.`;
-    stderr(renderErrorMessage(error, {
-      messageFormatter,
-      theme,
-      colors,
-      quotes: !colors,
-      maxWidth,
-    }));
+    stderr(renderErrorMessage(
+      error,
+      errorOptions({
+        messageFormatter,
+        theme,
+        colors,
+        quotes: !colors,
+        maxWidth,
+      }),
+    ));
     return dispatchByMode(
       parser.mode,
       () => {
@@ -2298,8 +2334,8 @@ export function runParser<
   const {
     colors,
     messageFormatter,
-    theme,
-    maxWidth,
+    theme: requestedTheme,
+    maxWidth: requestedMaxWidth,
     termWidth,
     showDefault,
     showChoices,
@@ -2321,6 +2357,25 @@ export function runParser<
     footer,
   } = options;
 
+  let maxWidth = requestedMaxWidth;
+  const automaticWidth = hasAutomaticWidth(options);
+  const theme = automaticWidth
+    ? cacheTerminalTheme(requestedTheme)
+    : requestedTheme;
+  const formatOptions = <T extends object>(format: T): T =>
+    automaticWidth
+      ? withAutomaticWidth(format, (width) => {
+        maxWidth = width;
+      })
+      : format;
+  const resolveUsageWidth = (usage: Usage) => {
+    if (
+      automaticWidth && maxWidth != null &&
+      maxWidth < minimumUsageWidth(programName, usage, usageLabel(), theme)
+    ) {
+      maxWidth = undefined;
+    }
+  };
   let usagePrefix: string | undefined;
   const usageLabel = () =>
     usagePrefix ??= spaceAfterLabel(renderTerminalTerm(
@@ -2638,6 +2693,7 @@ export function runParser<
           rootOptionSuggestions,
           messageFormatter,
           theme,
+          automaticWidth,
         ) as InferValue<TParser>;
 
       case "help": {
@@ -2691,6 +2747,7 @@ export function runParser<
         const reportInvalidHelpCommand = (
           validationError: Message,
         ): InferValue<TParser> => {
+          resolveUsageWidth(augmentedParser.usage);
           stderr(
             `${usageLabel()}${
               indentLines(
@@ -2706,13 +2763,16 @@ export function runParser<
               )
             }`,
           );
-          stderr(renderErrorMessage(validationError, {
-            messageFormatter,
-            theme,
-            colors,
-            quotes: !colors,
-            maxWidth,
-          }));
+          stderr(renderErrorMessage(
+            validationError,
+            formatOptions({
+              messageFormatter,
+              theme,
+              colors,
+              quotes: !colors,
+              maxWidth,
+            }),
+          ));
           return onError(1, validationError);
         };
 
@@ -2769,17 +2829,21 @@ export function runParser<
             const renderedDoc = isTopLevel && usageLine != null
               ? applyUsageLine(augmentedDoc, usageLine)
               : augmentedDoc;
-            stdout(formatDocPage(programName, renderedDoc, {
-              messageFormatter,
-              theme,
-              colors,
-              maxWidth,
-              termWidth,
-              showDefault,
-              showChoices,
-              sectionOrder,
-              showUsage,
-            }));
+            stdout(formatDocPage(
+              programName,
+              renderedDoc,
+              formatOptions({
+                messageFormatter,
+                theme,
+                colors,
+                maxWidth,
+                termWidth,
+                showDefault,
+                showChoices,
+                sectionOrder,
+                showUsage,
+              }),
+            ));
             return onHelp(0, renderedDoc);
           }
           throw new RunParserError("Failed to generate help page.");
@@ -2906,20 +2970,25 @@ export function runParser<
                   defaultRootUsage,
                 )
                 : augmentedDoc;
-              stderr(formatDocPage(programName, renderedDoc, {
-                messageFormatter,
-                theme,
-                colors,
-                maxWidth,
-                termWidth,
-                showDefault,
-                showChoices,
-                sectionOrder,
-                showUsage,
-              }));
+              stderr(formatDocPage(
+                programName,
+                renderedDoc,
+                formatOptions({
+                  messageFormatter,
+                  theme,
+                  colors,
+                  maxWidth,
+                  termWidth,
+                  showDefault,
+                  showChoices,
+                  sectionOrder,
+                  showUsage,
+                }),
+              ));
             }
           }
           if (effectiveAboveError === "usage") {
+            resolveUsageWidth(augmentedParser.usage);
             stderr(
               `${usageLabel()}${
                 indentLines(
@@ -2937,13 +3006,16 @@ export function runParser<
             );
           }
           // classified.error is now typed as Message
-          stderr(renderErrorMessage(classified.error, {
-            messageFormatter,
-            theme,
-            colors,
-            quotes: !colors,
-            maxWidth,
-          }));
+          stderr(renderErrorMessage(
+            classified.error,
+            formatOptions({
+              messageFormatter,
+              theme,
+              colors,
+              quotes: !colors,
+              maxWidth,
+            }),
+          ));
           return onError(1, classified.error);
         };
 

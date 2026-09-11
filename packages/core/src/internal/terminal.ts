@@ -6,3 +6,4 @@ export {
 } from "../message-renderer.ts";
 export { renderTerminalTerm } from "../terminal-internal.ts";
 export { measureText, placeText, spaceAfterLabel } from "../text-layout.ts";
+export { withAutomaticWidth } from "../terminal-width.ts";

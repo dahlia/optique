@@ -556,12 +556,52 @@ The function automatically:
 
  -  *Extracts arguments* from `process.argv.slice(2)`
  -  *Uses program name* from `Program` metadata
- -  *Auto-detects colors* from `process.stdout.isTTY`
- -  *Auto-detects width* from `process.stdout.columns`
+ -  *Auto-detects colors* from environment preferences and
+    `process.stdout.isTTY`
+ -  *Auto-detects width* from `process.stdout.columns`, then `COLUMNS`
  -  *Exits on error* with code 1 by default
 
 When `help`, `version`, or `completion` is enabled, the same runner also
 handles those meta requests and exits with code 0.
+
+### Terminal defaults
+
+Since Optique 1.3, `run()`, `runSync()`, and `runAsync()` honor environment
+preferences when `colors` is omitted. A nonempty `FORCE_COLOR` enables colors,
+including when output is piped. Any nonempty value works, including `0`,
+`false`, or whitespace. Otherwise, a nonempty `NO_COLOR` or the presence of
+`NODE_DISABLE_COLORS` disables colors. If none applies, the runner uses
+`process.stdout.isTTY`.
+
+Empty `FORCE_COLOR` and `NO_COLOR` values are ignored, following the
+[`FORCE_COLOR`] and [`NO_COLOR`] conventions. An empty
+`NODE_DISABLE_COLORS` still disables colors. Explicit `colors: true` or
+`colors: false` overrides all of these defaults.
+
+When `maxWidth` is omitted, the runner uses `process.stdout.columns` if it is a
+positive finite integer. Otherwise, it tries `COLUMNS`, which must contain
+only decimal digits and represent a positive finite integer. Leading zeros
+are allowed; whitespace, fractions, and values such as `80px` are not. If
+neither source is valid, output remains unwrapped. An automatically detected
+width that cannot fit the help or error layout also leaves that output
+unwrapped. An explicit `maxWidth`
+overrides detection and retains the formatter's validation, including errors
+for widths too narrow for the content.
+
+On Deno, `FORCE_COLOR` and `NO_COLOR` are readable without environment
+permissions. To use the other two variables, grant
+`--allow-env=COLUMNS,NODE_DISABLE_COLORS`. The runner ignores inaccessible
+variables without requesting permission.
+
+These defaults apply to runner-rendered help, usage, and errors, all using
+stdout as the detection source even when output callbacks are supplied.
+`print()`, `printError()`, and `createPrinter()` keep their stream-based
+defaults; pass their formatting options explicitly when they need to match
+your runner settings. For repeatable output assertions in tests, set both
+`colors` and `maxWidth` explicitly.
+
+[`FORCE_COLOR`]: https://force-color.org/
+[`NO_COLOR`]: https://no-color.org/
 
 ### Configuration options
 

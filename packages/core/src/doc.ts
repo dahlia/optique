@@ -1,9 +1,12 @@
+import {
+  hasAutomaticWidth,
+  minimumUsageWidth,
+  reportAutomaticWidth,
+} from "./terminal-width.ts";
 import { messageRenderers } from "./message-registry.ts";
 import { resolveMessageFormatter } from "./message-renderer.ts";
 import {
   cacheTerminalTheme,
-  formatTerminalTerm,
-  fragmentTokens,
   renderTerminalTerm,
   styleCode,
 } from "./terminal-internal.ts";
@@ -832,30 +835,8 @@ export function formatDocPage(
     // long terms, the term width is capped at programNameWidth + 7;
     // the 7 matches the continuation indent, so terms fitting within
     // the first line's total width are guaranteed not to overflow.
-    const programNameWidth = page.usage != null && showUsage
-      ? Math.max(
-        0,
-        ...[
-          ...fragmentTokens(
-            formatTerminalTerm(
-              { type: "programName", programName },
-              options.theme,
-            ),
-          ),
-        ].map((token) => token.width),
-      )
-      : 0;
     const usageMin = page.usage != null && showUsage
-      ? Math.max(
-        measureText(usageLabel).maxLineWidth,
-        usageLabelWidth + Math.max(
-          programNameWidth,
-          Math.min(
-            maxVisibleAtomicWidth(page.usage, options.theme),
-            programNameWidth + usageLabelWidth,
-          ),
-        ),
-      )
+      ? minimumUsageWidth(programName, page.usage, usageLabel, options.theme)
       : 1;
     // Fixed labels cannot wrap. Examples/Author/Bugs also need two
     // indentation columns and at least one column for their content.
@@ -877,23 +858,32 @@ export function formatDocPage(
     // overflow. Including them here would make existing narrow --help fail.
     const minWidth = Math.max(entryMin, usageMin, sectionMin);
     if (options.maxWidth < minWidth) {
-      throw new RangeError(
-        `maxWidth must be at least ${minWidth}, got ${options.maxWidth}.`,
-      );
+      if (!hasAutomaticWidth(options)) {
+        throw new RangeError(
+          `maxWidth must be at least ${minWidth}, got ${options.maxWidth}.`,
+        );
+      }
+      options = { ...options, maxWidth: undefined };
+      effectiveTermWidth = termWidth;
     }
     // Second check: even if maxWidth passes the formula-based minimum,
     // the effective layout may leave too little room for fixed prefixes.
-    if (needsDescColumn && minDescWidth > 1) {
+    if (options.maxWidth != null && needsDescColumn && minDescWidth > 1) {
       const avail = options.maxWidth - termIndent - 2;
       const descW = avail - effectiveTermWidth;
       if (descW < minDescWidth) {
         const needed = termIndent + effectiveTermWidth + 2 + minDescWidth;
-        throw new RangeError(
-          `maxWidth must be at least ${needed}, got ${options.maxWidth}.`,
-        );
+        if (!hasAutomaticWidth(options)) {
+          throw new RangeError(
+            `maxWidth must be at least ${needed}, got ${options.maxWidth}.`,
+          );
+        }
+        options = { ...options, maxWidth: undefined };
+        effectiveTermWidth = termWidth;
       }
     }
   }
+  reportAutomaticWidth(options, options.maxWidth);
   let output = "";
   if (hasContent(page.brief)) {
     output += formatMessage(page.brief, {
@@ -1150,20 +1140,6 @@ export function formatDocPage(
 
 function indentLines(text: string, indent: number): string {
   return text.split("\n").join("\n" + " ".repeat(indent));
-}
-
-/**
- * Returns the width of the widest non-breakable segment among visible
- * (non-usage-hidden) terms in a usage tree.  Hidden terms are excluded
- * because they are filtered out before rendering, so they do not
- * contribute to the rendered width.
- */
-function maxVisibleAtomicWidth(usage: Usage, theme?: TerminalTheme): number {
-  return usage.reduce((widest, term) =>
-    Math.max(
-      widest,
-      measureText(formatUsageTerm(term, { theme, maxWidth: 1 })).maxLineWidth,
-    ), 0);
 }
 
 function ansiAwareRightPad(
