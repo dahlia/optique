@@ -27,7 +27,7 @@ Core rules
     for parser results, `captureRun()` from *@optique/testing/run* for runner
     output/exits, `captureProgramRun()` from *@optique/testing/discover* for
     dispatch, and `createCliRunner()` from *@optique/testing/cli* for real CLIs.
-    Pin `colors`/`maxWidth` for output assertions; defaults use the environment.
+    Pin `colors`/`maxWidth` in tests; defaults use terminal and environment.
  -  Compose parsers with `object()`, `tuple()`, `seq()`, `or()`, `merge()`, and
     modifiers. Do not hand-write argument scanners around Optique parsers.
  -  Let TypeScript infer the parsed value type from the parser. Do not
