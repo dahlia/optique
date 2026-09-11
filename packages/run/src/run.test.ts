@@ -433,6 +433,8 @@ describe("run", () => {
         assert.throws(
           () => {
             run(parser, {
+              colors: false,
+              maxWidth: 80,
               help: "option",
             });
           },
@@ -513,6 +515,8 @@ describe("run", () => {
         assert.throws(
           () => {
             run(parser, {
+              colors: false,
+              maxWidth: 80,
               args: [],
               onExit: (code) => {
                 exitCode = code;
@@ -646,6 +650,8 @@ describe("run", () => {
       assert.throws(
         () => {
           run(parser, {
+            colors: false,
+            maxWidth: 80,
             args: ["--help"],
             programName: "tool",
             help: "option",
@@ -1790,6 +1796,8 @@ describe("runAsync", () => {
       assert.throws(
         () =>
           run(parser, {
+            colors: false,
+            maxWidth: 80,
             args: ["--help"],
             programName: "myapp",
             help: "option",
@@ -1815,6 +1823,8 @@ describe("runAsync", () => {
 
       try {
         run(parser, {
+          colors: false,
+          maxWidth: 80,
           args: ["--help"],
           commandList: "top-level",
           help: "option",

@@ -147,8 +147,9 @@ an exit code of zero.  Help, version, completion, and parse errors produce an
 runner writers.
 
 The `colors` and `maxWidth` options keep `runAsync()`'s defaults, which depend
-on the test process's terminal.  Set both explicitly when asserting rendered
-text so the result is stable between local terminals and CI.
+on the test process's terminal and environment variables.  Set both explicitly
+when asserting rendered text so the result is stable between local terminals
+and CI.
 
 The capture helper supplies `stdout`, `stderr`, and `onExit`, so callers cannot
 override them.  Exceptions from parsers, contexts, option callbacks, or

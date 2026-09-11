@@ -1127,7 +1127,7 @@ const config = run(prog, {
 
 
   colors: true,           // Force colored output (auto-detected by default)
-  maxWidth: 100,          // Set help text width (terminal width by default)
+  maxWidth: 100,          // Set help text width (auto-detected by default)
   termWidth: "auto",      // Fit the term column to visible help entries
   errorExitCode: 2        // Custom exit code for errors (default: 1)
 });
@@ -1515,8 +1515,9 @@ assert.equal(result.stderr, "");
 ~~~~
 
 Setting `colors` and `maxWidth` explicitly matters here. Without them the
-runner keeps its usual defaults, which depend on the terminal the test happens
-to run in, and the rendered text differs between your machine and CI.
+runner keeps its usual defaults, which depend on the test process's terminal
+and environment variables, and the rendered text differs between your machine
+and CI.
 
 Command dispatch and full process behavior have their own layers, which the
 [testing guide](./concepts/testing.md) covers along with the one rule that

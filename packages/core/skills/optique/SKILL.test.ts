@@ -59,6 +59,7 @@ declare module "node:process" {
 
   declare const process: {
     argv: string[];
+    readonly env: Readonly<Record<string, string | undefined>>;
     stdout: WritableStreamLike;
     stderr: WritableStreamLike;
     exit(code?: number): never;

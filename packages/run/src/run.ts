@@ -27,6 +27,11 @@ import type { Message } from "@optique/core/message";
 import type { Usage } from "@optique/core/usage";
 import path from "node:path";
 import process from "node:process";
+import {
+  detectColorSupport,
+  detectTerminalWidth,
+  readEnvironmentVariable,
+} from "./terminal.ts";
 
 /**
  * Configuration options for the {@link run} function.
@@ -77,15 +82,23 @@ export interface RunOptions {
   /**
    * Whether to enable colored output in help and error messages.
    *
-   * @default `process.stdout.isTTY` (auto-detect based on terminal)
+   * Explicit values override environment variables and terminal detection.
+   * A nonempty `FORCE_COLOR` enables colors (including `0`); otherwise a
+   * nonempty `NO_COLOR` or any `NODE_DISABLE_COLORS` disables them.
+   * Inaccessible environment variables are ignored.
+   *
+   * @default Environment preferences, then `process.stdout.isTTY`
    */
   readonly colors?: boolean;
 
   /**
    * Maximum width for output formatting. Text will be wrapped to fit within
-   * this width. If not specified, uses the terminal width.
+   * this width. If not specified, uses a positive finite integer from the
+   * terminal width, then a positive decimal integer from `COLUMNS`. Invalid
+   * or inaccessible detected values are ignored; explicit values retain the
+   * formatter's validation.
    *
-   * @default `process.stdout.columns` (auto-detect terminal width)
+   * @default Valid `process.stdout.columns`, then `COLUMNS`, or no wrapping
    */
   readonly maxWidth?: number;
 
@@ -882,8 +895,10 @@ function buildCoreOptions(
   });
   const onExit = options.onExit ??
     ((exitCode: number) => process.exit(exitCode) as never);
-  const colors = options.colors ?? process.stdout.isTTY;
-  const maxWidth = options.maxWidth ?? process.stdout.columns;
+  const colors = options.colors ??
+    detectColorSupport(process.stdout, readEnvironmentVariable);
+  const maxWidth = options.maxWidth ??
+    detectTerminalWidth(process.stdout, readEnvironmentVariable);
   const termWidth = options.termWidth;
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;

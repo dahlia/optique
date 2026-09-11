@@ -14,9 +14,12 @@
     "dist/",
     "tsdown.config.ts"
   ],
+  "publish": {
+    "exclude": ["src/fixtures/terminal-capabilities.ts"]
+  },
   "tasks": {
     "build": "pnpm build",
-    "test": "deno test --allow-read --allow-write",
+    "test": "deno test --allow-read --allow-write --allow-env --allow-run",
     "test:node": {
       "dependencies": [
         "build"
