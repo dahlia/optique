@@ -6,6 +6,7 @@
   "imports": {
     "@clack/prompts": "npm:@clack/prompts@^1.6.0",
     "@inquirer/prompts": "npm:@inquirer/prompts@^8.3.0",
+    "@jellybrick/dbus-next": "npm:@jellybrick/dbus-next@0.11.3",
     "@logtape/file": "jsr:@logtape/file@^2.2.2",
     "@logtape/logtape": "jsr:@logtape/logtape@^2.2.2",
     "@napi-rs/keyring": "npm:@napi-rs/keyring@2.0.0",

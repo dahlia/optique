@@ -62,5 +62,7 @@ await assert.rejects(
   parseAsync(parser, [], { annotations }),
   (error: unknown) =>
     error instanceof Error &&
-    error.message.startsWith("Cannot find native binding."),
+    (process.platform === "linux"
+      ? "code" in error && error.code === "ENOENT"
+      : error.message.startsWith("Cannot find native binding.")),
 );

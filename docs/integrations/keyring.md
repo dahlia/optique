@@ -139,8 +139,8 @@ system and permissions. Have your CI secret manager inject `MYAPP_API_KEY`
 instead of typing a literal key into a shell command.
 
 
-Custom sources and native loading
----------------------------------
+Custom sources and runtime setup
+--------------------------------
 
 `createKeyringContext()` accepts an injected async source for tests, custom
 backends, or runtimes that provide their own credential bridge. Return
@@ -157,12 +157,26 @@ const keyringContext = createKeyringContext({
 });
 ~~~~
 
-The built-in source loads its native addon lazily. Creating a context, parsing
+The built-in source loads its backend lazily. Creating a context, parsing
 CLI values, rendering help/version output, and generating completion
-suggestions do not load the addon or query the credential store. An outer
-environment binding that supplies the value also bypasses the addon.
+suggestions do not query the credential store. An outer environment binding
+that supplies the value also bypasses the backend.
 
-For Deno, enable local `node_modules` so the npm native addon can be loaded.
+On Linux, the default source connects directly to Secret Service over the
+user's D-Bus session bus. The connection uses an encrypted Secret Service
+session to read the matching credential. Deno needs permission to connect to
+the bus and access its socket. For a standard bus at `$XDG_RUNTIME_DIR/bus`:
+
+~~~~ bash
+deno run --node-modules-dir=auto --allow-env --allow-sys --allow-net \
+  --allow-read="node_modules,$XDG_RUNTIME_DIR/bus" \
+  --allow-write="$XDG_RUNTIME_DIR/bus" main.ts
+~~~~
+
+Use the socket path from `DBUS_SESSION_BUS_ADDRESS` if it differs.
+
+Other platforms use `@napi-rs/keyring`'s `AsyncEntry` API. For Deno, enable
+local `node_modules` so the npm native addon can be loaded.
 The native loader reads environment variables and detects the operating
 system in addition to loading the addon through FFI:
 
@@ -171,8 +185,8 @@ deno run --node-modules-dir=auto --allow-env --allow-sys \
   --allow-read=node_modules --allow-ffi=node_modules main.ts
 ~~~~
 
-The default backend uses `@napi-rs/keyring`'s `AsyncEntry` API. On macOS it
-uses the ordinary keychain store and does not provide Touch ID authentication.
+On macOS the backend uses the ordinary keychain store and does not provide
+Touch ID authentication.
 Use a custom source for a backend with different authentication requirements.
 
 
@@ -184,8 +198,9 @@ fallback or missing-value error. `optional(bindKeyring(...))` returns
 `undefined` for a missing credential, and `withDefault(bindKeyring(...), value)`
 uses the default only when the keyring cannot supply a value.
 
-Locked, inaccessible, or ambiguous credential-store errors reject the parse
-with the original error. They do not trigger an inner fallback or get replaced
+Locked, inaccessible, or ambiguous credentials reject the parse. Connection
+and lookup errors are propagated without switching to another store. These
+failures do not trigger an inner fallback or get replaced
 by an optional value or static default. If the inner parser provides a
 validation hook, it is applied to retrieved passwords. `fail<string>()` has
 no value validation of its own.

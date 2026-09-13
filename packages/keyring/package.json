@@ -61,6 +61,7 @@
   },
   "sideEffects": false,
   "dependencies": {
+    "@jellybrick/dbus-next": "catalog:",
     "@napi-rs/keyring": "catalog:",
     "@optique/core": "workspace:*"
   },
@@ -76,7 +77,7 @@
     "prepublish": "tsdown",
     "test": "node --test",
     "test:bun": "bun test",
-    "test:deno": "deno test --allow-read --allow-write --allow-env --allow-run",
-    "test-all": "tsdown && node --test && bun test && deno test --allow-read --allow-write --allow-env --allow-run"
+    "test:deno": "deno test --allow-read --allow-write --allow-env --allow-run --allow-net --allow-sys",
+    "test-all": "tsdown && node --test && bun test && deno test --allow-read --allow-write --allow-env --allow-run --allow-net --allow-sys"
   }
 }

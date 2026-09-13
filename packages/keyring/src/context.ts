@@ -6,7 +6,7 @@ import type { Annotations, SourceContext } from "@optique/core/context";
  * @param service Service name associated with the password.
  * @param username Username associated with the password.
  * @returns The stored password, or `undefined` when no password is available.
- * @throws Propagates credential-store loading and lookup failures unchanged.
+ * @throws Propagates credential-store loading and lookup failures.
  * @since 1.3.0
  */
 export type KeyringSource = (
@@ -38,6 +38,10 @@ async function defaultKeyringSource(
   service: string,
   username: string,
 ): Promise<string | undefined> {
+  if (process.platform === "linux") {
+    const { readLinuxPassword } = await import("./linux.ts");
+    return await readLinuxPassword(service, username);
+  }
   const { AsyncEntry } = await import("@napi-rs/keyring");
   return await new AsyncEntry(service, username).getPassword() ?? undefined;
 }
@@ -53,6 +57,8 @@ function getTypeName(value: unknown): string {
  *
  * The selected source is snapshotted into parse annotations. Creating the
  * context and collecting its annotations never reads the credential store.
+ * On Linux, passwords are read from Secret Service without switching stores
+ * on errors. Other platforms use `@napi-rs/keyring`.
  *
  * @param options Optional custom source configuration.
  * @returns A keyring context with a unique annotation identity.

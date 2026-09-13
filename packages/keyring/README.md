@@ -129,24 +129,39 @@ const keyringContext = createKeyringContext({
 Runtime setup
 -------------
 
-Node.js and Bun load the native keyring addon only when a password lookup is
-needed. Their normal package installations are enough.
+The password backend is loaded only when a lookup is needed. On Linux, the
+default source connects to Secret Service over the user's D-Bus session bus.
+Other platforms use the asynchronous `@napi-rs/keyring` API. Node.js and Bun
+use their normal package installations.
 
 Deno runs native Node addons from local `node_modules`. Run a Deno program with
-local modules enabled and grant the permissions used by the native loader:
+local modules enabled and grant the permissions used by the native loader
+on platforms using `@napi-rs/keyring`:
 
 ~~~~ bash
 deno run --node-modules-dir=auto --allow-env --allow-sys \
   --allow-read=node_modules --allow-ffi=node_modules main.ts
 ~~~~
 
+On Linux, grant access to the session bus instead. For a standard session bus
+at `$XDG_RUNTIME_DIR/bus`:
+
+~~~~ bash
+deno run --node-modules-dir=auto --allow-env --allow-sys --allow-net \
+  --allow-read="node_modules,$XDG_RUNTIME_DIR/bus" \
+  --allow-write="$XDG_RUNTIME_DIR/bus" main.ts
+~~~~
+
+Use the socket path from `DBUS_SESSION_BUS_ADDRESS` if it differs.
+
 
 Missing credentials and errors
 ------------------------------
 
 Missing credentials allow the inner parser to provide a fallback or its usual
-missing-value error. Locked, inaccessible, or ambiguous credential-store errors
-reject the parse unchanged, including under `optional()` or `withDefault()`.
+missing-value error. Locked, inaccessible, or ambiguous credentials reject the
+parse, including under `optional()` or `withDefault()`. Secret Service
+connection and lookup errors are propagated without switching stores.
 If the inner parser provides a validation hook, it is applied to stored
 passwords. `fail<string>()` has no value validation of its own.
 
@@ -154,9 +169,8 @@ Stored-password validation failures use a generic message so the password
 cannot appear in error output. If a validation hook throws or rejects, it is
 replaced with a `TypeError` without the original message or cause.
 
-The default backend uses the asynchronous `@napi-rs/keyring` API. Its macOS
-backend does not provide Touch ID authentication. A custom source can supply
-an alternative backend.
+The macOS backend does not provide Touch ID authentication. A custom source can
+supply an alternative backend.
 
 
 Documentation

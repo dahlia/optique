@@ -6,18 +6,34 @@ import { fileURLToPath } from "node:url";
 const packagePath = fileURLToPath(new URL("../", import.meta.url));
 
 describe("native keyring smoke", () => {
+  it(
+    "should reject an inaccessible Secret Service instead of reporting a missing password",
+    {
+      skip: process.platform !== "linux",
+    },
+    () => {
+      if (process.platform !== "linux") return;
+      runFixture(new URL("./linux-unavailable.fixture.ts", import.meta.url), {
+        DBUS_SESSION_BUS_ADDRESS:
+          "unix:path=/nonexistent/optique-keyring-secret-service.sock",
+      });
+    },
+  );
+
   it("should resolve AsyncEntry in a fresh process", () => {
     const fixture = new URL("./native-import.fixture.ts", import.meta.url);
     runFixture(fixture, {});
   });
 
-  it("should defer an invalid native library failure until fallback demand", () => {
+  it("should defer backend loading failures until fallback demand", () => {
     const fixture = new URL("./native-lazy.fixture.ts", import.meta.url);
     const libraryPath = fileURLToPath(
       new URL("./native-library-does-not-exist.node", import.meta.url),
     );
     runFixture(fixture, {
       NAPI_RS_NATIVE_LIBRARY_PATH: libraryPath,
+      DBUS_SESSION_BUS_ADDRESS:
+        "unix:path=/nonexistent/optique-keyring-secret-service.sock",
     });
   });
 });
@@ -35,7 +51,9 @@ function runFixture(
       "--node-modules-dir=manual",
       "--allow-env",
       "--allow-sys",
-      "--allow-read=../../node_modules",
+      "--allow-net",
+      "--allow-read=../../node_modules,/nonexistent/optique-keyring-secret-service.sock",
+      "--allow-write=/nonexistent/optique-keyring-secret-service.sock",
       "--allow-ffi=../../node_modules",
       fixturePath,
     ]
