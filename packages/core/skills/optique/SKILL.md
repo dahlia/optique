@@ -49,9 +49,8 @@ Core rules
     `@optique/run/valueparser` for file-system paths. Write a custom
     `{ mode, metavar, parse, format }` value parser only when the catalog does
     not cover the domain.
- -  Async value parsers make the containing parser async. If you use packages
-    such as *@optique/git*, remember to `await run(...)`, `await parse(...)`, or
-    `await runParser(...)` as appropriate.
+ -  Async value parsers like *@optique/git* make containing parsers async.
+    Await `run()`/`parse()`/`runParser()` or, for `bindKeyring()`, `runAsync()`.
  -  Use `dependency()` when one value parser controls another's valid values.
     For a multi-level chain, wrap the middle derivation too:
     `dependency(source.deriveSync(...))`. Optique resolves such chains by
@@ -248,8 +247,8 @@ Common mistakes checklist
     parsers compete by priority; use `seq()` only for truly ordered grammars.
  -  Do not concatenate plain strings for errors or descriptions. Use structured
     `message` values.
- -  Do not forget to register source contexts when using `bindEnv()`,
-    `bindConfig()`, or `bindDerivedDefault()`.
+ -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,
+    and `bindKeyring()` in the runner's `contexts` option.
  -  Do not flatten a multi-level dependency graph into duplicated one-level
     factories. Wrap each derived value that becomes a later source with
     `dependency()` and derive the next parser from it.
@@ -283,6 +282,7 @@ Integration packages
 | Package                     | Use for                                     | Docs                                                  |
 | --------------------------- | ------------------------------------------- | ----------------------------------------------------- |
 | `@optique/env`              | Environment variable fallbacks              | <https://optique.dev/integrations/env.md>             |
+| `@optique/keyring`          | Async OS credential-store password fallback | <https://optique.dev/integrations/keyring.md>         |
 | `@optique/config`           | Configuration file fallbacks                | <https://optique.dev/integrations/config.md>          |
 | `@optique/derived-defaults` | Defaults computed from first-pass results   | <https://optique.dev/concepts/derived-defaults.md>    |
 | `@optique/prompt`           | Generic prompt adapter foundation           | <https://optique.dev/integrations/prompt.md>          |

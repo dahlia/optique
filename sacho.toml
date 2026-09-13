@@ -54,6 +54,11 @@ directory = "env"
 paths = ["packages/env/**"]
 
 [[sections]]
+id = "@optique/keyring"
+directory = "keyring"
+paths = ["packages/keyring/**"]
+
+[[sections]]
 id = "@optique/git"
 directory = "git"
 paths = ["packages/git/**"]

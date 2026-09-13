@@ -79,6 +79,7 @@ const INTEGRATIONS = {
   items: [
     { text: "Config files", link: "/integrations/config" },
     { text: "Environment variables", link: "/integrations/env" },
+    { text: "Keyring", link: "/integrations/keyring" },
     { text: "Clack prompts", link: "/integrations/clack" },
     { text: "Inquirer.js prompts", link: "/integrations/inquirer" },
     { text: "Prompt adapters", link: "/integrations/prompt" },
@@ -102,6 +103,10 @@ const REFERENCES = {
     },
     { text: "@optique/man", link: "https://jsr.io/@optique/man/doc" },
     { text: "@optique/env", link: "https://jsr.io/@optique/env/doc" },
+    {
+      text: "@optique/keyring",
+      link: "https://jsr.io/@optique/keyring/doc",
+    },
     { text: "@optique/config", link: "https://jsr.io/@optique/config/doc" },
     {
       text: "@optique/derived-defaults",

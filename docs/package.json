@@ -9,6 +9,7 @@
     "@optique/discover": "workspace:",
     "@optique/env": "workspace:",
     "@optique/git": "workspace:",
+    "@optique/keyring": "workspace:",
     "@optique/logtape": "workspace:",
     "@optique/man": "workspace:",
     "@optique/prompt": "workspace:",

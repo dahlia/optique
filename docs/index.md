@@ -275,7 +275,7 @@ myapp completion nu | save myapp-completion.nu
 
 </LandingSection>
 
-<LandingSection eyebrow="Every value, one model" title="The same parser for CLI, environment, config, and prompts." lead="Integration packages are parser wrappers. Stack them and the priority is just the wrapping order: CLI over environment over config over an interactive prompt." tint moreHref="/why#integration-packages" moreText="How integration packages stack">
+<LandingSection eyebrow="Every value, one model" title="The same parser for CLI, environment, config, and prompts." lead="Integration packages are parser wrappers. Stack them and wrapper nesting sets precedence: CLI over environment over the keyring, config, or an interactive prompt." tint moreHref="/why#integration-packages" moreText="How integration packages stack">
 
 ~~~~ ts twoslash
 import { z } from "zod";
@@ -303,6 +303,11 @@ const host = prompt(
   { type: "input", message: "Host:", default: "localhost" },
 );
 ~~~~
+
+For secrets, use *@optique/keyring* as an async operating-system credential
+source instead of a config file. Register `keyringContext` with
+`contexts: [keyringContext]`; outer source wrappers take precedence. Missing
+credentials allow a fallback, while credential-store errors reject the parse.
 
 </LandingSection>
 <LandingSection eyebrow="From the cookbook" title="The awkward parts of real CLIs, already solved." lead="Mutually exclusive modes, options that gate others, key–value pairs, pass-through, verbosity, negatable flags. Each hard requirement is a small composition, and each one has a recipe in the cookbook." moreHref="/cookbook" moreText="Browse the full cookbook">
