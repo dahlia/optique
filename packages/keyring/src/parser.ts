@@ -3,6 +3,8 @@ import {
   defineForwardedEffectfulSchedulingNodes,
   type EffectfulSchedulingNodesFn,
   effectfulSchedulingNodesKey,
+  type RuntimeNode,
+  serializeSchedulingPath,
 } from "@optique/core/dependency-runtime";
 import {
   defineTraits,
@@ -30,6 +32,11 @@ interface BindState<TState> {
   readonly [stateKey]: symbol;
   readonly hasCliValue: boolean;
   readonly cliState: TState;
+}
+
+interface PreparedInner {
+  readonly [stateKey]: symbol;
+  readonly result: ValueParserResult<string>;
 }
 
 /**
@@ -118,14 +125,39 @@ export function bindKeyring<M extends Mode, TState>(
       run,
       parserInheritsAnnotations,
     );
+  const innerNodes = (
+    state: unknown,
+    path: readonly PropertyKey[] = [],
+  ): readonly RuntimeNode[] =>
+    withInnerState(
+      state,
+      (annotatedState) =>
+        parser.getSuggestRuntimeNodes?.(annotatedState, path) ?? [],
+    );
+  const isInnerDemanded = (state: unknown, exec?: ExecutionContext): boolean =>
+    innerNodes(state, exec?.path).some((node) => {
+      const id = node.parser.dependencyMetadata?.source?.sourceId;
+      return id != null &&
+        exec?.effectfulCompletionSession?.demanded.has(id) === true;
+    });
+  const preparedKey = (path: readonly PropertyKey[] = []): string =>
+    serializeSchedulingPath([stateId, ...path]);
+  const isPreparedInner = (value: unknown): value is PreparedInner =>
+    value != null && typeof value === "object" &&
+    stateKey in value && value[stateKey] === stateId;
   const completeInner = (
     state: BindState<TState>,
     exec?: ExecutionContext,
-  ): Promise<ValueParserResult<string>> =>
-    Promise.resolve(withInnerState(
+  ): Promise<ValueParserResult<string>> => {
+    const prepared = exec?.effectfulCompletionSession?.preparedByPath.get(
+      preparedKey(exec.path),
+    );
+    if (isPreparedInner(prepared)) return Promise.resolve(prepared.result);
+    return Promise.resolve(withInnerState(
       state,
       (annotatedState) => parser.complete(annotatedState, exec),
     ));
+  };
 
   const boundParser: Parser<"async", string, BindState<TState>> & {
     readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
@@ -220,11 +252,12 @@ export function bindKeyring<M extends Mode, TState>(
       const session = exec?.effectfulCompletionSession;
       const sourceId = boundParser.dependencyMetadata?.source?.sourceId;
       // The seed pass only needs credentials demanded by dependencies.
-      // A wrapper without a source ID cannot be demanded there, so it
-      // waits for the final pass as well.
+      // A construct wrapper can also guard sources demanded by siblings.
       if (
         session?.policy === "demand-only" &&
-        (sourceId == null || !session.demanded.has(sourceId))
+        (sourceId == null
+          ? !isInnerDemanded(state, exec)
+          : !session.demanded.has(sourceId))
       ) {
         return { success: true, value: "", deferred: true };
       }
@@ -358,12 +391,76 @@ export function bindKeyring<M extends Mode, TState>(
   const schedulingNodes = boundParser[effectfulSchedulingNodesKey];
   if (schedulingNodes != null) {
     Object.defineProperty(boundParser, effectfulSchedulingNodesKey, {
-      // Only CLI-selected inner parsers may contribute sources before this
-      // binding tries its keyring fallback. Keep that policy local to keyring.
-      value: ((state, path) =>
-        isBindState(state) && state.hasCliValue
-          ? schedulingNodes(state, path)
-          : []) satisfies EffectfulSchedulingNodesFn,
+      value: ((state, path) => {
+        const sourceData = getAnnotations(state)?.[options.context.id];
+        if (
+          (isBindState(state) && state.hasCliValue) ||
+          !isSourceData(sourceData)
+        ) {
+          return schedulingNodes(state, path);
+        }
+        // Keep inner effects behind the outer lookup, but prepare a missing
+        // fallback before the parent replays sibling dependency consumers.
+        // Suggestion nodes describe the active sources without completing them;
+        // completion itself stays with the inner parser and its own scheduler.
+        const nodes = innerNodes(state, path);
+        const providesSourceIds = new Set<symbol>();
+        const dependencyIds = new Set<symbol>();
+        for (const node of nodes) {
+          const metadata = node.parser.dependencyMetadata;
+          if (metadata?.source != null) {
+            providesSourceIds.add(metadata.source.sourceId);
+          }
+          for (const id of metadata?.completion?.dependencyIds ?? []) {
+            dependencyIds.add(id);
+          }
+        }
+        if (providesSourceIds.size === 0) return [];
+        return [{
+          path: path ?? [],
+          parser: {},
+          state,
+          providesSourceIds,
+          barrierCompletionDependencies: {
+            orderingDependencyIds: [...dependencyIds].filter((id) =>
+              !providesSourceIds.has(id)
+            ),
+            demandEdges: [],
+          },
+          prepare: async ({ exec, runtime }) => {
+            if (exec == null) return;
+            if (
+              exec.effectfulCompletionSession?.policy === "demand-only" &&
+              !isInnerDemanded(state, exec)
+            ) return;
+            const value = await lookupOnce(
+              exec.effectfulCompletionSession?.results,
+              path,
+              () => sourceData.source(options.service, options.username),
+            );
+            if (value !== undefined) return;
+            const result = await completeInner(
+              isBindState(state) ? state : injectAnnotations(
+                boundParser.initialState,
+                getAnnotations(state),
+              ),
+              {
+                ...exec,
+                path: path ?? [],
+                dependencyRuntime: runtime,
+                dependencyRegistry: runtime.registry,
+              },
+            );
+            if (!result.success || !result.deferred) {
+              exec.effectfulCompletionSession?.preparedByPath.set(
+                preparedKey(path),
+                { [stateKey]: stateId, result } satisfies PreparedInner,
+              );
+            }
+            return result.success ? undefined : result;
+          },
+        }];
+      }) satisfies EffectfulSchedulingNodesFn,
       configurable: true,
       enumerable: false,
     });

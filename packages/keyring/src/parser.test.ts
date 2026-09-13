@@ -994,6 +994,41 @@ describe("bindKeyring()", () => {
       assert.deepEqual(result, { password: "stored-value" });
     });
 
+    for (const sourceFirst of [true, false]) {
+      for (const levelValue of ["silent", "debug"]) {
+        it(`should validate ${levelValue} against an inner dependency after a keyring miss with the source ${sourceFirst ? "first" : "last"}`, async () => {
+          const outer = createKeyringContext({
+            source: () => Promise.resolve(undefined),
+          });
+          const inner = createKeyringContext({
+            source: () => Promise.resolve("prod"),
+          });
+          const { mode, level } = modeDependency();
+          const modeParser = bindKeyring(
+            object({
+              mode: bindKeyring(option("--mode", mode), binding(inner)),
+            }).map((value) => value.mode),
+            binding(outer),
+          );
+          const fields = { mode: modeParser, level: option("--level", level) };
+          const parser = object(
+            sourceFirst ? fields : { level: fields.level, mode: fields.mode },
+          );
+
+          const result = runWith(parser, "test", [outer, inner], {
+            args: ["--level", levelValue],
+            stderr: () => {},
+          });
+
+          if (levelValue === "silent") {
+            assert.deepEqual(await result, { mode: "prod", level: "silent" });
+          } else {
+            await assert.rejects(result, RunParserError);
+          }
+        });
+      }
+    }
+
     it("should not expose source completion for a non-preserving mapped source", async () => {
       let calls = 0;
       const context = createKeyringContext({
@@ -1027,6 +1062,95 @@ describe("bindKeyring()", () => {
   });
 
   describe("completion demand", () => {
+    for (const demanded of [true, false]) {
+      it(`should ${demanded ? "prepare" : "defer"} nested sources during the seed pass`, async () => {
+        const events: string[] = [];
+        const outer = createKeyringContext({
+          source: () => {
+            events.push("outer");
+            return Promise.resolve(undefined);
+          },
+        });
+        const inner = createKeyringContext({
+          source: () => {
+            events.push("inner");
+            return Promise.resolve("prod");
+          },
+        });
+        const { mode, level } = modeDependency();
+        const parser = object({
+          mode: bindKeyring(
+            object({
+              mode: bindKeyring(option("--mode", mode), binding(inner)),
+            }).map((value) => value.mode),
+            binding(outer),
+          ),
+          level: optional(option("--level", level)),
+        });
+        const twoPassContext: SourceContext = {
+          id: Symbol("two-pass"),
+          phase: "two-pass",
+          getAnnotations(request) {
+            if (request?.phase === "phase2") {
+              events.push("phase2");
+              if (demanded) {
+                assert.deepEqual(request.parsed, {
+                  mode: "prod",
+                  level: "silent",
+                });
+              }
+            }
+            return {};
+          },
+        };
+
+        const result = await runWith(
+          parser,
+          "test",
+          [twoPassContext, outer, inner],
+          { args: demanded ? ["--level", "silent"] : [] },
+        );
+
+        assert.deepEqual(result, {
+          mode: "prod",
+          level: demanded ? "silent" : undefined,
+        });
+        assert.deepEqual(
+          events,
+          demanded
+            ? ["outer", "inner", "phase2"]
+            : ["phase2", "outer", "inner"],
+        );
+      });
+    }
+
+    it("should reuse a prepared inner fallback during final completion", async () => {
+      let defaults = 0;
+      const outer = createKeyringContext({
+        source: () => Promise.resolve(undefined),
+      });
+      const { mode, level } = modeDependency();
+      const parser = object({
+        mode: bindKeyring(
+          object({
+            mode: withDefault(option("--mode", mode), () => {
+              defaults++;
+              return "prod";
+            }),
+          }).map((value) => value.mode),
+          binding(outer),
+        ),
+        level: option("--level", level),
+      });
+
+      const result = await runWith(parser, "test", [outer], {
+        args: ["--level", "silent"],
+      });
+
+      assert.deepEqual(result, { mode: "prod", level: "silent" });
+      assert.equal(defaults, 1);
+    });
+
     it("should avoid lookups for help, version, suggestions, and probes", async () => {
       let calls = 0;
       const context = createKeyringContext({
