@@ -14,9 +14,11 @@ describe("withAnnotatedInnerState()", () => {
 
   it("should inherit annotations without mutating the child", () => {
     const child = ["value"];
+
     const result = withAnnotatedInnerState(parent, child, (state) => {
       assert.deepEqual([...state], ["value"]);
       assert.equal(getAnnotations(state)?.[key], "parent");
+
       return "result";
     });
 
@@ -26,6 +28,7 @@ describe("withAnnotatedInnerState()", () => {
 
   it("should preserve an existing child's annotations and identity", () => {
     const child = injectAnnotations({}, { [key]: "child" });
+
     withAnnotatedInnerState(parent, child, (state) => {
       assert.equal(state, child);
       assert.equal(getAnnotations(state)?.[key], "child");
@@ -35,15 +38,19 @@ describe("withAnnotatedInnerState()", () => {
   it("should preserve private fields when a custom state needs an annotation view", () => {
     class State {
       #value = "value";
+
       read() {
         return this.#value;
       }
     }
+
     const child = new State();
+
     withAnnotatedInnerState(parent, child, (state) => {
       assert.equal(state.read(), "value");
       assert.equal(getAnnotations(state)?.[key], "parent");
     });
+
     assert.equal(getAnnotations(child), undefined);
   });
 
@@ -51,6 +58,7 @@ describe("withAnnotatedInnerState()", () => {
     withAnnotatedInnerState(parent, undefined, (state) => {
       assert.equal(state, undefined);
     });
+
     withAnnotatedInnerState(parent, undefined, (state) => {
       assert.equal(getAnnotations(state)?.[key], "parent");
       assert.equal(unwrapInjectedAnnotationState(state), undefined);
@@ -59,6 +67,7 @@ describe("withAnnotatedInnerState()", () => {
 
   it("should preserve state identity without parent annotations", () => {
     const child = new Date(0);
+
     withAnnotatedInnerState({}, child, (state) => {
       assert.equal(state, child);
     });

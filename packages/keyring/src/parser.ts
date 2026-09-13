@@ -47,8 +47,10 @@ interface PreparedInner {
 export interface BindKeyringOptions {
   /** Registered keyring context that supplies the password source. */
   readonly context: KeyringContext;
+
   /** Service name forwarded to the password source. */
   readonly service: string;
+
   /** Username forwarded to the password source. */
   readonly username: string;
 }
@@ -107,6 +109,7 @@ export function bindKeyring<M extends Mode, TState>(
   const isBindState = (value: unknown): value is BindState<TState> =>
     value != null && typeof value === "object" &&
     stateKey in value && value[stateKey] === stateId;
+
   const parserInheritsAnnotations =
     getTraits(parser).inheritsAnnotations === true;
   const lookupOnce = createRunLookup<string | undefined>();
@@ -115,6 +118,7 @@ export function bindKeyring<M extends Mode, TState>(
   // state. In that case, delegate using the inner parser's initial state.
   const innerState = (state: unknown): TState =>
     isBindState(state) ? state.cliState : parser.initialState;
+
   const withInnerState = <TResult>(
     state: unknown,
     run: (state: TState) => TResult,
@@ -125,6 +129,7 @@ export function bindKeyring<M extends Mode, TState>(
       run,
       parserInheritsAnnotations,
     );
+
   const innerNodes = (
     state: unknown,
     path: readonly PropertyKey[] = [],
@@ -134,17 +139,21 @@ export function bindKeyring<M extends Mode, TState>(
       (annotatedState) =>
         parser.getSuggestRuntimeNodes?.(annotatedState, path) ?? [],
     );
+
   const isInnerDemanded = (state: unknown, exec?: ExecutionContext): boolean =>
     innerNodes(state, exec?.path).some((node) => {
       const id = node.parser.dependencyMetadata?.source?.sourceId;
       return id != null &&
         exec?.effectfulCompletionSession?.demanded.has(id) === true;
     });
+
   const preparedKey = (path: readonly PropertyKey[] = []): string =>
     serializeSchedulingPath([stateId, ...path]);
+
   const isPreparedInner = (value: unknown): value is PreparedInner =>
     value != null && typeof value === "object" &&
     stateKey in value && value[stateKey] === stateId;
+
   const completeInner = (
     state: BindState<TState>,
     exec?: ExecutionContext,
@@ -153,6 +162,7 @@ export function bindKeyring<M extends Mode, TState>(
       preparedKey(exec.path),
     );
     if (isPreparedInner(prepared)) return Promise.resolve(prepared.result);
+
     return Promise.resolve(withInnerState(
       state,
       (annotatedState) => parser.complete(annotatedState, exec),
@@ -174,6 +184,7 @@ export function bindKeyring<M extends Mode, TState>(
       hasCliValue: false,
       cliState: parser.initialState,
     },
+
     canSkip(state, exec) {
       if (
         !(isBindState(state) && state.hasCliValue) &&
@@ -181,11 +192,13 @@ export function bindKeyring<M extends Mode, TState>(
       ) {
         return true;
       }
+
       return withInnerState(
         state,
         (annotatedState) => parser.canSkip?.(annotatedState, exec) === true,
       );
     },
+
     getSuggestRuntimeNodes(state, path) {
       return delegateSuggestNodes(
         parser,
@@ -196,14 +209,17 @@ export function bindKeyring<M extends Mode, TState>(
         "prepend",
       );
     },
+
     async parse(context): Promise<ParserResult<BindState<TState>>> {
       const annotations = getAnnotations(context.state);
       const state = innerState(context.state);
+
       const result = await withInnerState(
         context.state,
         (annotatedState) => parser.parse({ ...context, state: annotatedState }),
       );
       if (!result.success && result.consumed > 0) return result;
+
       const consumedOnlyTerminator = result.success &&
         !context.optionsTerminated && result.next.optionsTerminated &&
         result.consumed.length === 1 && result.consumed[0] === "--";
@@ -215,6 +231,7 @@ export function bindKeyring<M extends Mode, TState>(
             !consumedOnlyTerminator),
         cliState: result.success ? result.next.state : state,
       }, annotations);
+
       return {
         success: true,
         ...(result.success && result.provisional
@@ -227,10 +244,12 @@ export function bindKeyring<M extends Mode, TState>(
         consumed: result.success ? result.consumed : [],
       };
     },
+
     async complete(state, exec): Promise<ValueParserResult<string>> {
       if (isBindState(state) && state.hasCliValue) {
         return await completeInner(state, exec);
       }
+
       const annotations = getAnnotations(state);
       const sourceData = annotations?.[options.context.id];
       if (exec != null && exec.phase !== "complete") {
@@ -239,6 +258,7 @@ export function bindKeyring<M extends Mode, TState>(
         }
         return await completeInner(state, exec);
       }
+
       if (!isSourceData(sourceData)) {
         const innerResult = await completeInner(state, exec);
         return annotations != null && !innerResult.success
@@ -249,8 +269,10 @@ export function bindKeyring<M extends Mode, TState>(
           }
           : innerResult;
       }
+
       const session = exec?.effectfulCompletionSession;
       const sourceId = boundParser.dependencyMetadata?.source?.sourceId;
+
       // The seed pass only needs credentials demanded by dependencies.
       // A construct wrapper can also guard sources demanded by siblings.
       if (
@@ -261,12 +283,14 @@ export function bindKeyring<M extends Mode, TState>(
       ) {
         return { success: true, value: "", deferred: true };
       }
+
       const value = await lookupOnce(
         session?.results,
         exec?.path,
         () => sourceData.source(options.service, options.username),
       );
       if (value === undefined) return await completeInner(state, exec);
+
       let result: ValueParserResult<string>;
       try {
         result = typeof parser.validateValue === "function"
@@ -285,11 +309,14 @@ export function bindKeyring<M extends Mode, TState>(
           error: message`The password from the keyring failed validation.`,
         };
       }
+
       if (sourceId != null) {
         session?.effectfulSources.add(sourceId);
       }
+
       return result;
     },
+
     async *suggest(context, prefix) {
       const suggestions = withInnerState(
         context.state,
@@ -298,10 +325,12 @@ export function bindKeyring<M extends Mode, TState>(
       );
       yield* suggestions;
     },
+
     getDocFragments(state, upperDefaultValue) {
       if (state.kind === "unavailable") {
         return parser.getDocFragments(state, upperDefaultValue);
       }
+
       return withInnerState(
         state.state,
         (annotatedState) =>
@@ -311,6 +340,7 @@ export function bindKeyring<M extends Mode, TState>(
           ),
       );
     },
+
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
         shouldDeferCompletion: (
@@ -330,6 +360,7 @@ export function bindKeyring<M extends Mode, TState>(
     inheritsAnnotations: true,
     completesFromSource: true,
   });
+
   if ("placeholder" in parser) {
     Object.defineProperty(boundParser, "placeholder", {
       get: () => parser.placeholder,
@@ -337,6 +368,7 @@ export function bindKeyring<M extends Mode, TState>(
       enumerable: false,
     });
   }
+
   for (const hook of ["normalizeValue", "validateValue"] as const) {
     if (typeof parser[hook] === "function") {
       Object.defineProperty(boundParser, hook, {
@@ -346,6 +378,7 @@ export function bindKeyring<M extends Mode, TState>(
       });
     }
   }
+
   const dependencyMetadata = mapSourceMetadata(
     parser,
     (source: ParserSourceMetadata<M, string, TState>) => ({
@@ -360,6 +393,7 @@ export function bindKeyring<M extends Mode, TState>(
         ) {
           return undefined;
         }
+
         return source.extractSourceValue(
           isBindState(state) ? state.cliState : state,
         );
@@ -383,6 +417,7 @@ export function bindKeyring<M extends Mode, TState>(
       enumerable: false,
     });
   }
+
   defineForwardedEffectfulSchedulingNodes(
     boundParser,
     parser,
@@ -399,6 +434,7 @@ export function bindKeyring<M extends Mode, TState>(
         ) {
           return schedulingNodes(state, path);
         }
+
         // Keep inner effects behind the outer lookup, but prepare a missing
         // fallback before the parent replays sibling dependency consumers.
         // Suggestion nodes describe the active sources without completing them;
@@ -406,16 +442,19 @@ export function bindKeyring<M extends Mode, TState>(
         const nodes = innerNodes(state, path);
         const providesSourceIds = new Set<symbol>();
         const dependencyIds = new Set<symbol>();
+
         for (const node of nodes) {
           const metadata = node.parser.dependencyMetadata;
           if (metadata?.source != null) {
             providesSourceIds.add(metadata.source.sourceId);
           }
+
           for (const id of metadata?.completion?.dependencyIds ?? []) {
             dependencyIds.add(id);
           }
         }
         if (providesSourceIds.size === 0) return [];
+
         return [{
           path: path ?? [],
           parser: {},
@@ -433,12 +472,14 @@ export function bindKeyring<M extends Mode, TState>(
               exec.effectfulCompletionSession?.policy === "demand-only" &&
               !isInnerDemanded(state, exec)
             ) return;
+
             const value = await lookupOnce(
               exec.effectfulCompletionSession?.results,
               path,
               () => sourceData.source(options.service, options.username),
             );
             if (value !== undefined) return;
+
             const result = await completeInner(
               isBindState(state) ? state : injectAnnotations(
                 boundParser.initialState,
@@ -457,6 +498,7 @@ export function bindKeyring<M extends Mode, TState>(
                 { [stateKey]: stateId, result } satisfies PreparedInner,
               );
             }
+
             return result.success ? undefined : result;
           },
         }];
@@ -465,5 +507,6 @@ export function bindKeyring<M extends Mode, TState>(
       enumerable: false,
     });
   }
+
   return fluent(boundParser);
 }

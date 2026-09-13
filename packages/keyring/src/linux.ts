@@ -13,7 +13,9 @@ import {
 const destination = "org.freedesktop.secrets";
 const servicePath = "/org/freedesktop/secrets";
 const serviceInterface = "org.freedesktop.Secret.Service";
+
 const algorithm = "dh-ietf1024-sha256-aes128-cbc-pkcs7";
+
 // RFC 2409, section 6.2. Bun does not expose this group as "modp2".
 const prime = Buffer.from(
   "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1" +
@@ -46,6 +48,7 @@ export async function readLinuxPassword(
     // The library's event map omits the error event it emits at runtime.
     const events: EventEmitter = bus;
     events.on("error", (error: unknown) => reject(error));
+
     timer = setTimeout(() => {
       reject(
         new DOMException(
@@ -55,6 +58,7 @@ export async function readLinuxPassword(
       );
     }, 30_000);
   });
+
   try {
     return await Promise.race([
       readPassword(bus, service, username),
@@ -62,6 +66,7 @@ export async function readLinuxPassword(
     ]);
   } finally {
     clearTimeout(timer);
+
     // Closing this connection also closes its Secret Service session.
     bus.disconnect();
   }
@@ -89,6 +94,7 @@ async function call(
   if (reply == null || reply.signature !== replySignature) {
     throw new TypeError("The Secret Service returned an invalid response.");
   }
+
   return reply.body;
 }
 
@@ -109,6 +115,7 @@ async function readPassword(
   if (!isPaths(unlocked) || !isPaths(locked)) {
     throw new TypeError("The Secret Service returned invalid search results.");
   }
+
   const paths = [...new Set([...unlocked, ...locked])];
   if (paths.length === 0) return undefined;
   if (paths.length > 1) {
@@ -144,6 +151,7 @@ async function readPassword(
   const key = Buffer.from(
     hkdfSync("sha256", dh.computeSecret(output.value), "", "", 16),
   );
+
   const [secret] = await call(
     bus,
     paths[0],
@@ -160,11 +168,13 @@ async function readPassword(
   ) {
     throw new TypeError("The Secret Service returned an invalid secret.");
   }
+
   const decipher = createDecipheriv("aes-128-cbc", key, secret[1]);
   const password = Buffer.concat([
     decipher.update(secret[2]),
     decipher.final(),
   ]);
+
   return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
     password,
   );

@@ -42,6 +42,7 @@ async function defaultKeyringSource(
     const { readLinuxPassword } = await import("./linux.ts");
     return await readLinuxPassword(service, username);
   }
+
   const { AsyncEntry } = await import("@napi-rs/keyring");
   return await new AsyncEntry(service, username).getPassword() ?? undefined;
 }
@@ -74,6 +75,7 @@ export function createKeyringContext(
       `Expected source to be a function, but got: ${getTypeName(rawSource)}.`,
     );
   }
+
   const source = rawSource ?? defaultKeyringSource;
   const contextId = Symbol(`@optique/keyring context:${Math.random()}`);
 

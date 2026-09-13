@@ -20,6 +20,7 @@ const available = process.platform === "linux" &&
 
 describe("Secret Service password lookup", { skip: !available }, () => {
   if (!available) return;
+
   let address: string;
   let service: MessageBus;
   let stop: () => Promise<void>;
@@ -33,6 +34,7 @@ describe("Secret Service password lookup", { skip: !available }, () => {
       service.disconnect();
       await daemon.stop();
     };
+
     await once(service, "connect");
     await service.requestName("org.freedesktop.secrets", 0);
     service.addMethodHandler((request) => {
@@ -57,6 +59,7 @@ describe("Secret Service password lookup", { skip: !available }, () => {
         service: "example.test",
         username: "alice",
       }]);
+
       return Message.newMethodReturn(request, "aoao", [[], []]);
     };
 
@@ -80,6 +83,7 @@ describe("Secret Service password lookup", { skip: !available }, () => {
   it("should reject a locked matching credential without reading it", async () => {
     respond = (request) => {
       assert.equal(request.member, "SearchItems");
+
       return Message.newMethodReturn(request, "aoao", [[], ["/item/locked"]]);
     };
 
@@ -91,6 +95,7 @@ describe("Secret Service password lookup", { skip: !available }, () => {
   it("should reject ambiguous matches across locked and unlocked items", async () => {
     respond = (request) => {
       assert.equal(request.member, "SearchItems");
+
       return Message.newMethodReturn(request, "aoao", [["/item/one"], [
         "/item/two",
       ]]);
@@ -155,16 +160,19 @@ describe("Secret Service password lookup", { skip: !available }, () => {
 
 function encryptedStore(password: Buffer): (request: Message) => Message {
   let key: Buffer;
+
   return (request) => {
     if (request.member === "SearchItems") {
       return Message.newMethodReturn(request, "aoao", [["/item/one"], []]);
     }
+
     if (request.member === "OpenSession") {
       assert.equal(request.body[0], "dh-ietf1024-sha256-aes128-cbc-pkcs7");
       const input = request.body[1];
       assert.ok(input instanceof Variant);
       assert.equal(input.signature, "ay");
       assert.ok(input.value instanceof Uint8Array);
+
       const dh = createDiffieHellman(
         Buffer.from(
           "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1" +
@@ -181,17 +189,21 @@ function encryptedStore(password: Buffer): (request: Message) => Message {
       key = Buffer.from(
         hkdfSync("sha256", dh.computeSecret(input.value), "", "", 16),
       );
+
       return Message.newMethodReturn(request, "vo", [
         new Variant("ay", publicKey),
         "/session/one",
       ]);
     }
+
     assert.equal(request.member, "GetSecret");
     assert.equal(request.path, "/item/one");
     assert.deepEqual(request.body, ["/session/one"]);
+
     const iv = Buffer.alloc(16, 1);
     const cipher = createCipheriv("aes-128-cbc", key, iv);
     const encrypted = Buffer.concat([cipher.update(password), cipher.final()]);
+
     return Message.newMethodReturn(request, "(oayays)", [[
       "/session/one",
       iv,
@@ -214,11 +226,13 @@ async function startBus(): Promise<{
     `--address=unix:path=${join(directory, "bus")}`,
   ], { stdio: ["ignore", "pipe", "pipe"] });
   const closed = once(child, "close");
+
   const stop = async () => {
     child.kill();
     await closed;
     await rm(directory, { recursive: true, force: true });
   };
+
   try {
     const address = await new Promise<string>((resolve, reject) => {
       let output = "";
@@ -233,6 +247,7 @@ async function startBus(): Promise<{
         if (newline >= 0) resolve(output.slice(0, newline));
       });
     });
+
     return { address, stop };
   } catch (error) {
     await stop();

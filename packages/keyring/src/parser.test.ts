@@ -558,6 +558,7 @@ describe("bindKeyring()", () => {
             assert.match(error.message, /keyring.*validat/i);
             assert.ok(!error.message.includes(secret));
             assert.equal(error.cause, undefined);
+
             return true;
           },
         );
@@ -680,7 +681,9 @@ describe("bindKeyring()", () => {
 
       assert.ok(metadata != null);
       assert.equal(typeof metadata.completeSource, "function");
+
       await metadata.extractSourceValue?.(parser.initialState);
+
       assert.equal(calls, 0);
     });
 
@@ -798,6 +801,7 @@ describe("bindKeyring()", () => {
         runWith(parser, "test", [keyringContext, envContext], { args: [] }),
         (error) => error === failure,
       );
+
       assert.deepEqual(lookups, ["keyring", "environment"]);
     });
 
@@ -1051,10 +1055,13 @@ describe("bindKeyring()", () => {
         parser.dependencyMetadata?.source?.completeSource,
         undefined,
       );
+
       await suggestAsync(parser, ["--"]);
+
       assert.equal(calls, 0);
 
       const result = await parseWithContext(parser, [], context);
+
       assert.ok(result.success);
       assert.equal(result.value, "stored-value");
       assert.equal(calls, 1);
@@ -1100,6 +1107,7 @@ describe("bindKeyring()", () => {
                 });
               }
             }
+
             return {};
           },
         };
@@ -1170,13 +1178,16 @@ describe("bindKeyring()", () => {
         stdout: () => {},
         stderr: () => {},
       });
+
       const version = await runWith(parser, "test", [context], {
         args: ["--version"],
         version: { value: "1.0.0", option: true, onShow: () => "version" },
         stdout: () => {},
         stderr: () => {},
       });
+
       await suggestAsync(parser, ["--"]);
+
       const annotations = await context.getAnnotations();
       const state = injectAnnotations(parser.initialState, annotations);
       await parser.complete(
@@ -1202,6 +1213,7 @@ describe("bindKeyring()", () => {
         phase: "two-pass",
         getAnnotations(request) {
           if (request?.phase === "phase2") events.push("phase2");
+
           return {};
         },
       };
@@ -1340,6 +1352,7 @@ describe("bindKeyring()", () => {
         parser.complete(state, secondExec),
         (error) => error === sentinel,
       );
+
       assert.equal(calls, 1);
     });
 
@@ -1385,6 +1398,7 @@ describe("bindKeyring()", () => {
             state,
             executionContext(parser, { results, path }),
           );
+
         const [first, second, repeated] = await Promise.all([
           completeAt(firstPath),
           completeAt(secondPath),
@@ -1477,6 +1491,7 @@ describe("bindKeyring()", () => {
         service: "quality.test",
         username: "dummy",
       });
+
       const expected = await getDocPageAsync(inner);
 
       assert.deepEqual(await getDocPageAsync(bound), expected);
@@ -1495,12 +1510,15 @@ describe("bindKeyring()", () => {
         parse(context) {
           return { success: true, consumed: [], next: context };
         },
+
         complete(state) {
           return { success: true, value: state.toISOString() };
         },
+
         suggest() {
           return [];
         },
+
         getDocFragments(state) {
           return {
             fragments: [],
@@ -1520,6 +1538,7 @@ describe("bindKeyring()", () => {
       });
 
       const expected = await getDocPageAsync(inner);
+
       assert.deepEqual(await getDocPageAsync(bound), expected);
     });
 
@@ -1557,6 +1576,7 @@ function modeDependency() {
       choice(value === "dev" ? ["debug"] as const : ["silent"] as const),
     defaultValue: () => "dev" as const,
   });
+
   return { mode, level };
 }
 
@@ -1599,6 +1619,7 @@ function executionContext(
     preparedByPath: new Map(),
     missingDefaultsByOccurrence: new WeakMap(),
   };
+
   return {
     usage: parser.usage,
     phase: options.phase ?? "complete",
