@@ -172,11 +172,15 @@ export function bindKeyring<M extends Mode, TState>(
         (annotatedState) => parser.parse({ ...context, state: annotatedState }),
       );
       if (!result.success && result.consumed > 0) return result;
+      const consumedOnlyTerminator = result.success &&
+        !context.optionsTerminated && result.next.optionsTerminated &&
+        result.consumed.length === 1 && result.consumed[0] === "--";
       const nextState = injectAnnotations({
         [stateKey]: stateId,
         hasCliValue:
           (isBindState(context.state) && context.state.hasCliValue) ||
-          (result.success && result.consumed.length > 0),
+          (result.success && result.consumed.length > 0 &&
+            !consumedOnlyTerminator),
         cliState: result.success ? result.next.state : state,
       }, annotations);
       return {

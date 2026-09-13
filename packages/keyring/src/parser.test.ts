@@ -109,6 +109,33 @@ describe("bindKeyring()", () => {
   });
 
   describe("fallback precedence", () => {
+    for (const valueParser of [string(), asyncString()]) {
+      it(`should keep the keyring fallback after a terminator with a ${valueParser.mode} parser`, async () => {
+        const context = createKeyringContext({
+          source: () => Promise.resolve("stored-value"),
+        });
+        const parser = bindKeyring(
+          option("--password", valueParser),
+          binding(context),
+        );
+
+        const result = await parseWithContext(parser, ["--"], context);
+
+        assert.deepEqual(result, { success: true, value: "stored-value" });
+      });
+    }
+
+    it("should keep a literal terminator supplied as a CLI value", async () => {
+      const context = createKeyringContext({
+        source: () => Promise.reject(new Error("Unexpected keyring access.")),
+      });
+      const parser = bindKeyring(argument(string()), binding(context));
+
+      const result = await parseWithContext(parser, ["--", "--"], context);
+
+      assert.deepEqual(result, { success: true, value: "--" });
+    });
+
     it("should prefer a CLI value for a synchronous inner parser", async () => {
       let calls = 0;
       const context = createKeyringContext({
