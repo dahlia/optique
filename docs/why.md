@@ -483,6 +483,11 @@ integration packages extend it for common use cases:
  -  *[@optique/env](./integrations/env.md)*: Binds parser values to
     environment variables with configurable priority
     (CLI > environment > default).
+ -  *[@optique/keyring](./integrations/keyring.md)*: An async fallback from the
+    operating system credential store. Use it for secrets rather than config
+    files, register `contexts: [keyringContext]`, and set source precedence
+    through wrapper nesting. Missing credentials allow a fallback;
+    credential-store errors reject the parse.
  -  *[@optique/config](./integrations/config.md)*: Loads default values from
     configuration files, with schema validation via any Standard Schema-
     compatible library (Zod, Valibot, ArkType).
@@ -546,11 +551,11 @@ When Optique makes sense
 Optique shines in scenarios where CLI complexity grows over time and where
 consistency across related tools matters. Beyond argument parsing, Optique
 handles the full value resolution lifecycle: CLI arguments, environment
-variables, configuration files, and interactive prompts, all through the
-same composition model. If you're building a single simple script, the
-configuration approach of other libraries might serve you better. The
-functional programming concepts in Optique add value when you need the
-flexibility and reusability they enable.
+variables, operating-system credential fallback, configuration files, and
+interactive prompts, all through the same composition model. If you're
+building a single simple script, the configuration approach of other libraries
+might serve you better. The functional programming concepts in Optique add
+value when you need the flexibility and reusability they enable.
 
 Choose Optique when you're building CLI applications that will evolve, when
 you need to share patterns across multiple tools, or when you're working in

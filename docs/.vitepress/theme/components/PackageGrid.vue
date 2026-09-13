@@ -26,6 +26,7 @@ const groups = [
     role: "Value sources",
     packages: [
       { name: "@optique/env", desc: "Environment-variable fallbacks.", link: "/integrations/env" },
+      { name: "@optique/keyring", desc: "OS credential-store password fallback.", link: "/integrations/keyring" },
       { name: "@optique/config", desc: "Config-file values via Standard Schema.", link: "/integrations/config" },
       { name: "@optique/derived-defaults", desc: "Defaults derived from parsed values.", link: "/concepts/derived-defaults" },
       { name: "@optique/prompt", desc: "Adapter foundation for prompt libraries.", link: "/integrations/prompt" },

@@ -182,6 +182,23 @@ To be released.
 [#936]: https://github.com/dahlia/optique/issues/936
 [#940]: https://github.com/dahlia/optique/pull/940
 
+### @optique/keyring
+
+ -  Added OS credential-store password fallback through `@optique/keyring`, so
+    applications can keep secrets out of configuration files. Missing
+    credentials allow a fallback, while locked, inaccessible, or ambiguous
+    credential-store errors reject the parse. Keyring values take precedence
+    over inner fallbacks, including when used as dependency sources. The
+    credential store is accessed only when a password fallback is needed,
+    including in two-pass runs. Bound parsers preserve the inner parser's help
+    output and dependency sources inside selected commands and alternatives.
+    Stored-password validation failures hide their original details so
+    passwords do not appear in error output. [[#886], [#956] by [Minseok Youn]]
+
+[Minseok Youn]: https://github.com/black7375
+[#886]: https://github.com/dahlia/optique/issues/886
+[#956]: https://github.com/dahlia/optique/issues/956
+
 ### @optique/inquirer
 
  -  Added conditional prompt skipping to Inquirer.js prompt configurations with

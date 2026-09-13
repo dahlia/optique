@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
@@ -85,7 +86,7 @@ const STALE_OPTION_PATTERNS: {
 
 describe("README option shapes", () => {
   it("should not use stale run()/runParser() option shapes", async () => {
-    const root = new URL(".", import.meta.url).pathname;
+    const root = fileURLToPath(new URL(".", import.meta.url));
     const readmes = await findReadmeFiles(root);
     const violations: string[] = [];
 
@@ -110,7 +111,7 @@ describe("README option shapes", () => {
 
 describe("README run() usage", () => {
   it("should not call run() with a plain object instead of a parser", async () => {
-    const root = new URL(".", import.meta.url).pathname;
+    const root = fileURLToPath(new URL(".", import.meta.url));
     const readmes = await findReadmeFiles(root);
     const violations: string[] = [];
     // Match run({ ... }) but not run(object({ ... })) or run(parser, { ... })
@@ -141,7 +142,7 @@ describe("README run() usage", () => {
   });
 
   it("should not import object from @optique/core/primitives", async () => {
-    const root = new URL(".", import.meta.url).pathname;
+    const root = fileURLToPath(new URL(".", import.meta.url));
     const readmes = await findReadmeFiles(root);
     const violations: string[] = [];
     const pattern =
@@ -166,7 +167,7 @@ describe("README run() usage", () => {
   });
 
   it("should not use plain strings for option descriptions", async () => {
-    const root = new URL(".", import.meta.url).pathname;
+    const root = fileURLToPath(new URL(".", import.meta.url));
     const readmes = await findReadmeFiles(root);
     const violations: string[] = [];
     // Match description: "..." (plain string instead of message`...`)
@@ -198,7 +199,7 @@ describe("README run() usage", () => {
 
 describe("README imports", () => {
   it("should not import primitives/constructs/modifiers from @optique/core/parser", async () => {
-    const root = new URL(".", import.meta.url).pathname;
+    const root = fileURLToPath(new URL(".", import.meta.url));
     const readmes = await findReadmeFiles(root);
     const violations: string[] = [];
 

@@ -152,6 +152,9 @@ Architecture
     results.
  -  *@optique/env* (*packages/env/*): Environment variable integration.
     Provides `createEnvContext()`, `bindEnv()`, and `bool()`.
+ -  *@optique/keyring* (*packages/keyring/*): OS credential-store integration.
+    Provides `createKeyringContext()` and `bindKeyring()` for async password
+    fallback.
  -  *@optique/prompt* (*packages/prompt/*): Generic prompt adapter foundation.
     Provides `createPromptAdapter()` for prompt-library integrations.
  -  *@optique/clack* (*packages/clack/*): Interactive prompt integration for

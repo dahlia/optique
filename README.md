@@ -45,7 +45,8 @@ Why Optique
  -  *One parser, many outputs*: Derive help text, shell completions, and
     (with *@optique/man*) man pages from the same parser definition.
  -  *Practical integrations*: Extend parsers with config files, environment
-    variables, schema validators, interactive prompts, and git-aware parsing.
+    variables, OS credential stores, schema validators, interactive prompts, and
+    git-aware parsing.
  -  *Command discovery*: Split larger command trees into files with
     *@optique/discover* while keeping parser-driven help and completion.
  -  *Cross-runtime consistency*: Use the same parser model in Deno, Node.js,
@@ -70,6 +71,8 @@ Features
     more
  -  *Environment variable support*: Bind options to environment variables
     with type-safe parsing and fallback behavior (via *@optique/env*)
+ -  *OS credential-store support*: Fill missing password options from the OS
+    credential store with async fallback behavior (via *@optique/keyring*)
  -  *Derived defaults*: Compute default values from the first-pass parse result
     without lowering CLI argument priority (via *@optique/derived-defaults*)
  -  *Interactive prompts*: Prompt users for missing values via Inquirer.js or
@@ -193,6 +196,7 @@ The following is a list of the available packages:
 | [@optique/clack](/packages/clack/)                       | [JSR][jsr:@optique/clack]            | [npm][npm:@optique/clack]            | [Clack] prompt support                      |
 | [@optique/derived-defaults](/packages/derived-defaults/) | [JSR][jsr:@optique/derived-defaults] | [npm][npm:@optique/derived-defaults] | Defaults derived from parsed values         |
 | [@optique/env](/packages/env/)                           | [JSR][jsr:@optique/env]              | [npm][npm:@optique/env]              | Environment variable integration            |
+| [@optique/keyring](/packages/keyring/)                   | [JSR][jsr:@optique/keyring]          | [npm][npm:@optique/keyring]          | OS credential-store password fallback       |
 | [@optique/git](/packages/git/)                           | [JSR][jsr:@optique/git]              | [npm][npm:@optique/git]              | Git reference parsers (branches, tags, etc) |
 | [@optique/logtape](/packages/logtape/)                   | [JSR][jsr:@optique/logtape]          | [npm][npm:@optique/logtape]          | [LogTape] logging integration               |
 | [@optique/man](/packages/man/)                           | [JSR][jsr:@optique/man]              | [npm][npm:@optique/man]              | Man page generation from parsers            |
@@ -220,6 +224,8 @@ The following is a list of the available packages:
 [npm:@optique/derived-defaults]: https://www.npmjs.com/package/@optique/derived-defaults
 [jsr:@optique/env]: https://jsr.io/@optique/env
 [npm:@optique/env]: https://www.npmjs.com/package/@optique/env
+[jsr:@optique/keyring]: https://jsr.io/@optique/keyring
+[npm:@optique/keyring]: https://www.npmjs.com/package/@optique/keyring
 [jsr:@optique/git]: https://jsr.io/@optique/git
 [npm:@optique/git]: https://www.npmjs.com/package/@optique/git
 [jsr:@optique/logtape]: https://jsr.io/@optique/logtape

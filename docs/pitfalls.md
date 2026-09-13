@@ -267,6 +267,7 @@ command line, and they are easy to conflate. They serve different purposes:
 | [Derived defaults](./concepts/derived-defaults.md) | *@optique/derived-defaults* | Computes a *default value* from values already parsed (second pass) | plain value |
 | [Config files](./integrations/config.md)           | *@optique/config*           | Supplies a fallback from a configuration file                       | plain value |
 | [Environment variables](./integrations/env.md)     | *@optique/env*              | Supplies a fallback from an environment variable                    | plain value |
+| [Keyring](./integrations/keyring.md)               | *@optique/keyring*          | Async OS credential fallback                                        | plain value |
 | `deferredValue()`                                  | *@optique/core/modifiers*   | Defers resolution to the handler (prompt, network, conditional)     | a function  |
 
 The single most common mistake here is forgetting to register the context:
@@ -284,10 +285,28 @@ await runAsync(parser, { contexts: [envContext] });
 //                       ^^^^^^^^^^^^^^^^^^^^^^^^ required
 ~~~~
 
-When several sources apply to the same option, the documented resolution chain
-is *CLI argument > environment variable > config file > static default*. The
-order is determined by how you nest the bindings: an outer wrapper overrides an
-inner one. Derived defaults slot in wherever you wrap them in that chain.
+`bindKeyring()` also needs its own context registered. For an environment
+binding around a keyring binding, register both:
+
+~~~~ typescript
+await runAsync(parser, { contexts: [envContext, keyringContext] });
+~~~~
+
+Missing keyring registration skips the lookup. If a different context was
+registered and the inner parser fails, `bindKeyring()` can report the missing
+context instead of the usual missing-value error.
+
+Fallback precedence depends on how source bindings are nested. For example,
+`bindEnv(bindConfig(...))` with a config default gives *CLI argument >
+environment variable > config file > static default*. Reversing the bindings
+lets config values override the environment. `bindKeyring()` and
+`bindDerivedDefault()` likewise try their source before an inner fallback,
+while an explicit CLI value still wins. Modifiers such as `withDefault()` try
+the inner parser before using their default.
+
+For secrets, use keyring and hidden input instead of CLI options or config
+files. See the [keyring guide](./integrations/keyring.md) for password prompts
+and API keys supplied by the environment or credential store.
 
 A few more points worth knowing:
 
@@ -322,6 +341,9 @@ A few more points worth knowing:
     `constant()`.* `constant()` always succeeds, so `bindConfig()` treats it as
     a value the user supplied and skips the file lookup entirely. `fail()`
     always fails, which is what lets the fallback take over.
+ -  *Missing credentials and keyring errors are different.* A missing password
+    allows a fallback. Locked, inaccessible, or ambiguous credential-store
+    errors reject the parse, even under `optional()` or `withDefault()`.
 
 
 Value parser surprises

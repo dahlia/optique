@@ -12,12 +12,18 @@ catalogs:
     '@inquirer/prompts':
       specifier: ^8.3.0
       version: 8.3.0
+    '@jellybrick/dbus-next':
+      specifier: 0.11.3
+      version: 0.11.3
     '@logtape/file':
       specifier: ^2.2.2
       version: 2.2.2
     '@logtape/logtape':
       specifier: ^2.2.2
       version: 2.2.2
+    '@napi-rs/keyring':
+      specifier: 2.0.0
+      version: 2.0.0
     '@standard-schema/spec':
       specifier: ^1.1.0
       version: 1.1.0
@@ -90,6 +96,9 @@ importers:
       '@optique/inquirer':
         specifier: 'workspace:'
         version: link:../packages/inquirer
+      '@optique/keyring':
+        specifier: 'workspace:'
+        version: link:../packages/keyring
       '@optique/logtape':
         specifier: 'workspace:'
         version: link:../packages/logtape
@@ -386,6 +395,31 @@ importers:
       fast-check:
         specifier: 'catalog:'
         version: 4.7.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(supports-color@10.2.2)(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
+  packages/keyring:
+    dependencies:
+      '@jellybrick/dbus-next':
+        specifier: 'catalog:'
+        version: 0.11.3
+      '@napi-rs/keyring':
+        specifier: 'catalog:'
+        version: 2.0.0
+      '@optique/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@optique/env':
+        specifier: workspace:*
+        version: link:../env
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
       tsdown:
         specifier: 'catalog:'
         version: 0.13.0(supports-color@10.2.2)(typescript@5.8.3)
@@ -1189,6 +1223,10 @@ packages:
     resolution: {integrity: sha512-ZT55BDLV0yv0RBm2czMiZ+SqCGO7AvmOM3G/w2xhVPH+te0aKgFjmBvGlL1dH+ql2tgGO3MVrbb3jCKyvpgnxA==}
     engines: {node: 20 || >=22}
 
+  '@jellybrick/dbus-next@0.11.3':
+    resolution: {integrity: sha512-XaLIXFuG6YWmqmucY0/amh3VQpHXCOJ9mJMnwvvEOPdFFE6hQ3ZjdvkaWQuDWrN1qIfOoR9xTAGqFc3iWRpYbg==}
+    engines: {node: '>=12.20.0'}
+
   '@jridgewell/gen-mapping@0.3.12':
     resolution: {integrity: sha512-OuLGC46TjB5BbN1dH8JULVVZY4WTdkF7tV9Ys6wLL1rubZnCMstOhNHueU5bLCrnRuDhKPDM4g6sw4Bel5Gzqg==}
 
@@ -1223,8 +1261,92 @@ packages:
   '@mermaid-js/parser@1.2.0':
     resolution: {integrity: sha512-oYPyv8A4As1yH5Bx+04iQEQxXuIQDe0GKCNSRgao6z8AM9jixXIfP0vsppRLvGf+nKIOb9/LdpWA4YuJiVvESA==}
 
+  '@napi-rs/keyring-darwin-arm64@2.0.0':
+    resolution: {integrity: sha512-yvIfviiXpsDSsPdyzWWd7STZt7v774biPfMBpWkiK7rwauwWbOmVjUzgiJ11rbhJbWLqXE3CuQMyLgvcbm3jIA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@napi-rs/keyring-darwin-x64@2.0.0':
+    resolution: {integrity: sha512-XJUONH0c5cg7M9/1Vj3WeIi8TtWYdZlo8Jqho09ga8OWm9cFNxUv7+4QZx5UK/3JSp2qiyhTlresyKdcpwpnRw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@napi-rs/keyring-freebsd-x64@2.0.0':
+    resolution: {integrity: sha512-u/M114J9Lp3RqtIZihIqhvreNQ5f8wgLFo9tJFy+bIIO/xEHkMR0LENrfUF8hSY6FTNyS2kSbbkN6yOItBFY5g==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@napi-rs/keyring-linux-arm-gnueabihf@2.0.0':
+    resolution: {integrity: sha512-CHMv/KTuELo/MsrGUha52KrFGPBuBkeAonnMFUd3nNcxBTSmeJbCAZTuVSXzpessdpb4tT9xIMQsv2ZdWrl8iw==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [linux]
+
+  '@napi-rs/keyring-linux-arm64-gnu@2.0.0':
+    resolution: {integrity: sha512-BeUUPGSnW026yDGT4pKuNXDnwxw0xslwiSK6cuOIsDNLi3UO93rfF/7moqKznrBldgsZr8pl9LkMdRk8bnbjEA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@napi-rs/keyring-linux-arm64-musl@2.0.0':
+    resolution: {integrity: sha512-zj7wZ23Vs7SL4odnGDbWnhZhiyrnEgBe4+8dzKHDi1mTBX1d00FYlGOubkjvx3AeK7mm6G2FyFDDFqIxyR82gA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@napi-rs/keyring-linux-riscv64-gnu@2.0.0':
+    resolution: {integrity: sha512-xk/1SOhuk2yQvXiN+pBhR4njSfquLm1SUKUIJcPIeYV1bHFXbUsYrXdfy4NtynSW0lhs41zWjLXSdE8TLeTt2g==}
+    engines: {node: '>= 10'}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@napi-rs/keyring-linux-x64-gnu@2.0.0':
+    resolution: {integrity: sha512-12Dq6t2TOrQTibcJcfV5bnHbTvMwEz6zSDqQLHMO2x388gGFQBAeEvw7Hmt+R1QavxspTa2ptgI7axomu9TH+w==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@napi-rs/keyring-linux-x64-musl@2.0.0':
+    resolution: {integrity: sha512-7NJZvFUiL1FPCrSIQ1L4IUzN6l/2zoxT3IN6j3rHTuDdIEunJaycrUovDMvPlBNP1Vh3fSYz6Pp7tFjdt/1/oQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@napi-rs/keyring-win32-arm64-msvc@2.0.0':
+    resolution: {integrity: sha512-JTktZGXKow0HF/rhaZiQYB8DUS/iSX7S7FvJDoGxPT8mGavKE3w/vadtfKSBNDL4uGef3wu2Ll0XxSfDKBsm2Q==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@napi-rs/keyring-win32-ia32-msvc@2.0.0':
+    resolution: {integrity: sha512-AzvIFTqn1hJzCPu0foeYWn+kXruAIrVq3Z2IfJ24WPbIXUdD7+rcj49fqco7b14Z6C1aUfsSTyvrAgDfUWhKvA==}
+    engines: {node: '>= 10'}
+    cpu: [ia32]
+    os: [win32]
+
+  '@napi-rs/keyring-win32-x64-msvc@2.0.0':
+    resolution: {integrity: sha512-POpEUTV6U+pb69cpuOgtLV4xhcyEWDWq+/9zdiZmNxTL1AenE0MllWrbepS+Hng4M7EarQ5TB3kX69ASqGwfIw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@napi-rs/keyring@2.0.0':
+    resolution: {integrity: sha512-TnrIt0nO9U2Ue9E9vJQjso1hqhIYiGrn2Ew1HBsMSqQe4+ceOqPJJwRVsV0/Wy7pqp04/doOLASyIFM3gGwZJw==}
+    engines: {node: '>= 10'}
+
   '@napi-rs/wasm-runtime@1.0.1':
     resolution: {integrity: sha512-KVlQ/jgywZpixGCKMNwxStmmbYEMyokZpCf2YuIChhfJA2uqfAKNEM8INz7zzTo55iEXfBhIIs3VqYyqzDLj8g==}
+
+  '@nodable/entities@3.0.0':
+    resolution: {integrity: sha512-8L9xFeTYKhm49xfIypoe2W5wV1m/3Z58kT+7kR9A8OyFxcPduI4VmxaUMQyKYrRjUoLLSXv6EKKID5Tvj9cUVw==}
 
   '@oxc-project/runtime@0.77.3':
     resolution: {integrity: sha512-vsC/ewcGJ7xXnnwZkku7rpPH5Lxb5g4J+V6lD9eBTnRLmXVXM7Qu50y+ozD+UD5IXaSoVOvVMGTT4YSNCz2MQQ==}
@@ -1788,6 +1910,9 @@ packages:
     resolution: {integrity: sha512-BGcItUBWSMRgOCe+SVZJ+S7yTRG0eGt9cXAHev72yuGcY23hnLA7Bky5L/xLyPINoSN95geovfBkqoTlNZYa7w==}
     engines: {node: '>=14'}
 
+  anynum@1.0.1:
+    resolution: {integrity: sha512-N6//FLET/tXYNM/F6ABca1oH6fWB+KlTt909Le28WMDBk8oaT4vY17DCrwg2MvmuqUKt3Ni4N5dGJ/EoBgcO6A==}
+
   argparse@1.0.10:
     resolution: {integrity: sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg==}
 
@@ -2302,6 +2427,13 @@ packages:
   fast-wrap-ansi@0.2.0:
     resolution: {integrity: sha512-rLV8JHxTyhVmFYhBJuMujcrHqOT2cnO5Zxj37qROj23CP39GXubJRBUFF0z8KFK77Uc0SukZUf7JZhsVEQ6n8w==}
 
+  fast-xml-builder@1.3.1:
+    resolution: {integrity: sha512-pIM/1n3ntFXKYrUZwW7QCK0gAW7XY+wzj1YMIV3tLDvPj/V+zTGJK5e3/4WJfwj0qWw2ElNXiTixda/R+3YSug==}
+
+  fast-xml-parser@5.11.1:
+    resolution: {integrity: sha512-TBw6K/fxoQGGjCmZDw9w/ZwP3uDcnTM4YH/g+PFRWr8sbe5idXtxNN6vITh4+1ruCZaho6uBFurElsA7F0zzgw==}
+    hasBin: true
+
   fault@2.0.1:
     resolution: {integrity: sha512-WtySTkS4OKev5JtpHXnib4Gxiurzh5NCGvWrFaZ34m6JehfTUhKZvn9njTfw48t6JumVQOmrKqpmGcdwxnhqBQ==}
 
@@ -2450,6 +2582,9 @@ packages:
   is-typed-array@1.1.15:
     resolution: {integrity: sha512-p3EcsicXjit7SaskXHs1hA91QxgTw46Fv6EFKKGS5DRFLD8yKnohjF3hxoju94b/OcMZoQukzpPpBE9uLVKzgQ==}
     engines: {node: '>= 0.4'}
+
+  is-unsafe@2.0.2:
+    resolution: {integrity: sha512-HgbIHPBH0KHHCcjLfGsCvhtPTVxjaAZlXjwdz7/GQC40SjSe4sfQsar8J5VFo8JOSbarkpV0OLG95bbaNd9aAQ==}
 
   is-what@4.1.16:
     resolution: {integrity: sha512-ZhMwEosbFJkA0YhFnNDgTM4ZxDRsS6HqTo7qsZM08fehyRYIYa0yHu5R6mgo1n/8MgaPBXiPimPD77baVFYg+A==}
@@ -2737,6 +2872,10 @@ packages:
   path-data-parser@0.1.0:
     resolution: {integrity: sha512-NOnmBpt5Y2RWbuv0LMzsayp3lVylAHLPUTut412ZA3l+C4uw4ZVkQbjShYCQ8TCpUMdPapr4YjUqLYD6v68j+w==}
 
+  path-expression-matcher@1.6.2:
+    resolution: {integrity: sha512-enSlaiat05iasnzmgNxRj8reFdj3puY2QpNgP1aPIaVfT6nn9ICuPoFlKHk8EN22HcwewshO+mN2DGbkCEOtqQ==}
+    engines: {node: '>=14.0.0'}
+
   path-to-regexp@6.3.0:
     resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
 
@@ -2949,6 +3088,9 @@ packages:
   strip-bom-string@1.0.0:
     resolution: {integrity: sha512-uCC2VHvQRYu+lMh4My/sFNmF2klFymLX1wHJeXnbEJERpV/ZsVuonzerjfrGpIGF7LBVa1O7i9kjiWvJiFck8g==}
     engines: {node: '>=0.10.0'}
+
+  strnum@2.4.2:
+    resolution: {integrity: sha512-rDG3Ah4TV0k1hWvLSzkZtMmLN9+eS+h3knq4MP6A42Y3Yh5qGNnOUs1jJkoSr8FG5dsL28c7KgkIBzSEykqtuw==}
 
   stylis@4.4.0:
     resolution: {integrity: sha512-5Z9ZpRzfuH6l/UAvCPAPUo3665Nk2wLaZU3x+TLHKVzIz33+sbJqbtrYoC3KD4/uVOr2Zp+L0LySezP9OHV9yA==}
@@ -3221,6 +3363,10 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
+
+  xml-naming@0.3.0:
+    resolution: {integrity: sha512-ghig2TBE/H11aOVgmahA3MhimvkBr6JIYknH/Dhdk10nXwdbIqBJsbfMxpvFPG8bAw77gN29aQWvKpmVoPlvPQ==}
+    engines: {node: '>=16.0.0'}
 
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
@@ -3699,6 +3845,11 @@ snapshots:
     dependencies:
       '@isaacs/balanced-match': 4.0.1
 
+  '@jellybrick/dbus-next@0.11.3':
+    dependencies:
+      fast-xml-builder: 1.3.1
+      fast-xml-parser: 5.11.1
+
   '@jridgewell/gen-mapping@0.3.12':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -3743,12 +3894,65 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
+  '@napi-rs/keyring-darwin-arm64@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-darwin-x64@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-freebsd-x64@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-linux-arm-gnueabihf@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-linux-arm64-gnu@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-linux-arm64-musl@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-linux-riscv64-gnu@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-linux-x64-gnu@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-linux-x64-musl@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-win32-arm64-msvc@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-win32-ia32-msvc@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring-win32-x64-msvc@2.0.0':
+    optional: true
+
+  '@napi-rs/keyring@2.0.0':
+    optionalDependencies:
+      '@napi-rs/keyring-darwin-arm64': 2.0.0
+      '@napi-rs/keyring-darwin-x64': 2.0.0
+      '@napi-rs/keyring-freebsd-x64': 2.0.0
+      '@napi-rs/keyring-linux-arm-gnueabihf': 2.0.0
+      '@napi-rs/keyring-linux-arm64-gnu': 2.0.0
+      '@napi-rs/keyring-linux-arm64-musl': 2.0.0
+      '@napi-rs/keyring-linux-riscv64-gnu': 2.0.0
+      '@napi-rs/keyring-linux-x64-gnu': 2.0.0
+      '@napi-rs/keyring-linux-x64-musl': 2.0.0
+      '@napi-rs/keyring-win32-arm64-msvc': 2.0.0
+      '@napi-rs/keyring-win32-ia32-msvc': 2.0.0
+      '@napi-rs/keyring-win32-x64-msvc': 2.0.0
+
   '@napi-rs/wasm-runtime@1.0.1':
     dependencies:
       '@emnapi/core': 1.4.5
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.0
     optional: true
+
+  '@nodable/entities@3.0.0': {}
 
   '@oxc-project/runtime@0.77.3': {}
 
@@ -4299,6 +4503,8 @@ snapshots:
 
   ansis@4.1.0: {}
 
+  anynum@1.0.1: {}
+
   argparse@1.0.10:
     dependencies:
       sprintf-js: 1.0.3
@@ -4782,6 +4988,20 @@ snapshots:
     dependencies:
       fast-string-width: 3.0.2
 
+  fast-xml-builder@1.3.1:
+    dependencies:
+      path-expression-matcher: 1.6.2
+      xml-naming: 0.3.0
+
+  fast-xml-parser@5.11.1:
+    dependencies:
+      '@nodable/entities': 3.0.0
+      fast-xml-builder: 1.3.1
+      is-unsafe: 2.0.2
+      path-expression-matcher: 1.6.2
+      strnum: 2.4.2
+      xml-naming: 0.3.0
+
   fault@2.0.1:
     dependencies:
       format: 0.2.2
@@ -4917,6 +5137,8 @@ snapshots:
   is-typed-array@1.1.15:
     dependencies:
       which-typed-array: 1.1.19
+
+  is-unsafe@2.0.2: {}
 
   is-what@4.1.16: {}
 
@@ -5369,6 +5591,8 @@ snapshots:
 
   path-data-parser@0.1.0: {}
 
+  path-expression-matcher@1.6.2: {}
+
   path-to-regexp@6.3.0: {}
 
   path-to-regexp@8.2.0: {}
@@ -5674,6 +5898,10 @@ snapshots:
       ansi-regex: 5.0.1
 
   strip-bom-string@1.0.0: {}
+
+  strnum@2.4.2:
+    dependencies:
+      anynum: 1.0.1
 
   stylis@4.4.0: {}
 
@@ -5998,6 +6226,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.18.0: {}
+
+  xml-naming@0.3.0: {}
 
   y18n@5.0.8: {}
 
