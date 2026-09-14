@@ -1,465 +1,220 @@
 ---
 name: release
 description: >-
-  Create and publish releases for the Optique project.
-  Use when releasing a new version, creating a patch release, or creating
-  a major/minor release. Handles CHANGES.md updates, version bumping, tagging,
-  and branch management.
+  Create and publish releases for the Optique project. Use when releasing a
+  patch, minor, or major version. Handles Sacho release notes, the mise
+  bump-version task, tags, and maintenance-branch merges.
 metadata:
   internal: true
 ---
 
-Release skill
-=============
+Releasing Optique
+=================
 
-This skill automates the release process for the Optique project.  There are
-two types of releases: patch releases and major/minor releases.
+Optique releases patch versions from `X.Y-maintenance` branches and major/minor
+versions from `main`. Tags have no `v` prefix: use `1.2.7`, not `v1.2.7`.
 
-
-Prerequisites
--------------
-
-Before starting any release:
-
-1.  Verify the remote repository name:
-
-    ~~~~ bash
-    git remote -v
-    ~~~~
-
-    Use the correct remote name (usually `origin` or `upstream`) in all push
-    commands.
-
-2.  Ensure you're on the correct branch and it's up to date.
-
-3.  Run tests to ensure everything passes:
-
-    ~~~~ bash
-    mise test
-    mise check
-    ~~~~
+*changes.d/* holds unreleased entries. With `materialize = true` in
+*sacho.toml*, their rendered section in *CHANGES.md* is generated. Edit the
+fragments, then synchronize; do not hand-edit the unreleased section or copy
+entries into it during merges.
 
 
-Patch releases
---------------
+Prepare the branch
+------------------
 
-Patch releases (e.g., 1.2.3) are for bug fixes and small improvements.
-They are created from `X.Y-maintenance` branches.
-
-### Step 1: prepare the release
-
-1.  Check out the maintenance branch:
-
-    ~~~~ bash
-    git checkout 1.2-maintenance
-    git pull
-    ~~~~
-
-2.  Update *CHANGES.md*: Find the section for the version being released and
-    change “To be released.” to “Released on {Month} {Day}, {Year}.” using
-    the current date in English.  For example:
-
-    ~~~~ markdown
-    Version 1.2.3
-    -------------
-
-    Released on January 5, 2026.
-    ~~~~
-
-3.  Commit the changes:
-
-    ~~~~ bash
-    git add CHANGES.md
-    git commit -m "Release 1.2.3"
-    ~~~~
-
-4.  Create the tag (without `v` prefix).  Always use `-m` to provide a tag
-    message to avoid opening an editor for GPG-signed tags:
-
-    ~~~~ bash
-    git tag -m "Optique 1.2.3" 1.2.3
-    ~~~~
-
-### Step 2: prepare next version
-
-1.  Add a new section at the top of *CHANGES.md* for the next patch version:
-
-    ~~~~ markdown
-    Version 1.2.4
-    -------------
-
-    To be released.
-
-
-    Version 1.2.3
-    -------------
-
-    Released on January 5, 2026.
-    ~~~~
-
-2.  Bump the version in *packages/core/deno.json*:
-
-    Change `"version": "1.2.3"` to `"version": "1.2.4"`.
-
-3.  Run the version sync script:
-
-    ~~~~ bash
-    mise check-versions --fix
-    ~~~~
-
-4.  Commit the version bump:
-
-    ~~~~ bash
-    git add -A
-    git commit -m "Version bump
-
-    [ci skip]"
-    ~~~~
-
-### Step 3: push
-
-Push the tag and branch to the remote:
+Verify the current branch, working tree, and remotes before changing versions:
 
 ~~~~ bash
-git push origin 1.2.3 1.2-maintenance
+git status --short --branch
+git remote -v
 ~~~~
 
-### Step 4: cascade merges
-
-After creating a patch release, you must merge it forward to newer maintenance
-branches and eventually to `main`.
-
-1.  Check if a newer maintenance branch exists (e.g., `1.3-maintenance`):
-
-    ~~~~ bash
-    git branch -a | grep maintenance
-    ~~~~
-
-2.  If a newer maintenance branch exists:
-
-    1)  Check out the newer branch and merge the tag:
-
-        ~~~~ bash
-        git checkout 1.3-maintenance
-        git merge 1.2.3
-        ~~~~
-
-    2)  Resolve any conflicts (commonly in *CHANGES.md*, *deno.json*, and
-        *package.json* files).
-
-    3)  **Copy changelog entries**: After resolving conflicts, copy the
-        changelog entries from the merged tag's version into the current
-        branch's unreleased version section.  The entries should be:
-
-         -  Grouped by package (e.g., `### @optique/core`, `### @optique/run`)
-         -  Inserted *above* any existing entries in each package section
-         -  Issue/PR reference definitions (e.g., `[#123]: ...`) should not
-            be duplicated if they already exist
-
-        For example, if merging 1.2.3 into 1.3-maintenance where 1.3.2 is
-        pending:
-
-        *Before* (1.3-maintenance):
-
-        ~~~~ markdown
-        Version 1.3.2
-        -------------
-
-        To be released.
-
-        ### @optique/run
-
-         -  Added new logging features.  [[#125]]
-
-        [#125]: https://github.com/dahlia/optique/issues/125
-        ~~~~
-
-        *Merged tag 1.2.3 contains*:
-
-        ~~~~ markdown
-        Version 1.2.3
-        -------------
-
-        Released on January 6, 2026.
-
-        ### @optique/run
-
-         -  Fixed a crash on startup.  [[#123]]
-
-        [#123]: https://github.com/dahlia/optique/issues/123
-        ~~~~
-
-        *After* (1.3-maintenance):
-
-        ~~~~ markdown
-        Version 1.3.2
-        -------------
-
-        To be released.
-
-        ### @optique/run
-
-         -  Fixed a crash on startup.  [[#123]]
-         -  Added new logging features.  [[#125]]
-
-        [#123]: https://github.com/dahlia/optique/issues/123
-        [#125]: https://github.com/dahlia/optique/issues/125
-        ~~~~
-
-    4)  Run tests to verify:
-
-        ~~~~ bash
-        mise test
-        mise check
-        ~~~~
-
-    5)  Complete the merge commit (use default message).
-
-    6)  Create a new patch release for this branch by repeating Steps 1-3
-        for version 1.3.x (e.g., 1.3.1).
-
-    7)  Continue cascading to even newer maintenance branches if they exist.
-
-3.  If no newer maintenance branch exists, merge to `main`:
-
-    ~~~~ bash
-    git checkout main
-    git merge 1.2.3  # or the last tag you created (e.g., 1.3.1)
-    ~~~~
-
-    Resolve conflicts, run tests, and push:
-
-    ~~~~ bash
-    mise test
-    mise check
-    git push origin main
-    ~~~~
-
-
-    > [!IMPORTANT]
-    > Do *not* copy changelog entries to `main`.  The `main` branch tracks
-    > the next major/minor release, so patch release entries should not be
-    > duplicated there.  Just resolve conflicts and keep the existing
-    > unreleased section as-is.
-
-
-Major/minor releases
---------------------
-
-Major/minor releases (e.g., 1.3.0, 2.0.0) introduce new features or breaking
-changes.  They are always created from the `main` branch with patch version 0.
-
-### Step 1: prepare the release on main
-
-1.  Check out and update main:
-
-    ~~~~ bash
-    git checkout main
-    git pull
-    ~~~~
-
-2.  Update *CHANGES.md*: Find the section for the version being released and
-    change “To be released.” to “Released on {Month} {Day}, {Year}.” using
-    the current date in English.  For example:
-
-    ~~~~ markdown
-    Version 1.3.0
-    -------------
-
-    Released on January 5, 2026.
-    ~~~~
-
-3.  Commit the changes:
-
-    ~~~~ bash
-    git add CHANGES.md
-    git commit -m "Release 1.3.0"
-    ~~~~
-
-4.  Create the tag (without `v` prefix).  Always use `-m` to provide a tag
-    message to avoid opening an editor for GPG-signed tags:
-
-    ~~~~ bash
-    git tag -m "Optique 1.3.0" 1.3.0
-    ~~~~
-
-### Step 2: prepare next version on main
-
-1.  Add a new section at the top of *CHANGES.md* for the next minor version:
-
-    ~~~~ markdown
-    Version 1.4.0
-    -------------
-
-    To be released.
-
-
-    Version 1.3.0
-    -------------
-
-    Released on January 5, 2026.
-    ~~~~
-
-2.  Bump the version in *packages/core/deno.json*:
-
-    Change `"version": "1.3.0"` to `"version": "1.4.0"`.
-
-3.  Run the version sync script:
-
-    ~~~~ bash
-    mise check-versions --fix
-    ~~~~
-
-4.  Commit the version bump:
-
-    ~~~~ bash
-    git add -A
-    git commit -m "Version bump
-
-    [ci skip]"
-    ~~~~
-
-### Step 3: push main and tag
+The commands below use the `dahlia` remote. Substitute the verified remote name
+if this checkout uses another one. Start from an up-to-date branch with no
+unrelated changes staged or pending. Choose the target and next versions from
+the user's release request and the branch's existing versions.
+
+For a patch release, switch to the matching maintenance branch:
 
 ~~~~ bash
-git push origin 1.3.0 main
+git switch 1.2-maintenance
+git pull --ff-only dahlia 1.2-maintenance
 ~~~~
 
-### Step 4: create maintenance branch
+For a major/minor release, use `main` instead. Confirm that *changes.d/next*
+and all package versions match the version being released:
 
-1.  Create the maintenance branch from the release tag:
-
-    ~~~~ bash
-    git branch 1.3-maintenance 1.3.0
-    ~~~~
-
-2.  Check out the maintenance branch:
-
-    ~~~~ bash
-    git checkout 1.3-maintenance
-    ~~~~
-
-3.  Add a section for the first patch version in *CHANGES.md*:
-
-    ~~~~ markdown
-    Version 1.3.1
-    -------------
-
-    To be released.
-
-
-    Version 1.3.0
-    -------------
-
-    Released on January 5, 2026.
-    ~~~~
-
-4.  Bump the version in *packages/core/deno.json*:
-
-    Change `"version": "1.3.0"` to `"version": "1.3.1"`.
-
-5.  Run the version sync script:
-
-    ~~~~ bash
-    mise check-versions --fix
-    ~~~~
-
-6.  Commit the version bump:
-
-    ~~~~ bash
-    git add -A
-    git commit -m "Version bump
-
-    [ci skip]"
-    ~~~~
-
-7.  Push the maintenance branch:
-
-    ~~~~ bash
-    git push origin 1.3-maintenance
-    ~~~~
-
-
-Version format reference
-------------------------
-
- -  Patch releases: `X.Y.Z` where Z > 0 (e.g., 1.2.3, 1.2.4)
- -  Minor releases: `X.Y.0` (e.g., 1.3.0, 1.4.0)
- -  Major releases: `X.0.0` (e.g., 2.0.0, 3.0.0)
- -  Maintenance branches: `X.Y-maintenance` (e.g., 1.2-maintenance)
- -  Tags: No `v` prefix (e.g., `1.2.3`, not `v1.2.3`)
- -  Tag messages: `Optique X.Y.Z` format (use `-m` flag to avoid editor)
-
-
-CHANGES.md format
------------------
-
-Each version section follows this format:
-
-~~~~ markdown
-Version X.Y.Z
--------------
-
-Released on {Month} {Day}, {Year}.
-
-### @optique/core
-
- -  Change description.  [[#123]]
-
-### @optique/run
-
- -  Change description.
-
-[#123]: https://github.com/dahlia/optique/issues/123
+~~~~ bash
+cat changes.d/next
+jq -r .version packages/core/deno.json
+mise run check:versions
 ~~~~
 
-For unreleased versions:
+The two printed versions must be equal to each other and to the requested
+release version. `check:versions` verifies agreement between package manifests;
+it does not compare them with *changes.d/next*.
 
-~~~~ markdown
-Version X.Y.Z
--------------
+If the target version needs correction, use `mise run bump-version VERSION`.
+This task calls `sacho next`, updates *packages/core/deno.json*, formats it,
+and synchronizes all workspace package versions. Use this task instead of
+editing package versions manually.
 
-To be released.
+Read the fragments and their compiled output before finalizing the release:
+
+~~~~ bash
+sacho sync
+sacho fmt
+sacho preview
+sacho check
+mise test
 ~~~~
 
+If noninteractive `sacho sync` refuses to replace the generated region, inspect
+its diff for hand edits. Move any intended text into fragments before running
+`sacho sync --force`, then repeat formatting and checking.
 
-Checklist summary
------------------
+Run `pnpm build` in *docs/* before committing documentation changes. Use the
+installed `sacho release --help` and `mise run bump-version --help` when
+checking command syntax.
 
-### Patch release checklist
 
- -  [ ] Check out `X.Y-maintenance` branch
- -  [ ] Update *CHANGES.md* release date
- -  [ ] Commit with message “Release X.Y.Z”
- -  [ ] Create tag `X.Y.Z` with `-m "Optique X.Y.Z"`
- -  [ ] Add next version section to *CHANGES.md*
- -  [ ] Bump version in *packages/core/deno.json*
- -  [ ] Run `mise check-versions --fix`
- -  [ ] Commit with message `Version bump\n\n[ci skip]`
- -  [ ] Push tag and branch
- -  [ ] Cascade merge to newer maintenance branches (if any):
-     -  [ ] Merge tag into newer branch
-     -  [ ] Copy changelog entries to unreleased version (above existing
-        entries)
-     -  [ ] Run tests and complete merge commit
-     -  [ ] Create patch release for that branch
- -  [ ] Merge to `main` (if no newer maintenance branches)
+Finalize and tag the release
+----------------------------
 
-### Major/minor release checklist
+Use `sacho release` to compile the fragments into a dated release section and
+consume them. For example, on `1.2-maintenance` with 1.2.7 pending:
 
- -  [ ] Check out `main` branch
- -  [ ] Update *CHANGES.md* release date
- -  [ ] Commit with message “Release X.Y.0”
- -  [ ] Create tag `X.Y.0` with `-m "Optique X.Y.0"`
- -  [ ] Add next version section to *CHANGES.md*
- -  [ ] Bump version in *packages/core/deno.json*
- -  [ ] Run `mise check-versions --fix`
- -  [ ] Commit with message `Version bump\n\n[ci skip]`
- -  [ ] Push tag and `main` branch
- -  [ ] Create `X.Y-maintenance` branch from tag
- -  [ ] Check out maintenance branch
- -  [ ] Add patch version section to *CHANGES.md*
- -  [ ] Bump version to X.Y.1 in *packages/core/deno.json*
- -  [ ] Run `mise check-versions --fix`
- -  [ ] Commit with message `Version bump\n\n[ci skip]`
- -  [ ] Push maintenance branch
+~~~~ bash
+sacho release 1.2.7
+sacho check
+git diff --stat
+git diff -- CHANGES.md changes.d
+~~~~
+
+The date defaults to the current local calendar date; use `--date YYYY-MM-DD`
+when the release requires a specific date. Use `--allow-empty` only for an
+intentional release with no changelog entries.
+
+Commit *CHANGES.md* together with the consumed fragment deletions and any
+change to *changes.d/next*, plus any package metadata changed when correcting
+the release version. Use the message `Release 1.2.7`. Follow the repository's
+commit and AI-disclosure rules. Do not commit just the rendered
+changelog while leaving its source fragments pending.
+
+Tag this release commit before preparing the next version:
+
+~~~~ bash
+git tag -m "Optique 1.2.7" 1.2.7
+~~~~
+
+Always provide a tag message with `-m`, including for signed tags. For a
+major/minor release, use its version throughout, for example
+`sacho release 1.3.0` and `git tag -m "Optique 1.3.0" 1.3.0`.
+
+Do not use `sacho release --next` here. Prepare the next version in a separate
+commit with `bump-version`, so the release tag contains the released package
+versions and the next-version commit updates the manifests and changelog
+metadata together.
+
+
+Prepare the next version and push
+---------------------------------
+
+On a maintenance branch, advance to the next patch version:
+
+~~~~ bash
+mise run bump-version 1.2.8
+mise run check:versions
+sacho check
+git diff --stat
+~~~~
+
+On `main` after 1.3.0, use `mise run bump-version 1.4.0`, or the next major
+version if that is the planned development line. The task creates the next
+unreleased section through `sacho next`; do not add a heading manually or run
+`sacho next` separately.
+
+Review and commit all version changes together: package metadata,
+*changes.d/next*, and *CHANGES.md*. Use `Version bump` with `[ci skip]` in a
+separate paragraph, plus the required disclosure trailer. Run `mise test`
+before this commit as required by the repository.
+
+Push the release tag and the updated branch:
+
+~~~~ bash
+git push dahlia 1.2.7 1.2-maintenance
+~~~~
+
+Tag pushes trigger the publishing workflow in *.github/workflows/main.yaml*.
+Verify that the tag's workflow succeeds, including the `publish` job for JSR/npm
+and the `public-docs` job, before reporting the release as published.
+
+For a major/minor release, push its tag and `main`, then create the maintenance
+branch from the release tag, not from the next-version commit:
+
+~~~~ bash
+git push dahlia 1.3.0 main
+git switch -c 1.3-maintenance 1.3.0
+mise run bump-version 1.3.1
+mise run check:versions
+sacho check
+mise test
+~~~~
+
+Commit the first patch-version preparation with the same version-bump message
+and push `1.3-maintenance`.
+
+
+Merge patch releases forward
+----------------------------
+
+Merge each patch release into newer maintenance branches in order, then into
+`main`. Merge the release tag, not the older branch's next-version commit.
+Inspect available branches with `git branch -a --list '*-maintenance'`.
+
+For example, to bring 1.2.7 into an existing `1.3-maintenance` branch:
+
+~~~~ bash
+git switch 1.3-maintenance
+git pull --ff-only dahlia 1.3-maintenance
+git merge --no-commit --no-ff 1.2.7
+~~~~
+
+Resolve conflicts while retaining the receiving branch's package versions and
+*changes.d/next*. Sacho's configured merge driver preserves the receiving
+unreleased region and adds the released section at its version position.
+Review the result even when Git reports no conflict.
+
+On newer maintenance branches, include the fixes in their next patch notes by
+carrying the released entries back into fragments. Before running `carry`,
+check for existing *carried-from-1.2.7.md* fragments: the command replaces them.
+
+~~~~ bash
+sacho carry 1.2.7
+sacho sync
+sacho fmt
+sacho preview
+sacho check
+mise test
+~~~~
+
+`carry` creates package-specific *carried-from-1.2.7.md* fragments. Edit them
+if the receiving branch needs different wording, then synchronize again. Do not
+copy bullets or reference link definitions directly into *CHANGES.md*.
+
+Complete the merge commit, including carried fragments and the synchronized
+changelog. Confirm the receiving branch's next version and core manifest version
+match, using the checks in “Prepare the branch”. Then repeat “Finalize and tag
+the release” and
+the maintenance-branch steps in “Prepare the next version and push”, using its
+pending patch version. Merge the new release tag into the next newer
+maintenance branch.
+
+At `main`, merge the last release tag, including its code fixes and released
+changelog section. If there is no newer maintenance branch, use the original
+release tag. Apply the same conflict handling, but *do not run `sacho carry`*.
+Keep main's existing fragments and next version; the imported released section
+records the patch fixes without duplicating them in the next major/minor
+release notes. Run `sacho sync`, `sacho check`, and `mise test`, complete the
+merge commit, and push `main`.
