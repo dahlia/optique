@@ -41,7 +41,7 @@ import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
 import { formatUsage } from "#src/usage.ts";
 import { bash, fish, zsh } from "#src/completion.ts";
 import type { NonEmptyString } from "#src/nonempty.ts";
-import { message } from "#src/message.ts";
+import { formatMessage, message } from "#src/message.ts";
 
 // =============================================================================
 // Test Helpers: Async Value Parsers
@@ -10399,5 +10399,160 @@ describe("source delivery from conditional()/command() to siblings", () => {
       `Expected success but got: ${JSON.stringify(earlier)}`,
     );
     assert.equal(earlier.value.level, "silent");
+  });
+});
+
+describe("CLI-committed branch declaration precedence", () => {
+  for (const outerFirst of [false, true]) {
+    test(`uses enclosing CLI sources with outerFirst=${outerFirst}`, () => {
+      const framework = dependency(choice(["fresh", "hono"] as const));
+      const pm = framework.deriveSync({
+        metavar: "PM",
+        factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+        defaultValue: () => "fresh" as const,
+      });
+      const cond = conditional(option("--kind", choice(["a", "b"] as const)), {
+        a: object({ fw: option("--fw", framework), pm: option("--pm", pm) }),
+        b: constant("b"),
+      });
+      const fw2 = option("--fw2", framework);
+      const out = option("--out", pm);
+      const parser = outerFirst
+        ? object({ fw2, cond, out })
+        : object({ cond, fw2, out });
+      const expected = outerFirst ? "deno" : "npm";
+      const args = ["--kind", "a", "--fw", "fresh", "--fw2", "hono"];
+      const result = parseSync(parser, [
+        ...args,
+        "--pm",
+        expected,
+        "--out",
+        expected,
+      ]);
+      assert.ok(
+        result.success,
+        result.success ? undefined : formatMessage(result.error),
+      );
+      assert.deepEqual(result.value, {
+        cond: ["a", { fw: "fresh", pm: expected }],
+        fw2: "hono",
+        out: expected,
+      });
+      const rejected = parseSync(parser, [
+        ...args,
+        "--pm",
+        outerFirst ? "npm" : "deno",
+        "--out",
+        expected,
+      ]);
+      assert.ok(!rejected.success);
+    });
+  }
+});
+
+describe("committed source scopes across preceding siblings", () => {
+  function fixture() {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    return {
+      cond: conditional(option("--kind", choice(["a", "b"] as const)), {
+        a: object({ fw: option("--fw", framework), pm: option("--pm", pm) }),
+        b: constant("b"),
+      }),
+      fw2: option("--fw2", framework),
+      out: option("--out", pm),
+    };
+  }
+  const args = [
+    "--kind",
+    "a",
+    "--fw",
+    "fresh",
+    "--fw2",
+    "hono",
+    "--pm",
+    "npm",
+    "--out",
+    "npm",
+  ];
+
+  test("sync: an earlier plain object does not replace the enclosing collection", () => {
+    const parser = object({
+      nested: object({ x: option("-x") }),
+      ...fixture(),
+    });
+    const result = parseSync(parser, args);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      nested: { x: false },
+      cond: ["a", { fw: "fresh", pm: "npm" }],
+      fw2: "hono",
+      out: "npm",
+    });
+  });
+
+  test("async: an earlier plain object does not replace the enclosing collection", async () => {
+    const parser = object({
+      nested: object({ x: option("-x", asyncChoice(["x"])) }),
+      ...fixture(),
+    });
+    const result = await parseAsync(parser, ["-x", "x", ...args]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      nested: { x: "x" },
+      cond: ["a", { fw: "fresh", pm: "npm" }],
+      fw2: "hono",
+      out: "npm",
+    });
+  });
+});
+
+describe("committed source values across preceding siblings", () => {
+  test("does not inherit a sibling's late write over the enclosing value", () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    const parser = object({
+      nested: object({ fw3: option("--fw3", framework) }),
+      cond: conditional(option("--kind", choice(["a", "b"] as const)), {
+        a: object({ fw: option("--fw", framework), pm: option("--pm", pm) }),
+        b: constant("b"),
+      }),
+      fw2: option("--fw2", framework),
+    });
+    const result = parseSync(parser, [
+      "--fw3",
+      "fresh",
+      "--kind",
+      "a",
+      "--fw",
+      "fresh",
+      "--fw2",
+      "hono",
+      "--pm",
+      "npm",
+    ]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      nested: { fw3: "fresh" },
+      cond: ["a", { fw: "fresh", pm: "npm" }],
+      fw2: "hono",
+    });
   });
 });

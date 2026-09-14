@@ -22,7 +22,9 @@ import {
   extractRawInputFromState,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
+  forkRuntimeForCommittedSubtree,
   orderDependencyNodes,
+  recordSourceScope,
   replayDerivedParser,
   replayDerivedParserAsync,
   resolveStateWithRuntime,
@@ -4257,3 +4259,83 @@ function createRuntimeSourceNode(options: {
     state: undefined,
   };
 }
+
+describe("committed subtree source preservation", () => {
+  for (const value of ["hono", undefined]) {
+    test(`preserves a scheduled value (${String(value)}) through recollection`, () => {
+      const id = Symbol("framework");
+      const runtime = createDependencyRuntimeContext();
+      runtime.registerSource(id, value);
+      recordSourceScope(runtime, new Set([id]), [{
+        sourceId: id,
+        path: [],
+      }]);
+      // A structural walk can re-assert an earlier CLI occurrence after
+      // the pass's final publication. The fork must use the publication.
+      runtime.registerSource(id, "fresh");
+      const fork = forkRuntimeForCommittedSubtree({
+        usage: [],
+        phase: "complete",
+        path: [],
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      }, new Set([id]));
+      fork.registry.set(id, "fresh");
+      fork.registerSource(id, "fresh");
+      fork.markSourceFailed(id);
+      assert.ok(fork.hasSource(id));
+      assert.equal(fork.getSource(id), value);
+      assert.ok(!fork.isSourceFailed(id));
+
+      const rebound = createDependencyRuntimeContext(fork.registry);
+      rebound.registerSource(id, "fresh");
+      assert.equal(rebound.getSource(id), value);
+      // Completion-selected branches establish a new local scope.
+      const local = createDependencyRuntimeContext(fork.registry.clone());
+      local.registerSource(id, "fresh");
+      assert.equal(local.getSource(id), "fresh");
+      assert.equal(fork.getSource(id), value);
+    });
+  }
+
+  test("preserves inherited failures instead of resurrecting stale values", () => {
+    const id = Symbol("framework");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(id, "hono");
+    runtime.markSourceFailed(id);
+    recordSourceScope(runtime, new Set([id]), [{
+      sourceId: id,
+      path: [],
+    }]);
+    const fork = forkRuntimeForCommittedSubtree({
+      usage: [],
+      phase: "complete",
+      path: [],
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    }, new Set([id]));
+    fork.registerSource(id, "fresh");
+    fork.registry.set(id, "fresh");
+    assert.ok(fork.isSourceFailed(id));
+    assert.ok(!fork.hasSource(id));
+  });
+
+  test("leaves absent and unrelated sources writable", () => {
+    const id = Symbol("framework");
+    const other = Symbol("other");
+    const runtime = createDependencyRuntimeContext();
+    runtime.registerSource(other, "before");
+    const fork = forkRuntimeForCommittedSubtree({
+      usage: [],
+      phase: "complete",
+      path: [],
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    }, new Set([id]));
+    fork.registerSource(id, "fresh");
+    fork.registerSource(other, "after");
+    assert.equal(fork.getSource(id), "fresh");
+    assert.equal(fork.getSource(other), "after");
+    assert.equal(runtime.getSource(other), "before");
+  });
+});

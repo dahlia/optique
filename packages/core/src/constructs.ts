@@ -29,8 +29,11 @@ import {
   exclusiveSourceScopeKey,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
+  forkRuntimeForCommittedSubtree,
   guaranteedStaticSourceIdsKey,
   hasInactiveCompletion,
+  recordSourceScope,
+  releaseUncollectedSourceValues,
   replaceCachedBarrierFailure,
   resolveDerivedSourceValues,
   resolveDerivedSourceValuesAsync,
@@ -931,6 +934,7 @@ async function scheduleEffectfulSourceCompletions(
   // parsed branch occurrence lands in declaration order beside the cached
   // effectful ones (https://github.com/dahlia/optique/issues/929).
   const republish = exec?.republishCachedCompletions === true;
+  const publishedSourceIds = new Set<symbol>();
   const effectful = await completeEffectfulSourcesAsync(
     expandedNodes,
     state,
@@ -940,6 +944,9 @@ async function scheduleEffectfulSourceCompletions(
       ...(demandNodes != null
         ? { demandNodes: expandEffectfulRuntimeNodes(demandNodes) }
         : {}),
+      onPublish: (id) => {
+        publishedSourceIds.add(id);
+      },
       isReusable: (node) => direct.has(node),
       isCollected: republish ? () => true : (node) => collected.has(node),
       ...(republish ? { includeStructural: true } : {}),
@@ -952,6 +959,16 @@ async function scheduleEffectfulSourceCompletions(
     const cacheKey = typeof key === "number" ? String(key) : key;
     preCompleted.set(cacheKey as string | symbol, result);
   }
+  recordSourceScope(
+    runtime,
+    publishedSourceIds,
+    [...collected].flatMap((node) => {
+      const source = node.parser.dependencyMetadata?.source;
+      return source == null
+        ? []
+        : [{ sourceId: source.sourceId, path: node.path }];
+    }),
+  );
   return undefined;
 }
 
@@ -6445,6 +6462,16 @@ function preCompleteAndRegisterDependencies(
   registry: DependencyRegistryLike,
   exec?: ExecutionContext,
 ): Map<string | symbol, unknown> {
+  // Opaque descendants may introduce an occurrence the enclosing scope
+  // never collected. Release it before defaults or bindings complete.
+  if (exec?.dependencyRuntime != null) {
+    releaseUncollectedSourceValues(
+      expandSourceCollectionNodes(
+        buildRuntimeNodesFromPairs(fieldParserPairs, state, exec.path),
+      ),
+      exec.dependencyRuntime,
+    );
+  }
   const preCompleted = new Map<string | symbol, unknown>();
   // Read-only map from parent construct's Phase 1.  Never written to —
   // each construct builds its own map for children after this function
@@ -6584,6 +6611,16 @@ async function preCompleteAndRegisterDependenciesAsync(
   registry: DependencyRegistryLike,
   exec?: ExecutionContext,
 ): Promise<Map<string | symbol, unknown>> {
+  // Opaque descendants may introduce an occurrence the enclosing scope
+  // never collected. Release it before defaults or bindings complete.
+  if (exec?.dependencyRuntime != null) {
+    releaseUncollectedSourceValues(
+      expandSourceCollectionNodes(
+        buildRuntimeNodesFromPairs(fieldParserPairs, state, exec.path),
+      ),
+      exec.dependencyRuntime,
+    );
+  }
   const preCompleted = new Map<string | symbol, unknown>();
   const parentResults = exec?.preCompletedByParser;
   for (const [field, fieldParser] of fieldParserPairs) {
@@ -16352,9 +16389,12 @@ export function conditional(
         branchParser,
       ),
     };
-    const runtime = createDependencyRuntimeContext(
-      exec?.dependencyRegistry?.clone(),
-    );
+    const runtime = state.speculative === true
+      ? createDependencyRuntimeContext(exec?.dependencyRegistry?.clone())
+      : forkRuntimeForCommittedSubtree(
+        exec,
+        committedSourceIds(state, exec?.path),
+      );
     collectExplicitSourceValues(
       expandSourceCollectionNodes(
         buildRuntimeNodesFromPairs(
@@ -16650,6 +16690,22 @@ export function conditional(
       barrierDependenciesByKey: byKey,
     };
   })();
+
+  const committedSourceIds = (
+    state: unknown,
+    path: readonly PropertyKey[] | undefined,
+  ): ReadonlySet<symbol> => {
+    const ids = new Set<symbol>();
+    for (
+      const node of expandEffectfulRuntimeNodes(
+        buildConditionalSchedulingNodes(state, path),
+      )
+    ) {
+      const source = node.parser.dependencyMetadata?.source;
+      if (source != null) ids.add(source.sourceId);
+    }
+    return ids;
+  };
 
   // Builds the effectful scheduling nodes for this conditional: the
   // discriminator (always) and the committed branch (only when the
@@ -17280,9 +17336,12 @@ export function conditional(
         branchParser,
       ),
     };
-    const runtime = createDependencyRuntimeContext(
-      exec?.dependencyRegistry?.clone(),
-    );
+    const runtime = wasSpeculative
+      ? createDependencyRuntimeContext(exec?.dependencyRegistry?.clone())
+      : forkRuntimeForCommittedSubtree(
+        exec,
+        committedSourceIds(state, exec?.path),
+      );
     await collectExplicitSourceValuesAsync(
       expandSourceCollectionNodes(
         buildRuntimeNodesFromPairs(

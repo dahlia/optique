@@ -8200,3 +8200,344 @@ describe("branch completion dependencies across scheduling barriers", () => {
     assert.equal(result.value.out, "npm");
   });
 });
+
+describe("CLI-committed dependency source precedence", () => {
+  for (const outerFirst of [false, true]) {
+    for (const innerCli of [false, true]) {
+      for (const outerCli of [false, true]) {
+        for (const asyncDerived of [false, true]) {
+          for (const shape of ["object", "tuple"] as const) {
+            it(`${shape}: outerFirst=${outerFirst}, innerCli=${innerCli}, outerCli=${outerCli}, asyncDerived=${asyncDerived}`, async () => {
+              const framework = dependency(choice(["fresh", "hono"] as const));
+              const factory = (value: "fresh" | "hono") =>
+                choice(value === "fresh" ? ["deno"] : ["npm"]);
+              const pm = asyncDerived
+                ? framework.derive({
+                  metavar: "PM",
+                  mode: "async",
+                  factory: (value) => {
+                    const inner = factory(value);
+                    return {
+                      ...inner,
+                      mode: "async" as const,
+                      suggest: undefined,
+                      parse: (input: string) =>
+                        Promise.resolve(inner.parse(input)),
+                    };
+                  },
+                  defaultValue: () => "fresh" as const,
+                })
+                : framework.deriveSync({
+                  metavar: "PM",
+                  factory,
+                  defaultValue: () => "fresh" as const,
+                });
+              const { prompt, calls } = createTestPrompt();
+              const cond = conditional(
+                option("--kind", choice(["a", "b"] as const)),
+                {
+                  a: object({
+                    fw: prompt(option("--fw", framework), { value: "fresh" }),
+                    pm: option("--pm", pm),
+                  }),
+                  b: constant("b"),
+                },
+              );
+              const fw2 = prompt(option("--fw2", framework), { value: "hono" });
+              const out = option("--out", pm);
+              const parser: Parser<"async", unknown, unknown> =
+                shape === "object"
+                  ? outerFirst
+                    ? object({ fw2, cond, out })
+                    : object({ cond, fw2, out })
+                  : outerFirst
+                  ? tuple([fw2, cond, out])
+                  : tuple([cond, fw2, out]);
+              const args = [
+                "--kind",
+                "a",
+                ...(innerCli ? ["--fw", "fresh"] : []),
+                ...(outerCli ? ["--fw2", "hono"] : []),
+              ];
+              const acceptedPm = outerFirst ? "deno" : "npm";
+              const accepted = await parseAsync(parser, [
+                ...args,
+                "--pm",
+                acceptedPm,
+                "--out",
+                acceptedPm,
+              ]);
+              assert.ok(
+                accepted.success,
+                accepted.success ? undefined : formatMessage(accepted.error),
+              );
+              const branch = ["a", { fw: "fresh", pm: acceptedPm }];
+              assert.deepEqual(
+                accepted.value,
+                shape === "object"
+                  ? { cond: branch, fw2: "hono", out: acceptedPm }
+                  : outerFirst
+                  ? ["hono", branch, acceptedPm]
+                  : [branch, "hono", acceptedPm],
+              );
+              assert.equal(
+                calls.filter((call) => call.value === "fresh").length,
+                Number(!innerCli),
+              );
+              assert.ok(
+                calls.filter((call) => call.value === "hono").length <= 1,
+              );
+              if (shape === "object") {
+                assert.equal(
+                  calls.length,
+                  Number(!innerCli) + Number(!outerCli),
+                );
+              }
+              const rejected = await parseAsync(parser, [
+                ...args,
+                "--pm",
+                outerFirst ? "npm" : "deno",
+                "--out",
+                acceptedPm,
+              ]);
+              assert.ok(!rejected.success);
+              assert.match(formatMessage(rejected.error), /--pm/);
+            });
+          }
+        }
+      }
+    }
+  }
+});
+
+describe("nested committed dependency scopes", () => {
+  for (const nestedCommitted of [false, true]) {
+    it(`preserves the nested selection boundary (committed=${nestedCommitted})`, async () => {
+      const framework = dependency(choice(["fresh", "hono"] as const));
+      const kind = dependency(choice(["a", "b"] as const));
+      const pm = framework.deriveSync({
+        metavar: "PM",
+        factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+        defaultValue: () => "fresh" as const,
+      });
+      const { prompt, calls } = createTestPrompt();
+      const inner = conditional(
+        prompt(option("--inner", kind), { value: "a" }),
+        {
+          a: object({
+            fw: option("--fw", framework),
+            pm: option("--pm", pm),
+          }),
+          b: constant("b"),
+        },
+      );
+      const parser = object({
+        cond: conditional(option("--kind", choice(["a", "b"] as const)), {
+          a: object({ inner }),
+          b: constant("b"),
+        }),
+        fw2: prompt(option("--fw2", framework), { value: "hono" }),
+        out: option("--out", pm),
+      });
+      const expected = nestedCommitted ? "npm" : "deno";
+      const result = await parseAsync(parser, [
+        "--kind",
+        "a",
+        ...(nestedCommitted ? ["--inner", "a"] : []),
+        "--fw",
+        "fresh",
+        "--pm",
+        expected,
+        "--out",
+        "npm",
+      ]);
+      assert.ok(
+        result.success,
+        result.success ? undefined : formatMessage(result.error),
+      );
+      assert.deepEqual(result.value, {
+        cond: ["a", { inner: ["a", { fw: "fresh", pm: expected }] }],
+        fw2: "hono",
+        out: "npm",
+      });
+      assert.equal(calls.length, nestedCommitted ? 1 : 2);
+    });
+  }
+
+  it("carries the enclosing scope through a selected command", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cond: conditional(option("--kind", choice(["a", "b"] as const)), {
+        a: command(
+          "go",
+          object({ fw: option("--fw", framework), pm: option("--pm", pm) }),
+        ),
+        b: constant("b"),
+      }),
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      out: option("--out", pm),
+    });
+    const result = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "go",
+      "--fw",
+      "fresh",
+      "--pm",
+      "npm",
+      "--out",
+      "npm",
+    ]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      cond: ["a", { fw: "fresh", pm: "npm" }],
+      fw2: "hono",
+      out: "npm",
+    });
+    assert.equal(calls.length, 1);
+  });
+
+  it("collects a top-level committed branch without an enclosing scheduler", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = conditional(option("--kind", choice(["a", "b"] as const)), {
+      a: object({
+        fw: prompt(option("--fw", framework), { value: "hono" }),
+        pm: option("--pm", pm),
+      }),
+      b: constant("b"),
+    });
+    const result = await parseAsync(parser, ["--kind", "a", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, ["a", { fw: "hono", pm: "npm" }]);
+    assert.equal(calls.length, 1);
+  });
+});
+
+describe("committed branches inside ordinary nested objects", () => {
+  it("uses the immediate scope's collection instead of an older enclosing publication", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      nested: object({
+        cond: conditional(option("--kind", choice(["a", "b"] as const)), {
+          a: object({ fw: option("--fw", framework), pm: option("--pm", pm) }),
+          b: constant("b"),
+        }),
+      }),
+    });
+    const result = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "--fw",
+      "fresh",
+      "--pm",
+      "deno",
+    ]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      fw2: "hono",
+      nested: { cond: ["a", { fw: "fresh", pm: "deno" }] },
+    });
+    assert.equal(calls.length, 1);
+  });
+});
+
+describe("uncollected committed dependency sources", () => {
+  it("lets a prompted source behind multiple publish in its own scope", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const cond = conditional(option("--kind", choice(["a", "b"] as const)), {
+      a: object({
+        fw: prompt(option("--fw", framework), { value: "fresh" }),
+        pm: option("--pm", pm),
+      }),
+      b: constant("b"),
+    });
+    const parser = object({
+      fw2: prompt(option("--fw2", framework), { value: "hono" }),
+      items: multiple(cond),
+    });
+    const result = await parseAsync(parser, ["--kind", "a", "--pm", "deno"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      fw2: "hono",
+      items: [["a", { fw: "fresh", pm: "deno" }]],
+    });
+    assert.deepEqual(calls.map((call) => call.value), ["hono", "fresh"]);
+  });
+});
+
+describe("uncollected descendants of committed branches", () => {
+  it("lets an opaque item's prompt publish despite a collected occurrence of the same source", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cond: conditional(option("--kind", choice(["a", "b"] as const)), {
+        a: object({
+          fw: option("--fw", framework),
+          items: multiple(object({
+            fw2: prompt(option("--fw2", framework), { value: "fresh" }),
+            pm: option("--pm", pm),
+          })),
+        }),
+        b: constant("b"),
+      }),
+    });
+    const result = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "--fw",
+      "hono",
+      "--pm",
+      "deno",
+    ]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      cond: ["a", { fw: "hono", items: [{ fw2: "fresh", pm: "deno" }] }],
+    });
+    assert.deepEqual(calls.map((call) => call.value), ["fresh"]);
+  });
+});

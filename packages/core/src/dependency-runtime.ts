@@ -520,7 +520,7 @@ export interface DependencyRuntimeContext {
 // =============================================================================
 
 class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
-  readonly registry: DependencyRegistryLike;
+  readonly registry: FailedAwareRegistry;
   readonly #replayCache = new Map<string, ValueParserResult<unknown>>();
   readonly #failedSources = new Set<symbol>();
   readonly #sourceMetadata = new Map<symbol, {
@@ -542,6 +542,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   }
 
   registerSource(sourceId: symbol, value: unknown): void {
+    if (this.registry.isPreserved(sourceId)) return;
     this.registry.set(sourceId, value);
     this.#sourceFailures.delete(sourceId);
   }
@@ -570,6 +571,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   }
 
   markSourceFailed(sourceId: symbol): void {
+    if (this.registry.isPreserved(sourceId)) return;
     this.#failedSources.add(sourceId);
     const lineage = this.#getSourceLineage(sourceId, new Set<symbol>());
     const failure = {
@@ -614,7 +616,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
       ? upstream.participants
       : [...upstream.participants, sourceId];
     const failure = { chain, participants, diagnosticChain: chain };
-    if (sourceId != null) {
+    if (sourceId != null && !this.registry.isPreserved(sourceId)) {
       this.#failedSources.add(sourceId);
       this.#sourceFailures.set(sourceId, failure);
     }
@@ -696,6 +698,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
 class FailedAwareRegistry implements DependencyRegistryLike {
   readonly #inner: DependencyRegistryLike;
   readonly #failedSources: Set<symbol>;
+  readonly #preserved = new Map<symbol, readonly (readonly PropertyKey[])[]>();
 
   constructor(inner: DependencyRegistryLike, failedSources: Set<symbol>) {
     this.#inner = inner;
@@ -703,6 +706,7 @@ class FailedAwareRegistry implements DependencyRegistryLike {
   }
 
   set<T>(id: symbol, value: T): void {
+    if (this.isPreserved(id)) return;
     this.#inner.set(id, value);
     this.#failedSources.delete(id);
   }
@@ -717,6 +721,27 @@ class FailedAwareRegistry implements DependencyRegistryLike {
     return this.#inner.has(id);
   }
 
+  preserve(id: symbol, paths: readonly (readonly PropertyKey[])[]): void {
+    this.#preserved.set(id, paths);
+  }
+
+  allowUncollectedOccurrence(id: symbol, path: readonly PropertyKey[]): void {
+    const paths = this.#preserved.get(id);
+    if (
+      paths != null &&
+      !paths.some((covered) =>
+        covered.length === path.length &&
+        covered.every((segment, index) => segment === path[index])
+      )
+    ) {
+      this.#preserved.delete(id);
+    }
+  }
+
+  isPreserved(id: symbol): boolean {
+    return this.#preserved.has(id);
+  }
+
   copyFailedSources(target: Set<symbol>): void {
     for (const sourceId of this.#failedSources) {
       target.add(sourceId);
@@ -725,7 +750,9 @@ class FailedAwareRegistry implements DependencyRegistryLike {
 
   rebindFailedSources(target: Set<symbol>): FailedAwareRegistry {
     this.copyFailedSources(target);
-    return new FailedAwareRegistry(this.#inner, target);
+    const rebound = new FailedAwareRegistry(this.#inner, target);
+    for (const [id, paths] of this.#preserved) rebound.preserve(id, paths);
+    return rebound;
   }
 
   clone(): DependencyRegistryLike {
@@ -735,6 +762,149 @@ class FailedAwareRegistry implements DependencyRegistryLike {
       ? innerClone.rebindFailedSources(failedSources)
       : new FailedAwareRegistry(innerClone, failedSources);
   }
+}
+
+// Only conditional completion consumes these snapshots. Ordinary nested
+// constructs remain free to collect sources into their shared runtime.
+type ScheduledSourceValue =
+  | { readonly success: true; readonly value: unknown }
+  | { readonly success: false };
+interface CollectedSource {
+  readonly sourceId: symbol;
+  readonly path: readonly PropertyKey[];
+}
+interface CollectedSourceScope {
+  readonly values: ReadonlyMap<symbol, ScheduledSourceValue>;
+  readonly collectedSources: readonly CollectedSource[];
+}
+const sourceScopes = new WeakMap<
+  DependencyRuntimeContext,
+  CollectedSourceScope[]
+>();
+
+function recordSourceCollection(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+): void {
+  const sources = nodes.flatMap((node) => {
+    const source = node.parser.dependencyMetadata?.source;
+    return source == null
+      ? []
+      : [{ sourceId: source.sourceId, path: node.path }];
+  });
+  recordSourceScope(runtime, new Set(), sources);
+}
+
+/**
+ * Allows a source occurrence first discovered inside an opaque subtree to
+ * publish. Preservation covers the enclosing collector's known occurrences,
+ * not every later occurrence of the same dependency ID.
+ * @param nodes The source occurrences about to complete or be collected.
+ * @param runtime The runtime shared with the enclosing construct.
+ * @internal
+ * @since 1.3.0
+ */
+export function releaseUncollectedSourceValues(
+  nodes: readonly RuntimeNode[],
+  runtime: DependencyRuntimeContext,
+): void {
+  if (!(runtime instanceof DependencyRuntimeContextImpl)) return;
+  for (const node of nodes) {
+    const source = node.parser.dependencyMetadata?.source;
+    if (source != null) {
+      runtime.registry.allowUncollectedOccurrence(source.sourceId, node.path);
+    }
+  }
+}
+
+/**
+ * Records effective source values after a collection or scheduling pass.
+ * Each pass retains its own coverage, so a sibling sharing the runtime cannot
+ * replace its parent's snapshot. A newer pass only supersedes scopes for
+ * the source paths it actually collects.
+ * @param runtime The owning pass's runtime.
+ * @param sourceIds Additional IDs published by the pass's scheduling barriers.
+ * @param collectedSources The sources included in the owning scope's collection.
+ * @internal
+ * @since 1.3.0
+ */
+export function recordSourceScope(
+  runtime: DependencyRuntimeContext,
+  sourceIds: ReadonlySet<symbol>,
+  collectedSources: readonly CollectedSource[],
+): void {
+  if (collectedSources.length === 0) return;
+  const values = new Map<symbol, ScheduledSourceValue>();
+  const ids = new Set([
+    ...sourceIds,
+    ...collectedSources.map((source) => source.sourceId),
+  ]);
+  for (const id of ids) {
+    if (runtime.hasSource(id)) {
+      values.set(id, { success: true, value: runtime.getSource(id) });
+    } else if (runtime.isSourceFailed(id)) {
+      values.set(id, { success: false });
+    }
+  }
+  let scopes = sourceScopes.get(runtime);
+  if (scopes == null) {
+    scopes = [];
+    sourceScopes.set(runtime, scopes);
+  }
+  scopes.push({ values, collectedSources });
+}
+
+/**
+ * Forks a CLI-committed subtree without letting its repeated collection
+ * replace the enclosing scope's final source occurrences. Unknown sources
+ * remain writable, including when no enclosing construct collected them.
+ * Ordinary registry clones drop this protection so completion-selected
+ * branches can establish their own scope.
+ * @param exec The enclosing execution context.
+ * @param sourceIds The sources exposed by the committed subtree.
+ * @returns A runtime preserving the enclosing values for those sources.
+ * @internal
+ * @since 1.3.0
+ */
+export function forkRuntimeForCommittedSubtree(
+  exec: ExecutionContext | undefined,
+  sourceIds: ReadonlySet<symbol>,
+): DependencyRuntimeContext {
+  const runtime = new DependencyRuntimeContextImpl(
+    exec?.dependencyRegistry?.clone() ?? new SimpleRegistry(),
+  );
+  const scopes = exec?.dependencyRuntime == null
+    ? undefined
+    : sourceScopes.get(exec.dependencyRuntime);
+  for (const id of sourceIds) {
+    // Ignore sibling collections and opaque wrappers that never exposed
+    // this occurrence. Among scopes covering it, the most recent pass
+    // represents its immediate enclosing scope.
+    const scope = scopes?.findLast((candidate) =>
+      candidate.collectedSources.some((source) =>
+        source.sourceId === id &&
+        exec?.path.every((segment, index) => source.path[index] === segment)
+      )
+    );
+    if (scope == null) continue;
+    const publication = scope.values.get(id);
+    if (publication?.success) {
+      runtime.registerSource(id, publication.value);
+    } else if (publication != null) {
+      runtime.markSourceFailed(id);
+    } else if (runtime.hasSource(id)) {
+      // The sync path has no effectful scheduling pass; its enclosing
+      // collector already registered CLI occurrences in declaration order.
+    } else if (!runtime.isSourceFailed(id)) {
+      continue;
+    }
+    const paths = scope.collectedSources.filter((source) =>
+      source.sourceId === id
+    )
+      .map((source) => source.path);
+    runtime.registry.preserve(id, paths);
+  }
+  return runtime;
 }
 
 function resolveRequest(
@@ -959,6 +1129,7 @@ export function collectExplicitSourceValues(
   nodes: readonly RuntimeNode[],
   runtime: DependencyRuntimeContext,
 ): void {
+  releaseUncollectedSourceValues(nodes, runtime);
   registerRuntimeSourceMetadata(nodes, runtime);
   for (const node of nodes) {
     const meta = node.parser.dependencyMetadata;
@@ -980,6 +1151,7 @@ export function collectExplicitSourceValues(
     registerExplicitSourceValue(meta.source.sourceId, result, runtime);
   }
   resolveDerivedSourceValues(nodes, runtime);
+  recordSourceCollection(nodes, runtime);
 }
 
 function registerExplicitSourceValue(
@@ -1022,6 +1194,7 @@ export async function collectExplicitSourceValuesAsync(
   nodes: readonly RuntimeNode[],
   runtime: DependencyRuntimeContext,
 ): Promise<void> {
+  releaseUncollectedSourceValues(nodes, runtime);
   registerRuntimeSourceMetadata(nodes, runtime);
   for (const node of nodes) {
     const meta = node.parser.dependencyMetadata;
@@ -1033,6 +1206,7 @@ export async function collectExplicitSourceValuesAsync(
     registerExplicitSourceValue(meta.source.sourceId, result, runtime);
   }
   await resolveDerivedSourceValuesAsync(nodes, runtime);
+  recordSourceCollection(nodes, runtime);
 }
 
 /**

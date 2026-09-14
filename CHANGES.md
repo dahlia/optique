@@ -62,7 +62,7 @@ To be released.
     run prompts or create false cycles.  Consumers inside a selected branch
     read its active source values, while later outer occurrences remain in
     effect for consumers outside the branch.
-    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932]]
+    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932], [#957]]
  -  Fixed derived parsers so they can act as dependency sources for later
     parsers, allowing multi-level parsing, defaults, and shell suggestions to
     resolve independently of object/tuple field order. [[#869], [#871], [#915]]
@@ -106,6 +106,7 @@ To be released.
 [#949]: https://github.com/dahlia/optique/pull/949
 [#950]: https://github.com/dahlia/optique/pull/950
 [#952]: https://github.com/dahlia/optique/pull/952
+[#957]: https://github.com/dahlia/optique/issues/957
 
 ### @optique/run
 

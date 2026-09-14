@@ -12,6 +12,7 @@ links:
   '#929': https://github.com/dahlia/optique/issues/929
   '#931': https://github.com/dahlia/optique/pull/931
   '#932': https://github.com/dahlia/optique/pull/932
+  '#957': https://github.com/dahlia/optique/issues/957
 ---
  -  Fixed dependency-aware completion inside `conditional()` so only the
     selected branch determines ordering, effects, provider precedence, and
@@ -19,4 +20,4 @@ links:
     run prompts or create false cycles.  Consumers inside a selected branch
     read its active source values, while later outer occurrences remain in
     effect for consumers outside the branch.
-    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932]]
+    [[#869], [#872], [#919], [#923], [#924], [#925], [#926], [#927], [#928], [#929], [#931], [#932], [#957]]
