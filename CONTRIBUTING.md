@@ -171,9 +171,9 @@ Architecture
  -  *@optique/inquirer* (*packages/inquirer/*): Inquirer.js prompt integration.
     Provides `prompt()` for interactive fallback using Inquirer.js prompts.
  -  *@optique/testing* (*packages/testing/*): Layered testing support.
-    Reserves `@optique/testing/parser`, `/run`, `/discover`, and `/cli` for
-    helpers that exercise a CLI at a chosen execution boundary, and holds the
-    contracts shared across them.
+    Provides `@optique/testing/parser` for parse results, `/run` for runner
+    output, `/discover` for command dispatch, and `/cli` for subprocess tests,
+    with shared output and result contracts.
 
 ### Dual publishing
 

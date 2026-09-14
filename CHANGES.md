@@ -19,25 +19,14 @@ To be released.
     command path on structured parse failures.  [[#890], [#892], [#943]]
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
     with fixed flags and customizable parse errors.  [[#906], [#909]]
- -  Added semantic terminal themes and `MessageFormatter` injection for help,
-    usage, and errors. Added `createMessageFormatter()` and public
-    `initialWidth` support so custom renderers can honor the space already
-    occupied on a description's first line. Scalar value themes also control
-    values within lists, including uncolored output. Custom error formatters
-    receive the runner's configured `maxWidth` and the rendered error prefix's
-    occupied width so wrapping accounts for the prefix. Multiline usage labels
-    reserve only their final line's width for wrapping and indentation.
-    Multiline examples, author, and bugs labels use their widest line when
-    checking the minimum page width. Newlines inside themed text force line
-    breaks while preserving styles and hyperlinks. Usage labels and
-    annotation prefixes and suffixes are measured per line for minimum widths
-    and message continuation. Help entries keep explicitly multiline themed
-    terms indented, with descriptions attached to their final line. Usage
-    separators between program names, terms, and option values respect explicit
-    themed line breaks without adding spaces or blank lines. Empty themed
-    usage terms do not leave redundant separators. Usage and error labels
-    reserve spacing only when their final line has content. Automatic usage
-    wrapping preserves spaces supplied by custom theme fragments.
+ -  Added semantic terminal themes and `MessageFormatter` injection to customize
+    help, usage, and errors, including output without colors.  Added
+    `createMessageFormatter()` and public `initialWidth` support so custom
+    renderers can account for text already on the first line.  Error formatters
+    receive the configured `maxWidth` and the rendered prefix's occupied width.
+    Themed output preserves explicit line breaks, spaces, styles, and hyperlinks
+    when wrapping.  It measures the width of each line in multiline labels and
+    terms separately.
     [[#907], [#952]]
  -  Added `termWidth: "auto"` to `formatDocPage()` for aligning descriptions
     after the widest visible term using terminal display width while reserving
@@ -250,22 +239,25 @@ To be released.
 
 ### @optique/testing
 
- -  Added the `@optique/testing` package with a shared `CapturedOutput` type
-    and layered entry points for parser, runner, command discovery, and
-    subprocess testing.  The parser entry point can run a complete argument
-    list and report an inferred value or a structured failure with remaining
-    arguments and the matched command path.  The runner entry point can capture
-    returned values, help, version, completion, parse errors, and intentional
-    exit codes without writing to process streams or running downstream
-    application handlers.  The discovery entry point's `captureProgramRun()`
-    captures output and exit codes while executing command discovery, hooks,
-    and handler dispatch in the test process.  The CLI entry point's
-    `createCliRunner()` runs a real process, capturing stdout, stderr, and exit
-    status with stdin, environment, timeout, cancellation, and optional
-    process-tree cleanup controls.  On Windows, tree cleanup lets `taskkill`
-    use the shared cleanup deadline and preserves process and pipe errors
-    alongside the original invocation failure.
+ -  Added the `@optique/testing` package with separate entry points for testing
+    parser results, runner output, command dispatch, and real CLI processes.
+    The package also exports `CapturedOutput` for captured stdout and stderr.
     [[#887], [#890], [#891], [#892], [#893], [#894], [#942], [#943], [#944], [#945], [#946], [#953], [#954]]
+
+     -  `@optique/testing/parser` parses a complete argument list and reports an
+        inferred value or a structured failure, including remaining arguments
+        and the matched command path.
+     -  `@optique/testing/run` captures returned values, help, version,
+        completion, parse errors, and intentional exit codes without writing
+        to process streams or running application handlers.
+     -  `@optique/testing/discover` provides `captureProgramRun()` to exercise
+        command discovery, lifecycle hooks, and handler dispatch in the test
+        process.  It captures output routed through Optique's callbacks;
+        direct process writes such as `console.log()` are not captured.
+     -  `@optique/testing/cli` provides `createCliRunner()` to run a real
+        process and capture stdout, stderr, and exit status.  It supports
+        stdin, environment overrides, timeouts, cancellation, and optional
+        process-tree cleanup with a bounded deadline on POSIX and Windows.
 
 [#887]: https://github.com/dahlia/optique/issues/887
 [#891]: https://github.com/dahlia/optique/issues/891

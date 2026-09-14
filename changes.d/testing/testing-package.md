@@ -14,19 +14,22 @@ links:
   '#953': https://github.com/dahlia/optique/issues/953
   '#954': https://github.com/dahlia/optique/pull/954
 ---
- -  Added the `@optique/testing` package with a shared `CapturedOutput` type
-    and layered entry points for parser, runner, command discovery, and
-    subprocess testing.  The parser entry point can run a complete argument
-    list and report an inferred value or a structured failure with remaining
-    arguments and the matched command path.  The runner entry point can capture
-    returned values, help, version, completion, parse errors, and intentional
-    exit codes without writing to process streams or running downstream
-    application handlers.  The discovery entry point's `captureProgramRun()`
-    captures output and exit codes while executing command discovery, hooks,
-    and handler dispatch in the test process.  The CLI entry point's
-    `createCliRunner()` runs a real process, capturing stdout, stderr, and exit
-    status with stdin, environment, timeout, cancellation, and optional
-    process-tree cleanup controls.  On Windows, tree cleanup lets `taskkill`
-    use the shared cleanup deadline and preserves process and pipe errors
-    alongside the original invocation failure.
+ -  Added the `@optique/testing` package with separate entry points for testing
+    parser results, runner output, command dispatch, and real CLI processes.
+    The package also exports `CapturedOutput` for captured stdout and stderr.
     [[#887], [#890], [#891], [#892], [#893], [#894], [#942], [#943], [#944], [#945], [#946], [#953], [#954]]
+
+     -  `@optique/testing/parser` parses a complete argument list and reports an
+        inferred value or a structured failure, including remaining arguments
+        and the matched command path.
+     -  `@optique/testing/run` captures returned values, help, version,
+        completion, parse errors, and intentional exit codes without writing
+        to process streams or running application handlers.
+     -  `@optique/testing/discover` provides `captureProgramRun()` to exercise
+        command discovery, lifecycle hooks, and handler dispatch in the test
+        process.  It captures output routed through Optique's callbacks;
+        direct process writes such as `console.log()` are not captured.
+     -  `@optique/testing/cli` provides `createCliRunner()` to run a real
+        process and capture stdout, stderr, and exit status.  It supports
+        stdin, environment overrides, timeouts, cancellation, and optional
+        process-tree cleanup with a bounded deadline on POSIX and Windows.

@@ -7,14 +7,9 @@ description: >-
 Testing
 =======
 
-An Optique application is testable at several points, and the useful question
-is rarely “how do I test my CLI?” but “which part of it do I want to run?”
-A parser can be checked without rendering help or touching a process.  A runner
-can be checked without executing the code that consumes the parsed value.
-Neither of those observes what a command handler prints through `console.log()`.
-
-The *@optique/testing* package draws those boundaries as separate entry points,
-so the scope of a test is visible from its import:
+Use *@optique/testing* to check parsed values, help and error output, command
+handler dispatch, or a CLI running as a child process.  Choose the entry point
+that exercises the behavior your test needs:
 
 ~~~~ typescript
 import { /* ... */ } from "@optique/testing/parser";
@@ -29,20 +24,19 @@ Execution boundaries
 
 Each layer runs strictly more of the application than the one above it:
 
-| Layer                       | Runs                                                                     | Does not run                                                     |
-| --------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| *@optique/testing/parser*   | The parser, over a complete argument list                                | Help rendering, output, exits, command handlers                  |
-| *@optique/testing/run*      | The above, plus help, version, completion, and parse-error output        | The code that consumes the parsed value                          |
-| *@optique/testing/discover* | The above, plus command discovery, lifecycle hooks, and handler dispatch | Nothing—but writes that bypass Optique's handlers escape capture |
-| *@optique/testing/cli*      | The entire process                                                       | —                                                                |
+| Layer                       | Runs                                                                     | Does not run                                    |
+| --------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
+| *@optique/testing/parser*   | The parser, over a complete argument list                                | Help rendering, output, exits, command handlers |
+| *@optique/testing/run*      | The above, plus help, version, completion, and parse-error output        | The code that consumes the parsed value         |
+| *@optique/testing/discover* | The above, plus command discovery, lifecycle hooks, and handler dispatch | A separate CLI process                          |
+| *@optique/testing/cli*      | The entire process                                                       | —                                               |
 
-The gap between the last two rows is the one that catches people out.  The
-in-process layers capture output because *@optique/run* accepts injected
-`stdout` and `stderr` callbacks, and Optique routes help, version, completion,
-and parse errors through them.  A command handler that calls `console.log()`,
-[`print()`](./runners.md), or `process.stdout.write()` writes past those
-callbacks and is invisible to a `runProgram()` capture.  Asserting on that
-output requires a child process.
+The runner and discovery helpers capture help, version, completion, and
+parse-error output through injected `stdout` and `stderr` callbacks.  Direct
+writes from command handlers, such as `console.log()`,
+[`print()`](./runners.md), or `process.stdout.write()`, bypass these callbacks
+and are not captured by `captureProgramRun()`.  Use a child-process test to
+assert on that output.
 
 
 Choosing a layer
