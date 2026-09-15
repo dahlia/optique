@@ -41,11 +41,11 @@ Core rules
     customize terminal output with `theme` or `messageFormatter`, preserving
     `initialWidth`, quoting, and width options. Keep canonical errors unthemed.
  -  Use value parsers such as `integer()`, `choice()`, `biject()`, `regExp()`,
-    `url()`, and `uuid()` instead of validating raw strings after parsing. Use
-    `regExp({ flags })` for user-supplied regular expression sources,
-    `biject()` for one-to-one string-to-value choices, and `transform()` when
-    an existing value parser describes the accepted CLI spelling but your app
-    needs a different result type. Use `path()` from
+    `url()`, `origin()`, and `uuid()` instead of validating raw strings after
+    parsing. Use `regExp({ flags })` for user-supplied sources, `biject()` for
+    one-to-one string-to-value choices, and `transform()` when an existing
+    value parser describes the accepted CLI spelling but your app needs a
+    different result type. Use `path()` from
     `@optique/run/valueparser` for file-system paths. Write a custom
     `{ mode, metavar, parse, format }` value parser only when the catalog does
     not cover the domain.

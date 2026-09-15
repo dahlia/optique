@@ -33,6 +33,7 @@ const valueParsers = [
     base: "/concepts/valueparsers",
     items: [
       ["url", "url-parser"],
+      ["origin", "origin-parser"],
       ["ip", "ip-parser"],
       ["ipv4", "ipv4-parser"],
       ["ipv6", "ipv6-parser"],

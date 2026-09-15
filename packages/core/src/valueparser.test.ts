@@ -28,6 +28,7 @@ import {
   locale,
   macAddress,
   type NonEmptyString,
+  origin,
   port,
   portRange,
   regExp,
@@ -4601,6 +4602,400 @@ describe("url", () => {
         .filter((s) => s.kind === "literal")
         .map((s) => s.text);
       assert.deepEqual(suggestions, ["http://"]);
+    });
+  });
+});
+
+describe("origin()", () => {
+  describe("basic parsing", () => {
+    it("should parse an origin into a URL", () => {
+      const parser = origin();
+      const result = parser.parse("https://example.com");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.ok(result.value instanceof URL);
+        assert.equal(result.value.origin, "https://example.com");
+        assert.equal(result.value.pathname, "/");
+        assert.equal(result.value.port, "");
+      }
+    });
+
+    it("should keep a non-default port", () => {
+      const parser = origin();
+      const result = parser.parse("http://localhost:8888");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "http://localhost:8888");
+      }
+    });
+
+    it("should reject strings that are not absolute URLs", () => {
+      const parser = origin();
+      for (const input of ["", "   ", "not-a-url", "/path", "example.com"]) {
+        const result = parser.parse(input);
+        assert.ok(!result.success, `Should reject ${JSON.stringify(input)}`);
+      }
+    });
+
+    it("should use ORIGIN as the default metavar", () => {
+      assert.equal(origin().metavar, "ORIGIN");
+      assert.equal(origin({ metavar: "BASE_URL" }).metavar, "BASE_URL");
+    });
+
+    it("should return a fresh placeholder on each access", () => {
+      const parser = origin();
+      const first = parser.placeholder;
+      const second = parser.placeholder;
+      assert.ok(first instanceof URL);
+      assert.ok(second instanceof URL);
+      assert.notEqual(first, second);
+      assert.equal(first.href, "http://0.invalid/");
+    });
+  });
+
+  describe("canonicalization", () => {
+    it("should lowercase the host and drop default ports", () => {
+      const parser = origin();
+      const result = parser.parse("HTTPS://Example.COM:443/");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "https://example.com");
+      }
+    });
+
+    it("should convert IDN host names to punycode", () => {
+      const parser = origin();
+      const result = parser.parse("https://例え.jp/");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "https://xn--r8jz45g.jp");
+      }
+    });
+  });
+
+  describe("extraComponents", () => {
+    it("should strip a path, query, and fragment by default", () => {
+      const parser = origin();
+      const result = parser.parse("https://example.com/path?query#fragment");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "https://example.com");
+        assert.equal(result.value.pathname, "/");
+      }
+    });
+
+    it("should reject extra components when set to reject", () => {
+      const parser = origin({ extraComponents: "reject" });
+      assert.ok(!parser.parse("https://example.com/path").success);
+      assert.ok(!parser.parse("https://example.com/?query").success);
+      assert.ok(!parser.parse("https://example.com/#fragment").success);
+    });
+
+    it("should accept a bare origin and a root path when rejecting", () => {
+      const parser = origin({ extraComponents: "reject" });
+      assert.ok(parser.parse("https://example.com").success);
+      assert.ok(parser.parse("https://example.com/").success);
+      assert.ok(parser.parse("https://example.com:8443/").success);
+    });
+
+    it("should treat empty query and fragment markers as absent", () => {
+      const parser = origin({ extraComponents: "reject" });
+      assert.ok(parser.parse("https://example.com/?").success);
+      assert.ok(parser.parse("https://example.com/#").success);
+    });
+
+    it("should accept a dot-segment that normalizes to the root", () => {
+      const parser = origin({ extraComponents: "reject" });
+      assert.ok(parser.parse("https://example.com/a/..").success);
+    });
+  });
+
+  describe("credentials", () => {
+    it("should reject credentials in either mode", () => {
+      for (
+        const parser of [
+          origin(),
+          origin({ extraComponents: "reject" }),
+        ]
+      ) {
+        const result = parser.parse("https://user:pw@example.com/");
+        assert.ok(!result.success);
+      }
+    });
+
+    it("should not echo the password in the error message", () => {
+      const parser = origin();
+      const result = parser.parse("https://admin:hunter2@example.com/");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.ok(
+          !formatMessage(result.error).includes("hunter2"),
+          "Error message should not contain the password",
+        );
+      }
+    });
+  });
+
+  describe("opaque origins", () => {
+    it("should reject schemes that have no origin", () => {
+      const parser = origin();
+      for (
+        const input of [
+          "mailto:user@example.com",
+          "data:text/plain,hi",
+          "file:///tmp/example",
+        ]
+      ) {
+        assert.ok(!parser.parse(input).success, `Should reject ${input}`);
+      }
+    });
+
+    it("should reject blob URLs even though they wrap an origin", () => {
+      const parser = origin();
+      assert.ok(!parser.parse("blob:https://example.com/uuid").success);
+    });
+  });
+
+  describe("allowedProtocols", () => {
+    it("should accept any scheme with a tuple origin by default", () => {
+      const parser = origin();
+      for (
+        const input of [
+          "ftp://example.com",
+          "ws://example.com",
+          "wss://example.com",
+        ]
+      ) {
+        assert.ok(parser.parse(input).success, `Should accept ${input}`);
+      }
+    });
+
+    it("should restrict the accepted protocols", () => {
+      const parser = origin({ allowedProtocols: ["http:", "https:"] });
+      assert.ok(parser.parse("https://example.com").success);
+      const result = parser.parse("ftp://example.com");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "URL protocol " },
+            { type: "value", value: "ftp:" },
+            { type: "text", text: " is not allowed. Allowed protocols: " },
+            { type: "value", value: "http:" },
+            { type: "text", text: " and " },
+            { type: "value", value: "https:" },
+            { type: "text", text: "." },
+          ] as const,
+        );
+      }
+    });
+
+    it("should match protocols case-insensitively", () => {
+      const parser = origin({ allowedProtocols: ["HTTPS:"] });
+      assert.ok(parser.parse("https://example.com").success);
+      assert.ok(!parser.parse("http://example.com").success);
+    });
+
+    it("should throw TypeError for an empty list", () => {
+      assert.throws(() => origin({ allowedProtocols: [] }), {
+        name: "TypeError",
+        message: "allowedProtocols must not be empty.",
+      });
+    });
+
+    it("should throw TypeError for an entry missing its colon", () => {
+      assert.throws(() => origin({ allowedProtocols: ["https"] }), {
+        name: "TypeError",
+        message: /got: "https"\./,
+      });
+    });
+  });
+
+  describe("trailingDot", () => {
+    it("should strip a trailing dot by default", () => {
+      const parser = origin();
+      const result = parser.parse("https://example.com./");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "https://example.com");
+      }
+    });
+
+    it("should preserve a trailing dot", () => {
+      const parser = origin({ trailingDot: "preserve" });
+      const dotted = parser.parse("https://example.com./");
+      assert.ok(dotted.success);
+      if (dotted.success) {
+        assert.equal(dotted.value.origin, "https://example.com.");
+      }
+      const plain = parser.parse("https://example.com/");
+      assert.ok(plain.success);
+      if (plain.success) {
+        assert.equal(plain.value.origin, "https://example.com");
+      }
+    });
+
+    it("should append a trailing dot to domain names", () => {
+      const parser = origin({ trailingDot: "append" });
+      const result = parser.parse("https://example.com/");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "https://example.com.");
+      }
+    });
+
+    it("should leave IP literals alone when appending", () => {
+      const parser = origin({ trailingDot: "append" });
+      const ipv4 = parser.parse("http://127.0.0.1:8080/");
+      assert.ok(ipv4.success);
+      if (ipv4.success) {
+        assert.equal(ipv4.value.origin, "http://127.0.0.1:8080");
+      }
+      const ipv6 = parser.parse("http://[::1]:8080/");
+      assert.ok(ipv6.success);
+      if (ipv6.success) {
+        assert.equal(ipv6.value.origin, "http://[::1]:8080");
+      }
+    });
+
+    it("should strip every trailing dot in one pass", () => {
+      const parser = origin();
+      const result = parser.parse("https://example.com../");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "https://example.com");
+        const again = parser.normalize?.(result.value);
+        assert.ok(again);
+        assert.equal(again.origin, "https://example.com");
+      }
+    });
+
+    it("should leave a trailing dot on an IPv4 host when stripping", () => {
+      const parser = origin();
+      const result = parser.parse("http://127.0.0.1./");
+      assert.ok(result.success);
+      if (result.success) {
+        assert.equal(result.value.origin, "http://127.0.0.1");
+      }
+    });
+  });
+
+  describe("option validation", () => {
+    it("should throw TypeError for an unknown extraComponents value", () => {
+      assert.throws(
+        () => origin({ extraComponents: "keep" as never }),
+        { name: "TypeError" },
+      );
+    });
+
+    it("should throw TypeError for an unknown trailingDot value", () => {
+      assert.throws(
+        () => origin({ trailingDot: "remove" as never }),
+        { name: "TypeError" },
+      );
+    });
+  });
+
+  describe("format(), normalize(), and validate()", () => {
+    it("should format a URL as its origin", () => {
+      const parser = origin();
+      assert.equal(
+        parser.format(new URL("https://example.com/path?q#f")),
+        "https://example.com",
+      );
+    });
+
+    it("should normalize a URL to its origin", () => {
+      const parser = origin();
+      const normalized = parser.normalize?.(
+        new URL("https://Example.COM/path?q#f"),
+      );
+      assert.ok(normalized);
+      assert.equal(normalized.origin, "https://example.com");
+    });
+
+    it("should apply the trailing dot mode when normalizing", () => {
+      const parser = origin({ trailingDot: "append" });
+      const normalized = parser.normalize?.(new URL("https://example.com/"));
+      assert.ok(normalized);
+      assert.equal(normalized.origin, "https://example.com.");
+    });
+
+    it("should leave an opaque URL unchanged when normalizing", () => {
+      const parser = origin();
+      const url = new URL("mailto:user@example.com");
+      const normalized = parser.normalize?.(url);
+      assert.equal(normalized, url);
+    });
+
+    it("should not label an opaque URL as null when validating", () => {
+      const parser = origin();
+      const result = parser.validate?.(new URL("mailto:user@example.com"));
+      assert.ok(result);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.ok(!formatMessage(result.error).includes("null"));
+      }
+    });
+
+    it("should validate a URL the way parse does", () => {
+      const parser = origin({ extraComponents: "reject" });
+      assert.ok(parser.validate?.(new URL("https://example.com"))?.success);
+      assert.ok(
+        !parser.validate?.(new URL("https://example.com/path"))?.success,
+      );
+      assert.ok(
+        !parser.validate?.(new URL("mailto:user@example.com"))?.success,
+      );
+      assert.ok(!parser.validate?.("not a URL" as never)?.success);
+    });
+  });
+
+  describe("error customization", () => {
+    it("should use a custom invalidOrigin message", () => {
+      const parser = origin({
+        errors: { invalidOrigin: (input) => message`Bad origin ${input}` },
+      });
+      const result = parser.parse("nope");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "Bad origin " },
+            { type: "value", value: "nope" },
+          ] as const,
+        );
+      }
+    });
+
+    it("should use a custom disallowedProtocol message", () => {
+      const parser = origin({
+        allowedProtocols: ["https:"],
+        errors: { disallowedProtocol: (protocol) => message`No ${protocol}` },
+      });
+      const result = parser.parse("http://example.com");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.deepEqual(
+          result.error,
+          [
+            { type: "text", text: "No " },
+            { type: "value", value: "http:" },
+          ] as const,
+        );
+      }
+    });
+  });
+
+  describe("suggest()", () => {
+    it("should suggest allowed protocols", () => {
+      const parser = origin({ allowedProtocols: ["http:", "https:"] });
+      const suggestions = [...parser.suggest!("ht")]
+        .filter((s) => s.kind === "literal")
+        .map((s) => s.text);
+      assert.deepEqual(suggestions, ["http://", "https://"]);
     });
   });
 });

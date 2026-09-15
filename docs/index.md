@@ -316,7 +316,7 @@ credentials allow a fallback, while credential-store errors reject the parse.
 <LandingSection
   eyebrow="Batteries included"
   title="Reach for a parser before you write one."
-  lead="Fifty-one built-in value parsers, from <code>integer()</code> and
+  lead="Fifty-two built-in value parsers, from <code>integer()</code> and
   <code>ip()</code> to schema validators, Temporal dates, and async Git refs,
   plus the combinators that assemble them. Every one returns an ordinary parser
   that composes with the rest."
