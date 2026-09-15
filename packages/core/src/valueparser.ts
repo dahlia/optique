@@ -4070,6 +4070,292 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
 }
 
 /**
+ * A host name that the WHATWG URL parser has canonicalized into a dotted-quad
+ * IPv4 address.  Matching the canonical form is enough, because the parser
+ * turns every other spelling (`0x7f.1`, `2130706433`, …) into it.
+ */
+const IPV4_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
+
+/**
+ * Whether a URL scheme can yield a tuple origin.  Opaque schemes such as
+ * `file:`, `blob:`, `mailto:`, and `data:` cannot, and an origin parser can
+ * never accept them, so they are rejected when listed in `allowedProtocols`.
+ */
+function canProduceOrigin(protocol: string): boolean {
+  try {
+    return new URL(`${protocol}//0.invalid`).origin !== "null";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Options for creating an {@link origin} parser.
+ *
+ * @since 1.3.0
+ */
+export interface OriginOptions {
+  /**
+   * The metavariable name for this parser.  This is used in help messages to
+   * indicate what kind of value this parser expects.  Usually a single
+   * word in uppercase, like `ORIGIN` or `BASE_URL`.
+   * @default `"ORIGIN"`
+   */
+  readonly metavar?: NonEmptyString;
+
+  /**
+   * List of allowed URL protocols (e.g., `["http:", "https:"]`).
+   * If specified, the parsed URL must use one of these protocols.
+   * Protocol names should include the trailing colon (e.g., `"https:"`), and
+   * each must name a scheme that can produce an origin; opaque schemes such as
+   * `file:` and `blob:` are rejected at construction.
+   * If not specified, any protocol with a tuple origin is allowed.
+   */
+  readonly allowedProtocols?: readonly string[];
+
+  /**
+   * How to treat a URL that carries more than an origin.
+   *
+   * - `"strip"`: return just the origin, discarding any path, query, or
+   *   fragment.
+   * - `"reject"`: fail when the input has a path other than `/`, or a query
+   *   or fragment delimiter (including an empty `?` or `#`).
+   *
+   * Credentials are always rejected, under either setting.
+   * @default `"strip"`
+   */
+  readonly extraComponents?: "strip" | "reject";
+
+  /**
+   * How to treat a trailing dot on a domain name, as in `example.com.`.
+   *
+   * - `"strip"`: remove it, so `example.com.` becomes `example.com`.
+   * - `"preserve"`: keep it, matching the WHATWG URL origin exactly.
+   * - `"append"`: force it, so `example.com` becomes `example.com.`.  This
+   *   has no effect on an IP address literal.
+   *
+   * @default `"strip"`
+   */
+  readonly trailingDot?: "strip" | "preserve" | "append";
+
+  /**
+   * Custom error messages for origin parsing failures.
+   */
+  readonly errors?: {
+    /**
+     * Custom error message when input is not a valid absolute URL.
+     */
+    readonly invalidOrigin?: Message | ((input: string) => Message);
+
+    /**
+     * Custom error message when URL protocol is not allowed.
+     */
+    readonly disallowedProtocol?:
+      | Message
+      | ((protocol: string, allowedProtocols: readonly string[]) => Message);
+  };
+}
+
+/**
+ * Creates a {@link ValueParser} for web origins.
+ *
+ * An origin is a scheme, a host, and an optional port, and nothing else.  The
+ * parser returns a `URL` whose pathname is `/` and which carries no
+ * credentials, query, or fragment.
+ *
+ * Input is canonicalized rather than rejected when it carries more than an
+ * origin: the host is lowercased, internationalized names are converted to
+ * punycode, and a default port is elided, so `HTTPS://Example.COM/`,
+ * `https://example.com:443/path?query#fragment` all parse to
+ * `https://example.com`.  Set `extraComponents: "reject"` to fail on a path,
+ * query, or fragment instead.  Credentials are always rejected.  Schemes whose
+ * origin is opaque (`mailto:`, `data:`, `file:`) are rejected, as is `blob:`,
+ * whose origin belongs to the URL it wraps.
+ *
+ * By default a trailing root-zone dot is stripped, so `example.com.` becomes
+ * `example.com`.  This differs from the WHATWG origin, which keeps the dot, so
+ * the two strings are not interchangeable when an exact origin comparison
+ * matters.  Use `trailingDot: "preserve"` for the WHATWG behavior or
+ * `trailingDot: "append"` to force a fully-qualified name.
+ *
+ * @param options Configuration options for the origin parser.
+ * @returns A {@link ValueParser} that converts string input to `URL` objects
+ *          that name an origin.
+ * @throws {TypeError} If any `allowedProtocols` entry is not a valid protocol
+ *   string ending with a colon (e.g., `"https:"`).
+ * @since 1.3.0
+ */
+export function origin(
+  options: OriginOptions = {},
+): ValueParser<"sync", URL> {
+  const metavar = options.metavar ?? "ORIGIN";
+  ensureNonEmptyString(metavar);
+  checkEnumOption(options, "extraComponents", ["strip", "reject"]);
+  checkEnumOption(options, "trailingDot", ["strip", "preserve", "append"]);
+  const extraComponents = options.extraComponents ?? "strip";
+  const trailingDot = options.trailingDot ?? "strip";
+  const originalProtocolsList: string[] = [];
+  const normalizedProtocolsList: string[] = [];
+  if (options.allowedProtocols != null) {
+    const seen = new Set<string>();
+    for (const protocol of options.allowedProtocols) {
+      if (
+        typeof protocol !== "string" ||
+        !/^[a-z][a-z0-9+\-.]*:$/i.test(protocol)
+      ) {
+        const rendered = typeof protocol === "string"
+          ? JSON.stringify(protocol)
+          : String(protocol);
+        throw new TypeError(
+          `Each allowed protocol must be a valid protocol ending with a colon` +
+            ` (e.g., "https:"), got: ${rendered}.`,
+        );
+      }
+      if (!canProduceOrigin(protocol)) {
+        throw new TypeError(
+          `Each allowed protocol must name a scheme that can produce an ` +
+            `origin, but ${JSON.stringify(protocol)} cannot.`,
+        );
+      }
+      const normalized = protocol.toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      originalProtocolsList.push(protocol);
+      normalizedProtocolsList.push(normalized);
+    }
+    if (originalProtocolsList.length === 0) {
+      throw new TypeError("allowedProtocols must not be empty.");
+    }
+  }
+  const originalProtocols = options.allowedProtocols != null
+    ? Object.freeze(originalProtocolsList)
+    : undefined;
+  const allowedProtocols = options.allowedProtocols != null
+    ? Object.freeze(normalizedProtocolsList)
+    : undefined;
+  const invalidOrigin = options.errors?.invalidOrigin;
+  const disallowedProtocol = options.errors?.disallowedProtocol;
+
+  function invalidOriginError(input: string): Message {
+    return invalidOrigin
+      ? (typeof invalidOrigin === "function"
+        ? invalidOrigin(input)
+        : invalidOrigin)
+      : message`Invalid origin.`;
+  }
+
+  function disallowedProtocolError(protocol: string): Message {
+    return disallowedProtocol
+      ? (typeof disallowedProtocol === "function"
+        ? disallowedProtocol(protocol, originalProtocols!)
+        : disallowedProtocol)
+      : [
+        { type: "text", text: "URL protocol " },
+        { type: "value", value: protocol },
+        { type: "text", text: " is not allowed. Allowed protocols: " },
+        ...valueSet(originalProtocols!, { fallback: "", locale: "en-US" }),
+        { type: "text", text: "." },
+      ] as Message;
+  }
+
+  function withTrailingDot(url: URL): URL {
+    if (trailingDot === "preserve") return url;
+    const { hostname } = url;
+    if (hostname.startsWith("[") || IPV4_PATTERN.test(hostname)) return url;
+    if (trailingDot === "strip") {
+      const stripped = hostname.replace(/\.+$/u, "");
+      if (stripped !== "") url.hostname = stripped;
+    } else if (!hostname.endsWith(".")) {
+      url.hostname = `${hostname}.`;
+    }
+    return url;
+  }
+
+  function resolve(url: URL): ValueParserResult<URL> {
+    if (allowedProtocols != null && !allowedProtocols.includes(url.protocol)) {
+      return { success: false, error: disallowedProtocolError(url.protocol) };
+    }
+    if (url.protocol === "blob:") {
+      return {
+        success: false,
+        error:
+          message`The ${url.protocol} URL wraps another origin. Pass that origin instead.`,
+      };
+    }
+    if (url.origin === "null") {
+      return {
+        success: false,
+        error: message`The ${url.protocol} URL has no origin.`,
+      };
+    }
+    if (url.username !== "" || url.password !== "") {
+      return {
+        success: false,
+        error: message`An origin must not contain credentials: ${url.origin}`,
+      };
+    }
+    if (
+      extraComponents === "reject" &&
+      (
+        url.pathname !== "/" ||
+        url.search !== "" ||
+        url.hash !== "" ||
+        url.href !== new URL(url.origin).href
+      )
+    ) {
+      return {
+        success: false,
+        error:
+          message`Expected only an origin, but got extra components on ${url.origin}.`,
+      };
+    }
+    return { success: true, value: withTrailingDot(new URL(url.origin)) };
+  }
+
+  return {
+    mode: "sync",
+    metavar,
+    get placeholder(): URL {
+      return new URL(`${allowedProtocols?.[0] ?? "http:"}//0.invalid`);
+    },
+    parse(input: string): ValueParserResult<URL> {
+      if (!URL.canParse(input)) {
+        return { success: false, error: invalidOriginError(input) };
+      }
+      return resolve(new URL(input));
+    },
+    validate(value: URL): ValueParserResult<URL> {
+      if (!(value instanceof URL)) {
+        return { success: false, error: invalidOriginError(String(value)) };
+      }
+      return resolve(value);
+    },
+    format(value: URL): string {
+      return value.origin;
+    },
+    normalize(value: URL): URL {
+      if (!(value instanceof URL)) return value;
+      const result = resolve(value);
+      return result.success ? result.value : value;
+    },
+    *suggest(prefix: string): Iterable<Suggestion> {
+      if (allowedProtocols && prefix.length > 0 && !prefix.includes(":")) {
+        for (const protocol of allowedProtocols) {
+          const cleanProtocol = protocol.replace(/:+$/, "");
+          if (cleanProtocol.startsWith(prefix.toLowerCase())) {
+            const suffix = SPECIAL_URL_SCHEMES.has(cleanProtocol) ? "://" : ":";
+            yield {
+              kind: "literal",
+              text: `${cleanProtocol}${suffix}`,
+            };
+          }
+        }
+      }
+    },
+  };
+}
+
+/**
  * Options for creating a {@link locale} parser.
  */
 export interface LocaleOptions {

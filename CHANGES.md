@@ -15,6 +15,11 @@ To be released.
     Existing zero-argument and one-argument handlers remain compatible.
     Wrappers that invoke `onError` must now pass the message after the exit
     code.  [[#897], [#949]]
+ -  Added `origin()` to `@optique/core/valueparser` for parsing a web origin:
+    a scheme, a host, and an optional port.  It returns a `URL` whose pathname
+    is `/`, normalizes the host and port, strips a trailing root-zone dot by
+    default, and rejects credentials and schemes whose origin is opaque or
+    borrowed.  [[#961], [#962]]
  -  Added `parseDetailed()` to preserve remaining arguments and the matched
     command path on structured parse failures.  [[#890], [#892], [#943]]
  -  Added `regExp()` for compiling command-line values into `RegExp` objects
@@ -119,6 +124,8 @@ To be released.
 [#952]: https://github.com/dahlia/optique/pull/952
 [#957]: https://github.com/dahlia/optique/issues/957
 [#958]: https://github.com/dahlia/optique/issues/958
+[#961]: https://github.com/dahlia/optique/issues/961
+[#962]: https://github.com/dahlia/optique/pull/962
 
 ### @optique/run
 

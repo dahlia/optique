@@ -44,6 +44,7 @@ with Optique's type system.
 | `json()`                         | *@optique/core*            | `Json`                         | Any JSON value, with optional root type restriction   |
 | `cron()`                         | *@optique/core*            | `CronExpression`               | Cron schedule expression                              |
 | `url()`                          | *@optique/core*            | `URL`                          | URL with protocol filtering                           |
+| `origin()`                       | *@optique/core*            | `URL`                          | Web origin (scheme, host, port)                       |
 | `locale()`                       | *@optique/core*            | `Intl.Locale`                  | BCP 47 locale identifier                              |
 | `uuid()`                         | *@optique/core*            | `string`                       | UUID with RFC 9562 validation                         |
 | `semVer()`                       | *@optique/core*            | `SemVerString` or `SemVer`     | Semantic Versioning 2.0.0                             |
@@ -1421,6 +1422,59 @@ Error: URL protocol ftp: is not allowed. Allowed protocols: https:.
 ~~~~
 
 The parser uses `"URL"` as its default metavar.
+
+
+`origin()` parser
+-----------------
+
+*This API is available since Optique 1.3.0.*
+
+The `origin()` parser accepts a web origin: a scheme, a host, and an optional
+port.  The parsed result is a JavaScript [`URL`] object whose pathname is `/`
+and which carries no credentials, query, or fragment, so the value is
+guaranteed to name an origin rather than a full URL.
+
+~~~~ typescript twoslash
+import { origin } from "@optique/core/valueparser";
+
+// Basic origin parser
+const rootOrigin = origin();
+
+// Only secure origins
+const secureOrigin = origin({ allowedProtocols: ["https:"] });
+~~~~
+
+The input is canonicalized rather than rejected, so `HTTPS://Example.COM/` and
+`https://example.com:443/path` both parse to `https://example.com`.  A path,
+query, or fragment is dropped; set `extraComponents: "reject"` to fail on them
+instead, including an empty `?` or `#`.  Credentials are always rejected, and
+schemes whose origin is opaque (`mailto:`, `data:`, `file:`) are rejected, as
+is `blob:`, whose origin belongs to the URL it wraps.  `allowedProtocols`
+accepts only schemes that can produce an origin, so an opaque scheme such as
+`file:` is refused at construction.
+
+### Trailing dots
+
+By default the parser strips a trailing root-zone dot, so `example.com.`
+becomes `example.com`.  This differs from the WHATWG URL origin, which keeps
+the dot, and can change an exact origin comparison.  Use
+`trailingDot: "preserve"` for the WHATWG behavior, or `trailingDot: "append"`
+to force a fully-qualified name.
+
+~~~~ typescript twoslash
+import { origin } from "@optique/core/valueparser";
+// ---cut-before---
+// Strips the dot: "https://example.com"
+const stripped = origin();
+
+// Keeps it: "https://example.com."
+const preserved = origin({ trailingDot: "preserve" });
+
+// Adds it: "https://example.com."
+const appended = origin({ trailingDot: "append" });
+~~~~
+
+The parser uses `"ORIGIN"` as its default metavar.
 
 
 `locale()` parser
