@@ -385,6 +385,53 @@ describe("captureRun()", () => {
     );
   });
 
+  it("should not capture an exit sentinel leaked by another invocation", async () => {
+    // Arrange
+    const disposalFailure = new Error("Disposal failed.");
+    const context: SourceContext = {
+      id: Symbol("leaked-exit"),
+      phase: "single-pass",
+      getAnnotations() {
+        return {};
+      },
+      [Symbol.dispose]() {
+        throw disposalFailure;
+      },
+    };
+    let leaked: unknown;
+
+    // Act and assert
+    await assert.rejects(
+      captureRun(constant("unused"), {
+        args: ["--help"],
+        help: "option",
+        contexts: [context],
+      }),
+      (error) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, "SuppressedError");
+        assert.ok("error" in error);
+        assert.equal(error.error, disposalFailure);
+        assert.ok("suppressed" in error);
+        leaked = error.suppressed;
+        assert.ok(leaked instanceof Error);
+        return true;
+      },
+    );
+    await assert.rejects(
+      captureRun(
+        constant("value").map(() => {
+          throw leaked;
+        }),
+        { args: [] },
+      ),
+      (error) => {
+        assert.equal(error, leaked);
+        return true;
+      },
+    );
+  });
+
   it("should isolate overlapping calls", async () => {
     // Arrange
     const returnStarted = createDeferred();

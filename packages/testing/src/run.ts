@@ -173,6 +173,19 @@ export async function captureRun(
     | Program<Mode, unknown>,
   options: CaptureRunOptions = {},
 ): Promise<CapturedRunResult<unknown>> {
+  // A disposal failure can expose an exit through SuppressedError.suppressed.
+  // A separate class per call prevents a rethrown exit from another invocation
+  // from being mistaken for this invocation's intentional exit.
+  class CapturedExit extends Error {
+    readonly exitCode: number;
+
+    constructor(exitCode: number) {
+      super(`Runner exited with code ${exitCode}.`);
+      this.name = "CapturedExit";
+      this.exitCode = exitCode;
+    }
+  }
+
   let stdout = "";
   let stderr = "";
   const runOptions: RunOptions = {
@@ -208,15 +221,5 @@ export async function captureRun(
       stdout,
       stderr,
     };
-  }
-}
-
-class CapturedExit extends Error {
-  readonly exitCode: number;
-
-  constructor(exitCode: number) {
-    super(`Runner exited with code ${exitCode}.`);
-    this.name = "CapturedExit";
-    this.exitCode = exitCode;
   }
 }

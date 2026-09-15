@@ -255,7 +255,7 @@ To be released.
  -  Added the `@optique/testing` package with separate entry points for testing
     parser results, runner output, command dispatch, and real CLI processes.
     The package also exports `CapturedOutput` for captured stdout and stderr.
-    [[#887], [#890], [#891], [#892], [#893], [#894], [#942], [#943], [#944], [#945], [#946], [#953], [#954]]
+    [[#887], [#890], [#891], [#892], [#893], [#894], [#942], [#943], [#944], [#945], [#946], [#953], [#954], [#959]]
 
      -  `@optique/testing/parser` parses a complete argument list and reports an
         inferred value or a structured failure, including remaining arguments
@@ -282,6 +282,7 @@ To be released.
 [#946]: https://github.com/dahlia/optique/pull/946
 [#953]: https://github.com/dahlia/optique/issues/953
 [#954]: https://github.com/dahlia/optique/pull/954
+[#959]: https://github.com/dahlia/optique/issues/959
 
 
 Version 1.2.7
