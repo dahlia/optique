@@ -8,6 +8,7 @@ import { dependency, deriveFrom } from "#src/internal/dependency.ts";
 import {
   getDocPage,
   parseAsync,
+  type Parser,
   parseSync,
   suggestAsync,
   type Suggestion,
@@ -10249,14 +10250,15 @@ describe("source delivery from conditional()/command() to siblings", () => {
     },
   );
 
+  // https://github.com/dahlia/optique/issues/958
   test(
-    "does not deliver a plain nested object() CLI source to an earlier consumer",
+    "delivers a plain nested object() CLI source to an earlier consumer",
     async () => {
       const { mode, level } = createModeLevel();
-      // A source nested in a plain object() only leaks to consumers
-      // completed after it (declaration order); a consumer declared
-      // first keeps seeing the source default.  This pins the existing
-      // scope so the conditional()/command() expansion does not widen it.
+      // A plain nested object() is part of the enclosing declaration
+      // sequence, so its command-line source reaches a consumer
+      // declared before it, exactly as a source declared directly
+      // beside that consumer does.
       const parser = object({
         level: option("--level", level),
         inner: object({ mode: option("--mode", mode) }),
@@ -10266,13 +10268,21 @@ describe("source delivery from conditional()/command() to siblings", () => {
         "--mode",
         "prod",
         "--level",
-        "debug",
+        "silent",
       ]);
       assert.ok(
         result.success,
         `Expected success but got: ${JSON.stringify(result)}`,
       );
-      assert.equal(result.value.level, "debug");
+      assert.equal(result.value.level, "silent");
+
+      const rejected = await parseAsync(parser, [
+        "--mode",
+        "prod",
+        "--level",
+        "debug",
+      ]);
+      assert.ok(!rejected.success);
     },
   );
 
@@ -10554,5 +10564,475 @@ describe("committed source values across preceding siblings", () => {
       cond: ["a", { fw: "fresh", pm: "npm" }],
       fw2: "hono",
     });
+  });
+});
+
+// https://github.com/dahlia/optique/issues/958
+describe("nested command-line source delivery to earlier consumers", () => {
+  function fixture() {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    return { framework, pm };
+  }
+
+  // The example from the issue report.
+  for (const consumerFirst of [false, true]) {
+    test(`reads a nested source with consumerFirst=${consumerFirst}`, async () => {
+      const { framework, pm } = fixture();
+      const source = object({ fw: option("--fw", framework) });
+      const consumer = option("--pm", pm);
+      const parser = consumerFirst
+        ? object({ consumer, source })
+        : object({ source, consumer });
+      const args = ["--fw", "hono", "--pm", "npm"];
+
+      const syncResult = parseSync(parser, args);
+      assert.ok(
+        syncResult.success,
+        syncResult.success ? undefined : formatMessage(syncResult.error),
+      );
+      assert.deepEqual(syncResult.value, {
+        source: { fw: "hono" },
+        consumer: "npm",
+      });
+
+      const asyncResult = await parseAsync(parser, args);
+      assert.ok(
+        asyncResult.success,
+        asyncResult.success ? undefined : formatMessage(asyncResult.error),
+      );
+      assert.deepEqual(asyncResult.value, syncResult.value);
+
+      // The default no longer decides: "deno" belongs to "fresh".
+      assert.ok(!parseSync(parser, ["--fw", "hono", "--pm", "deno"]).success);
+    });
+  }
+
+  test("reads a source nested in a tuple()", () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: tuple([option("--fw", framework)]),
+    });
+    const result = parseSync(parser, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, { consumer: "npm", nested: ["hono"] });
+  });
+
+  test("reads a source nested in a concat()", () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: concat(tuple([option("--fw", framework)])),
+    });
+    const result = parseSync(parser, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, { consumer: "npm", nested: ["hono"] });
+  });
+
+  test("reads a source nested two constructs deep", () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: object({ inner: object({ fw: option("--fw", framework) }) }),
+    });
+    const result = parseSync(parser, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      consumer: "npm",
+      nested: { inner: { fw: "hono" } },
+    });
+  });
+
+  test("reads a source through transparent wrappers", () => {
+    const { framework, pm } = fixture();
+    const optionalParser = object({
+      consumer: option("--pm", pm),
+      nested: optional(object({ fw: option("--fw", framework) })),
+    });
+    const optionalResult = parseSync(optionalParser, [
+      "--fw",
+      "hono",
+      "--pm",
+      "npm",
+    ]);
+    assert.ok(
+      optionalResult.success,
+      optionalResult.success ? undefined : formatMessage(optionalResult.error),
+    );
+
+    const mapped = object({
+      consumer: option("--pm", pm),
+      nested: map(object({ fw: option("--fw", framework) }), (v) => v.fw),
+    });
+    const mappedResult = parseSync(mapped, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      mappedResult.success,
+      mappedResult.success ? undefined : formatMessage(mappedResult.error),
+    );
+    assert.deepEqual(mappedResult.value, { consumer: "npm", nested: "hono" });
+
+    const grouped = object({
+      consumer: option("--pm", pm),
+      nested: group("Nested", object({ fw: option("--fw", framework) })),
+    });
+    const groupedResult = parseSync(grouped, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      groupedResult.success,
+      groupedResult.success ? undefined : formatMessage(groupedResult.error),
+    );
+  });
+
+  test("reads a nested source from an enclosing tuple()", () => {
+    const { framework, pm } = fixture();
+    const parser = tuple([
+      option("--pm", pm),
+      object({ fw: option("--fw", framework) }),
+    ]);
+    const result = parseSync(parser, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, ["npm", { fw: "hono" }]);
+  });
+
+  test("reads a source nested in merge() with distinct fields", () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: merge(
+        object({ fw: option("--fw", framework) }),
+        object({ tag: optional(option("--tag", string())) }),
+      ),
+    });
+    const result = parseSync(parser, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      consumer: "npm",
+      nested: { fw: "hono", tag: undefined },
+    });
+  });
+
+  test("keeps a merge() duplicate output field out of the outer scope", () => {
+    const { framework, pm } = fixture();
+    // A field merge() duplicates stays local to its own child, so the
+    // outer collection never sees it and the consumer keeps the default.
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: merge(
+        object({ fw: option("--fw", framework) }),
+        object({ fw: option("--fw", framework) }),
+        { allowDuplicates: true },
+      ),
+    });
+    assert.ok(!parseSync(parser, ["--fw", "hono", "--pm", "npm"]).success);
+  });
+
+  test("reads the last occurrence of a nested multiple() source", () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: object({ fw: multiple(option("--fw", framework)) }),
+    });
+    const result = parseSync(parser, [
+      "--fw",
+      "fresh",
+      "--fw",
+      "hono",
+      "--pm",
+      "npm",
+    ]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      consumer: "npm",
+      nested: { fw: ["fresh", "hono"] },
+    });
+  });
+
+  test("gives a nested occurrence its construct's declaration position", () => {
+    const { framework, pm } = fixture();
+    // A nested occurrence takes the enclosing declaration position of
+    // the construct holding it, so the last declared occurrence wins.
+    const nestedLast = object({
+      outer: option("--outer", framework),
+      nested: object({ fw: option("--fw", framework) }),
+      consumer: option("--pm", pm),
+    });
+    const nestedArgs = ["--outer", "fresh", "--fw", "hono"];
+    const nestedWins = parseSync(nestedLast, [...nestedArgs, "--pm", "npm"]);
+    assert.ok(
+      nestedWins.success,
+      nestedWins.success ? undefined : formatMessage(nestedWins.error),
+    );
+    assert.ok(!parseSync(nestedLast, [...nestedArgs, "--pm", "deno"]).success);
+
+    const outerLast = object({
+      consumer: option("--pm", pm),
+      nested: object({ fw: option("--fw", framework) }),
+      outer: option("--outer", framework),
+    });
+    const outerArgs = ["--fw", "hono", "--outer", "fresh"];
+    const outerWins = parseSync(outerLast, [...outerArgs, "--pm", "deno"]);
+    assert.ok(
+      outerWins.success,
+      outerWins.success ? undefined : formatMessage(outerWins.error),
+    );
+    assert.ok(!parseSync(outerLast, [...outerArgs, "--pm", "npm"]).success);
+  });
+
+  test("does not let an absent nested occurrence displace a later one", () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: object({ fw: optional(option("--fw", framework)) }),
+      outer: option("--outer", framework),
+    });
+    const result = parseSync(parser, ["--outer", "hono", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      consumer: "npm",
+      nested: { fw: undefined },
+      outer: "hono",
+    });
+  });
+
+  test("fails on an invalid nested source instead of defaulting", () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      nested: object({ fw: option("--fw", framework) }),
+      consumer: option("--pm", pm),
+    });
+    assert.ok(!parseSync(parser, ["--fw", "bogus", "--pm", "deno"]).success);
+  });
+
+  test("evaluates a nested derived source's default thunk once", () => {
+    let calls = 0;
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const middle = dependency(framework.deriveSync({
+      metavar: "MIDDLE",
+      factory: (value) => choice(value === "fresh" ? ["a"] : ["b"]),
+      defaultValue: () => {
+        calls += 1;
+        return "fresh" as const;
+      },
+    }));
+    const parser = object({
+      fw: option("--fw", framework),
+      nested: object({ middle: option("--middle", middle) }),
+    });
+    const result = parseSync(parser, ["--fw", "hono", "--middle", "b"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.equal(calls, 1);
+  });
+
+  test("keeps a nested exclusive alternative out of the enclosing scope", () => {
+    const { framework, pm } = fixture();
+    const alternatives = () =>
+      or(
+        object({ fw: option("--fw", framework) }),
+        object({ tag: option("--tag", string()) }),
+      );
+    // An alternative is a scope of its own; the consumer keeps its
+    // default, and neither a label nor an error callback changes that.
+    const plain = object({
+      consumer: option("--pm", pm),
+      nested: object({ alt: alternatives() }),
+    });
+    const grouped = object({
+      consumer: option("--pm", pm),
+      nested: object({ alt: group("Alt", alternatives()) }),
+    });
+    const longest = object({
+      consumer: option("--pm", pm),
+      nested: object({
+        alt: longestMatch(
+          object({ fw: option("--fw", framework) }),
+          object({ tag: option("--tag", string()) }),
+        ),
+      }),
+    });
+    for (const parser of [plain, grouped, longest]) {
+      const accepted = parseSync(parser, ["--fw", "hono", "--pm", "deno"]);
+      assert.ok(
+        accepted.success,
+        accepted.success ? undefined : formatMessage(accepted.error),
+      );
+      assert.ok(!parseSync(parser, ["--fw", "hono", "--pm", "npm"]).success);
+    }
+  });
+
+  test("keeps a nested or() with composed metadata out of the scope", () => {
+    // Both alternatives publish the same source, so the or() composes
+    // its own source metadata.  That metadata still only delegates to
+    // the selected alternative, which is a scope of its own—including
+    // when a wrapper composes the capability further.
+    const shapes: readonly (readonly [
+      string,
+      Parser<"sync", unknown, unknown>,
+    ])[] = (() => {
+      const built: [string, Parser<"sync", unknown, unknown>][] = [];
+      for (
+        const label of [
+          "plain",
+          "optional",
+          "map",
+          "multiple",
+          "withDefault",
+        ] as const
+      ) {
+        const { framework, pm } = fixture();
+        const alt = or(
+          option("--fw", framework),
+          option("--other", framework),
+        );
+        const wrapped = label === "optional"
+          ? optional(alt)
+          : label === "map"
+          ? map(alt, (value) => value)
+          : label === "multiple"
+          ? multiple(alt)
+          : label === "withDefault"
+          ? withDefault(alt, "fresh" as const)
+          : alt;
+        built.push([
+          label,
+          object({
+            consumer: option("--pm", pm),
+            nested: object({ alt: wrapped }),
+          }),
+        ]);
+      }
+      return built;
+    })();
+    for (const [label, parser] of shapes) {
+      const accepted = parseSync(parser, ["--fw", "hono", "--pm", "deno"]);
+      assert.ok(
+        accepted.success,
+        `${label}: ${accepted.success ? "" : formatMessage(accepted.error)}`,
+      );
+      assert.ok(
+        !parseSync(parser, ["--fw", "hono", "--pm", "npm"]).success,
+        label,
+      );
+    }
+  });
+
+  test("treats a nested repetition that matched nothing as absent", () => {
+    const { framework, pm } = fixture();
+    // withDefault(multiple(...)) rebuilds an empty state on every parse,
+    // so it is never identical to the parser's initial state even though
+    // nothing matched.
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: object({
+        fw: withDefault(multiple(option("--fw", framework)), []),
+      }),
+    });
+    const accepted = parseSync(parser, ["--pm", "deno"]);
+    assert.ok(
+      accepted.success,
+      accepted.success ? undefined : formatMessage(accepted.error),
+    );
+    assert.deepEqual(accepted.value, { consumer: "deno", nested: { fw: [] } });
+    assert.ok(!parseSync(parser, ["--pm", "npm"]).success);
+  });
+
+  test("keeps branchError from widening a nested conditional's scope", () => {
+    const { framework, pm } = fixture();
+    const alternatives = () =>
+      or(
+        object({ fw: option("--fw", framework) }),
+        object({ tag: option("--tag", string()) }),
+      );
+    const nested = (withBranchError: boolean) =>
+      object({
+        consumer: option("--pm", pm),
+        nested: object({
+          alt: withBranchError
+            ? conditional(
+              option("--kind", choice(["a"] as const)),
+              { a: alternatives() },
+              constant("none" as const),
+              { errors: { branchError: () => message`branch failed` } },
+            )
+            : conditional(
+              option("--kind", choice(["a"] as const)),
+              { a: alternatives() },
+              constant("none" as const),
+            ),
+        }),
+      });
+    for (const withBranchError of [false, true]) {
+      const parser = nested(withBranchError);
+      const args = ["--kind", "a", "--fw", "hono"];
+      const accepted = parseSync(parser, [...args, "--pm", "deno"]);
+      assert.ok(
+        accepted.success,
+        accepted.success ? undefined : formatMessage(accepted.error),
+      );
+      assert.ok(!parseSync(parser, [...args, "--pm", "npm"]).success);
+    }
+  });
+
+  test("reads a nested source in an async object()", async () => {
+    const framework = dependency(asyncChoice(["fresh", "hono"] as const));
+    const pm = framework.deriveAsync({
+      metavar: "PM",
+      factory: (value: "fresh" | "hono") =>
+        asyncChoice(value === "fresh" ? ["deno"] as const : ["npm"] as const),
+      defaultValue: () => "fresh" as const,
+    });
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: object({ fw: option("--fw", framework) }),
+    });
+    const result = await parseAsync(parser, ["--fw", "hono", "--pm", "npm"]);
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      consumer: "npm",
+      nested: { fw: "hono" },
+    });
+  });
+
+  test("suggests values derived from a nested source", async () => {
+    const { framework, pm } = fixture();
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: object({ fw: option("--fw", framework) }),
+    });
+    const suggestions = await suggestAsync(parser, ["--fw", "hono", "--pm="]);
+    assert.deepEqual(
+      suggestions.flatMap((s) => s.kind === "literal" ? [s.text] : []),
+      ["--pm=npm"],
+    );
   });
 });

@@ -27,11 +27,15 @@ import {
   type EffectfulSchedulingNodesFn,
   effectfulSchedulingNodesKey,
   exclusiveSourceScopeKey,
+  type ExpandRuntimeNodesOptions,
+  extractRawInputFromState,
   fillMissingSourceDefaults,
   fillMissingSourceDefaultsAsync,
   forkRuntimeForCommittedSubtree,
+  getDefaultDependencySnapshot,
   guaranteedStaticSourceIdsKey,
   hasInactiveCompletion,
+  isMatchedState,
   recordSourceScope,
   releaseUncollectedSourceValues,
   replaceCachedBarrierFailure,
@@ -297,10 +301,26 @@ const preExpandedBranchNodes = new WeakSet<RuntimeNode>();
  */
 function expandEffectfulRuntimeNodes(
   nodes: readonly RuntimeNode[],
+  options?: ExpandRuntimeNodesOptions,
 ): readonly RuntimeNode[] {
   const expanded: RuntimeNode[] = [];
   const visit = (node: RuntimeNode): void => {
     const meta = node.parser.dependencyMetadata;
+    const optedIntoCollection = (node.parser as {
+      readonly [sourceCollectionExpansionKey]?: boolean;
+    })[sourceCollectionExpansionKey] === true;
+    // A structural walk stays inside the enclosing scope's own subtree:
+    // an alternative selected by an exclusive parser is a scope of its
+    // own unless it opted into source collection, so its hook is left
+    // to the scheduling walk.
+    if (
+      options?.structuralOnly === true &&
+      !optedIntoCollection &&
+      exclusiveSourceScopeKey in node.parser
+    ) {
+      expanded.push(node);
+      return;
+    }
     const schedulingNodes = (node.parser as {
       readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
     })[effectfulSchedulingNodesKey];
@@ -312,10 +332,7 @@ function expandEffectfulRuntimeNodes(
     // branch) falls back to the node itself.  Derived metadata still
     // pins the node: consumers must stay visible to demand detection.
     const expandsThroughHook = schedulingNodes != null &&
-      meta?.derived == null &&
-      (node.parser as {
-          readonly [sourceCollectionExpansionKey]?: boolean;
-        })[sourceCollectionExpansionKey] === true;
+      meta?.derived == null && optedIntoCollection;
     if (
       !expandsThroughHook &&
       (meta?.source?.completeSource != null || meta?.derived != null)
@@ -327,7 +344,7 @@ function expandEffectfulRuntimeNodes(
     // expansion uses the same child-indexed paths, declaration order,
     // and duplicate-field exclusion as the merge's direct scheduling.
     if (schedulingNodes != null) {
-      const children = schedulingNodes(node.state, node.path);
+      const children = schedulingNodes(node.state, node.path, options);
       if (children.length === 0 && meta?.source != null) {
         expanded.push(node);
         return;
@@ -365,13 +382,31 @@ function expandEffectfulRuntimeNodes(
       const childState = Array.isArray(state)
         ? state[segment as number]
         : (state as Record<string | symbol, unknown>)[field];
+      // Propagate parent annotations so source bindings (e.g.,
+      // bindEnv()) can read their values when completed through the
+      // expansion.
+      const annotatedChildState = getAnnotatedChildState(
+        state,
+        childState,
+        childParser,
+      );
+      // Derived children carry the same replay metadata a direct child
+      // gets from buildRuntimeNodesFromPairs(), so a dynamic default
+      // thunk keeps its parse-time snapshot instead of being evaluated
+      // again during replay.
+      const isDerived = childParser.dependencyMetadata?.derived != null;
+      const rawInput = isDerived
+        ? extractRawInputFromState(annotatedChildState)
+        : undefined;
+      const defaultDependencyValues = isDerived
+        ? getDefaultDependencySnapshot(annotatedChildState)
+        : undefined;
       visit({
         path: [...node.path, segment],
         parser: childParser,
-        // Propagate parent annotations so source bindings (e.g.,
-        // bindEnv()) can read their values when completed through the
-        // expansion.
-        state: getAnnotatedChildState(state, childState, childParser),
+        state: annotatedChildState,
+        ...(rawInput != null ? { rawInput } : {}),
+        ...(defaultDependencyValues != null ? { defaultDependencyValues } : {}),
       });
     }
   };
@@ -401,14 +436,128 @@ function expandSourceCollectionNodes(
     const optedIn = (node.parser as {
       readonly [sourceCollectionExpansionKey]?: boolean;
     })[sourceCollectionExpansionKey] === true;
-    if (!optedIn) {
+    if (optedIn) {
+      if (expanded == null) expanded = nodes.slice(0, i);
+      expanded.push(...expandEffectfulRuntimeNodes([node]));
+      continue;
+    }
+    const nested = nestedCommandLineSourceNodes(node);
+    if (nested.length < 1) {
       expanded?.push(node);
       continue;
     }
     if (expanded == null) expanded = nodes.slice(0, i);
-    expanded.push(...expandEffectfulRuntimeNodes([node]));
+    expanded.push(node, ...nested);
   }
   return expanded ?? nodes;
+}
+
+/**
+ * The command-line source occurrences a structural child contributes to
+ * its enclosing construct's collection scope.
+ *
+ * A plain nested construct—an `object()`, `tuple()`, `concat()`,
+ * `merge()`, or one of those behind a transparent wrapper—is part of the
+ * enclosing declaration sequence, so a source it holds must reach a
+ * consumer declared before it, exactly as a source declared directly
+ * beside that consumer does.  Only occurrences that consumed
+ * command-line input are contributed: an absent occurrence has no value
+ * to publish, and a bound or defaulted one publishes through its own
+ * construct's pre-completion, whose fallback readers and lazy defaults
+ * must keep evaluating exactly once
+ * (https://github.com/dahlia/optique/issues/958).
+ *
+ * @param node The structural child to look inside.
+ * @returns The nested command-line source occurrences, in declaration
+ *          order.  Empty for a child that holds none.
+ */
+function nestedCommandLineSourceNodes(
+  node: RuntimeNode,
+): readonly RuntimeNode[] {
+  const nested: RuntimeNode[] = [];
+  for (
+    const descendant of expandEffectfulRuntimeNodes([node], {
+      structuralOnly: true,
+    })
+  ) {
+    if (descendant === node) continue;
+    if (descendant.parser.dependencyMetadata?.source == null) continue;
+    // The walk stops at an exclusive parser that did not opt in, which
+    // leaves the parser itself in the list.  Its composed metadata
+    // merely delegates to whichever alternative was selected, so
+    // collecting it would publish that alternative's value after all.
+    // The metadata flag also catches a wrapper that composed such a
+    // capability without carrying the parser-level marker.
+    if (
+      (exclusiveSourceScopeKey in descendant.parser ||
+        descendant.parser.dependencyMetadata?.source?.exclusiveOccurrence ===
+          true) &&
+      (descendant.parser as {
+          readonly [sourceCollectionExpansionKey]?: boolean;
+        })[sourceCollectionExpansionKey] !== true
+    ) {
+      continue;
+    }
+    if (!hasCommandLineSourceInput(descendant)) continue;
+    nested.push({ ...descendant, matched: true });
+  }
+  return nested;
+}
+
+/**
+ * Whether a source occurrence's state holds no parsed input at all.
+ *
+ * State identity against `initialState` misses two shapes a wrapper
+ * produces afresh on every parse: a repetition that matched nothing,
+ * whose state is a new empty array, and a wrapper whose own initial
+ * state is `undefined`, which annotation injection turns into an object
+ * carrying nothing but annotation symbols.  Both look matched by
+ * identity while holding nothing to publish, and neither forwards the
+ * binding marker that would otherwise catch them.
+ *
+ * Treating an unrecognized shape as non-empty is the safe direction: the
+ * occurrence is then subject to the remaining provenance checks.
+ *
+ * @param state The occurrence's state, already unwrapped one level.
+ * @returns `true` when the state carries no parsed input.
+ */
+function isEmptySourceState(state: unknown): boolean {
+  if (state == null) return true;
+  if (Array.isArray(state)) return state.length < 1;
+  if (typeof state !== "object") return false;
+  return Object.getOwnPropertyNames(state).length < 1;
+}
+
+/**
+ * Whether a nested source occurrence holds a value the command line
+ * supplied.
+ *
+ * A source that can complete from a binding (`bindEnv()`,
+ * `bindConfig()`, and other `completesFromSource` wrappers) reaches an
+ * annotated state even when nothing on the command line matched, so an
+ * unmatched state alone does not prove provenance.  Such an occurrence
+ * has to say so through its own state; otherwise extracting from it here
+ * would run the binding's fallback reader in addition to the run its
+ * owning construct's pre-completion already performs.
+ *
+ * @param node The nested source occurrence.
+ * @returns `true` when the occurrence's state came from the command
+ *          line, whether or not that input passed validation.
+ */
+function hasCommandLineSourceInput(node: RuntimeNode): boolean {
+  const parser = node.parser as {
+    readonly dependencyMetadata?: ParserDependencyMetadata;
+    readonly initialState?: unknown;
+    readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+  };
+  if (!isMatchedState(node.state, parser)) return false;
+  const innerState = Array.isArray(node.state) && node.state.length === 1
+    ? node.state[0]
+    : node.state;
+  if (isEmptySourceState(innerState)) return false;
+  if (parser[unmatchedNonCliDependencySourceStateMarker] !== true) return true;
+  return innerState != null && typeof innerState === "object" &&
+    (innerState as { readonly hasCliValue?: unknown }).hasCliValue === true;
 }
 
 /**
@@ -920,10 +1069,25 @@ async function scheduleEffectfulSourceCompletions(
       readonly [sourceCollectionExpansionKey]?: boolean;
     })[sourceCollectionExpansionKey] === true;
     const preExpanded = preExpandedBranchNodes.has(node);
+    // A structural child's command-line occurrences took part in the
+    // construct's explicit source collection, so they re-register in
+    // declaration order here too; otherwise an effectful source
+    // declared earlier would keep the value it published
+    // (https://github.com/dahlia/optique/issues/958).
+    const nestedPaths = optedIn || preExpanded ? undefined : new Set(
+      nestedCommandLineSourceNodes(node).map((nested) =>
+        serializeSchedulingPath(nested.path)
+      ),
+    );
     for (const expandedNode of expandEffectfulRuntimeNodes([node])) {
       expandedNodes.push(expandedNode);
       if (preExpanded) continue;
-      if (optedIn || expandedNode === node) collected.add(expandedNode);
+      if (
+        optedIn || expandedNode === node ||
+        nestedPaths?.has(serializeSchedulingPath(expandedNode.path)) === true
+      ) {
+        collected.add(expandedNode);
+      }
     }
   }
   // A pass asked to re-publish cached completions (the first pass of a
@@ -2561,6 +2725,11 @@ function composeExclusiveDependencyMetadata(
       // so the exclusive parser is never a guaranteed publisher even
       // when a source alternative would be.
       completesWhenMissing: false,
+      // The value this capability yields belongs to whichever
+      // alternative the run committed, so an enclosing construct's
+      // source collection must leave it to that alternative's own
+      // scope (https://github.com/dahlia/optique/issues/958).
+      exclusiveOccurrence: true,
       preservesSourceValue: everyBranchPreserves,
       extractSourceValue(state) {
         if (
@@ -14902,6 +15071,20 @@ export function group<M extends Mode, TValue, TState>(
         )[sourceCollectionExpansionKey],
       }
       : {}),
+    // Forward the exclusive-scope marker so a grouped or()/conditional()
+    // keeps its own scope: a label must not make an alternative's
+    // sources visible to the enclosing collection.
+    ...(exclusiveSourceScopeKey in parser
+      ? {
+        [exclusiveSourceScopeKey]: (
+          parser as {
+            [exclusiveSourceScopeKey]: ReadonlyArray<
+              Parser<Mode, unknown, unknown>
+            >;
+          }
+        )[exclusiveSourceScopeKey],
+      }
+      : {}),
     // Forward completion deferral hook from inner parser so that
     // prompt(group("label", bindConfig(...))) defers correctly.
     ...(typeof parser.shouldDeferCompletion === "function"
@@ -15041,6 +15224,20 @@ export function group<M extends Mode, TValue, TState>(
       configurable: true,
       enumerable: false,
     });
+  }
+  // A grouped source binding keeps completing from its binding, so the
+  // marker that distinguishes a bound state from command-line input
+  // travels with the metadata.
+  if (
+    (parser as {
+      readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+    })[unmatchedNonCliDependencySourceStateMarker] === true
+  ) {
+    Object.defineProperty(
+      groupParser,
+      unmatchedNonCliDependencySourceStateMarker,
+      { value: true, configurable: true, enumerable: true },
+    );
   }
   // Lazily forward placeholder from inner parser to avoid eagerly
   // evaluating derived value parser factories at construction time.
@@ -16724,6 +16921,7 @@ export function conditional(
   const buildConditionalSchedulingNodes = (
     state: unknown,
     parentPath: readonly PropertyKey[] | undefined,
+    expandOptions?: ExpandRuntimeNodesOptions,
   ): readonly RuntimeNode[] => {
     if (state == null || typeof state !== "object") return [];
     const conditionalState = state as ConditionalState<string>;
@@ -16762,7 +16960,10 @@ export function conditional(
           // scheduling call never treats them as reusable.
           for (
             const expanded of wrapBranchBarrierNodes(
-              expandEffectfulRuntimeNodes([branchNode]),
+              // The caller's traversal limits apply to the branch too:
+              // pre-expanding here must not fold an alternative that the
+              // caller would have stopped at into its scope.
+              expandEffectfulRuntimeNodes([branchNode], expandOptions),
               branchKey,
             )
           ) {

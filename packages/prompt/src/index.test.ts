@@ -8541,3 +8541,42 @@ describe("uncollected descendants of committed branches", () => {
     assert.deepEqual(calls.map((call) => call.value), ["fresh"]);
   });
 });
+
+// https://github.com/dahlia/optique/issues/958
+describe("nested command-line sources beside a prompted source", () => {
+  it("lets a nested CLI occurrence win over an earlier prompted one", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    // The prompt publishes "fresh" during the scheduling pass; the
+    // later nested "--fw hono" must re-register at its declaration
+    // position, whichever side of it the consumer is declared on.
+    for (const consumerFirst of [false, true]) {
+      const { prompt } = createTestPrompt();
+      const effect = prompt(option("--fw0", framework), { value: "fresh" });
+      const consumer = option("--pm", pm);
+      const nested = object({ fw: option("--fw", framework) });
+      const parser = consumerFirst
+        ? object({ effect, consumer, nested })
+        : object({ effect, nested, consumer });
+      const result = await parseAsync(parser, [
+        "--fw",
+        "hono",
+        "--pm",
+        "npm",
+      ]);
+      assert.ok(
+        result.success,
+        result.success ? undefined : formatMessage(result.error),
+      );
+      assert.deepEqual(result.value, {
+        effect: "fresh",
+        consumer: "npm",
+        nested: { fw: "hono" },
+      });
+    }
+  });
+});

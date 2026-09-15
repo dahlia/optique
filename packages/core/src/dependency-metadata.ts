@@ -117,6 +117,22 @@ export interface DependencySourceCapability {
   readonly completesWhenMissing?: boolean;
 
   /**
+   * Whether this capability publishes whichever mutually exclusive
+   * alternative the run selected, rather than an occurrence of its own.
+   *
+   * An `or()`/`longestMatch()` whose alternatives share one source
+   * composes such a capability.  The alternative is a scope of its own,
+   * so an enclosing construct's explicit source collection leaves it
+   * alone unless the exclusive parser opted into collection.  Wrappers
+   * compose source capabilities by spreading them, so the flag travels
+   * through `optional()`, `withDefault()`, `map()`, and `multiple()`
+   * without each having to forward it.
+   *
+   * @since 1.3.0
+   */
+  readonly exclusiveOccurrence?: boolean;
+
+  /**
    * Whether the parser's output value is the actual dependency source value.
    * `false` when a transform like `map()` has been applied.
    */

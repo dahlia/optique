@@ -1377,6 +1377,55 @@ describe("bindConfig", () => {
     assert.equal(keyCalls, 1);
   });
 
+  // https://github.com/dahlia/optique/issues/958
+  test("does not read the config fallback for a nested binding", () => {
+    // Nested command-line sources register in their enclosing scope, but
+    // a binding is not command-line input: reading it here would run the
+    // key callback in addition to the run its own construct's
+    // pre-completion performs.
+    const source = dependency(string());
+    let keyCalls = 0;
+    const context = createConfigContext({
+      schema: z.object({ mode: z.string() }),
+    });
+    const annotations: Annotations = {
+      [context.id]: { data: { mode: "prod" } },
+    };
+    const leaf = bindConfig(option("--mode", source), {
+      context,
+      key(config) {
+        keyCalls += 1;
+        return config.mode;
+      },
+    });
+    const leafParse = leaf.parse({
+      buffer: [],
+      state: injectAnnotations(leaf.initialState, annotations),
+      optionsTerminated: false,
+      usage: leaf.usage,
+    });
+    assert.ok(leafParse.success);
+
+    const nested = object({ nested: object({ mode: leaf }) });
+    const nestedResult = nested.complete(
+      { nested: { mode: leafParse.next.state } },
+      { usage: nested.usage, phase: "complete", path: [], trace: undefined },
+    );
+    assert.ok(nestedResult.success);
+    assert.deepEqual(nestedResult.value, { nested: { mode: "prod" } });
+    assert.equal(keyCalls, 1);
+
+    keyCalls = 0;
+    const grouped = concat(tuple([group("Mode", leaf)]), tuple([]));
+    const groupedResult = grouped.complete(
+      [[leafParse.next.state], []],
+      { usage: grouped.usage, phase: "complete", path: [], trace: undefined },
+    );
+    assert.ok(groupedResult.success);
+    assert.deepEqual(groupedResult.value, ["prod"]);
+    assert.equal(keyCalls, 1);
+  });
+
   // Regression test for https://github.com/dahlia/optique/issues/94
   test("does not crash when bindConfig wraps flag() inside object() with no CLI args", () => {
     const schema = z.object({

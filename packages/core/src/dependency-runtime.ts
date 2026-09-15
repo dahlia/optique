@@ -2211,6 +2211,23 @@ export const effectfulSchedulingNodesKey: unique symbol = Symbol(
 );
 
 /**
+ * Options that steer how far a runtime-node expansion walks.
+ *
+ * @internal
+ * @since 1.3.0
+ */
+export interface ExpandRuntimeNodesOptions {
+  /**
+   * Stops the walk at an exclusive parser—an `or()`, `longestMatch()`, or
+   * `conditional()` alternative—that has not opted into source
+   * collection, so a scope of its own is not folded into the enclosing
+   * one.  A hook that expands descendants itself must forward this to
+   * its own expansion.
+   */
+  readonly structuralOnly?: boolean;
+}
+
+/**
  * The shape of the {@link effectfulSchedulingNodesKey} hook.
  *
  * @internal
@@ -2219,6 +2236,7 @@ export const effectfulSchedulingNodesKey: unique symbol = Symbol(
 export type EffectfulSchedulingNodesFn = (
   state: unknown,
   parentPath: readonly PropertyKey[] | undefined,
+  options?: ExpandRuntimeNodesOptions,
 ) => readonly RuntimeNode[];
 
 /**
@@ -3587,10 +3605,18 @@ async function resolveDeferredInStateAsync(
 /**
  * Determines whether a parser state represents an explicit match (the user
  * provided input) rather than an initial/pending state.
+ *
+ * @param fieldState The parser's state.
+ * @param parser The parser owning that state.
+ * @returns `true` when the state reflects command-line input, whether or
+ *          not that input passed validation.
+ * @internal
+ * @since 1.3.0
  */
-function isMatchedState(
+export function isMatchedState(
   fieldState: unknown,
   parser: {
+    readonly dependencyMetadata?: ParserDependencyMetadata;
     readonly initialState?: unknown;
     readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
   },
@@ -3711,7 +3737,19 @@ export function buildRuntimeNodesFromArray(
   return nodes;
 }
 
-function getDefaultDependencySnapshot(
+/**
+ * Reads a derived parser state's snapshotted default dependency values.
+ *
+ * Nodes must carry the parse-time snapshot so replay never re-evaluates a
+ * dynamic `getDefaultDependencyValues()` thunk.
+ *
+ * @param state The derived parser's state.
+ * @returns The snapshotted values, or `undefined` when the state carries
+ *          none.
+ * @internal
+ * @since 1.3.0
+ */
+export function getDefaultDependencySnapshot(
   state: unknown,
 ): readonly unknown[] | undefined {
   return getDefaultDependencySnapshotInner(state, new Set<object>());

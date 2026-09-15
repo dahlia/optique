@@ -1605,6 +1605,129 @@ describe("bindEnv()", () => {
     assert.equal(parseCalls, 1);
   });
 
+  // https://github.com/dahlia/optique/issues/958
+  it("does not read the env fallback for a nested binding", () => {
+    // Nested command-line sources register in their enclosing scope, but
+    // a binding is not command-line input: extracting from it here would
+    // run the fallback parser in addition to the run its own construct's
+    // pre-completion performs.
+    const source = dependency(string());
+    let parseCalls = 0;
+    const countingEnvParser: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "MODE",
+      placeholder: "",
+      parse(input: string) {
+        parseCalls += 1;
+        return { success: true, value: input };
+      },
+      format(value: string) {
+        return value;
+      },
+    };
+    const context = createEnvContext({
+      source: (key) => key === "MODE" ? "prod" : undefined,
+    });
+    const binding = bindEnv(option("--mode", source), {
+      context,
+      key: "MODE",
+      parser: countingEnvParser,
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const shapes: readonly (readonly [
+      string,
+      Parser<"sync", unknown, unknown>,
+      number,
+    ])[] = [
+      // A nested object() completes the binding through its own
+      // pre-completion, which the enclosing object() repeats—a
+      // pre-existing extra read this scope change must not add to.
+      ["nested object()", object({ nested: object({ mode: binding }) }), 2],
+      [
+        "grouped binding",
+        concat(tuple([group("Mode", binding)]), tuple([])),
+        1,
+      ],
+    ];
+    for (const [label, parser, expectedCalls] of shapes) {
+      parseCalls = 0;
+      const result = parse(parser, [], { annotations });
+      assert.ok(
+        result.success,
+        `${label}: ${result.success ? "" : formatMessage(result.error)}`,
+      );
+      assert.equal(parseCalls, expectedCalls, label);
+    }
+  });
+
+  // https://github.com/dahlia/optique/issues/958
+  it("delivers a nested binding's CLI value to an earlier consumer", () => {
+    // The command line, not the binding, supplied this occurrence, so it
+    // joins the enclosing collection scope like any other nested
+    // command-line source—and its fallback parser stays unused.
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const pm = framework.deriveSync({
+      metavar: "PM",
+      factory: (value) => choice(value === "fresh" ? ["deno"] : ["npm"]),
+      defaultValue: () => "fresh" as const,
+    });
+    let parseCalls = 0;
+    const countingEnvParser: ValueParser<"sync", "fresh" | "hono"> = {
+      mode: "sync",
+      metavar: "FW",
+      placeholder: "fresh",
+      parse(input: string) {
+        parseCalls += 1;
+        return input === "fresh" || input === "hono"
+          ? { success: true, value: input }
+          : { success: false, error: message`Bad framework.` };
+      },
+      format(value: "fresh" | "hono") {
+        return value;
+      },
+    };
+    const context = createEnvContext({
+      source: (key) => key === "FW" ? "fresh" : undefined,
+    });
+    const parser = object({
+      consumer: option("--pm", pm),
+      nested: object({
+        fw: bindEnv(option("--fw", framework), {
+          context,
+          key: "FW",
+          parser: countingEnvParser,
+        }),
+      }),
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    const result = parse(parser, ["--fw", "hono", "--pm", "npm"], {
+      annotations,
+    });
+    assert.ok(
+      result.success,
+      result.success ? undefined : formatMessage(result.error),
+    );
+    assert.deepEqual(result.value, {
+      consumer: "npm",
+      nested: { fw: "hono" },
+    });
+    assert.equal(parseCalls, 0);
+
+    // The environment fallback still decides when the command line is
+    // silent, and it still reaches the consumer only through the nested
+    // construct's own completion.
+    assert.ok(
+      !parse(parser, ["--fw", "hono", "--pm", "deno"], { annotations }).success,
+    );
+  });
+
   it("uses env values when prefix is omitted", () => {
     const context = createEnvContext({
       source: (key) => ({ PORT: "8080" })[key],
