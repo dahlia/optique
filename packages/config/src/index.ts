@@ -800,6 +800,8 @@ export function bindConfig<
     parse: (context) => {
       // Extract annotations from context to preserve them
       const annotations = getAnnotations(context.state);
+      const hadCliValue = isConfigBindState(context.state) &&
+        context.state.hasCliValue;
 
       // Unwrap state from a previous parse() call.  After a successful
       // parse, object() stores the wrapped ConfigBindState and passes it
@@ -809,7 +811,7 @@ export function bindConfig<
       const innerState = isConfigBindState(context.state)
         ? (context.state.hasCliValue
           ? (context.state.cliState as TState)
-          : parser.initialState)
+          : inheritAnnotations(context.state, parser.initialState))
         : context.state;
       const innerContext = innerState !== context.state
         ? { ...context, state: innerState }
@@ -819,12 +821,15 @@ export function bindConfig<
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
         if (result.success) {
-          // Only mark hasCliValue when the inner parser actually consumed
-          // input tokens.  Wrappers like withDefault may return success
-          // with consumed: [] when the CLI option is absent; treating those
-          // as "CLI provided" would skip the config fallback and break
-          // composition with bindEnv.
-          const cliConsumed = result.consumed.length > 0;
+          // The inner parser owns cliState, including zero-consumption
+          // updates; the binding owns cumulative CLI provenance.  A re-parse
+          // must retain earlier input, while an initially empty parse must
+          // still allow the fallback source.
+          const terminatorOnly = result.consumed.length === 1 &&
+            result.consumed[0] === "--" && !context.optionsTerminated &&
+            result.next.optionsTerminated;
+          const cliConsumed = hadCliValue ||
+            (result.consumed.length > 0 && !terminatorOnly);
           const newState = injectAnnotations({
             [configBindStateKey]: true as const,
             hasCliValue: cliConsumed,
@@ -844,6 +849,11 @@ export function bindConfig<
         // "Unexpected option or argument" message.
         if (result.consumed > 0) {
           return result;
+        }
+
+        // A non-match after CLI input preserves the annotated wrapper.
+        if (hadCliValue) {
+          return { success: true, next: context, consumed: [] };
         }
 
         const newState = injectAnnotations({

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { getEventListeners } from "node:events";
 import { describe, it } from "node:test";
-import { object } from "@optique/core/constructs";
+import { concat, object, tuple } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { formatMessage, message } from "@optique/core/message";
-import { multiple } from "@optique/core/modifiers";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { parseAsync } from "@optique/core/parser";
-import { fail, flag, option } from "@optique/core/primitives";
+import { argument, fail, flag, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, createEnvContext } from "@optique/env";
 import {
@@ -64,6 +64,103 @@ async function withPromptFunctionsOverride<T>(
 }
 
 describe("prompt()", () => {
+  describe("CLI provenance across reparses", () => {
+    for (const construct of ["tuple", "concat"] as const) {
+      for (const wrapper of ["bare", "optional", "default"] as const) {
+        it(`should preserve CLI input in ${construct} with ${wrapper} option`, async () => {
+          const calls: string[] = [];
+          const config = {
+            type: "text" as const,
+            message: "Name",
+            prompter: () => {
+              calls.push("name");
+              return Promise.resolve("prompted");
+            },
+          };
+          const name = wrapper === "bare"
+            ? prompt(option("--name", string()), config)
+            : wrapper === "optional"
+            ? prompt(optional(option("--name", string())), config)
+            : prompt(
+              withDefault(option("--name", string()), "default"),
+              config,
+            );
+          const tags = multiple(option("--tag", string()));
+          const parser = construct === "tuple"
+            ? tuple([tags, name])
+            : concat(tuple([tags]), tuple([name]));
+          const annotations = { [Symbol.for("@test/issue-960")]: "present" };
+          const result = await parseAsync(parser, [
+            "--name",
+            "original",
+            "--tag",
+            "a",
+            "--tag",
+            "b",
+          ], { annotations });
+          assert.deepEqual(calls, []);
+          assert.deepEqual(result, {
+            success: true,
+            value: [["a", "b"], "original"],
+          });
+
+          // Reusing the parser must not carry CLI provenance into a new run.
+          const omitted = await parseAsync(parser, ["--tag", "c"]);
+          assert.deepEqual(omitted, {
+            success: true,
+            value: [["c"], "prompted"],
+          });
+          assert.deepEqual(calls, ["name"]);
+        });
+      }
+    }
+
+    it("should not treat an options terminator as a CLI value", async () => {
+      let calls = 0;
+      const parser = tuple([
+        prompt(option("--name", string()), {
+          type: "text",
+          message: "Name",
+          prompter: () => {
+            calls++;
+            return Promise.resolve("prompted");
+          },
+        }),
+        multiple(argument(string())),
+      ]);
+      assert.deepEqual(await parseAsync(parser, ["--", "foo", "bar"]), {
+        success: true,
+        value: ["prompted", ["foo", "bar"]],
+      });
+      assert.equal(calls, 1);
+      assert.deepEqual(
+        await parseAsync(parser, ["--name", "original", "--", "foo", "bar"]),
+        { success: true, value: ["original", ["foo", "bar"]] },
+      );
+      assert.equal(calls, 1);
+    });
+
+    it("should preserve a literal terminator used as an argument value", async () => {
+      const parser = prompt(argument(string()), {
+        type: "text",
+        message: "Value",
+        prompter: () => Promise.reject(new Error("Unexpected prompt.")),
+      });
+      const parsed = await parser.parse({
+        buffer: ["--"],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      assert.ok(!parser.shouldDeferCompletion?.(parsed.next.state));
+      assert.deepEqual(await parser.complete(parsed.next.state), {
+        success: true,
+        value: "--",
+      });
+    });
+  });
+
   it("returns an async fluent parser", () => {
     const parser = prompt(option("--name", string()), {
       type: "text",
