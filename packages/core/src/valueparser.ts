@@ -4218,7 +4218,7 @@ export function origin(
       ? (typeof invalidOrigin === "function"
         ? invalidOrigin(input)
         : invalidOrigin)
-      : message`Invalid origin: ${input}.`;
+      : message`Invalid origin.`;
   }
 
   function disallowedProtocolError(protocol: string): Message {
@@ -4248,7 +4248,7 @@ export function origin(
     return url;
   }
 
-  function resolve(url: URL, label: string): ValueParserResult<URL> {
+  function resolve(url: URL): ValueParserResult<URL> {
     if (allowedProtocols != null && !allowedProtocols.includes(url.protocol)) {
       return { success: false, error: disallowedProtocolError(url.protocol) };
     }
@@ -4256,13 +4256,13 @@ export function origin(
       return {
         success: false,
         error:
-          message`The URL ${label} wraps another origin. Pass that origin instead.`,
+          message`The ${url.protocol} URL wraps another origin. Pass that origin instead.`,
       };
     }
     if (url.origin === "null") {
       return {
         success: false,
-        error: message`The URL ${label} has no origin.`,
+        error: message`The ${url.protocol} URL has no origin.`,
       };
     }
     if (url.username !== "" || url.password !== "") {
@@ -4277,7 +4277,8 @@ export function origin(
     ) {
       return {
         success: false,
-        error: message`Expected only an origin, but got: ${label}`,
+        error:
+          message`Expected only an origin, but got extra components on ${url.origin}.`,
       };
     }
     return { success: true, value: withTrailingDot(new URL(url.origin)) };
@@ -4293,20 +4294,20 @@ export function origin(
       if (!URL.canParse(input)) {
         return { success: false, error: invalidOriginError(input) };
       }
-      return resolve(new URL(input), input);
+      return resolve(new URL(input));
     },
     validate(value: URL): ValueParserResult<URL> {
       if (!(value instanceof URL)) {
         return { success: false, error: invalidOriginError(String(value)) };
       }
-      return resolve(value, value.href);
+      return resolve(value);
     },
     format(value: URL): string {
       return value.origin;
     },
     normalize(value: URL): URL {
       if (!(value instanceof URL)) return value;
-      const result = resolve(value, value.href);
+      const result = resolve(value);
       return result.success ? result.value : value;
     },
     *suggest(prefix: string): Iterable<Suggestion> {

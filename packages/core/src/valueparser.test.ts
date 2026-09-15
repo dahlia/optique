@@ -4734,6 +4734,30 @@ describe("origin()", () => {
         );
       }
     });
+
+    it("should not echo credentials nested in a blob URL", () => {
+      const parser = origin();
+      const result = parser.parse("blob:https://user:hunter2@example.com/id");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.ok(
+          !formatMessage(result.error).includes("hunter2"),
+          "Error message should not contain the password",
+        );
+      }
+    });
+
+    it("should not echo credentials in an invalid origin", () => {
+      const parser = origin();
+      const result = parser.parse("https://user:hunter2@ex ample.com");
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.ok(
+          !formatMessage(result.error).includes("hunter2"),
+          "Error message should not contain the password",
+        );
+      }
+    });
   });
 
   describe("opaque origins", () => {
