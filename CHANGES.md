@@ -8,6 +8,37 @@ Version 1.2.7
 
 To be released.
 
+### @optique/config
+
+ -  Fixed `bindConfig()` replacing explicit command-line values with config
+    values when `tuple()` or `concat()` revisited the parser without consuming
+    input.  An option terminator alone now leaves config fallback available.
+    [[#960]]
+
+[#960]: https://github.com/dahlia/optique/issues/960
+
+### @optique/clack
+
+ -  Fixed `prompt()` losing an explicit command-line value when `tuple()` or
+    `concat()` revisited it without consuming more input.  The value is now
+    preserved instead of prompting again and replacing it.  [[#960]]
+
+### @optique/env
+
+ -  Fixed `bindEnv()` replacing explicit command-line values with environment
+    values when `tuple()` or `concat()` revisited the parser without consuming
+    input.  An option terminator alone now leaves environment fallback
+    available.  Nested config fallback also keeps its annotations across
+    reparses when the environment variable is absent.
+    [[#960]]
+
+### @optique/inquirer
+
+ -  Fixed `prompt()` losing an explicit command-line value when `tuple()` or
+    `concat()` revisited it without consuming more input.  The value is now
+    preserved instead of prompting again and replacing it.
+    [[#960]]
+
 
 Version 1.2.6
 -------------
@@ -336,6 +367,33 @@ Released on July 21, 2026.
     selection behavior remains unchanged.  [[#867]]
 
 [#867]: https://github.com/dahlia/optique/pull/867
+
+
+Version 1.1.7
+-------------
+
+Released on September 15, 2026.
+
+### @optique/config
+
+ -  Fixed `bindConfig()` replacing explicit command-line values with config
+    values when `tuple()` or `concat()` revisited the parser without consuming
+    input.  An option terminator alone now leaves config fallback available.
+    [[#960]]
+
+### @optique/env
+
+ -  Fixed `bindEnv()` replacing explicit command-line values with environment
+    values when `tuple()` or `concat()` revisited the parser without consuming
+    input.  An option terminator alone now leaves environment fallback
+    available.  Nested config fallback also keeps its annotations across
+    reparses when the environment variable is absent.  [[#960]]
+
+### @optique/inquirer
+
+ -  Fixed `prompt()` losing an explicit command-line value when `tuple()` or
+    `concat()` revisited it without consuming more input.  The value is now
+    preserved instead of prompting again and replacing it.  [[#960]]
 
 
 Version 1.1.6
@@ -674,6 +732,33 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.9
+-------------
+
+Released on September 15, 2026.
+
+### @optique/config
+
+ -  Fixed `bindConfig()` replacing explicit command-line values with config
+    values when `tuple()` or `concat()` revisited the parser without consuming
+    input.  An option terminator alone now leaves config fallback available.
+    [[#960]]
+
+### @optique/env
+
+ -  Fixed `bindEnv()` replacing explicit command-line values with environment
+    values when `tuple()` or `concat()` revisited the parser without consuming
+    input.  An option terminator alone now leaves environment fallback
+    available.  Nested config fallback also keeps its annotations across
+    reparses when the environment variable is absent.  [[#960]]
+
+### @optique/inquirer
+
+ -  Fixed `prompt()` losing an explicit command-line value when `tuple()` or
+    `concat()` revisited it without consuming more input.  The value is now
+    preserved instead of prompting again and replacing it.  [[#960]]
 
 
 Version 1.0.8

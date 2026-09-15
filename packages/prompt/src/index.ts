@@ -290,6 +290,8 @@ export function createPromptAdapter<TConfig>(
 
       parse: (context): ModeValue<"async", ParserResult<TState>> => {
         const annotations = getAnnotations(context.state);
+        const hadCliValue = isPromptBindState(context.state) &&
+          context.state.hasCliValue;
         const innerState = isPromptBindState(context.state)
           ? (context.state.hasCliValue
             ? (context.state.cliState as TState)
@@ -313,7 +315,17 @@ export function createPromptAdapter<TConfig>(
                 getAnnotations(result.next.state) !== annotations
               ? injectAnnotations(result.next.state, annotations)
               : result.next.state;
-            const cliConsumed = result.consumed.length > 0;
+            // The inner parser owns cliState, including zero-consumption
+            // updates; the adapter owns cumulative CLI provenance.  A re-parse
+            // must not forget earlier input, while an initially empty parse
+            // (e.g., withDefault, bindConfig) must still allow prompting.
+            // Consuming only the option terminator changes parsing mode,
+            // but supplies no value to the wrapped parser.
+            const terminatorOnly = result.consumed.length === 1 &&
+              result.consumed[0] === "--" && !context.optionsTerminated &&
+              result.next.optionsTerminated;
+            const cliConsumed = hadCliValue ||
+              (result.consumed.length > 0 && !terminatorOnly);
             const nextState = injectAnnotations({
               [promptBindStateKey]: true as const,
               hasCliValue: cliConsumed,
@@ -329,6 +341,12 @@ export function createPromptAdapter<TConfig>(
 
           if (result.consumed > 0) {
             return result;
+          }
+
+          // A non-match after a CLI value leaves the populated wrapper intact.
+          // tuple()/concat() may commit this result on a later parse pass.
+          if (hadCliValue) {
+            return { success: true, next: context, consumed: [] };
           }
 
           const nextState = injectAnnotations({
