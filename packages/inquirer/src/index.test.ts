@@ -3,7 +3,14 @@ import * as fc from "fast-check";
 import { describe, it } from "node:test";
 import { type Annotations, getAnnotations } from "@optique/core/annotations";
 import { injectAnnotations } from "@optique/core/extension";
-import { concat, group, object, or, tuple } from "@optique/core/constructs";
+import {
+  concat,
+  conditional,
+  group,
+  object,
+  or,
+  tuple,
+} from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import type {
   SourceContext,
@@ -20,7 +27,13 @@ import {
   suggestAsync,
   type Suggestion,
 } from "@optique/core/parser";
-import { constant, fail, flag, option } from "@optique/core/primitives";
+import {
+  argument,
+  constant,
+  fail,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindEnv, bool, createEnvContext } from "@optique/env";
@@ -1193,6 +1206,320 @@ describe("prompt()", () => {
       assert.equal(terms.length, 1);
       assert.equal((terms[0] as { type: string }).type, "option");
     });
+  });
+
+  describe("CLI provenance across reparses", () => {
+    for (const construct of ["tuple", "concat"] as const) {
+      for (const wrapper of ["bare", "optional", "default"] as const) {
+        it(`preserves CLI input in ${construct} with ${wrapper} option`, async () => {
+          const calls: string[] = [];
+          const config = {
+            type: "input" as const,
+            message: "Name",
+            prompter: () => {
+              calls.push("name");
+              return Promise.resolve("prompted");
+            },
+          };
+          const name = wrapper === "bare"
+            ? prompt(option("--name", string()), config)
+            : wrapper === "optional"
+            ? prompt(optional(option("--name", string())), config)
+            : prompt(
+              withDefault(option("--name", string()), "default"),
+              config,
+            );
+          const tags = multiple(option("--tag", string()));
+          const parser = construct === "tuple"
+            ? tuple([tags, name])
+            : concat(tuple([tags]), tuple([name]));
+          const annotations = { [Symbol.for("@test/issue-960")]: "present" };
+          const result = await parseAsync(parser, [
+            "--name",
+            "original",
+            "--tag",
+            "a",
+            "--tag",
+            "b",
+          ], { annotations });
+          assert.deepEqual(calls, []);
+          assert.deepEqual(result, {
+            success: true,
+            value: [["a", "b"], "original"],
+          });
+
+          // Reusing the parser must not carry CLI provenance into a new run.
+          const omitted = await parseAsync(parser, ["--tag", "c"]);
+          assert.deepEqual(omitted, {
+            success: true,
+            value: [["c"], "prompted"],
+          });
+          assert.deepEqual(calls, ["name"]);
+        });
+      }
+    }
+
+    for (const buffer of [[], ["--other"]]) {
+      it(`retains populated state after a non-match on ${JSON.stringify(buffer)}`, async () => {
+        const parser = prompt(option("--name", string()), {
+          type: "input",
+          message: "Name",
+          prompter: () => Promise.reject(new Error("Unexpected prompt.")),
+        });
+        const first = await parser.parse({
+          buffer: ["--name", "original"],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(first.success);
+        const annotations = { [Symbol.for("@test/issue-960")]: "reparse" };
+        const context = {
+          ...first.next,
+          buffer,
+          state: injectAnnotations(first.next.state, annotations),
+        };
+        const reparsed = await parser.parse(context);
+        assert.ok(reparsed.success);
+        assert.deepEqual(reparsed.consumed, []);
+        assert.equal(reparsed.next, context);
+        assert.equal(getAnnotations(reparsed.next.state), annotations);
+        assert.ok(!parser.shouldDeferCompletion?.(reparsed.next.state));
+        const completed = await parser.complete(reparsed.next.state);
+        assert.ok(completed.success);
+        assert.equal(completed.value, "original");
+      });
+    }
+
+    it("adopts successful zero-consumption inner state updates", async () => {
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [],
+        $stateType: [],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: true,
+        initialState: "",
+        parse(context) {
+          return {
+            success: true,
+            next: {
+              ...context,
+              buffer: [],
+              state: context.buffer[0] ?? `${context.state}!`,
+            },
+            consumed: context.buffer,
+          };
+        },
+        complete: (state) => ({ success: true, value: state }),
+        suggest: function* () {},
+        getDocFragments: () => ({ fragments: [] }),
+        getSuggestRuntimeNodes: (
+          state,
+          path,
+        ) => [{ parser: inner, state, path }],
+      };
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Name",
+        prompter: () => Promise.reject(new Error("Unexpected prompt.")),
+      });
+      const first = await parser.parse({
+        buffer: ["original"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: [],
+      });
+      assert.ok(first.success);
+      const reparsed = await parser.parse(first.next);
+      assert.ok(reparsed.success);
+      assert.ok(!parser.shouldDeferCompletion?.(reparsed.next.state));
+      assert.deepEqual(await parser.complete(reparsed.next.state), {
+        success: true,
+        value: "original!",
+      });
+      assert.equal(
+        parser.getSuggestRuntimeNodes?.(reparsed.next.state, ["name"])[0].state,
+        "original!",
+      );
+    });
+
+    it("does not treat an options terminator as a CLI value", async () => {
+      let calls = 0;
+      const parser = tuple([
+        prompt(option("--name", string()), {
+          type: "input",
+          message: "Name",
+          prompter: () => {
+            calls++;
+            return Promise.resolve("prompted");
+          },
+        }),
+        multiple(argument(string())),
+      ]);
+      assert.deepEqual(await parseAsync(parser, ["--", "foo", "bar"]), {
+        success: true,
+        value: ["prompted", ["foo", "bar"]],
+      });
+      assert.equal(calls, 1);
+      assert.deepEqual(
+        await parseAsync(parser, ["--name", "original", "--", "foo", "bar"]),
+        { success: true, value: ["original", ["foo", "bar"]] },
+      );
+      assert.equal(calls, 1);
+    });
+
+    it("preserves a literal terminator used as an argument value", async () => {
+      const parser = prompt(argument(string()), {
+        type: "input",
+        message: "Value",
+        prompter: () => Promise.reject(new Error("Unexpected prompt.")),
+      });
+      const parsed = await parser.parse({
+        buffer: ["--"],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      });
+      assert.ok(parsed.success);
+      assert.ok(!parser.shouldDeferCompletion?.(parsed.next.state));
+      assert.deepEqual(await parser.complete(parsed.next.state), {
+        success: true,
+        value: "--",
+      });
+    });
+
+    it("preserves consuming failures after a CLI value", async () => {
+      const parser = prompt(option("--name", string()), {
+        type: "input",
+        message: "Name",
+        prompter: () => Promise.reject(new Error("Unexpected prompt.")),
+      });
+      const first = await parser.parse({
+        buffer: ["--name", "original"],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(first.success);
+      const duplicate = await parser.parse({
+        ...first.next,
+        buffer: ["--name", "duplicate"],
+      });
+      assert.ok(!duplicate.success);
+      assert.ok(duplicate.consumed > 0);
+    });
+
+    for (const construct of ["tuple", "concat", "object"] as const) {
+      it(`preserves shared dependency CLI prompts in ${construct}`, async () => {
+        const calls: string[] = [];
+        const framework = dependency(choice(["fresh", "hono"] as const));
+        const source = (name: "--fw" | "--fw2") =>
+          prompt(option(name, framework), {
+            type: "input",
+            message: name,
+            prompter: () => {
+              calls.push(name);
+              return Promise.reject(new Error("Cancelled."));
+            },
+          });
+        for (const permissive of [false, true]) {
+          const pm = framework.deriveSync({
+            metavar: "PM",
+            factory: (value) =>
+              choice(
+                permissive
+                  ? ["deno", "npm"]
+                  : value === "fresh"
+                  ? ["deno"]
+                  : ["npm"],
+              ),
+            defaultValue: () => "fresh" as const,
+          });
+          const cond = conditional(
+            option("--kind", choice(["a", "b"] as const)),
+            {
+              a: object({ fw: source("--fw"), pm: option("--pm", pm) }),
+              b: constant("b"),
+            },
+          );
+          const fw2 = source("--fw2");
+          const out = option("--out", pm);
+          const parser = construct === "tuple"
+            ? tuple([cond, fw2, out])
+            : construct === "concat"
+            ? concat(tuple([cond]), tuple([fw2]), tuple([out]))
+            : map(object({ cond, fw2, out }), (value) =>
+              [value.cond, value.fw2, value.out] as const);
+          for (const innerPm of ["deno", "npm"]) {
+            for (const outerPm of ["deno", "npm"]) {
+              for (
+                const args of [
+                  [
+                    "--kind",
+                    "a",
+                    "--fw",
+                    "fresh",
+                    "--fw2",
+                    "hono",
+                    "--pm",
+                    innerPm,
+                    "--out",
+                    outerPm,
+                  ],
+                  [
+                    "--fw2",
+                    "hono",
+                    "--kind",
+                    "a",
+                    "--fw",
+                    "fresh",
+                    "--pm",
+                    innerPm,
+                    "--out",
+                    outerPm,
+                  ],
+                  [
+                    "--kind",
+                    "a",
+                    "--fw",
+                    "fresh",
+                    "--pm",
+                    innerPm,
+                    "--out",
+                    outerPm,
+                    "--fw2",
+                    "hono",
+                  ],
+                ]
+              ) {
+                const result = await parseAsync(parser, args);
+                assert.deepEqual(calls, []);
+                // #957 governs derived-value precedence, independently of #960.
+                if (permissive) assert.ok(result.success);
+                if (result.success) {
+                  assert.equal(
+                    result.value[1],
+                    "hono",
+                  );
+                }
+              }
+            }
+          }
+          const invalid = await parseAsync(parser, [
+            "--kind",
+            "a",
+            "--fw",
+            "fresh",
+            "--fw2",
+            "bogus",
+          ]);
+          assert.ok(!invalid.success);
+          assert.deepEqual(calls, []);
+        }
+      });
+    }
   });
 
   describe("consumed-token detection", () => {
