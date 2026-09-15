@@ -4078,6 +4078,8 @@ const IPV4_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
 
 /**
  * Options for creating an {@link origin} parser.
+ *
+ * @since 1.3.0
  */
 export interface OriginOptions {
   /**
