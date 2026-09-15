@@ -1,6 +1,6 @@
 {
   "name": "@optique/testing",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Testing support for Optique command-line interfaces",
   "keywords": [
     "CLI",
