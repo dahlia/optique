@@ -4077,6 +4077,19 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
 const IPV4_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$/u;
 
 /**
+ * Whether a URL scheme can yield a tuple origin.  Opaque schemes such as
+ * `file:`, `blob:`, `mailto:`, and `data:` cannot, and an origin parser can
+ * never accept them, so they are rejected when listed in `allowedProtocols`.
+ */
+function canProduceOrigin(protocol: string): boolean {
+  try {
+    return new URL(`${protocol}//0.invalid`).origin !== "null";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Options for creating an {@link origin} parser.
  *
  * @since 1.3.0
@@ -4093,7 +4106,9 @@ export interface OriginOptions {
   /**
    * List of allowed URL protocols (e.g., `["http:", "https:"]`).
    * If specified, the parsed URL must use one of these protocols.
-   * Protocol names should include the trailing colon (e.g., `"https:"`).
+   * Protocol names should include the trailing colon (e.g., `"https:"`), and
+   * each must name a scheme that can produce an origin; opaque schemes such as
+   * `file:` and `blob:` are rejected at construction.
    * If not specified, any protocol with a tuple origin is allowed.
    */
   readonly allowedProtocols?: readonly string[];
@@ -4103,8 +4118,8 @@ export interface OriginOptions {
    *
    * - `"strip"`: return just the origin, discarding any path, query, or
    *   fragment.
-   * - `"reject"`: fail when the input has a path other than `/`, a query, or
-   *   a fragment.
+   * - `"reject"`: fail when the input has a path other than `/`, or a query
+   *   or fragment delimiter (including an empty `?` or `#`).
    *
    * Credentials are always rejected, under either setting.
    * @default `"strip"`
@@ -4196,6 +4211,12 @@ export function origin(
             ` (e.g., "https:"), got: ${rendered}.`,
         );
       }
+      if (!canProduceOrigin(protocol)) {
+        throw new TypeError(
+          `Each allowed protocol must name a scheme that can produce an ` +
+            `origin, but ${JSON.stringify(protocol)} cannot.`,
+        );
+      }
       const normalized = protocol.toLowerCase();
       if (seen.has(normalized)) continue;
       seen.add(normalized);
@@ -4275,7 +4296,12 @@ export function origin(
     }
     if (
       extraComponents === "reject" &&
-      (url.pathname !== "/" || url.search !== "" || url.hash !== "")
+      (
+        url.pathname !== "/" ||
+        url.search !== "" ||
+        url.hash !== "" ||
+        url.href !== new URL(url.origin).href
+      )
     ) {
       return {
         success: false,

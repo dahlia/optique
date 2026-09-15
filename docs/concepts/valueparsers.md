@@ -1447,9 +1447,11 @@ const secureOrigin = origin({ allowedProtocols: ["https:"] });
 The input is canonicalized rather than rejected, so `HTTPS://Example.COM/` and
 `https://example.com:443/path` both parse to `https://example.com`.  A path,
 query, or fragment is dropped; set `extraComponents: "reject"` to fail on them
-instead.  Credentials are always rejected, and schemes whose origin is opaque
-(`mailto:`, `data:`, `file:`) are rejected, as is `blob:`, whose origin belongs
-to the URL it wraps.
+instead, including an empty `?` or `#`.  Credentials are always rejected, and
+schemes whose origin is opaque (`mailto:`, `data:`, `file:`) are rejected, as
+is `blob:`, whose origin belongs to the URL it wraps.  `allowedProtocols`
+accepts only schemes that can produce an origin, so an opaque scheme such as
+`file:` is refused at construction.
 
 ### Trailing dots
 

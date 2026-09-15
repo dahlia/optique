@@ -4698,10 +4698,10 @@ describe("origin()", () => {
       assert.ok(parser.parse("https://example.com:8443/").success);
     });
 
-    it("should treat empty query and fragment markers as absent", () => {
+    it("should reject empty query and fragment markers", () => {
       const parser = origin({ extraComponents: "reject" });
-      assert.ok(parser.parse("https://example.com/?").success);
-      assert.ok(parser.parse("https://example.com/#").success);
+      assert.ok(!parser.parse("https://example.com/?").success);
+      assert.ok(!parser.parse("https://example.com/#").success);
     });
 
     it("should accept a dot-segment that normalizes to the root", () => {
@@ -4833,6 +4833,25 @@ describe("origin()", () => {
         name: "TypeError",
         message: /got: "https"\./,
       });
+    });
+
+    it("should accept tuple-origin schemes in allowedProtocols", () => {
+      for (const protocol of ["http:", "https:", "ftp:", "ws:", "wss:"]) {
+        assert.doesNotThrow(
+          () => origin({ allowedProtocols: [protocol] }),
+          `Should accept ${protocol}`,
+        );
+      }
+    });
+
+    it("should throw TypeError for a scheme without a tuple origin", () => {
+      for (const protocol of ["file:", "blob:", "mailto:", "data:"]) {
+        assert.throws(
+          () => origin({ allowedProtocols: [protocol] }),
+          { name: "TypeError" },
+          `Should reject ${protocol}`,
+        );
+      }
     });
   });
 
