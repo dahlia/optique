@@ -157,31 +157,17 @@ console.log(`Connecting to ${result.host}:${result.port}`);
 ~~~~
 
 > [!NOTE]
-> The path returned by `getConfigPath()` is used as is, and a leading `~` is
-> not expanded to the home directory, because `~` is a valid file name
-> character on most platforms.  When users pass `--config ~/.myapp.json`,
-> their shell expands `~` before Optique sees it, but a default value like
-> `"~/.myapp.json"` refers to a directory literally named *~* under the
-> current working directory.  Since a missing config file is not an error,
-> every value would then silently fall back to its default.  That is why the
-> examples on this page build the default path with `homedir()`:
->
-> ~~~~ typescript twoslash
-> import { withDefault } from "@optique/core/modifiers";
-> import { option } from "@optique/core/primitives";
-> import { string } from "@optique/core/valueparser";
-> // ---cut-before---
-> import { homedir } from "node:os";
-> import { join } from "node:path";
->
-> const config = withDefault(
->   option("--config", string()),
->   join(homedir(), ".myapp.json"),
-> );
-> ~~~~
->
-> If you want to accept `~` in paths anyway, expand it yourself in
-> `getConfigPath()`.
+> By default, the path returned by `getConfigPath()` is used as is, and
+> a leading `~` is not expanded to the home directory, because `~` is a valid
+> file name character on most platforms.  When users pass
+> `--config ~/.myapp.json`, a shell that performs tilde expansion expands `~`
+> before Optique sees it, but a default value like `"~/.myapp.json"` refers to
+> a directory literally named *~* under the current working directory.  Since
+> a missing config file is not an error, every value would then silently fall
+> back to its default.  That is why the examples on this page build the
+> default path with `homedir()`.  See
+> [*Home directory paths*](#home-directory-paths) for the alternative of
+> letting Optique expand `~`.
 
 If the config file `~/.myapp.json` contains:
 
@@ -366,6 +352,62 @@ With a config file:
   }
 }
 ~~~~
+
+
+Home directory paths
+--------------------
+
+*This API is available since Optique 1.4.0.*
+
+A default config path in the user's home directory is usually written as
+`~/.myapp.json`, but *@optique/config* does not treat `~` specially unless you
+ask it to.  Set the `expandHome` runtime option to `true`, and a leading `~` in
+the path returned by `getConfigPath()` is expanded to the current user's home
+directory:
+
+~~~~ typescript twoslash
+import { z } from "zod";
+import { bindConfig, createConfigContext } from "@optique/config";
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { withDefault } from "@optique/core/modifiers";
+import { runAsync } from "@optique/run";
+
+const configContext = createConfigContext({
+  schema: z.object({ host: z.string() }),
+});
+
+const parser = object({
+  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  host: bindConfig(option("--host", string()), {
+    context: configContext,
+    key: "host",
+    default: "localhost",
+  }),
+});
+
+const result = await runAsync(parser, {
+  contexts: [configContext],
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+    expandHome: true,
+  },
+});
+~~~~
+
+Keeping `"~/.myapp.json"` as the default also keeps it readable wherever it is
+shown, such as in help text with `showDefault`.
+
+Only a bare `~` and paths starting with `~/` (or `~\` on Windows) are expanded.
+Other forms, such as `~user/.myapp.json`, are used as is.  The expanded path is
+what `ConfigMeta` reports as `configPath` and `configDir`.
+
+The option only applies to single-file mode.  With a custom `load` callback,
+your loader decides how to resolve paths, and `expandHome` has no effect.
+
+On Deno, looking up the home directory requires the `--allow-sys=homedir`
+permission (or `--allow-sys`), so grant it to CLIs that enable `expandHome`.
 
 
 Resolving paths relative to config files
@@ -967,6 +1009,12 @@ options:
     a `ConfigLoadResult`) to signal that no config data is available.
     Use this for multi-file merging scenarios.  Optional when using
     `getConfigPath`.
+
+`expandHome`
+:   Whether to expand a leading `~` in the path returned by `getConfigPath`
+    to the current user's home directory.  Defaults to `false`.  Has no
+    effect with `load`.  See [*Home directory paths*](#home-directory-paths).
+    *Available since Optique 1.4.0.*
 
 At least one of `getConfigPath` or `load` must be provided.
 
