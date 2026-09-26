@@ -27,6 +27,8 @@ Quick start
 -----------
 
 ~~~~ typescript
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
 import { object } from "@optique/core/constructs";
@@ -45,7 +47,10 @@ const configContext = createConfigContext({ schema: configSchema });
 
 // 2. Bind parsers to config values
 const parser = object({
-  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  config: withDefault(
+    option("--config", string()),
+    join(homedir(), ".myapp.json"),
+  ),
   host: bindConfig(option("--host", string()), {
     context: configContext,
     key: "host",
@@ -61,7 +66,9 @@ const parser = object({
 // 3. Run with config support via contexts
 const result = await runAsync(parser, {
   contexts: [configContext],
-  getConfigPath: (parsed) => parsed.config,
+  contextOptions: {
+    getConfigPath: (parsed) => parsed.config,
+  },
   args: process.argv.slice(2),
 });
 
