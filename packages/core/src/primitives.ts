@@ -1125,8 +1125,8 @@ export function option<M extends Mode, T>(
         .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
       for (const prefix of prefixes) {
         if (!context.buffer[0].startsWith(prefix)) continue;
+        const optionName = prefix.slice(0, -1);
         if (hasParsedOptionValue(context.state, valueParser)) {
-          const optionName = prefix.slice(0, -1);
           return {
             success: false,
             consumed: 1,
@@ -1149,7 +1149,7 @@ export function option<M extends Mode, T>(
                 ? options.errors.unexpectedValue(rawInput)
                 : options.errors.unexpectedValue)
               : message`Option ${
-                eOptionName(prefix)
+                eOptionName(optionName)
               } is a Boolean flag, but got a value: ${rawInput}.`,
           };
         }
