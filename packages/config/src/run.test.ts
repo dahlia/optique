@@ -1,8 +1,9 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import process from "node:process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
 import type {
@@ -1257,6 +1258,61 @@ describe("run with config context", { concurrency: false }, () => {
       assert.ok(!detachedResult.success);
     } finally {
       await rm(configPath, { force: true });
+    }
+  });
+
+  test("expandHome expands a ~/ default config path", async () => {
+    // Bun caches os.homedir() and ignores runtime changes to HOME, so the
+    // config file is addressed through a path relative to the real home
+    // directory rather than by overriding it.
+    const dir = await mkdtemp(join(tmpdir(), "optique-expand-home-"));
+    const configPath = join(dir, "config.json");
+    await writeFile(
+      configPath,
+      JSON.stringify({ host: "config.example.com", port: 8080 }),
+    );
+
+    try {
+      const rel = relative(homedir(), configPath);
+      // On Windows, the temporary directory can be on a different drive
+      // than the home directory; then no relative path reaches it.
+      if (isAbsolute(rel)) return;
+
+      const schema = z.object({
+        host: z.string(),
+        port: z.number(),
+      });
+      const context = createConfigContext({ schema });
+
+      const parser = object({
+        config: withDefault(
+          option("--config", string()),
+          `~/${rel.split(sep).join("/")}`,
+        ),
+        host: bindConfig(option("--host", string()), {
+          context,
+          key: "host",
+          default: "localhost",
+        }),
+        port: bindConfig(option("--port", integer()), {
+          context,
+          key: "port",
+          default: 3000,
+        }),
+      });
+
+      const result = await runWith(parser, "test", [context], {
+        contextOptions: {
+          getConfigPath: (parsed: { config: string }) => parsed.config,
+          expandHome: true,
+        },
+        args: [],
+      });
+
+      assert.equal(result.host, "config.example.com");
+      assert.equal(result.port, 8080);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 

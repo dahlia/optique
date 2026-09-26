@@ -1,5 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import process from "node:process";
 import * as fc from "fast-check";
 import { z } from "zod";
 import { getDocPage, parse, suggestSync } from "@optique/core/parser";
@@ -4127,5 +4128,213 @@ describe("bindConfig() error messages for unregistered context", () => {
         `Should NOT include "contexts option" in: ${formatted}`,
       );
     }
+  });
+});
+
+describe("expandHome option", () => {
+  const schema = z.object({ host: z.string() });
+
+  // Bun caches os.homedir() and ignores runtime changes to HOME, so these
+  // tests do not override the home directory.  They also avoid writing into
+  // the real home directory: the config file lives in a temporary directory
+  // and is addressed through a path relative to the home directory instead.
+  async function withTempConfig(
+    fn: (file: string, homeRelative: string | undefined) => Promise<void>,
+  ): Promise<void> {
+    const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+    const { homedir, tmpdir } = await import("node:os");
+    const { isAbsolute, join, relative, sep } = await import("node:path");
+    const dir = await mkdtemp(join(tmpdir(), "optique-expand-home-"));
+    const file = join(dir, "config.json");
+    await writeFile(file, JSON.stringify({ host: "from-file" }));
+    // On Windows, the temporary directory can be on a different drive than
+    // the home directory; then no relative path reaches it.
+    const rel = relative(homedir(), file);
+    const homeRelative = isAbsolute(rel) ? undefined : rel.split(sep).join("/");
+    try {
+      await fn(file, homeRelative);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  function uniqueName(): string {
+    return `optique-expand-home-${process.pid}-${Date.now()}-${
+      Math.random().toString(36).slice(2)
+    }`;
+  }
+
+  test("expands ~/ to the home directory when enabled", async () => {
+    await withTempConfig(async (file, homeRelative) => {
+      if (homeRelative === undefined) return;
+      const { dirname, resolve } = await import("node:path");
+      const context = createConfigContext({ schema });
+      const annotations = await context.getAnnotations(phase2({}), {
+        getConfigPath: () => `~/${homeRelative}`,
+        expandHome: true,
+      });
+      const annotation = annotations[context.id] as
+        | { readonly data: unknown; readonly meta: ConfigMeta }
+        | undefined;
+      assert.deepEqual(annotation?.data, { host: "from-file" });
+      assert.equal(annotation?.meta.configPath, resolve(file));
+      assert.equal(annotation?.meta.configDir, dirname(resolve(file)));
+    });
+  });
+
+  test("expands ~\\ to the home directory on Windows", {
+    skip: process.platform !== "win32",
+  }, async () => {
+    // Bun ignores the skip option, so we need an early return as well:
+    if (process.platform !== "win32") return;
+    await withTempConfig(async (_file, homeRelative) => {
+      if (homeRelative === undefined) return;
+      const context = createConfigContext({ schema });
+      const annotations = await context.getAnnotations(phase2({}), {
+        getConfigPath: () => `~\\${homeRelative.replaceAll("/", "\\")}`,
+        expandHome: true,
+      });
+      const annotation = annotations[context.id] as
+        | { readonly data: unknown }
+        | undefined;
+      assert.deepEqual(annotation?.data, { host: "from-file" });
+    });
+  });
+
+  test("does not expand ~\\ on non-Windows platforms", {
+    skip: process.platform === "win32",
+  }, async () => {
+    // Bun ignores the skip option, so we need an early return as well:
+    if (process.platform === "win32") return;
+    const context = createConfigContext({ schema });
+    const annotations = await context.getAnnotations(phase2({}), {
+      getConfigPath: () => `~\\${uniqueName()}.json`,
+      expandHome: true,
+    });
+    assert.deepEqual(annotations, {});
+  });
+
+  test("does not expand ~ by default", async () => {
+    await withTempConfig(async (_file, homeRelative) => {
+      const path = `~/${homeRelative ?? `${uniqueName()}.json`}`;
+      const context = createConfigContext({ schema });
+      assert.deepEqual(
+        await context.getAnnotations(phase2({}), {
+          getConfigPath: () => path,
+        }),
+        {},
+      );
+      assert.deepEqual(
+        await context.getAnnotations(phase2({}), {
+          getConfigPath: () => path,
+          expandHome: false,
+        }),
+        {},
+      );
+    });
+  });
+
+  test("expands bare ~ to the home directory itself", async () => {
+    // The home directory is not a readable file, so reading it fails with
+    // a file system error instead of being treated as a missing config.
+    const context = createConfigContext({ schema });
+    await assert.rejects(
+      async () =>
+        await context.getAnnotations(phase2({}), {
+          getConfigPath: () => "~",
+          expandHome: true,
+        }),
+      (error: unknown) => {
+        assert.ok(
+          typeof error === "object" && error !== null && "code" in error &&
+            typeof error.code === "string",
+          `Expected a file system error, but got: ${String(error)}`,
+        );
+        return true;
+      },
+    );
+  });
+
+  test("leaves other ~ forms unchanged", async () => {
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const context = createConfigContext({ schema });
+    for (
+      const path of [
+        `~${uniqueName()}/config.json`,
+        join(tmpdir(), uniqueName(), "~", "config.json"),
+        `./~/${uniqueName()}.json`,
+      ]
+    ) {
+      assert.deepEqual(
+        await context.getAnnotations(phase2({}), {
+          getConfigPath: () => path,
+          expandHome: true,
+        }),
+        {},
+        path,
+      );
+    }
+  });
+
+  test("keeps skipping an empty config path", async () => {
+    const context = createConfigContext({ schema });
+    assert.deepEqual(
+      await context.getAnnotations(phase2({}), {
+        getConfigPath: () => "",
+        expandHome: true,
+      }),
+      {},
+    );
+  });
+
+  test("rejects a non-boolean expandHome", () => {
+    const context = createConfigContext({ schema });
+    for (
+      const [value, typeName] of [
+        ["yes", "string"],
+        [1, "number"],
+        [null, "null"],
+      ] as const
+    ) {
+      assert.throws(
+        () =>
+          context.getAnnotations(phase2({}), {
+            getConfigPath: () => undefined,
+            expandHome: value as never,
+          }),
+        {
+          name: "TypeError",
+          message: `Expected expandHome to be a boolean, but got: ${typeName}.`,
+        },
+      );
+    }
+  });
+
+  test("rejects a non-boolean expandHome in load mode", () => {
+    const context = createConfigContext({ schema });
+    assert.throws(
+      () =>
+        context.getAnnotations(phase2({}), {
+          load: () => ({ config: { host: "from-load" }, meta: undefined }),
+          expandHome: "yes" as never,
+        }),
+      {
+        name: "TypeError",
+        message: "Expected expandHome to be a boolean, but got: string.",
+      },
+    );
+  });
+
+  test("has no effect in load mode", async () => {
+    const context = createConfigContext({ schema });
+    const annotations = await context.getAnnotations(phase2({}), {
+      load: () => ({ config: { host: "from-load" }, meta: undefined }),
+      expandHome: true,
+    });
+    const annotation = annotations[context.id] as
+      | { readonly data: unknown }
+      | undefined;
+    assert.deepEqual(annotation?.data, { host: "from-load" });
   });
 });

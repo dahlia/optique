@@ -9,7 +9,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { dirname, resolve as resolvePath } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve as resolvePath, sep } from "node:path";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type {
   Annotations,
@@ -157,6 +158,26 @@ export interface ConfigContextRequiredOptions<TConfigMeta = ConfigMeta> {
     | ConfigLoadResult<TConfigMeta>
     | undefined
     | null;
+
+  /**
+   * Whether to expand a leading `~` in the path returned by `getConfigPath()`
+   * to the current user's home directory.  Defaults to `false`, so the path
+   * is used as is, since `~` is a valid file name character on most
+   * platforms.
+   *
+   * When enabled, only a bare `~` and paths starting with `~/` (or `~\` on
+   * Windows) are expanded.  Other forms such as `~user/config.json` are left
+   * unchanged.  The expanded path is also what `ConfigMeta` reports.
+   *
+   * This option only affects single-file mode.  It has no effect when `load`
+   * is provided, although it is still validated.
+   *
+   * On Deno, looking up the home directory requires the
+   * `--allow-sys=homedir` permission.
+   *
+   * @since 1.4.0
+   */
+  readonly expandHome?: boolean;
 }
 
 /**
@@ -264,6 +285,28 @@ function isStandardSchema(value: unknown): value is StandardSchemaV1 {
     return false;
   }
   return typeof (standard as Record<string, unknown>).validate === "function";
+}
+
+/**
+ * Expands a leading `~` in a config file path to the home directory.  Only
+ * a bare `~` and `~/` (or `~\` on Windows) prefixes are expanded; any other
+ * path is returned unchanged.
+ * @throws {Error} If the home directory cannot be determined.
+ */
+function expandHomeDirectory(path: string): string {
+  const hasHomePrefix = path === "~" || path.startsWith("~/") ||
+    (sep === "\\" && path.startsWith("~\\"));
+  if (!hasHomePrefix) return path;
+  const home = homedir();
+  // Node.js returns an empty string or throws when the home directory is
+  // unknown, while Deno can return null.
+  if (!home) {
+    throw new Error(
+      "Cannot expand ~ in config path: the home directory could not be " +
+        "determined.",
+    );
+  }
+  return path === "~" ? home : join(home, path.slice(2));
 }
 
 function isErrnoException(
@@ -442,6 +485,15 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           }.`,
         );
       }
+      if (
+        opts.expandHome !== undefined && typeof opts.expandHome !== "boolean"
+      ) {
+        throw new TypeError(
+          `Expected expandHome to be a boolean, but got: ${
+            getTypeName(opts.expandHome)
+          }.`,
+        );
+      }
 
       // At runtime, `parsed` is the actual parser value.  The
       // ParserValuePlaceholder brand is compile-time only.
@@ -530,7 +582,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
           return emptyAnnotations();
         }
 
-        const absoluteConfigPath = resolvePath(configPath);
+        const absoluteConfigPath = resolvePath(
+          opts.expandHome ? expandHomeDirectory(configPath) : configPath,
+        );
         const singleFileMeta: ConfigMeta = {
           configDir: dirname(absoluteConfigPath),
           configPath: absoluteConfigPath,
