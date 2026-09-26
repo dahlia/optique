@@ -8,6 +8,16 @@ Version 1.3.1
 
 To be released.
 
+### @optique/core
+
+ -  Fixed a Boolean `option()` given an attached value, such as
+    `--no-pager=1`, reporting the option name with the `=` or `:` separator
+    still attached in its error message.
+    [[#966], [#975]]
+
+[#966]: https://github.com/dahlia/optique/issues/966
+[#975]: https://github.com/dahlia/optique/pull/975
+
 
 Version 1.3.0
 -------------
@@ -296,6 +306,19 @@ Released on September 15, 2026.
 [#953]: https://github.com/dahlia/optique/issues/953
 [#954]: https://github.com/dahlia/optique/pull/954
 [#959]: https://github.com/dahlia/optique/issues/959
+
+
+Version 1.2.8
+-------------
+
+Released on September 26, 2026.
+
+### @optique/core
+
+ -  Fixed a Boolean `option()` given an attached value, such as
+    `--no-pager=1`, reporting the option name with the `=` or `:` separator
+    still attached in its error message.
+    [[#966], [#975]]
 
 
 Version 1.2.7
@@ -664,6 +687,18 @@ Released on July 21, 2026.
 [#867]: https://github.com/dahlia/optique/pull/867
 
 
+Version 1.1.8
+-------------
+
+Released on September 26, 2026.
+
+### @optique/core
+
+ -  Fixed a Boolean `option()` given an attached value, such as
+    `--no-pager=1`, reporting the option name with the `=` or `:` separator
+    still attached in its error message.  [[#966], [#975]]
+
+
 Version 1.1.7
 -------------
 
@@ -1027,6 +1062,18 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.10
+--------------
+
+Released on September 26, 2026.
+
+### @optique/core
+
+ -  Fixed a Boolean `option()` given an attached value, such as
+    `--no-pager=1`, reporting the option name with the `=` or `:` separator
+    still attached in its error message.  [[#966], [#975]]
 
 
 Version 1.0.9

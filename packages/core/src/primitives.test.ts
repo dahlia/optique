@@ -689,6 +689,31 @@ describe("option", () => {
       }
     });
 
+    it("should not include the separator in the Boolean flag value error", () => {
+      // https://github.com/dahlia/optique/issues/966
+      for (
+        const [name, input] of [
+          ["--no-pager", "--no-pager=1"],
+          ["/Q", "/Q:1"],
+        ] as const
+      ) {
+        const parser = option(name);
+        const result = parser.parse({
+          buffer: [input],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        });
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.equal(
+            formatMessage(result.error),
+            `Option \`${name}\` is a Boolean flag, but got a value: "1".`,
+          );
+        }
+      }
+    });
+
     it("should parse string values", () => {
       const parser = option("--name", string({ metavar: "NAME" }));
       const context = {
