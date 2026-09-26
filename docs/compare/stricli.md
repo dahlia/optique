@@ -209,6 +209,8 @@ Optique provides those layers as composable, individually-validated wrappers,
 with priority set by nesting order:
 
 ~~~~ typescript
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { object } from "@optique/core/constructs";
 import { option } from "@optique/core/primitives";
@@ -226,7 +228,10 @@ const configContext = createConfigContext({
 
 // CLI argument > env var > config file > interactive prompt
 const parser = object({
-  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  config: withDefault(
+    option("--config", string()),
+    join(homedir(), ".myapp.json"),
+  ),
   host: prompt(
     bindEnv(
       bindConfig(option("--host", string()), {
