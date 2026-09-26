@@ -105,6 +105,8 @@ const portParser = bindConfig(option("--port", integer()), {
 Pass the config context to `runAsync()` (or `run()`) via the `contexts` option:
 
 ~~~~ typescript twoslash
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
 import { object } from "@optique/core/constructs";
@@ -120,7 +122,10 @@ const configSchema = z.object({
 const configContext = createConfigContext({ schema: configSchema });
 
 const parser = object({
-  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  config: withDefault(
+    option("--config", string()),
+    join(homedir(), ".myapp.json"),
+  ),
   host: bindConfig(option("--host", string()), {
     context: configContext,
     key: "host",
@@ -144,6 +149,33 @@ const result = await runAsync(parser, {
 
 console.log(`Connecting to ${result.host}:${result.port}`);
 ~~~~
+
+> [!NOTE]
+> The path returned by `getConfigPath()` is used as is, and a leading `~` is
+> not expanded to the home directory, because `~` is a valid file name
+> character on most platforms.  When users pass `--config ~/.myapp.json`,
+> their shell expands `~` before Optique sees it, but a default value like
+> `"~/.myapp.json"` refers to a directory literally named *~* under the
+> current working directory.  Since a missing config file is not an error,
+> every value would then silently fall back to its default.  That is why the
+> examples on this page build the default path with `homedir()`:
+>
+> ~~~~ typescript twoslash
+> import { withDefault } from "@optique/core/modifiers";
+> import { option } from "@optique/core/primitives";
+> import { string } from "@optique/core/valueparser";
+> // ---cut-before---
+> import { homedir } from "node:os";
+> import { join } from "node:path";
+>
+> const config = withDefault(
+>   option("--config", string()),
+>   join(homedir(), ".myapp.json"),
+> );
+> ~~~~
+>
+> If you want to accept `~` in paths anyway, expand it yourself in
+> `getConfigPath()`.
 
 If the config file `~/.myapp.json` contains:
 
@@ -211,6 +243,8 @@ access those features unless the user parser already consumes the same
 token sequence as ordinary data:
 
 ~~~~ typescript twoslash
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
 import { object } from "@optique/core/constructs";
@@ -226,7 +260,10 @@ const configSchema = z.object({
 const configContext = createConfigContext({ schema: configSchema });
 
 const parser = object({
-  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  config: withDefault(
+    option("--config", string()),
+    join(homedir(), ".myapp.json"),
+  ),
   host: bindConfig(option("--host", string()), {
     context: configContext,
     key: "host",
@@ -383,6 +420,8 @@ file or the supplied default.  Compare this with `constant(value)`, which
 always succeeds and would prevent the config fallback from ever triggering.
 
 ~~~~ typescript twoslash
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { bindConfig, createConfigContext } from "@optique/config";
 import { object } from "@optique/core/constructs";
@@ -401,7 +440,10 @@ const configSchema = z.object({
 const configContext = createConfigContext({ schema: configSchema });
 
 const parser = object({
-  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  config: withDefault(
+    option("--config", string()),
+    join(homedir(), ".myapp.json"),
+  ),
   host: bindConfig(option("--host", string()), {
     context: configContext,
     key: "host",
@@ -962,6 +1004,8 @@ Example application
 Here's a complete example of a CLI application with config file support:
 
 ~~~~ typescript twoslash
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { createConfigContext, bindConfig } from "@optique/config";
 import { object } from "@optique/core/constructs";
@@ -982,7 +1026,10 @@ const configContext = createConfigContext({ schema: configSchema });
 
 // Build parser
 const parser = object({
-  config: withDefault(option("--config", string()), "~/.myapp.json"),
+  config: withDefault(
+    option("--config", string()),
+    join(homedir(), ".myapp.json"),
+  ),
   host: bindConfig(option("--host", string()), {
     context: configContext,
     key: "host",
