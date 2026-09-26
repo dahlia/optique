@@ -44,6 +44,7 @@ import {
   type PromptExecutionContext,
   type PromptOptions,
   type PromptValidator,
+  type SelectConfig,
   Separator,
 } from "@optique/inquirer";
 import { bindConfig, createConfigContext } from "@optique/config";
@@ -6911,5 +6912,61 @@ describe("prompt() with derived configurations", () => {
     assert.ok(result.success);
     assert.equal(result.value.packageManager, "deno");
     assert.equal(resolverCalls, 0);
+  });
+});
+
+// https://github.com/dahlia/optique/issues/964
+describe("prompt() with zero-dependency derived configurations", () => {
+  it("passes asynchronously loaded choices to the select prompt", async () => {
+    const selectChoices: unknown[] = [];
+    const signals: (AbortSignal | undefined)[] = [];
+    const controller = new AbortController();
+    const parser = prompt(
+      option("--key", string()),
+      derivePromptConfig(async ({ signal }) => {
+        signals.push(signal);
+        const keys = await Promise.resolve(["a.txt", "b.txt"]);
+        return {
+          type: "select",
+          message: "Pick an object:",
+          choices: keys,
+          default: keys[1],
+        };
+      }),
+      { signal: controller.signal },
+    );
+
+    const result = await withPromptFunctionsOverride({
+      select(config: { readonly choices: readonly unknown[] }) {
+        selectChoices.push(config.choices);
+        return Promise.resolve("b.txt");
+      },
+    }, () => parseAsync(parser, []));
+
+    assert.ok(result.success);
+    assert.equal(result.value, "b.txt");
+    assert.deepEqual(signals, [controller.signal]);
+    assert.deepEqual(selectChoices, [[
+      { value: "a.txt", name: "a.txt" },
+      { value: "b.txt", name: "b.txt" },
+    ]]);
+  });
+
+  it("type-checks a separately declared configuration", async () => {
+    const config = derivePromptConfig(async () => {
+      const keys = await Promise.resolve(["a.txt"]);
+      return {
+        type: "select",
+        message: "Pick an object:",
+        choices: keys,
+        prompter: () => Promise.resolve("a.txt"),
+      } satisfies SelectConfig;
+    });
+    const parser = prompt(option("--key", string()), config);
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "a.txt");
   });
 });

@@ -15,6 +15,7 @@ import {
   type PromptExecutionContext,
   type PromptOptions,
   type PromptValidator,
+  type SelectConfig,
 } from "@optique/clack";
 
 const promptFunctionsOverrideSymbol = Symbol.for(
@@ -1031,5 +1032,56 @@ describe("prompt() with derived configurations", () => {
     assert.ok(result.success);
     assert.equal(result.value.packageManager, "deno");
     assert.equal(resolverCalls, 0);
+  });
+});
+
+// https://github.com/dahlia/optique/issues/964
+describe("prompt() with zero-dependency derived configurations", () => {
+  it("passes asynchronously loaded options to the select prompt", async () => {
+    const selectOptions: unknown[] = [];
+    const parser = prompt(
+      option("--key", string()),
+      derivePromptConfig(async () => {
+        const keys = await Promise.resolve(["a.txt", "b.txt"]);
+        return {
+          type: "select",
+          message: "Pick an object:",
+          options: keys,
+          initialValue: keys[1],
+        };
+      }),
+    );
+
+    const result = await withPromptFunctionsOverride({
+      select(config: { readonly options: readonly unknown[] }) {
+        selectOptions.push(config.options);
+        return Promise.resolve("b.txt");
+      },
+    }, () => parseAsync(parser, []));
+
+    assert.ok(result.success);
+    assert.equal(result.value, "b.txt");
+    assert.deepEqual(selectOptions, [[
+      { value: "a.txt", label: "a.txt" },
+      { value: "b.txt", label: "b.txt" },
+    ]]);
+  });
+
+  it("type-checks a separately declared configuration", async () => {
+    const config = derivePromptConfig(async ({ signal }) => {
+      const keys = await Promise.resolve(signal == null ? ["a.txt"] : []);
+      return {
+        type: "select",
+        message: "Pick an object:",
+        options: keys,
+        prompter: () => Promise.resolve("a.txt"),
+      } satisfies SelectConfig;
+    });
+    const parser = prompt(option("--key", string()), config);
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "a.txt");
   });
 });

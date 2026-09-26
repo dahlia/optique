@@ -33,6 +33,8 @@ export { derivePromptConfig, isDerivedPromptConfig } from "@optique/prompt";
 export type {
   DerivedPromptConfig,
   DerivePromptConfigContext,
+  DerivePromptConfigNoDepsContext,
+  DerivePromptConfigNoDepsOptions,
   DerivePromptConfigOptions,
   DerivePromptConfigsContext,
   DerivePromptConfigsOptions,

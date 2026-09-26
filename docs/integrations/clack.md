@@ -482,11 +482,11 @@ native Clack validation.  They run within one Clack execution and can reject
 several submissions without consuming another shared attempt.  The third
 argument's shared validator runs once after Clack returns a value.
 
-Pass an `AbortSignal` as `signal` to stop an active prompt or validator.  An
-abort rejects parsing with the signal's exact `reason`; it is not converted to
-a `Prompt cancelled.` failure.  CLI values, configured sources, and skipped
-runtime conditions do not consult these shared options because no prompt
-attempt runs.
+Pass an `AbortSignal` as `signal` to stop an active prompt, validator, or
+derived configuration resolver.  An abort rejects parsing with the signal's
+exact `reason`; it is not converted to a `Prompt cancelled.` failure.  CLI
+values, configured sources, and skipped runtime conditions do not consult these
+shared options because no prompt attempt runs.
 
 
 Testing
@@ -583,6 +583,41 @@ they came from the command line, a binding, or another prompt.  See the
 [*@optique/prompt* documentation](./prompt.md#derived-prompt-configurations)
 for declared defaults, failure behavior, and the runtime condition form.
 
+### Options loaded at prompt time
+
+*This API is available since Optique 1.4.0.*
+
+`derivePromptConfig()` also accepts a resolver without any dependency
+source.  Use it when the options have to be fetched, for example from a remote
+service.  The resolver runs only when the prompt is about to open, so
+`--key` on the command line, `--help`, and shell completion never trigger
+the request:
+
+~~~~ typescript twoslash
+declare function listObjects(
+  options: { readonly signal?: AbortSignal },
+): Promise<string[]>;
+// ---cut-before---
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { derivePromptConfig, prompt } from "@optique/clack";
+
+const key = prompt(
+  option("--key", string()),
+  derivePromptConfig(async ({ signal }) => ({
+    type: "select",
+    message: "Object to download:",
+    options: await listObjects({ signal }),
+  })),
+);
+~~~~
+
+The resolver receives the `signal` passed in the shared options, if any;
+forward it to the request so that an abort also cancels the fetch.
+When you store the derived configuration in a variable before passing it to
+`prompt()`, add `satisfies SelectConfig` to the returned object so that
+`type: "select"` does not widen to `string`.
+
 
 API reference
 -------------
@@ -604,8 +639,8 @@ Parameters
      -  `options`: Optional shared [`PromptOptions<T>`].  `validate` runs after
         each successful adapter execution, independently of config-level native
         validation.  `maxAttempts` limits adapter executions, including custom
-        `prompter` invocations.  `signal` can stop an active adapter execution
-        or validator.
+        `prompter` invocations.  `signal` can stop an active adapter execution,
+        validator, or derived configuration resolver.
 
 Returns
 :   A new parser with `mode: "async"` and Clack prompt fallback.  The `usage`
