@@ -115,6 +115,45 @@ describe("attached short option values", () => {
       ]).success,
     );
   });
+  it("preserves conditional ownership through env wrappers", async () => {
+    const env = createEnvContext({ source: () => undefined });
+    for (
+      const value of [choice(["a", "b"]), {
+        ...choice(["a", "b"]),
+        mode: "async" as const,
+        parse: (input: string) =>
+          Promise.resolve(choice(["a", "b"]).parse(input)),
+      }]
+    ) {
+      const inner = conditional(withDefault(option("--mode", value), "a"), {
+        a: option("-verbose"),
+        b: constant("none"),
+      });
+      const p = object({
+        v: optional(option("-v", string())),
+        c: bindEnv(inner, {
+          context: env,
+          key: "BRANCH",
+          parser: {
+            ...string(),
+            parse: () => ({
+              success: true as const,
+              value: ["a", false] as const,
+            }),
+            format: JSON.stringify,
+          },
+        }),
+      });
+      assert.deepEqual(await parseAsync(p, ["-verbose"]), {
+        success: true,
+        value: { v: undefined, c: ["a", true] },
+      });
+      assert.deepEqual(await parseAsync(p, ["--mode", "b", "-verbose"]), {
+        success: true,
+        value: { v: "erbose", c: ["b", "none"] },
+      });
+    }
+  });
   it("probes discriminators using their actual child execution path", async () => {
     const inner = constant("a");
     const discriminator = (path: readonly PropertyKey[]) => ({

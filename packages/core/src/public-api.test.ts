@@ -114,6 +114,7 @@ test("extension module exposes the supported extension helpers", () => {
     "extractPhase2SeedKey",
     "getTraits",
     "inheritAnnotations",
+    "inheritOptionScope",
     "injectAnnotations",
     "isInjectedAnnotationState",
     "mapModeValue",

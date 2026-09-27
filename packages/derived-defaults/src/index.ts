@@ -13,6 +13,7 @@ import {
   delegateSuggestNodes,
   extractPhase2SeedKey,
   inheritAnnotations,
+  inheritOptionScope,
   injectAnnotations,
   mapModeValue,
   mapSourceMetadata,
@@ -602,6 +603,7 @@ export function bindDerivedDefault<
     },
     configurable: true,
   });
+  inheritOptionScope(boundParser, parser);
   defineTraits(boundParser, {
     inheritsAnnotations: true,
     completesFromSource: true,

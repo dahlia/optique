@@ -21,6 +21,7 @@ import {
   delegateSuggestNodes,
   getTraits,
   inheritAnnotations,
+  inheritOptionScope,
   injectAnnotations,
   mapSourceMetadata,
   type ParserSourceMetadata,
@@ -1377,6 +1378,7 @@ export function createPromptAdapter<TConfig>(
         return parser.getDocFragments(state, defaultValue as TValue);
       },
     };
+    inheritOptionScope(promptedParser, parser);
     defineTraits(promptedParser, {
       inheritsAnnotations: true,
       ...(getTraits(parser).completesFromSource === true

@@ -8,6 +8,7 @@ import {
   dispatchByMode,
   getTraits,
   inheritAnnotations,
+  inheritOptionScope,
   injectAnnotations,
   isInjectedAnnotationState,
   mapModeValue,
@@ -893,6 +894,7 @@ export function bindEnv<
       return parser.getDocFragments(state, defaultValue);
     },
   };
+  inheritOptionScope(boundParser, parser);
   defineTraits(boundParser, {
     inheritsAnnotations: true,
     completesFromSource: true,

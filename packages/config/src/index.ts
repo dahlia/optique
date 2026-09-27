@@ -30,6 +30,7 @@ import {
   defineTraits,
   delegateSuggestNodes,
   inheritAnnotations,
+  inheritOptionScope,
   injectAnnotations,
   mapModeValue,
   mapSourceMetadata,
@@ -961,6 +962,7 @@ export function bindConfig<
       return parser.getDocFragments(state, defaultValue);
     },
   };
+  inheritOptionScope(boundParser, parser);
   defineTraits(boundParser, {
     inheritsAnnotations: true,
     completesFromSource: true,

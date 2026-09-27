@@ -108,6 +108,18 @@ function parserScope(parser: Parser<Mode, unknown, unknown>): ScopeSource {
   return source;
 }
 
+/** Preserves dynamic option ownership through a transparent wrapper. @internal */
+export function inheritOptionScope(
+  target: object,
+  inner: Parser<Mode, unknown, unknown>,
+): void {
+  Object.defineProperty(target, scopeSourceKey, {
+    value: parserScope(inner),
+    enumerable: true,
+    configurable: true,
+  });
+}
+
 /** Combines declarations without flattening conditional ownership. @internal */
 export function combinedOptionScope(
   parsers: readonly Parser<Mode, unknown, unknown>[],

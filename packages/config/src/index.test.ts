@@ -7,6 +7,7 @@ import { getDocPage, parse, suggestSync } from "@optique/core/parser";
 import type { Parser } from "@optique/core/parser";
 import {
   concat,
+  conditional,
   group,
   merge,
   object,
@@ -192,6 +193,27 @@ describe("createConfigContext", () => {
 });
 
 describe("bindConfig", () => {
+  test("preserves conditional full names before CLI delegation", async () => {
+    const context = createConfigContext({
+      schema: z.object({
+        branch: z.tuple([z.literal("a"), z.boolean()]).readonly().optional(),
+      }),
+    });
+    const p = object({
+      v: optional(option("-v", string())),
+      c: bindConfig(
+        conditional(withDefault(option("--mode", choice(["a"])), "a"), {
+          a: option("-verbose"),
+        }),
+        { context, key: "branch" },
+      ),
+    });
+    assert.deepEqual(await parse(p, ["-verbose"]), {
+      success: true,
+      value: { v: undefined, c: ["a", true] },
+    });
+  });
+
   test("returns a fluent parser", () => {
     const context = createConfigContext({
       schema: z.object({ name: z.string().optional() }),
