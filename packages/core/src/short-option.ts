@@ -32,11 +32,26 @@ interface ScopeNode {
   readonly bound: ScopeSource;
 }
 const scopeLocations = new WeakMap<ScopeSource, readonly PropertyKey[]>();
-const boundScopes = new WeakMap<ScopeSource, ScopeNode>();
+// Occurrence paths belong to one parse, including its speculative forks.
+// Weak keys let discarded parse contexts release all numeric path bindings.
+const scopeBindings = new WeakMap<
+  ReadonlyMap<ScopeSource, ScopeSource>,
+  WeakMap<ScopeSource, ScopeNode>
+>();
+function getScopeBindings(selections: ReadonlyMap<ScopeSource, ScopeSource>) {
+  let bindings = scopeBindings.get(selections);
+  if (bindings == null) {
+    bindings = new WeakMap<ScopeSource, ScopeNode>();
+    scopeBindings.set(selections, bindings);
+  }
+  return bindings;
+}
 function bindScope(
   source: ScopeSource,
   path: readonly PropertyKey[],
+  selections: ReadonlyMap<ScopeSource, ScopeSource>,
 ): ScopeSource {
+  const boundScopes = getScopeBindings(selections);
   let node = boundScopes.get(source);
   if (node == null) {
     node = {
@@ -148,7 +163,7 @@ export function repeatedOptionScope(
 /** Tracks declarations after a command or discriminator routes input. @internal */
 export function selectableOptionScope(initial: ScopeSource) {
   const source: ScopeSource = (selections, arities, context, path = []) =>
-    (selections.get(bindScope(source, path)) ?? initial)(
+    (selections.get(bindScope(source, path, selections)) ?? initial)(
       selections,
       arities,
       context,
@@ -157,8 +172,10 @@ export function selectableOptionScope(initial: ScopeSource) {
   return {
     source,
     select(context: ParserContext<unknown>, selected: ScopeSource): void {
-      (context as ScopedContext)[optionScopeKey]?.selections.set(
-        bindScope(source, scopePath(context)),
+      const selections = (context as ScopedContext)[optionScopeKey]?.selections;
+      if (selections == null) return;
+      selections.set(
+        bindScope(source, scopePath(context), selections),
         selected,
       );
     },
@@ -244,6 +261,8 @@ export function withParserOptionScope<S>(
   segment?: PropertyKey,
 ): ParserContext<S> & ScopedContext {
   const inherited = (context as ScopedContext)[optionScopeKey];
+  const selections = inherited?.selections ??
+    new Map<ScopeSource, ScopeSource>();
   return {
     ...context,
     [optionScopeKey]: {
@@ -255,9 +274,10 @@ export function withParserOptionScope<S>(
           segment == null
             ? scopePath(context)
             : [...scopePath(context), segment],
+          selections,
         ),
       ]),
-      selections: inherited?.selections ?? new Map(),
+      selections,
     },
   };
 }
@@ -267,12 +287,12 @@ export function forkOptionScope<S>(
   context: ParserContext<S>,
 ): ParserContext<S> & ScopedContext {
   const scoped = (context as ScopedContext)[optionScopeKey];
-  return scoped == null ? context : {
+  if (scoped == null) return context;
+  const selections = new Map(scoped.selections);
+  scopeBindings.set(selections, getScopeBindings(scoped.selections));
+  return {
     ...context,
-    [optionScopeKey]: {
-      ...scoped,
-      selections: new Map(scoped.selections),
-    },
+    [optionScopeKey]: { ...scoped, selections },
   };
 }
 
