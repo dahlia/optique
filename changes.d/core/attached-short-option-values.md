@@ -7,5 +7,7 @@ links:
     `-n 5` and `-x -n 5`, with value completion for attached forms.  Declared
     single-dash full names now take precedence over short-option splitting,
     independently of field order, including reused parser occurrences and
-    failed speculative parses and source-backed wrappers.  Unicode short-option
-    names work in attached forms and bundles too.  [[#965], [#981]]
+    failed speculative parses and source-backed wrappers.  Conditional parsers
+    release inactive option names as soon as they select a default branch.
+    Unicode short-option names work in attached forms and bundles too.
+    [[#965], [#981]]

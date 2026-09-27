@@ -15984,6 +15984,7 @@ export function conditional(
         // stateful discriminators that could pick a different branch).
         const commitDefault = defaultResult.consumed.length > 0 ||
           context.buffer.length === 0;
+        if (commitDefault) optionScope.select(context, syncDefaultBranch);
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),
@@ -16529,6 +16530,7 @@ export function conditional(
         // See sync counterpart for rationale on commitDefault.
         const commitDefault = defaultResult.consumed.length > 0 ||
           context.buffer.length === 0;
+        if (commitDefault) optionScope.select(context, defaultBranch);
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),

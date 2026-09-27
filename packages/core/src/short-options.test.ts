@@ -529,6 +529,46 @@ describe("attached short option values", () => {
       assert.ok(formatMessage(result.error).includes("multiple times"));
     }
   });
+  it("publishes the default route before parsing and completing sibling values", async () => {
+    const values = choice(["erbose", "ersion"]);
+    const sync = object({
+      v: optional(option("-v", values)),
+      c: conditional(withDefault(option("--mode", choice(["a", "z"])), "z"), {
+        a: option("-verbose"),
+      }, option("--other")),
+    });
+    const asyncValues: ValueParser<"async", string> = {
+      ...values,
+      mode: "async",
+      parse: (input) => Promise.resolve(values.parse(input)),
+      suggest: async function* (prefix) {
+        yield* values.suggest!(prefix);
+      },
+    };
+    const async = object({
+      v: optional(option("-v", asyncValues)),
+      c: conditional(withDefault(option("--mode", asyncString()), "z"), {
+        a: option("-verbose"),
+      }, option("--other")),
+    });
+    const expected = {
+      success: true,
+      value: { v: "erbose", c: [undefined, true] },
+    };
+    assert.deepEqual(parseSync(sync, ["--other", "-verbose"]), expected);
+    assert.deepEqual(
+      await parseAsync(async, ["--other", "-verbose"]),
+      expected,
+    );
+    assert.deepEqual(texts(suggestSync(sync, ["--other", "-ve"])), [
+      "-verbose",
+      "-version",
+    ]);
+    assert.deepEqual(texts(await suggestAsync(async, ["--other", "-ve"])), [
+      "-verbose",
+      "-version",
+    ]);
+  });
   it("drops inactive default names after selecting a conditional branch", async () => {
     const p = conditional(
       option("--mode", choice(["a"])),
