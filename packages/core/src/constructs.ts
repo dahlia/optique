@@ -1,4 +1,15 @@
 import {
+  adoptOptionScope,
+  combinedOptionScope,
+  conditionalOptionScope,
+  forkOptionScope,
+  restoreOptionScope,
+  scopeParser,
+  selectableOptionScope,
+  withOptionScope,
+  withParserOptionScope,
+} from "./short-option.ts";
+import {
   annotationViewTargets,
   getWrappedChildParseState as getParseChildState,
   getWrappedChildState as getAnnotatedChildState,
@@ -201,7 +212,8 @@ function withChildContext<TState>(
   const childState = parser == null
     ? state
     : getParseChildState(context.state, state, parser) as TState;
-  return withSharedChildContext(context, segment, childState, usage);
+  const child = withSharedChildContext(context, segment, childState, usage);
+  return parser == null ? child : withParserOptionScope(child, parser);
 }
 
 function isUnmatchedDependencyState(
@@ -4337,7 +4349,7 @@ export function or(
     for (const [parser, i] of orderedParsers) {
       const result = parser.parse(
         withChildContext(
-          context,
+          forkOptionScope(context),
           i,
           activeState == null || activeState[0] !== i ||
             !activeState[1].success
@@ -4406,7 +4418,7 @@ export function or(
             return {
               success: true,
               next: {
-                ...context,
+                ...adoptOptionScope(context, result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: createExclusiveState(
@@ -4480,7 +4492,7 @@ export function or(
           return {
             success: true,
             next: {
-              ...context,
+              ...adoptOptionScope(context, replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -4509,7 +4521,7 @@ export function or(
         return {
           success: true,
           next: {
-            ...context,
+            ...adoptOptionScope(context, result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: createExclusiveState(context.state, i, parser, result),
@@ -4561,7 +4573,7 @@ export function or(
           ? { provisional: true as const }
           : {}),
         next: {
-          ...context,
+          ...adoptOptionScope(context, zeroConsumedBranch.result.next),
           state: createExclusiveState(
             context.state,
             zeroConsumedBranch.index,
@@ -4595,7 +4607,7 @@ export function or(
           success: true,
           provisional: true,
           next: {
-            ...context,
+            ...adoptOptionScope(context, provisionalConsuming.result.next),
             buffer: provisionalConsuming.result.next.buffer,
             optionsTerminated:
               provisionalConsuming.result.next.optionsTerminated,
@@ -4624,7 +4636,7 @@ export function or(
         const previouslyConsumed = activeState[1].consumed;
         const checkResult = provisionalConsuming.parser.parse({
           ...withChildContext(
-            context,
+            forkOptionScope(context),
             provisionalConsuming.index,
             provisionalConsuming.parser.initialState,
             provisionalConsuming.parser,
@@ -4670,7 +4682,7 @@ export function or(
             success: true,
             provisional: true,
             next: {
-              ...context,
+              ...adoptOptionScope(context, replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -4747,7 +4759,7 @@ export function or(
     for (const [parser, i] of orderedParsers) {
       const resultOrPromise = parser.parse(
         withChildContext(
-          context,
+          forkOptionScope(context),
           i,
           activeState == null || activeState[0] !== i ||
             !activeState[1].success
@@ -4806,7 +4818,7 @@ export function or(
             return {
               success: true,
               next: {
-                ...context,
+                ...adoptOptionScope(context, result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: createExclusiveState(
@@ -4882,7 +4894,7 @@ export function or(
           return {
             success: true,
             next: {
-              ...context,
+              ...adoptOptionScope(context, replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -4911,7 +4923,7 @@ export function or(
         return {
           success: true,
           next: {
-            ...context,
+            ...adoptOptionScope(context, result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: createExclusiveState(context.state, i, parser, result),
@@ -4954,7 +4966,7 @@ export function or(
           ? { provisional: true as const }
           : {}),
         next: {
-          ...context,
+          ...adoptOptionScope(context, zeroConsumedBranch.result.next),
           state: createExclusiveState(
             context.state,
             zeroConsumedBranch.index,
@@ -4986,7 +4998,7 @@ export function or(
           success: true,
           provisional: true,
           next: {
-            ...context,
+            ...adoptOptionScope(context, provisionalConsuming.result.next),
             buffer: provisionalConsuming.result.next.buffer,
             optionsTerminated:
               provisionalConsuming.result.next.optionsTerminated,
@@ -5015,7 +5027,7 @@ export function or(
         const previouslyConsumed = activeState[1].consumed;
         const checkResult = await provisionalConsuming.parser.parse({
           ...withChildContext(
-            context,
+            forkOptionScope(context),
             provisionalConsuming.index,
             provisionalConsuming.parser.initialState,
             provisionalConsuming.parser,
@@ -5058,7 +5070,7 @@ export function or(
             success: true,
             provisional: true,
             next: {
-              ...context,
+              ...adoptOptionScope(context, replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -5200,11 +5212,14 @@ export function or(
   // belong to any branch, so revalidating through a single arbitrary
   // branch would reject values that another branch would accept.
   return fluent(
-    singleResult as Parser<
-      Mode,
-      unknown,
-      [number, ParserResult<unknown>] | undefined
-    >,
+    scopeParser(
+      singleResult as Parser<
+        Mode,
+        unknown,
+        [number, ParserResult<unknown>] | undefined
+      >,
+      combinedOptionScope(parsers, parsers.map((_, index) => index)),
+    ),
   );
 }
 
@@ -5571,7 +5586,7 @@ function createLongestMatch(
     return {
       success: true,
       next: {
-        ...context,
+        ...adoptOptionScope(context, selectedResult.next),
         buffer: selectedResult.next.buffer,
         optionsTerminated: selectedResult.next.optionsTerminated,
         state: createExclusiveState(
@@ -5672,7 +5687,7 @@ function createLongestMatch(
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
       const childContext = withChildContext(
-        context,
+        forkOptionScope(context),
         i,
         activeState == null || activeState[0] !== i ||
           !activeState[1].success
@@ -5743,7 +5758,7 @@ function createLongestMatch(
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
       const childContext = withChildContext(
-        context,
+        forkOptionScope(context),
         i,
         activeState == null || activeState[0] !== i ||
           !activeState[1].success
@@ -5888,11 +5903,14 @@ function createLongestMatch(
   // branch would produce values that differ from what parse() returns.
   // The same reasoning applies to validateValue (#414).
   return fluent(
-    multiResult as Parser<
-      Mode,
-      unknown,
-      [number, ParserResult<unknown>] | undefined
-    >,
+    scopeParser(
+      multiResult as Parser<
+        Mode,
+        unknown,
+        [number, ParserResult<unknown>] | undefined
+      >,
+      combinedOptionScope(parsers, parsers.map((_, index) => index)),
+    ),
   );
 }
 
@@ -7199,6 +7217,7 @@ export function object<
     if (result.consumed.length === 0 && result.next.state === fieldState) {
       return { success: true, next: context, consumed: [] };
     }
+    adoptOptionScope(context, result.next);
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
     const nextState = result.next.state === fieldState ? context.state : {
       ...(context.state as Record<string | symbol, unknown>),
@@ -7243,7 +7262,12 @@ export function object<
           combinedMode,
           () => {
             const result = (parser as Parser<"sync", unknown, unknown>).parse(
-              withChildContext(context, field, fieldState, parser),
+              withChildContext(
+                forkOptionScope(context),
+                field,
+                fieldState,
+                parser,
+              ),
             );
             return adaptFieldLaneResult(
               context,
@@ -7255,7 +7279,12 @@ export function object<
           },
           async () => {
             const result = await parser.parse(
-              withChildContext(context, field, fieldState, parser),
+              withChildContext(
+                forkOptionScope(context),
+                field,
+                fieldState,
+                parser,
+              ),
             );
             return adaptFieldLaneResult(
               context,
@@ -7293,7 +7322,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             getFieldState(field, parser),
             parser,
@@ -7301,6 +7330,7 @@ export function object<
         );
 
         if (result.success && result.consumed.length > 0) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -7364,7 +7394,7 @@ export function object<
         const fieldState = getFieldState(field, parser);
         const result = typedParser.parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             fieldState,
             parser,
@@ -7374,6 +7404,7 @@ export function object<
           result.success && result.consumed.length === 0 &&
           result.next.state !== fieldState
         ) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -7486,7 +7517,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const resultOrPromise = parser.parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             getFieldState(field, parser),
             parser,
@@ -7495,6 +7526,7 @@ export function object<
         const result = await resultOrPromise;
 
         if (result.success && result.consumed.length > 0) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -7548,7 +7580,7 @@ export function object<
         const fieldState = getFieldState(field, parser);
         const resultOrPromise = parser.parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             fieldState,
             parser,
@@ -7559,6 +7591,7 @@ export function object<
           result.success && result.consumed.length === 0 &&
           result.next.state !== fieldState
         ) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -8372,7 +8405,17 @@ export function object<
 
   defineParseLanes(objectParser, objectParseLanes);
   defineInheritedAnnotationParser(objectParser);
-  return fluent(objectParser);
+  return fluent(
+    scopeParser(
+      objectParser,
+      combinedOptionScope(
+        parserPairs.map(([, p]) => p),
+        parserPairs.map(([field]) => field),
+      ),
+      undefined,
+      true,
+    ),
+  );
 }
 
 /**
@@ -8434,12 +8477,19 @@ function tokenMatchesLeadingName(
 ): boolean {
   if (token == null) return false;
   for (const name of candidates.optionNames) {
-    if (token === name) return true;
+    if (
+      token === name ||
+      name.startsWith("-") && !name.startsWith("--") &&
+        name.length > 2 && !/^-[^-]$/u.test(name) &&
+        token.startsWith(`${name}=`)
+    ) return true;
   }
   for (const name of candidates.joinedOptionNames) {
     if (
+      /^-[^-]$/u.test(name) && token.startsWith(name) ||
       name.startsWith("/") && token.startsWith(`${name}:`) ||
-      (name.startsWith("--") || name.startsWith("-") && name.length > 2) &&
+      (name.startsWith("--") ||
+          name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name)) &&
         token.startsWith(`${name}=`)
     ) {
       return true;
@@ -8868,6 +8918,7 @@ function advanceSeqSuggestContextSync(
   while (currentContext.state.index < parsers.length) {
     const index = currentContext.state.index;
     const parser = parsers[index];
+    currentContext = withParserOptionScope(currentContext, parser, index);
     const parserState = getSeqChildState(currentContext.state, index, parser);
 
     if (currentContext.buffer.length < 1) break;
@@ -8923,6 +8974,7 @@ async function advanceSeqSuggestContextAsync(
   while (currentContext.state.index < parsers.length) {
     const index = currentContext.state.index;
     const parser = parsers[index];
+    currentContext = withParserOptionScope(currentContext, parser, index);
     const parserState = getSeqChildState(currentContext.state, index, parser);
 
     if (currentContext.buffer.length < 1) break;
@@ -10584,7 +10636,15 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
-  return fluent(tupleParser);
+  return fluent(
+    scopeParser(
+      tupleParser,
+      combinedOptionScope(
+        parsers,
+        parsers.map((_, index) => index),
+      ),
+    ),
+  );
 }
 
 /**
@@ -10729,6 +10789,54 @@ export function seq<
     consumed: consumed.length + result.consumed,
   });
 
+  const reachableSeqScope = (context: ParserContext<SeqState>) => {
+    let end = Math.min(context.state.index + 1, parsers.length);
+    while (end < parsers.length) {
+      const index = end - 1;
+      const child = parsers[index];
+      if (
+        context.buffer.length > 0 &&
+        !tokenMatchesLeadingName(
+          context.buffer[0],
+          leadingCandidatesAfter(parsers, end),
+        )
+      ) break;
+      if (
+        !parserCanSkipAt(
+          child,
+          getSeqChildState(context.state, index, child),
+          context.exec,
+          index,
+        )
+      ) break;
+      end++;
+    }
+    return combinedOptionScope(
+      parsers.slice(0, end),
+      parsers.slice(0, end).map((_, index) => index),
+    );
+  };
+
+  const seqScope = selectableOptionScope(
+    (selections, arities, context, path = []) => {
+      const initialContext: ParserContext<SeqState> = {
+        state: context == null
+          ? initialState
+          : inheritAnnotations(context.state, initialState),
+        buffer: context?.buffer ?? [],
+        usage: context?.usage ?? [],
+        optionsTerminated: context?.optionsTerminated ?? false,
+        exec: context?.exec == null ? undefined : { ...context.exec, path },
+      };
+      return reachableSeqScope(initialContext)(
+        selections,
+        arities,
+        context,
+        path,
+      );
+    },
+  );
+
   const parseSync = (context: ParserContext<SeqState>): ParseResult => {
     let currentContext = context;
     const allConsumed: string[] = [];
@@ -10736,6 +10844,10 @@ export function seq<
     while (currentContext.state.index < syncParsers.length) {
       const index = currentContext.state.index;
       const parser = syncParsers[index];
+      seqScope.select(
+        currentContext,
+        reachableSeqScope(currentContext),
+      );
       const parserState = getSeqChildState(currentContext.state, index, parser);
 
       if (currentContext.buffer.length < 1) break;
@@ -10761,7 +10873,12 @@ export function seq<
       }
 
       const result = parser.parse(
-        withChildContext(currentContext, index, parserState, parser),
+        withChildContext(
+          forkOptionScope(currentContext),
+          index,
+          parserState,
+          parser,
+        ),
       );
 
       if (!result.success) {
@@ -10775,6 +10892,7 @@ export function seq<
         continue;
       }
 
+      adoptOptionScope(currentContext, result.next);
       const states = updateSeqChildState(
         currentContext.state,
         index,
@@ -10814,6 +10932,10 @@ export function seq<
     while (currentContext.state.index < parsers.length) {
       const index = currentContext.state.index;
       const parser = parsers[index];
+      seqScope.select(
+        currentContext,
+        reachableSeqScope(currentContext),
+      );
       const parserState = getSeqChildState(currentContext.state, index, parser);
 
       if (currentContext.buffer.length < 1) break;
@@ -10839,7 +10961,12 @@ export function seq<
       }
 
       const result = await parser.parse(
-        withChildContext(currentContext, index, parserState, parser),
+        withChildContext(
+          forkOptionScope(currentContext),
+          index,
+          parserState,
+          parser,
+        ),
       );
 
       if (!result.success) {
@@ -10853,6 +10980,7 @@ export function seq<
         continue;
       }
 
+      adoptOptionScope(currentContext, result.next);
       const states = updateSeqChildState(
         currentContext.state,
         index,
@@ -11351,7 +11479,12 @@ export function seq<
   }
 
   defineInheritedAnnotationParser(seqParser);
-  return fluent(seqParser);
+  return fluent(scopeParser(seqParser, seqScope.source, (context) => {
+    seqScope.select(
+      context,
+      reachableSeqScope(context),
+    );
+  }, true));
 }
 
 /**
@@ -13542,7 +13675,15 @@ export function merge(
   // ownership cannot be resolved from the value alone.
   defineParseLanes(mergeParser, mergeParseLanes);
   defineInheritedAnnotationParser(mergeParser);
-  return fluent(mergeParser);
+  return fluent(
+    scopeParser(
+      mergeParser,
+      combinedOptionScope(
+        parsers,
+        parsers.map((_, index) => index),
+      ),
+    ),
+  );
 }
 
 type ConcatParserArity =
@@ -14967,7 +15108,15 @@ export function concat(
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
-  return fluent(concatParser);
+  return fluent(
+    scopeParser(
+      concatParser,
+      combinedOptionScope(
+        parsers,
+        parsers.map((_, index) => index),
+      ),
+    ),
+  );
 }
 
 /**
@@ -15268,7 +15417,7 @@ export function group<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
-  return fluent(groupParser);
+  return fluent(scopeParser(groupParser, combinedOptionScope([parser])));
 }
 
 /**
@@ -15597,6 +15746,12 @@ export function conditional(
 
   type ParseResult = ParserResult<ConditionalState<string>>;
 
+  const optionScope = conditionalOptionScope(
+    discriminator,
+    defaultBranch,
+    branchParsers.map(([, p]) => p),
+  );
+
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<ConditionalState<string>>,
@@ -15681,6 +15836,8 @@ export function conditional(
         const branchParser = syncBranches[value];
 
         if (branchParser) {
+          const branchContext = forkOptionScope(context);
+          optionScope.select(branchContext, branchParser);
           // Try to parse more from the branch
           const discriminatorExec = mergeChildExec(
             context.exec,
@@ -15689,7 +15846,7 @@ export function conditional(
           const branchParseResult = branchParser.parse({
             ...withChildContext(
               {
-                ...context,
+                ...branchContext,
                 ...(discriminatorExec != null
                   ? {
                     exec: discriminatorExec,
@@ -15707,6 +15864,12 @@ export function conditional(
           });
 
           if (branchParseResult.success) {
+            if (
+              discriminatorResult.consumed.length > 0 ||
+              branchParseResult.consumed.length > 0
+            ) {
+              adoptOptionScope(context, branchParseResult.next);
+            }
             const mergedExec = mergeChildExec(
               discriminatorExec,
               branchParseResult.next.exec,
@@ -15752,6 +15915,7 @@ export function conditional(
 
           // Branch parse failed but discriminator succeeded.
           if (discriminatorResult.consumed.length > 0) {
+            optionScope.select(context, branchParser);
             // Discriminator consumed input—commit to the branch even
             // though it hasn't consumed yet (it may on the next call).
             return {
@@ -15808,9 +15972,11 @@ export function conditional(
       ? discriminatorResult.consumed.length
       : discriminatorResult.consumed;
     if (syncDefaultBranch !== undefined) {
+      const defaultContext = forkOptionScope(context);
+      optionScope.select(defaultContext, syncDefaultBranch);
       const defaultResult = syncDefaultBranch.parse(
         withChildContext(
-          context,
+          defaultContext,
           "_branch",
           state.branchState ?? syncDefaultBranch.initialState,
           syncDefaultBranch,
@@ -15833,6 +15999,7 @@ export function conditional(
         // stateful discriminators that could pick a different branch).
         const commitDefault = defaultResult.consumed.length > 0 ||
           context.buffer.length === 0;
+        if (commitDefault) adoptOptionScope(context, defaultResult.next);
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),
@@ -15975,7 +16142,13 @@ export function conditional(
         // optionsTerminated changes the discriminator made (without
         // consuming tokens) propagate to the branch probes.
         const speculationContext = {
-          ...context,
+          ...withOptionScope(
+            context,
+            unionLeadingNames([
+              ...branchParsers.map(([, p]) => p),
+              ...(defaultBranch ? [defaultBranch] : []),
+            ]),
+          ),
           buffer: discriminatorResult.next.buffer,
           optionsTerminated: discriminatorResult.next.optionsTerminated,
           ...(discriminatorExec != null
@@ -16001,7 +16174,7 @@ export function conditional(
         for (const [key, bp] of branchParsers) {
           const branchResult = await bp.parse(
             withChildContext(
-              speculationContext,
+              forkOptionScope(speculationContext),
               "_branch",
               bp.initialState,
               bp,
@@ -16072,11 +16245,12 @@ export function conditional(
               discriminatorExec,
               branchResult.next.exec,
             );
+            optionScope.select(context, bp);
             return {
               success: true,
               provisional: true,
               next: {
-                ...branchResult.next,
+                ...restoreOptionScope(branchResult.next, context),
                 state: {
                   ...state,
                   discriminatorState: annotatedDiscriminatorState,
@@ -16115,7 +16289,7 @@ export function conditional(
         ) {
           const defaultResult = await defaultBranch.parse(
             withChildContext(
-              speculationContext,
+              forkOptionScope(speculationContext),
               "_branch",
               state.branchState ?? defaultBranch.initialState,
               defaultBranch,
@@ -16131,13 +16305,14 @@ export function conditional(
               discriminatorExec ?? context.exec,
               defaultResult.next.exec,
             );
+            optionScope.select(context, defaultBranch);
             return {
               success: true,
               ...(defaultResult.provisional
                 ? { provisional: true as const }
                 : {}),
               next: {
-                ...defaultResult.next,
+                ...restoreOptionScope(defaultResult.next, context),
                 state: {
                   ...state,
                   selectedBranch: { kind: "default" },
@@ -16195,7 +16370,7 @@ export function conditional(
           success: true,
           provisional: true,
           next: {
-            ...speculationContext,
+            ...restoreOptionScope(speculationContext, context),
             state: {
               ...state,
               discriminatorState: annotatedDiscriminatorState,
@@ -16222,6 +16397,8 @@ export function conditional(
         const branchParser = branches[value];
 
         if (branchParser) {
+          const branchContext = forkOptionScope(context);
+          optionScope.select(branchContext, branchParser);
           // Try to parse more from the branch
           const discriminatorExec = mergeChildExec(
             context.exec,
@@ -16230,7 +16407,7 @@ export function conditional(
           const branchParseResult = await branchParser.parse({
             ...withChildContext(
               {
-                ...context,
+                ...branchContext,
                 ...(discriminatorExec != null
                   ? {
                     exec: discriminatorExec,
@@ -16248,6 +16425,12 @@ export function conditional(
           });
 
           if (branchParseResult.success) {
+            if (
+              discriminatorResult.consumed.length > 0 ||
+              branchParseResult.consumed.length > 0
+            ) {
+              adoptOptionScope(context, branchParseResult.next);
+            }
             const mergedExec = mergeChildExec(
               discriminatorExec,
               branchParseResult.next.exec,
@@ -16291,6 +16474,7 @@ export function conditional(
           // Branch parse failed but discriminator succeeded
           // (see sync counterpart for rationale).
           if (discriminatorResult.consumed.length > 0) {
+            optionScope.select(context, branchParser);
             return {
               success: true,
               next: {
@@ -16339,9 +16523,11 @@ export function conditional(
       ? discriminatorResult.consumed.length
       : discriminatorResult.consumed;
     if (defaultBranch !== undefined) {
+      const defaultContext = forkOptionScope(context);
+      optionScope.select(defaultContext, defaultBranch);
       const defaultResult = await defaultBranch.parse(
         withChildContext(
-          context,
+          defaultContext,
           "_branch",
           state.branchState ?? defaultBranch.initialState,
           defaultBranch,
@@ -16361,6 +16547,7 @@ export function conditional(
         // See sync counterpart for rationale on commitDefault.
         const commitDefault = defaultResult.consumed.length > 0 ||
           context.buffer.length === 0;
+        if (commitDefault) adoptOptionScope(context, defaultResult.next);
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),
@@ -17941,9 +18128,11 @@ export function conditional(
         syncBranches[discComplete.value] !== undefined
       ) {
         const resolvedBranch = syncBranches[discComplete.value];
+        const branchContext = forkOptionScope(suggestContext);
+        optionScope.select(branchContext, resolvedBranch);
         yield* resolvedBranch.suggest(
           withChildContext(
-            suggestContext,
+            branchContext,
             "_branch",
             state.branchState ?? resolvedBranch.initialState,
             resolvedBranch,
@@ -17952,9 +18141,11 @@ export function conditional(
         );
       } else if (syncDefaultBranch !== undefined) {
         // Default branch suggestions if available
+        const defaultContext = forkOptionScope(suggestContext);
+        optionScope.select(defaultContext, syncDefaultBranch);
         yield* syncDefaultBranch.suggest(
           withChildContext(
-            suggestContext,
+            defaultContext,
             "_branch",
             state.branchState ?? syncDefaultBranch.initialState,
             syncDefaultBranch,
@@ -18115,9 +18306,11 @@ export function conditional(
           branches[discComplete.value] !== undefined
         ) {
           const resolvedBranch = branches[discComplete.value];
+          const branchContext = forkOptionScope(suggestContext);
+          optionScope.select(branchContext, resolvedBranch);
           yield* resolvedBranch.suggest(
             withChildContext(
-              suggestContext,
+              branchContext,
               "_branch",
               state.branchState ?? resolvedBranch.initialState,
               resolvedBranch,
@@ -18129,9 +18322,11 @@ export function conditional(
       }
       if (!discResolved) {
         if (defaultBranch !== undefined) {
+          const defaultContext = forkOptionScope(suggestContext);
+          optionScope.select(defaultContext, defaultBranch);
           yield* defaultBranch.suggest(
             withChildContext(
-              suggestContext,
+              defaultContext,
               "_branch",
               state.branchState ?? defaultBranch.initialState,
               defaultBranch,
@@ -18502,5 +18697,15 @@ export function conditional(
       enumerable: false,
     });
   }
-  return fluent(conditionalParser);
+  return fluent(
+    scopeParser(conditionalParser, optionScope.source, (context) => {
+      const selected = context.state?.selectedBranch;
+      if (selected != null) {
+        const branch = selected.kind === "default"
+          ? defaultBranch
+          : branches[selected.key];
+        if (branch != null) optionScope.select(context, branch);
+      }
+    }),
+  );
 }

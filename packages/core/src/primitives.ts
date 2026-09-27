@@ -1,4 +1,12 @@
 import {
+  attachedValuePrefix,
+  combinedOptionScope,
+  fullNameOwnsToken,
+  prefixSuggestion,
+  scopeParser,
+  selectableOptionScope,
+} from "./short-option.ts";
+import {
   getWrappedChildParseState,
   getWrappedChildState,
   isAnnotationWrappedInitialState,
@@ -530,15 +538,49 @@ function* suggestOptionSync<T>(
 ): Generator<Suggestion> {
   if (hidden) return;
 
+  if (context.optionsTerminated) return;
+  const waitingForValue = context.buffer.length > 0 &&
+    optionNames.includes(context.buffer[context.buffer.length - 1]);
+  if (
+    valueParser != null && !waitingForValue &&
+    !isTerminalValueState(context.state)
+  ) {
+    const attached = attachedValuePrefix(context, prefix, optionNames);
+    if (attached != null) {
+      if (attached.value.length === 0 && optionNames.includes(prefix)) {
+        yield {
+          kind: "literal",
+          text: prefix,
+          ...(description != null ? { description } : {}),
+        };
+      }
+      if (valueParser.suggest != null) {
+        for (
+          const suggestion of getSuggestionsWithDependency(
+            valueParser,
+            attached.value,
+            context.dependencyRegistry,
+            context.exec,
+          )
+        ) {
+          yield prefixSuggestion(attached.head, suggestion);
+        }
+      }
+      return;
+    }
+  }
   // Check for --option=value format
   const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0) {
+  if (equalsIndex >= 0 && !waitingForValue) {
     // Handle --option=value completion
     const optionPart = prefix.slice(0, equalsIndex);
     const valuePart = prefix.slice(equalsIndex + 1);
 
     // Check if this option matches any of our option names
-    if ((optionNames as readonly string[]).includes(optionPart)) {
+    if (
+      (optionNames as readonly string[]).includes(optionPart) &&
+      !/^-[^-]$/u.test(optionPart)
+    ) {
       if (valueParser && valueParser.suggest) {
         const valueSuggestions = getSuggestionsWithDependency(
           valueParser,
@@ -581,7 +623,7 @@ function* suggestOptionSync<T>(
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
           // Special case: if prefix is exactly "-", only suggest short options
-          if (prefix === "-" && optionName.length !== 2) {
+          if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
             continue;
           }
           yield {
@@ -716,15 +758,49 @@ async function* suggestOptionAsync<T>(
 ): AsyncGenerator<Suggestion> {
   if (hidden) return;
 
+  if (context.optionsTerminated) return;
+  const waitingForValue = context.buffer.length > 0 &&
+    optionNames.includes(context.buffer[context.buffer.length - 1]);
+  if (
+    valueParser != null && !waitingForValue &&
+    !isTerminalValueState(context.state)
+  ) {
+    const attached = attachedValuePrefix(context, prefix, optionNames);
+    if (attached != null) {
+      if (attached.value.length === 0 && optionNames.includes(prefix)) {
+        yield {
+          kind: "literal",
+          text: prefix,
+          ...(description != null ? { description } : {}),
+        };
+      }
+      if (valueParser.suggest != null) {
+        for await (
+          const suggestion of getSuggestionsWithDependencyAsync(
+            valueParser,
+            attached.value,
+            context.dependencyRegistry,
+            context.exec,
+          )
+        ) {
+          yield prefixSuggestion(attached.head, suggestion);
+        }
+      }
+      return;
+    }
+  }
   // Check for --option=value format
   const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0) {
+  if (equalsIndex >= 0 && !waitingForValue) {
     // Handle --option=value completion
     const optionPart = prefix.slice(0, equalsIndex);
     const valuePart = prefix.slice(equalsIndex + 1);
 
     // Check if this option matches any of our option names
-    if ((optionNames as readonly string[]).includes(optionPart)) {
+    if (
+      (optionNames as readonly string[]).includes(optionPart) &&
+      !/^-[^-]$/u.test(optionPart)
+    ) {
       if (valueParser && valueParser.suggest) {
         const valueSuggestions = getSuggestionsWithDependencyAsync(
           valueParser,
@@ -766,7 +842,7 @@ async function* suggestOptionAsync<T>(
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
           // Special case: if prefix is exactly "-", only suggest short options
-          if (prefix === "-" && optionName.length !== 2) {
+          if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
             continue;
           }
           yield {
@@ -867,7 +943,7 @@ async function* suggestArgumentAsync<T>(
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-option=value`, `-o value`,
- * or `/option:value`.
+ * `-ovalue`, or `/option:value`.
  * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
@@ -884,7 +960,7 @@ export function option<M extends Mode, T>(
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-option=value`, `-o value`,
- * or `/option:value`.
+ * `-ovalue`, or `/option:value`.
  * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
@@ -917,7 +993,7 @@ export function option(
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-option=value`, `-o value`,
- * or `/option:value`.
+ * `-ovalue`, or `/option:value`.
  * @param args The {@link OptionName}s to parse, followed by
  *             an optional {@link OptionOptions} object that allows you to
  *             specify a description or other metadata.
@@ -1150,12 +1226,27 @@ export function option<M extends Mode, T>(
         .filter((name) =>
           name.startsWith("--") ||
           name.startsWith("/") ||
-          (name.startsWith("-") && name.length > 2)
+          (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
         )
-        .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
-      for (const prefix of prefixes) {
+        .map((name) => ({
+          optionName: name,
+          prefix: name.startsWith("/") ? `${name}:` : `${name}=`,
+        }));
+      if (
+        valueParser != null &&
+        optionNames.some((name) =>
+          /^-[^-]$/u.test(name) && context.buffer[0].startsWith(name)
+        ) &&
+        !fullNameOwnsToken(context, context.buffer[0])
+      ) {
+        for (const name of optionNames) {
+          if (/^-[^-]$/u.test(name)) {
+            prefixes.push({ optionName: name, prefix: name });
+          }
+        }
+      }
+      for (const { prefix, optionName } of prefixes) {
         if (!context.buffer[0].startsWith(prefix)) continue;
-        const optionName = prefix.slice(0, -1);
         if (hasParsedOptionValue(context.state, valueParser)) {
           return {
             success: false,
@@ -1245,10 +1336,13 @@ export function option<M extends Mode, T>(
       if (valueParser == null) {
         // When the input contains bundled options, e.g., `-abc`
         const shortOptions = optionNames.filter(
-          (name) => name.match(/^-[^-]$/),
+          (name) => name.match(/^-[^-]$/u),
         );
         for (const shortOption of shortOptions) {
-          if (!context.buffer[0].startsWith(shortOption)) continue;
+          if (
+            !context.buffer[0].startsWith(shortOption) ||
+            fullNameOwnsToken(context, context.buffer[0])
+          ) continue;
           if (hasParsedOptionValue(context.state, valueParser)) {
             return {
               success: false,
@@ -1268,11 +1362,11 @@ export function option<M extends Mode, T>(
               ...context,
               state: { success: true, value: true },
               buffer: [
-                `-${context.buffer[0].slice(2)}`,
+                `-${context.buffer[0].slice(shortOption.length)}`,
                 ...context.buffer.slice(1),
               ],
             },
-            consumed: [context.buffer[0].slice(0, 2)],
+            consumed: [context.buffer[0].slice(0, shortOption.length)],
           };
         }
       }
@@ -1792,7 +1886,7 @@ export function flag(
         .filter((name) =>
           name.startsWith("--") ||
           name.startsWith("/") ||
-          (name.startsWith("-") && name.length > 2)
+          (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
         )
         .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
       for (const prefix of prefixes) {
@@ -1810,10 +1904,13 @@ export function flag(
 
       // When the input contains bundled options, e.g., `-abc`
       const shortOptions = optionNames.filter(
-        (name) => name.match(/^-[^-]$/),
+        (name) => name.match(/^-[^-]$/u),
       );
       for (const shortOption of shortOptions) {
-        if (!context.buffer[0].startsWith(shortOption)) continue;
+        if (
+          !context.buffer[0].startsWith(shortOption) ||
+          fullNameOwnsToken(context, context.buffer[0])
+        ) continue;
         if (context.state?.success) {
           return {
             success: false,
@@ -1833,11 +1930,11 @@ export function flag(
             ...context,
             state: { success: true, value: true },
             buffer: [
-              `-${context.buffer[0].slice(2)}`,
+              `-${context.buffer[0].slice(shortOption.length)}`,
               ...context.buffer.slice(1),
             ],
           },
-          consumed: [context.buffer[0].slice(0, 2)],
+          consumed: [context.buffer[0].slice(0, shortOption.length)],
         };
       }
 
@@ -1913,7 +2010,7 @@ export function flag(
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {
             // Special case: if prefix is exactly "-", only suggest short options (single dash + single char)
-            if (prefix === "-" && optionName.length !== 2) {
+            if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
               continue;
             }
             suggestions.push({
@@ -2273,7 +2370,7 @@ export function negatableFlag(
           !name.startsWith("--") &&
           !name.startsWith("/") &&
           !name.startsWith("+") &&
-          !(name.startsWith("-") && name.length > 2)
+          !(name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
         ) {
           continue;
         }
@@ -2293,15 +2390,21 @@ export function negatableFlag(
       }
 
       for (const shortOption of optionNames) {
-        if (!shortOption.match(/^-[^-]$/)) continue;
-        if (!context.buffer[0].startsWith(shortOption)) continue;
+        if (!shortOption.match(/^-[^-]$/u)) continue;
+        if (
+          !context.buffer[0].startsWith(shortOption) ||
+          fullNameOwnsToken(context, context.buffer[0])
+        ) continue;
         return parseMatchedNegatableFlag(
           context,
           shortOption,
           valueByName.get(shortOption)!,
-          [context.buffer[0].slice(0, 2)],
+          [context.buffer[0].slice(0, shortOption.length)],
           1,
-          [`-${context.buffer[0].slice(2)}`, ...context.buffer.slice(1)],
+          [
+            `-${context.buffer[0].slice(shortOption.length)}`,
+            ...context.buffer.slice(1),
+          ],
           options,
         );
       }
@@ -2364,7 +2467,7 @@ export function negatableFlag(
       ) {
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {
-            if (prefix === "-" && optionName.length !== 2) {
+            if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
               continue;
             }
             suggestions.push({ kind: "literal", text: optionName });
@@ -3208,6 +3311,9 @@ export function command<M extends Mode, T, TState>(
   const syncInnerParser = parser as Parser<"sync", T, TState>;
   const asyncInnerParser = parser as Parser<"async", T, TState>;
 
+  const commandScope = selectableOptionScope(() => new Set<string>());
+  const enteredScope = combinedOptionScope([parser], [name]);
+
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
     [Symbol.for("@optique/core/commandParser")]: true,
@@ -3321,6 +3427,7 @@ export function command<M extends Mode, T, TState>(
               : baseError,
           };
         }
+        commandScope.select(context, enteredScope);
         // Command matched, consume it and move to "matched" state
         return {
           success: true,
@@ -3390,13 +3497,23 @@ export function command<M extends Mode, T, TState>(
           () =>
             wrapState(
               syncInnerParser.parse(
-                withChildContext(context, name, innerState, parser.usage),
+                withChildContext(
+                  context,
+                  name,
+                  innerState,
+                  parser.usage,
+                ),
               ),
             ),
           async () =>
             wrapState(
               await parser.parse(
-                withChildContext(context, name, innerState, parser.usage),
+                withChildContext(
+                  context,
+                  name,
+                  innerState,
+                  parser.usage,
+                ),
               ),
             ),
         );
@@ -3703,7 +3820,15 @@ export function command<M extends Mode, T, TState>(
   });
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  return fluent(result as unknown as Parser<M, T, CommandState<TState>>);
+  return fluent(scopeParser(
+    result as unknown as Parser<M, T, CommandState<TState>>,
+    commandScope.source,
+    (context) => {
+      if (normalizeCommandState(context.state) != null) {
+        commandScope.select(context, enteredScope);
+      }
+    },
+  ));
 }
 
 /**

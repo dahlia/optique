@@ -1,3 +1,4 @@
+import { withOptionScopeChild } from "./short-option.ts";
 import type { ExecutionContext, ParserContext } from "./parser.ts";
 import type { Usage } from "./usage.ts";
 
@@ -54,7 +55,7 @@ export function withChildContext<TParentState, TChildState>(
   const dependencyRegistry = context.dependencyRegistry ??
     exec?.dependencyRegistry;
   return {
-    ...context,
+    ...withOptionScopeChild(context, segment),
     state,
     ...(usage != null ? { usage } : {}),
     ...(exec != null

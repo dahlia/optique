@@ -112,6 +112,24 @@ function createRegionConfigContext() {
 }
 
 describe("createPromptAdapter()", () => {
+  it("preserves conditional full names without prompting for CLI values", async () => {
+    const { prompt, calls } = createTestPrompt();
+    const p = object({
+      v: optional(option("-v", string())),
+      c: prompt(
+        conditional(withDefault(option("--mode", choice(["a"])), "a"), {
+          a: option("-verbose"),
+        }),
+        { value: ["a", false] },
+      ),
+    });
+    assert.deepEqual(await parseAsync(p, ["-verbose"]), {
+      success: true,
+      value: { v: undefined, c: ["a", true] },
+    });
+    assert.deepEqual(calls, []);
+  });
+
   it("should require otherwise when when is configured", () => {
     const unconditional = {} satisfies PromptCondition<string>;
     const conditional = {

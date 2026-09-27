@@ -130,3 +130,169 @@ export function extractLeadingCommandNames(usage: Usage): Set<string> {
   collectLeadingCandidates(usage, options, commands);
   return commands;
 }
+
+/** Option arities in the current command. @internal */
+export interface CurrentOptionNames {
+  readonly value: Set<string>;
+  readonly flag: Set<string>;
+}
+
+/** Collects arities along an entered command path. @internal */
+export function collectActiveOptionNames(
+  usage: Usage,
+  commandPath: readonly string[],
+  names: CurrentOptionNames,
+  fromExclusive: boolean,
+  includeDirectAfterCommandOptions: boolean,
+): void {
+  if (commandPath.length === 0) {
+    collectOptionNamesAtCurrentCommandDepth(usage, names, false);
+    return;
+  }
+
+  const [commandName, ...rest] = commandPath;
+  for (let i = 0; i < usage.length; i++) {
+    const term = usage[i];
+    if (term.type === "command" && term.name === commandName) {
+      const remainingUsage = usage.slice(i + 1);
+      if (rest.length === 0) {
+        collectOptionNamesAtCurrentCommandDepth(
+          remainingUsage,
+          names,
+          !fromExclusive && includeDirectAfterCommandOptions,
+        );
+      } else {
+        collectActiveOptionNames(
+          remainingUsage,
+          rest,
+          names,
+          fromExclusive,
+          includeDirectAfterCommandOptions,
+        );
+      }
+    } else if (term.type === "exclusive") {
+      for (const branch of term.terms) {
+        collectActiveOptionNames(
+          branch,
+          commandPath,
+          names,
+          true,
+          includeDirectAfterCommandOptions,
+        );
+      }
+    } else if (
+      term.type === "optional" || term.type === "multiple" ||
+      term.type === "sequence"
+    ) {
+      collectActiveOptionNames(
+        term.terms,
+        commandPath,
+        names,
+        fromExclusive,
+        includeDirectAfterCommandOptions,
+      );
+    }
+  }
+}
+
+/** Collects arities without entering further commands. @internal */
+export function collectOptionNamesAtCurrentCommandDepth(
+  usage: Usage,
+  names: CurrentOptionNames,
+  afterMatchedCommand: boolean,
+): void {
+  for (const term of usage) {
+    if (
+      collectOptionNamesAtCurrentCommandDepthFromTerm(
+        term,
+        names,
+        afterMatchedCommand,
+      )
+    ) {
+      return;
+    }
+  }
+}
+
+function collectOptionNamesAtCurrentCommandDepthFromTerm(
+  term: Usage[number],
+  names: CurrentOptionNames,
+  afterMatchedCommand: boolean,
+): boolean {
+  switch (term.type) {
+    case "command":
+      return !afterMatchedCommand;
+    case "option":
+      if (term.metavar != null) {
+        for (const name of term.names) names.value.add(name);
+      } else {
+        for (const name of term.names) names.flag.add(name);
+      }
+      return false;
+    case "optional":
+    case "multiple":
+    case "sequence":
+      collectOptionNamesAtCurrentCommandDepth(
+        term.terms,
+        names,
+        afterMatchedCommand,
+      );
+      return false;
+    case "exclusive":
+      for (const branch of term.terms) {
+        collectOptionNamesAtCurrentCommandDepth(branch, names, false);
+      }
+      return false;
+    case "argument":
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return false;
+  }
+}
+
+/** Collects scoped root arities across sibling commands. @internal */
+export function collectRootOptionNames(
+  usage: Usage,
+  names: CurrentOptionNames,
+  rootLeadingNames: ReadonlySet<string>,
+): void {
+  for (const term of usage) {
+    collectRootOptionNamesFromTerm(term, names, rootLeadingNames);
+  }
+}
+
+function collectRootOptionNamesFromTerm(
+  term: Usage[number],
+  names: CurrentOptionNames,
+  rootLeadingNames: ReadonlySet<string>,
+): void {
+  switch (term.type) {
+    case "option":
+      for (const name of term.names) {
+        if (!rootLeadingNames.has(name)) continue;
+        if (term.metavar != null) {
+          names.value.add(name);
+        } else {
+          names.flag.add(name);
+        }
+      }
+      return;
+    case "optional":
+    case "multiple":
+    case "sequence":
+      collectRootOptionNames(term.terms, names, rootLeadingNames);
+      return;
+    case "exclusive":
+      for (const branch of term.terms) {
+        collectRootOptionNames(branch, names, rootLeadingNames);
+      }
+      return;
+    case "argument":
+    case "command":
+    case "literal":
+    case "passthrough":
+    case "ellipsis":
+      return;
+  }
+}

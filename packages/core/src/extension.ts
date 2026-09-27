@@ -9,6 +9,7 @@
  * @since 1.0.0
  */
 
+import { inheritOptionScope as inheritScope } from "./short-option.ts";
 import type { Mode, Parser } from "./parser.ts";
 import {
   annotationWrapperRequiresSourceBindingKey,
@@ -123,6 +124,23 @@ export function defineTraits(parser: object, traits: ParserTraits): void {
       enumerable: false,
     });
   }
+}
+
+/**
+ * Preserves a wrapped parser's reachable option names in the same parse path.
+ * Call this when a transparent wrapper constructs a fresh parser object instead
+ * of copying the inner parser with object spread.
+ *
+ * @param parser The wrapper parser to annotate.
+ * @param innerParser The parser that handles the wrapper's CLI input.
+ * @throws {TypeError} If scope metadata cannot be defined on the wrapper.
+ * @since 1.4.0
+ */
+export function inheritOptionScope(
+  parser: object,
+  innerParser: Parser<Mode, unknown, unknown>,
+): void {
+  inheritScope(parser, innerParser);
 }
 
 /**

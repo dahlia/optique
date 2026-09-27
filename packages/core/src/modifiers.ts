@@ -1,4 +1,9 @@
 import {
+  combinedOptionScope,
+  repeatedOptionScope,
+  scopeParser,
+} from "./short-option.ts";
+import {
   getDelegatedAnnotationState,
   hasDelegatedAnnotationCarrier,
   isAnnotationWrappedInitialState,
@@ -1054,7 +1059,7 @@ export function optional<M extends Mode, TValue, TState>(
   defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
-  return fluent(optionalParser);
+  return fluent(scopeParser(optionalParser, combinedOptionScope([parser])));
 }
 
 /**
@@ -1643,7 +1648,7 @@ export function withDefault<
   );
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
-  return fluent(withDefaultParser);
+  return fluent(scopeParser(withDefaultParser, combinedOptionScope([parser])));
 }
 
 /**
@@ -1896,6 +1901,8 @@ export function map<M extends Mode, T, U, TState>(
   // through unchanged, so a wrapped exclusive or command construct stays
   // visible to a parent's scheduling expansion.
   defineForwardedEffectfulSchedulingNodes(mappedParser, parser);
+  // map() copies parse/suggest and their enumerable scope metadata. Reuse
+  // that scope rather than stacking another wrapper around the same calls.
   return fluent(mappedParser);
 }
 
@@ -3416,7 +3423,7 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
-  return fluent(resultParser);
+  return fluent(scopeParser(resultParser, repeatedOptionScope(parser)));
 }
 
 /**
@@ -3611,7 +3618,7 @@ export function nonEmpty<M extends Mode, T, TState>(
   // through unchanged, so a wrapped exclusive or command construct stays
   // visible to a parent's scheduling expansion.
   defineForwardedEffectfulSchedulingNodes(nonEmptyParser, parser);
-  return fluent(nonEmptyParser);
+  return fluent(scopeParser(nonEmptyParser, combinedOptionScope([parser])));
 }
 
 const fluentParserMarker = Symbol.for("@optique/core/fluent");

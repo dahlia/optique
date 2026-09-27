@@ -10,6 +10,7 @@ import {
   defineTraits,
   delegateSuggestNodes,
   getTraits,
+  inheritOptionScope,
   injectAnnotations,
   mapSourceMetadata,
   type ParserSourceMetadata,
@@ -356,6 +357,7 @@ export function bindKeyring<M extends Mode, TState>(
       : {}),
   };
 
+  inheritOptionScope(boundParser, parser);
   defineTraits(boundParser, {
     inheritsAnnotations: true,
     completesFromSource: true,

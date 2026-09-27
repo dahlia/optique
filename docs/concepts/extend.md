@@ -263,7 +263,7 @@ Optique exposes a few low-level helper modules for custom parser authors:
     `injectAnnotations()`, `inheritAnnotations()`,
     `isInjectedAnnotationState()`, `unwrapInjectedAnnotationState()`,
     `withAnnotationView()`, `dispatchByMode()`, `mapModeValue()`,
-    `wrapForMode()`, `delegateSuggestNodes()`, and
+    `wrapForMode()`, `inheritOptionScope()`, `delegateSuggestNodes()`, and
     `mapSourceMetadata()`.
  -  `@optique/core/fluent`: Decorate a custom parser with method-style
     modifier helpers using `fluent()` when you want it to support calls such as
@@ -882,6 +882,12 @@ API reference
 
 `getTraits(parser)`
 :   Reads those stable extension traits back from a parser.
+
+`inheritOptionScope(parser, innerParser)`
+:   Preserves the inner parser's reachable option names when a transparent
+    wrapper delegates CLI parsing at the same execution path. Call this when
+    constructing a fresh parser object so conditional branches still reserve
+    single-dash full names before sibling short options consume them.
 
 `delegateSuggestNodes(innerParser, outerParser, state, path, innerState, position?)`
 :   Reuses the wrapped parser's suggest-time runtime nodes while keeping the
