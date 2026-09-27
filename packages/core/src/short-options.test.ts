@@ -22,6 +22,7 @@ import {
 } from "#src/primitives.ts";
 import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
 import {
+  type ExecutionContext,
   parseAsync,
   parseSync,
   suggestAsync,
@@ -112,6 +113,65 @@ describe("attached short option values", () => {
       !parseSync(object({ n: option("-n", string()), x: option("-x") }), [
         "-zn5",
       ]).success,
+    );
+  });
+  it("probes discriminators using their actual child execution path", async () => {
+    const inner = constant("a");
+    const discriminator = (path: readonly PropertyKey[]) => ({
+      ...inner,
+      canSkip: (_state: typeof inner.initialState, exec?: ExecutionContext) =>
+        exec?.path.length === path.length &&
+        path.every((segment, index) => exec.path[index] === segment),
+    });
+    assert.deepEqual(
+      parseSync(
+        conditional(discriminator(["_discriminator"]), {
+          a: option("-verbose"),
+        }),
+        ["-verbose"],
+      ),
+      {
+        success: true,
+        value: ["a", true],
+      },
+    );
+    const child = discriminator(["c", "_discriminator"]);
+    const p = object({
+      v: optional(option("-v", string())),
+      c: conditional(child, { a: option("-verbose") }),
+    });
+    assert.deepEqual(parseSync(p, ["-verbose"]), {
+      success: true,
+      value: { v: undefined, c: ["a", true] },
+    });
+    const asyncChild = {
+      ...child,
+      mode: "async" as const,
+      parse: (context: Parameters<typeof child.parse>[0]) =>
+        Promise.resolve(child.parse(context)),
+      complete: (
+        state: Parameters<typeof child.complete>[0],
+        exec?: ExecutionContext,
+      ) => Promise.resolve(child.complete(state, exec)),
+      suggest: async function* (
+        context: Parameters<typeof child.suggest>[0],
+        prefix: string,
+      ) {
+        yield* child.suggest(context, prefix);
+      },
+    };
+    assert.deepEqual(
+      await parseAsync(
+        object({
+          v: optional(option("-v", string())),
+          c: conditional(asyncChild, { a: option("-verbose") }),
+        }),
+        ["-verbose"],
+      ),
+      {
+        success: true,
+        value: { v: undefined, c: ["a", true] },
+      },
     );
   });
   it("uses aliases and existing occurrence policy", () => {

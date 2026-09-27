@@ -1,3 +1,4 @@
+import { withChildExecPath } from "./execution-context.ts";
 import { mapModeValue } from "./internal/mode-dispatch.ts";
 import { inheritAnnotations } from "./internal/annotations.ts";
 import type { Mode, Parser, ParserContext, Suggestion } from "./parser.ts";
@@ -193,7 +194,10 @@ export function conditionalOptionScope(
       context == null
         ? discriminator.initialState
         : inheritAnnotations(context.state, discriminator.initialState),
-      context?.exec,
+      context?.exec == null ? undefined : withChildExecPath({
+        ...context.exec,
+        path: path ?? scopePath(context),
+      }, "_discriminator"),
     ) === true;
     return combinedOptionScope([
       discriminator,
