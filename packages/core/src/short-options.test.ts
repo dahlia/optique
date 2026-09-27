@@ -20,7 +20,7 @@ import {
   negatableFlag,
   option,
 } from "#src/primitives.ts";
-import { multiple, optional, withDefault } from "#src/modifiers.ts";
+import { map, multiple, optional, withDefault } from "#src/modifiers.ts";
 import {
   parseAsync,
   parseSync,
@@ -386,6 +386,7 @@ describe("attached short option values", () => {
         optional(p),
         withDefault(p, ["fallback", false] as const),
         group("Branch", p),
+        map(p, (value) => value),
       ]
     ) {
       assert.deepEqual(

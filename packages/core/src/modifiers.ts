@@ -1897,7 +1897,9 @@ export function map<M extends Mode, T, U, TState>(
   // through unchanged, so a wrapped exclusive or command construct stays
   // visible to a parent's scheduling expansion.
   defineForwardedEffectfulSchedulingNodes(mappedParser, parser);
-  return fluent(scopeParser(mappedParser, combinedOptionScope([parser])));
+  // map() copies parse/suggest and their enumerable scope metadata. Reuse
+  // that scope rather than stacking another wrapper around the same calls.
+  return fluent(mappedParser);
 }
 
 /**
