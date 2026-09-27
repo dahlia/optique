@@ -1,3 +1,4 @@
+import { mapModeValue } from "./internal/mode-dispatch.ts";
 import { inheritAnnotations } from "./internal/annotations.ts";
 import type { Mode, Parser, ParserContext, Suggestion } from "./parser.ts";
 import { extractOptionNames } from "./usage.ts";
@@ -7,13 +8,16 @@ import {
 } from "./usage-internals.ts";
 
 const optionScopeKey: unique symbol = Symbol("optionScope");
+const optionPathKey: unique symbol = Symbol("optionScopePath");
 const scopeSourceKey: unique symbol = Symbol("optionScopeSource");
 type ScopeSource = (
   selections: ReadonlyMap<ScopeSource, ScopeSource>,
   arities?: CurrentOptionNames,
   context?: ParserContext<unknown>,
+  path?: readonly PropertyKey[],
 ) => ReadonlySet<string>;
 interface ScopedContext {
+  readonly [optionPathKey]?: readonly PropertyKey[];
   readonly [optionScopeKey]?: {
     readonly names: ReadonlySet<string>;
     readonly sources: ReadonlySet<ScopeSource>;
@@ -23,6 +27,54 @@ interface ScopedContext {
 interface ScopedParser {
   readonly [scopeSourceKey]?: ScopeSource;
 }
+interface ScopeNode {
+  readonly children: Map<PropertyKey, ScopeNode>;
+  readonly bound: ScopeSource;
+}
+const scopeLocations = new WeakMap<ScopeSource, readonly PropertyKey[]>();
+const boundScopes = new WeakMap<ScopeSource, ScopeNode>();
+function bindScope(
+  source: ScopeSource,
+  path: readonly PropertyKey[],
+): ScopeSource {
+  let node = boundScopes.get(source);
+  if (node == null) {
+    node = {
+      children: new Map(),
+      bound: (selections, arities, context) =>
+        source(selections, arities, context, []),
+    };
+    boundScopes.set(source, node);
+    scopeLocations.set(node.bound, []);
+  }
+  for (let i = 0; i < path.length; i++) {
+    let child: ScopeNode | undefined = node.children.get(path[i]);
+    if (child == null) {
+      const occurrence = path.slice(0, i + 1);
+      child = {
+        children: new Map(),
+        bound: (selections, arities, context) =>
+          source(selections, arities, context, occurrence),
+      };
+      node.children.set(path[i], child);
+      scopeLocations.set(child.bound, occurrence);
+    }
+    node = child;
+  }
+  return node.bound;
+}
+function scopePath(context: ParserContext<unknown>): readonly PropertyKey[] {
+  return context.exec?.path ?? (context as ScopedContext)[optionPathKey] ?? [];
+}
+
+/** Tracks child occurrences even for contexts without execution metadata. @internal */
+export function withOptionScopeChild<S>(
+  context: ParserContext<S>,
+  segment: PropertyKey,
+): ParserContext<S> & ScopedContext {
+  return { ...context, [optionPathKey]: [...scopePath(context), segment] };
+}
+
 const primitiveScopes = new WeakMap<object, ScopeSource>();
 function parserScope(parser: Parser<Mode, unknown, unknown>): ScopeSource {
   const declared = (parser as ScopedParser)[scopeSourceKey];
@@ -43,24 +95,70 @@ function parserScope(parser: Parser<Mode, unknown, unknown>): ScopeSource {
 /** Combines declarations without flattening conditional ownership. @internal */
 export function combinedOptionScope(
   parsers: readonly Parser<Mode, unknown, unknown>[],
+  segments?: readonly PropertyKey[],
 ): ScopeSource {
-  return (selections, arities, context) =>
+  return (selections, arities, context, path = []) =>
     new Set(
       parsers.flatMap((
         parser,
-      ) => [...parserScope(parser)(selections, arities, context)]),
+        index,
+      ) => [
+        ...parserScope(parser)(
+          selections,
+          arities,
+          context,
+          segments == null ? path : [...path, segments[index]],
+        ),
+      ]),
     );
+}
+
+/** Evaluates repeated declarations at their actual item occurrences. @internal */
+export function repeatedOptionScope(
+  parser: Parser<Mode, unknown, unknown>,
+): ScopeSource {
+  return (selections, arities, context, path = []) => {
+    const indices = new Set<number>();
+    const collect = (location: readonly PropertyKey[] | undefined): void => {
+      if (
+        location != null &&
+        path.every((segment, index) => location[index] === segment)
+      ) {
+        const index = location[path.length];
+        if (typeof index === "number") indices.add(index);
+      }
+    };
+    for (const selected of selections.keys()) {
+      collect(scopeLocations.get(selected));
+    }
+    if (context != null) collect(scopePath(context));
+    // Before an item has selected a route, its initial declarations still
+    // own the token. Later items keep earlier committed routes reserved.
+    if (indices.size === 0) indices.add(0);
+    return new Set(
+      [...indices].flatMap((
+        index,
+      ) => [
+        ...parserScope(parser)(selections, arities, context, [...path, index]),
+      ]),
+    );
+  };
 }
 
 /** Tracks declarations after a command or discriminator routes input. @internal */
 export function selectableOptionScope(initial: ScopeSource) {
-  const source: ScopeSource = (selections, arities, context) =>
-    (selections.get(source) ?? initial)(selections, arities, context);
+  const source: ScopeSource = (selections, arities, context, path = []) =>
+    (selections.get(bindScope(source, path)) ?? initial)(
+      selections,
+      arities,
+      context,
+      path,
+    );
   return {
     source,
     select(context: ParserContext<unknown>, selected: ScopeSource): void {
       (context as ScopedContext)[optionScopeKey]?.selections.set(
-        source,
+        bindScope(source, scopePath(context)),
         selected,
       );
     },
@@ -73,7 +171,7 @@ export function conditionalOptionScope(
   fallback?: Parser<Mode, unknown, unknown>,
   candidates: readonly Parser<Mode, unknown, unknown>[] = [],
 ) {
-  const scope = selectableOptionScope((selections, arities, context) => {
+  const scope = selectableOptionScope((selections, arities, context, path) => {
     const canSkip = discriminator.canSkip?.(
       context == null
         ? discriminator.initialState
@@ -84,7 +182,11 @@ export function conditionalOptionScope(
       discriminator,
       ...(canSkip ? candidates : []),
       ...(fallback == null ? [] : [fallback]),
-    ])(selections, arities, context);
+    ], [
+      "_discriminator",
+      ...(canSkip ? candidates.map(() => "_branch") : []),
+      ...(fallback == null ? [] : ["_branch"]),
+    ])(selections, arities, context, path);
   });
   return {
     source: scope.source,
@@ -92,7 +194,13 @@ export function conditionalOptionScope(
       context: ParserContext<unknown>,
       branch: Parser<Mode, unknown, unknown>,
     ): void {
-      scope.select(context, combinedOptionScope([discriminator, branch]));
+      scope.select(
+        context,
+        combinedOptionScope([discriminator, branch], [
+          "_discriminator",
+          "_branch",
+        ]),
+      );
     },
   };
 }
@@ -133,13 +241,22 @@ export function withOptionScope<S>(
 export function withParserOptionScope<S>(
   context: ParserContext<S>,
   parser: Parser<Mode, unknown, unknown>,
+  segment?: PropertyKey,
 ): ParserContext<S> & ScopedContext {
   const inherited = (context as ScopedContext)[optionScopeKey];
   return {
     ...context,
     [optionScopeKey]: {
       names: inherited?.names ?? new Set(),
-      sources: new Set([...(inherited?.sources ?? []), parserScope(parser)]),
+      sources: new Set([
+        ...(inherited?.sources ?? []),
+        bindScope(
+          parserScope(parser),
+          segment == null
+            ? scopePath(context)
+            : [...scopePath(context), segment],
+        ),
+      ]),
       selections: inherited?.selections ?? new Map(),
     },
   };
@@ -197,6 +314,7 @@ export function scopeParser<M extends Mode, T, S>(
   parser: Parser<M, T, S>,
   source: ScopeSource = () => parser.leadingNames,
   prepare?: (context: ParserContext<S>) => void,
+  isolate = false,
 ): Parser<M, T, S> {
   const parse = parser.parse;
   const suggest = parser.suggest;
@@ -207,9 +325,34 @@ export function scopeParser<M extends Mode, T, S>(
       configurable: true,
       writable: true,
       value: (context: ParserContext<S>) => {
-        const scoped = withParserOptionScope(context, parser);
+        const scoped = withParserOptionScope(
+          isolate ? forkOptionScope(context) : context,
+          parser,
+        );
         prepare?.(scoped);
-        return parse.call(parser, scoped);
+        return mapModeValue(
+          parser.mode,
+          parse.call(parser, scoped),
+          (result) => {
+            if (!result.success) return result;
+            let next: ParserContext<S> & ScopedContext = result.next;
+            if (isolate) {
+              adoptOptionScope(context, next);
+              const parent = (context as ScopedContext)[optionScopeKey];
+              const child = (next as ScopedContext)[optionScopeKey];
+              if (parent != null && child != null) {
+                next = {
+                  ...next,
+                  [optionScopeKey]: { ...child, selections: parent.selections },
+                };
+              }
+            }
+            return {
+              ...result,
+              next: { ...next, [optionPathKey]: scopePath(context) },
+            };
+          },
+        );
       },
     },
     suggest: {
@@ -234,8 +377,8 @@ export function fullNameOwnsToken(
   if (!/^-[^-]/.test(token)) return false;
   for (const name of getOptionScope(context)) {
     if (
-      name.startsWith("-") && !name.startsWith("--") && name.length > 2 &&
-      !/^-[^-]$/u.test(name) &&
+      name.startsWith("-") && !name.startsWith("--") &&
+      name.length > 2 && !/^-[^-]$/u.test(name) &&
       (token === name || token.startsWith(`${name}=`))
     ) return true;
   }
@@ -265,8 +408,8 @@ export function attachedValuePrefix(
     const remainder = `-${prefix.slice(index)}`;
     for (const name of scope) {
       if (
-        name.startsWith("-") && !name.startsWith("--") && name.length > 2 &&
-        !/^-[^-]$/u.test(name) &&
+        name.startsWith("-") && !name.startsWith("--") &&
+        name.length > 2 && !/^-[^-]$/u.test(name) &&
         (name.startsWith(remainder) || remainder.startsWith(`${name}=`))
       ) return undefined;
     }

@@ -212,12 +212,8 @@ function withChildContext<TState>(
   const childState = parser == null
     ? state
     : getParseChildState(context.state, state, parser) as TState;
-  return withSharedChildContext(
-    parser == null ? context : withParserOptionScope(context, parser),
-    segment,
-    childState,
-    usage,
-  );
+  const child = withSharedChildContext(context, segment, childState, usage);
+  return parser == null ? child : withParserOptionScope(child, parser);
 }
 
 function isUnmatchedDependencyState(
@@ -5222,7 +5218,7 @@ export function or(
         unknown,
         [number, ParserResult<unknown>] | undefined
       >,
-      combinedOptionScope(parsers),
+      combinedOptionScope(parsers, parsers.map((_, index) => index)),
     ),
   );
 }
@@ -5913,7 +5909,7 @@ function createLongestMatch(
         unknown,
         [number, ParserResult<unknown>] | undefined
       >,
-      combinedOptionScope(parsers),
+      combinedOptionScope(parsers, parsers.map((_, index) => index)),
     ),
   );
 }
@@ -7221,6 +7217,7 @@ export function object<
     if (result.consumed.length === 0 && result.next.state === fieldState) {
       return { success: true, next: context, consumed: [] };
     }
+    adoptOptionScope(context, result.next);
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
     const nextState = result.next.state === fieldState ? context.state : {
       ...(context.state as Record<string | symbol, unknown>),
@@ -7265,7 +7262,12 @@ export function object<
           combinedMode,
           () => {
             const result = (parser as Parser<"sync", unknown, unknown>).parse(
-              withChildContext(context, field, fieldState, parser),
+              withChildContext(
+                forkOptionScope(context),
+                field,
+                fieldState,
+                parser,
+              ),
             );
             return adaptFieldLaneResult(
               context,
@@ -7277,7 +7279,12 @@ export function object<
           },
           async () => {
             const result = await parser.parse(
-              withChildContext(context, field, fieldState, parser),
+              withChildContext(
+                forkOptionScope(context),
+                field,
+                fieldState,
+                parser,
+              ),
             );
             return adaptFieldLaneResult(
               context,
@@ -7315,7 +7322,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             getFieldState(field, parser),
             parser,
@@ -7323,6 +7330,7 @@ export function object<
         );
 
         if (result.success && result.consumed.length > 0) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -7386,7 +7394,7 @@ export function object<
         const fieldState = getFieldState(field, parser);
         const result = typedParser.parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             fieldState,
             parser,
@@ -7396,6 +7404,7 @@ export function object<
           result.success && result.consumed.length === 0 &&
           result.next.state !== fieldState
         ) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -7508,7 +7517,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         const resultOrPromise = parser.parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             getFieldState(field, parser),
             parser,
@@ -7517,6 +7526,7 @@ export function object<
         const result = await resultOrPromise;
 
         if (result.success && result.consumed.length > 0) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -7570,7 +7580,7 @@ export function object<
         const fieldState = getFieldState(field, parser);
         const resultOrPromise = parser.parse(
           withChildContext(
-            currentContext,
+            forkOptionScope(currentContext),
             field,
             fieldState,
             parser,
@@ -7581,6 +7591,7 @@ export function object<
           result.success && result.consumed.length === 0 &&
           result.next.state !== fieldState
         ) {
+          adoptOptionScope(currentContext, result.next);
           const mergedExec = mergeChildExec(
             currentContext.exec,
             result.next.exec,
@@ -8397,7 +8408,12 @@ export function object<
   return fluent(
     scopeParser(
       objectParser,
-      combinedOptionScope(parserPairs.map(([, p]) => p)),
+      combinedOptionScope(
+        parserPairs.map(([, p]) => p),
+        parserPairs.map(([field]) => field),
+      ),
+      undefined,
+      true,
     ),
   );
 }
@@ -8463,8 +8479,8 @@ function tokenMatchesLeadingName(
   for (const name of candidates.optionNames) {
     if (
       token === name ||
-      name.startsWith("-") && !name.startsWith("--") && name.length > 2 &&
-        !/^-[^-]$/u.test(name) &&
+      name.startsWith("-") && !name.startsWith("--") &&
+        name.length > 2 && !/^-[^-]$/u.test(name) &&
         token.startsWith(`${name}=`)
     ) return true;
   }
@@ -8902,7 +8918,7 @@ function advanceSeqSuggestContextSync(
   while (currentContext.state.index < parsers.length) {
     const index = currentContext.state.index;
     const parser = parsers[index];
-    currentContext = withParserOptionScope(currentContext, parser);
+    currentContext = withParserOptionScope(currentContext, parser, index);
     const parserState = getSeqChildState(currentContext.state, index, parser);
 
     if (currentContext.buffer.length < 1) break;
@@ -8958,7 +8974,7 @@ async function advanceSeqSuggestContextAsync(
   while (currentContext.state.index < parsers.length) {
     const index = currentContext.state.index;
     const parser = parsers[index];
-    currentContext = withParserOptionScope(currentContext, parser);
+    currentContext = withParserOptionScope(currentContext, parser, index);
     const parserState = getSeqChildState(currentContext.state, index, parser);
 
     if (currentContext.buffer.length < 1) break;
@@ -10620,7 +10636,15 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
-  return fluent(scopeParser(tupleParser, combinedOptionScope(parsers)));
+  return fluent(
+    scopeParser(
+      tupleParser,
+      combinedOptionScope(
+        parsers,
+        parsers.map((_, index) => index),
+      ),
+    ),
+  );
 }
 
 /**
@@ -10787,7 +10811,10 @@ export function seq<
       ) break;
       end++;
     }
-    return combinedOptionScope(parsers.slice(0, end));
+    return combinedOptionScope(
+      parsers.slice(0, end),
+      parsers.slice(0, end).map((_, index) => index),
+    );
   };
 
   const seqScope = selectableOptionScope(reachableSeqScope({
@@ -10808,7 +10835,6 @@ export function seq<
         currentContext,
         reachableSeqScope(currentContext),
       );
-      currentContext = withParserOptionScope(currentContext, parser);
       const parserState = getSeqChildState(currentContext.state, index, parser);
 
       if (currentContext.buffer.length < 1) break;
@@ -10834,7 +10860,12 @@ export function seq<
       }
 
       const result = parser.parse(
-        withChildContext(currentContext, index, parserState, parser),
+        withChildContext(
+          forkOptionScope(currentContext),
+          index,
+          parserState,
+          parser,
+        ),
       );
 
       if (!result.success) {
@@ -10848,6 +10879,7 @@ export function seq<
         continue;
       }
 
+      adoptOptionScope(currentContext, result.next);
       const states = updateSeqChildState(
         currentContext.state,
         index,
@@ -10891,7 +10923,6 @@ export function seq<
         currentContext,
         reachableSeqScope(currentContext),
       );
-      currentContext = withParserOptionScope(currentContext, parser);
       const parserState = getSeqChildState(currentContext.state, index, parser);
 
       if (currentContext.buffer.length < 1) break;
@@ -10917,7 +10948,12 @@ export function seq<
       }
 
       const result = await parser.parse(
-        withChildContext(currentContext, index, parserState, parser),
+        withChildContext(
+          forkOptionScope(currentContext),
+          index,
+          parserState,
+          parser,
+        ),
       );
 
       if (!result.success) {
@@ -10931,6 +10967,7 @@ export function seq<
         continue;
       }
 
+      adoptOptionScope(currentContext, result.next);
       const states = updateSeqChildState(
         currentContext.state,
         index,
@@ -11434,7 +11471,7 @@ export function seq<
       context,
       reachableSeqScope(context),
     );
-  }));
+  }, true));
 }
 
 /**
@@ -13625,7 +13662,15 @@ export function merge(
   // ownership cannot be resolved from the value alone.
   defineParseLanes(mergeParser, mergeParseLanes);
   defineInheritedAnnotationParser(mergeParser);
-  return fluent(scopeParser(mergeParser, combinedOptionScope(parsers)));
+  return fluent(
+    scopeParser(
+      mergeParser,
+      combinedOptionScope(
+        parsers,
+        parsers.map((_, index) => index),
+      ),
+    ),
+  );
 }
 
 type ConcatParserArity =
@@ -15050,7 +15095,15 @@ export function concat(
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
-  return fluent(scopeParser(concatParser, combinedOptionScope(parsers)));
+  return fluent(
+    scopeParser(
+      concatParser,
+      combinedOptionScope(
+        parsers,
+        parsers.map((_, index) => index),
+      ),
+    ),
+  );
 }
 
 /**

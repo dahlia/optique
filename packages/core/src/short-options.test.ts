@@ -156,6 +156,51 @@ describe("attached short option values", () => {
       },
     );
   });
+  it("keeps routes of reused conditional occurrences", async () => {
+    for (const discriminator of [choice(["a", "b"]), asyncString()]) {
+      const shared = conditional(option("--mode", discriminator), {
+        a: option("-verbose"),
+        b: option("-other"),
+      });
+      const p = object({
+        first: shared,
+        second: shared,
+        v: optional(option("-v", string())),
+      }, { allowDuplicates: true });
+      const result = await parseAsync(p, [
+        "--mode",
+        "a",
+        "--mode",
+        "b",
+        "-verbose",
+        "-other",
+        "-verbose",
+      ]);
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.ok(formatMessage(result.error).includes("multiple times"));
+      }
+    }
+  });
+
+  it("keeps repeated parser routes while dropping inactive defaults", () => {
+    const branch = conditional(option("--mode", choice(["a"])), {
+      a: option("-p", string()),
+    }, option("-port"));
+    assert.deepEqual(parseSync(multiple(branch), ["--mode", "a", "-port"]), {
+      success: true,
+      value: [["a", "ort"]],
+    });
+  });
+  it("keeps repeated routes through nested constructs", () => {
+    const branch = conditional(option("--mode", choice(["a"])), {
+      a: option("-p", string()),
+    }, option("-port"));
+    assert.deepEqual(
+      parseSync(multiple(object({ branch })), ["--mode", "a", "-port"]),
+      { success: true, value: [{ branch: ["a", "ort"] }] },
+    );
+  });
   it("recognizes Unicode short names when skipping sequence fields and completing names", async () => {
     assert.deepEqual(
       parseSync(
@@ -181,6 +226,46 @@ describe("attached short option values", () => {
         "-🙂",
       ),
     );
+  });
+  it("lets a successful object alternative ignore a failed sequence's routes", async () => {
+    for (const value of [string(), asyncString()]) {
+      const p = object({
+        failed: optional(
+          seq(
+            command("build", option("-verbose")),
+            option("--required", value),
+          ),
+        ),
+        fallback: seq(
+          argument(value),
+          option("-v", string()),
+          argument(string()),
+        ),
+      });
+      assert.deepEqual(await parseAsync(p, ["build", "-verbose", "bad"]), {
+        success: true,
+        value: { failed: undefined, fallback: ["build", "erbose", "bad"] },
+      });
+    }
+  });
+  it("shares committed discriminator routes after isolated parses", async () => {
+    for (const value of [choice(["a"]), asyncString()]) {
+      const p = object({
+        v: optional(option("-v", string())),
+        route: conditional(
+          map(seq(option("--mode", value)), ([mode]) => mode),
+          { a: option("-verbose") },
+        ),
+        other: option("--other"),
+      });
+      assert.deepEqual(
+        await parseAsync(p, ["--mode", "a", "--other", "-verbose"]),
+        {
+          success: true,
+          value: { v: undefined, route: ["a", true], other: true },
+        },
+      );
+    }
   });
   it("works asynchronously and replays dependent attached values", async () => {
     assert.deepEqual(

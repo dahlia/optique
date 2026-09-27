@@ -1,4 +1,8 @@
-import { combinedOptionScope, scopeParser } from "./short-option.ts";
+import {
+  combinedOptionScope,
+  repeatedOptionScope,
+  scopeParser,
+} from "./short-option.ts";
 import {
   getDelegatedAnnotationState,
   hasDelegatedAnnotationCarrier,
@@ -3419,7 +3423,7 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
-  return fluent(scopeParser(resultParser, combinedOptionScope([parser])));
+  return fluent(scopeParser(resultParser, repeatedOptionScope(parser)));
 }
 
 /**

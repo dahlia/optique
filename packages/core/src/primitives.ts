@@ -5,7 +5,6 @@ import {
   prefixSuggestion,
   scopeParser,
   selectableOptionScope,
-  withParserOptionScope,
 } from "./short-option.ts";
 import {
   getWrappedChildParseState,
@@ -3185,7 +3184,6 @@ function* suggestCommandSync<T, TState>(
   }
 
   const state = normalizeCommandState(context.state);
-  if (state != null) context = withParserOptionScope(context, parser);
 
   // Handle different command states
   if (state === undefined) {
@@ -3238,7 +3236,6 @@ async function* suggestCommandAsync<T, TState>(
   }
 
   const state = normalizeCommandState(context.state);
-  if (state != null) context = withParserOptionScope(context, parser);
 
   // Handle different command states
   if (state === undefined) {
@@ -3315,7 +3312,7 @@ export function command<M extends Mode, T, TState>(
   const asyncInnerParser = parser as Parser<"async", T, TState>;
 
   const commandScope = selectableOptionScope(() => new Set(commandNames));
-  const enteredScope = combinedOptionScope([parser]);
+  const enteredScope = combinedOptionScope([parser], [name]);
 
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
@@ -3501,7 +3498,7 @@ export function command<M extends Mode, T, TState>(
             wrapState(
               syncInnerParser.parse(
                 withChildContext(
-                  withParserOptionScope(context, parser),
+                  context,
                   name,
                   innerState,
                   parser.usage,
@@ -3512,7 +3509,7 @@ export function command<M extends Mode, T, TState>(
             wrapState(
               await parser.parse(
                 withChildContext(
-                  withParserOptionScope(context, parser),
+                  context,
                   name,
                   innerState,
                   parser.usage,
