@@ -1,4 +1,13 @@
 import {
+  attachedValuePrefix,
+  combinedOptionScope,
+  fullNameOwnsToken,
+  prefixSuggestion,
+  scopeParser,
+  selectableOptionScope,
+  withParserOptionScope,
+} from "./short-option.ts";
+import {
   getWrappedChildParseState,
   getWrappedChildState,
   isAnnotationWrappedInitialState,
@@ -530,15 +539,49 @@ function* suggestOptionSync<T>(
 ): Generator<Suggestion> {
   if (hidden) return;
 
+  if (context.optionsTerminated) return;
+  const waitingForValue = context.buffer.length > 0 &&
+    optionNames.includes(context.buffer[context.buffer.length - 1]);
+  if (
+    valueParser != null && !waitingForValue &&
+    !isTerminalValueState(context.state)
+  ) {
+    const attached = attachedValuePrefix(context, prefix, optionNames);
+    if (attached != null) {
+      if (attached.value.length === 0 && optionNames.includes(prefix)) {
+        yield {
+          kind: "literal",
+          text: prefix,
+          ...(description != null ? { description } : {}),
+        };
+      }
+      if (valueParser.suggest != null) {
+        for (
+          const suggestion of getSuggestionsWithDependency(
+            valueParser,
+            attached.value,
+            context.dependencyRegistry,
+            context.exec,
+          )
+        ) {
+          yield prefixSuggestion(attached.head, suggestion);
+        }
+      }
+      return;
+    }
+  }
   // Check for --option=value format
   const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0) {
+  if (equalsIndex >= 0 && !waitingForValue) {
     // Handle --option=value completion
     const optionPart = prefix.slice(0, equalsIndex);
     const valuePart = prefix.slice(equalsIndex + 1);
 
     // Check if this option matches any of our option names
-    if ((optionNames as readonly string[]).includes(optionPart)) {
+    if (
+      (optionNames as readonly string[]).includes(optionPart) &&
+      !/^-[^-]$/.test(optionPart)
+    ) {
       if (valueParser && valueParser.suggest) {
         const valueSuggestions = getSuggestionsWithDependency(
           valueParser,
@@ -716,15 +759,49 @@ async function* suggestOptionAsync<T>(
 ): AsyncGenerator<Suggestion> {
   if (hidden) return;
 
+  if (context.optionsTerminated) return;
+  const waitingForValue = context.buffer.length > 0 &&
+    optionNames.includes(context.buffer[context.buffer.length - 1]);
+  if (
+    valueParser != null && !waitingForValue &&
+    !isTerminalValueState(context.state)
+  ) {
+    const attached = attachedValuePrefix(context, prefix, optionNames);
+    if (attached != null) {
+      if (attached.value.length === 0 && optionNames.includes(prefix)) {
+        yield {
+          kind: "literal",
+          text: prefix,
+          ...(description != null ? { description } : {}),
+        };
+      }
+      if (valueParser.suggest != null) {
+        for await (
+          const suggestion of getSuggestionsWithDependencyAsync(
+            valueParser,
+            attached.value,
+            context.dependencyRegistry,
+            context.exec,
+          )
+        ) {
+          yield prefixSuggestion(attached.head, suggestion);
+        }
+      }
+      return;
+    }
+  }
   // Check for --option=value format
   const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0) {
+  if (equalsIndex >= 0 && !waitingForValue) {
     // Handle --option=value completion
     const optionPart = prefix.slice(0, equalsIndex);
     const valuePart = prefix.slice(equalsIndex + 1);
 
     // Check if this option matches any of our option names
-    if ((optionNames as readonly string[]).includes(optionPart)) {
+    if (
+      (optionNames as readonly string[]).includes(optionPart) &&
+      !/^-[^-]$/.test(optionPart)
+    ) {
       if (valueParser && valueParser.suggest) {
         const valueSuggestions = getSuggestionsWithDependencyAsync(
           valueParser,
@@ -867,7 +944,7 @@ async function* suggestArgumentAsync<T>(
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-option=value`, `-o value`,
- * or `/option:value`.
+ * `-ovalue`, or `/option:value`.
  * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
@@ -884,7 +961,7 @@ export function option<M extends Mode, T>(
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-option=value`, `-o value`,
- * or `/option:value`.
+ * `-ovalue`, or `/option:value`.
  * @template M The execution mode of the parser.
  * @template T The type of value this parser produces.
  * @param args The {@link OptionName}s to parse, followed by
@@ -917,7 +994,7 @@ export function option(
 /**
  * Creates a parser for various styles of command-line options that take an
  * argument value, such as `--option=value`, `-option=value`, `-o value`,
- * or `/option:value`.
+ * `-ovalue`, or `/option:value`.
  * @param args The {@link OptionName}s to parse, followed by
  *             an optional {@link OptionOptions} object that allows you to
  *             specify a description or other metadata.
@@ -1152,10 +1229,25 @@ export function option<M extends Mode, T>(
           name.startsWith("/") ||
           (name.startsWith("-") && name.length > 2)
         )
-        .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
-      for (const prefix of prefixes) {
+        .map((name) => ({
+          optionName: name,
+          prefix: name.startsWith("/") ? `${name}:` : `${name}=`,
+        }));
+      if (
+        valueParser != null &&
+        optionNames.some((name) =>
+          /^-[^-]$/.test(name) && context.buffer[0].startsWith(name)
+        ) &&
+        !fullNameOwnsToken(context, context.buffer[0])
+      ) {
+        for (const name of optionNames) {
+          if (/^-[^-]$/.test(name)) {
+            prefixes.push({ optionName: name, prefix: name });
+          }
+        }
+      }
+      for (const { prefix, optionName } of prefixes) {
         if (!context.buffer[0].startsWith(prefix)) continue;
-        const optionName = prefix.slice(0, -1);
         if (hasParsedOptionValue(context.state, valueParser)) {
           return {
             success: false,
@@ -1248,7 +1340,10 @@ export function option<M extends Mode, T>(
           (name) => name.match(/^-[^-]$/),
         );
         for (const shortOption of shortOptions) {
-          if (!context.buffer[0].startsWith(shortOption)) continue;
+          if (
+            !context.buffer[0].startsWith(shortOption) ||
+            fullNameOwnsToken(context, context.buffer[0])
+          ) continue;
           if (hasParsedOptionValue(context.state, valueParser)) {
             return {
               success: false,
@@ -1813,7 +1908,10 @@ export function flag(
         (name) => name.match(/^-[^-]$/),
       );
       for (const shortOption of shortOptions) {
-        if (!context.buffer[0].startsWith(shortOption)) continue;
+        if (
+          !context.buffer[0].startsWith(shortOption) ||
+          fullNameOwnsToken(context, context.buffer[0])
+        ) continue;
         if (context.state?.success) {
           return {
             success: false,
@@ -2294,7 +2392,10 @@ export function negatableFlag(
 
       for (const shortOption of optionNames) {
         if (!shortOption.match(/^-[^-]$/)) continue;
-        if (!context.buffer[0].startsWith(shortOption)) continue;
+        if (
+          !context.buffer[0].startsWith(shortOption) ||
+          fullNameOwnsToken(context, context.buffer[0])
+        ) continue;
         return parseMatchedNegatableFlag(
           context,
           shortOption,
@@ -3081,6 +3182,7 @@ function* suggestCommandSync<T, TState>(
   }
 
   const state = normalizeCommandState(context.state);
+  if (state != null) context = withParserOptionScope(context, parser);
 
   // Handle different command states
   if (state === undefined) {
@@ -3133,6 +3235,7 @@ async function* suggestCommandAsync<T, TState>(
   }
 
   const state = normalizeCommandState(context.state);
+  if (state != null) context = withParserOptionScope(context, parser);
 
   // Handle different command states
   if (state === undefined) {
@@ -3207,6 +3310,9 @@ export function command<M extends Mode, T, TState>(
   const isAsync = parser.mode === "async";
   const syncInnerParser = parser as Parser<"sync", T, TState>;
   const asyncInnerParser = parser as Parser<"async", T, TState>;
+
+  const commandScope = selectableOptionScope(() => new Set(commandNames));
+  const enteredScope = combinedOptionScope([parser]);
 
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
@@ -3321,6 +3427,7 @@ export function command<M extends Mode, T, TState>(
               : baseError,
           };
         }
+        commandScope.select(context, enteredScope);
         // Command matched, consume it and move to "matched" state
         return {
           success: true,
@@ -3390,13 +3497,23 @@ export function command<M extends Mode, T, TState>(
           () =>
             wrapState(
               syncInnerParser.parse(
-                withChildContext(context, name, innerState, parser.usage),
+                withChildContext(
+                  withParserOptionScope(context, parser),
+                  name,
+                  innerState,
+                  parser.usage,
+                ),
               ),
             ),
           async () =>
             wrapState(
               await parser.parse(
-                withChildContext(context, name, innerState, parser.usage),
+                withChildContext(
+                  withParserOptionScope(context, parser),
+                  name,
+                  innerState,
+                  parser.usage,
+                ),
               ),
             ),
         );
@@ -3703,7 +3820,15 @@ export function command<M extends Mode, T, TState>(
   });
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  return fluent(result as unknown as Parser<M, T, CommandState<TState>>);
+  return fluent(scopeParser(
+    result as unknown as Parser<M, T, CommandState<TState>>,
+    commandScope.source,
+    (context) => {
+      if (normalizeCommandState(context.state) != null) {
+        commandScope.select(context, enteredScope);
+      }
+    },
+  ));
 }
 
 /**

@@ -115,13 +115,12 @@ describe("suggest function", () => {
       ]);
     });
 
-    it("should suggest -option=value format for short options", () => {
+    it("should suggest attached short option values", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
-      const result = suggestSync(parser, ["-f=y"]);
+      const result = suggestSync(parser, ["-fy"]);
       deepStrictEqual(result, [{
         kind: "literal",
-        text: "-f=yaml",
-        description: undefined,
+        text: "-fyaml",
       }]);
     });
 

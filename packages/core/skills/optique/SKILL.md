@@ -50,6 +50,8 @@ Core rules
     `@optique/run/valueparser` for file-system paths. Write a custom
     `{ mode, metavar, parse, format }` value parser only when the catalog does
     not cover the domain.
+ -  Since 1.4.0, `-p8080`/`-vp8080` accept attached values. Values consume
+    the literal suffix (`-p=5` gives `"=5"`); full single-dash names win.
  -  Async value parsers like *@optique/git* make containing parsers async.
     Await `run()`/`parse()`/`runParser()` or, for `bindKeyring()`, `runAsync()`.
  -  Use `dependency()` when one value parser controls another's valid values.

@@ -1166,7 +1166,7 @@ describe("option", () => {
       assert.deepEqual(result.consumed, ["-seed", "42"]);
     });
 
-    it("should not treat single-char option as equals-joined", () => {
+    it("should retain equals in an attached short value", () => {
       const parser = option("-v", string());
       const context = {
         buffer: ["-v=foo"] as readonly string[],
@@ -1176,7 +1176,10 @@ describe("option", () => {
       };
 
       const result = parser.parse(context);
-      assert.ok(!result.success);
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(result.next.state, { success: true, value: "=foo" });
+      }
     });
 
     it("should not affect short option bundling", () => {

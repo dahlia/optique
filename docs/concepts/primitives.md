@@ -201,8 +201,43 @@ Java-style
 DOS-style
 :   `/port:8080`
 
+Attached short-option values
+:   `-p8080` (equivalent to `-p 8080`, available since Optique 1.4.0)
+
 Bundled short options
-:   `-abc` (equivalent to `-a -b -c` for boolean flags)
+:   `-abc` (equivalent to `-a -b -c` for boolean flags), or `-abp8080`
+    (equivalent to `-a -b -p 8080` when `-p` takes a value)
+
+Short-option bundles are read from left to right. When an option takes a value,
+the entire remaining suffix is its value; if the suffix is empty, the next
+argument supplies the value. For example, `-pn 5` gives `-p` the value `"n"`,
+not `"5"`. Invalid values produce a value error rather than another attempt to
+split the bundle. A declared numeric flag such as `-5` does not change the
+meaning of `-p5` when `-p` takes a value.
+
+The suffix is literal: `-p=8080` supplies `"=8080"`, and `-p-5` supplies
+`"-5"`. Use `--port=8080` for an equals-separated value. A bare `-p` requires
+the next argument, which can be an empty string or even `--`; otherwise `--`
+ends option parsing as usual.
+
+A declared single-dash name such as `-port`, or its `-port=8080` form, takes
+precedence over splitting it into `-p` and a value. This includes hidden names
+and names of options already used, which retain their duplicate-option errors.
+Names competing through `or()`/`longestMatch()` are considered together, while
+options inside a command become available only after entering that command.
+In `seq()`, reached names remain reserved, including children reachable by
+skipping an optional or completed child. Conditional candidates share names
+when the discriminator can be skipped; a branch committed by consuming input
+contributes its own names. Failed and empty probes keep candidate names
+reserved. A name does not reserve arbitrary extensions: `-portXYZ` can still
+give `-p` the value `"ortXYZ"`.
+
+Value completion also accepts attached forms, such as `-fj`/`-xfj` for a
+`-f` option whose choices include `"json"`. Prefixes that could still name a
+longer option complete that name first. Native file completion cannot carry
+an option prefix in the current suggestion format, so attached forms use
+literal pattern suggestions, as equals-separated forms do. Use a separate
+value token for native file completion.
 
 ### Option ordering
 
