@@ -11,8 +11,7 @@ description: >
 license: MIT
 ---
 
-Start at <https://optique.dev/llms.txt> when online. These rules cover the
-combinatorial parser model and common pitfalls offline.
+Start at <https://optique.dev/llms.txt> online; these rules also work offline.
 
 
 Core rules
@@ -30,13 +29,15 @@ Core rules
     Pin `colors`/`maxWidth` in tests; defaults use terminal and environment.
  -  Compose parsers with `object()`, `tuple()`, `seq()`, `or()`, `merge()`, and
     modifiers. Do not hand-write argument scanners around Optique parsers.
- -  Let TypeScript infer the parsed value type from the parser. Do not
-    hand-maintain a separate interface for the result unless another API
-    boundary requires it.
- -  Most parsers are required until you wrap them. `optional(p)` yields
-    `undefined`; `withDefault(p, value)` yields a fallback value. For Boolean
-    flags, use `withDefault(flag("--name"), false)` when absence should mean
-    `false`.
+ -  For command/option help headings, set the runner's
+    `helpSections: { commands: "Commands", options: "Options" }`.
+    It groups untitled entries only on pages with visible commands. See
+    <https://optique.dev/cookbook.md#command-and-option-headings-in-help>.
+ -  Let TypeScript infer results; write a separate result interface only when
+    another API boundary requires it.
+ -  Parsers are usually required. `optional(p)` yields `undefined`, and
+    `withDefault(p, value)` supplies a fallback. Use
+    `withDefault(flag("--name"), false)` for optional Boolean flags.
  -  Use semantic `message` helpers for descriptions and errors. Since 1.3.0,
     customize terminal output with `theme` or `messageFormatter`, preserving
     `initialWidth`, quoting, and width options. Keep canonical errors unthemed.
@@ -231,9 +232,8 @@ const parser = logLevel();
 Common mistakes checklist
 -------------------------
 
- -  Do not parse `process.argv` manually before calling Optique. Pass the parser
-    to `run()` for applications, or pass explicit argument arrays to `parse()`
-    in tests and embedded use.
+ -  Pass parsers to `run()` for apps; use explicit argument arrays with
+    `parse()` in tests and embedded use. Do not pre-parse `process.argv`.
  -  Do not treat `or(a, b)` as “zero or more alternatives.” It requires one
     matching branch unless the whole `or()` is wrapped in `optional()` or
     `withDefault()`.

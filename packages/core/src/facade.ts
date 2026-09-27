@@ -27,6 +27,7 @@ import {
   type DocPageFormatOptions,
   type DocSection,
   formatDocPage,
+  isDocEntryHidden,
   type ShowChoicesOptions,
   type ShowDefaultOptions,
 } from "./doc.ts";
@@ -76,6 +77,7 @@ import { argument, command, constant, flag, option } from "./primitives.ts";
 import {
   cloneUsage,
   formatUsage,
+  formatUsageTerm,
   type HiddenVisibility,
   isSuggestionHidden,
   normalizeUsage,
@@ -92,6 +94,7 @@ import {
   type MetaEntry,
   validateCommandNames,
   validateContextIds,
+  validateLabel,
   validateMetaNameCollisions,
   validateOptionNames,
   validateProgramName,
@@ -583,6 +586,20 @@ interface MetaParseResult {
  * @since 1.2.0
  */
 export type CommandListMode = "recursive" | "top-level";
+
+/**
+ * Labels for automatically grouping untitled help entries on pages that
+ * contain visible commands. Explicitly titled sections keep their titles.
+ * Missing labels leave the corresponding entries untitled.
+ *
+ * @since 1.4.0
+ */
+export interface HelpSectionsOptions {
+  /** Heading for untitled command entries. */
+  readonly commands?: string;
+  /** Heading for untitled option entries, including built-in meta options. */
+  readonly options?: string;
+}
 
 /**
  * Sub-configuration for a meta command's command form.
@@ -1268,6 +1285,17 @@ export interface RunOptions<THelp, TError> {
    * @since 1.0.0
    */
   readonly sectionOrder?: (a: DocSection, b: DocSection) => number;
+
+  /**
+   * Groups untitled command and option entries when the help page contains
+   * visible commands. Pages without commands receive no automatic headings.
+   * Existing titled sections are preserved; matching automatic entries are
+   * appended to them. Applies to help callbacks and help above errors too.
+   * Supplied labels must be nonempty and contain no control characters.
+   *
+   * @since 1.4.0
+   */
+  readonly helpSections?: HelpSectionsOptions;
 
   /**
    * Help configuration.  When provided, enables help functionality.
@@ -2256,7 +2284,9 @@ function validateVersionValue(value: unknown): string {
  *          non-empty string without ASCII control characters, or if any
  *          meta command/option name is empty, whitespace-only, contains
  *          whitespace or control characters, or (for option names) lacks a
- *          valid prefix (`--`, `-`, `/`, or `+`).
+ *          valid prefix (`--`, `-`, `/`, or `+`). Also thrown if a
+ *          `helpSections` label is empty, whitespace-only, or contains
+ *          control characters.
  * @throws {RunParserError} When parsing fails and no `onError` callback is
  *          provided, or if the requested help page cannot be generated.
  * @since 0.10.0 Added support for {@link Program} objects.
@@ -2368,6 +2398,7 @@ export function runParser<
     showDefault,
     showChoices,
     sectionOrder,
+    helpSections,
     showUsage,
     usageLine,
     commandList = "recursive",
@@ -2444,6 +2475,9 @@ export function runParser<
     onError(code, error) as InferValue<TParser>;
 
   // Validate meta names eagerly
+  for (const label of [helpSections?.commands, helpSections?.options]) {
+    if (label !== undefined) validateLabel(label);
+  }
   if (helpOptionConfig?.names) {
     validateOptionNames(helpOptionConfig.names, "Help option");
   }
@@ -2855,9 +2889,10 @@ export function runParser<
               commandList,
               isTopLevel,
             );
+            const groupedDoc = applyHelpSections(augmentedDoc, helpSections);
             const renderedDoc = isTopLevel && usageLine != null
-              ? applyUsageLine(augmentedDoc, usageLine)
-              : augmentedDoc;
+              ? applyUsageLine(groupedDoc, usageLine)
+              : groupedDoc;
             stdout(formatDocPage(
               programName,
               renderedDoc,
@@ -2992,13 +3027,14 @@ export function runParser<
                   (options.help || options.version || options.completion)
                 ? normalizeUsage(getRootHelpGeneratorParser().usage)
                 : augmentedDoc.usage ?? [];
+              const groupedDoc = applyHelpSections(augmentedDoc, helpSections);
               const renderedDoc = isTopLevel && usageLine != null
                 ? applyUsageLine(
-                  augmentedDoc,
+                  groupedDoc,
                   usageLine,
                   defaultRootUsage,
                 )
-                : augmentedDoc;
+                : groupedDoc;
               stderr(formatDocPage(
                 programName,
                 renderedDoc,
@@ -3140,6 +3176,7 @@ export function runParser<
  * @returns The parsed result if successful.
  * @throws {TypeError} If an async parser is passed at runtime.  Use
  * {@link runParser} or {@link runParserAsync} for async parsers.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @since 0.9.0
  */
 export function runParserSync<
@@ -3177,6 +3214,7 @@ export function runParserSync<
  * @param options Configuration options for customizing behavior.
  * @throws {RangeError} If rendering help or errors encounters an invalid theme
  * color, even when colors are disabled.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @returns A Promise of the parsed result if successful.
  * @since 0.9.0
  */
@@ -3206,6 +3244,95 @@ function applyUsageLine(
     ...doc,
     usage: normalizeUsage(customUsageLine),
   };
+}
+
+/** Prepares the runner's final page without changing parser documentation. */
+function applyHelpSections(
+  doc: DocPage,
+  labels: HelpSectionsOptions | undefined,
+): DocPage {
+  if (labels == null || (labels.commands == null && labels.options == null)) {
+    return doc;
+  }
+  const visible = (entry: DocEntry): boolean =>
+    !isDocEntryHidden(entry) &&
+    formatUsageTerm(entry.term, { context: "doc" }).trim() !== "";
+  if (
+    !doc.sections.some((section) =>
+      section.entries.some((entry) =>
+        entry.term.type === "command" && visible(entry)
+      )
+    )
+  ) return doc;
+
+  const existingTitles = new Set(
+    doc.sections.flatMap((section) =>
+      section.title == null ? [] : [section.title]
+    ),
+  );
+  const additions = new Map<string, DocEntry[]>();
+  const residuals = new Map<DocSection, readonly DocEntry[]>();
+  const newSections = new Map<DocSection, string[]>();
+  for (const section of doc.sections) {
+    if (section.title != null) continue;
+    const commands: DocEntry[] = [];
+    const options: DocEntry[] = [];
+    const remaining: DocEntry[] = [];
+    for (const entry of section.entries) {
+      if (
+        entry.term.type === "command" && labels.commands != null &&
+        visible(entry)
+      ) {
+        commands.push(entry);
+      } else if (
+        entry.term.type === "option" && labels.options != null && visible(entry)
+      ) {
+        options.push(entry);
+      } else remaining.push(entry);
+    }
+    if (commands.length === 0 && options.length === 0) continue;
+    residuals.set(section, remaining);
+    for (
+      const [label, entries] of [[labels.commands, commands], [
+        labels.options,
+        options,
+      ]] as const
+    ) {
+      if (label == null || entries.length === 0) continue;
+      const previous = additions.get(label);
+      if (previous != null) previous.push(...entries);
+      else {
+        additions.set(label, entries);
+        if (!existingTitles.has(label)) {
+          const titles = newSections.get(section) ?? [];
+          titles.push(label);
+          newSections.set(section, titles);
+        }
+      }
+    }
+  }
+  if (additions.size === 0) return doc;
+
+  const sections: DocSection[] = [];
+  for (const section of doc.sections) {
+    if (section.title != null) {
+      const entries = additions.get(section.title);
+      sections.push(
+        entries == null ? section : {
+          ...section,
+          entries: [...section.entries, ...entries],
+        },
+      );
+      continue;
+    }
+    for (const title of newSections.get(section) ?? []) {
+      sections.push({ title, entries: additions.get(title) ?? [] });
+    }
+    const entries = residuals.get(section);
+    if (entries == null) sections.push(section);
+    else if (entries.length > 0) sections.push({ ...section, entries });
+  }
+  return { ...doc, sections };
 }
 
 function maybeCollapseCommandList(
@@ -3989,6 +4116,7 @@ async function runWithBody<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @throws {RangeError} If rendering help or errors encounters an invalid theme
  * color, even when colors are disabled.
  * @returns Promise that resolves to the parsed result.
@@ -4181,6 +4309,7 @@ function runWithSyncBody<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @throws {RangeError} If rendering help or errors encounters an invalid theme
  * color, even when colors are disabled.
  * @returns The parsed result.
@@ -4267,6 +4396,7 @@ export function runWithSync<
  * @param programName Name of the program for help/error output.
  * @param contexts Source contexts to use (priority: earlier overrides later).
  * @param options Run options including args, help, version, etc.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @throws {RangeError} If rendering help or errors encounters an invalid theme
  * color, even when colors are disabled.
  * @returns Promise that resolves to the parsed result.

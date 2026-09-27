@@ -239,6 +239,72 @@ A few things to note about this pattern:
     *@optique/discover* instead; it lets each command module declare its
     own defaults while sharing a common entry point.
 
+### Command and option headings in help
+
+Use the runner's `helpSections` setting to separate command lists from options
+without adding a group wrapper to each command:
+
+~~~~ typescript twoslash
+import { merge, object, or } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { optional } from "@optique/core/modifiers";
+import { command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const logs = optional(option("-L", "--logs", string({ metavar: "DIR" }), {
+  description: message`Logs directory`,
+}));
+const list = command("list", object({ action: constant("list"), logs }), {
+  brief: message`List run directories`,
+});
+const rotate = command("rotate", object({ action: constant("rotate"), logs }), {
+  brief: message`Rotate run directories`,
+});
+const cli = merge(
+  object({ verbose: option("-v", "--verbose") }),
+  object({ command: or(list, rotate) }),
+);
+
+const config = run(cli, {
+  programName: "runs",
+  help: "option",
+  version: "1.0.0",
+  helpSections: { commands: "Commands", options: "Options" },
+});
+~~~~
+
+The sections in `runs --help` look like this:
+
+~~~~ text
+Commands:
+  list                        List run directories
+  rotate                      Rotate run directories
+
+Options:
+  -v, --verbose
+  --help                      Show help information.
+  --version                   Show version information.
+~~~~
+
+The `runs list --help` page has no command list, so its options have no heading:
+
+~~~~ text
+  -L, --logs DIR              Logs directory
+  -v, --verbose
+~~~~
+
+The same rule applies at every level: a nested page with further commands gets
+headings, while a page without commands does not get automatic headings.
+Explicitly titled groups keep their titles on either page. Leave the command
+bodies and global options unlabeled if you want heading-free help on leaf pages.
+
+To label only the command list using existing parser combinators, wrap the
+dispatcher in
+[`group("Commands", or(...))`](./concepts/constructs.md#grouping-commands). See
+[automatic help sections](./concepts/runners.md#automatic-help-sections) for
+partial labels, section merging, and built-in help commands.
+
 ### Positional prefixes before subcommands
 
 Some tools accept a small positional prefix before the subcommand itself. For

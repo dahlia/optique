@@ -17,20 +17,33 @@ To be released.
  -  Fixed completion requests for inherited object names such as `toString`
     to report an unsupported shell instead of throwing, unless the name is
     explicitly registered as a custom shell.  [[#967], [#982]]
+ -  Added the `helpSections` option to the Core runners to group untitled
+    command and option entries on help pages with visible commands, leaving
+    pages without commands free of automatic headings.  Existing titled groups
+    are preserved, and help callbacks receive the grouped page.
+    [[#972], [#983]]
 
 [#967]: https://github.com/dahlia/optique/issues/967
+[#972]: https://github.com/dahlia/optique/issues/972
 [#982]: https://github.com/dahlia/optique/pull/982
+[#983]: https://github.com/dahlia/optique/pull/983
 
 ### @optique/run
 
  -  Added `completion.errors` to `run()`, `runSync()`, and `runAsync()` for
     customizing missing or unsupported completion shell messages.
     [[#967], [#982]]
+ -  Added the `helpSections` option to `run()`, `runSync()`, and `runAsync()`
+    to separate command lists from options in help while keeping pages without
+    commands free of automatic headings.  [[#972], [#983]]
 
 ### @optique/discover
 
  -  Added `completion.errors` to `runProgram()` for customizing missing or
     unsupported completion shell messages.  [[#967], [#982]]
+ -  Added support for `helpSections` in `runProgram()` to separate discovered
+    commands from options in help while keeping pages without commands free of
+    automatic headings.  [[#972], [#983]]
 
 ### @optique/config
 

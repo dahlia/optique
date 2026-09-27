@@ -24,6 +24,7 @@ import { defineInheritedAnnotationParser } from "#src/internal/parser.ts";
 import {
   createParserContext,
   type ExecutionContext,
+  getDocPage,
   type Parser,
 } from "@optique/core/parser";
 import {
@@ -61,7 +62,7 @@ import {
 import type { Program } from "@optique/core/program";
 import type { OptionName, Usage } from "@optique/core/usage";
 import type { DeferredMap, ValueParser } from "@optique/core/valueparser";
-import { integer, string } from "@optique/core/valueparser";
+import { choice, integer, string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { extractPhase2SeedKey } from "#src/phase2-seed.ts";
@@ -17042,4 +17043,407 @@ describe("completion errors through context runners", () => {
       });
     }
   }
+});
+
+describe("helpSections", () => {
+  const labels = { commands: "Commands", options: "Options" };
+  type HelpOptions = RunOptions<void, never>;
+
+  function capture(
+    parser: Parser<"sync", unknown, unknown>,
+    args: readonly string[] = ["--help"],
+    overrides: HelpOptions = {},
+  ) {
+    const pages: DocPage[] = [];
+    const chunks: string[] = [];
+    const options = {
+      ...overrides,
+      colors: false,
+      showUsage: false,
+      stdout: (chunk: string) => chunks.push(chunk),
+      help: {
+        ...overrides.help,
+        option: true as const,
+        onShow(_code: number, page: DocPage) {
+          pages.push(page);
+          assert.deepEqual(chunks, [formatDocPage("demo", page, {
+            colors: false,
+            showUsage: false,
+            sectionOrder: overrides.sectionOrder,
+          })]);
+        },
+      },
+    };
+    runParserSync(parser, "demo", args, options);
+    assert.equal(pages.length, 1);
+    return { page: pages[0], output: chunks.join("") };
+  }
+
+  function cli() {
+    return merge(
+      object({ verbose: option("--verbose") }),
+      object({
+        command: or(
+          command(
+            "list",
+            object({ logs: optional(option("--logs", string())) }),
+          ),
+          command(
+            "remote",
+            or(
+              command("add", object({ force: option("--force") })),
+              command("remove", object({ force: option("--force") })),
+            ),
+          ),
+        ),
+      }),
+    );
+  }
+
+  it("should group root and intermediate help while leaving leaf help flat", () => {
+    for (const args of [["--help"], ["remote", "--help"], ["help", "remote"]]) {
+      const { page } = capture(cli(), args, {
+        helpSections: labels,
+        help: { command: true, option: true },
+      });
+      assert.deepEqual(page.sections.map((s) => s.title), [
+        "Commands",
+        "Options",
+      ]);
+      assert.ok(page.sections.every((s) => s.entries.length > 0));
+    }
+    for (const args of [["list", "--help"], ["remote", "add", "--help"]]) {
+      const { page, output } = capture(cli(), args, { helpSections: labels });
+      assert.ok(page.sections.every((s) => s.title == null));
+      assert.doesNotMatch(output, /^(Commands|Options):$/m);
+      assert.match(output, /--verbose/);
+    }
+  });
+
+  it("should include ungrouped meta options in the automatic option section", () => {
+    const { page } = capture(cli(), ["--help"], {
+      helpSections: labels,
+      version: { value: "1.0", option: true },
+      completion: { option: true },
+    });
+    const options = page.sections.find((s) => s.title === "Options");
+    assert.ok(options);
+    assert.deepEqual(
+      options.entries.flatMap((e) =>
+        e.term.type === "option" ? e.term.names : []
+      ),
+      ["--verbose", "--help", "--version", "--completion"],
+    );
+  });
+
+  it("should preserve default output when the setting is absent or empty", () => {
+    const plain = capture(cli());
+    assert.equal(
+      capture(cli(), ["--help"], { helpSections: {} }).output,
+      plain.output,
+    );
+    assert.ok(plain.page.sections.every((s) => s.title == null));
+  });
+
+  it("should leave categories without a configured label untitled", () => {
+    for (
+      const helpSections of [{ commands: "Commands" }, { options: "Options" }]
+    ) {
+      const { page } = capture(cli(), ["--help"], { helpSections });
+      assert.equal(page.sections.filter((s) => s.title != null).length, 1);
+      assert.ok(page.sections.some((s) => s.title == null));
+    }
+  });
+
+  it("should retain explicit groups and append matching automatic entries", () => {
+    const parser = merge(
+      object({
+        command: group(
+          "Commands",
+          or(
+            command("list", constant("list")),
+            command("rotate", constant("rotate")),
+          ),
+        ),
+      }),
+      object("Options", { verbose: option("--verbose") }),
+      object("Logging", { logs: optional(option("--logs", string())) }),
+    );
+    const { page } = capture(parser, ["--help"], {
+      helpSections: labels,
+      help: { command: true, option: true },
+    });
+    assert.deepEqual(page.sections.map((s) => s.title), [
+      "Commands",
+      "Options",
+      "Logging",
+    ]);
+    assert.deepEqual(
+      page.sections[0].entries.map((e) =>
+        e.term.type === "command" ? e.term.name : ""
+      ),
+      ["list", "rotate", "help"],
+    );
+    assert.deepEqual(
+      page.sections[1].entries.flatMap((e) =>
+        e.term.type === "option" ? e.term.names : []
+      ),
+      ["--verbose", "--help"],
+    );
+    const leaf = capture(parser, ["list", "--help"], { helpSections: labels });
+    assert.ok(leaf.page.sections.some((s) => s.title === "Options"));
+    assert.ok(leaf.page.sections.some((s) => s.title === "Logging"));
+  });
+
+  it("should combine equal labels in command then option order", () => {
+    const { page } = capture(cli(), ["--help"], {
+      helpSections: { commands: "Available", options: "Available" },
+    });
+    assert.equal(page.sections.length, 1);
+    assert.equal(page.sections[0].title, "Available");
+    const types = page.sections[0].entries.map((e) => e.term.type);
+    assert.deepEqual(types, [
+      "command",
+      "command",
+      "option",
+      "option",
+    ]);
+  });
+
+  it("should leave positional entries untitled and let the comparator order final sections", () => {
+    const parser = merge(
+      object({ file: optional(argument(string({ metavar: "FILE" }))) }),
+      object({
+        command: or(
+          command("list", constant("list")),
+          command("rotate", constant("rotate")),
+        ),
+      }),
+    );
+    const stable = capture(parser, ["--help"], {
+      helpSections: labels,
+      sectionOrder: () => 0,
+    });
+    assert.deepEqual(stable.page.sections.map((s) => s.title), [
+      "Commands",
+      "Options",
+      undefined,
+    ]);
+    assert.equal(stable.page.sections[2].entries[0].term.type, "argument");
+    const sorted = capture(parser, ["--help"], {
+      helpSections: labels,
+      sectionOrder: (a, b) => (b.title ?? "").localeCompare(a.title ?? ""),
+    });
+    assert.ok(
+      sorted.output.indexOf("Options:") < sorted.output.indexOf("Commands:"),
+    );
+    const defaultOrder = capture(parser, ["--help"], { helpSections: labels });
+    assert.ok(
+      defaultOrder.output.indexOf("FILE") <
+        defaultOrder.output.indexOf("Options:"),
+    );
+  });
+
+  it("should only count commands visible in documentation", () => {
+    for (const hidden of [true, "doc", "usage"] as const) {
+      const parser = merge(
+        object({ verbose: option("--verbose") }),
+        object({ command: command("secret", constant("secret"), { hidden }) }),
+      );
+      const { output } = capture(parser, ["--help"], { helpSections: labels });
+      if (hidden === "usage") assert.match(output, /^Commands:$/m);
+      else assert.doesNotMatch(output, /^(Commands|Options):$/m);
+    }
+  });
+
+  it("should not let an empty command term trigger headings", () => {
+    const parser = createFlatCommandDocParser();
+    const original = parser.getDocFragments;
+    const modified = {
+      ...parser,
+      getDocFragments(...args: Parameters<typeof original>) {
+        const doc = original(...args);
+        return {
+          ...doc,
+          fragments: [{
+            type: "entry" as const,
+            term: { type: "command" as const, name: "" },
+          }],
+        };
+      },
+    };
+    const { output } = capture(modified, ["--help"], { helpSections: labels });
+    assert.doesNotMatch(output, /^(Commands|Options):$/m);
+  });
+
+  it("should count visible meta commands on an otherwise flat CLI", () => {
+    const { output } = capture(option("--verbose"), ["--help"], {
+      helpSections: labels,
+      help: { command: true, option: true },
+    });
+    assert.match(output, /^Commands:$/m);
+    assert.match(output, /^Options:$/m);
+  });
+
+  it("should group after commandList collapse without changing raw documentation", () => {
+    const parser = createFlatCommandDocParser();
+    const before = getDocPage(parser, []);
+    const { page } = capture(parser, ["--help"], {
+      helpSections: labels,
+      commandList: "top-level",
+    });
+    assert.deepEqual(
+      page.sections[0].entries.map((e) =>
+        e.term.type === "command" ? e.term.name : ""
+      ),
+      ["remote", "config"],
+    );
+    assert.deepEqual(getDocPage(parser, []), before);
+    assert.ok(before?.sections.every((s) => s.title == null));
+  });
+
+  it("should group full help above errors for empty and nonempty arguments", () => {
+    for (const args of [[], ["--bad"]]) {
+      const chunks: string[] = [];
+      const options = {
+        helpSections: labels,
+        aboveError: "help" as const,
+        showUsage: false,
+        colors: false,
+        stderr: (chunk: string) => chunks.push(chunk),
+        onError: () => "handled",
+      };
+      runParser(cli(), "demo", args, options);
+      assert.match(chunks.join(""), /^Commands:$/m);
+      assert.match(chunks.join(""), /^Options:$/m);
+    }
+  });
+
+  it("should reject invalid configured labels before normal parsing", () => {
+    for (const label of ["", "   ", "Bad\nlabel", "Bad\u001blabel"]) {
+      for (const helpSections of [{ commands: label }, { options: label }]) {
+        const options = { helpSections, colors: false };
+        assert.throws(
+          () => runParser(constant("ok"), "demo", [], options),
+          TypeError,
+        );
+      }
+    }
+  });
+});
+
+describe("helpSections asynchronous runners", () => {
+  const valueParser: ValueParser<"async", string> = {
+    mode: "async",
+    metavar: "NAME",
+    placeholder: "",
+    parse: (input) => Promise.resolve({ success: true, value: input }),
+    format: (value) => value,
+  };
+
+  it("should group help from an asynchronous parser", async () => {
+    const parser = or(
+      command("list", option("--name", valueParser)),
+      command("rotate", option("--name", valueParser)),
+    );
+    const pages: DocPage[] = [];
+    await runParserAsync(parser, "demo", ["--help"], {
+      helpSections: { commands: "Commands", options: "Options" },
+      help: {
+        option: true,
+        onShow: (_code, page) => {
+          pages.push(page);
+        },
+      },
+      stdout: () => {},
+    });
+    assert.deepEqual(pages[0].sections.map((s) => s.title), [
+      "Commands",
+      "Options",
+    ]);
+  });
+
+  it("should pass the grouped page through runWith", async () => {
+    const parser = or(
+      command("list", constant("list")),
+      command("rotate", constant("rotate")),
+    );
+    const context: SourceContext = {
+      id: Symbol("grouping"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    const pages: DocPage[] = [];
+    await runWith(parser, "demo", [context], {
+      args: ["--help"],
+      helpSections: { commands: "Commands", options: "Options" },
+      help: {
+        option: true,
+        onShow: (_code, page) => {
+          pages.push(page);
+        },
+      },
+      stdout: () => {},
+    });
+    assert.deepEqual(pages[0].sections.map((s) => s.title), [
+      "Commands",
+      "Options",
+    ]);
+  });
+
+  it("should keep completion diagnostic help flat", () => {
+    const chunks: string[] = [];
+    runParser(option("--verbose"), "demo", ["completion"], {
+      completion: { command: true },
+      helpSections: { commands: "Commands", options: "Options" },
+      colors: false,
+      stderr: (text) => chunks.push(text),
+      onError: () => "handled",
+    });
+    assert.match(chunks.join(""), /SHELL/);
+    assert.doesNotMatch(chunks.join(""), /^(Commands|Options):$/m);
+  });
+});
+
+describe("helpSections entry metadata", () => {
+  it("should preserve descriptions, defaults and choices when moving entries", () => {
+    const parser = object({
+      format: withDefault(
+        option("--format", choice(["json", "yaml"]), {
+          description: message`Output format.`,
+        }),
+        "json",
+      ),
+      command: or(
+        command("list", constant("list")),
+        command("rotate", constant("rotate")),
+      ),
+    });
+    const raw = getDocPage(parser, []);
+    assert.ok(raw);
+    const original = raw.sections.flatMap((s) => s.entries).find((e) =>
+      e.term.type === "option" && e.term.names.includes("--format")
+    );
+    assert.ok(original?.default);
+    assert.ok(original.choices);
+    const source = Object.freeze(original);
+    runParser(parser, "demo", ["--help"], {
+      helpSections: { commands: "Commands", options: "Options" },
+      help: {
+        option: true,
+        onShow(_code, page) {
+          const options = page.sections.find((s) => s.title === "Options");
+          assert.ok(options);
+          const moved = options.entries.find((e) =>
+            e.term.type === "option" && e.term.names.includes("--format")
+          );
+          assert.deepEqual(moved, source);
+        },
+      },
+      stdout: () => {},
+    });
+    assert.deepEqual(getDocPage(parser, []), raw);
+  });
 });

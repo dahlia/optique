@@ -1887,7 +1887,8 @@ on that command's own help page too.
 For options shared by every command, see
 [shared options across subcommands](../cookbook.md#shared-options-across-subcommands).
 Grouping the shared options gives them a heading on both the parent and
-subcommand help pages.
+subcommand help pages. For headings only on pages with commands, use the
+runner's [`helpSections`](./runners.md#automatic-help-sections) setting instead.
 
 ### Realistic usage patterns
 
