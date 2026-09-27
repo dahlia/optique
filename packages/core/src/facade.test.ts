@@ -16192,6 +16192,119 @@ describe("structured runner errors", () => {
       }
     }
 
+    for (const shellName of ["toString", "constructor", "__proto__"]) {
+      for (
+        const args of [["completion", shellName], [`--completion=${shellName}`]]
+      ) {
+        it(`should reject inherited shell ${shellName} for ${name} ${args[0]}`, async () => {
+          const error = message`Unsupported completion shell ${shellName}.`;
+          const chunks: string[] = [];
+          let callbackCalls = 0;
+          let errorCalls = 0;
+          const result = await runParser(
+            create(message`Unused failure.`),
+            "test",
+            args,
+            {
+              colors: false,
+              completion: {
+                command: true,
+                option: true,
+                errors: {
+                  unsupportedShell: (requested, shells) => {
+                    callbackCalls++;
+                    assert.equal(requested, shellName);
+                    assert.deepEqual(shells, [
+                      "bash",
+                      "fish",
+                      "nu",
+                      "pwsh",
+                      "zsh",
+                    ]);
+                    return error;
+                  },
+                },
+              },
+              stdout: () => {
+                throw new Error("Unexpected stdout.");
+              },
+              stderr: (chunk) => chunks.push(chunk),
+              onError: (code, received) => {
+                errorCalls++;
+                assert.equal(code, 1);
+                assert.strictEqual(received, error);
+                return "handled";
+              },
+            },
+          );
+          assert.equal(result, "handled");
+          assert.deepEqual(chunks, [
+            `Error: Unsupported completion shell "${shellName}".`,
+          ]);
+          assert.equal(callbackCalls, 1);
+          assert.equal(errorCalls, 1);
+        });
+
+        it(`should allow explicitly registered shell ${shellName} for ${name} ${args[0]}`, async () => {
+          const chunks: string[] = [];
+          const result = await runParser(
+            create(message`Unused failure.`),
+            "test",
+            args,
+            {
+              completion: {
+                command: true,
+                option: true,
+                shells: { [shellName]: bash },
+                errors: {
+                  unsupportedShell: () => {
+                    throw new Error("Unexpected unsupported shell.");
+                  },
+                },
+                onShow: () => "shown",
+              },
+              stdout: (chunk) => chunks.push(chunk),
+              stderr: () => {
+                throw new Error("Unexpected stderr.");
+              },
+            },
+          );
+          assert.equal(result, "shown");
+          assert.equal(chunks.length, 1);
+          assert.ok(chunks[0].includes("complete -F"));
+        });
+      }
+
+      it(`should report the default ${name} error for inherited shell ${shellName}`, async () => {
+        const chunks: string[] = [];
+        let errorCalls = 0;
+        const result = await runParser(
+          create(message`Unused failure.`),
+          "test",
+          ["completion", shellName],
+          {
+            colors: false,
+            completion: { command: true },
+            stderr: (chunk) => chunks.push(chunk),
+            onError: (code, received) => {
+              errorCalls++;
+              assert.equal(code, 1);
+              assert.deepEqual(
+                received,
+                message`Unsupported shell ${shellName}. Available shells: ${message`${"bash"}, ${"fish"}, ${"nu"}, ${"pwsh"}, ${"zsh"}`}.`,
+              );
+              return "handled";
+            },
+          },
+        );
+        assert.equal(result, "handled");
+        assert.equal(errorCalls, 1);
+        assert.deepEqual(chunks, [
+          `Error: Unsupported shell "${shellName}". Available shells: "bash", "fish", "nu", "pwsh", "zsh".`,
+        ]);
+      });
+    }
+
     it(`should not invoke the ${name} unsupported-shell callback for a supported shell`, async () => {
       const output: string[] = [];
       const result = await runParser(create(message`Unused failure.`), "test", [

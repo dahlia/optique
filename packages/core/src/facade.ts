@@ -1573,7 +1573,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
     );
   }
 
-  const shell = availableShells[shellName];
+  const shell = Object.hasOwn(availableShells, shellName)
+    ? availableShells[shellName]
+    : undefined;
 
   if (!shell) {
     const available: MessageTerm[] = [];
