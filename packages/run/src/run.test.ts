@@ -3233,3 +3233,77 @@ describe("terminal presentation options", () => {
     });
   }
 });
+
+describe("custom completion errors", () => {
+  for (const runner of [run, runSync, runAsync]) {
+    for (const args of [["--completion"], ["completion", "unknown"]]) {
+      it(`should render custom errors through ${runner.name} for ${args.join(" ")}`, async () => {
+        const chunks: string[] = [];
+        const exit = new Error("Exit.");
+        await assert.rejects(async () => {
+          await runner(object({}), {
+            programName: "test",
+            args,
+            colors: false,
+            completion: {
+              command: true,
+              option: true,
+              errors: {
+                missingShell: message`Select a shell.`,
+                unsupportedShell: (shell, shells) => {
+                  assert.equal(shell, "unknown");
+                  assert.deepEqual(shells, [
+                    "bash",
+                    "fish",
+                    "nu",
+                    "pwsh",
+                    "zsh",
+                  ]);
+                  return message`Cannot complete for ${shell}.`;
+                },
+              },
+            },
+            stderr: (chunk) => chunks.push(chunk),
+            onExit: (code): never => {
+              assert.equal(code, 1);
+              throw exit;
+            },
+          });
+        }, (error) => error === exit);
+        assert.equal(
+          chunks[0],
+          args.length === 1
+            ? "Error: Select a shell.\n"
+            : 'Error: Cannot complete for "unknown".',
+        );
+      });
+    }
+  }
+
+  it("should pass custom completion errors through run with contexts", async () => {
+    const chunks: string[] = [];
+    const exit = new Error("Exit.");
+    const context: SourceContext = {
+      id: Symbol("completion-errors"),
+      phase: "single-pass",
+      getAnnotations: () => ({}),
+    };
+    await assert.rejects(async () => {
+      await run(object({}), {
+        programName: "test",
+        args: ["--completion", "unknown"],
+        contexts: [context],
+        colors: false,
+        completion: {
+          option: true,
+          errors: { unsupportedShell: message`Select a shell.` },
+        },
+        stderr: (chunk) => chunks.push(chunk),
+        onExit: (): never => {
+          throw exit;
+        },
+      });
+    }, (error) => error === exit);
+    assert.deepEqual(chunks, ["Error: Select a shell."]);
+  });
+});

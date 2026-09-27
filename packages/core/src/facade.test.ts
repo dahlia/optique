@@ -34,6 +34,7 @@ import {
   runParserSync,
   runWith,
   runWithAsync,
+  type RunWithOptions,
   runWithSync,
 } from "@optique/core/facade";
 import {
@@ -16047,6 +16048,41 @@ describe("structured runner errors", () => {
             : /Usage: test completion/,
         );
       });
+      it(`should use a custom missing-shell message for ${name} ${args[0]}`, async () => {
+        const error = message`Choose a ${"shell"}.`;
+        const chunks: string[] = [];
+        const result = await runParser(
+          create(message`Unused failure.`),
+          "test",
+          args,
+          {
+            colors: false,
+            completion: {
+              command: { names: ["completion", "completions"] },
+              option: { names: ["--completion", "--complete"] },
+              errors: {
+                missingShell: error,
+                unsupportedShell: () => {
+                  throw new Error("Unexpected callback.");
+                },
+              },
+            },
+            stdout: () => {
+              throw new Error("Unexpected stdout.");
+            },
+            stderr: (chunk) => chunks.push(chunk),
+            onError: (code, received) => {
+              assert.equal(code, 1);
+              assert.strictEqual(received, error);
+              return "handled";
+            },
+          },
+        );
+        assert.equal(result, "handled");
+        assert.equal(chunks[0], 'Error: Choose a "shell".\n');
+        assert.equal(chunks.length, 2);
+        assert.match(chunks[1], /Usage: test/);
+      });
     }
 
     for (const colors of [false, true]) {
@@ -16091,6 +16127,202 @@ describe("structured runner errors", () => {
         });
       }
     }
+
+    for (
+      const args of [
+        ["completion", "unknown"],
+        ["--completion", "unknown"],
+        ["--completion=unknown"],
+        ["completions", "unknown"],
+        ["--complete=unknown"],
+      ]
+    ) {
+      for (const kind of ["static", "callback", "empty"] as const) {
+        it(`should use a ${kind} unsupported-shell message for ${name} ${args[0]}`, async () => {
+          const error: Message = kind === "empty"
+            ? []
+            : message`Choose another ${"unknown"}.`;
+          const chunks: string[] = [];
+          let calls = 0;
+          const result = await runParser(
+            create(message`Unused failure.`),
+            "test",
+            args,
+            {
+              colors: false,
+              completion: {
+                command: { names: ["completion", "completions"] },
+                option: { names: ["--completion", "--complete"] },
+                shells: { zsh: bash, custom: bash },
+                errors: {
+                  unsupportedShell: kind === "callback"
+                    ? (shell, shells) => {
+                      calls++;
+                      assert.equal(shell, "unknown");
+                      assert.deepEqual(shells, [
+                        "bash",
+                        "fish",
+                        "nu",
+                        "pwsh",
+                        "zsh",
+                        "custom",
+                      ]);
+                      return error;
+                    }
+                    : error,
+                },
+              },
+              stdout: () => {
+                throw new Error("Unexpected stdout.");
+              },
+              stderr: (chunk) => chunks.push(chunk),
+              onError: (code, received) => {
+                assert.equal(code, 1);
+                assert.strictEqual(received, error);
+                return "handled";
+              },
+            },
+          );
+          assert.equal(result, "handled");
+          assert.deepEqual(chunks, [
+            kind === "empty" ? "Error: " : 'Error: Choose another "unknown".',
+          ]);
+          assert.equal(calls, kind === "callback" ? 1 : 0);
+        });
+      }
+    }
+
+    it(`should not invoke the ${name} unsupported-shell callback for a supported shell`, async () => {
+      const output: string[] = [];
+      const result = await runParser(create(message`Unused failure.`), "test", [
+        "--completion=bash",
+      ], {
+        completion: {
+          option: true,
+          errors: {
+            unsupportedShell: () => {
+              throw new Error("Unexpected callback.");
+            },
+          },
+          onShow: () => "shown",
+        },
+        stdout: (chunk) => output.push(chunk),
+        stderr: () => {
+          throw new Error("Unexpected stderr.");
+        },
+      });
+      assert.equal(result, "shown");
+      assert.ok(output[0].includes("complete -F"));
+    });
+
+    it(`should preserve the ${name} default missing-shell error when only unsupportedShell is customized`, async () => {
+      await runParser(
+        create(message`Unused failure.`),
+        "test",
+        ["completion"],
+        {
+          completion: {
+            command: true,
+            errors: { unsupportedShell: message`Unsupported.` },
+          },
+          stderr: () => {},
+          onError: (code, error) => {
+            assert.equal(code, 1);
+            assert.deepEqual(
+              error,
+              message`Missing shell name for completion.`,
+            );
+            return "handled";
+          },
+        },
+      );
+    });
+
+    it(`should accept an empty ${name} missing-shell message`, async () => {
+      const error: Message = [];
+      const chunks: string[] = [];
+      await runParser(create(message`Unused failure.`), "test", [
+        "--completion",
+      ], {
+        completion: { option: true, errors: { missingShell: error } },
+        stderr: (chunk) => chunks.push(chunk),
+        onError: (_code, received) => {
+          assert.strictEqual(received, error);
+          return "handled";
+        },
+      });
+      assert.equal(chunks[0], "Error: \n");
+      assert.equal(chunks.length, 2);
+    });
+
+    it(`should preserve the ${name} default unsupported-shell error when only missingShell is customized`, async () => {
+      const chunks: string[] = [];
+      await runParser(create(message`Unused failure.`), "test", [
+        "--completion",
+        "unknown",
+      ], {
+        colors: false,
+        completion: {
+          option: true,
+          errors: { missingShell: message`Select a shell.` },
+        },
+        stderr: (chunk) => chunks.push(chunk),
+        onError: (_code, error) => {
+          assert.deepEqual(
+            error,
+            message`Unsupported shell ${"unknown"}. Available shells: ${message`${"bash"}, ${"fish"}, ${"nu"}, ${"pwsh"}, ${"zsh"}`}.`,
+          );
+          return "handled";
+        },
+      });
+      assert.deepEqual(chunks, [
+        'Error: Unsupported shell "unknown". Available shells: "bash", "fish", "nu", "pwsh", "zsh".',
+      ]);
+    });
+
+    it(`should render ${name} custom message terms with colors`, async () => {
+      const chunks: string[] = [];
+      const error = message`Choose another ${"unknown"}.`;
+      await runParser(create(message`Unused failure.`), "test", [
+        "--completion=unknown",
+      ], {
+        colors: true,
+        completion: { option: true, errors: { unsupportedShell: error } },
+        stderr: (chunk) => chunks.push(chunk),
+        onError: (_code, received) => {
+          assert.strictEqual(received, error);
+          return "handled";
+        },
+      });
+      assert.deepEqual(chunks, [
+        "Error: Choose another \x1b[32munknown\x1b[0m.",
+      ]);
+    });
+
+    it(`should preserve exceptions from the ${name} unsupported-shell callback`, async () => {
+      const failure = new TypeError("Cannot select a message.");
+      await assert.rejects(async () => {
+        await runParser(create(message`Unused failure.`), "test", [
+          "completion",
+          "unknown",
+        ], {
+          completion: {
+            command: true,
+            errors: {
+              unsupportedShell: () => {
+                throw failure;
+              },
+            },
+          },
+          stderr: () => {
+            throw new Error("Unexpected stderr.");
+          },
+          onError: () => {
+            throw new Error("Unexpected onError.");
+          },
+        });
+      }, (error) => error === failure);
+    });
 
     it(`should pass ${name} errors through the context runners before disposal`, async () => {
       const error = message`Missing context value.`;
@@ -16658,4 +16890,43 @@ describe("final help pages", () => {
       assert.deepEqual(events, ["help", "dispose"]);
     }
   });
+});
+
+describe("completion errors through context runners", () => {
+  for (const runner of ["runWith", "runWithAsync", "runWithSync"] as const) {
+    for (const args of [["--completion"], ["completion", "unknown"]]) {
+      it(`should forward custom errors through ${runner} for ${args.join(" ")}`, async () => {
+        const error = message`Select a supported shell.`;
+        const context: SourceContext = {
+          id: Symbol("completion-errors"),
+          phase: "single-pass",
+          getAnnotations: () => ({}),
+        };
+        let calls = 0;
+        const options: RunWithOptions<void, string> = {
+          args,
+          completion: {
+            command: true,
+            option: true,
+            errors: { missingShell: error, unsupportedShell: error },
+          },
+          stderr: () => {},
+          onError: (code, received) => {
+            calls++;
+            assert.equal(code, 1);
+            assert.strictEqual(received, error);
+            return "handled";
+          },
+        };
+        const parser = flag("--verbose");
+        const result = runner === "runWithSync"
+          ? runWithSync(parser, "test", [context], options)
+          : runner === "runWithAsync"
+          ? await runWithAsync(parser, "test", [context], options)
+          : await runWith(parser, "test", [context], options);
+        assert.equal(result, "handled");
+        assert.equal(calls, 1);
+      });
+    }
+  }
 });

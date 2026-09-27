@@ -8,6 +8,27 @@ Version 1.4.0
 
 To be released.
 
+### @optique/core
+
+ -  Added `completion.errors` to the Core runners to customize messages for
+    missing or unsupported completion shells.  `unsupportedShell` also accepts
+    a callback receiving the requested shell name and available shell names.
+    [[#967], [#982]]
+
+[#967]: https://github.com/dahlia/optique/issues/967
+[#982]: https://github.com/dahlia/optique/pull/982
+
+### @optique/run
+
+ -  Added `completion.errors` to `run()`, `runSync()`, and `runAsync()` for
+    customizing missing or unsupported completion shell messages.
+    [[#967], [#982]]
+
+### @optique/discover
+
+ -  Added `completion.errors` to `runProgram()` for customizing missing or
+    unsupported completion shell messages.  [[#967], [#982]]
+
 ### @optique/config
 
  -  Added the `expandHome` runtime option for config contexts.  When it is
