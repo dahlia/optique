@@ -414,8 +414,9 @@ to use `onExit(code)`.
 Core runners pass `onError(exitCode, error)` the structured
 [`Message`](./messages.md) used to render an error.  This covers parse failures,
 invalid command paths before help, and missing or unsupported completion
-shells.  You can inspect the message terms or format them for your application
-without extracting a reason from rendered stderr text.
+shells.  When `completion.errors` is configured, the callback receives the
+chosen custom message.  You can inspect the message terms or format them for
+your application without extracting a reason from rendered stderr text.
 
 The runner writes its usual output before calling `onError`.  The message
 argument contains the error itself; the runner's `Error: ` prefix, usage/help
@@ -808,6 +809,43 @@ const config = run(parser, {
   }
 });
 ~~~~
+
+### Completion error messages
+
+*Available since Optique 1.4.0.*
+
+Use the object form of `completion` to customize errors for a missing or
+unsupported shell.  Both the option and subcommand forms use these messages:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { run } from "@optique/run";
+
+run(object({}), {
+  completion: {
+    command: true,
+    option: true,
+    errors: {
+      missingShell: message`Select a shell for completion.`,
+      unsupportedShell: (shell, availableShells) =>
+        message`Cannot complete for ${shell}. Choose from ${
+          availableShells.join(", ")
+        }.`,
+    },
+  },
+});
+~~~~
+
+`missingShell` accepts a [`Message`](./messages.md).  `unsupportedShell`
+accepts either a `Message` or a callback receiving the requested shell name
+and the available shell names, including custom shells.  The callback runs
+only for an unsupported shell.  Omitted fields keep their default messages.
+
+The same settings work with the Core `runParser()`/`runWith()` families and
+[`runProgram()`](./discover.md).  Core runners pass the chosen message to
+`onError`; *@optique/run* and *@optique/discover* render it on stderr and
+report the exit code through `onExit`.
 
 Users can generate and install completion scripts:
 

@@ -3427,3 +3427,51 @@ describe("runProgram terminal presentation", () => {
     assert.ok(output.some((s) => s.includes("Failure: CUSTOM")));
   });
 });
+
+describe("runProgram completion errors", () => {
+  for (const args of [["--completion"], ["completion", "unknown"]]) {
+    it(`should render custom completion errors for ${args.join(" ")}`, async () => {
+      const chunks: string[] = [];
+      const exit = new Error("Exit.");
+      let handlerCalls = 0;
+      const command = defineCommand({
+        path: ["hello"],
+        parser: object({}),
+        handler: () => {
+          handlerCalls++;
+        },
+      });
+      await assert.rejects(() =>
+        runProgram({
+          commands: [command],
+          metadata: { name: "test" },
+          args,
+          colors: false,
+          completion: {
+            command: true,
+            option: true,
+            errors: {
+              missingShell: message`Select a shell.`,
+              unsupportedShell: (shell, shells) => {
+                assert.equal(shell, "unknown");
+                assert.deepEqual(shells, ["bash", "fish", "nu", "pwsh", "zsh"]);
+                return message`Cannot complete for ${shell}.`;
+              },
+            },
+          },
+          stderr: (chunk) => chunks.push(chunk),
+          onExit: (code): never => {
+            assert.equal(code, 1);
+            throw exit;
+          },
+        }), (error) => error === exit);
+      assert.equal(
+        chunks[0],
+        args.length === 1
+          ? "Error: Select a shell.\n"
+          : 'Error: Cannot complete for "unknown".',
+      );
+      assert.equal(handlerCalls, 0);
+    });
+  }
+});

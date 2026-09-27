@@ -77,8 +77,8 @@ Core rules
  -  Build subcommands with `command()` combined by `or()`. Put a literal field
     such as `command: constant("serve")` in each branch when you want a
     discriminated union.
- -  Enable completion through `run(parser, { completion: "both" })` for CLI
-    apps. Do not hand-write completion scripts from parser metadata.
+ -  Use `run(parser, { completion: "both" })` for completion, or the object form
+    with `completion.errors` for custom shell errors. Do not hand-write scripts.
  -  Use `usageLine: [{ type: "ellipsis" }]` in runner options when a large root
     synopsis should become a compact `Usage: myapp ...` line. This applies only
     to root full help; use `command()`'s `usageLine` for subcommand help.

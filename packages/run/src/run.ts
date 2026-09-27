@@ -274,6 +274,13 @@ export interface RunOptions {
     | (
       & {
         readonly shells?: Record<string, ShellCompletion>;
+        /**
+         * Custom messages for missing or unsupported completion shells.
+         * @since 1.4.0
+         */
+        readonly errors?: NonNullable<
+          CoreRunOptions<never, never>["completion"]
+        >["errors"];
       }
       & (
         | {

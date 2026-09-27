@@ -1341,6 +1341,26 @@ export interface RunOptions<THelp, TError> {
        * @default `{ bash, fish, nu, pwsh, zsh }`
        */
       readonly shells?: Record<string, ShellCompletion>;
+      /**
+       * Custom messages for completion shell errors.  Unspecified errors use
+       * the default messages.
+       * @since 1.4.0
+       */
+      readonly errors?: {
+        /**
+         * Message shown when no shell name is provided.
+         * @since 1.4.0
+         */
+        readonly missingShell?: Message;
+        /**
+         * Message shown for an unsupported shell.  A callback receives the
+         * shell name and the available shell names, including custom shells.
+         * @since 1.4.0
+         */
+        readonly unsupportedShell?:
+          | Message
+          | ((shell: string, availableShells: readonly string[]) => Message);
+      };
       /** Callback invoked when completion is requested. */
       readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
     }
@@ -1369,6 +1389,7 @@ export interface RunOptions<THelp, TError> {
    * Callback invoked after error output for a parse failure, an invalid
    * command path before help, or a missing or unsupported completion shell.
    * Receives the exit code and the structured error message used for output.
+   * Completion errors use `completion.errors` overrides when configured.
    * The message does not include the runner's `Error: ` prefix or usage/help
    * output.  The runner preserves any formatting terms in the original message.
    *
@@ -1467,6 +1488,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   messageFormatter?: MessageFormatter,
   theme?: TerminalTheme,
   automaticWidth = false,
+  errors?: NonNullable<RunOptions<THelp, TError>["completion"]>["errors"],
 ): ModeValue<M, THelp | TError> {
   const errorOptions = <T extends object>(format: T): T =>
     automaticWidth
@@ -1484,7 +1506,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
   // Check if shell name is empty
   if (!shellName) {
-    const error = message`Missing shell name for completion.`;
+    const error = errors?.missingShell ??
+      message`Missing shell name for completion.`;
     const writeError = () =>
       stderr(
         renderErrorMessage(
@@ -1550,7 +1573,9 @@ function handleCompletion<M extends Mode, THelp, TError>(
     );
   }
 
-  const shell = availableShells[shellName];
+  const shell = Object.hasOwn(availableShells, shellName)
+    ? availableShells[shellName]
+    : undefined;
 
   if (!shell) {
     const available: MessageTerm[] = [];
@@ -1558,8 +1583,11 @@ function handleCompletion<M extends Mode, THelp, TError>(
       if (available.length > 0) available.push(text(", "));
       available.push(value(name));
     }
-    const error =
-      message`Unsupported shell ${shellName}. Available shells: ${available}.`;
+    const unsupportedShell = errors?.unsupportedShell;
+    const error = typeof unsupportedShell === "function"
+      ? unsupportedShell(shellName, Object.keys(availableShells))
+      : unsupportedShell ??
+        message`Unsupported shell ${shellName}. Available shells: ${available}.`;
     stderr(renderErrorMessage(
       error,
       errorOptions({
@@ -2694,6 +2722,7 @@ export function runParser<
           messageFormatter,
           theme,
           automaticWidth,
+          options.completion?.errors,
         ) as InferValue<TParser>;
 
       case "help": {
