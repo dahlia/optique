@@ -8464,14 +8464,16 @@ function tokenMatchesLeadingName(
     if (
       token === name ||
       name.startsWith("-") && !name.startsWith("--") && name.length > 2 &&
+        !/^-[^-]$/u.test(name) &&
         token.startsWith(`${name}=`)
     ) return true;
   }
   for (const name of candidates.joinedOptionNames) {
     if (
-      /^-[^-]$/.test(name) && token.startsWith(name) ||
+      /^-[^-]$/u.test(name) && token.startsWith(name) ||
       name.startsWith("/") && token.startsWith(`${name}:`) ||
-      (name.startsWith("--") || name.startsWith("-") && name.length > 2) &&
+      (name.startsWith("--") ||
+          name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name)) &&
         token.startsWith(`${name}=`)
     ) {
       return true;

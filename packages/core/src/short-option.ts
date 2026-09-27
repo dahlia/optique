@@ -235,6 +235,7 @@ export function fullNameOwnsToken(
   for (const name of getOptionScope(context)) {
     if (
       name.startsWith("-") && !name.startsWith("--") && name.length > 2 &&
+      !/^-[^-]$/u.test(name) &&
       (token === name || token.startsWith(`${name}=`))
     ) return true;
   }
@@ -258,24 +259,28 @@ export function attachedValuePrefix(
       source(scoped.selections, names, context);
     }
   }
-  for (let index = 1; index < prefix.length; index++) {
+  for (let index = 1; index < prefix.length;) {
+    const character = String.fromCodePoint(prefix.codePointAt(index)!);
+    const nextIndex = index + character.length;
     const remainder = `-${prefix.slice(index)}`;
     for (const name of scope) {
       if (
         name.startsWith("-") && !name.startsWith("--") && name.length > 2 &&
+        !/^-[^-]$/u.test(name) &&
         (name.startsWith(remainder) || remainder.startsWith(`${name}=`))
       ) return undefined;
     }
-    const short = `-${prefix[index]}`;
+    const short = `-${character}`;
     if (optionNames.includes(short)) {
       return {
-        head: prefix.slice(0, index + 1),
-        value: prefix.slice(index + 1),
+        head: prefix.slice(0, nextIndex),
+        value: prefix.slice(nextIndex),
       };
     }
     if (!scope.has(short) || !names.flag.has(short) || names.value.has(short)) {
       return undefined;
     }
+    index = nextIndex;
   }
   return undefined;
 }

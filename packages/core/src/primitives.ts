@@ -580,7 +580,7 @@ function* suggestOptionSync<T>(
     // Check if this option matches any of our option names
     if (
       (optionNames as readonly string[]).includes(optionPart) &&
-      !/^-[^-]$/.test(optionPart)
+      !/^-[^-]$/u.test(optionPart)
     ) {
       if (valueParser && valueParser.suggest) {
         const valueSuggestions = getSuggestionsWithDependency(
@@ -624,7 +624,7 @@ function* suggestOptionSync<T>(
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
           // Special case: if prefix is exactly "-", only suggest short options
-          if (prefix === "-" && optionName.length !== 2) {
+          if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
             continue;
           }
           yield {
@@ -800,7 +800,7 @@ async function* suggestOptionAsync<T>(
     // Check if this option matches any of our option names
     if (
       (optionNames as readonly string[]).includes(optionPart) &&
-      !/^-[^-]$/.test(optionPart)
+      !/^-[^-]$/u.test(optionPart)
     ) {
       if (valueParser && valueParser.suggest) {
         const valueSuggestions = getSuggestionsWithDependencyAsync(
@@ -843,7 +843,7 @@ async function* suggestOptionAsync<T>(
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
           // Special case: if prefix is exactly "-", only suggest short options
-          if (prefix === "-" && optionName.length !== 2) {
+          if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
             continue;
           }
           yield {
@@ -1227,7 +1227,7 @@ export function option<M extends Mode, T>(
         .filter((name) =>
           name.startsWith("--") ||
           name.startsWith("/") ||
-          (name.startsWith("-") && name.length > 2)
+          (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
         )
         .map((name) => ({
           optionName: name,
@@ -1236,12 +1236,12 @@ export function option<M extends Mode, T>(
       if (
         valueParser != null &&
         optionNames.some((name) =>
-          /^-[^-]$/.test(name) && context.buffer[0].startsWith(name)
+          /^-[^-]$/u.test(name) && context.buffer[0].startsWith(name)
         ) &&
         !fullNameOwnsToken(context, context.buffer[0])
       ) {
         for (const name of optionNames) {
-          if (/^-[^-]$/.test(name)) {
+          if (/^-[^-]$/u.test(name)) {
             prefixes.push({ optionName: name, prefix: name });
           }
         }
@@ -1337,7 +1337,7 @@ export function option<M extends Mode, T>(
       if (valueParser == null) {
         // When the input contains bundled options, e.g., `-abc`
         const shortOptions = optionNames.filter(
-          (name) => name.match(/^-[^-]$/),
+          (name) => name.match(/^-[^-]$/u),
         );
         for (const shortOption of shortOptions) {
           if (
@@ -1363,11 +1363,11 @@ export function option<M extends Mode, T>(
               ...context,
               state: { success: true, value: true },
               buffer: [
-                `-${context.buffer[0].slice(2)}`,
+                `-${context.buffer[0].slice(shortOption.length)}`,
                 ...context.buffer.slice(1),
               ],
             },
-            consumed: [context.buffer[0].slice(0, 2)],
+            consumed: [context.buffer[0].slice(0, shortOption.length)],
           };
         }
       }
@@ -1887,7 +1887,7 @@ export function flag(
         .filter((name) =>
           name.startsWith("--") ||
           name.startsWith("/") ||
-          (name.startsWith("-") && name.length > 2)
+          (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
         )
         .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
       for (const prefix of prefixes) {
@@ -1905,7 +1905,7 @@ export function flag(
 
       // When the input contains bundled options, e.g., `-abc`
       const shortOptions = optionNames.filter(
-        (name) => name.match(/^-[^-]$/),
+        (name) => name.match(/^-[^-]$/u),
       );
       for (const shortOption of shortOptions) {
         if (
@@ -1931,11 +1931,11 @@ export function flag(
             ...context,
             state: { success: true, value: true },
             buffer: [
-              `-${context.buffer[0].slice(2)}`,
+              `-${context.buffer[0].slice(shortOption.length)}`,
               ...context.buffer.slice(1),
             ],
           },
-          consumed: [context.buffer[0].slice(0, 2)],
+          consumed: [context.buffer[0].slice(0, shortOption.length)],
         };
       }
 
@@ -2011,7 +2011,7 @@ export function flag(
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {
             // Special case: if prefix is exactly "-", only suggest short options (single dash + single char)
-            if (prefix === "-" && optionName.length !== 2) {
+            if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
               continue;
             }
             suggestions.push({
@@ -2371,7 +2371,7 @@ export function negatableFlag(
           !name.startsWith("--") &&
           !name.startsWith("/") &&
           !name.startsWith("+") &&
-          !(name.startsWith("-") && name.length > 2)
+          !(name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
         ) {
           continue;
         }
@@ -2391,7 +2391,7 @@ export function negatableFlag(
       }
 
       for (const shortOption of optionNames) {
-        if (!shortOption.match(/^-[^-]$/)) continue;
+        if (!shortOption.match(/^-[^-]$/u)) continue;
         if (
           !context.buffer[0].startsWith(shortOption) ||
           fullNameOwnsToken(context, context.buffer[0])
@@ -2400,9 +2400,12 @@ export function negatableFlag(
           context,
           shortOption,
           valueByName.get(shortOption)!,
-          [context.buffer[0].slice(0, 2)],
+          [context.buffer[0].slice(0, shortOption.length)],
           1,
-          [`-${context.buffer[0].slice(2)}`, ...context.buffer.slice(1)],
+          [
+            `-${context.buffer[0].slice(shortOption.length)}`,
+            ...context.buffer.slice(1),
+          ],
           options,
         );
       }
@@ -2465,7 +2468,7 @@ export function negatableFlag(
       ) {
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {
-            if (prefix === "-" && optionName.length !== 2) {
+            if (prefix === "-" && !/^-[^-]$/u.test(optionName)) {
               continue;
             }
             suggestions.push({ kind: "literal", text: optionName });

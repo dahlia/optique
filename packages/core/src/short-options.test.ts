@@ -131,6 +131,57 @@ describe("attached short option values", () => {
       value: 5,
     });
   });
+  it("handles Unicode short names in values, flag bundles and completion", async () => {
+    const p = object({ mark: flag("-🚩"), value: option("-🙂", string()) });
+    assert.deepEqual(parseSync(p, ["-🚩🙂hello"]), {
+      success: true,
+      value: { mark: true, value: "hello" },
+    });
+    assert.deepEqual(parseSync(option("-🙂", string()), ["-🙂=hello"]), {
+      success: true,
+      value: "=hello",
+    });
+    const completion = object({
+      mark: negatableFlag({ positive: "-🚩", negative: "--no-mark" }),
+      value: option("-🙂", choice(["hello"])),
+    });
+    assert.deepEqual(texts(suggestSync(completion, ["-🚩🙂he"])), [
+      "-🚩🙂hello",
+    ]);
+    assert.deepEqual(
+      await parseAsync(option("-🙂", asyncString()), ["-🙂hello"]),
+      {
+        success: true,
+        value: "hello",
+      },
+    );
+  });
+  it("recognizes Unicode short names when skipping sequence fields and completing names", async () => {
+    assert.deepEqual(
+      parseSync(
+        seq(
+          withDefault(argument(string()), "default"),
+          option("-🙂", string()),
+        ),
+        ["-🙂hello"],
+      ),
+      { success: true, value: ["default", "hello"] },
+    );
+    for (
+      const p of [
+        option("-🙂", string()),
+        flag("-🙂"),
+        negatableFlag({ positive: "-🙂", negative: "--no-smile" }),
+      ]
+    ) {
+      assert.ok(texts(suggestSync<unknown>(p, ["-"])).includes("-🙂"));
+    }
+    assert.ok(
+      texts(await suggestAsync(option("-🙂", asyncString()), ["-"])).includes(
+        "-🙂",
+      ),
+    );
+  });
   it("works asynchronously and replays dependent attached values", async () => {
     assert.deepEqual(
       await parseAsync(

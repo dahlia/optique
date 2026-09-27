@@ -10,6 +10,10 @@ To be released.
 
 ### @optique/core
 
+ -  Added attached values for short options, so `-n5` and `-xn5` work like
+    `-n 5` and `-x -n 5`, with value completion for attached forms.  Declared
+    single-dash full names now take precedence over short-option splitting,
+    independently of field order.  [[#965], [#981]]
  -  Added `completion.errors` to the Core runners to customize messages for
     missing or unsupported completion shells.  `unsupportedShell` also accepts
     a callback receiving the requested shell name and available shell names.
@@ -23,8 +27,10 @@ To be released.
     are preserved, and help callbacks receive the grouped page.
     [[#972], [#983]]
 
+[#965]: https://github.com/dahlia/optique/issues/965
 [#967]: https://github.com/dahlia/optique/issues/967
 [#972]: https://github.com/dahlia/optique/issues/972
+[#981]: https://github.com/dahlia/optique/pull/981
 [#982]: https://github.com/dahlia/optique/pull/982
 [#983]: https://github.com/dahlia/optique/pull/983
 
