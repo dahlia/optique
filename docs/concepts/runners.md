@@ -371,7 +371,8 @@ their existing fallback behavior.
 
 Core runners pass `help.onShow(exitCode, page)` the final `DocPage` used for
 help output. This includes runner-provided help, version, and completion
-entries, program metadata, and root `usageLine` and `commandList` changes.
+entries, program metadata, root `usageLine` and `commandList` changes, and
+`helpSections` grouping.
 Subcommand and meta-command help receive the selected command's page, with
 its own brief and description and the run-level footer as a fallback.
 
@@ -1110,6 +1111,48 @@ These same fields also appear when errors are displayed with
 `aboveError: "help"`, providing context even when parsing fails. The
 user-provided documentation takes precedence over any documentation generated
 from parser structure.
+
+### Automatic help sections
+
+*This feature is available since Optique 1.4.0.*
+
+Pass `helpSections: { commands: "Commands", options: "Options" }` to `run()`,
+`runParser()`, or their sync, async, and context-aware variants to group
+untitled command and option entries. The grouping applies only when the
+current help page contains a visible command. Leaf pages with no command
+entries receive no automatic headings. See the
+[cookbook example](../cookbook.md#command-and-option-headings-in-help).
+
+Both labels are optional. For example, `{ commands: "Commands" }` labels only
+the command list; option entries remain untitled. Labels have no default
+language. Omit the setting or pass `{}` to keep the existing output.
+Supplied labels are validated before parsing, even if no help is requested:
+empty, whitespace-only, or control-character-containing labels throw
+`TypeError`.
+
+Explicit section titles from `group()`, labeled `object()`/`merge()`, or a
+meta entry's `group` setting are preserved. If an automatic title matches an
+existing title, its entries are appended to that section. Otherwise a new
+section is placed where the untitled entries came from. Command sections are
+created before option sections, followed by any untitled remainder; the usual
+[`sectionOrder`](#section-ordering) then determines their display order. Using
+the same label for commands and options gives one section with commands first.
+Matching a command label to an existing option section gives a mixed section.
+
+Built-in help, version, and completion entries take part too. For example,
+`help: "both"` adds a visible `help` command, so it can trigger automatic
+headings even when the user parser has no commands. Commands hidden from
+documentation do not trigger grouping; commands hidden only from usage do.
+
+Arguments and passthrough entries stay untitled. Under the default section
+order they can appear between `Commands:` and `Options:`. Explicit groups
+also keep their titles on leaf pages; this setting does not remove them.
+
+Grouping applies to full help printed above errors with `aboveError: "help"`.
+The core runner's `help.onShow()` callback receives the grouped `DocPage`, so
+formatting it again reproduces the sections. Raw `getDocPage()` results and
+standalone `formatDocPage()` calls are unaffected. Man pages use their own
+section headings and do not use this setting.
 
 ### Section ordering
 

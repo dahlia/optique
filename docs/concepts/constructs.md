@@ -1835,6 +1835,61 @@ if (result1.success && result2.success) {
 }
 ~~~~
 
+### Grouping commands
+
+Wrap a command dispatcher in `group()` to give the command list a heading
+without labeling the selected command's options:
+
+~~~~ typescript twoslash
+import { group, object, or } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { optional } from "@optique/core/modifiers";
+import { command, constant, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const logs = optional(option("-L", "--logs", string({ metavar: "DIR" }), {
+  description: message`Logs directory`,
+}));
+
+const parser = group("Commands", or(
+  command("list", object({ action: constant("list"), logs }), {
+    brief: message`List run directories`,
+  }),
+  command("rotate", object({ action: constant("rotate"), logs }), {
+    brief: message`Rotate run directories`,
+  }),
+));
+~~~~
+
+The parent help page includes this section:
+
+~~~~ text
+Commands:
+  list                        List run directories
+  rotate                      Rotate run directories
+~~~~
+
+On the `list` help page, the options appear without the outer heading:
+
+~~~~ text
+  -L, --logs DIR              Logs directory
+~~~~
+
+The outer label also stops applying when the selected command exposes its
+own nested commands. Explicit groups inside a command keep their own titles.
+
+A labeled `object("Commands", { command: or(...) })` or `merge("Commands", ...)`
+keeps its label when its children expose the selected command's options.
+Use `group("Commands", or(...))` when the heading belongs to the command list
+only. A labeled `object()` or `merge()` used as a command body keeps its heading
+on that command's own help page too.
+
+For options shared by every command, see
+[shared options across subcommands](../cookbook.md#shared-options-across-subcommands).
+Grouping the shared options gives them a heading on both the parent and
+subcommand help pages. For headings only on pages with commands, use the
+runner's [`helpSections`](./runners.md#automatic-help-sections) setting instead.
+
 ### Realistic usage patterns
 
 The `group()` parser is most useful with parsers that don't have built-in

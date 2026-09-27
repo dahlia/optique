@@ -8,6 +8,7 @@ import type {
   CommandListMode,
   CommandSubConfig,
   ContextOptionsParam,
+  HelpSectionsOptions,
   OptionSubConfig,
   RunOptions as CoreRunOptions,
 } from "@optique/core/facade";
@@ -194,6 +195,17 @@ export interface RunOptions {
    * @since 1.0.0
    */
   readonly sectionOrder?: (a: DocSection, b: DocSection) => number;
+
+  /**
+   * Groups untitled command and option entries on help pages with visible
+   * commands. Pages without commands receive no automatic headings. Explicit
+   * titles are preserved; matching automatic entries join the existing section.
+   * Supplied labels must be nonempty and contain no control characters.
+   * Also applies to full help displayed above errors.
+   *
+   * @since 1.4.0
+   */
+  readonly helpSections?: HelpSectionsOptions;
 
   /**
    * Help configuration. Determines how help is made available:
@@ -508,6 +520,7 @@ function resolveProgramInput<
  *                See {@link RunOptions} for available settings.
  * @throws {RangeError} If rendering help or errors encounters an invalid theme
  * color, even when colors are disabled.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @returns The parsed result if successful. On help display or parse errors,
  *          the function will call `process.exit()` and not return.
  *
@@ -689,6 +702,7 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
  * @param options Configuration options for customizing behavior.
  * @throws {RangeError} If rendering help or errors encounters an invalid theme
  * color, even when colors are disabled.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @returns The parsed result if successful.
  * @throws {TypeError} If an async parser (or a {@link Program} wrapping one)
  * is passed at runtime.  Use {@link run} or {@link runAsync} instead.
@@ -802,6 +816,7 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
  * @param options Configuration options for customizing behavior.
  * @throws {RangeError} If rendering help or errors encounters an invalid theme
  * color, even when colors are disabled.
+ * @throws {TypeError} If a `helpSections` label is invalid.
  * @returns A Promise of the parsed result if successful.
  * @since 0.9.0
  */
@@ -915,6 +930,7 @@ function buildCoreOptions(
   const usageLine = options.usageLine;
   const commandList = options.commandList;
   const sectionOrder = options.sectionOrder;
+  const helpSections = options.helpSections;
   const help = options.help;
   const version = options.version;
   const completion = options.completion;
@@ -985,6 +1001,7 @@ function buildCoreOptions(
     usageLine,
     commandList,
     sectionOrder,
+    helpSections,
     help: helpConfig,
     version: versionConfig,
     completion: completionConfig,
@@ -1030,6 +1047,7 @@ const knownRunOptionsKeyList = [
   "usageLine",
   "commandList",
   "sectionOrder",
+  "helpSections",
   "help",
   "version",
   "completion",

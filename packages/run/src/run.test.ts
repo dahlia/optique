@@ -3307,3 +3307,94 @@ describe("custom completion errors", () => {
     assert.deepEqual(chunks, ["Error: Select a shell."]);
   });
 });
+
+describe("helpSections forwarding", () => {
+  class HelpExit extends Error {
+    constructor() {
+      super("Help displayed.");
+    }
+  }
+  const parser = object({
+    verbose: option("--verbose"),
+    command: or(
+      command("list", object({ logs: optional(option("--logs", string())) })),
+      command("rotate", object({ logs: optional(option("--logs", string())) })),
+    ),
+  });
+  const helpSections = { commands: "Commands", options: "Options" };
+
+  it("should forward the setting through sync and async public runners", async () => {
+    for (const args of [["--help"], ["list", "--help"]]) {
+      const chunks: string[] = [];
+      const options: RunOptions = {
+        args,
+        programName: "demo",
+        help: "option",
+        helpSections,
+        colors: false,
+        showUsage: false,
+        stdout: (text) => chunks.push(text),
+        onExit: () => {
+          throw new HelpExit();
+        },
+      };
+      assert.throws(() => runSync(parser, options), HelpExit);
+      await assert.rejects(
+        async () => await runAsync(parser, options),
+        HelpExit,
+      );
+      assert.equal(chunks.length, 2);
+      assert.equal(chunks[0], chunks[1]);
+      if (args.length === 1) {
+        assert.match(chunks[0], /^Commands:$/m);
+        assert.match(chunks[0], /^Options:$/m);
+      } else assert.doesNotMatch(chunks[0], /^(Commands|Options):$/m);
+    }
+  });
+
+  it("should preserve grouping with source contexts", async () => {
+    const chunks: string[] = [];
+    const context: SourceContext = {
+      id: Symbol("help-grouping-context"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    await assert.rejects(() =>
+      runAsync(parser, {
+        args: ["--help"],
+        programName: "demo",
+        contexts: [context],
+        help: "option",
+        helpSections,
+        colors: false,
+        stdout: (text) => chunks.push(text),
+        onExit: () => {
+          throw new HelpExit();
+        },
+      }), HelpExit);
+    assert.match(chunks.join(""), /^Commands:$/m);
+    assert.match(chunks.join(""), /^Options:$/m);
+  });
+
+  it("should keep the runner setting out of implicit context options", () => {
+    const received: unknown[] = [];
+    const context: SourceContext = {
+      id: Symbol("help-grouping-options"),
+      phase: "two-pass",
+      getAnnotations(_request, options) {
+        received.push(options);
+        return {};
+      },
+    };
+    runSync(constant("ok"), {
+      args: [],
+      programName: "demo",
+      contexts: [context],
+      helpSections,
+    });
+    assert.ok(received.length > 0);
+    for (const options of received) assert.equal(options, undefined);
+  });
+});

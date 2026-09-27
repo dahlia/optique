@@ -3,10 +3,10 @@ import type {
   ParserValuePlaceholder,
   SourceContext,
 } from "@optique/core/context";
-import { object } from "@optique/core/constructs";
+import { object, or } from "@optique/core/constructs";
 import type { Parser } from "@optique/core/parser";
 import type { Program } from "@optique/core/program";
-import { argument, constant, option } from "@optique/core/primitives";
+import { argument, command, constant, option } from "@optique/core/primitives";
 import type { ValueParser } from "@optique/core/valueparser";
 import { string } from "@optique/core/valueparser";
 import type { RunOptions } from "@optique/run";
@@ -646,3 +646,30 @@ function createBlockingContext(
     },
   };
 }
+
+describe("helpSections forwarding", () => {
+  it("should capture the runner's conditional headings", async () => {
+    const parser = or(
+      command("list", object({ verbose: option("--verbose") })),
+      command("rotate", object({ verbose: option("--verbose") })),
+    );
+    for (const args of [["--help"], ["list", "--help"]]) {
+      const result = await captureRun(parser, {
+        args,
+        programName: "demo",
+        help: "option",
+        helpSections: { commands: "Commands", options: "Options" },
+        colors: false,
+      });
+      assert.equal(result.kind, "exited");
+      assert.equal(result.exitCode, 0);
+      if (args.length === 1) {
+        assert.match(result.stdout, /^Commands:$/m);
+        assert.match(result.stdout, /^Options:$/m);
+      } else {
+        assert.doesNotMatch(result.stdout, /^(Commands|Options):$/m);
+        assert.match(result.stdout, /--verbose/);
+      }
+    }
+  });
+});

@@ -3475,3 +3475,41 @@ describe("runProgram completion errors", () => {
     });
   }
 });
+
+describe("helpSections forwarding", () => {
+  it("should group discovered command help and leave leaf help untitled", async () => {
+    const commands = ["list", "rotate"].map((name) =>
+      defineCommand({
+        path: [name],
+        parser: object({ verbose: option("--verbose") }),
+        handler() {},
+      })
+    );
+    for (const args of [["--help"], ["list", "--help"]]) {
+      const chunks: string[] = [];
+      await assert.rejects(() =>
+        runProgram({
+          commands,
+          metadata: { name: "demo", version: "1.0" },
+          args,
+          help: "option",
+          completion: false,
+          helpSections: { commands: "Commands", options: "Options" },
+          colors: false,
+          stdout: (text) => chunks.push(text),
+          onExit(code): never {
+            throw new ExitSignal(code);
+          },
+        }), ExitSignal);
+      const output = chunks.join("");
+      if (args.length === 1) {
+        assert.match(output, /^Commands:$/m);
+        assert.match(output, /^Options:$/m);
+        assert.match(output, /--version/);
+      } else {
+        assert.doesNotMatch(output, /^(Commands|Options):$/m);
+        assert.match(output, /--verbose/);
+      }
+    }
+  });
+});
