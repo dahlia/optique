@@ -415,13 +415,16 @@ prompt configuration resolves only once, and every attempt receives that same
 resolved config.  Rejected values are not cached or published as dependency
 values; only the terminal result reaches the existing completion cache.
 
-An optional `AbortSignal` stops an active adapter execution or validator and
+An optional `AbortSignal` stops an active adapter execution, validator, or
+[derived configuration](#derived-prompt-configurations) resolver and
 propagates its reason.  CLI values, source-bound values, a false runtime
 condition, help, suggestions, and completion probes do not consult the signal.
-The signal does not add general cancellation to parsing, dependency scheduling,
-or derived configuration resolution.  If it aborts while a resolver is
-pending, the reason is observed immediately after the resolver settles and
-before an adapter starts.
+The signal does not add general cancellation to parsing or dependency
+scheduling.  If it aborts while a resolver is pending, parsing rejects with
+its reason right away instead of waiting for the resolver to settle.  The
+resolver receives the same signal in its context and should pass it on to
+cancellable work such as network requests; otherwise that work keeps running
+in the background after the prompt has been abandoned.
 
 > [!IMPORTANT]
 > Shared validation applies only to prompted values.  It does not re-run the
@@ -808,6 +811,59 @@ actually published.  See
 [Evaluation order and failures](../concepts/dependencies.md#evaluation-order-and-failures)
 for the full branch and repeated-source rules.
 
+### Configurations without dependencies
+
+*This API is available since Optique 1.4.0.*
+
+`derivePromptConfig()` also accepts a resolver alone.  This defers the whole
+configuration to the moment the prompt is about to be shown, which suits
+choices that have to be fetched, such as objects in a storage bucket or
+branches on a remote server:
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { createPromptAdapter, derivePromptConfig } from "@optique/prompt";
+
+interface SelectConfig {
+  readonly message: string;
+  readonly choices: readonly string[];
+}
+
+declare function promptSelect(config: SelectConfig): Promise<string>;
+declare function listObjects(
+  options: { readonly signal?: AbortSignal },
+): Promise<readonly string[]>;
+// ---cut-before---
+const prompt = createPromptAdapter<SelectConfig>({
+  async execute<TValue>(config: SelectConfig) {
+    return { success: true, value: await promptSelect(config) as TValue };
+  },
+});
+
+const key = prompt(
+  option("--key", string()),
+  derivePromptConfig(async ({ signal }) => ({
+    message: "Object to download:",
+    choices: await listObjects({ signal }),
+  })),
+);
+~~~~
+
+The resolver follows the same rules as one with dependencies.  It does not
+run when the command line or a source binding supplies the value, or during
+help, suggestions, and completion probes.  It runs at most once per
+completion, and validation retries reuse the configuration it returned.
+A `when`/`otherwise` pair goes in the optional second argument and is checked
+before the resolver, so a skipped prompt fetches nothing.
+
+Setting a `select`-style configuration by returning a plain object literal
+relies on the `prompt()` wrapper's expected configuration type.  When you
+assign the derived configuration to a variable before passing it on, that
+context is gone and a field such as `type: "select"` widens to `string`.
+Mark the returned object with `satisfies` and the adapter's configuration
+type, or annotate the resolver's return type, to keep it narrow.
+
 
 Testing adapters
 ----------------
@@ -932,7 +988,9 @@ promise of either result is also accepted.
 
 `signal`
 :   Optional `AbortSignal` for the interactive fallback.  Its reason propagates
-    when it stops an active adapter execution or validator.
+    when it stops an active adapter execution, validator, or derived
+    configuration resolver.  Resolvers also receive it in their context.
+    Stopping a pending resolver is available since Optique 1.4.0.
 
 ### `PromptExecutionContext`
 
@@ -965,6 +1023,8 @@ Parameters
     the tuple context has a positional `usedDefaults` tuple.  A flag is
     `true` only when the value came from this configuration's own declared
     default, not from source-level fallbacks such as `withDefault()`.
+    Both contexts also carry the optional `signal` from `PromptOptions`
+    (since Optique 1.4.0).
 
 :   `options`: Optional `defaultValue` (or `defaultValues` for a tuple)
     thunk evaluated lazily for unpublished sources, plus the same
@@ -977,6 +1037,25 @@ Returns
 Throws
 :   `TypeError` when `source` is empty or contains a value that is not a
     dependency source.
+
+### `derivePromptConfig(resolver, options?)`
+
+*Available since Optique 1.4.0.*
+
+Creates a `DerivedPromptConfig` that resolves the adapter configuration
+during the real completion phase without reading any dependency source.
+
+Parameters
+:   `resolver`: Receives a context object with the optional `signal` from
+    `PromptOptions`, and returns the adapter configuration synchronously or
+    as a promise.
+
+:   `options`: The same optional `when`/`otherwise` pair as static
+    configurations.
+
+Returns
+:   An opaque `DerivedPromptConfig` accepted by every `prompt()` wrapper
+    generated by `createPromptAdapter()`.
 
 ### `isDerivedPromptConfig(config)`
 

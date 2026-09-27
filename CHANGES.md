@@ -20,6 +20,41 @@ To be released.
 [#973]: https://github.com/dahlia/optique/issues/973
 [#977]: https://github.com/dahlia/optique/pull/977
 
+### @optique/clack
+
+ -  `prompt()` now accepts a `derivePromptConfig()` result without
+    dependency sources, so a selection prompt can load its options
+    asynchronously right before it opens.  The resolver receives the abort
+    `signal` from the shared options.  The new
+    `DerivePromptConfigNoDepsContext` and `DerivePromptConfigNoDepsOptions`
+    types are re-exported for convenience.  [[#964], [#979]]
+
+[#964]: https://github.com/dahlia/optique/issues/964
+[#979]: https://github.com/dahlia/optique/pull/979
+
+### @optique/inquirer
+
+ -  `prompt()` now accepts a `derivePromptConfig()` result without
+    dependency sources, so a selection prompt can load its choices
+    asynchronously right before it opens.  The resolver receives the abort
+    `signal` from the shared options.  The new
+    `DerivePromptConfigNoDepsContext` and `DerivePromptConfigNoDepsOptions`
+    types are re-exported for convenience.  [[#964], [#979]]
+
+### @optique/prompt
+
+ -  Added a `derivePromptConfig()` form that takes only a resolver, for
+    prompt configurations that depend on no parsed value but have to be
+    loaded, such as choices fetched from a remote service.  The resolver runs
+    only at the real prompt fallback, so command-line values, source
+    bindings, help, and suggestions never trigger it.  The new
+    `DerivePromptConfigNoDepsContext` and `DerivePromptConfigNoDepsOptions`
+    types describe its context and options.  [[#964], [#979]]
+ -  Derived prompt configuration resolvers now receive the prompt's abort
+    `signal` in their context, and aborting while a resolver is pending now
+    rejects parsing right away with the signal's reason.  Previously, the
+    abort was observed only after the resolver settled.  [[#964], [#979]]
+
 
 Version 1.3.1
 -------------
@@ -32,6 +67,9 @@ Released on September 26, 2026.
     `--no-pager=1`, reporting the option name with the `=` or `:` separator
     still attached in its error message.
     [[#966], [#975]]
+
+[#966]: https://github.com/dahlia/optique/issues/966
+[#975]: https://github.com/dahlia/optique/pull/975
 
 
 Version 1.3.0

@@ -94,8 +94,11 @@ export interface PromptOptions<TValue> {
   readonly maxAttempts?: number;
 
   /**
-   * Signal that stops the active adapter execution or validator.  Its reason
-   * is propagated to the caller without becoming a parse failure.
+   * Signal that stops the active adapter execution, validator, or derived
+   * configuration resolver.  Its reason is propagated to the caller without
+   * becoming a parse failure.  Derived configuration resolvers also receive
+   * it so that they can cancel their own work.
+   * @since 1.4.0 Also stops a pending derived configuration resolver.
    */
   readonly signal?: AbortSignal;
 }
@@ -176,6 +179,27 @@ export interface DerivePromptConfigContext {
    * values and are not reported here.
    */
   readonly usedDefault: boolean;
+
+  /**
+   * Signal supplied through the prompt's shared options, when present.
+   * Pass it to cancellable work such as network requests.
+   * @since 1.4.0
+   */
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Context passed to a prompt configuration resolver that has no
+ * dependencies.
+ *
+ * @since 1.4.0
+ */
+export interface DerivePromptConfigNoDepsContext {
+  /**
+   * Signal supplied through the prompt's shared options, when present.
+   * Pass it to cancellable work such as network requests.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -193,6 +217,13 @@ export interface DerivePromptConfigsContext<
    * than a published source value.
    */
   readonly usedDefaults: { readonly [K in keyof Deps]: boolean };
+
+  /**
+   * Signal supplied through the prompt's shared options, when present.
+   * Pass it to cancellable work such as network requests.
+   * @since 1.4.0
+   */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -218,6 +249,19 @@ export type DerivePromptConfigOptions<TDefault, TOtherwise> =
       readonly otherwise: TOtherwise;
     }
   );
+
+/**
+ * Options for a zero-dependency {@link derivePromptConfig} call.
+ *
+ * @typeParam TOtherwise Value type returned when `when` skips the prompt.
+ * @since 1.4.0
+ */
+export type DerivePromptConfigNoDepsOptions<TOtherwise> =
+  | { readonly when?: never; readonly otherwise?: never }
+  | {
+    readonly when: () => boolean | Promise<boolean>;
+    readonly otherwise: TOtherwise;
+  };
 
 /**
  * Options for a multi-dependency {@link derivePromptConfig} call.
@@ -274,12 +318,14 @@ export interface DerivedPromptConfig<TConfig, TOtherwise = never> {
 
   /**
    * Resolves the adapter configuration from dependency values.  Receives
-   * one value and one used-default flag per dependency position.
+   * one value and one used-default flag per dependency position, and
+   * optionally the abort signal to forward to the resolver.
    * @internal
    */
   readonly resolve: (
     values: readonly unknown[],
     usedDefaults: readonly boolean[],
+    context?: DerivePromptConfigNoDepsContext,
   ) => TConfig | Promise<TConfig>;
 
   /**
@@ -312,6 +358,30 @@ export function isDerivedPromptConfig(
         derivedPromptConfigMarker
       ] === true;
 }
+
+/**
+ * Derives a prompt configuration without any dependency source.
+ *
+ * The resolver may return the configuration synchronously or
+ * asynchronously.  It runs only during the real completion phase,
+ * immediately before the adapter executes, so it can load data such as
+ * the choices of a selection prompt without running for command-line
+ * values, help, or suggestions.
+ *
+ * @typeParam TConfig Adapter configuration produced by the resolver.
+ * @typeParam TOtherwise Value type returned when `when` skips the prompt.
+ * @param resolver Produces the adapter configuration.  It receives the
+ *                 prompt's abort signal, when one is supplied.
+ * @param options Optional runtime condition.
+ * @returns A derived configuration accepted by `prompt()` wrappers.
+ * @since 1.4.0
+ */
+export function derivePromptConfig<TConfig, const TOtherwise = never>(
+  resolver: (
+    context: DerivePromptConfigNoDepsContext,
+  ) => TConfig | Promise<TConfig>,
+  options?: DerivePromptConfigNoDepsOptions<TOtherwise>,
+): DerivedPromptConfig<TConfig, TOtherwise>;
 
 /**
  * Derives a prompt configuration from one dependency source value.
@@ -378,8 +448,13 @@ export function derivePromptConfig<
 ): DerivedPromptConfig<TConfig, TOtherwise>;
 
 export function derivePromptConfig(
-  source: AnyDependencySource | readonly AnyDependencySource[],
-  resolver: (value: never, context: never) => unknown,
+  source:
+    | AnyDependencySource
+    | readonly AnyDependencySource[]
+    | ((context: DerivePromptConfigNoDepsContext) => unknown),
+  resolverOrOptions?:
+    | ((value: never, context: never) => unknown)
+    | DerivePromptConfigNoDepsOptions<unknown>,
   options?: {
     readonly defaultValue?: () => unknown;
     readonly defaultValues?: () => readonly unknown[];
@@ -387,6 +462,16 @@ export function derivePromptConfig(
     readonly otherwise?: unknown;
   },
 ): DerivedPromptConfig<unknown, unknown> {
+  if (typeof source === "function") {
+    return deriveNoDepsPromptConfig(
+      source,
+      resolverOrOptions as DerivePromptConfigNoDepsOptions<unknown> | undefined,
+    );
+  }
+  const resolver = resolverOrOptions as (
+    value: never,
+    context: never,
+  ) => unknown;
   const isTuple = Array.isArray(source);
   const dependencies: readonly AnyDependencySource[] = isTuple
     ? source
@@ -407,14 +492,17 @@ export function derivePromptConfig(
     ? (
       values: readonly unknown[],
       usedDefaults: readonly boolean[],
-    ): unknown => resolver(values as never, { usedDefaults } as never)
+      context?: DerivePromptConfigNoDepsContext,
+    ): unknown =>
+      resolver(values as never, { usedDefaults, ...context } as never)
     : (
       values: readonly unknown[],
       usedDefaults: readonly boolean[],
+      context?: DerivePromptConfigNoDepsContext,
     ): unknown =>
       resolver(
         values[0] as never,
-        { usedDefault: usedDefaults[0] } as never,
+        { usedDefault: usedDefaults[0], ...context } as never,
       );
   return {
     [derivedPromptConfigMarker]: true,
@@ -425,6 +513,22 @@ export function derivePromptConfig(
     ),
     resolve: resolve as DerivedPromptConfig<unknown, unknown>["resolve"],
     ...(defaultValues == null ? {} : { defaultValues }),
+    ...(options?.when == null
+      ? {}
+      : { when: options.when, otherwise: options.otherwise }),
+  };
+}
+
+function deriveNoDepsPromptConfig(
+  resolver: (context: DerivePromptConfigNoDepsContext) => unknown,
+  options: DerivePromptConfigNoDepsOptions<unknown> | undefined,
+): DerivedPromptConfig<unknown, unknown> {
+  return {
+    [derivedPromptConfigMarker]: true,
+    dependencies: [],
+    dependencyIds: [],
+    dependencyLabels: [],
+    resolve: (_values, _usedDefaults, context) => resolver({ ...context }),
     ...(options?.when == null
       ? {}
       : { when: options.when, otherwise: options.otherwise }),
@@ -453,6 +557,7 @@ async function resolveDerivedPromptConfig<TConfig>(
   exec: ExecutionContext | undefined,
   ownSourceId: symbol | undefined,
   ownLabel: string | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<DerivedConfigResolution<TConfig>> {
   const runtime = exec?.dependencyRuntime;
   const ids = config.dependencyIds;
@@ -524,7 +629,14 @@ async function resolveDerivedPromptConfig<TConfig>(
   }
 
   try {
-    return { ok: true, config: await config.resolve(values, usedDefaults) };
+    return {
+      ok: true,
+      config: await config.resolve(
+        values,
+        usedDefaults,
+        signal === undefined ? {} : { signal },
+      ),
+    };
   } catch (error) {
     return {
       ok: false,
@@ -842,13 +954,19 @@ export function createPromptAdapter<TConfig>(
         resolvedConfig = config as TConfig;
       } else {
         const source = promptedParser.dependencyMetadata?.source;
-        const resolved = await resolveDerivedPromptConfig(
-          config as DerivedPromptConfig<TConfig, unknown>,
-          exec,
-          source?.sourceId,
-          source?.metavar,
+        // Stop waiting as soon as the signal aborts; the resolver receives
+        // the same signal to cancel its own work.
+        const resolved = await racePromptWorkWithAbort(
+          signal,
+          () =>
+            resolveDerivedPromptConfig(
+              config as DerivedPromptConfig<TConfig, unknown>,
+              exec,
+              source?.sourceId,
+              source?.metavar,
+              signal,
+            ),
         );
-        throwIfPromptAborted(signal);
         if (!resolved.ok) return { success: false, error: resolved.error };
         resolvedConfig = resolved.config;
       }

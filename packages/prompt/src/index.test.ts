@@ -4043,7 +4043,7 @@ describe("derived prompt configurations", () => {
     assert.deepEqual(calls, []);
   });
 
-  it("observes abort after a pending derived configuration settles", async () => {
+  it("rejects with the abort reason before a pending derived configuration settles", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
     const controller = new AbortController();
     const reason = { code: "stopped" };
@@ -4064,15 +4064,83 @@ describe("derived prompt configurations", () => {
     });
 
     const parsing = parseAsync(parser, ["--framework", "hono"]);
+    let rejection: unknown;
+    const settled = parsing.then(
+      () => false,
+      (error: unknown) => {
+        rejection = error;
+        return true;
+      },
+    );
     await started.promise;
     controller.abort(reason);
-    resolution.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    await assert.rejects(
-      () => parsing,
-      (error: unknown) => error === reason,
-    );
+    // The resolver is still pending, yet parsing has already rejected.
+    assert.equal(rejection, reason);
+    resolution.resolve();
+    assert.ok(await settled);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(calls, []);
+  });
+
+  it("passes the abort signal to dependency resolvers", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const runtime = dependency(choice(["deno", "node"] as const));
+    const controller = new AbortController();
+    const { prompt } = createTestPrompt();
+    const signals: (AbortSignal | undefined)[] = [];
+    const parser = object({
+      framework: option("--framework", framework),
+      runtime: option("--runtime", runtime),
+      single: prompt(
+        option("--single", string()),
+        derivePromptConfig(framework, (value, { signal }) => {
+          signals.push(signal);
+          return { value };
+        }),
+        { signal: controller.signal },
+      ),
+      tuple: prompt(
+        option("--tuple", string()),
+        derivePromptConfig([framework, runtime], ([fw, rt], { signal }) => {
+          signals.push(signal);
+          return { value: `${fw}/${rt}` };
+        }),
+        { signal: controller.signal },
+      ),
+    });
+
+    const result = await parseAsync(parser, [
+      "--framework",
+      "hono",
+      "--runtime",
+      "deno",
+    ]);
+
+    assert.ok(result.success);
+    assert.deepEqual(signals, [controller.signal, controller.signal]);
+  });
+
+  it("omits the signal from dependency resolver contexts without one", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const runtime = dependency(choice(["deno", "node"] as const));
+    const single = derivePromptConfig(
+      framework,
+      (_value, context) => ({ value: context }),
+    );
+    const tuple = derivePromptConfig(
+      [framework, runtime],
+      (_values, context) => ({ value: context }),
+    );
+
+    // Callers that predate the optional resolver context still work.
+    assert.deepEqual(await single.resolve(["hono"], [true]), {
+      value: { usedDefault: true },
+    });
+    assert.deepEqual(await tuple.resolve(["hono", "deno"], [false, true]), {
+      value: { usedDefaults: [false, true] },
+    });
   });
 
   it("orders prompts topologically regardless of field order", async () => {
@@ -4284,6 +4352,478 @@ describe("derived prompt configurations", () => {
       assert.deepEqual(calls, [{ value: "z2" }]);
     },
   );
+});
+
+// https://github.com/dahlia/optique/issues/964
+describe("zero-dependency derived prompt configurations", () => {
+  function createTwoPassContext(name: string): SourceContext {
+    return {
+      id: Symbol.for(`@optique/prompt/test-zero-dependency-${name}`),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+  }
+
+  it("resolves an asynchronous configuration at completion", async () => {
+    const { prompt, calls } = createTestPrompt();
+    const contexts: unknown[] = [];
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(async (context) => {
+        contexts.push(context);
+        await Promise.resolve();
+        return { value: "loaded" };
+      }),
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "loaded");
+    assert.deepEqual(calls, [{ value: "loaded" }]);
+    assert.deepEqual(contexts, [{}]);
+  });
+
+  it("does not resolve when the command line supplies a value", async () => {
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(() => {
+        resolverCalls++;
+        return { value: "loaded" };
+      }),
+    );
+
+    const result = await parseAsync(parser, ["--name", "cli"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "cli");
+    assert.equal(resolverCalls, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  it("does not resolve when bindEnv() supplies a value", async () => {
+    const envContext = createEnvContext({
+      source: (key) => ({ MYAPP_NAME: "EnvName" })[key],
+      prefix: "MYAPP_",
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = prompt(
+      bindEnv(option("--name", string()), {
+        context: envContext,
+        key: "NAME",
+        parser: string(),
+      }),
+      derivePromptConfig(() => {
+        resolverCalls++;
+        return { value: "loaded" };
+      }),
+    );
+
+    const result = await parseAsync(parser, [], { annotations });
+
+    assert.ok(result.success);
+    assert.equal(result.value, "EnvName");
+    assert.equal(resolverCalls, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  it("does not resolve during help or suggestions", async () => {
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = object({
+      name: prompt(
+        option("--name", string()),
+        derivePromptConfig(() => {
+          resolverCalls++;
+          return { value: "loaded" };
+        }),
+      ),
+    });
+
+    await suggestAsync(parser, ["--na"]);
+    const page = await getDocPageAsync(parser);
+
+    assert.ok(page != null);
+    assert.equal(resolverCalls, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  it("does not resolve inside an unselected branch", async () => {
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = or(
+      command(
+        "upload",
+        object({
+          key: prompt(
+            option("--key", string()),
+            derivePromptConfig(() => {
+              resolverCalls++;
+              return { value: "loaded" };
+            }),
+          ),
+        }),
+      ),
+      command("list", constant("list")),
+    );
+
+    const result = await parseAsync(parser, ["list"]);
+
+    assert.ok(result.success);
+    assert.equal(resolverCalls, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  it("resolves once across validation retries", async () => {
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    let validationCalls = 0;
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(() => {
+        resolverCalls++;
+        return { value: "loaded" };
+      }),
+      {
+        validate() {
+          validationCalls++;
+          return validationCalls === 1 ? message`Try again.` : undefined;
+        },
+      },
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(resolverCalls, 1);
+    assert.equal(calls.length, 2);
+  });
+
+  it("returns otherwise without resolving when the condition is false", async () => {
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(() => {
+        resolverCalls++;
+        return { value: "loaded" };
+      }, { when: () => Promise.resolve(false), otherwise: "skipped" }),
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "skipped");
+    assert.equal(resolverCalls, 0);
+    assert.deepEqual(calls, []);
+  });
+
+  it("returns otherwise for a false condition despite an aborted signal", async () => {
+    const controller = new AbortController();
+    controller.abort({ code: "stopped" });
+    const { prompt } = createTestPrompt();
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(() => ({ value: "loaded" }), {
+        when: () => false,
+        otherwise: "skipped",
+      }),
+      { signal: controller.signal },
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.equal(result.value, "skipped");
+  });
+
+  it("fails the prompt when the resolver rejects", async () => {
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(() =>
+        Promise.reject(new TypeError("Bucket not found."))
+      ),
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(!result.success);
+    assert.ok(formatMessage(result.error).includes("Bucket not found."));
+    assert.deepEqual(calls, []);
+  });
+
+  it("feeds a dependent prompt from a demanded source in a two-pass run", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const packageManager = dependency(
+      choice(["deno", "npm", "pnpm"] as const),
+    );
+    const storage = packageManager.deriveSync({
+      metavar: "STORAGE",
+      factory: (value: "deno" | "npm" | "pnpm") =>
+        choice(value === "deno" ? (["kv"] as const) : (["redis"] as const)),
+      defaultValue: () => "deno" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = object({
+      framework: prompt(
+        option("--framework", framework),
+        derivePromptConfig(() => {
+          resolverCalls++;
+          return { value: "hono" };
+        }),
+      ),
+      packageManager: prompt(
+        option("--package-manager", packageManager),
+        derivePromptConfig(framework, (value) => ({
+          value: value === "hono" ? "npm" : "deno",
+        })),
+      ),
+      storage: option("--storage", storage),
+    });
+
+    const result = await runWith(
+      parser,
+      "test",
+      [createTwoPassContext("demanded")],
+      { args: ["--storage", "redis"] },
+    );
+
+    assert.deepEqual(result, {
+      framework: "hono",
+      packageManager: "npm",
+      storage: "redis",
+    });
+    assert.equal(resolverCalls, 1);
+    assert.deepEqual(calls, [{ value: "hono" }, { value: "npm" }]);
+  });
+
+  it("resolves an undemanded source prompt once in a two-pass run", async () => {
+    const framework = dependency(choice(["fresh", "hono"] as const));
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = object({
+      framework: prompt(
+        option("--framework", framework),
+        derivePromptConfig(() => {
+          resolverCalls++;
+          return { value: "hono" };
+        }),
+      ),
+    });
+
+    const result = await runWith(
+      parser,
+      "test",
+      [createTwoPassContext("undemanded")],
+      { args: [] },
+    );
+
+    assert.deepEqual(result, { framework: "hono" });
+    assert.equal(resolverCalls, 1);
+    assert.deepEqual(calls, [{ value: "hono" }]);
+  });
+
+  it("resolves a consumer-only prompt once in a two-pass run", async () => {
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = object({
+      name: prompt(
+        option("--name", string()),
+        derivePromptConfig(() => {
+          resolverCalls++;
+          return { value: "loaded" };
+        }),
+      ),
+    });
+
+    const result = await runWith(
+      parser,
+      "test",
+      [createTwoPassContext("consumer")],
+      { args: [] },
+    );
+
+    assert.deepEqual(result, { name: "loaded" });
+    assert.equal(resolverCalls, 1);
+    assert.deepEqual(calls, [{ value: "loaded" }]);
+  });
+
+  it("resolves again in each run", async () => {
+    const { prompt } = createTestPrompt();
+    let resolverCalls = 0;
+    const parser = object({
+      name: prompt(
+        option("--name", string()),
+        derivePromptConfig(() => ({ value: `run-${++resolverCalls}` })),
+      ),
+    });
+    const context = createTwoPassContext("repeated");
+
+    const first = await runWith(parser, "test", [context], { args: [] });
+    const second = await runWith(parser, "test", [context], { args: [] });
+
+    assert.deepEqual(first, { name: "run-1" });
+    assert.deepEqual(second, { name: "run-2" });
+  });
+
+  it("resolves each occurrence of a reused wrapper", async () => {
+    const { prompt, calls } = createTestPrompt();
+    let resolverCalls = 0;
+    const name = prompt(
+      argument(string()),
+      derivePromptConfig(() => ({ value: `occurrence-${++resolverCalls}` })),
+    );
+    const parser = tuple([name, name]);
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["occurrence-1", "occurrence-2"]);
+    assert.equal(calls.length, 2);
+  });
+
+  it("passes the abort signal to the resolver", async () => {
+    const controller = new AbortController();
+    const { prompt } = createTestPrompt();
+    const signals: (AbortSignal | undefined)[] = [];
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(({ signal }) => {
+        signals.push(signal);
+        return { value: "loaded" };
+      }),
+      { signal: controller.signal },
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(signals, [controller.signal]);
+  });
+
+  it("rejects with the abort reason before a pending resolver settles", async () => {
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    const started = deferred<void>();
+    const resolution = deferred<void>();
+    const { prompt, calls } = createTestPrompt();
+    let observedAbort = false;
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(async ({ signal }) => {
+        signal?.addEventListener("abort", () => {
+          observedAbort = true;
+        });
+        started.resolve();
+        await resolution.promise;
+        throw new TypeError("Late resolver failure.");
+      }),
+      { signal: controller.signal },
+    );
+
+    const parsing = parseAsync(parser, []);
+    let rejection: unknown;
+    const settled = parsing.then(
+      () => false,
+      (error: unknown) => {
+        rejection = error;
+        return true;
+      },
+    );
+    await started.promise;
+    controller.abort(reason);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(rejection, reason);
+    assert.ok(observedAbort);
+    resolution.resolve();
+    assert.ok(await settled);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(calls, []);
+  });
+
+  it("rejects with the abort reason when the resolver aborts synchronously", async () => {
+    const controller = new AbortController();
+    const reason = { code: "stopped" };
+    const { prompt, calls } = createTestPrompt();
+    const parser = prompt(
+      option("--name", string()),
+      derivePromptConfig(() => {
+        controller.abort(reason);
+        return { value: "loaded" };
+      }),
+      { signal: controller.signal },
+    );
+
+    await assert.rejects(
+      () => parseAsync(parser, []),
+      (error: unknown) => error === reason,
+    );
+    assert.deepEqual(calls, []);
+  });
+
+  it("normalizes an omitted resolver context", async () => {
+    const contexts: unknown[] = [];
+    const config = derivePromptConfig((context) => {
+      contexts.push(context);
+      return { value: "loaded" };
+    });
+
+    assert.deepEqual(config.dependencies, []);
+    assert.deepEqual(await config.resolve([], []), { value: "loaded" });
+    assert.deepEqual(contexts, [{}]);
+  });
+
+  it("type-checks zero-dependency derived configurations", () => {
+    const { prompt } = createTestPrompt();
+
+    prompt(
+      option("--name", string()),
+      derivePromptConfig(async ({ signal }) => {
+        const narrowed: AbortSignal | undefined = signal;
+        await Promise.resolve(narrowed);
+        return { value: "loaded" };
+      }),
+    );
+
+    prompt(
+      option("--name", string()),
+      derivePromptConfig(() => ({ value: "loaded" }), {
+        when: () => true,
+        otherwise: "skipped",
+      }),
+    );
+
+    // @ts-expect-error A condition needs a value for the skipped branch.
+    derivePromptConfig(() => ({ value: "loaded" }), { when: () => true });
+
+    prompt(
+      option("--name", string()),
+      // @ts-expect-error The skipped value must match the parser result type.
+      derivePromptConfig(() => ({ value: "loaded" }), {
+        when: () => true,
+        otherwise: 42,
+      }),
+    );
+
+    // @ts-expect-error There are no dependencies to default.
+    derivePromptConfig(() => ({ value: "loaded" }), {
+      defaultValue: () => "fallback",
+    });
+
+    assert.ok(true);
+  });
 });
 
 // https://github.com/dahlia/optique/issues/872

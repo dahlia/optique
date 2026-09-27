@@ -62,8 +62,8 @@ Core rules
     resolve; pass `[sourceA, sourceB]` when it reads several sources. The
     resolver's prompt kind must return the wrapped parser's value type. Derive
     the wrapped parser separately when the CLI domain should change, and make
-    it a dependency source only if another consumer needs its answer. Keep
-    static prompt configs for everything else.
+    it a dependency source only if another consumer needs its answer. Pass a
+    lone resolver for fetched choices, forwarding its `signal` to the fetch.
  -  Pass `{ validate, maxAttempts, signal }` as a generated prompt wrapper's
     third argument, including `prompt()` from *@optique/inquirer* and
     *@optique/clack*. The validator returns `undefined` to accept the prompted
