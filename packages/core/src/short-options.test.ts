@@ -154,6 +154,104 @@ describe("attached short option values", () => {
       });
     }
   });
+  it("selects default ownership before parsing and completing its options", async () => {
+    const values = choice(["erbose", "ersion"]);
+    const sync = conditional(
+      constant("z"),
+      { a: option("-verbose") },
+      option("-v", values),
+    );
+    const asyncValues: ValueParser<"async", string> = {
+      ...values,
+      mode: "async",
+      parse: (input) => Promise.resolve(values.parse(input)),
+      suggest: async function* (prefix) {
+        yield* values.suggest!(prefix);
+      },
+    };
+    const async = conditional(
+      constant("z"),
+      { a: option("-verbose") },
+      option("-v", asyncValues),
+    );
+    const expected = { success: true, value: [undefined, "erbose"] };
+    assert.deepEqual(parseSync(sync, ["-verbose"]), expected);
+    assert.deepEqual(await parseAsync(async, ["-verbose"]), expected);
+    assert.deepEqual(texts(suggestSync(sync, ["-ve"])), [
+      "-verbose",
+      "-version",
+    ]);
+    assert.deepEqual(texts(await suggestAsync(async, ["-ve"])), [
+      "-verbose",
+      "-version",
+    ]);
+  });
+  it("queries initial sequence ownership at the caller's child path", async () => {
+    const inner = constant("start");
+    const child = {
+      ...inner,
+      canSkip: (_state: typeof inner.initialState, exec?: ExecutionContext) =>
+        exec?.path.length === 2 && exec.path[0] === "steps" &&
+        exec.path[1] === 0,
+    };
+    const sync = object({
+      v: optional(option("-v", string())),
+      steps: seq(child, option("-verbose")),
+    });
+    const expected = {
+      success: true,
+      value: { v: undefined, steps: ["start", true] },
+    };
+    assert.deepEqual(parseSync(sync, ["-verbose"]), expected);
+    const asyncChild = {
+      ...child,
+      mode: "async" as const,
+      parse: (context: Parameters<typeof child.parse>[0]) =>
+        Promise.resolve(child.parse(context)),
+      complete: (
+        state: Parameters<typeof child.complete>[0],
+        exec?: ExecutionContext,
+      ) => Promise.resolve(child.complete(state, exec)),
+      suggest: async function* (
+        context: Parameters<typeof child.suggest>[0],
+        prefix: string,
+      ) {
+        yield* child.suggest(context, prefix);
+      },
+    };
+    assert.deepEqual(
+      await parseAsync(
+        object({
+          v: optional(option("-v", string())),
+          steps: seq(asyncChild, option("-verbose")),
+        }),
+        ["-verbose"],
+      ),
+      expected,
+    );
+  });
+  it("does not reserve an unentered dash-prefixed command as an option", async () => {
+    const sync = object({
+      cmd: optional(command("-foo", constant(null))),
+      f: optional(option("-f", string())),
+    });
+    const expected = { success: true, value: { cmd: undefined, f: "oo=bar" } };
+    assert.deepEqual(parseSync(sync, ["-foo=bar"]), expected);
+    assert.deepEqual(
+      await parseAsync(
+        object({
+          cmd: optional(command("-foo", constant(null))),
+          f: optional(option("-f", asyncString())),
+        }),
+        ["-foo=bar"],
+      ),
+      expected,
+    );
+    assert.deepEqual(parseSync(sync, ["-foo"]), {
+      success: true,
+      value: { cmd: null, f: undefined },
+    });
+  });
   it("probes discriminators using their actual child execution path", async () => {
     const inner = constant("a");
     const discriminator = (path: readonly PropertyKey[]) => ({

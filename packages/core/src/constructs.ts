@@ -10817,12 +10817,25 @@ export function seq<
     );
   };
 
-  const seqScope = selectableOptionScope(reachableSeqScope({
-    state: initialState,
-    buffer: [],
-    usage: [],
-    optionsTerminated: false,
-  }));
+  const seqScope = selectableOptionScope(
+    (selections, arities, context, path = []) => {
+      const initialContext: ParserContext<SeqState> = {
+        state: context == null
+          ? initialState
+          : inheritAnnotations(context.state, initialState),
+        buffer: context?.buffer ?? [],
+        usage: context?.usage ?? [],
+        optionsTerminated: context?.optionsTerminated ?? false,
+        exec: context?.exec == null ? undefined : { ...context.exec, path },
+      };
+      return reachableSeqScope(initialContext)(
+        selections,
+        arities,
+        context,
+        path,
+      );
+    },
+  );
 
   const parseSync = (context: ParserContext<SeqState>): ParseResult => {
     let currentContext = context;
@@ -15959,9 +15972,11 @@ export function conditional(
       ? discriminatorResult.consumed.length
       : discriminatorResult.consumed;
     if (syncDefaultBranch !== undefined) {
+      const defaultContext = forkOptionScope(context);
+      optionScope.select(defaultContext, syncDefaultBranch);
       const defaultResult = syncDefaultBranch.parse(
         withChildContext(
-          context,
+          defaultContext,
           "_branch",
           state.branchState ?? syncDefaultBranch.initialState,
           syncDefaultBranch,
@@ -15984,7 +15999,7 @@ export function conditional(
         // stateful discriminators that could pick a different branch).
         const commitDefault = defaultResult.consumed.length > 0 ||
           context.buffer.length === 0;
-        if (commitDefault) optionScope.select(context, syncDefaultBranch);
+        if (commitDefault) adoptOptionScope(context, defaultResult.next);
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),
@@ -16508,9 +16523,11 @@ export function conditional(
       ? discriminatorResult.consumed.length
       : discriminatorResult.consumed;
     if (defaultBranch !== undefined) {
+      const defaultContext = forkOptionScope(context);
+      optionScope.select(defaultContext, defaultBranch);
       const defaultResult = await defaultBranch.parse(
         withChildContext(
-          context,
+          defaultContext,
           "_branch",
           state.branchState ?? defaultBranch.initialState,
           defaultBranch,
@@ -16530,7 +16547,7 @@ export function conditional(
         // See sync counterpart for rationale on commitDefault.
         const commitDefault = defaultResult.consumed.length > 0 ||
           context.buffer.length === 0;
-        if (commitDefault) optionScope.select(context, defaultBranch);
+        if (commitDefault) adoptOptionScope(context, defaultResult.next);
         return {
           success: true,
           ...(defaultResult.provisional ? { provisional: true as const } : {}),
@@ -18124,9 +18141,11 @@ export function conditional(
         );
       } else if (syncDefaultBranch !== undefined) {
         // Default branch suggestions if available
+        const defaultContext = forkOptionScope(suggestContext);
+        optionScope.select(defaultContext, syncDefaultBranch);
         yield* syncDefaultBranch.suggest(
           withChildContext(
-            suggestContext,
+            defaultContext,
             "_branch",
             state.branchState ?? syncDefaultBranch.initialState,
             syncDefaultBranch,
@@ -18303,9 +18322,11 @@ export function conditional(
       }
       if (!discResolved) {
         if (defaultBranch !== undefined) {
+          const defaultContext = forkOptionScope(suggestContext);
+          optionScope.select(defaultContext, defaultBranch);
           yield* defaultBranch.suggest(
             withChildContext(
-              suggestContext,
+              defaultContext,
               "_branch",
               state.branchState ?? defaultBranch.initialState,
               defaultBranch,

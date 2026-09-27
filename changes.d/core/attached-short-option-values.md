@@ -9,5 +9,8 @@ links:
     independently of field order, including reused parser occurrences and
     failed speculative parses and source-backed wrappers.  Conditional parsers
     release inactive option names as soon as they select a default branch.
+    Attached values and completion work in default branches too.  Sequence
+    parsers honor context-dependent skippable steps when recognizing full option
+    names, and dash-prefixed command names no longer block attached values.
     Unicode short-option names work in attached forms and bundles too.
     [[#965], [#981]]

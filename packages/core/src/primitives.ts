@@ -3311,7 +3311,7 @@ export function command<M extends Mode, T, TState>(
   const syncInnerParser = parser as Parser<"sync", T, TState>;
   const asyncInnerParser = parser as Parser<"async", T, TState>;
 
-  const commandScope = selectableOptionScope(() => new Set(commandNames));
+  const commandScope = selectableOptionScope(() => new Set<string>());
   const enteredScope = combinedOptionScope([parser], [name]);
 
   // Use type assertion to allow both sync and async returns from parse method
