@@ -33,8 +33,7 @@ Core rules
     `helpSections: { commands: "Commands", options: "Options" }`.
     It groups untitled entries only on pages with visible commands. See
     <https://optique.dev/cookbook.md#command-and-option-headings-in-help>.
- -  Let TypeScript infer results; write a separate result interface only when
-    another API boundary requires it.
+ -  Let TypeScript infer results unless another API needs a separate interface.
  -  Parsers are usually required. `optional(p)` yields `undefined`, and
     `withDefault(p, value)` supplies a fallback. Use
     `withDefault(flag("--name"), false)` for optional Boolean flags.
@@ -46,10 +45,9 @@ Core rules
     parsing. Use `regExp({ flags })` for user-supplied sources, `biject()` for
     one-to-one string-to-value choices, and `transform()` when an existing
     value parser describes the accepted CLI spelling but your app needs a
-    different result type. Use `path()` from
-    `@optique/run/valueparser` for file-system paths. Write a custom
-    `{ mode, metavar, parse, format }` value parser only when the catalog does
-    not cover the domain.
+    different result type. Use `path()` from `@optique/run/valueparser` for
+    file-system paths. Write a custom `{ mode, metavar, parse, format }` value
+    parser only when the catalog does not cover the domain.
  -  Since 1.4.0, `-p8080`/`-vp8080` accept attached values. Values consume
     the literal suffix (`-p=5` gives `"=5"`); full single-dash names win.
  -  Async value parsers like *@optique/git* make containing parsers async.
