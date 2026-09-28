@@ -1221,6 +1221,15 @@ export function option<M extends Mode, T>(
 
       // Check if custom noMatch error is provided
       if (options.errors?.noMatch) {
+        // Literal messages do not use suggestions.
+        if (typeof options.errors.noMatch !== "function") {
+          return {
+            success: false,
+            consumed: 0,
+            error: options.errors.noMatch,
+          };
+        }
+
         const candidates = new Set<string>();
         for (const name of extractOptionNames(context.usage)) {
           candidates.add(name);
@@ -1231,9 +1240,7 @@ export function option<M extends Mode, T>(
           DEFAULT_FIND_SIMILAR_OPTIONS,
         );
 
-        const errorMessage = typeof options.errors.noMatch === "function"
-          ? options.errors.noMatch(invalidOption, suggestions)
-          : options.errors.noMatch;
+        const errorMessage = options.errors.noMatch(invalidOption, suggestions);
 
         return {
           success: false,
@@ -1765,6 +1772,15 @@ export function flag(
 
       // Check if custom noMatch error is provided
       if (options.errors?.noMatch) {
+        // Literal messages do not use suggestions.
+        if (typeof options.errors.noMatch !== "function") {
+          return {
+            success: false,
+            consumed: 0,
+            error: options.errors.noMatch,
+          };
+        }
+
         const candidates = new Set<string>();
         for (const name of extractOptionNames(context.usage)) {
           candidates.add(name);
@@ -1775,9 +1791,7 @@ export function flag(
           DEFAULT_FIND_SIMILAR_OPTIONS,
         );
 
-        const errorMessage = typeof options.errors.noMatch === "function"
-          ? options.errors.noMatch(invalidOption, suggestions)
-          : options.errors.noMatch;
+        const errorMessage = options.errors.noMatch(invalidOption, suggestions);
 
         return {
           success: false,

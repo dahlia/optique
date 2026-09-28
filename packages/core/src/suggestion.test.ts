@@ -4,7 +4,9 @@ import {
   createErrorWithSuggestions,
   createSuggestionMessage,
   deduplicateSuggestions,
+  DEFAULT_FIND_SIMILAR_OPTIONS,
   findSimilar,
+  type FindSimilarOptions,
   levenshteinDistance,
 } from "./suggestion.ts";
 import { formatMessage, message, optionName } from "./message.ts";
@@ -941,6 +943,197 @@ describe("property-based tests", () => {
               assert.ok(suggestion.includeHidden);
             }
           }
+        },
+      ),
+      propertyParameters,
+    );
+  });
+});
+
+// Preserve the pre-optimization selection algorithm as a compatibility oracle.
+function referenceFindSimilar(
+  input: string,
+  candidates: Iterable<string>,
+  options: FindSimilarOptions = {},
+): string[] {
+  // Apply defaults
+  const maxDistance = options.maxDistance ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance;
+  const maxDistanceRatio = options.maxDistanceRatio ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio;
+  const maxSuggestions = options.maxSuggestions ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions;
+  const caseSensitive = options.caseSensitive ??
+    DEFAULT_FIND_SIMILAR_OPTIONS.caseSensitive;
+
+  // Return empty if input is empty
+  if (input.length === 0) return [];
+
+  // Normalize input for comparison
+  const normalizedInput = caseSensitive ? input : input.toLowerCase();
+
+  // Collect matches with their distances
+  const matches: Array<{ candidate: string; distance: number }> = [];
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    // Normalize candidate for comparison
+    const normalizedCandidate = caseSensitive
+      ? candidate
+      : candidate.toLowerCase();
+
+    // Skip exact duplicate candidates
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    // Calculate distance
+    const distance = levenshteinDistance(normalizedInput, normalizedCandidate);
+
+    // Early termination for exact match
+    if (distance === 0) {
+      return [candidate];
+    }
+
+    // Check if within thresholds
+    const distanceRatio = distance / input.length;
+    if (distance <= maxDistance && distanceRatio <= maxDistanceRatio) {
+      matches.push({ candidate, distance });
+    }
+  }
+
+  // Sort by:
+  // 1. Distance (ascending)
+  // 2. Length difference from input (ascending)
+  // 3. Alphabetical (ascending)
+  matches.sort((a, b) => {
+    if (a.distance !== b.distance) {
+      return a.distance - b.distance;
+    }
+
+    const lengthDiffA = Math.abs(a.candidate.length - input.length);
+    const lengthDiffB = Math.abs(b.candidate.length - input.length);
+    if (lengthDiffA !== lengthDiffB) {
+      return lengthDiffA - lengthDiffB;
+    }
+
+    return a.candidate.localeCompare(b.candidate);
+  });
+
+  // Return top N suggestions
+  return matches.slice(0, maxSuggestions).map((m) => m.candidate);
+}
+
+describe("findSimilar compatibility", () => {
+  const cases: readonly (readonly [string, readonly string[]])[] = [
+    ["--verbos", ["--verbose", "--version", "--Verbose", "--verbose", ""]],
+    ["abc", ["abcdef", "ab", "xbc", "abcd", "acb", "abc", "after"]],
+    ["İ", ["i", "i\u0307x", "i\u0307", "İ", "after"]],
+    ["i", ["İ", "ẞ", "K", "I", "after"]],
+    ["\ud800x", ["\ud800", "\ud801x", "😀", "\ud800x", "after"]],
+    ["", ["", "anything"]],
+  ];
+
+  it("preserves results and iterable consumption with custom thresholds", () => {
+    for (const [input, candidates] of cases) {
+      for (
+        const maxDistance of [
+          undefined,
+          -1,
+          0,
+          0.5,
+          1,
+          2.5,
+          3,
+          1e6,
+          Infinity,
+          NaN,
+        ]
+      ) {
+        for (
+          const maxDistanceRatio of [
+            undefined,
+            -0.1,
+            0,
+            0.3,
+            0.5,
+            1,
+            2,
+            Infinity,
+            NaN,
+          ]
+        ) {
+          for (const maxSuggestions of [undefined, -1, 0, 1, 3, 10]) {
+            for (const caseSensitive of [false, true]) {
+              const options = {
+                maxDistance,
+                maxDistanceRatio,
+                maxSuggestions,
+                caseSensitive,
+              };
+              let actualYielded = 0;
+              let referenceYielded = 0;
+              const actualCandidates = function* () {
+                for (const candidate of candidates) {
+                  actualYielded++;
+                  yield candidate;
+                }
+              };
+              const referenceCandidates = function* () {
+                for (const candidate of candidates) {
+                  referenceYielded++;
+                  yield candidate;
+                }
+              };
+              assert.deepEqual(
+                findSimilar(input, actualCandidates(), options),
+                referenceFindSimilar(input, referenceCandidates(), options),
+              );
+              assert.equal(actualYielded, referenceYielded);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("agrees with the original algorithm for near matches and UTF-16 strings", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ unit: "binary", maxLength: 24 }),
+        fc.array(fc.string({ unit: "binary", maxLength: 24 }), {
+          maxLength: 10,
+        }),
+        fc.constantFrom(-1, 0, 0.5, 1, 2.5, 3, Infinity, NaN),
+        fc.constantFrom(-0.1, 0, 0.3, 0.5, 1, Infinity, NaN),
+        fc.constantFrom(-1, 0, 1, 3, 10),
+        fc.boolean(),
+        (
+          input,
+          randomCandidates,
+          maxDistance,
+          maxDistanceRatio,
+          maxSuggestions,
+          caseSensitive,
+        ) => {
+          const candidates = [
+            ...randomCandidates,
+            input.slice(1),
+            input + "x",
+            "x" + input.slice(1),
+            input.toUpperCase(),
+            input.slice(0, -1),
+            ...randomCandidates,
+          ];
+          const options = {
+            maxDistance,
+            maxDistanceRatio,
+            maxSuggestions,
+            caseSensitive,
+          };
+          assert.deepEqual(
+            findSimilar(input, candidates, options),
+            referenceFindSimilar(input, candidates, options),
+          );
         },
       ),
       propertyParameters,
