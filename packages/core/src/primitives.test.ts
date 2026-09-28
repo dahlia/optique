@@ -12,7 +12,9 @@ import {
   formatMessage,
   type Message,
   message,
+  optionName,
   text,
+  value,
 } from "@optique/core/message";
 import { formatDocPage } from "@optique/core/doc";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
@@ -2603,6 +2605,169 @@ describe("negatableFlag()", () => {
 });
 
 describe("flag() error customization", () => {
+  for (
+    const [name, separator] of [
+      ["--verbose", "="],
+      ["-verbose", "="],
+      ["/verbose", ":"],
+    ] as const
+  ) {
+    it(`should use a static unexpectedValue error for ${name}`, () => {
+      const error = message`Verbose takes no value.`;
+      const parser = flag(name, { errors: { unexpectedValue: error } });
+
+      const result = parser.parse({
+        buffer: [`${name}${separator}yes`],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+
+      assert.deepEqual(result, { success: false, consumed: 1, error });
+    });
+
+    for (const input of ["1", "", "a=b:c"]) {
+      it(`should pass the matched alias and value for ${name}${separator}${input}`, () => {
+        const parser = flag("-v", "--verbose", "-verbose", "/verbose", {
+          errors: {
+            unexpectedValue: (name, input) => {
+              return message`${optionName(name)} takes no value, got ${
+                value(input)
+              }.`;
+            },
+          },
+        });
+        const error = message`${optionName(name)} takes no value, got ${
+          value(input)
+        }.`;
+
+        const result = parse(parser, [`${name}${separator}${input}`]);
+
+        assert.deepEqual(result, { success: false, error });
+      });
+    }
+
+    it(`should preserve the default unexpectedValue error for ${name}`, () => {
+      const parser = flag(name);
+      const result = parser.parse({
+        buffer: [`${name}${separator}yes`],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+
+      assert.deepEqual(result, {
+        success: false,
+        consumed: 1,
+        error: message`Flag ${
+          optionName(name)
+        } does not accept a value, but got: ${"yes"}.`,
+      });
+    });
+  }
+
+  it("should keep other flag parsing paths with unexpectedValue configured", () => {
+    const parser = flag("-v", "--verbose", {
+      errors: {
+        unexpectedValue: () => {
+          assert.fail("Unexpected-value callback should not run.");
+        },
+      },
+    });
+
+    assert.deepEqual(parse(parser, ["--verbose"]), {
+      success: true,
+      value: true,
+    });
+    assert.deepEqual(parse(parser, ["-v"]), { success: true, value: true });
+    assert.deepEqual(
+      parse(object({ verbose: parser, force: flag("-f") }), ["-vf"]),
+      {
+        success: true,
+        value: { verbose: true, force: true },
+      },
+    );
+    const unmatched = parse(parser, ["--other=yes"]);
+    assert.ok(!unmatched.success);
+    const terminated = parse(parser, ["--", "--verbose=yes"]);
+    assert.ok(!terminated.success);
+    const duplicate = parse(parser, ["--verbose", "--verbose"]);
+    assert.ok(!duplicate.success);
+    if (!duplicate.success) {
+      assert.deepEqual(
+        duplicate.error,
+        message`${optionName("--verbose")} cannot be used multiple times.`,
+      );
+    }
+  });
+
+  it("should use the matched overlapping alias in composed parsers", () => {
+    const parser = object({
+      verbose: flag("--verbose", "--verbosity", {
+        errors: {
+          unexpectedValue: (name, input) =>
+            message`${optionName(name)} takes no value, got ${value(input)}.`,
+        },
+      }),
+    });
+
+    const result = parse(parser, ["--verbosity=1"]);
+
+    assert.deepEqual(result, {
+      success: false,
+      error: message`${optionName("--verbosity")} takes no value, got ${
+        value("1")
+      }.`,
+    });
+  });
+
+  it("should prefer unexpectedValue over duplicate for an attached value", () => {
+    const error = message`Verbose takes no value.`;
+    const parser = flag("--verbose", {
+      errors: {
+        unexpectedValue: error,
+        duplicate: message`Duplicate verbose flag.`,
+      },
+    });
+
+    const result = parser.parse({
+      buffer: ["--verbose=yes"],
+      state: { success: true, value: true },
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+
+    assert.deepEqual(result, { success: false, consumed: 1, error });
+  });
+
+  it("should keep plus-prefixed joined input as a no-match error", () => {
+    const error = message`Unknown debug flag.`;
+    const parser = flag("+debug", {
+      errors: {
+        noMatch: error,
+        unexpectedValue: () => {
+          assert.fail("Unexpected-value callback should not run.");
+        },
+      },
+    });
+
+    const result = parse(parser, ["+debug=yes"]);
+
+    assert.deepEqual(result, { success: false, error });
+  });
+
+  it("should preserve the formatted default error for an empty value", () => {
+    const result = parse(flag("--verbose"), ["--verbose="]);
+
+    assert.ok(!result.success);
+    if (!result.success) {
+      assert.equal(
+        formatMessage(result.error),
+        'Flag `--verbose` does not accept a value, but got: "".',
+      );
+    }
+  });
+
   it("should use custom missing error", () => {
     const parser = flag("--force", {
       errors: {

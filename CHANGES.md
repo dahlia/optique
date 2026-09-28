@@ -28,6 +28,9 @@ To be released.
  -  Fixed completion requests for inherited object names such as `toString`
     to report an unsupported shell instead of throwing, unless the name is
     explicitly registered as a custom shell.  [[#967], [#982]]
+ -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
+    value is attached to a flag.  It accepts a static message or a callback
+    receiving the matched option name and the supplied value.  [[#968], [#984]]
  -  Added the `helpSections` option to the Core runners to group untitled
     command and option entries on help pages with visible commands, leaving
     pages without commands free of automatic headings.  Existing titled groups
@@ -36,10 +39,12 @@ To be released.
 
 [#965]: https://github.com/dahlia/optique/issues/965
 [#967]: https://github.com/dahlia/optique/issues/967
+[#968]: https://github.com/dahlia/optique/issues/968
 [#972]: https://github.com/dahlia/optique/issues/972
 [#981]: https://github.com/dahlia/optique/pull/981
 [#982]: https://github.com/dahlia/optique/pull/982
 [#983]: https://github.com/dahlia/optique/pull/983
+[#984]: https://github.com/dahlia/optique/pull/984
 
 ### @optique/run
 

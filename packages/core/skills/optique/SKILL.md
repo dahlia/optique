@@ -34,12 +34,12 @@ Core rules
     It groups untitled entries only on pages with visible commands. See
     <https://optique.dev/cookbook.md#command-and-option-headings-in-help>.
  -  Let TypeScript infer results unless another API needs a separate interface.
- -  Parsers are usually required. `optional(p)` yields `undefined`, and
-    `withDefault(p, value)` supplies a fallback. Use
-    `withDefault(flag("--name"), false)` for optional Boolean flags.
+ -  Parsers usually require input. `optional(p)` yields `undefined`; use
+    `withDefault(p, value)` or `withDefault(flag("-v"), false)` for fallbacks.
  -  Use semantic `message` helpers for descriptions and errors. Since 1.3.0,
     customize terminal output with `theme` or `messageFormatter`, preserving
     `initialWidth`, quoting, and width options. Keep canonical errors unthemed.
+    `flag()` supports static/callback `errors.unexpectedValue` since 1.4.0.
  -  Use value parsers such as `integer()`, `choice()`, `biject()`, `regExp()`,
     `url()`, `origin()`, and `uuid()` instead of validating raw strings after
     parsing. Use `regExp({ flags })` for user-supplied sources, `biject()` for
