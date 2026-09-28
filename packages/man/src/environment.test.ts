@@ -147,3 +147,81 @@ describe("man environment documentation", () => {
     assert.ok(output.includes("\n\\&.SH INJECTED"));
   });
 });
+
+describe("source-only man environment sections", () => {
+  const page: DocPage = {
+    sections: [],
+    environmentBindings: [
+      { name: "FIRST" },
+      { name: "SECOND", description: message`Use ${"seconds"}.` },
+      { name: ".LAST" },
+    ],
+  };
+  const options: ManPageOptions = {
+    name: "app",
+    section: 1,
+    date: "September 2026",
+  };
+  it("emits safe empty bodies and unquoted generated purposes in every enabled mode", () => {
+    for (
+      const showEnvironment of [true, {}, { placement: "section" as const }, {
+        placement: "both" as const,
+      }]
+    ) {
+      const roff = formatDocPageAsMan(page, {
+        ...options,
+        showEnvironment,
+        files: {
+          entries: [{
+            term: { type: "literal", value: "CONFIG" },
+            description: message`Settings.`,
+          }],
+        },
+      });
+      assert.ok(roff.includes(".SH ENVIRONMENT"));
+      assert.match(roff, /\.TP\nFIRST\n\\&\n\.TP\nSECOND/);
+      assert.match(roff, /Use seconds\./);
+      assert.match(roff, /\\&\.LAST\n\\&\n\.SH FILES/);
+    }
+    assert.ok(!formatDocPageAsMan(page, options).includes("FIRST"));
+  });
+  it("honors manual sections and empty suppression even for inline fallback", () => {
+    const manual = {
+      entries: [{
+        term: { type: "literal" as const, value: "MANUAL" },
+        description: message`${"quoted"}`,
+      }],
+    };
+    const roff = formatDocPageAsMan(page, {
+      ...options,
+      showEnvironment: true,
+      environment: manual,
+    });
+    assert.ok(roff.includes("MANUAL"));
+    assert.ok(!roff.includes("FIRST"));
+    assert.ok(roff.includes('"quoted"'));
+    assert.ok(
+      !formatDocPageAsMan(page, {
+        ...options,
+        showEnvironment: true,
+        environment: { entries: [] },
+      }).includes(".SH ENVIRONMENT"),
+    );
+  });
+});
+
+it("gives generated empty purpose bodies a safe roff placeholder", () => {
+  const roff = formatDocPageAsMan({
+    sections: [],
+    environmentBindings: [
+      { name: "EMPTY", description: [{ type: "text", text: "" }] },
+      { name: "NEXT", description: message`Next purpose.` },
+    ],
+  }, {
+    name: "app",
+    section: 1,
+    date: "September 2026",
+    showEnvironment: true,
+  });
+  assert.match(roff, /EMPTY\n\\&\n\.TP\nNEXT/);
+});

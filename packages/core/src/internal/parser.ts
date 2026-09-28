@@ -10,6 +10,7 @@ import { cloneMessage, type Message, message } from "../message.ts";
 import type { DependencyRegistryLike } from "../registry-types.ts";
 import {
   cloneUsage,
+  isDocHidden,
   normalizeUsage,
   type Usage,
   type UsageTerm,
@@ -2323,10 +2324,11 @@ function buildDocPage(
   matchedCommandArgIndices?: ReadonlySet<number>,
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
-  let { brief, description, fragments, footer } = parser.getDocFragments(
-    { kind: "available", state: context.state },
-    undefined,
-  );
+  let { brief, description, fragments, footer, environmentBindings } = parser
+    .getDocFragments(
+      { kind: "available", state: context.state },
+      undefined,
+    );
   // When the doc root is a bare command() parser and no args navigated into
   // it, the fragments contain only a single command entry instead of the
   // inner parser's options/arguments.  Detect this case and re-invoke
@@ -2352,7 +2354,7 @@ function buildDocPage(
       { kind: "available", state: matchedState },
       undefined,
     );
-    ({ brief, description, fragments, footer } = matched);
+    ({ brief, description, fragments, footer, environmentBindings } = matched);
     effectiveArgs = [cmdName];
   }
   // Build sections in the order that entries first appear in the fragment
@@ -2476,7 +2478,18 @@ function buildDocPage(
       usage.splice(1, usage.length - 1, ...normalizedCustomUsageLine);
     }
   }
+  const visibleBindings = environmentBindings?.filter((binding) =>
+    !isDocHidden(binding.hidden)
+  ).map((binding) => ({
+    ...binding,
+    ...(binding.description != null && {
+      description: cloneMessage(binding.description),
+    }),
+  }));
   return {
+    ...(visibleBindings != null && visibleBindings.length > 0 && {
+      environmentBindings: visibleBindings,
+    }),
     usage: revealMatchedCommandUsage(
       usage,
       effectiveArgs,

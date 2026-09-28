@@ -248,7 +248,7 @@ Common mistakes checklist
  -  Use structured `message` values for errors and descriptions.
  -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,
     and `bindKeyring()` in the runner's `contexts` option.
- -  Show `bindEnv()` names in help with `showEnvironment: true`.
+ -  Enable `showEnvironment` for env-only help; set `documentation.description`.
  -  Do not flatten a multi-level dependency graph into duplicated one-level
     factories. Wrap each derived value that becomes a later source with
     `dependency()` and derive the next parser from it.

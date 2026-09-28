@@ -314,7 +314,7 @@ export function constant<const T>(value: T): FluentParser<"sync", T, T> {
       return [];
     },
     getDocFragments(_state: DocState<T>, _defaultValue?) {
-      return { fragments: [] };
+      return { fragments: [], sourceOnly: true };
     },
   };
   Object.defineProperty(result, "placeholder", {
@@ -375,7 +375,7 @@ export function fail<T>(): FluentParser<"sync", T, undefined> {
       return [];
     },
     getDocFragments(_state, _defaultValue?) {
-      return { fragments: [] };
+      return { fragments: [], sourceOnly: true };
     },
   });
 }

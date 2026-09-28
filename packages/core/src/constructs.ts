@@ -87,6 +87,7 @@ import {
   deduplicateDocFragments,
   type DocEntry,
   type DocFragment,
+  type DocFragments,
   type DocSection,
 } from "./doc.ts";
 import {
@@ -1710,6 +1711,25 @@ function applyHiddenToDocEntry(
     return undefined;
   }
   return { ...entry, term: mergedTerm };
+}
+
+// Aggregate only the child documentation already requested by this scope.
+// Hidden parents revoke the positive capability as well as their records.
+function sourceDocumentation(
+  children: readonly DocFragments[],
+  hidden?: HiddenVisibility,
+): Pick<DocFragments, "environmentBindings" | "sourceOnly"> {
+  if (isDocHidden(hidden)) return {};
+  const environmentBindings = children.flatMap((docs) =>
+    docs.environmentBindings ?? []
+  );
+  return {
+    ...(environmentBindings.length > 0 && { environmentBindings }),
+    ...(children.length > 0 &&
+      children.every((docs) => docs.sourceOnly === true) && {
+      sourceOnly: true,
+    }),
+  };
 }
 
 function applyHiddenToDocFragments(
@@ -5156,6 +5176,11 @@ export function or(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?: unknown,
     ) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       let brief: Message | undefined;
       let description: Message | undefined;
       let footer: Message | undefined;
@@ -5164,7 +5189,7 @@ export function or(
       if (state.kind === "unavailable" || state.state == null) {
         // When state is unavailable or null, show all parser options
         fragments = parsers.flatMap((p) =>
-          p.getDocFragments({ kind: "unavailable" }, undefined).fragments
+          collect(p.getDocFragments({ kind: "unavailable" }, undefined))
         );
       } else {
         // When state is available and has a value, show only the selected parser
@@ -5179,7 +5204,7 @@ export function or(
         brief = docFragments.brief;
         description = docFragments.description;
         footer = docFragments.footer;
-        fragments = docFragments.fragments;
+        fragments = collect(docFragments);
       }
       // When a single branch matched successfully, pass its fragments
       // Only deduplicate when showing all branches.  When state.state is
@@ -5190,6 +5215,7 @@ export function or(
         fragments = deduplicateDocFragments(fragments);
       }
       return {
+        ...sourceDocumentation(children),
         brief,
         description,
         footer,
@@ -5849,6 +5875,11 @@ function createLongestMatch(
       state: DocState<undefined | [number, ParserResult<unknown>]>,
       _defaultValue?: unknown,
     ) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       let brief: Message | undefined;
       let description: Message | undefined;
       let footer: Message | undefined;
@@ -5858,7 +5889,7 @@ function createLongestMatch(
       if (state.kind === "unavailable" || state.state == null) {
         // When state is unavailable or null, show all parser options
         fragments = parsers.flatMap((p) =>
-          p.getDocFragments({ kind: "unavailable" }).fragments
+          collect(p.getDocFragments({ kind: "unavailable" }))
         );
         shouldDeduplicate = true;
       } else {
@@ -5870,17 +5901,18 @@ function createLongestMatch(
           brief = docResult.brief;
           description = docResult.description;
           footer = docResult.footer;
-          fragments = docResult.fragments;
+          fragments = collect(docResult);
           shouldDeduplicate = false;
         } else {
           fragments = parsers.flatMap((p) =>
-            p.getDocFragments({ kind: "unavailable" }).fragments
+            collect(p.getDocFragments({ kind: "unavailable" }))
           );
           shouldDeduplicate = true;
         }
       }
 
       return {
+        ...sourceDocumentation(children),
         brief,
         description,
         fragments: shouldDeduplicate
@@ -8328,11 +8360,16 @@ export function object<
       state: DocState<{ readonly [K in keyof T]: unknown }>,
       defaultValue?: { readonly [K in keyof T]: unknown },
     ) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       const fragments = parserPairs.flatMap(([field, p]) => {
         const fieldState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
           : { kind: "available", state: state.state[field] };
-        return p.getDocFragments(fieldState, defaultValue?.[field]).fragments;
+        return collect(p.getDocFragments(fieldState, defaultValue?.[field]));
       });
       const hiddenAwareFragments = applyHiddenToDocFragments(
         fragments,
@@ -8352,7 +8389,10 @@ export function object<
       }
       const section: DocSection = { title: label, entries };
       sections.push(section);
-      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+      return {
+        ...sourceDocumentation(children, options.hidden),
+        fragments: sections.map((s) => ({ ...s, type: "section" })),
+      };
     },
     // Type assertion needed because TypeScript cannot verify the combined mode
     // of multiple parsers at compile time. Runtime behavior is correct via mode dispatch.
@@ -10559,6 +10599,11 @@ export function tuple<
       state: DocState<TupleState>,
       defaultValue?: TupleState,
     ) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       const fragments = syncParsers.flatMap((p, i) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
@@ -10566,7 +10611,7 @@ export function tuple<
             kind: "available",
             state: (state.state as readonly unknown[])[i],
           };
-        return p.getDocFragments(indexState, defaultValue?.[i]).fragments;
+        return collect(p.getDocFragments(indexState, defaultValue?.[i]));
       });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
       const sections: DocSection[] = [];
@@ -10580,7 +10625,10 @@ export function tuple<
       }
       const section: DocSection = { title: label, entries };
       sections.push(section);
-      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+      return {
+        ...sourceDocumentation(children),
+        fragments: sections.map((s) => ({ ...s, type: "section" })),
+      };
     },
     [Symbol.for("Deno.customInspect")]() {
       const parsersStr = parsers.length === 1
@@ -11404,6 +11452,11 @@ export function seq<
       state: DocState<SeqState>,
       defaultValue?: readonly unknown[],
     ) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       const fragments = syncParsers.flatMap((parser, index) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
@@ -11411,8 +11464,9 @@ export function seq<
             kind: "available",
             state: state.state.states[index],
           };
-        return parser.getDocFragments(indexState, defaultValue?.[index])
-          .fragments;
+        return collect(
+          parser.getDocFragments(indexState, defaultValue?.[index]),
+        );
       });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
       const sections: DocSection[] = [];
@@ -11425,7 +11479,10 @@ export function seq<
         }
       }
       sections.push({ title: label, entries });
-      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+      return {
+        ...sourceDocumentation(children),
+        fragments: sections.map((s) => ({ ...s, type: "section" })),
+      };
     },
     [Symbol.for("Deno.customInspect")]() {
       const parsersStr = parsers.length === 1
@@ -13577,6 +13634,11 @@ export function merge(
       state: DocState<Record<string | symbol, unknown>>,
       _defaultValue?: unknown,
     ) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       let brief: Message | undefined;
       let description: Message | undefined;
       let footer: Message | undefined;
@@ -13618,7 +13680,7 @@ export function merge(
         brief ??= docFragments.brief;
         description ??= docFragments.description;
         footer ??= docFragments.footer;
-        return docFragments.fragments;
+        return collect(docFragments);
       });
       const hiddenAwareFragments = applyHiddenToDocFragments(
         fragments,
@@ -13642,6 +13704,7 @@ export function merge(
         const labeledSection: DocSection = { title: label, entries };
         sections.push(labeledSection);
         return {
+          ...sourceDocumentation(children, options.hidden),
           brief,
           description,
           footer,
@@ -13653,6 +13716,7 @@ export function merge(
       }
 
       return {
+        ...sourceDocumentation(children, options.hidden),
         brief,
         description,
         footer,
@@ -15082,11 +15146,16 @@ export function concat(
       })();
     },
     getDocFragments(state: DocState<readonly unknown[]>, _defaultValue?) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       const fragments = syncParsers.flatMap((p, index) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
           : { kind: "available", state: state.state[index] };
-        return p.getDocFragments(indexState, undefined).fragments;
+        return collect(p.getDocFragments(indexState, undefined));
       });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
@@ -15104,7 +15173,10 @@ export function concat(
       if (entries.length > 0) {
         result.push({ type: "section", entries });
       }
-      return { fragments: result };
+      return {
+        ...sourceDocumentation(children),
+        fragments: result,
+      };
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
@@ -15265,10 +15337,17 @@ export function group<M extends Mode, TValue, TState>(
       return parser.suggest(context, prefix);
     },
     getDocFragments: (state, defaultValue) => {
-      const { brief, description, footer, fragments } = parser.getDocFragments(
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
+      const docs = parser.getDocFragments(
         state,
         defaultValue,
       );
+      const { brief, description, footer } = docs;
+      const fragments = collect(docs);
       const hiddenAwareFragments = applyHiddenToDocFragments(
         fragments,
         options.hidden,
@@ -15338,6 +15417,7 @@ export function group<M extends Mode, TValue, TState>(
         : { entries: allEntries };
 
       return {
+        ...sourceDocumentation(children, options.hidden),
         brief,
         description,
         footer,
@@ -18581,6 +18661,11 @@ export function conditional(
     },
 
     getDocFragments(_state, _defaultValue?) {
+      const children: DocFragments[] = [];
+      const collect = (docs: DocFragments): readonly DocFragment[] => {
+        children.push(docs);
+        return docs.fragments;
+      };
       const fragments: DocFragment[] = [];
 
       // Add discriminator documentation
@@ -18588,7 +18673,7 @@ export function conditional(
         { kind: "unavailable" },
         undefined,
       );
-      fragments.push(...discriminatorFragments.fragments);
+      fragments.push(...collect(discriminatorFragments));
 
       // Add branch-specific documentation
       for (const [key, branchParser] of branchParsers) {
@@ -18597,6 +18682,7 @@ export function conditional(
           undefined,
         );
 
+        children.push(branchFragments);
         const entries: DocEntry[] = branchFragments.fragments
           .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
 
@@ -18623,6 +18709,7 @@ export function conditional(
           undefined,
         );
 
+        children.push(defaultFragments);
         const entries: DocEntry[] = defaultFragments.fragments
           .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
 
@@ -18641,7 +18728,10 @@ export function conditional(
         }
       }
 
-      return { fragments };
+      return {
+        ...sourceDocumentation(children),
+        fragments,
+      };
     },
   } as Parser<
     Mode,

@@ -1064,8 +1064,11 @@ structured environment-name terms.
 The structured page passed to `help.onShow` contains `DocEntry.envVars`,
 without an extra environment section. Custom renderers can call
 [`deriveEnvironmentSection()`](../integrations/env.md#custom-renderers).
-Bindings without documentation entries, such as `bindEnv(fail(), ...)`,
-are not automatically documented.
+The page also contains `environmentBindings` for independent environment
+purposes, with hidden records removed. Env-only bindings such as
+`bindEnv(fail(), ...)` appear in a fallback Environment section even with
+`showEnvironment: true`. A name with any visible CLI reference stays inline
+in this mode. Use `section` or `both` to show all purposes and references.
 
 ### Rich documentation support
 

@@ -1,4 +1,13 @@
-import type { DocEntry } from "@optique/core/doc";
+import {
+  type DocEntry,
+  type EnvironmentBindingDoc,
+  isDocEntryHidden,
+} from "@optique/core/doc";
+import {
+  formatUsageTerm,
+  type HiddenVisibility,
+  isDocHidden,
+} from "@optique/core/usage";
 import { readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { getAnnotations } from "@optique/core/annotations";
@@ -618,6 +627,16 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
  */
 export interface BindEnvOptions<M extends Mode, TValue> {
   /**
+   * Environment purpose and visibility, independent of CLI descriptions.
+   * This cannot expose an enclosing hidden parser. A CLI-less custom parser
+   * must declare `DocFragments.sourceOnly` to receive an independent entry.
+   * @since 1.4.0
+   */
+  readonly documentation?: {
+    readonly description?: Message;
+    readonly hidden?: HiddenVisibility;
+  };
+  /**
    * The environment context to read from.
    */
   readonly context: EnvContext;
@@ -667,7 +686,8 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * Since 1.4.0, visible documentation entries include the full environment
  * variable name in `DocEntry.envVars`. Set `showEnvironment` on the runner
  * or formatter to display these names without reading their values. Parsers
- * without documentation entries, such as `fail()`, have no automatic entry.
+ * with `sourceOnly` documentation, such as `fail()`, receive independent
+ * environment records. Use `documentation.description` for purpose text.
  *
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
@@ -899,12 +919,31 @@ export function bindEnv<
       const defaultValue = upperDefaultValue ?? options.default;
       const docs = parser.getDocFragments(state, defaultValue);
       const name = `${options.context.prefix}${options.key}`;
+      const hidden = isDocHidden(options.documentation?.hidden);
+      const visibleEntry = docs.fragments.some((fragment) =>
+        (fragment.type === "entry" ? [fragment] : fragment.entries).some((
+          entry,
+        ) =>
+          !isDocEntryHidden(entry) &&
+          formatUsageTerm(entry.term, { context: "doc" }).trim() !== ""
+        )
+      );
+      const ownBindings: readonly EnvironmentBindingDoc[] =
+        docs.sourceOnly === true ||
+          ((options.documentation?.description?.length ?? 0) > 0 &&
+            visibleEntry)
+          ? [{ name, ...options.documentation }]
+          : [];
+      const bindings = [...ownBindings, ...docs.environmentBindings ?? []];
       const attach = (entry: DocEntry) => ({
         ...entry,
-        envVars: [...new Set([name, ...(entry.envVars ?? [])])],
+        envVars: [
+          ...new Set([...(hidden ? [] : [name]), ...(entry.envVars ?? [])]),
+        ],
       });
       return {
         ...docs,
+        ...(bindings.length > 0 && { environmentBindings: bindings }),
         fragments: docs.fragments.map((fragment) =>
           fragment.type === "entry"
             ? { ...attach(fragment), type: "entry" as const }

@@ -1241,7 +1241,8 @@ export interface RunOptions<THelp, TError> {
 
   /**
    * Displays declared environment bindings in help. `true` selects inline
-   * annotations; an object can select a section or both. Defaults to `false`.
+   * annotations; an object can select a section or both. Names without visible
+   * CLI references get a fallback section even in inline mode. Defaults to `false`.
    * Also applies to full help above errors. @since 1.4.0
    */
   readonly showEnvironment?: boolean | ShowEnvironmentOptions;

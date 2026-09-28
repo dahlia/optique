@@ -394,11 +394,16 @@ heading regardless of its `title`, and it is still printed when
 Inline annotations remain available. `sectionTitle` applies only to automatic
 sections; the sections are never merged.
 
-The automatic section includes environment names from visible CLI entries on
-the current page and omits empty terms. Existing manually supplied sections
-retain their own filtering behavior. Env-only bindings such as
-`bindEnv(fail(), ...)` have no entry to collect; use manual environment
-documentation for them. The
+The automatic section combines independent bindings with names from visible
+CLI entries on the current page. With `true`/`inline`, an ENVIRONMENT section
+still lists env-only names without visible CLI references; names shared with
+visible CLI entries stay inline. `section`/`both` includes all collected names.
+Explicit purposes render without value quotes; defaults and choices are not
+copied from CLI entries. A binding without a purpose still gets a name-only
+entry.
+
+Existing manually supplied sections retain their own quoting and filtering
+behavior and also take precedence over the fallback ENVIRONMENT section. The
 [env integration guide](../integrations/env.md#custom-renderers) describes the
 metadata and `deriveEnvironmentSection()` helper for custom renderers.
 

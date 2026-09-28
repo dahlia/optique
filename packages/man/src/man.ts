@@ -97,7 +97,8 @@ export interface ManPageOptions {
 
   /**
    * Displays declared environment bindings. `true` selects inline annotations;
-   * an object can select a generated section or both. Defaults to `false`.
+   * an object can select a generated section or both. Names without visible
+   * CLI references get a fallback section in inline mode. Defaults to `false`.
    * A supplied `environment` section overrides the generated section, including
    * an empty section. Inline annotations are independent of that override.
    * `sectionTitle` only affects generated sections and is uppercased.
@@ -499,6 +500,7 @@ function inferSectionTitle(entries: readonly DocEntry[]): string {
 function formatDocSectionEntries(
   section: DocSection,
   showEnvironment = false,
+  generatedEnvironment = false,
 ): string {
   const lines: string[] = [];
 
@@ -521,7 +523,10 @@ function formatDocSectionEntries(
       }]`;
 
     if (entry.description) {
-      let desc = formatMessageAsRoff(entry.description);
+      let desc = formatMessageAsRoff(
+        entry.description,
+        generatedEnvironment ? { quotes: false } : {},
+      );
       if (entry.default) {
         desc += ` [${formatMessageAsRoff(entry.default)}]`;
       }
@@ -531,9 +536,10 @@ function formatDocSectionEntries(
         })`;
       }
       const separator = desc === "" || desc.endsWith("\n") ? "" : " ";
-      lines.push(
-        envAnnotation === "" ? desc : desc + separator + envAnnotation,
-      );
+      const body = envAnnotation === ""
+        ? desc
+        : desc + separator + envAnnotation;
+      lines.push(generatedEnvironment && body === "" ? "\\&" : body);
     } else if (entry.default || entry.choices || envAnnotation !== "") {
       const parts: string[] = [];
       if (entry.default) {
@@ -546,6 +552,8 @@ function formatDocSectionEntries(
       }
       if (envAnnotation !== "") parts.push(envAnnotation);
       lines.push(parts.join(" "));
+    } else if (generatedEnvironment) {
+      lines.push("\\&");
     }
   }
 
@@ -693,8 +701,9 @@ export function formatDocPageAsMan(
 
   // Manual environment documentation retains its existing precedence.
   const automaticEnvironment = options.environment == null &&
-      (placement === "section" || placement === "both")
+      placement != null
     ? deriveEnvironmentSection(page, {
+      onlyUnreferenced: placement === "inline",
       title: typeof options.showEnvironment === "object"
         ? options.showEnvironment.sectionTitle
         : undefined,
@@ -702,7 +711,11 @@ export function formatDocPageAsMan(
     : undefined;
   const environment = options.environment ?? automaticEnvironment;
   if (environment != null && environment.entries.length > 0) {
-    const content = formatDocSectionEntries(environment);
+    const content = formatDocSectionEntries(
+      environment,
+      false,
+      automaticEnvironment != null,
+    );
     if (content !== "") {
       const title = automaticEnvironment == null
         ? "ENVIRONMENT"
