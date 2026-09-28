@@ -1038,6 +1038,35 @@ Choice values are automatically dimmed when colors are enabled, making them
 visually distinct from the main help text.  Both `showDefault` and
 `showChoices` can be enabled simultaneously.
 
+### Environment display
+
+*This API is available since Optique 1.4.0.*
+
+Use `showEnvironment` to display the names declared by
+[`bindEnv()`](../integrations/env.md#help-and-man-page-documentation).
+`true` selects inline annotations such as `[env: APP_LOG_LEVEL]`;
+`{ placement: "section" }` selects an Environment section; and
+`{ placement: "both" }` selects both. The default is `false`, preserving
+existing output. A `sectionTitle` property customizes the automatic heading.
+
+The option is accepted by `run()`, its sync and async variants, the core
+runner functions, and `runProgram()` from *@optique/discover*. It also applies
+to `aboveError: "help"`, while usage-only error output is unchanged.
+The generated section comes after the regular sections and before examples;
+it is not passed to `sectionOrder`.
+
+Environment annotations use the existing `envVar` theme formatter and can
+have their surrounding style customized with
+`theme.annotationStyles.environment`. With colors enabled, the annotation
+style is dim by default. An explicit `messageFormatter` also receives the
+structured environment-name terms.
+
+The structured page passed to `help.onShow` contains `DocEntry.envVars`,
+without an extra environment section. Custom renderers can call
+[`deriveEnvironmentSection()`](../integrations/env.md#custom-renderers).
+Bindings without documentation entries, such as `bindEnv(fail(), ...)`,
+are not automatically documented.
+
 ### Rich documentation support
 
 *This API is available since Optique 0.4.0.*

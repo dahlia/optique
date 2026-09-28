@@ -24,6 +24,7 @@ import type {
   DocSection,
   ShowChoicesOptions,
   ShowDefaultOptions,
+  ShowEnvironmentOptions,
 } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
 import type { Usage } from "@optique/core/usage";
@@ -142,6 +143,13 @@ export interface RunOptions {
    * @since 0.10.0
    */
   readonly showChoices?: boolean | ShowChoicesOptions;
+
+  /**
+   * Displays declared environment bindings in help. `true` selects inline
+   * annotations; an object can select a section or both. Defaults to `false`.
+   * Also applies to full help above errors. @since 1.4.0
+   */
+  readonly showEnvironment?: boolean | ShowEnvironmentOptions;
 
   /**
    * Whether to include the usage synopsis in full help output.
@@ -926,6 +934,7 @@ function buildCoreOptions(
   const termWidth = options.termWidth;
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;
+  const showEnvironment = options.showEnvironment;
   const showUsage = options.showUsage;
   const usageLine = options.usageLine;
   const commandList = options.commandList;
@@ -997,6 +1006,7 @@ function buildCoreOptions(
     termWidth,
     showDefault,
     showChoices,
+    showEnvironment,
     showUsage,
     usageLine,
     commandList,
@@ -1043,6 +1053,7 @@ const knownRunOptionsKeyList = [
   "termWidth",
   "showDefault",
   "showChoices",
+  "showEnvironment",
   "showUsage",
   "usageLine",
   "commandList",

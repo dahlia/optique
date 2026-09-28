@@ -245,10 +245,10 @@ Common mistakes checklist
     `nonEmpty()` when at least one value is required.
  -  Do not confuse free-order parsing with `seq()`. Most constructs let child
     parsers compete by priority; use `seq()` only for truly ordered grammars.
- -  Do not concatenate plain strings for errors or descriptions. Use structured
-    `message` values.
+ -  Use structured `message` values for errors and descriptions.
  -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,
     and `bindKeyring()` in the runner's `contexts` option.
+ -  Show `bindEnv()` names in help with `showEnvironment: true`.
  -  Do not flatten a multi-level dependency graph into duplicated one-level
     factories. Wrap each derived value that becomes a later source with
     `dependency()` and derive the next parser from it.

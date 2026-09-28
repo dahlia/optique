@@ -63,6 +63,14 @@ a ${metavar("PROGRAM")} or ${metavar("PARSER")} to generate a man page from.`,
   ${"8"}  System administration`,
       },
     ),
+    showEnvironment: optional(option(
+      "--show-environment",
+      choice(["inline", "section", "both"] as const, { metavar: "LAYOUT" }),
+      {
+        description:
+          message`Document declared environment bindings inline, in a section, or both.`,
+      },
+    )),
     exportName: withDefault(
       option("-e", "--export", string({ metavar: "NAME" }), {
         description: message`JavaScript export name to use. The export must be
@@ -584,6 +592,9 @@ export async function main(): Promise<void> {
         date,
         version: args.versionString,
         manual: args.manual,
+        showEnvironment: args.showEnvironment == null
+          ? undefined
+          : { placement: args.showEnvironment },
       });
     } else {
       manPage = await generateManPageAsync(target, {
@@ -592,6 +603,9 @@ export async function main(): Promise<void> {
         date,
         version: args.versionString,
         manual: args.manual,
+        showEnvironment: args.showEnvironment == null
+          ? undefined
+          : { placement: args.showEnvironment },
       });
     }
   } catch (error) {

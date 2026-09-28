@@ -233,6 +233,111 @@ Encrypted dotenvx values are not decrypted; they are treated as ordinary
 string values.
 
 
+Help and man page documentation
+-------------------------------
+
+*This feature is available since Optique 1.4.0.*
+
+`bindEnv()` records each full variable name (`prefix + key`) in the wrapped
+parser's documentation. Enable `showEnvironment` to display those names:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+import { run } from "@optique/run";
+
+const context = createEnvContext({ prefix: "APP_" });
+const levels = choice(["error", "warn", "debug"], { metavar: "LEVEL" });
+const parser = object({
+  logLevel: bindEnv(
+    option("--log-level", levels, {
+      description: message`Diagnostic verbosity.`,
+    }),
+    { context, key: "LOG_LEVEL", parser: levels, default: "warn" },
+  ),
+});
+
+await run(parser, {
+  contexts: [context],
+  help: "option",
+  showDefault: true,
+  showEnvironment: { placement: "both" },
+});
+~~~~
+
+The help includes an inline annotation and a separate section:
+
+~~~~ text
+  --log-level LEVEL           Diagnostic verbosity. ["warn"] [env: APP_LOG_LEVEL]
+
+Environment:
+  APP_LOG_LEVEL               --log-level LEVEL
+~~~~
+
+| `showEnvironment`          | Output                           |
+| -------------------------- | -------------------------------- |
+| Omitted or `false`         | No automatic environment output  |
+| `true` or `{}`             | Inline `[env: NAME]` annotations |
+| `{ placement: "section" }` | An Environment section           |
+| `{ placement: "both" }`    | Annotations and a section        |
+
+Set `sectionTitle` in the options object to customize the generated heading.
+The section follows the regular help sections, before examples; `sectionOrder`
+only sorts the regular sections. Names shared by several entries appear once,
+with references to the associated options or arguments. Hidden documentation
+entries are excluded, and subcommand pages use their existing documentation
+scope. A term hidden only from usage still appears in documentation.
+
+These names describe declared bindings. They do not guarantee that every
+variable is consulted on every parse: an outer binding's default can prevent
+an inner binding from being reached. Nested bindings list outer names first,
+without duplicate names. A binding around a composite parser is associated
+with all its visible entries, rather than declaring a separate fallback for
+each child. When alternative branches document the same CLI option, the
+existing first-entry-wins deduplication also chooses its environment metadata.
+
+Only variable names are displayed. Creating this metadata does not add reads
+of environment values. Context registration is still required for parsing,
+but the names can be documented without registering the context.
+
+Man page generators accept the same `showEnvironment` option. See
+[Environment documentation](../concepts/man.md#environment-documentation)
+for automatic sections and manual overrides.
+
+### Custom renderers
+
+`getDocPage()` exposes the names as `DocEntry.envVars`, an optional readonly
+array. Existing documentation entries retain their shape when no binding is
+attached, but entries from `bindEnv()` gain this field even when automatic
+output is disabled. Exact object comparisons or serialized documentation
+snapshots may need updating.
+
+The generated section is not inserted into `DocPage.sections`, including the
+page supplied to a runner's `help.onShow` callback. Use
+`deriveEnvironmentSection()` from *@optique/core/doc* to obtain it separately:
+
+~~~~ typescript twoslash
+import type { Parser } from "@optique/core/parser";
+declare const parser: Parser<"sync", unknown, unknown>;
+// ---cut-before---
+import { deriveEnvironmentSection } from "@optique/core/doc";
+import { getDocPage } from "@optique/core/parser";
+
+const page = getDocPage(parser);
+const environment = page == null
+  ? undefined
+  : deriveEnvironmentSection(page, { title: "Environment variables" });
+~~~~
+
+The helper returns `undefined` when no visible names exist. It creates a new
+`DocSection` without modifying the page. Environment entries refer to the
+associated CLI terms; they do not copy defaults, choices, or descriptions.
+Empty names and empty documentation terms are omitted.
+
+
 Env-only values
 ---------------
 
@@ -253,6 +358,13 @@ const timeout = bindEnv(fail<number>(), {
   default: 30,
 });
 ~~~~
+
+This pattern has no CLI documentation entry, so `showEnvironment` and
+`deriveEnvironmentSection()` do not include it in an automatic section.
+For man pages, supply a manual `environment` section instead. Automatic
+documentation for env-only bindings is tracked in [#985].
+
+[#985]: https://github.com/dahlia/optique/issues/985
 
 
 Composing with other contexts
