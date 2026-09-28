@@ -8,6 +8,17 @@ Version 1.0.11
 
 To be released.
 
+### @optique/core
+
+ -  Reduced typo suggestion overhead when option parsers encounter positional
+    arguments.  Literal `errors.noMatch` messages now skip suggestion searches,
+    and candidates whose length difference exceeds the suggestion thresholds
+    are excluded before calculating edit distances.  Suggestion results and
+    custom error callback invocations are preserved.  [[#988], [#992]]
+
+[#988]: https://github.com/dahlia/optique/issues/988
+[#992]: https://github.com/dahlia/optique/pull/992
+
 
 Version 1.0.10
 --------------
