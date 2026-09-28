@@ -1,4 +1,8 @@
 import {
+  type ConsumingFailure,
+  withPassThroughFailure,
+} from "./internal/passthrough.ts";
+import {
   annotationViewTargets,
   getWrappedChildParseState as getParseChildState,
   getWrappedChildState as getAnnotatedChildState,
@@ -6003,11 +6007,13 @@ export function object<
     let anySuccess = false;
     const allConsumed: string[] = [];
     const consumedFields = new Set<string | symbol>();
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       const getFieldState = createFieldStateGetter(
         currentContext.state,
         getObjectParseChildState,
@@ -6015,11 +6021,14 @@ export function object<
 
       for (const [field, parser] of parserPairs) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse(
-          withChildContext(
-            currentContext,
-            field,
-            getFieldState(field, parser),
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              getFieldState(field, parser),
+              parser,
+            ),
+            consumingFailure,
           ),
         );
 
@@ -6053,8 +6062,10 @@ export function object<
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (!result.success) {
+          // The first failure blocks capture; the deepest selects the diagnostic.
+          if (result.consumed > 0) consumingFailure ??= result;
+          if (error.consumed < result.consumed) error = result;
         }
       }
     }
@@ -6086,11 +6097,14 @@ export function object<
         }
         const fieldState = getFieldState(field, parser);
         const result = typedParser.parse(
-          withChildContext(
-            currentContext,
-            field,
-            fieldState,
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              fieldState,
+              parser,
+            ),
+            consumingFailure,
           ),
         );
         if (
@@ -6181,11 +6195,13 @@ export function object<
     let anySuccess = false;
     const allConsumed: string[] = [];
     const consumedFields = new Set<string | symbol>();
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       const getFieldState = createFieldStateGetter(
         currentContext.state,
         getObjectParseChildState,
@@ -6193,11 +6209,14 @@ export function object<
 
       for (const [field, parser] of parserPairs) {
         const resultOrPromise = parser.parse(
-          withChildContext(
-            currentContext,
-            field,
-            getFieldState(field, parser),
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              getFieldState(field, parser),
+              parser,
+            ),
+            consumingFailure,
           ),
         );
         const result = await resultOrPromise;
@@ -6232,8 +6251,10 @@ export function object<
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (!result.success) {
+          // The first failure blocks capture; the deepest selects the diagnostic.
+          if (result.consumed > 0) consumingFailure ??= result;
+          if (error.consumed < result.consumed) error = result;
         }
       }
     }
@@ -6255,11 +6276,14 @@ export function object<
         }
         const fieldState = getFieldState(field, parser);
         const resultOrPromise = parser.parse(
-          withChildContext(
-            currentContext,
-            field,
-            fieldState,
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              fieldState,
+              parser,
+            ),
+            consumingFailure,
           ),
         );
         const result = await resultOrPromise;
@@ -7620,6 +7644,8 @@ export function tuple<
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Similar to object(), try parsers in priority order but maintain tuple semantics
     while (matchedParsers.size < syncParsers.length) {
@@ -7640,7 +7666,10 @@ export function tuple<
 
       for (const [parser, index] of remainingParsers) {
         const result = parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+          ),
         );
 
         if (result.success && result.consumed.length > 0) {
@@ -7674,12 +7703,15 @@ export function tuple<
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (!result.success) {
+          // The first failure blocks capture; the deepest selects the diagnostic.
+          if (result.consumed > 0) consumingFailure ??= result;
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -7688,7 +7720,15 @@ export function tuple<
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
           const result = parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+            ),
           );
 
           if (result.success && result.consumed.length < 1) {
@@ -7754,6 +7794,8 @@ export function tuple<
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Similar to object(), try parsers in priority order but maintain tuple semantics
     while (matchedParsers.size < parsers.length) {
@@ -7774,7 +7816,10 @@ export function tuple<
 
       for (const [parser, index] of remainingParsers) {
         const resultOrPromise = parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+          ),
         );
         const result = await resultOrPromise;
 
@@ -7809,12 +7854,15 @@ export function tuple<
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (!result.success) {
+          // The first failure blocks capture; the deepest selects the diagnostic.
+          if (result.consumed > 0) consumingFailure ??= result;
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -7823,7 +7871,15 @@ export function tuple<
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
           const resultOrPromise = parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+            ),
           );
           const result = await resultOrPromise;
 
@@ -10939,6 +10995,8 @@ export function concat(
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Use the exact same logic as tuple() to avoid infinite loops
     while (matchedParsers.size < syncParsers.length) {
@@ -10959,7 +11017,10 @@ export function concat(
 
       for (const [parser, index] of remainingParsers) {
         const result = parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+          ),
         );
 
         if (result.success && result.consumed.length > 0) {
@@ -10993,12 +11054,15 @@ export function concat(
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (!result.success) {
+          // The first failure blocks capture; the deepest selects the diagnostic.
+          if (result.consumed > 0) consumingFailure ??= result;
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -11007,7 +11071,15 @@ export function concat(
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
           const result = parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+            ),
           );
 
           if (result.success && result.consumed.length < 1) {
@@ -11071,6 +11143,8 @@ export function concat(
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Use the exact same logic as tuple() to avoid infinite loops
     while (matchedParsers.size < parsers.length) {
@@ -11091,7 +11165,10 @@ export function concat(
 
       for (const [parser, index] of remainingParsers) {
         const result = await parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+          ),
         );
 
         if (result.success && result.consumed.length > 0) {
@@ -11125,12 +11202,15 @@ export function concat(
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (!result.success) {
+          // The first failure blocks capture; the deepest selects the diagnostic.
+          if (result.consumed > 0) consumingFailure ??= result;
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -11139,7 +11219,15 @@ export function concat(
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
           const result = await parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+            ),
           );
 
           if (result.success && result.consumed.length < 1) {

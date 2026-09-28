@@ -1,3 +1,4 @@
+import { getPassThroughFailure } from "./internal/passthrough.ts";
 import {
   getWrappedChildParseState,
   getWrappedChildState,
@@ -3114,6 +3115,9 @@ export function passThrough(
           error: message`No input to pass through.`,
         };
       }
+
+      const failure = getPassThroughFailure(context);
+      if (failure != null) return failure;
 
       const token = context.buffer[0];
 
