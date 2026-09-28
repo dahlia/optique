@@ -375,6 +375,30 @@ const parser = flag("-f", "--force", {
 The `flag()` parser has the same priority (10) as `option()` to ensure
 consistent option handling.
 
+### Custom errors
+
+Since Optique 1.4.0, `errors.unexpectedValue` customizes the error for a value
+attached to a flag as `--name=value`, `-name=value` (a single-dash long name),
+or `/name:value`.  It accepts a static `Message` or a function that receives
+the matched option name and the value after the separator, including an
+empty string:
+
+~~~~ typescript twoslash
+import { message, optionName, value } from "@optique/core/message";
+import { flag } from "@optique/core/primitives";
+
+const verboseFlag = flag("--verbose", {
+  errors: {
+    unexpectedValue: (name, input) =>
+      message`${optionName(name)} takes no value, got ${value(input)}.`,
+  },
+});
+~~~~
+
+See
+[customizing parser error messages](./messages.md#customizing-parser-error-messages)
+for the other error options.
+
 
 `negatableFlag()` parser
 ------------------------

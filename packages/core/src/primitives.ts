@@ -1745,6 +1745,17 @@ export interface FlagErrorOptions {
   duplicate?: Message | ((token: string) => Message);
 
   /**
+   * Custom error message when a flag receives an unexpected value.
+   * Can be a static message or a function that receives the matched option
+   * name and the value after the separator, including an empty value.
+   *
+   * @since 1.4.0
+   */
+  readonly unexpectedValue?:
+    | Message
+    | ((optionName: string, value: string) => Message);
+
+  /**
    * Custom error message when no matching flag is found.
    * Can be a static message or a function that receives:
    * - invalidOption: The invalid option name that was provided
@@ -1891,13 +1902,18 @@ export function flag(
         .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
       for (const prefix of prefixes) {
         if (context.buffer[0].startsWith(prefix)) {
+          const optionName = prefix.slice(0, -1);
           const value = context.buffer[0].slice(prefix.length);
           return {
             success: false,
             consumed: 1,
-            error: message`Flag ${
-              eOptionName(prefix.slice(0, -1))
-            } does not accept a value, but got: ${value}.`,
+            error: options.errors?.unexpectedValue
+              ? (typeof options.errors.unexpectedValue === "function"
+                ? options.errors.unexpectedValue(optionName, value)
+                : options.errors.unexpectedValue)
+              : message`Flag ${
+                eOptionName(optionName)
+              } does not accept a value, but got: ${value}.`,
           };
         }
       }

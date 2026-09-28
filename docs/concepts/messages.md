@@ -761,7 +761,7 @@ Most primitive parsers support customizing their core error conditions:
 ~~~~ typescript twoslash
 import { option, flag } from "@optique/core/primitives";
 import { string, integer } from "@optique/core/valueparser";
-import { message, optionName, metavar, type Message } from "@optique/core/message";
+import { message, optionName, metavar, value, type Message } from "@optique/core/message";
 
 // Option parser with custom errors
 const portOption = option("--port", integer(), {
@@ -776,7 +776,10 @@ const portOption = option("--port", integer(), {
 const verboseFlag = flag("--verbose", {
   errors: {
     duplicate: (token: string) =>
-      message`${optionName("--verbose")} was already specified: ${token}.`
+      message`${optionName("--verbose")} was already specified: ${token}.`,
+    // Available since Optique 1.4.0
+    unexpectedValue: (name, input) =>
+      message`${optionName(name)} takes no value, got ${value(input)}.`
   }
 });
 ~~~~
