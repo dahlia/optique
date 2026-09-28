@@ -238,3 +238,127 @@ describe("environment documentation", () => {
     assert.match(opaque, /DESCRIPTION \[env: ENV\]/);
   });
 });
+
+describe("independent environment documentation", () => {
+  const independent: DocPage = {
+    sections: [{ entries: [entry, { ...entry, envVars: ["SECOND"] }] }],
+    environmentBindings: [
+      { name: "ONLY", description: message`Purpose.` },
+      { name: "APP_LEVEL", description: message`Level purpose.` },
+      { name: "ONLY", description: [{ text: "Purpose.", type: "text" }] },
+      { name: "ONLY", description: message`Another purpose.` },
+      { name: "NAME_ONLY" },
+      { name: "ONLY", hidden: true, description: message`Hidden purpose.` },
+      { name: "HIDDEN", hidden: "doc" },
+      { name: "" },
+    ],
+  };
+  it("orders CLI names first without deduplicating distinct entry metadata", () => {
+    const section = deriveEnvironmentSection(independent);
+    assert.ok(section);
+    assert.deepEqual(section.entries.map((entry) => entry.term), [
+      { type: "literal", value: "APP_LEVEL" },
+      { type: "literal", value: "SECOND" },
+      { type: "literal", value: "ONLY" },
+      { type: "literal", value: "NAME_ONLY" },
+    ]);
+    assert.deepEqual(section.entries[0].description, [
+      ...message`Level purpose.`,
+      { type: "lineBreak" },
+      { type: "text", text: "CLI: " },
+      { type: "optionNames", optionNames: ["--level"] },
+      { type: "text", text: " " },
+      { type: "metavar", metavar: "LEVEL" },
+    ]);
+    assert.deepEqual(section.entries[2].description, [
+      ...message`Purpose.`,
+      { type: "lineBreak" },
+      ...message`Another purpose.`,
+    ]);
+    assert.ok(!("description" in section.entries[3]));
+  });
+  it("uses per-name fallback and ignores hidden records without hiding visible siblings", () => {
+    const section = deriveEnvironmentSection(independent, {
+      onlyUnreferenced: true,
+    });
+    assert.deepEqual(section?.entries.map((entry) => entry.term), [
+      { type: "literal", value: "ONLY" },
+      { type: "literal", value: "NAME_ONLY" },
+    ]);
+    for (
+      const showEnvironment of [true, {}, { placement: "inline" as const }]
+    ) {
+      const help = formatDocPage("app", independent, { showEnvironment });
+      assert.ok(help.includes("ONLY"));
+      assert.ok(help.includes("NAME_ONLY"));
+      assert.ok(!help.includes("Level purpose."));
+      assert.ok(!help.includes("Hidden purpose."));
+    }
+  });
+  it("normalizes structural message equality including URLs and ordered arrays", () => {
+    const purpose = [{
+      type: "url" as const,
+      url: new URL("https://example.com/"),
+    }];
+    const names = [{
+      type: "optionNames" as const,
+      optionNames: ["--a", "--b"],
+    }];
+    const section = deriveEnvironmentSection({
+      sections: [],
+      environmentBindings: [
+        { name: "A", description: purpose },
+        {
+          name: "A",
+          description: [{ type: "url", url: new URL("https://example.com/") }],
+        },
+        { name: "A", description: names },
+        {
+          name: "A",
+          description: [{ optionNames: ["--a", "--b"], type: "optionNames" }],
+        },
+      ],
+    });
+    assert.deepEqual(section?.entries[0].description, [...purpose, {
+      type: "lineBreak",
+    }, ...names]);
+  });
+  it("validates an inline title only when the fallback is present", () => {
+    const options = { showEnvironment: { sectionTitle: "" } };
+    assert.doesNotThrow(() => formatDocPage("app", page, options));
+    assert.throws(() => formatDocPage("app", independent, options), TypeError);
+    assert.throws(
+      () =>
+        formatDocPage("app", {
+          sections: [],
+          environmentBindings: [{ name: "LONG_VARIABLE" }],
+        }, { maxWidth: 2, showEnvironment: true }),
+      RangeError,
+    );
+  });
+  it("keeps purpose values unquoted in generated sections", () => {
+    const help = formatDocPage("app", {
+      sections: [],
+      environmentBindings: [{
+        name: "A",
+        description: message`Use ${"seconds"}.`,
+      }],
+    }, { showEnvironment: true });
+    assert.ok(help.includes("Use seconds."));
+    assert.ok(!help.includes('"seconds"'));
+  });
+});
+
+it("compares message terms by documented fields rather than unrelated attached metadata", () => {
+  const metadata: Record<string, unknown> = {};
+  metadata.self = metadata;
+  const term = { type: "text" as const, text: "Purpose.", metadata };
+  const section = deriveEnvironmentSection({
+    sections: [],
+    environmentBindings: [
+      { name: "A", description: [term] },
+      { name: "A", description: message`Purpose.` },
+    ],
+  });
+  assert.equal(section?.entries[0].description?.length, 1);
+});

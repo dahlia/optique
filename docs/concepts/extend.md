@@ -1457,3 +1457,41 @@ For performance-critical applications:
  -  Cache parsed results rather than re-parsing multiple times
  -  Consider using `runWithSync()` for sync-only contexts to avoid Promise
     overhead
+
+
+Source-only documentation
+-------------------------
+
+*Available since Optique 1.4.0.*
+
+A parser without a CLI surface can return `sourceOnly: true` from
+`getDocFragments()`. This explicitly allows `bindEnv()` to add independent
+environment documentation. `fail()` and `constant()` already declare it.
+Empty `fragments` or `usage` arrays do not imply this permission, since a
+hidden CLI parser may also return empty arrays.
+
+~~~~ typescript twoslash
+import type { DocFragments } from "@optique/core/doc";
+
+const docs: DocFragments = {
+  fragments: [],
+  sourceOnly: true,
+};
+~~~~
+
+A transparent wrapper should return or spread the whole child result, keeping
+`sourceOnly` and `environmentBindings`. When combining children, concatenate
+their environment records in the same scope and order as their CLI fragments.
+Set `sourceOnly` only when at least one child is represented and every
+represented child explicitly sets it. A hidden parent must drop the records and
+the capability; otherwise an outer binding could expose hidden documentation.
+
+Built-in alternative and command parsers collect only the branches their CLI
+documentation already represents. `conditional()` documents all configured
+branches. Custom combinators that rebuild `DocFragments` must forward these
+optional fields deliberately; Optique does not recover discarded metadata.
+
+`DocPage.environmentBindings` contains cloned, visible records, without the
+producer-only `sourceOnly` flag. Renderers can pass the page to
+[`deriveEnvironmentSection()`](../integrations/env.md#custom-renderers) to
+combine these records with `DocEntry.envVars`.

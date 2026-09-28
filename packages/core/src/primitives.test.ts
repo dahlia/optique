@@ -174,7 +174,7 @@ describe("constant", () => {
         state: parser.initialState,
       });
 
-      assert.deepEqual(fragments, { fragments: [] });
+      assert.deepEqual(fragments, { fragments: [], sourceOnly: true });
     });
 
     it("should return empty array with different state values", () => {
@@ -190,8 +190,8 @@ describe("constant", () => {
         state: parser2.initialState,
       });
 
-      assert.deepEqual(fragments1, { fragments: [] });
-      assert.deepEqual(fragments2, { fragments: [] });
+      assert.deepEqual(fragments1, { fragments: [], sourceOnly: true });
+      assert.deepEqual(fragments2, { fragments: [], sourceOnly: true });
     });
 
     it("should return empty array with default value parameter", () => {
@@ -206,8 +206,8 @@ describe("constant", () => {
         parser.initialState,
       );
 
-      assert.deepEqual(fragments1, { fragments: [] });
-      assert.deepEqual(fragments2, { fragments: [] });
+      assert.deepEqual(fragments1, { fragments: [], sourceOnly: true });
+      assert.deepEqual(fragments2, { fragments: [], sourceOnly: true });
     });
 
     it("should return empty array for different constant types", () => {
@@ -220,15 +220,16 @@ describe("constant", () => {
         stringParser.getDocFragments({ kind: "available", state: "string" }),
         {
           fragments: [],
+          sourceOnly: true,
         },
       );
       assert.deepEqual(
         numberParser.getDocFragments({ kind: "available", state: 123 }),
-        { fragments: [] },
+        { fragments: [], sourceOnly: true },
       );
       assert.deepEqual(
         booleanParser.getDocFragments({ kind: "available", state: true }),
-        { fragments: [] },
+        { fragments: [], sourceOnly: true },
       );
       assert.deepEqual(
         objectParser.getDocFragments({
@@ -237,6 +238,7 @@ describe("constant", () => {
         }),
         {
           fragments: [],
+          sourceOnly: true,
         },
       );
     });
@@ -296,7 +298,7 @@ describe("fail", () => {
   it("should return no doc fragments", () => {
     const parser = fail<string>();
     const fragments = parser.getDocFragments({ kind: "unavailable" });
-    assert.deepEqual(fragments, { fragments: [] });
+    assert.deepEqual(fragments, { fragments: [], sourceOnly: true });
   });
 
   it("should return no suggestions", () => {

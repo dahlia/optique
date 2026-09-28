@@ -31,6 +31,11 @@ To be released.
  -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
     value is attached to a flag.  It accepts a static message or a callback
     receiving the matched option name and the supplied value.  [[#968], [#984]]
+ -  Added independent environment documentation to help pages. Inline mode now
+    lists env-only names in a fallback section. The new optional
+    `DocFragments.sourceOnly` and `environmentBindings` fields preserve
+    source-only scopes through built-in combinators; exact raw documentation
+    snapshots and fixed maps of doc keys may need updating.  [[#985], [#987]]
  -  Added opt-in environment binding annotations and sections to help output,
     with `DocEntry.envVars` metadata and `deriveEnvironmentSection()` for
     custom renderers.  Existing help output stays unchanged unless
@@ -50,7 +55,9 @@ To be released.
 [#982]: https://github.com/dahlia/optique/pull/982
 [#983]: https://github.com/dahlia/optique/pull/983
 [#984]: https://github.com/dahlia/optique/pull/984
+[#985]: https://github.com/dahlia/optique/issues/985
 [#986]: https://github.com/dahlia/optique/pull/986
+[#987]: https://github.com/dahlia/optique/pull/987
 
 ### @optique/run
 
@@ -70,6 +77,10 @@ To be released.
  -  Added support for `helpSections` in `runProgram()` to separate discovered
     commands from options in help while keeping pages without commands free of
     automatic headings.  [[#972], [#983]]
+ -  Preserved independent root environment documentation in command discovery
+    help, while keeping descendant bindings scoped to their own command pages.
+    Root-only programs also show environment bindings added by outer wrappers.
+    [[#985], [#987]]
 
 ### @optique/config
 
@@ -97,12 +108,21 @@ To be released.
 
 ### @optique/env
 
+ -  Added automatic documentation for `bindEnv(fail(), ...)` and other
+    source-only scopes, with optional `documentation.description` purpose text
+    and `documentation.hidden` visibility. Hidden enclosing parsers stay
+    hidden, and creating documentation does not read environment values.
+    [[#985], [#987]]
  -  Added full environment variable names to the documentation entries produced
     by `bindEnv()`, so help and man page renderers can display declared
     fallback bindings without reading their values.  [[#969], [#986]]
 
 ### @optique/man
 
+ -  Added automatic ENVIRONMENT entries for env-only bindings, including a
+    fallback section in inline mode. Manual environment sections still take
+    precedence, including empty sections that suppress automatic output.
+    [[#985], [#987]]
  -  Added opt-in environment binding annotations and generated `ENVIRONMENT`
     sections to man pages, including `--show-environment` in the generator
     CLI.  Explicit `environment` sections retain priority over generated

@@ -81,13 +81,16 @@ describe("bindEnv documentation", () => {
     assert.ok(!JSON.stringify(getDocPage(parser)).includes("APP_"));
   });
 
-  it("leaves entryless env-only bindings for issue #985", () => {
+  it("records entryless env-only bindings without synthesizing CLI entries", () => {
     const parser = bindEnv(fail<string>(), {
       context,
       key: "NAME",
       parser: string(),
     });
     assert.deepEqual(getDocPage(parser)?.sections, []);
+    assert.deepEqual(getDocPage(parser)?.environmentBindings, [{
+      name: "APP_NAME",
+    }]);
   });
 
   it("preserves arbitrary declared prefixes and keys without reading values", () => {
@@ -161,4 +164,43 @@ describe("bindEnv documentation", () => {
       assert.match(output.join("\n"), /Environment:/);
     }
   });
+});
+
+it("supplies cloned visible env-only records to help callbacks without adding raw sections", () => {
+  const context = createEnvContext({
+    source() {
+      throw new Error("Unexpected read.");
+    },
+  });
+  const parser = object({
+    visible: bindEnv(fail<string>(), {
+      context,
+      key: "VISIBLE",
+      parser: string(),
+    }),
+    hidden: bindEnv(fail<string>(), {
+      context,
+      key: "HIDDEN",
+      parser: string(),
+      documentation: { hidden: true },
+    }),
+  });
+  const output: string[] = [];
+  runParser(parser, "app", ["--help"], {
+    help: {
+      option: true,
+      onShow(_code, page) {
+        assert.deepEqual(page.environmentBindings, [{ name: "VISIBLE" }]);
+        assert.ok(
+          page.sections.every((section) => section.title !== "Environment"),
+        );
+        assert.ok(!("sourceOnly" in page));
+      },
+    },
+    showEnvironment: true,
+    colors: false,
+    stdout: (line) => output.push(line),
+  });
+  assert.ok(output.join("\n").includes("VISIBLE"));
+  assert.ok(!output.join("\n").includes("HIDDEN"));
 });

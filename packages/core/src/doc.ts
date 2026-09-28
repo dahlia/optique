@@ -39,6 +39,7 @@ import {
   cloneUsageTerm,
   formatUsage,
   formatUsageTerm,
+  type HiddenVisibility,
   isDocHidden,
   type Usage,
   type UsageTerm,
@@ -98,11 +99,27 @@ export interface DocSection {
 }
 
 /**
+ * A declared environment binding, independent of CLI documentation entries.
+ * Names describe possible sources, not whether they are read during parsing.
+ * @since 1.4.0
+ */
+export interface EnvironmentBindingDoc {
+  /** The full variable name, including any prefix. */
+  readonly name: string;
+  /** Purpose text supplied by the binding author, without inferred values. */
+  readonly description?: Message;
+  /** Visibility in documentation; `"usage"` remains visible. */
+  readonly hidden?: HiddenVisibility;
+}
+
+/**
  * A document page that contains multiple sections, each with its own brief
  * and a list of entries. This structure is used to organize documentation
  * for commands, options, and other related information.
  */
 export interface DocPage {
+  /** Independent environment documentation in this page's scope. @since 1.4.0 */
+  readonly environmentBindings?: readonly EnvironmentBindingDoc[];
   readonly brief?: Message;
   readonly usage?: Usage;
   readonly description?: Message;
@@ -139,6 +156,15 @@ export type DocFragment =
  * a final document page.
  */
 export interface DocFragments {
+  /** Independent environment documentation in this scope. @since 1.4.0 */
+  readonly environmentBindings?: readonly EnvironmentBindingDoc[];
+  /**
+   * Positive permission for source-only bindings to document this scope.
+   * Empty fragments alone do not imply this capability. Custom combinators
+   * must preserve it deliberately, respecting scope and hidden parents.
+   * @since 1.4.0
+   */
+  readonly sourceOnly?: true;
   /**
    * An optional brief that provides a short summary for the collection
    * of fragments.
@@ -367,19 +393,21 @@ export interface ShowEnvironmentOptions {
  * Names are grouped in first-appearance order with references to their
  * associated entries. Empty names and hidden or empty terms are ignored.
  * This does not read environment values or modify the page. Entries without
- * CLI documentation, such as `bindEnv(fail(), ...)`, are not collected.
+ * CLI documentation are collected through `environmentBindings`.
  *
  * @param page The documentation page to inspect.
- * @param options An optional heading for the generated section.
+ * @param options A heading and optional filter for names without CLI references.
  * @returns A new section, or `undefined` when there are no visible names.
  * @throws {TypeError} If a used title is empty or contains control characters.
  * @since 1.4.0
  */
 export function deriveEnvironmentSection(
   page: DocPage,
-  options: { readonly title?: string } = {},
+  options: { readonly title?: string; readonly onlyUnreferenced?: boolean } =
+    {},
 ): DocSection | undefined {
   const bindings = new Map<string, Map<string, Message>>();
+  const purposes = new Map<string, Map<string, Message>>();
   for (const section of page.sections) {
     for (const entry of section.entries) {
       if (isDocEntryHidden(entry)) continue;
@@ -407,17 +435,70 @@ export function deriveEnvironmentSection(
       }
     }
   }
-  if (bindings.size === 0) return undefined;
+  for (const binding of page.environmentBindings ?? []) {
+    if (binding.name === "" || isDocHidden(binding.hidden)) continue;
+    if (!bindings.has(binding.name)) bindings.set(binding.name, new Map());
+    const description = binding.description;
+    if (description == null || description.length === 0) continue;
+    let descriptions = purposes.get(binding.name);
+    if (descriptions == null) {
+      descriptions = new Map();
+      purposes.set(binding.name, descriptions);
+    }
+    // Compare only documented fields. Structurally compatible user terms may
+    // carry unrelated metadata, including objects that cannot be serialized.
+    const key = JSON.stringify(description.map((term) => {
+      switch (term.type) {
+        case "text":
+          return [term.type, term.text];
+        case "optionName":
+          return [term.type, term.optionName];
+        case "optionNames":
+          return [term.type, term.optionNames];
+        case "metavar":
+          return [term.type, term.metavar];
+        case "value":
+          return [term.type, term.value];
+        case "values":
+          return [term.type, term.values];
+        case "envVar":
+          return [term.type, term.envVar];
+        case "commandLine":
+          return [term.type, term.commandLine];
+        case "lineBreak":
+          return [term.type];
+        case "url":
+          return [term.type, term.url.href];
+      }
+    }));
+    descriptions.set(key, description);
+  }
+  const collected = Array.from(bindings).filter(([, references]) =>
+    !options.onlyUnreferenced || references.size === 0
+  );
+  if (collected.length === 0) return undefined;
   const title = options.title ?? "Environment";
   validateLabel(title);
   return {
     title,
-    entries: Array.from(bindings, ([name, references]) => ({
-      term: { type: "literal", value: name },
-      description: Array.from(references.values()).flatMap((reference, i) =>
-        i === 0 ? reference : [text(", "), ...reference]
-      ),
-    })),
+    entries: collected.map(([name, references]) => {
+      const purpose: Message = Array.from(purposes.get(name)?.values() ?? [])
+        .flatMap((description, i) =>
+          i === 0 ? description : [{ type: "lineBreak" }, ...description]
+        );
+      const refs: Message = Array.from(references.values()).flatMap((ref, i) =>
+        i === 0 ? ref : [text(", "), ...ref]
+      );
+      const description: Message = purpose.length === 0
+        ? refs
+        : refs.length === 0
+        ? purpose
+        : [...purpose, { type: "lineBreak" }, text("CLI: "), ...refs];
+      return {
+        term: { type: "literal", value: name },
+        ...(description.length > 0 && { description }),
+      };
+    }),
   };
 }
 
@@ -485,7 +566,8 @@ export interface ShowChoicesOptions {
 export interface DocPageFormatOptions {
   /**
    * Displays declared environment bindings. `true` or `{}` selects inline
-   * annotations; `placement` can select a section or both. Defaults to `false`.
+   * annotations; `placement` can select a section or both. Unreferenced names
+   * get a fallback section in inline mode. Defaults to `false`.
    * Generated sections follow the regular sections, before examples, and are
    * not passed to `sectionOrder`. The original page is not modified.
    * @since 1.4.0
@@ -788,9 +870,9 @@ export function formatDocPage(
       return rendered.trim() !== "";
     }),
   }));
-  const environmentSection = environmentPlacement === "section" ||
-      environmentPlacement === "both"
+  const environmentSection = environmentPlacement != null
     ? deriveEnvironmentSection({ ...page, sections: filteredSections }, {
+      onlyUnreferenced: environmentPlacement === "inline",
       title: typeof options.showEnvironment === "object"
         ? options.showEnvironment.sectionTitle
         : undefined,

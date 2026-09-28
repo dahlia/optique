@@ -277,12 +277,12 @@ Environment:
   APP_LOG_LEVEL               --log-level LEVEL
 ~~~~
 
-| `showEnvironment`          | Output                           |
-| -------------------------- | -------------------------------- |
-| Omitted or `false`         | No automatic environment output  |
-| `true` or `{}`             | Inline `[env: NAME]` annotations |
-| `{ placement: "section" }` | An Environment section           |
-| `{ placement: "both" }`    | Annotations and a section        |
+| `showEnvironment`          | Output                                                                 |
+| -------------------------- | ---------------------------------------------------------------------- |
+| Omitted or `false`         | No automatic environment output                                        |
+| `true` or `{}`             | Inline annotations; a section for names without visible CLI references |
+| `{ placement: "section" }` | An Environment section                                                 |
+| `{ placement: "both" }`    | Annotations and a section                                              |
 
 Set `sectionTitle` in the options object to customize the generated heading.
 The section follows the regular help sections, before examples; `sectionOrder`
@@ -299,9 +299,10 @@ with all its visible entries, rather than declaring a separate fallback for
 each child. When alternative branches document the same CLI option, the
 existing first-entry-wins deduplication also chooses its environment metadata.
 
-Only variable names are displayed. Creating this metadata does not add reads
-of environment values. Context registration is still required for parsing,
-but the names can be documented without registering the context.
+Names and any explicitly supplied purpose text are displayed. Creating this
+metadata does not add reads of environment values. Context registration is
+still required for parsing, but the names can be documented without registering
+the context.
 
 Man page generators accept the same `showEnvironment` option. See
 [Environment documentation](../concepts/man.md#environment-documentation)
@@ -310,7 +311,11 @@ for automatic sections and manual overrides.
 ### Custom renderers
 
 `getDocPage()` exposes the names as `DocEntry.envVars`, an optional readonly
-array. Existing documentation entries retain their shape when no binding is
+array. Independent bindings appear in the optional readonly
+`DocPage.environmentBindings` array as `EnvironmentBindingDoc` records with
+`name`, optional `description`, and optional `hidden` fields. Hidden records
+are excluded from pages before `help.onShow` receives them. Existing
+documentation entries retain their shape when no binding is
 attached, but entries from `bindEnv()` gain this field even when automatic
 output is disabled. Exact object comparisons or serialized documentation
 snapshots may need updating.
@@ -334,8 +339,17 @@ const environment = page == null
 
 The helper returns `undefined` when no visible names exist. It creates a new
 `DocSection` without modifying the page. Environment entries refer to the
-associated CLI terms; they do not copy defaults, choices, or descriptions.
-Empty names and empty documentation terms are omitted.
+associated CLI terms and include explicitly supplied environment purposes;
+they do not copy CLI descriptions, defaults, or choices. Empty names and
+empty CLI terms are omitted. Names with CLI references come first in entry
+order, followed by unreferenced names in binding order. Unique purposes are
+joined with line breaks; references follow a `CLI:` label when a purpose is
+present. Generated purposes render value terms without quotes.
+
+Pass `{ onlyUnreferenced: true }` to collect only names without any visible
+CLI reference on this page, as the inline fallback does. The helper groups
+names exactly and deduplicates structurally equal purposes. A hidden record
+never hides a separate visible binding of the same name.
 
 
 Env-only values
@@ -348,6 +362,7 @@ with `fail<T>()`:
 import { bindEnv, createEnvContext } from "@optique/env";
 import { fail } from "@optique/core/primitives";
 import { integer } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
 
 const envContext = createEnvContext({ prefix: "MYAPP_" });
 
@@ -356,15 +371,45 @@ const timeout = bindEnv(fail<number>(), {
   key: "TIMEOUT",
   parser: integer(),
   default: 30,
+  documentation: { description: message`Request timeout in seconds.` },
 });
 ~~~~
 
-This pattern has no CLI documentation entry, so `showEnvironment` and
-`deriveEnvironmentSection()` do not include it in an automatic section.
-For man pages, supply a manual `environment` section instead. Automatic
-documentation for env-only bindings is tracked in [#985].
+With `showEnvironment: true`, this binding appears in a separate Environment
+section without a fake option or argument:
 
-[#985]: https://github.com/dahlia/optique/issues/985
+~~~~ text
+Environment:
+  MYAPP_TIMEOUT               Request timeout in seconds.
+~~~~
+
+`fail()` and `constant()` declare a source-only documentation scope. Built-in
+combinators preserve it when every documented child declares it and the scope
+is visible. An empty fragment list alone does not grant this capability: a
+hidden CLI option also has no entries. Custom parsers can declare
+`DocFragments.sourceOnly: true`; custom wrappers must forward it and
+`environmentBindings` while respecting their own visibility and branch scope.
+See
+[source-only documentation](../concepts/extend.md#source-only-documentation).
+
+The default inline layout adds a section only for names without visible CLI
+references. A name shared by an env-only binding and a visible CLI binding
+appears only inline; use `section` or `both` to show its purpose as well.
+A purpose is optional, and a name-only binding still appears in the section.
+Defaults and current values are never inferred into these entries.
+
+`documentation.description` also describes CLI-bound environment variables,
+without replacing the CLI description. It produces an independent purpose
+record when a visible CLI entry exists. The purpose is stored
+separately from the CLI entry. If `or()`/`longestMatch()` first-entry-wins
+deduplication removes that entry, the purpose can still appear in the fallback
+section. Without a purpose, the existing
+CLI metadata follows the deduplicated entry.
+
+Set `documentation.hidden` to `true`, `"doc"`, or `"help"` to hide this binding
+from both automatic forms. `false` and `"usage"` remain visible in help.
+This setting does not hide the CLI option itself, change parsing, or expose
+an enclosing hidden parser. Nested bindings retain their own visibility.
 
 
 Composing with other contexts
@@ -675,8 +720,11 @@ default.  See *Fallback validation* under “Error handling” for details.
 Parameters
 :    -  `parser`: The inner parser to wrap.
      -  `options.context`: `EnvContext` to read from.
-     -  `options.key`: Environment variable key *without* the prefix.
-        The actual variable looked up is `prefix + key`.
+     -  `options.key`: Environment variable key *without* the prefix. The actual
+        variable looked up is `prefix + key`.
+     -  `options.documentation`: Optional purpose `description` and
+        documentation `hidden` visibility. See
+        [env-only values](#env-only-values).
      -  `options.parser`: A `ValueParser` used to parse the raw string value
         from the environment.
      -  `options.default`: Optional default value used when neither CLI

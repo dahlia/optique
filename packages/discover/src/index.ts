@@ -1794,10 +1794,10 @@ function withRootDocs(
     metadata.commandList ?? "recursive",
   );
   const rootDocs = (): DocFragments => {
-    const fragments: DocFragment[] = [
-      ...(rootCommand?.command.parser.getDocFragments({ kind: "unavailable" })
-        .fragments ?? []),
-    ];
+    const root = rootCommand?.command.parser.getDocFragments({
+      kind: "unavailable",
+    });
+    const fragments: DocFragment[] = [...root?.fragments ?? []];
     if (listedCommands.length > 0) {
       fragments.push({
         type: "section",
@@ -1816,6 +1816,12 @@ function withRootDocs(
       brief: metadata.brief,
       description: metadata.description,
       footer: metadata.footer,
+      ...(root?.environmentBindings != null && {
+        environmentBindings: root.environmentBindings,
+      }),
+      ...(listedCommands.length === 0 && root?.sourceOnly === true && {
+        sourceOnly: true,
+      }),
       fragments,
     };
   };
