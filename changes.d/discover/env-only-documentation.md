@@ -5,4 +5,5 @@ links:
 ---
  -  Preserved independent root environment documentation in command discovery
     help, while keeping descendant bindings scoped to their own command pages.
+    Root-only programs also show environment bindings added by outer wrappers.
     [[#985], [#987]]

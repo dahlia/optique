@@ -1819,6 +1819,9 @@ function withRootDocs(
       ...(root?.environmentBindings != null && {
         environmentBindings: root.environmentBindings,
       }),
+      ...(listedCommands.length === 0 && root?.sourceOnly === true && {
+        sourceOnly: true,
+      }),
       fragments,
     };
   };
