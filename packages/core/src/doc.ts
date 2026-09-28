@@ -25,10 +25,14 @@ import {
 } from "./text-layout.ts";
 import {
   cloneMessage,
+  commandLine,
+  envVar,
   type Message,
   type MessageFormatOptions,
   type MessageFormatter,
   type MessageTerm,
+  metavar,
+  optionNames,
   text,
 } from "./message.ts";
 import {
@@ -75,6 +79,14 @@ export interface DocEntry {
    * @since 0.10.0
    */
   readonly choices?: Message;
+
+  /**
+   * Declared environment bindings associated with this entry, outermost
+   * first. These names do not guarantee that every binding is consulted
+   * during parsing. Renderers can display them with `showEnvironment`.
+   * @since 1.4.0
+   */
+  readonly envVars?: readonly string[];
 }
 
 /**
@@ -326,6 +338,7 @@ export function deduplicateDocFragments(
 export function cloneDocEntry(entry: DocEntry): DocEntry {
   return {
     term: cloneUsageTerm(entry.term),
+    ...(entry.envVars != null && { envVars: [...entry.envVars] }),
     ...(entry.description != null && {
       description: cloneMessage(entry.description),
     }),
@@ -335,6 +348,76 @@ export function cloneDocEntry(entry: DocEntry): DocEntry {
     ...(entry.choices != null && {
       choices: cloneMessage(entry.choices),
     }),
+  };
+}
+
+/**
+ * Controls automatic environment documentation in help and man pages.
+ * @since 1.4.0
+ */
+export interface ShowEnvironmentOptions {
+  /** The display layout. Defaults to `"inline"`. */
+  readonly placement?: "inline" | "section" | "both";
+  /** The generated section's heading. Defaults to `"Environment"`. */
+  readonly sectionTitle?: string;
+}
+
+/**
+ * Derives an environment section from the visible entries on a help page.
+ * Names are grouped in first-appearance order with references to their
+ * associated entries. Empty names and hidden or empty terms are ignored.
+ * This does not read environment values or modify the page. Entries without
+ * CLI documentation, such as `bindEnv(fail(), ...)`, are not collected.
+ *
+ * @param page The documentation page to inspect.
+ * @param options An optional heading for the generated section.
+ * @returns A new section, or `undefined` when there are no visible names.
+ * @throws {TypeError} If a used title is empty or contains control characters.
+ * @since 1.4.0
+ */
+export function deriveEnvironmentSection(
+  page: DocPage,
+  options: { readonly title?: string } = {},
+): DocSection | undefined {
+  const bindings = new Map<string, Map<string, Message>>();
+  for (const section of page.sections) {
+    for (const entry of section.entries) {
+      if (isDocEntryHidden(entry)) continue;
+      const rendered = formatUsageTerm(entry.term, { context: "doc" });
+      if (rendered.trim() === "") continue;
+      const term = entry.term;
+      const reference: Message = term.type === "option"
+        ? [
+          optionNames(term.names),
+          ...(term.metavar == null ? [] : [text(" "), metavar(term.metavar)]),
+        ]
+        : term.type === "argument"
+        ? [metavar(term.metavar)]
+        : term.type === "command"
+        ? [commandLine(term.name)]
+        : [text(rendered)];
+      for (const name of entry.envVars ?? []) {
+        if (name === "") continue;
+        let references = bindings.get(name);
+        if (references == null) {
+          references = new Map();
+          bindings.set(name, references);
+        }
+        references.set(rendered, reference);
+      }
+    }
+  }
+  if (bindings.size === 0) return undefined;
+  const title = options.title ?? "Environment";
+  validateLabel(title);
+  return {
+    title,
+    entries: Array.from(bindings, ([name, references]) => ({
+      term: { type: "literal", value: name },
+      description: Array.from(references.values()).flatMap((reference, i) =>
+        i === 0 ? reference : [text(", "), ...reference]
+      ),
+    })),
   };
 }
 
@@ -400,6 +483,14 @@ export interface ShowChoicesOptions {
  * Options for formatting a documentation page.
  */
 export interface DocPageFormatOptions {
+  /**
+   * Displays declared environment bindings. `true` or `{}` selects inline
+   * annotations; `placement` can select a section or both. Defaults to `false`.
+   * Generated sections follow the regular sections, before examples, and are
+   * not passed to `sectionOrder`. The original page is not modified.
+   * @since 1.4.0
+   */
+  readonly showEnvironment?: boolean | ShowEnvironmentOptions;
   /**
    * Custom message renderer, taking precedence over theme for messages.
    * @since 1.3.0
@@ -610,6 +701,21 @@ export function formatDocPage(
     { dim: true };
   const choicesAmbient = options.theme?.annotationStyles?.choices ??
     { dim: true };
+  const environmentAmbient = options.theme?.annotationStyles?.environment ??
+    { dim: true };
+  const environmentStyle = styleCode(environmentAmbient);
+  const environmentPlacement = typeof options.showEnvironment === "object"
+    ? options.showEnvironment.placement ?? "inline"
+    : options.showEnvironment
+    ? "inline"
+    : undefined;
+  const showInlineEnvironment = environmentPlacement === "inline" ||
+    environmentPlacement === "both";
+  const environmentContent = (entry: DocEntry): Message =>
+    [...new Set(entry.envVars ?? [])].filter((name) => name !== "")
+      .flatMap((name, i) =>
+        i === 0 ? [envVar(name)] : [text(", "), envVar(name)]
+      );
   const labelCache = new Map<string, string>();
   const label = (label: string, kind: LabelTerm["kind"]) => {
     const key = `${kind}:${label}`;
@@ -682,7 +788,22 @@ export function formatDocPage(
       return rendered.trim() !== "";
     }),
   }));
-  page = { ...page, sections: filteredSections };
+  const environmentSection = environmentPlacement === "section" ||
+      environmentPlacement === "both"
+    ? deriveEnvironmentSection({ ...page, sections: filteredSections }, {
+      title: typeof options.showEnvironment === "object"
+        ? options.showEnvironment.sectionTitle
+        : undefined,
+    })
+    : undefined;
+  // Include the derived entries in all layout measurements, but keep their
+  // section out of the user-supplied comparator below.
+  page = {
+    ...page,
+    sections: environmentSection == null
+      ? filteredSections
+      : [...filteredSections, environmentSection],
+  };
 
   // Validate showChoices.maxItems before any per-entry rendering.
   if (
@@ -711,11 +832,22 @@ export function formatDocPage(
     (options.showDefault === true || typeof options.showDefault === "object") &&
       hasContent(entry.default) ||
     (options.showChoices === true || typeof options.showChoices === "object") &&
-      hasContent(entry.choices);
-  const annotations = new Map<"default" | "choices", AnnotationLayout>();
-  const annotation = (kind: "default" | "choices"): AnnotationLayout => {
+      hasContent(entry.choices) ||
+    showInlineEnvironment && hasContent(environmentContent(entry));
+  const annotations = new Map<
+    "default" | "choices" | "environment",
+    AnnotationLayout
+  >();
+  const annotation = (
+    kind: "default" | "choices" | "environment",
+  ): AnnotationLayout => {
     const cached = annotations.get(kind);
     if (cached != null) return cached;
+    if (kind === "environment") {
+      const layout = measureAnnotation(" [env: ", "]");
+      annotations.set(kind, layout);
+      return layout;
+    }
     const config = kind === "default"
       ? options.showDefault
       : options.showChoices;
@@ -798,14 +930,22 @@ export function formatDocPage(
     // reserved from the content budget; later suffix lines stand alone.
     let minDescWidth = 1;
     if (needsDescColumn) {
-      for (const kind of ["default", "choices"] as const) {
+      for (const kind of ["default", "choices", "environment"] as const) {
         const enabled = kind === "default"
           ? options.showDefault
-          : options.showChoices;
+          : kind === "choices"
+          ? options.showChoices
+          : showInlineEnvironment;
         if (
           enabled &&
           page.sections.some((section) =>
-            section.entries.some((entry) => hasContent(entry[kind]))
+            section.entries.some((entry) =>
+              hasContent(
+                kind === "environment"
+                  ? environmentContent(entry)
+                  : entry[kind],
+              )
+            )
           )
         ) {
           minDescWidth = Math.max(minDescWidth, annotation(kind).minWidth);
@@ -928,7 +1068,7 @@ export function formatDocPage(
   // correct ordering is now enforced in buildDocPage, which places titled
   // sections first and the untitled catch-all section last in the sections
   // array.
-  const sections = page.sections
+  const sections = filteredSections
     .map((s, i) => ({ section: s, index: i }))
     .toSorted((a, b) => {
       const cmp = comparator(a.section, b.section);
@@ -936,6 +1076,7 @@ export function formatDocPage(
       return a.index - b.index;
     })
     .map(({ section }) => section);
+  if (environmentSection != null) sections.push(environmentSection);
   for (const section of sections) {
     // Skip sections with no entries
     if (section.entries.length < 1) continue;
@@ -980,7 +1121,7 @@ export function formatDocPage(
 
       const descFormatOptions: MessageFormatOptions = {
         colors: options.colors,
-        quotes: !options.colors,
+        quotes: section === environmentSection ? false : !options.colors,
         maxWidth: descColumnWidth,
         initialWidth: extraTermOffset > 0 ? extraTermOffset : undefined,
       };
@@ -1076,6 +1217,19 @@ export function formatDocPage(
           choicesAmbient,
           false,
         );
+      }
+
+      if (showInlineEnvironment) {
+        const content = environmentContent(entry);
+        if (hasContent(content)) {
+          appendAnnotation(
+            content,
+            annotation("environment"),
+            environmentStyle,
+            environmentAmbient,
+            false,
+          );
+        }
       }
 
       const paddedTerm = ansiAwareRightPad(term, effectiveTermWidth);

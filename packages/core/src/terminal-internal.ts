@@ -399,6 +399,9 @@ export function cacheTerminalTheme(theme: TerminalTheme = {}): TerminalTheme {
       choices: theme.annotationStyles.choices == null
         ? undefined
         : { ...theme.annotationStyles.choices },
+      environment: theme.annotationStyles.environment == null
+        ? undefined
+        : { ...theme.annotationStyles.environment },
     },
   };
 }

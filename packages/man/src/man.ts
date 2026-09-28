@@ -1,4 +1,10 @@
-import type { DocEntry, DocPage, DocSection } from "@optique/core/doc";
+import {
+  deriveEnvironmentSection,
+  type DocEntry,
+  type DocPage,
+  type DocSection,
+  type ShowEnvironmentOptions,
+} from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
 import {
   isDocHidden,
@@ -88,6 +94,16 @@ export interface ManPageOptions {
    * Environment variables to document in the ENVIRONMENT section.
    */
   readonly environment?: DocSection;
+
+  /**
+   * Displays declared environment bindings. `true` selects inline annotations;
+   * an object can select a generated section or both. Defaults to `false`.
+   * A supplied `environment` section overrides the generated section, including
+   * an empty section. Inline annotations are independent of that override.
+   * `sectionTitle` only affects generated sections and is uppercased.
+   * @since 1.4.0
+   */
+  readonly showEnvironment?: boolean | ShowEnvironmentOptions;
 
   /**
    * File paths to document in the FILES section.
@@ -480,7 +496,10 @@ function inferSectionTitle(entries: readonly DocEntry[]): string {
  * @param section The section to format.
  * @returns The roff-formatted section content.
  */
-function formatDocSectionEntries(section: DocSection): string {
+function formatDocSectionEntries(
+  section: DocSection,
+  showEnvironment = false,
+): string {
   const lines: string[] = [];
 
   for (const entry of section.entries) {
@@ -489,6 +508,17 @@ function formatDocSectionEntries(section: DocSection): string {
 
     lines.push(".TP");
     lines.push(termStr);
+
+    const envNames = showEnvironment
+      ? [...new Set(entry.envVars ?? [])].filter((name) => name !== "")
+      : [];
+    const envAnnotation = envNames.length === 0
+      ? ""
+      : `[env: ${
+        envNames.map((name) =>
+          formatMessageAsRoff([{ type: "envVar", envVar: name }])
+        ).join(", ")
+      }]`;
 
     if (entry.description) {
       let desc = formatMessageAsRoff(entry.description);
@@ -500,8 +530,11 @@ function formatDocSectionEntries(section: DocSection): string {
           formatMessageAsRoff(entry.choices, { quotes: false })
         })`;
       }
-      lines.push(desc);
-    } else if (entry.default || entry.choices) {
+      const separator = desc === "" || desc.endsWith("\n") ? "" : " ";
+      lines.push(
+        envAnnotation === "" ? desc : desc + separator + envAnnotation,
+      );
+    } else if (entry.default || entry.choices || envAnnotation !== "") {
       const parts: string[] = [];
       if (entry.default) {
         parts.push(`[${formatMessageAsRoff(entry.default)}]`);
@@ -511,6 +544,7 @@ function formatDocSectionEntries(section: DocSection): string {
           `(choices: ${formatMessageAsRoff(entry.choices, { quotes: false })})`,
         );
       }
+      if (envAnnotation !== "") parts.push(envAnnotation);
       lines.push(parts.join(" "));
     }
   }
@@ -545,7 +579,8 @@ function formatDocSectionEntries(section: DocSection): string {
  * @param page The documentation page to format.
  * @param options The man page options.
  * @returns The complete man page in roff format.
- * @throws {TypeError} If the program name is empty.
+ * @throws {TypeError} If the program name is empty or a generated environment
+ * section title is empty, whitespace-only, or contains control characters.
  * @throws {RangeError} If the section number or any `seeAlso` entry's section
  * number is not a valid man page section (1–8).
  * @since 0.10.0
@@ -636,11 +671,18 @@ export function formatDocPageAsMan(
     lines.push(formatMessageAsRoff(description));
   }
 
+  const placement = typeof options.showEnvironment === "object"
+    ? options.showEnvironment.placement ?? "inline"
+    : options.showEnvironment
+    ? "inline"
+    : undefined;
+  const inlineEnvironment = placement === "inline" || placement === "both";
+
   // Process DocPage sections
   for (const section of page.sections) {
     if (section.entries.length === 0) continue;
 
-    const content = formatDocSectionEntries(section);
+    const content = formatDocSectionEntries(section, inlineEnvironment);
     if (content === "") continue;
 
     const title = section.title?.toUpperCase() ??
@@ -649,11 +691,27 @@ export function formatDocPageAsMan(
     lines.push(content);
   }
 
-  // .SH ENVIRONMENT
-  if (options.environment && options.environment.entries.length > 0) {
-    const content = formatDocSectionEntries(options.environment);
+  // Manual environment documentation retains its existing precedence.
+  const automaticEnvironment = options.environment == null &&
+      (placement === "section" || placement === "both")
+    ? deriveEnvironmentSection(page, {
+      title: typeof options.showEnvironment === "object"
+        ? options.showEnvironment.sectionTitle
+        : undefined,
+    })
+    : undefined;
+  const environment = options.environment ?? automaticEnvironment;
+  if (environment != null && environment.entries.length > 0) {
+    const content = formatDocSectionEntries(environment);
     if (content !== "") {
-      lines.push(".SH ENVIRONMENT");
+      const title = automaticEnvironment == null
+        ? "ENVIRONMENT"
+        : automaticEnvironment.title?.toUpperCase() ?? "ENVIRONMENT";
+      lines.push(
+        title === "ENVIRONMENT"
+          ? ".SH ENVIRONMENT"
+          : `.SH "${escapeRequestArg(title)}"`,
+      );
       lines.push(content);
     }
   }

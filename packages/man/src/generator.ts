@@ -120,6 +120,7 @@ function extractParserAndOptions<M extends Mode>(
         footer: programOptions.footer ?? metadata.footer,
         seeAlso: programOptions.seeAlso,
         environment: programOptions.environment,
+        showEnvironment: programOptions.showEnvironment,
         files: programOptions.files,
         exitStatus: programOptions.exitStatus,
       },

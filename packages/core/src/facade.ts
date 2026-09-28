@@ -35,6 +35,7 @@ import {
   isDocEntryHidden,
   type ShowChoicesOptions,
   type ShowDefaultOptions,
+  type ShowEnvironmentOptions,
 } from "./doc.ts";
 import {
   commandLine,
@@ -1239,6 +1240,13 @@ export interface RunOptions<THelp, TError> {
   readonly showChoices?: boolean | ShowChoicesOptions;
 
   /**
+   * Displays declared environment bindings in help. `true` selects inline
+   * annotations; an object can select a section or both. Defaults to `false`.
+   * Also applies to full help above errors. @since 1.4.0
+   */
+  readonly showEnvironment?: boolean | ShowEnvironmentOptions;
+
+  /**
    * Whether to include the usage synopsis in full help output.
    *
    * This affects help pages produced by `--help`, the help command, and
@@ -2240,6 +2248,7 @@ export function runParser<
     termWidth,
     showDefault,
     showChoices,
+    showEnvironment,
     sectionOrder,
     helpSections,
     showUsage,
@@ -2747,6 +2756,7 @@ export function runParser<
                 termWidth,
                 showDefault,
                 showChoices,
+                showEnvironment,
                 sectionOrder,
                 showUsage,
               }),
@@ -2889,6 +2899,7 @@ export function runParser<
                   termWidth,
                   showDefault,
                   showChoices,
+                  showEnvironment,
                   sectionOrder,
                   showUsage,
                 }),

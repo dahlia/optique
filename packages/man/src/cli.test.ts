@@ -78,6 +78,39 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
   });
 
   describe("man page generation", () => {
+    it("passes environment layout options for Program and Parser exports", async () => {
+      if (!hasReliableSubprocess) return;
+      const file = join(fixturesDir, "environment.ts");
+      for (const exportName of ["default", "parser"]) {
+        for (const layout of ["inline", "section", "both"]) {
+          const result = await cli.invoke(
+            file,
+            "-s",
+            "1",
+            "-e",
+            exportName,
+            "--show-environment",
+            layout,
+          );
+          assert.equal(result.exitCode, 0, result.stderr);
+          assert.ok(result.stdout.includes("APP_NAME"));
+          assert.equal(result.stdout.includes("[env:"), layout !== "section");
+          assert.equal(
+            result.stdout.includes(".SH ENVIRONMENT"),
+            layout !== "inline",
+          );
+        }
+      }
+      const invalid = await cli.invoke(
+        file,
+        "-s",
+        "1",
+        "--show-environment",
+        "invalid",
+      );
+      assert.notEqual(invalid.exitCode, 0);
+    });
+
     it("generates man page from Program export", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const result = await cli.invoke(programFile, "-s", "1");

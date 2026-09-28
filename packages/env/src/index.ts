@@ -1,3 +1,4 @@
+import type { DocEntry } from "@optique/core/doc";
 import { readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { getAnnotations } from "@optique/core/annotations";
@@ -663,6 +664,11 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * > but this env context is not, the error explicitly names the `contexts`
  * > option to aid diagnosis.
  *
+ * Since 1.4.0, visible documentation entries include the full environment
+ * variable name in `DocEntry.envVars`. Set `showEnvironment` on the runner
+ * or formatter to display these names without reading their values. Parsers
+ * without documentation entries, such as `fail()`, have no automatic entry.
+ *
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
  * @returns A parser with environment fallback behavior.
@@ -891,7 +897,20 @@ export function bindEnv<
       : {}),
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
-      return parser.getDocFragments(state, defaultValue);
+      const docs = parser.getDocFragments(state, defaultValue);
+      const name = `${options.context.prefix}${options.key}`;
+      const attach = (entry: DocEntry) => ({
+        ...entry,
+        envVars: [...new Set([name, ...(entry.envVars ?? [])])],
+      });
+      return {
+        ...docs,
+        fragments: docs.fragments.map((fragment) =>
+          fragment.type === "entry"
+            ? { ...attach(fragment), type: "entry" as const }
+            : { ...fragment, entries: fragment.entries.map(attach) }
+        ),
+      };
     },
   };
   inheritOptionScope(boundParser, parser);

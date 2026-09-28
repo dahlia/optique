@@ -156,6 +156,8 @@ export type TerminalTheme = Partial<Formatters> & {
   readonly annotationStyles?: {
     readonly default?: TerminalStyle;
     readonly choices?: TerminalStyle;
+    /** Environment annotation style. @since 1.4.0 */
+    readonly environment?: TerminalStyle;
   };
 };
 const plain = (text: string): TerminalFragment => ({ type: "text", text });

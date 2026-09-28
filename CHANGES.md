@@ -31,6 +31,10 @@ To be released.
  -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
     value is attached to a flag.  It accepts a static message or a callback
     receiving the matched option name and the supplied value.  [[#968], [#984]]
+ -  Added opt-in environment binding annotations and sections to help output,
+    with `DocEntry.envVars` metadata and `deriveEnvironmentSection()` for
+    custom renderers.  Existing help output stays unchanged unless
+    `showEnvironment` is enabled.  [[#969], [#986]]
  -  Added the `helpSections` option to the Core runners to group untitled
     command and option entries on help pages with visible commands, leaving
     pages without commands free of automatic headings.  Existing titled groups
@@ -40,11 +44,13 @@ To be released.
 [#965]: https://github.com/dahlia/optique/issues/965
 [#967]: https://github.com/dahlia/optique/issues/967
 [#968]: https://github.com/dahlia/optique/issues/968
+[#969]: https://github.com/dahlia/optique/issues/969
 [#972]: https://github.com/dahlia/optique/issues/972
 [#981]: https://github.com/dahlia/optique/pull/981
 [#982]: https://github.com/dahlia/optique/pull/982
 [#983]: https://github.com/dahlia/optique/pull/983
 [#984]: https://github.com/dahlia/optique/pull/984
+[#986]: https://github.com/dahlia/optique/pull/986
 
 ### @optique/run
 
@@ -54,6 +60,8 @@ To be released.
  -  Added the `helpSections` option to `run()`, `runSync()`, and `runAsync()`
     to separate command lists from options in help while keeping pages without
     commands free of automatic headings.  [[#972], [#983]]
+ -  Added the `showEnvironment` option to display environment binding names
+    inline, in a separate help section, or both.  [[#969], [#986]]
 
 ### @optique/discover
 
@@ -86,6 +94,19 @@ To be released.
 
 [#964]: https://github.com/dahlia/optique/issues/964
 [#979]: https://github.com/dahlia/optique/pull/979
+
+### @optique/env
+
+ -  Added full environment variable names to the documentation entries produced
+    by `bindEnv()`, so help and man page renderers can display declared
+    fallback bindings without reading their values.  [[#969], [#986]]
+
+### @optique/man
+
+ -  Added opt-in environment binding annotations and generated `ENVIRONMENT`
+    sections to man pages, including `--show-environment` in the generator
+    CLI.  Explicit `environment` sections retain priority over generated
+    sections.  [[#969], [#986]]
 
 ### @optique/inquirer
 

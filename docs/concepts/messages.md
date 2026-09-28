@@ -1379,9 +1379,12 @@ whitespace normalization; `text` and `lineBreak` are not theme callback roles.
 In addition to the message roles, themes cover `programName`, `label`,
 `syntaxPunctuation`, and `errorLabel`. Labels and punctuation include a `kind`
 field to distinguish headings, usage separators, optional brackets, and
-annotation affixes. Set `annotationStyles.default` or `annotationStyles.choices`
-to customize the surrounding default/choice style; `{}` removes the default dim
-styling while preserving child value styles.
+annotation affixes. Set `annotationStyles.default`, `annotationStyles.choices`,
+or `annotationStyles.environment` (since 1.4.0) to customize the surrounding
+annotation style; `{}` removes the default dim styling while preserving child
+value styles. Environment names use the `envVar` callback, with quoting disabled
+in help annotations. See [environment display](./runners.md#environment-display)
+for the `showEnvironment` option.
 
 A `TerminalFragment` is a tree of `text`, `concat`, `style`, and `link` nodes. A
 newline in a text leaf forces a line break; each line within a leaf is an

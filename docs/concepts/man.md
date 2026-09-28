@@ -340,6 +340,69 @@ Run tests
 ~~~~
 
 
+Environment documentation
+-------------------------
+
+*This feature is available since Optique 1.4.0.*
+
+Pass `showEnvironment` to `generateManPage()`, `generateManPageSync()`,
+`generateManPageAsync()`, or `formatDocPageAsMan()` to document environment
+bindings from
+[`bindEnv()`](../integrations/env.md#help-and-man-page-documentation):
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { option } from "@optique/core/primitives";
+import { integer } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+import { generateManPage } from "@optique/man";
+
+const context = createEnvContext({ prefix: "APP_" });
+const parser = object({
+  port: bindEnv(option("--port", integer()), {
+    context,
+    key: "PORT",
+    parser: integer(),
+    default: 3000,
+  }),
+});
+
+const manPage = generateManPage(parser, {
+  name: "server",
+  section: 1,
+  showEnvironment: { placement: "section" },
+});
+~~~~
+
+`true` or `{}` adds inline `[env: APP_PORT]` annotations. Use
+`{ placement: "section" }` for an ENVIRONMENT section or
+`{ placement: "both" }` for both forms. The default is no automatic output.
+Variable names are documented without reading their current values for this
+metadata. Generating the names does not require registering an env context.
+
+`sectionTitle` customizes an automatic section's heading, converted to
+uppercase like other man page headings. For example,
+`{ placement: "section", sectionTitle: "Environment variables" }` produces
+ENVIRONMENT VARIABLES. The automatic section comes after ordinary sections,
+before FILES, EXIT STATUS, and EXAMPLES.
+
+An explicit `environment: DocSection` always takes precedence over the
+automatic section. Its existing behavior is unchanged: it uses the ENVIRONMENT
+heading regardless of its `title`, and it is still printed when
+`showEnvironment` is omitted, `false`, or inline-only. An empty manual section
+(`environment: { entries: [] }`) suppresses automatic section output.
+Inline annotations remain available. `sectionTitle` applies only to automatic
+sections; the sections are never merged.
+
+The automatic section includes environment names from visible CLI entries on
+the current page and omits empty terms. Existing manually supplied sections
+retain their own filtering behavior. Env-only bindings such as
+`bindEnv(fail(), ...)` have no entry to collect; use manual environment
+documentation for them. The
+[env integration guide](../integrations/env.md#custom-renderers) describes the
+metadata and `deriveEnvironmentSection()` helper for custom renderers.
+
+
 Async parsers
 -------------
 
@@ -565,6 +628,14 @@ optique-man ./src/cli.ts -s 1 -o myapp.1
 
 `--manual`
 :   Override the manual title in the header.
+
+`--show-environment` (since 1.4.0)
+:   Display declared environment bindings using `inline`, `section`, or `both`.
+    Omitted by default. For example:
+
+    ~~~~ bash
+    optique-man ./src/cli.ts -s 1 --show-environment section
+    ~~~~
 
 ### TypeScript support
 
