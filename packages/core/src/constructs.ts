@@ -336,9 +336,8 @@ function orderBeforePassThrough<TPair>(
     });
   const orderedCaptures = [...captures].sort((a, b) => b[1] - a[1]);
   if (matching.length === 0) {
-    if (![...matches.values()].some((match) => match != null)) return pairs;
-    // Every matching container will capture. Reorder only capture slots,
-    // retaining ordinary siblings in place even without a known-option group.
+    // Reorder only capture slots by their reachable priorities, retaining
+    // ordinary siblings in place even without a known-option group.
     let captureIndex = 0;
     return pairs.map((pair) =>
       captures.has(pair) ? orderedCaptures[captureIndex++][0] : pair

@@ -109,6 +109,49 @@ for (const mode of ["sync", "async"] as const) {
   });
   for (const outer of ["object", "tuple", "concat"] as const) {
     for (const inner of ["object", "tuple", "concat"] as const) {
+      it(`${mode} ${outer} orders pure ${inner} captures without a matching option`, async () => {
+        for (const capturePriority of [5, 20, 25]) {
+          for (const override of [undefined, 30]) {
+            const unrelated = {
+              ...optional(command("run", optional(option("--other", value)))),
+              priority: 25,
+            };
+            const rest = {
+              ...passThrough({ format: "nextToken" }),
+              priority: capturePriority,
+            };
+            const container = inner === "object"
+              ? object({ unrelated, rest })
+              : inner === "tuple"
+              ? tuple([unrelated, rest])
+              : concat(tuple([unrelated]), tuple([rest]));
+            const mixed = override == null
+              ? container
+              : { ...container, priority: override };
+            const sibling = {
+              ...passThrough({ format: "nextToken" }),
+              priority: 20,
+            };
+            const parser = outer === "object"
+              ? object({ mixed, sibling })
+              : outer === "tuple"
+              ? tuple([mixed, sibling])
+              : concat(tuple([mixed]), tuple([sibling]));
+            const args = ["-m", "hello"];
+            const firstWins = (override ?? capturePriority) >= 20;
+            const captured = firstWins ? args : [];
+            const mixedValue = inner === "object"
+              ? { unrelated: undefined, rest: captured }
+              : [undefined, captured];
+            assert.deepEqual(await parseAsync<unknown>(parser, args), {
+              success: true,
+              value: outer === "object"
+                ? { mixed: mixedValue, sibling: firstWins ? [] : args }
+                : [mixedValue, firstWins ? [] : args],
+            });
+          }
+        }
+      });
       it(`${mode} ${outer} excludes mixed ${inner} captures that reject the token`, async () => {
         for (const format of ["equalsOnly", "nextToken", "greedy"] as const) {
           for (const name of ["-m", "/m", "+m", "--message"] as const) {
