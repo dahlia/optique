@@ -8,11 +8,9 @@ import {
 } from "./short-option.ts";
 import {
   defineKnownCompletion,
-  defineOptionMatch,
   definePassThroughPriority,
-  getOptionMatch,
+  defineReachableChildren,
   getPassThroughFailure,
-  getPassThroughPriority,
 } from "./internal/passthrough.ts";
 import {
   getWrappedChildParseState,
@@ -3356,6 +3354,23 @@ export function command<M extends Mode, T, TState>(
   const syncInnerParser = parser as Parser<"sync", T, TState>;
   const asyncInnerParser = parser as Parser<"async", T, TState>;
 
+  const getChildState = (
+    state: CommandState<TState>,
+    active: Exclude<CommandState<TState>, undefined>,
+  ): TState =>
+    getCommandParseChildState(
+      state,
+      active[0] === "matched" ? parser.initialState : active[1],
+      parser,
+    );
+  const selectChild = (state: CommandState<TState>) => {
+    const active = normalizeCommandState(state);
+    return active == null ? undefined : {
+      parser,
+      state: getChildState(state, active),
+      continuesCommand: true,
+    };
+  };
   const commandScope = selectableOptionScope(() => new Set<string>());
   const enteredScope = combinedOptionScope([parser], [name]);
 
@@ -3497,13 +3512,7 @@ export function command<M extends Mode, T, TState>(
       ) {
         // "matched": command was matched, start the inner parser
         // "parsing": delegate to inner parser with existing state
-        const innerState = state[0] === "matched"
-          ? getCommandParseChildState(
-            context.state,
-            parser.initialState,
-            parser,
-          )
-          : getCommandParseChildState(context.state, state[1], parser);
+        const innerState = getChildState(context.state, state);
 
         const wrapState = (
           parseResult: ParserResult<TState>,
@@ -3865,31 +3874,14 @@ export function command<M extends Mode, T, TState>(
   });
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  definePassThroughPriority(result, [parser], (state, token) => {
-    const active = normalizeCommandState(state);
-    if (active == null) return undefined;
-    const childState = active[0] === "matched"
-      ? parser.initialState
-      : active[1];
-    return getPassThroughPriority(
-      parser,
-      getCommandParseChildState(state, childState, parser),
-      token,
-    );
-  });
-  defineOptionMatch<CommandState<TState>>(result, (state, token) => {
-    const active = normalizeCommandState(state);
-    if (active == null) return undefined;
-    const childState = active[0] === "matched"
-      ? parser.initialState
-      : active[1];
-    const match = getOptionMatch(
-      parser,
-      getCommandParseChildState(state, childState, parser),
-      token,
-    );
-    return match == null ? undefined : { ...match, continuesCommand: true };
-  });
+  defineReachableChildren<CommandState<TState>, TState>(
+    result,
+    [parser],
+    (state) => {
+      const child = selectChild(state);
+      return child == null ? [] : [child];
+    },
+  );
 
   return fluent(scopeParser(
     result as unknown as Parser<M, T, CommandState<TState>>,

@@ -5,11 +5,8 @@ import {
 } from "./short-option.ts";
 import {
   defineKnownCompletionLookup,
-  defineOptionMatch,
-  definePassThroughPriority,
+  defineReachableChildren,
   getKnownCompletion,
-  getOptionMatch,
-  getPassThroughPriority,
 } from "./internal/passthrough.ts";
 import {
   getDelegatedAnnotationState,
@@ -1067,25 +1064,10 @@ export function optional<M extends Mode, TValue, TState>(
   defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
-  defineOptionMatch(
-    optionalParser,
-    (state, token) =>
-      getOptionMatch(
-        parser,
-        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
-        token,
-      ),
-  );
-  definePassThroughPriority(
-    optionalParser,
-    [parser],
-    (state, token) =>
-      getPassThroughPriority(
-        parser,
-        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
-        token,
-      ),
-  );
+  defineReachableChildren(optionalParser, [parser], (state) => [{
+    parser,
+    state: deriveOptionalInnerParseState(state, parser),
+  }]);
   // A known child succeeds even without input, so parsing wraps its state
   // and completion preserves its value instead of using the fallback.
   defineKnownCompletionLookup(
@@ -1682,25 +1664,10 @@ export function withDefault<
   );
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
-  defineOptionMatch(
-    withDefaultParser,
-    (state, token) =>
-      getOptionMatch(
-        parser,
-        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
-        token,
-      ),
-  );
-  definePassThroughPriority(
-    withDefaultParser,
-    [parser],
-    (state, token) =>
-      getPassThroughPriority(
-        parser,
-        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
-        token,
-      ),
-  );
+  defineReachableChildren(withDefaultParser, [parser], (state) => [{
+    parser,
+    state: deriveOptionalInnerParseState(state, parser),
+  }]);
   // A known child succeeds even without input, so parsing wraps its state
   // and completion preserves its value instead of using the fallback.
   defineKnownCompletionLookup(
@@ -2476,6 +2443,24 @@ export function multiple<M extends Mode, TValue, TState>(
       (parser.dependencyMetadata?.source != null
         ? [{ path, parser, state }]
         : []);
+  // Structural candidates are shared; only parsing asks whether a current
+  // item is skippable. Opaque canSkip callbacks cannot run during inspection.
+  const selectItems = (state: MultipleState) => {
+    const current = state.at(-1);
+    return [
+      ...(current != null && !isTerminalMultipleItemState(current)
+        ? [{ parser, state: current, index: state.length - 1, fresh: false }]
+        : []),
+      ...(state.length < max
+        ? [{
+          parser,
+          state: parser.initialState,
+          index: state.length,
+          fresh: true,
+        }]
+        : []),
+    ];
+  };
   const canExtendMultipleItem = (
     state: TState | undefined,
     itemIndex: number,
@@ -2492,14 +2477,16 @@ export function multiple<M extends Mode, TValue, TState>(
   const parseSync = (
     context: ParserContext<MultipleState>,
   ): ParseResult => {
-    const currentItemState = context.state.at(-1);
-    const currentItemIndex = context.state.length - 1;
-    const canExtendCurrent = canExtendMultipleItem(
-      currentItemState as TState | undefined,
-      currentItemIndex,
+    const items = selectItems(context.state);
+    const current = items.find((item) => !item.fresh);
+    const fresh = items.find((item) => item.fresh);
+    const currentItemState = current?.state;
+    const canExtendCurrent = current != null && canExtendMultipleItem(
+      current.state,
+      current.index,
       context.exec,
     );
-    const canOpenFreshItem = context.state.length < max;
+    const canOpenFreshItem = fresh != null;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
         success: true,
@@ -2513,7 +2500,7 @@ export function multiple<M extends Mode, TValue, TState>(
       : context.state.length;
     const currentItemStateWithAnnotations = canExtendCurrent
       ? currentItemState
-      : inheritAnnotations(context.state, syncParser.initialState);
+      : inheritAnnotations(context.state, fresh?.state ?? parser.initialState);
     let result = parseSyncWithUnwrappedFallback(
       withChildContext(
         context,
@@ -2659,14 +2646,16 @@ export function multiple<M extends Mode, TValue, TState>(
   const parseAsync = async (
     context: ParserContext<MultipleState>,
   ): Promise<ParseResult> => {
-    const currentItemState = context.state.at(-1);
-    const currentItemIndex = context.state.length - 1;
-    const canExtendCurrent = canExtendMultipleItem(
-      currentItemState as TState | undefined,
-      currentItemIndex,
+    const items = selectItems(context.state);
+    const current = items.find((item) => !item.fresh);
+    const fresh = items.find((item) => item.fresh);
+    const currentItemState = current?.state;
+    const canExtendCurrent = current != null && canExtendMultipleItem(
+      current.state,
+      current.index,
       context.exec,
     );
-    const canOpenFreshItem = context.state.length < max;
+    const canOpenFreshItem = fresh != null;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
         success: true,
@@ -2680,7 +2669,7 @@ export function multiple<M extends Mode, TValue, TState>(
       : context.state.length;
     const currentItemStateWithAnnotations = canExtendCurrent
       ? currentItemState
-      : inheritAnnotations(context.state, parser.initialState);
+      : inheritAnnotations(context.state, fresh?.state ?? parser.initialState);
     let result = await parseAsyncWithUnwrappedFallback(
       withChildContext(
         context,
@@ -3483,23 +3472,15 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
-  const matchingItem = (state: MultipleState) => {
-    const current = state.at(-1);
-    if (current != null && !isTerminalMultipleItemState(current)) {
-      return { state: unwrapInjectedWrapper(current) };
-    }
-    return state.length < max ? { state: parser.initialState } : undefined;
-  };
-  defineOptionMatch(resultParser, (state, token) => {
-    const item = matchingItem(state);
-    return item == null ? undefined : getOptionMatch(parser, item.state, token);
-  });
-  definePassThroughPriority(resultParser, [parser], (state, token) => {
-    const item = matchingItem(state);
-    return item == null
-      ? undefined
-      : getPassThroughPriority(parser, item.state, token);
-  });
+  defineReachableChildren(
+    resultParser,
+    [parser],
+    (state) =>
+      selectItems(state).map((item) => ({
+        parser,
+        state: unwrapInjectedWrapper(item.state),
+      })),
+  );
   return fluent(scopeParser(resultParser, repeatedOptionScope(parser)));
 }
 
@@ -3695,14 +3676,10 @@ export function nonEmpty<M extends Mode, T, TState>(
   // through unchanged, so a wrapped exclusive or command construct stays
   // visible to a parent's scheduling expansion.
   defineForwardedEffectfulSchedulingNodes(nonEmptyParser, parser);
-  defineOptionMatch(
-    nonEmptyParser,
-    (state, token) => getOptionMatch(parser, state, token),
-  );
-  definePassThroughPriority(
+  defineReachableChildren(
     nonEmptyParser,
     [parser],
-    (state, token) => getPassThroughPriority(parser, state, token),
+    (state) => [{ parser, state }],
   );
   return fluent(scopeParser(nonEmptyParser, combinedOptionScope([parser])));
 }
