@@ -47,6 +47,101 @@ describe("pass-through known-option errors", () => {
         }
       }
 
+      for (const format of ["nextToken", "greedy"] as const) {
+        it(`checks known options before tied nested ${format} capture`, () => {
+          const known = optional(option("-m", "--message", string()));
+          const extra = object({
+            other: option("--other"),
+            rest: passThrough({ format }),
+          });
+          const parser = compose(extra, known);
+          for (
+            const wrappedExtra of [
+              extra,
+              optional(extra),
+              multiple(extra),
+              or(extra, constant(undefined)),
+            ]
+          ) {
+            for (const spelling of ["-m", "--message"]) {
+              assert.deepEqual(
+                parseSync<unknown>(compose(wrappedExtra, known), [spelling]),
+                parseSync<unknown>(known, [spelling]),
+              );
+            }
+          }
+          for (
+            const input of [["-m", "hello"], ["--message=hello"]]
+          ) {
+            const result = parseSync<unknown>(parser, input);
+            assert.deepEqual(result, {
+              success: true,
+              value: name === "object"
+                ? { known: { other: false, rest: [] }, extra: "hello" }
+                : [{ other: false, rest: [] }, "hello"],
+            });
+          }
+          assert.ok(parseSync<unknown>(parser, ["--unknown=value"]).success);
+        });
+      }
+
+      it("checks attached known flags before tied nested capture", () => {
+        for (
+          const [known, input, format] of [
+            [option("--debug"), "--debug=1", "equalsOnly"],
+            [option("/D"), "/D:1", "greedy"],
+          ] as const
+        ) {
+          const extra = object({
+            other: option("--other"),
+            rest: passThrough({ format }),
+          });
+          assert.deepEqual(
+            parseSync<unknown>(compose(extra, known), [input]),
+            parseSync<unknown>(known, [input]),
+          );
+        }
+      });
+
+      it("preserves ordinary tied alternatives ahead of known options", () => {
+        const ordinary = { ...option("-m"), leadingNames: new Set<string>() };
+        const known = optional(option("-m", string()));
+        const extra = object({
+          other: option("--other"),
+          rest: passThrough({ format: "nextToken" }),
+        });
+        const parser = name === "object"
+          ? object({ extra, ordinary, known }, { allowDuplicates: true })
+          : name === "tuple"
+          ? tuple([extra, ordinary, known], { allowDuplicates: true })
+          : concat(tuple([extra]), tuple([ordinary]), tuple([known]));
+        const result = parseSync<unknown>(parser, ["-m"]);
+        assert.deepEqual(result, {
+          success: true,
+          value: name === "object"
+            ? {
+              extra: { other: false, rest: [] },
+              ordinary: true,
+              known: undefined,
+            }
+            : [{ other: false, rest: [] }, true, undefined],
+        });
+      });
+
+      it("preserves explicitly higher-priority nested capture", () => {
+        const known = optional(option("-m", string()));
+        const extra = object({
+          other: option("--other"),
+          rest: passThrough({ format: "nextToken" }),
+        });
+        assert.ok(
+          parseSync<unknown>(
+            compose({ ...extra, priority: known.priority + 1 }, known),
+            ["-m"],
+          ).success,
+        );
+      });
+
       it("preserves a custom missing-value diagnostic after earlier input", () => {
         const known = optional(option("-m", string(), {
           errors: { endOfInput: message`Please supply a message.` },
@@ -242,6 +337,39 @@ describe("pass-through known-option errors", () => {
           "--unknown=value",
         ]);
         assert.ok(valid.success);
+      });
+    }
+  }
+
+  for (const format of ["nextToken", "greedy"] as const) {
+    const known = optional(option("-m", "--message", asyncString));
+    const extra = object({
+      other: option("--other"),
+      rest: passThrough({ format }),
+    });
+    const parsers = {
+      object: object({ extra, known }),
+      tuple: tuple([extra, known]),
+      concat: concat(tuple([extra]), tuple([known])),
+    };
+    for (const [name, parser] of Object.entries(parsers)) {
+      it(`checks true async ${name} known options before tied nested ${format} capture`, async () => {
+        for (const spelling of ["-m", "--message"]) {
+          assert.deepEqual(
+            await parseAsync<unknown>(parser, [spelling]),
+            await parseAsync<unknown>(known, [spelling]),
+          );
+        }
+        const result = await parseAsync<unknown>(parser, ["-m", "hello"]);
+        assert.deepEqual(result, {
+          success: true,
+          value: name === "object"
+            ? { extra: { other: false, rest: [] }, known: "hello" }
+            : [{ other: false, rest: [] }, "hello"],
+        });
+        assert.ok(
+          (await parseAsync<unknown>(parser, ["--unknown=value"])).success,
+        );
       });
     }
   }

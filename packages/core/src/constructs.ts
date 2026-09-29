@@ -266,6 +266,67 @@ function sharedBufferLeadingNames(
   return names.size === 0 ? EMPTY_LEADING_NAMES : names;
 }
 
+/** Checks for pass-through capture through usage-preserving wrappers. */
+function hasPassThroughUsage(usage: Usage): boolean {
+  return usage.some((term) =>
+    term.type === "passthrough" ||
+    ((term.type === "optional" || term.type === "multiple") &&
+      hasPassThroughUsage(term.terms)) ||
+    (term.type === "exclusive" && term.terms.some(hasPassThroughUsage))
+  );
+}
+
+/**
+ * Defers tied pass-through candidates until a known option has been tried.
+ * Other siblings retain their relative order, and explicit priorities win.
+ */
+function orderBeforePassThrough<TPair>(
+  pairs: readonly TPair[],
+  context: ParserContext<unknown>,
+  getParser: (pair: TPair) => Parser<Mode, unknown, unknown>,
+  passThroughParsers: ReadonlySet<Parser<Mode, unknown, unknown>>,
+): readonly TPair[] {
+  const token = context.buffer[0];
+  if (
+    passThroughParsers.size === 0 || context.optionsTerminated ||
+    token == null || token === "--" ||
+    !/^[-/+]/.test(token)
+  ) return pairs;
+
+  // Long and slash options can include attached values, whose complete token
+  // is not itself a leading name.
+  const slashOption = token.startsWith("/");
+  const separator = slashOption
+    ? token.indexOf(":")
+    : token.startsWith("-")
+    ? token.indexOf("=")
+    : -1;
+  const name = separator > (slashOption ? 0 : 2)
+    ? token.slice(0, separator)
+    : token;
+  const matches = (parser: Parser<Mode, unknown, unknown>): boolean =>
+    parser.leadingNames.has(token) || parser.leadingNames.has(name);
+  const matchingPriorities = new Set(
+    pairs.map(getParser).filter(matches).map((parser) => parser.priority),
+  );
+  if (matchingPriorities.size === 0) return pairs;
+
+  const deferred = new Set(
+    pairs.map(getParser).filter((parser) =>
+      matchingPriorities.has(parser.priority) && !matches(parser) &&
+      passThroughParsers.has(parser)
+    ),
+  );
+  if (deferred.size === 0) return pairs;
+
+  return pairs.toSorted((a, b) => {
+    const parserA = getParser(a);
+    const parserB = getParser(b);
+    return parserB.priority - parserA.priority ||
+      Number(deferred.has(parserA)) - Number(deferred.has(parserB));
+  });
+}
+
 /**
  * Internal symbol for exposing field-level parser pairs from `object()`
  * and `merge()` parsers.  This allows `merge()` to pre-complete dependency
@@ -5825,6 +5886,11 @@ export function object<
   parserPairs.sort(([_, parserA], [__, parserB]) =>
     parserB.priority - parserA.priority
   );
+  const passThroughParsers = new Set(
+    parserPairs.map(([, parser]) => parser).filter((parser) =>
+      hasPassThroughUsage(parser.usage)
+    ),
+  );
   const createInitialState = (): Record<string | symbol, unknown> => {
     const state: Record<string | symbol, unknown> = {};
     for (const key of parserKeys) {
@@ -6019,7 +6085,14 @@ export function object<
         getObjectParseChildState,
       );
 
-      for (const [field, parser] of parserPairs) {
+      for (
+        const [field, parser] of orderBeforePassThrough(
+          parserPairs,
+          currentContext,
+          ([, parser]) => parser,
+          passThroughParsers,
+        )
+      ) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse(
           withPassThroughFailure(
             withChildContext(
@@ -6207,7 +6280,14 @@ export function object<
         getObjectParseChildState,
       );
 
-      for (const [field, parser] of parserPairs) {
+      for (
+        const [field, parser] of orderBeforePassThrough(
+          parserPairs,
+          currentContext,
+          ([, parser]) => parser,
+          passThroughParsers,
+        )
+      ) {
         const resultOrPromise = parser.parse(
           withPassThroughFailure(
             withChildContext(
@@ -7634,6 +7714,10 @@ export function tuple<
     );
   }
 
+  const passThroughParsers = new Set(
+    parsers.filter((parser) => hasPassThroughUsage(parser.usage)),
+  );
+
   type TupleState = { readonly [K in keyof T]: unknown };
   type ParseResult = ParserResult<TupleState>;
 
@@ -7659,10 +7743,15 @@ export function tuple<
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = syncParsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        syncParsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([_, index]) => !matchedParsers.has(index))
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const result = parser.parse(
@@ -7809,10 +7898,15 @@ export function tuple<
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = parsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        parsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([_, index]) => !matchedParsers.has(index))
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const resultOrPromise = parser.parse(
@@ -10987,6 +11081,10 @@ export function concat(
 
   const initialState = parsers.map((parser) => parser.initialState);
 
+  const passThroughParsers = new Set(
+    parsers.filter((parser) => hasPassThroughUsage(parser.usage)),
+  );
+
   type ConcatContext = ParserContext<readonly unknown[]>;
   type ConcatResult = ParserResult<readonly unknown[]>;
 
@@ -11010,10 +11108,15 @@ export function concat(
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = syncParsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        syncParsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([_, index]) => !matchedParsers.has(index))
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const result = parser.parse(
@@ -11158,10 +11261,15 @@ export function concat(
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = parsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        parsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([_, index]) => !matchedParsers.has(index))
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const result = await parser.parse(
