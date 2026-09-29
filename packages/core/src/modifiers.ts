@@ -2,6 +2,7 @@ import {
   defineOptionMatch,
   definePassThroughPriority,
   getOptionMatch,
+  getPassThroughPriority,
 } from "./internal/passthrough.ts";
 import {
   getDelegatedAnnotationState,
@@ -1004,7 +1005,15 @@ export function optional<M extends Mode, TValue, TState>(
         token,
       ),
   );
-  definePassThroughPriority(optionalParser, [parser]);
+  definePassThroughPriority(
+    optionalParser,
+    [parser],
+    (state) =>
+      getPassThroughPriority(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+      ),
+  );
   return optionalParser;
 }
 
@@ -1554,7 +1563,15 @@ export function withDefault<
         token,
       ),
   );
-  definePassThroughPriority(withDefaultParser, [parser]);
+  definePassThroughPriority(
+    withDefaultParser,
+    [parser],
+    (state) =>
+      getPassThroughPriority(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+      ),
+  );
   return withDefaultParser;
 }
 
@@ -3004,7 +3021,15 @@ export function multiple<M extends Mode, TValue, TState>(
         token,
       ),
   );
-  definePassThroughPriority(resultParser, [parser]);
+  definePassThroughPriority(
+    resultParser,
+    [parser],
+    (state) =>
+      getPassThroughPriority(
+        parser,
+        unwrapInjectedWrapper(state.at(-1)) ?? parser.initialState,
+      ),
+  );
   return resultParser;
 }
 
@@ -3180,6 +3205,10 @@ export function nonEmpty<M extends Mode, T, TState>(
     nonEmptyParser,
     (state, token) => getOptionMatch(parser, state, token),
   );
-  definePassThroughPriority(nonEmptyParser, [parser]);
+  definePassThroughPriority(
+    nonEmptyParser,
+    [parser],
+    (state) => getPassThroughPriority(parser, state),
+  );
   return nonEmptyParser;
 }

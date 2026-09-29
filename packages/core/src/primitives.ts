@@ -1,8 +1,10 @@
 import {
+  defineKnownCompletion,
   defineOptionMatch,
   definePassThroughPriority,
   getOptionMatch,
   getPassThroughFailure,
+  getPassThroughPriority,
 } from "./internal/passthrough.ts";
 import {
   getWrappedChildParseState,
@@ -276,6 +278,10 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
       return { fragments: [] };
     },
   };
+  defineKnownCompletion(
+    result,
+    (state) => normalizeInjectedAnnotationState(state),
+  );
   Object.defineProperty(result, "placeholder", {
     value,
     configurable: true,
@@ -2998,7 +3004,17 @@ export function command<M extends Mode, T, TState>(
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  definePassThroughPriority(result, [parser]);
+  definePassThroughPriority(result, [parser], (state) => {
+    const active = normalizeCommandState(state);
+    if (active == null) return undefined;
+    const childState = active[0] === "matched"
+      ? parser.initialState
+      : active[1];
+    return getPassThroughPriority(
+      parser,
+      getCommandParseChildState(state, childState, parser),
+    );
+  });
   defineOptionMatch<CommandState<TState>>(result, (state, token) => {
     const active = normalizeCommandState(state);
     if (active == null) return undefined;

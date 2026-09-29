@@ -1,8 +1,10 @@
 import {
   combineOptionMatches,
+  combinePassThroughPriorities,
   type ConsumingFailure,
   defineOptionMatch,
   definePassThroughPriority,
+  getKnownCompletion,
   getOptionMatch,
   getPassThroughFailureHint,
   getPassThroughPriority,
@@ -293,35 +295,43 @@ function orderBeforePassThrough<TPair>(
     !/^[-/+]/.test(token)
   ) return pairs;
 
-  const matches = new Map(pairs.map((pair) => {
-    const parser = getParser(pair);
-    return [parser, getOptionMatch(parser, getState(pair), token)] as const;
-  }));
+  const matches = new Map(pairs.map((pair) =>
+    [
+      pair,
+      getOptionMatch(getParser(pair), getState(pair), token),
+    ] as const
+  ));
   const matching = [...matches.values()].filter((match) => match != null);
   if (matching.length === 0) return pairs;
   const matchingPriority = Math.max(...matching.map((match) => match.priority));
-  const capture = (
-    parser: Parser<Mode, unknown, unknown>,
-  ): number | undefined =>
-    passThroughParsers.has(parser) ? getPassThroughPriority(parser) : undefined;
-  const priority = (parser: Parser<Mode, unknown, unknown>): number => {
-    const match = matches.get(parser);
-    const capturePriority = capture(parser);
-    return match == null
-      ? capturePriority ?? parser.priority
-      : Math.max(match.priority, capturePriority ?? -Infinity);
-  };
-  const deferred = (parser: Parser<Mode, unknown, unknown>): number =>
-    matches.get(parser) == null &&
-      (capture(parser) ?? Infinity) <= matchingPriority
-      ? 1
-      : 0;
-  return pairs.toSorted((a, b) => {
-    const parserA = getParser(a);
-    const parserB = getParser(b);
-    return priority(parserB) - priority(parserA) ||
-      deferred(parserA) - deferred(parserB);
-  });
+  const captures = new Map(pairs.flatMap((pair) => {
+    if (matches.get(pair) != null || !passThroughParsers.has(getParser(pair))) {
+      return [];
+    }
+    const priority = getPassThroughPriority(getParser(pair), getState(pair));
+    return priority == null ? [] : [[pair, priority] as const];
+  }));
+  // Keep ordinary siblings in their original order. Only capture moves across
+  // the matching group, so unrelated container priorities retain their meaning.
+  const ordinary = pairs.filter((pair) => !captures.has(pair));
+  const first = ordinary.findIndex((pair) => matches.get(pair) != null);
+  const last = ordinary.findLastIndex((pair) => matches.get(pair) != null);
+  const orderedCaptures = [...captures].sort((a, b) => b[1] - a[1]);
+  const before = orderedCaptures.filter(([, priority]) =>
+    priority > matchingPriority
+  )
+    .map(([pair]) => pair);
+  const after = orderedCaptures.filter(([, priority]) =>
+    priority <= matchingPriority
+  )
+    .map(([pair]) => pair);
+  return [
+    ...ordinary.slice(0, first),
+    ...before,
+    ...ordinary.slice(first, last + 1),
+    ...after,
+    ...ordinary.slice(last + 1),
+  ];
 }
 
 /**
@@ -4122,7 +4132,21 @@ export function or(
         );
       })),
   );
-  definePassThroughPriority(singleResult, parsers);
+  definePassThroughPriority(singleResult, parsers, (state) => {
+    const active = normalizeExclusiveState(state);
+    return combinePassThroughPriorities(
+      parsers.map((parser, index) =>
+        active != null && active[0] !== index
+          ? undefined
+          : getPassThroughPriority(
+            parser,
+            active?.[0] === index && active[1].success
+              ? active[1].next.state
+              : parser.initialState,
+          )
+      ),
+    );
+  });
   return singleResult as Parser<
     Mode,
     unknown,
@@ -4807,7 +4831,21 @@ export function longestMatch(
         );
       })),
   );
-  definePassThroughPriority(multiResult, parsers);
+  definePassThroughPriority(multiResult, parsers, (state) => {
+    const active = normalizeExclusiveState(state);
+    return combinePassThroughPriorities(
+      parsers.map((parser, index) =>
+        active != null && active[0] !== index
+          ? undefined
+          : getPassThroughPriority(
+            parser,
+            active?.[0] === index && active[1].success
+              ? active[1].next.state
+              : parser.initialState,
+          )
+      ),
+    );
+  });
   return multiResult as Parser<
     Mode,
     unknown,
@@ -7204,6 +7242,19 @@ export function object<
   definePassThroughPriority(
     objectParser,
     parserPairs.map(([, parser]) => parser),
+    (state) =>
+      combinePassThroughPriorities(
+        parserPairs.map(([field, parser]) =>
+          getPassThroughPriority(
+            parser,
+            getAnnotatedFieldState(
+              state,
+              typeof field === "number" ? String(field) : field,
+              parser,
+            ),
+          )
+        ),
+      ),
   );
   return objectParser;
 }
@@ -7840,8 +7891,15 @@ export function tuple<
           .map((parser, index) => [parser, index] as [typeof parser, number])
           .filter(([parser, index]) =>
             !matchedParsers.has(index) ||
-            getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                ?.continuesCommand === true
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -7919,6 +7977,9 @@ export function tuple<
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const result = parser.parse(
             withPassThroughFailure(
               withChildContext(
@@ -8014,8 +8075,15 @@ export function tuple<
           .map((parser, index) => [parser, index] as [typeof parser, number])
           .filter(([parser, index]) =>
             !matchedParsers.has(index) ||
-            getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                ?.continuesCommand === true
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -8094,6 +8162,9 @@ export function tuple<
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const resultOrPromise = parser.parse(
             withPassThroughFailure(
               withChildContext(
@@ -8665,7 +8736,19 @@ export function tuple<
         )
       )),
   );
-  definePassThroughPriority(tupleParser, parsers);
+  definePassThroughPriority(
+    tupleParser,
+    parsers,
+    (state) =>
+      combinePassThroughPriorities(
+        parsers.map((parser, index) =>
+          getPassThroughPriority(
+            parser,
+            getAnnotatedChildState(state, state[index], parser),
+          )
+        ),
+      ),
+  );
   return tupleParser;
 }
 
@@ -10668,7 +10751,19 @@ export function merge(
         ),
       ),
   );
-  definePassThroughPriority(mergeParser, parsers);
+  definePassThroughPriority(
+    mergeParser,
+    parsers,
+    (state) =>
+      combinePassThroughPriorities(
+        sorted.map(([parser], index) =>
+          getPassThroughPriority(
+            parser,
+            extractParserState(parser, state, index),
+          )
+        ),
+      ),
+  );
   return mergeParser;
 }
 
@@ -11295,8 +11390,15 @@ export function concat(
           .map((parser, index) => [parser, index] as [typeof parser, number])
           .filter(([parser, index]) =>
             !matchedParsers.has(index) ||
-            getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                ?.continuesCommand === true
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -11374,6 +11476,9 @@ export function concat(
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const result = parser.parse(
             withPassThroughFailure(
               withChildContext(
@@ -11467,8 +11572,15 @@ export function concat(
           .map((parser, index) => [parser, index] as [typeof parser, number])
           .filter(([parser, index]) =>
             !matchedParsers.has(index) ||
-            getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                ?.continuesCommand === true
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -11546,6 +11658,9 @@ export function concat(
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const result = await parser.parse(
             withPassThroughFailure(
               withChildContext(
@@ -12112,7 +12227,19 @@ export function concat(
         )
       )),
   );
-  definePassThroughPriority(concatParser, parsers);
+  definePassThroughPriority(
+    concatParser,
+    parsers,
+    (state) =>
+      combinePassThroughPriorities(
+        parsers.map((parser, index) =>
+          getPassThroughPriority(
+            parser,
+            getAnnotatedChildState(state, state[index], parser),
+          )
+        ),
+      ),
+  );
   return concatParser;
 }
 
@@ -12350,7 +12477,11 @@ export function group<M extends Mode, TValue, TState>(
     groupParser,
     (state, token) => getOptionMatch(parser, state, token),
   );
-  definePassThroughPriority(groupParser, [parser]);
+  definePassThroughPriority(
+    groupParser,
+    [parser],
+    (state) => getPassThroughPriority(parser, state),
+  );
   return groupParser;
 }
 
@@ -14815,10 +14946,42 @@ export function conditional(
     ConditionalState<string>
   >;
   defineInheritedAnnotationParser(conditionalParser);
+  // Constants can resolve their branch without invoking completion. Other
+  // discriminators retain potential branches until parse selects one.
+  const reachableBranches = (state: ConditionalState<string>) => {
+    if (state.selectedBranch != null) {
+      const branch = state.selectedBranch.kind === "default"
+        ? defaultBranch
+        : branches[state.selectedBranch.key];
+      return branch == null ? [] : [{ branch, state: state.branchState }];
+    }
+    const known = getKnownCompletion(discriminator, state.discriminatorState);
+    if (known != null) {
+      const branch = typeof known.value === "string"
+        ? branches[known.value]
+        : undefined;
+      const reachable = branch ?? defaultBranch;
+      return reachable == null
+        ? []
+        : [{ branch: reachable, state: reachable.initialState }];
+    }
+    return allBranchParsers.map((branch) => ({
+      branch,
+      state: branch.initialState,
+    }));
+  };
   definePassThroughPriority(conditionalParser, [
     discriminator,
     ...allBranchParsers,
-  ]);
+  ], (state) =>
+    combinePassThroughPriorities([
+      ...(state.selectedBranch == null
+        ? [getPassThroughPriority(discriminator, state.discriminatorState)]
+        : []),
+      ...reachableBranches(state).map(({ branch, state }) =>
+        getPassThroughPriority(branch, state)
+      ),
+    ]));
   defineOptionMatch<ConditionalState<string>>(
     conditionalParser,
     (state, token) => {
@@ -14832,10 +14995,8 @@ export function conditional(
       }
       return combineOptionMatches([
         getOptionMatch(discriminator, state.discriminatorState, token),
-        // Before selection, named branches may consume an option after a
-        // zero-consuming discriminator, or during speculative async parsing.
-        ...allBranchParsers.map((branch) =>
-          getOptionMatch(branch, branch.initialState, token)
+        ...reachableBranches(state).map(({ branch, state }) =>
+          getOptionMatch(branch, state, token)
         ),
       ]);
     },

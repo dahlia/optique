@@ -71,10 +71,14 @@ export function withPassThroughFailure<TState>(
 }
 
 const capturePriority = Symbol("capturePriority");
-type PrioritySource = Pick<Parser, "priority" | "usage">;
-interface CapturePriority {
+type PrioritySource = Pick<
+  Parser<Mode, unknown, unknown>,
+  "priority" | "usage" | "initialState"
+>;
+interface CapturePriority<TState> {
   readonly ownerPriority: number;
   readonly priority: number;
+  readonly getPriority?: (state: TState) => number | undefined;
 }
 
 /** Checks for capture through usage-preserving wrappers. @internal */
@@ -93,16 +97,20 @@ export function hasPassThroughUsage(usage: Usage): boolean {
  * @returns The capture priority, or undefined when capture is absent.
  * @internal
  */
-export function getPassThroughPriority(
-  parser: PrioritySource,
+export function getPassThroughPriority<TState>(
+  parser: Pick<
+    Parser<Mode, unknown, TState>,
+    "priority" | "usage" | "initialState"
+  >,
+  state: TState = parser.initialState,
 ): number | undefined {
   if (!hasPassThroughUsage(parser.usage)) return undefined;
-  const annotated: PrioritySource & {
-    readonly [capturePriority]?: CapturePriority;
+  const annotated: typeof parser & {
+    readonly [capturePriority]?: CapturePriority<TState>;
   } = parser;
   const hint = annotated[capturePriority];
   return hint != null && hint.ownerPriority === parser.priority
-    ? hint.priority
+    ? hint.getPriority == null ? hint.priority : hint.getPriority(state)
     : parser.priority;
 }
 
@@ -110,21 +118,25 @@ export function getPassThroughPriority(
  * Records capture priority separately from unrelated children's priorities.
  * @param parser The newly constructed parser.
  * @param children Its transparent children.
+ * @param getPriority Optional state-aware capture priority lookup.
  * @internal
  */
-export function definePassThroughPriority(
-  parser: Pick<Parser, "priority">,
+export function definePassThroughPriority<TState>(
+  parser: Pick<Parser<Mode, unknown, TState>, "priority" | "initialState">,
   children: readonly PrioritySource[],
+  getPriority?: (state: TState) => number | undefined,
 ): void {
-  const priorities = children.map(getPassThroughPriority).filter((priority) =>
-    priority != null
-  );
+  const priorities = children.filter((child) =>
+    hasPassThroughUsage(child.usage)
+  )
+    .map((child) => getPassThroughPriority(child) ?? child.priority);
   if (priorities.length === 0) return;
   Object.defineProperty(parser, capturePriority, {
     value: {
       ownerPriority: parser.priority,
       priority: Math.max(...priorities),
-    } satisfies CapturePriority,
+      getPriority,
+    } satisfies CapturePriority<TState>,
     enumerable: true,
   });
 }
@@ -264,4 +276,45 @@ export function combineOptionMatches(
     priority: Math.max(...found.map((match) => match.priority)),
     continuesCommand: found.some((match) => match.continuesCommand),
   };
+}
+
+const knownCompletionKey = Symbol("knownCompletion");
+interface KnownCompletion<TState> {
+  readonly complete: unknown;
+  readonly value: (state: TState) => unknown;
+}
+
+/** Marks a completion value that can be inspected without running user code. @internal */
+export function defineKnownCompletion<TState>(
+  parser: Pick<Parser<Mode, unknown, TState>, "complete">,
+  value: (state: TState) => unknown,
+): void {
+  Object.defineProperty(parser, knownCompletionKey, {
+    value: { complete: parser.complete, value } satisfies KnownCompletion<
+      TState
+    >,
+    enumerable: true,
+  });
+}
+
+/** Looks up a known value only while the original completion is intact. @internal */
+export function getKnownCompletion<TState>(
+  parser: Pick<Parser<Mode, unknown, TState>, "complete">,
+  state: TState,
+): { readonly value: unknown } | undefined {
+  const annotated: typeof parser & {
+    readonly [knownCompletionKey]?: KnownCompletion<TState>;
+  } = parser;
+  const hint = annotated[knownCompletionKey];
+  return hint != null && hint.complete === parser.complete
+    ? { value: hint.value(state) }
+    : undefined;
+}
+
+/** Combines the priorities of currently reachable capture lanes. @internal */
+export function combinePassThroughPriorities(
+  priorities: readonly (number | undefined)[],
+): number | undefined {
+  const found = priorities.filter((priority) => priority != null);
+  return found.length === 0 ? undefined : Math.max(...found);
 }
