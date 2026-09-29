@@ -1,3 +1,4 @@
+import { definePassThroughPriority } from "./internal/passthrough.ts";
 import {
   getDelegatedAnnotationState,
   hasDelegatedAnnotationCarrier,
@@ -990,6 +991,7 @@ export function optional<M extends Mode, TValue, TState>(
   defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
+  definePassThroughPriority(optionalParser, [parser]);
   return optionalParser;
 }
 
@@ -1530,6 +1532,7 @@ export function withDefault<
   );
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
+  definePassThroughPriority(withDefaultParser, [parser]);
   return withDefaultParser;
 }
 
@@ -2968,6 +2971,7 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
+  definePassThroughPriority(resultParser, [parser]);
   return resultParser;
 }
 
@@ -3139,5 +3143,6 @@ export function nonEmpty<M extends Mode, T, TState>(
       enumerable: false,
     });
   }
+  definePassThroughPriority(nonEmptyParser, [parser]);
   return nonEmptyParser;
 }

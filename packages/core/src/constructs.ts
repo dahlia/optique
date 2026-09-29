@@ -1,6 +1,9 @@
 import {
   type ConsumingFailure,
-  getPassThroughFailure,
+  definePassThroughPriority,
+  getPassThroughFailureHint,
+  getPassThroughPriority,
+  hasPassThroughUsage,
   withPassThroughFailure,
 } from "./internal/passthrough.ts";
 import {
@@ -267,16 +270,6 @@ function sharedBufferLeadingNames(
   return names.size === 0 ? EMPTY_LEADING_NAMES : names;
 }
 
-/** Checks for pass-through capture through usage-preserving wrappers. */
-function hasPassThroughUsage(usage: Usage): boolean {
-  return usage.some((term) =>
-    term.type === "passthrough" ||
-    ((term.type === "optional" || term.type === "multiple") &&
-      hasPassThroughUsage(term.terms)) ||
-    (term.type === "exclusive" && term.terms.some(hasPassThroughUsage))
-  );
-}
-
 /** Finds a Boolean option through usage-preserving wrappers. */
 function hasFlagUsage(usage: Usage, name: string): boolean {
   return usage.some((term) =>
@@ -291,7 +284,7 @@ function hasFlagUsage(usage: Usage, name: string): boolean {
 
 /** Matches exact options, attached values, and leading bundled flags. */
 function matchesOptionToken(
-  parser: Parser<Mode, unknown, unknown>,
+  parser: Pick<Parser, "leadingNames" | "usage">,
   token: string | undefined,
 ): boolean {
   if (token == null || token === "--" || !/^[-/+]/.test(token)) return false;
@@ -318,7 +311,8 @@ function matchesOptionToken(
 }
 
 /**
- * Defers tied pass-through candidates until a known option has been tried.
+ * Defers capture until a known option at an equal or higher lane priority
+ * has been tried.
  * Other siblings retain their relative order, and explicit priorities win.
  */
 function orderBeforePassThrough<TPair>(
@@ -336,23 +330,27 @@ function orderBeforePassThrough<TPair>(
 
   const matches = (parser: Parser<Mode, unknown, unknown>): boolean =>
     matchesOptionToken(parser, token);
-  const matchingPriorities = new Set(
-    pairs.map(getParser).filter(matches).map((parser) => parser.priority),
+  const matchingPriority = Math.max(
+    ...pairs.map(getParser).filter(matches).map((parser) => parser.priority),
   );
-  if (matchingPriorities.size === 0) return pairs;
+  if (matchingPriority === -Infinity) return pairs;
 
   const deferred = new Set(
     pairs.map(getParser).filter((parser) =>
-      matchingPriorities.has(parser.priority) && !matches(parser) &&
-      passThroughParsers.has(parser)
+      !matches(parser) && passThroughParsers.has(parser) &&
+      (getPassThroughPriority(parser) ?? Infinity) <= matchingPriority
     ),
   );
   if (deferred.size === 0) return pairs;
+  const priority = (parser: Parser<Mode, unknown, unknown>): number =>
+    deferred.has(parser)
+      ? Math.min(parser.priority, matchingPriority)
+      : parser.priority;
 
   return pairs.toSorted((a, b) => {
     const parserA = getParser(a);
     const parserB = getParser(b);
-    return parserB.priority - parserA.priority ||
+    return priority(parserB) - priority(parserA) ||
       Number(deferred.has(parserA)) - Number(deferred.has(parserB));
   });
 }
@@ -1255,6 +1253,7 @@ function preserveExclusiveStateAfterOptionsTerminator(
     success: true,
     next: {
       ...context,
+      ...getPassThroughFailureHint(result.next),
       buffer: result.next.buffer,
       optionsTerminated: true,
       state: context.state,
@@ -3351,6 +3350,7 @@ export function or(
               success: true,
               next: {
                 ...context,
+                ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: createExclusiveState(
@@ -3425,6 +3425,7 @@ export function or(
             success: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -3454,6 +3455,7 @@ export function or(
           success: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: createExclusiveState(context.state, i, parser, result),
@@ -3540,6 +3542,7 @@ export function or(
           provisional: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(provisionalConsuming.result.next),
             buffer: provisionalConsuming.result.next.buffer,
             optionsTerminated:
               provisionalConsuming.result.next.optionsTerminated,
@@ -3615,6 +3618,7 @@ export function or(
             provisional: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -3751,6 +3755,7 @@ export function or(
               success: true,
               next: {
                 ...context,
+                ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: createExclusiveState(
@@ -3827,6 +3832,7 @@ export function or(
             success: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -3856,6 +3862,7 @@ export function or(
           success: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: createExclusiveState(context.state, i, parser, result),
@@ -3931,6 +3938,7 @@ export function or(
           provisional: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(provisionalConsuming.result.next),
             buffer: provisionalConsuming.result.next.buffer,
             optionsTerminated:
               provisionalConsuming.result.next.optionsTerminated,
@@ -4003,6 +4011,7 @@ export function or(
             provisional: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -4130,6 +4139,7 @@ export function or(
   // reasoning applies to validateValue (#414): a fallback value may
   // belong to any branch, so revalidating through a single arbitrary
   // branch would reject values that another branch would accept.
+  definePassThroughPriority(singleResult, parsers);
   return singleResult as Parser<
     Mode,
     unknown,
@@ -4470,6 +4480,7 @@ export function longestMatch(
         ...match.result,
         next: {
           ...match.result.next,
+          ...getPassThroughFailureHint(optionsTerminatorResult.next),
           buffer: optionsTerminatorResult.next.buffer,
           optionsTerminated: true,
         },
@@ -4484,6 +4495,7 @@ export function longestMatch(
       success: true,
       next: {
         ...context,
+        ...getPassThroughFailureHint(selectedResult.next),
         buffer: selectedResult.next.buffer,
         optionsTerminated: selectedResult.next.optionsTerminated,
         state: createExclusiveState(
@@ -4798,6 +4810,7 @@ export function longestMatch(
   // branch is unknown at default time — normalizing through the wrong
   // branch would produce values that differ from what parse() returns.
   // The same reasoning applies to validateValue (#414).
+  definePassThroughPriority(multiResult, parsers);
   return multiResult as Parser<
     Mode,
     unknown,
@@ -6035,6 +6048,7 @@ export function object<
       success: true,
       next: {
         ...context,
+        ...getPassThroughFailureHint(result.next),
         buffer: result.next.buffer,
         optionsTerminated: result.next.optionsTerminated,
         state: nextState,
@@ -6142,6 +6156,7 @@ export function object<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: {
@@ -6160,22 +6175,23 @@ export function object<
               }
               : {}),
           };
-          currentContext = withPassThroughFailure(
-            currentContext,
-            getPassThroughFailure(result.next),
-          );
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success) {
-          // The first matching option failure blocks capture.
+          // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           if (
             result.consumed > 0 &&
             matchesOptionToken(parser, currentContext.buffer[0])
-          ) consumingFailure ??= result;
+          ) {
+            if (
+              consumingFailure == null ||
+              result.consumed > consumingFailure.consumed
+            ) consumingFailure = result;
+          }
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -6346,6 +6362,7 @@ export function object<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: {
@@ -6364,22 +6381,23 @@ export function object<
               }
               : {}),
           };
-          currentContext = withPassThroughFailure(
-            currentContext,
-            getPassThroughFailure(result.next),
-          );
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success) {
-          // The first matching option failure blocks capture.
+          // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           if (
             result.consumed > 0 &&
             matchesOptionToken(parser, currentContext.buffer[0])
-          ) consumingFailure ??= result;
+          ) {
+            if (
+              consumingFailure == null ||
+              result.consumed > consumingFailure.consumed
+            ) consumingFailure = result;
+          }
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -7161,6 +7179,10 @@ export function object<
 
   defineParseLanes(objectParser, objectParseLanes);
   defineInheritedAnnotationParser(objectParser);
+  definePassThroughPriority(
+    objectParser,
+    parserPairs.map(([, parser]) => parser),
+  );
   return objectParser;
 }
 
@@ -7377,6 +7399,7 @@ function advanceTupleSuggestContextSync(
         );
         currentContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newStateArray as readonly unknown[],
@@ -7503,6 +7526,7 @@ async function advanceTupleSuggestContextAsync(
         );
         currentContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newStateArray as readonly unknown[],
@@ -7827,6 +7851,7 @@ export function tuple<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as TupleState,
@@ -7839,21 +7864,22 @@ export function tuple<
           };
 
           consumingFailure = undefined;
-          currentContext = withPassThroughFailure(
-            currentContext,
-            getPassThroughFailure(result.next),
-          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first matching option failure blocks capture.
+          // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           if (
             result.consumed > 0 &&
             matchesOptionToken(parser, currentContext.buffer[0])
-          ) consumingFailure ??= result;
+          ) {
+            if (
+              consumingFailure == null ||
+              result.consumed > consumingFailure.consumed
+            ) consumingFailure = result;
+          }
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -7991,6 +8017,7 @@ export function tuple<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as TupleState,
@@ -8003,21 +8030,22 @@ export function tuple<
           };
 
           consumingFailure = undefined;
-          currentContext = withPassThroughFailure(
-            currentContext,
-            getPassThroughFailure(result.next),
-          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first matching option failure blocks capture.
+          // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           if (
             result.consumed > 0 &&
             matchesOptionToken(parser, currentContext.buffer[0])
-          ) consumingFailure ??= result;
+          ) {
+            if (
+              consumingFailure == null ||
+              result.consumed > consumingFailure.consumed
+            ) consumingFailure = result;
+          }
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -8586,6 +8614,7 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
+  definePassThroughPriority(tupleParser, parsers);
   return tupleParser;
 }
 
@@ -8964,6 +8993,7 @@ export function merge(
       success: true,
       next: {
         ...context,
+        ...getPassThroughFailureHint(result.next),
         buffer: result.next.buffer,
         optionsTerminated: result.next.optionsTerminated,
         state: newState,
@@ -9137,6 +9167,7 @@ export function merge(
         );
         settledContext = {
           ...settledContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: nextState,
@@ -9203,6 +9234,7 @@ export function merge(
         );
         const newContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newState,
@@ -9286,6 +9318,7 @@ export function merge(
         );
         const newContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newState,
@@ -9342,11 +9375,13 @@ export function merge(
     const consumedLanes = new Set<ParseLane<MergeState>>();
     const consumedGroups = new Set<object>();
     const laneResults = new Map<ParseLane<MergeState>, MergeParseResult>();
+    let consumingFailure: ConsumingFailure | undefined;
     let attemptedLane = false;
     let madeProgress = true;
 
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       let consumingError: {
         readonly priority: number;
         readonly result: {
@@ -9384,6 +9419,14 @@ export function merge(
           break;
         }
         if (!result.success) {
+          if (
+            result.consumed > 0 && matchesOptionToken({
+              leadingNames: lane.leadingNames,
+              usage: parsers.flatMap((parser) => parser.usage),
+            }, currentContext.buffer[0]) &&
+            (consumingFailure == null ||
+              result.consumed > consumingFailure.consumed)
+          ) consumingFailure = result;
           if (result.consumed > 0 && consumingError == null) {
             consumingError = { priority: lane.priority, result };
           }
@@ -9430,7 +9473,7 @@ export function merge(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -9445,11 +9488,13 @@ export function merge(
     const consumedLanes = new Set<ParseLane<MergeState>>();
     const consumedGroups = new Set<object>();
     const laneResults = new Map<ParseLane<MergeState>, MergeParseResult>();
+    let consumingFailure: ConsumingFailure | undefined;
     let attemptedLane = false;
     let madeProgress = true;
 
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       let consumingError: {
         readonly priority: number;
         readonly result: {
@@ -9484,6 +9529,14 @@ export function merge(
           break;
         }
         if (!result.success) {
+          if (
+            result.consumed > 0 && matchesOptionToken({
+              leadingNames: lane.leadingNames,
+              usage: parsers.flatMap((parser) => parser.usage),
+            }, currentContext.buffer[0]) &&
+            (consumingFailure == null ||
+              result.consumed > consumingFailure.consumed)
+          ) consumingFailure = result;
           if (result.consumed > 0 && consumingError == null) {
             consumingError = { priority: lane.priority, result };
           }
@@ -9530,7 +9583,7 @@ export function merge(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -10551,6 +10604,7 @@ export function merge(
   // ownership cannot be resolved from the value alone.
   defineParseLanes(mergeParser, mergeParseLanes);
   defineInheritedAnnotationParser(mergeParser);
+  definePassThroughPriority(mergeParser, parsers);
   return mergeParser;
 }
 
@@ -10993,6 +11047,7 @@ function tryParseSuggestList(
             return preParseSuggestLoop(
               {
                 ...context,
+                ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: stateArray,
@@ -11061,6 +11116,7 @@ function tryParseSuggestList(
       const mergedExec = mergeChildExec(context.exec, result.next.exec);
       return {
         ...context,
+        ...getPassThroughFailureHint(result.next),
         buffer: result.next.buffer,
         optionsTerminated: result.next.optionsTerminated,
         state: stateArray,
@@ -11208,6 +11264,7 @@ export function concat(
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as readonly unknown[],
@@ -11220,21 +11277,22 @@ export function concat(
           };
 
           consumingFailure = undefined;
-          currentContext = withPassThroughFailure(
-            currentContext,
-            getPassThroughFailure(result.next),
-          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first matching option failure blocks capture.
+          // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           if (
             result.consumed > 0 &&
             matchesOptionToken(parser, currentContext.buffer[0])
-          ) consumingFailure ??= result;
+          ) {
+            if (
+              consumingFailure == null ||
+              result.consumed > consumingFailure.consumed
+            ) consumingFailure = result;
+          }
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -11369,6 +11427,7 @@ export function concat(
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as readonly unknown[],
@@ -11381,21 +11440,22 @@ export function concat(
           };
 
           consumingFailure = undefined;
-          currentContext = withPassThroughFailure(
-            currentContext,
-            getPassThroughFailure(result.next),
-          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first matching option failure blocks capture.
+          // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           if (
             result.consumed > 0 &&
             matchesOptionToken(parser, currentContext.buffer[0])
-          ) consumingFailure ??= result;
+          ) {
+            if (
+              consumingFailure == null ||
+              result.consumed > consumingFailure.consumed
+            ) consumingFailure = result;
+          }
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -11959,6 +12019,7 @@ export function concat(
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
+  definePassThroughPriority(concatParser, parsers);
   return concatParser;
 }
 
@@ -12192,6 +12253,7 @@ export function group<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  definePassThroughPriority(groupParser, [parser]);
   return groupParser;
 }
 
@@ -12621,6 +12683,7 @@ export function conditional(
               branchParser,
               branchParser.usage,
             ),
+            ...getPassThroughFailureHint(discriminatorResult.next),
             buffer: discriminatorResult.next.buffer,
             optionsTerminated: discriminatorResult.next.optionsTerminated,
           });
@@ -12895,6 +12958,7 @@ export function conditional(
         // consuming tokens) propagate to the branch probes.
         const speculationContext = {
           ...context,
+          ...getPassThroughFailureHint(discriminatorResult.next),
           buffer: discriminatorResult.next.buffer,
           optionsTerminated: discriminatorResult.next.optionsTerminated,
           ...(discriminatorExec != null
@@ -13162,6 +13226,7 @@ export function conditional(
               branchParser,
               branchParser.usage,
             ),
+            ...getPassThroughFailureHint(discriminatorResult.next),
             buffer: discriminatorResult.next.buffer,
             optionsTerminated: discriminatorResult.next.optionsTerminated,
           });
