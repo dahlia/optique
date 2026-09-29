@@ -1988,7 +1988,7 @@ export function argument<M extends Mode, T>(
         : options.errors.invalidValue)
       : message`${metavar(valueParser.metavar)}: ${error}`;
 
-  const optionPattern = /^--?[a-z0-9-]+$/i;
+  const optionPattern = /^(?!--=)(--?[a-z0-9-]+)(?:=|$)/i;
   const term: UsageTerm = {
     type: "argument",
     metavar: valueParser.metavar,
@@ -2027,14 +2027,17 @@ export function argument<M extends Mode, T>(
         if (context.buffer[i] === "--") {
           optionsTerminated = true;
           i++;
-        } else if (context.buffer[i].match(optionPattern)) {
-          return {
-            success: false,
-            consumed: i,
-            error: message`Expected an argument, but got an option: ${
-              eOptionName(context.buffer[i])
-            }.`,
-          };
+        } else {
+          const optionMatch = context.buffer[i].match(optionPattern);
+          if (optionMatch != null) {
+            return {
+              success: false,
+              consumed: i,
+              error: message`Expected an argument, but got an option: ${
+                eOptionName(optionMatch[1])
+              }.`,
+            };
+          }
         }
       }
 
