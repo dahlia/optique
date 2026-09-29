@@ -27,6 +27,7 @@ import type {
 import { getAnnotations } from "@optique/core/annotations";
 import {
   defineTraits,
+  delegateOptionParsing,
   delegateSuggestNodes,
   inheritAnnotations,
   injectAnnotations,
@@ -764,6 +765,13 @@ export function bindConfig<
     return configValue !== undefined;
   }
 
+  const getCliState = (state: TState): TState =>
+    isConfigBindState(state)
+      ? (state.hasCliValue
+        ? state.cliState as TState
+        : inheritAnnotations(state, parser.initialState))
+      : state;
+
   const boundParser: Parser<M, TValue, TState> = {
     mode: parser.mode,
     $valueType: parser.$valueType,
@@ -808,11 +816,7 @@ export function bindConfig<
       // back on the next iteration.  The inner parser expects its own
       // native state, so we unwrap cliState before delegating, mirroring
       // the pattern used by bindEnv.
-      const innerState = isConfigBindState(context.state)
-        ? (context.state.hasCliValue
-          ? (context.state.cliState as TState)
-          : inheritAnnotations(context.state, parser.initialState))
-        : context.state;
+      const innerState = getCliState(context.state);
       const innerContext = innerState !== context.state
         ? { ...context, state: innerState }
         : context;
@@ -1017,6 +1021,7 @@ export function bindConfig<
       enumerable: false,
     });
   }
+  delegateOptionParsing(boundParser, parser, getCliState);
   return fluent(boundParser);
 }
 

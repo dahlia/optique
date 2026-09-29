@@ -15482,7 +15482,7 @@ describe("branch coverage: facade.ts edge cases", () => {
         return {};
       },
     };
-    const parser = object({ value: argument(string()) });
+    const parser = object({ value: option("--completion", string()) });
 
     const result = runWithSync(parser, "myapp", [trackingContext], {
       args: ["--completion=bash"],
@@ -15495,8 +15495,20 @@ describe("branch coverage: facade.ts edge cases", () => {
       stderr: () => {},
     });
 
-    assert.deepEqual(result, { value: "--completion=bash" });
+    assert.deepEqual(result, { value: "bash" });
     assert.equal(annotationsCallCount, 1);
+  });
+
+  it("runWithSync dispatches joined completion options with positional parsers", () => {
+    const parser = object({ value: argument(string()) });
+    const result = runWithSync(parser, "myapp", [], {
+      args: ["--completion=bash"],
+      completion: { option: true, onShow: () => "COMP" },
+      onError: () => "ERROR",
+      stdout: () => {},
+      stderr: () => {},
+    });
+    assert.equal(result, "COMP");
   });
 });
 
