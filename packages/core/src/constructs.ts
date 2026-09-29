@@ -1,4 +1,21 @@
 import {
+  combineOptionMatches,
+  combinePassThroughPriorities,
+  type ConsumingFailure,
+  defineOptionMatch,
+  definePassThroughPriority,
+  delegateKnownCompletion,
+  getKnownCompletion,
+  getOptionMatch,
+  getPassThroughFailureHint,
+  getPassThroughPriority,
+  hasPassThroughUsage,
+  matchesOptionToken,
+  retainConsumingFailure,
+  retainConsumingFailureHint,
+  withPassThroughFailure,
+} from "./internal/passthrough.ts";
+import {
   annotationViewTargets,
   getWrappedChildParseState as getParseChildState,
   getWrappedChildState as getAnnotatedChildState,
@@ -260,6 +277,118 @@ function sharedBufferLeadingNames(
     if (p.acceptingAnyToken) positionalBlocked = true;
   }
   return names.size === 0 ? EMPTY_LEADING_NAMES : names;
+}
+
+/**
+ * Defers capture until a known option at an equal or higher lane priority
+ * has been tried.
+ * Other siblings retain their relative order, and explicit priorities win.
+ */
+function orderBeforePassThrough<TPair>(
+  pairs: readonly TPair[],
+  context: ParserContext<unknown>,
+  getParser: (pair: TPair) => Parser<Mode, unknown, unknown>,
+  getState: (pair: TPair) => unknown,
+  passThroughParsers: ReadonlySet<Parser<Mode, unknown, unknown>>,
+): readonly TPair[] {
+  const token = context.buffer[0];
+  if (
+    passThroughParsers.size === 0 || context.optionsTerminated ||
+    token == null || token === "--" ||
+    !/^[-/+]/.test(token)
+  ) return pairs;
+
+  const matches = new Map(pairs.map((pair) =>
+    [
+      pair,
+      getOptionMatch(getParser(pair), getState(pair), token),
+    ] as const
+  ));
+  const normalizedOptions = new Map<TPair, number>();
+  const captures = new Map(pairs.flatMap((pair) => {
+    if (!passThroughParsers.has(getParser(pair))) return [];
+    const priority = getPassThroughPriority(
+      getParser(pair),
+      getState(pair),
+      token,
+    );
+    const match = matches.get(pair);
+    // A rejected high capture must not raise a matching option's priority,
+    // including when a lower capture still accepts this token.
+    if (match != null && (priority == null || match.priority >= priority)) {
+      const unfiltered = getPassThroughPriority(
+        getParser(pair),
+        getState(pair),
+      );
+      if (
+        priority == null || (unfiltered != null && unfiltered > match.priority)
+      ) {
+        normalizedOptions.set(pair, match.priority);
+      }
+      return [];
+    }
+    return priority == null ? [] : [[pair, priority] as const];
+  }));
+  const matching = pairs.filter((pair) => !captures.has(pair))
+    .flatMap((pair) => {
+      const match = matches.get(pair);
+      return match == null ? [] : [match];
+    });
+  const orderedCaptures = [...captures].sort((a, b) => b[1] - a[1]);
+  if (matching.length === 0) {
+    // Reorder only capture slots by their reachable priorities, retaining
+    // ordinary siblings in place even without a known-option group.
+    let captureIndex = 0;
+    return pairs.map((pair) =>
+      captures.has(pair) ? orderedCaptures[captureIndex++][0] : pair
+    );
+  }
+  const matchingPriority = Math.max(...matching.map((match) => match.priority));
+  // Preserve ordinary siblings' relative order. A container whose capture is
+  // rejected competes among matching options at its own option priority.
+  const ordinary = pairs.filter((pair) =>
+    !captures.has(pair) && !normalizedOptions.has(pair)
+  );
+  const positions = new Map(pairs.map((pair, index) => [pair, index] as const));
+  for (
+    const [pair, priority] of [...normalizedOptions].sort((a, b) => b[1] - a[1])
+  ) {
+    let insertion = ordinary.findIndex((candidate) => {
+      const match = matches.get(candidate);
+      return match != null && (match.priority < priority ||
+        (match.priority === priority &&
+          positions.get(pair)! < positions.get(candidate)!));
+    });
+    if (insertion < 0) {
+      const lastMatch = ordinary.findLastIndex((candidate) =>
+        matches.get(candidate) != null
+      );
+      insertion = lastMatch >= 0
+        ? lastMatch + 1
+        : ordinary.findIndex((candidate) =>
+          positions.get(candidate)! > positions.get(pair)!
+        );
+      if (insertion < 0) insertion = ordinary.length;
+    }
+    ordinary.splice(insertion, 0, pair);
+  }
+  const first = ordinary.findIndex((pair) => matches.get(pair) != null);
+  const last = ordinary.findLastIndex((pair) => matches.get(pair) != null);
+  const before = orderedCaptures.filter(([, priority]) =>
+    priority > matchingPriority
+  )
+    .map(([pair]) => pair);
+  const after = orderedCaptures.filter(([, priority]) =>
+    priority <= matchingPriority
+  )
+    .map(([pair]) => pair);
+  return [
+    ...ordinary.slice(0, first),
+    ...before,
+    ...ordinary.slice(first, last + 1),
+    ...after,
+    ...ordinary.slice(last + 1),
+  ];
 }
 
 /**
@@ -1160,6 +1289,7 @@ function preserveExclusiveStateAfterOptionsTerminator(
     success: true,
     next: {
       ...context,
+      ...getPassThroughFailureHint(result.next),
       buffer: result.next.buffer,
       optionsTerminated: true,
       state: context.state,
@@ -3256,6 +3386,7 @@ export function or(
               success: true,
               next: {
                 ...context,
+                ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: createExclusiveState(
@@ -3330,6 +3461,7 @@ export function or(
             success: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -3359,6 +3491,7 @@ export function or(
           success: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: createExclusiveState(context.state, i, parser, result),
@@ -3445,6 +3578,7 @@ export function or(
           provisional: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(provisionalConsuming.result.next),
             buffer: provisionalConsuming.result.next.buffer,
             optionsTerminated:
               provisionalConsuming.result.next.optionsTerminated,
@@ -3520,6 +3654,7 @@ export function or(
             provisional: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -3656,6 +3791,7 @@ export function or(
               success: true,
               next: {
                 ...context,
+                ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: createExclusiveState(
@@ -3732,6 +3868,7 @@ export function or(
             success: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -3761,6 +3898,7 @@ export function or(
           success: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: createExclusiveState(context.state, i, parser, result),
@@ -3836,6 +3974,7 @@ export function or(
           provisional: true,
           next: {
             ...context,
+            ...getPassThroughFailureHint(provisionalConsuming.result.next),
             buffer: provisionalConsuming.result.next.buffer,
             optionsTerminated:
               provisionalConsuming.result.next.optionsTerminated,
@@ -3908,6 +4047,7 @@ export function or(
             provisional: true,
             next: {
               ...context,
+              ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
               state: createExclusiveState(
@@ -4035,6 +4175,36 @@ export function or(
   // reasoning applies to validateValue (#414): a fallback value may
   // belong to any branch, so revalidating through a single arbitrary
   // branch would reject values that another branch would accept.
+  defineOptionMatch<OrState>(
+    singleResult,
+    (state, token) =>
+      combineOptionMatches(parsers.map((parser, index) => {
+        const active = normalizeExclusiveState(state);
+        return getOptionMatch(
+          parser,
+          active?.[0] === index && active[1].success
+            ? active[1].next.state
+            : parser.initialState,
+          token,
+        );
+      })),
+  );
+  definePassThroughPriority(singleResult, parsers, (state, token) => {
+    const active = normalizeExclusiveState(state);
+    return combinePassThroughPriorities(
+      // Parsing still evaluates other alternatives. or() validates replay
+      // before switching; longestMatch() compares every branch each time.
+      parsers.map((parser, index) =>
+        getPassThroughPriority(
+          parser,
+          active?.[0] === index && active[1].success
+            ? active[1].next.state
+            : parser.initialState,
+          token,
+        )
+      ),
+    );
+  });
   return singleResult as Parser<
     Mode,
     unknown,
@@ -4368,6 +4538,7 @@ export function longestMatch(
     context: ParserContext<LongestMatchState>,
     match: BranchMatch,
     optionsTerminatorResult?: SuccessfulResult,
+    consumingFailure?: ConsumingFailure,
   ): ParseResult => {
     const selectedResult: SuccessfulResult = optionsTerminatorResult == null
       ? match.result
@@ -4375,6 +4546,7 @@ export function longestMatch(
         ...match.result,
         next: {
           ...match.result.next,
+          ...getPassThroughFailureHint(optionsTerminatorResult.next),
           buffer: optionsTerminatorResult.next.buffer,
           optionsTerminated: true,
         },
@@ -4383,14 +4555,18 @@ export function longestMatch(
           ...match.result.consumed,
         ],
       };
+    const next = selectedResult.consumed.length === 0
+      ? withPassThroughFailure(selectedResult.next, consumingFailure)
+      : selectedResult.next;
     const parser = parsers[match.index];
-    const mergedExec = mergeChildExec(context.exec, selectedResult.next.exec);
+    const mergedExec = mergeChildExec(context.exec, next.exec);
     return {
       success: true,
       next: {
         ...context,
-        buffer: selectedResult.next.buffer,
-        optionsTerminated: selectedResult.next.optionsTerminated,
+        ...getPassThroughFailureHint(next),
+        buffer: next.buffer,
+        optionsTerminated: next.optionsTerminated,
         state: createExclusiveState(
           context.state,
           match.index,
@@ -4483,6 +4659,7 @@ export function longestMatch(
     } | null = null;
     const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
+    let consumingFailure: ConsumingFailure | undefined;
     const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
@@ -4511,6 +4688,11 @@ export function longestMatch(
         continue;
       }
       if (result.success) {
+        consumingFailure = retainConsumingFailureHint(
+          consumingFailure,
+          context,
+          result.next,
+        );
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
@@ -4524,8 +4706,20 @@ export function longestMatch(
         ) {
           bestMatch = { index: i, result, consumed };
         }
-      } else if (error.consumed < result.consumed) {
-        error = result;
+      } else {
+        const match = getOptionMatch(
+          parser,
+          childContext.state,
+          context.buffer[0],
+        );
+        if (result.consumed > 0 && match != null) {
+          consumingFailure = retainConsumingFailure(
+            consumingFailure,
+            result,
+            match.priority,
+          );
+        }
+        if (error.consumed < result.consumed) error = result;
       }
     }
 
@@ -4538,7 +4732,14 @@ export function longestMatch(
       return optionsTerminatorResolution;
     }
 
-    if (bestMatch != null) return commitLongestMatch(context, bestMatch);
+    if (bestMatch != null) {
+      return commitLongestMatch(
+        context,
+        bestMatch,
+        undefined,
+        consumingFailure,
+      );
+    }
 
     return { ...error, success: false };
   };
@@ -4554,6 +4755,7 @@ export function longestMatch(
     } | null = null;
     const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
+    let consumingFailure: ConsumingFailure | undefined;
     const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
@@ -4583,6 +4785,11 @@ export function longestMatch(
         continue;
       }
       if (result.success) {
+        consumingFailure = retainConsumingFailureHint(
+          consumingFailure,
+          context,
+          result.next,
+        );
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
@@ -4596,8 +4803,20 @@ export function longestMatch(
         ) {
           bestMatch = { index: i, result, consumed };
         }
-      } else if (error.consumed < result.consumed) {
-        error = result;
+      } else {
+        const match = getOptionMatch(
+          parser,
+          childContext.state,
+          context.buffer[0],
+        );
+        if (result.consumed > 0 && match != null) {
+          consumingFailure = retainConsumingFailure(
+            consumingFailure,
+            result,
+            match.priority,
+          );
+        }
+        if (error.consumed < result.consumed) error = result;
       }
     }
 
@@ -4610,7 +4829,14 @@ export function longestMatch(
       return optionsTerminatorResolution;
     }
 
-    if (bestMatch != null) return commitLongestMatch(context, bestMatch);
+    if (bestMatch != null) {
+      return commitLongestMatch(
+        context,
+        bestMatch,
+        undefined,
+        consumingFailure,
+      );
+    }
 
     return { ...error, success: false };
   };
@@ -4703,6 +4929,36 @@ export function longestMatch(
   // branch is unknown at default time — normalizing through the wrong
   // branch would produce values that differ from what parse() returns.
   // The same reasoning applies to validateValue (#414).
+  defineOptionMatch<LongestMatchState>(
+    multiResult,
+    (state, token) =>
+      combineOptionMatches(parsers.map((parser, index) => {
+        const active = normalizeExclusiveState(state);
+        return getOptionMatch(
+          parser,
+          active?.[0] === index && active[1].success
+            ? active[1].next.state
+            : parser.initialState,
+          token,
+        );
+      })),
+  );
+  definePassThroughPriority(multiResult, parsers, (state, token) => {
+    const active = normalizeExclusiveState(state);
+    return combinePassThroughPriorities(
+      // Parsing still evaluates other alternatives. or() validates replay
+      // before switching; longestMatch() compares every branch each time.
+      parsers.map((parser, index) =>
+        getPassThroughPriority(
+          parser,
+          active?.[0] === index && active[1].success
+            ? active[1].next.state
+            : parser.initialState,
+          token,
+        )
+      ),
+    );
+  });
   return multiResult as Parser<
     Mode,
     unknown,
@@ -5821,6 +6077,11 @@ export function object<
   parserPairs.sort(([_, parserA], [__, parserB]) =>
     parserB.priority - parserA.priority
   );
+  const passThroughParsers = new Set(
+    parserPairs.map(([, parser]) => parser).filter((parser) =>
+      hasPassThroughUsage(parser.usage)
+    ),
+  );
   const createInitialState = (): Record<string | symbol, unknown> => {
     const state: Record<string | symbol, unknown> = {};
     for (const key of parserKeys) {
@@ -5935,6 +6196,7 @@ export function object<
       success: true,
       next: {
         ...context,
+        ...getPassThroughFailureHint(result.next),
         buffer: result.next.buffer,
         optionsTerminated: result.next.optionsTerminated,
         state: nextState,
@@ -6003,23 +6265,41 @@ export function object<
     let anySuccess = false;
     const allConsumed: string[] = [];
     const consumedFields = new Set<string | symbol>();
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       const getFieldState = createFieldStateGetter(
         currentContext.state,
         getObjectParseChildState,
       );
 
-      for (const [field, parser] of parserPairs) {
+      for (
+        const [field, parser] of orderBeforePassThrough(
+          parserPairs,
+          currentContext,
+          ([, parser]) => parser,
+          ([field, parser]) => getFieldState(field, parser),
+          passThroughParsers,
+        )
+      ) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse(
-          withChildContext(
-            currentContext,
-            field,
-            getFieldState(field, parser),
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              getFieldState(field, parser),
+              parser,
+            ),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
 
@@ -6030,6 +6310,7 @@ export function object<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: {
@@ -6053,8 +6334,28 @@ export function object<
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
+          // The deepest matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          const match = getOptionMatch(
+            parser,
+            getFieldState(field, parser),
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
+          }
+          if (error.consumed < result.consumed) error = result;
         }
       }
     }
@@ -6086,11 +6387,19 @@ export function object<
         }
         const fieldState = getFieldState(field, parser);
         const result = typedParser.parse(
-          withChildContext(
-            currentContext,
-            field,
-            fieldState,
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              fieldState,
+              parser,
+            ),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
         if (
@@ -6127,7 +6436,7 @@ export function object<
     if (anySuccess) {
       return {
         success: true,
-        next: currentContext,
+        next: withPassThroughFailure(currentContext, consumingFailure),
         consumed: allConsumed,
       };
     }
@@ -6181,23 +6490,41 @@ export function object<
     let anySuccess = false;
     const allConsumed: string[] = [];
     const consumedFields = new Set<string | symbol>();
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Keep trying to parse fields until no more can be matched
     let madeProgress = true;
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       const getFieldState = createFieldStateGetter(
         currentContext.state,
         getObjectParseChildState,
       );
 
-      for (const [field, parser] of parserPairs) {
+      for (
+        const [field, parser] of orderBeforePassThrough(
+          parserPairs,
+          currentContext,
+          ([, parser]) => parser,
+          ([field, parser]) => getFieldState(field, parser),
+          passThroughParsers,
+        )
+      ) {
         const resultOrPromise = parser.parse(
-          withChildContext(
-            currentContext,
-            field,
-            getFieldState(field, parser),
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              getFieldState(field, parser),
+              parser,
+            ),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
         const result = await resultOrPromise;
@@ -6209,6 +6536,7 @@ export function object<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: {
@@ -6232,8 +6560,28 @@ export function object<
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
+          // The deepest matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          const match = getOptionMatch(
+            parser,
+            getFieldState(field, parser),
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
+          }
+          if (error.consumed < result.consumed) error = result;
         }
       }
     }
@@ -6255,11 +6603,19 @@ export function object<
         }
         const fieldState = getFieldState(field, parser);
         const resultOrPromise = parser.parse(
-          withChildContext(
-            currentContext,
-            field,
-            fieldState,
-            parser,
+          withPassThroughFailure(
+            withChildContext(
+              currentContext,
+              field,
+              fieldState,
+              parser,
+            ),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
         const result = await resultOrPromise;
@@ -6297,7 +6653,7 @@ export function object<
     if (anySuccess) {
       return {
         success: true,
-        next: currentContext,
+        next: withPassThroughFailure(currentContext, consumingFailure),
         consumed: allConsumed,
       };
     }
@@ -7011,6 +7367,39 @@ export function object<
 
   defineParseLanes(objectParser, objectParseLanes);
   defineInheritedAnnotationParser(objectParser);
+  defineOptionMatch(
+    objectParser,
+    (state, token) =>
+      combineOptionMatches(parserPairs.map(([field, parser]) =>
+        getOptionMatch(
+          parser,
+          getAnnotatedFieldState(
+            state,
+            typeof field === "number" ? String(field) : field,
+            parser,
+          ),
+          token,
+        )
+      )),
+  );
+  definePassThroughPriority(
+    objectParser,
+    parserPairs.map(([, parser]) => parser),
+    (state, token) =>
+      combinePassThroughPriorities(
+        parserPairs.map(([field, parser]) =>
+          getPassThroughPriority(
+            parser,
+            getAnnotatedFieldState(
+              state,
+              typeof field === "number" ? String(field) : field,
+              parser,
+            ),
+            token,
+          )
+        ),
+      ),
+  );
   return objectParser;
 }
 
@@ -7227,6 +7616,7 @@ function advanceTupleSuggestContextSync(
         );
         currentContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newStateArray as readonly unknown[],
@@ -7353,6 +7743,7 @@ async function advanceTupleSuggestContextAsync(
         );
         currentContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newStateArray as readonly unknown[],
@@ -7610,6 +8001,10 @@ export function tuple<
     );
   }
 
+  const passThroughParsers = new Set(
+    parsers.filter((parser) => hasPassThroughUsage(parser.usage)),
+  );
+
   type TupleState = { readonly [K in keyof T]: unknown };
   type ParseResult = ParserResult<TupleState>;
 
@@ -7620,6 +8015,8 @@ export function tuple<
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Similar to object(), try parsers in priority order but maintain tuple semantics
     while (matchedParsers.size < syncParsers.length) {
@@ -7633,14 +8030,39 @@ export function tuple<
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = syncParsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        syncParsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([parser, index]) =>
+            !matchedParsers.has(index) ||
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
+          )
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        ([, index]) => stateArray[index],
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const result = parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
+          ),
         );
 
         if (result.success && result.consumed.length > 0) {
@@ -7663,6 +8085,7 @@ export function tuple<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as TupleState,
@@ -7674,12 +8097,33 @@ export function tuple<
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
+          // The deepest matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
+          }
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -7687,8 +8131,24 @@ export function tuple<
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const result = parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
+            ),
           );
 
           if (result.success && result.consumed.length < 1) {
@@ -7742,7 +8202,7 @@ export function tuple<
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -7754,6 +8214,8 @@ export function tuple<
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Similar to object(), try parsers in priority order but maintain tuple semantics
     while (matchedParsers.size < parsers.length) {
@@ -7767,14 +8229,39 @@ export function tuple<
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = parsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        parsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([parser, index]) =>
+            !matchedParsers.has(index) ||
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
+          )
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        ([, index]) => stateArray[index],
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const resultOrPromise = parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
+          ),
         );
         const result = await resultOrPromise;
 
@@ -7798,6 +8285,7 @@ export function tuple<
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as TupleState,
@@ -7809,12 +8297,33 @@ export function tuple<
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
+          // The deepest matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
+          }
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -7822,8 +8331,24 @@ export function tuple<
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const resultOrPromise = parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
+            ),
           );
           const result = await resultOrPromise;
 
@@ -7878,7 +8403,7 @@ export function tuple<
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -8374,6 +8899,31 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
+  defineOptionMatch(
+    tupleParser,
+    (state, token) =>
+      combineOptionMatches(parsers.map((parser, index) =>
+        getOptionMatch(
+          parser,
+          getAnnotatedChildState(state, state[index], parser),
+          token,
+        )
+      )),
+  );
+  definePassThroughPriority(
+    tupleParser,
+    parsers,
+    (state, token) =>
+      combinePassThroughPriorities(
+        parsers.map((parser, index) =>
+          getPassThroughPriority(
+            parser,
+            getAnnotatedChildState(state, state[index], parser),
+            token,
+          )
+        ),
+      ),
+  );
   return tupleParser;
 }
 
@@ -8752,6 +9302,7 @@ export function merge(
       success: true,
       next: {
         ...context,
+        ...getPassThroughFailureHint(result.next),
         buffer: result.next.buffer,
         optionsTerminated: result.next.optionsTerminated,
         state: newState,
@@ -8925,6 +9476,7 @@ export function merge(
         );
         settledContext = {
           ...settledContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: nextState,
@@ -8991,6 +9543,7 @@ export function merge(
         );
         const newContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newState,
@@ -9074,6 +9627,7 @@ export function merge(
         );
         const newContext = {
           ...currentContext,
+          ...getPassThroughFailureHint(result.next),
           buffer: result.next.buffer,
           optionsTerminated: result.next.optionsTerminated,
           state: newState,
@@ -9130,11 +9684,13 @@ export function merge(
     const consumedLanes = new Set<ParseLane<MergeState>>();
     const consumedGroups = new Set<object>();
     const laneResults = new Map<ParseLane<MergeState>, MergeParseResult>();
+    let consumingFailure: ConsumingFailure | undefined;
     let attemptedLane = false;
     let madeProgress = true;
 
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       let consumingError: {
         readonly priority: number;
         readonly result: {
@@ -9172,6 +9728,18 @@ export function merge(
           break;
         }
         if (!result.success) {
+          if (
+            result.consumed > 0 && matchesOptionToken({
+              leadingNames: lane.leadingNames,
+              usage: parsers.flatMap((parser) => parser.usage),
+            }, currentContext.buffer[0])
+          ) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              lane.priority,
+            );
+          }
           if (result.consumed > 0 && consumingError == null) {
             consumingError = { priority: lane.priority, result };
           }
@@ -9218,7 +9786,7 @@ export function merge(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -9233,11 +9801,13 @@ export function merge(
     const consumedLanes = new Set<ParseLane<MergeState>>();
     const consumedGroups = new Set<object>();
     const laneResults = new Map<ParseLane<MergeState>, MergeParseResult>();
+    let consumingFailure: ConsumingFailure | undefined;
     let attemptedLane = false;
     let madeProgress = true;
 
     while (madeProgress && currentContext.buffer.length > 0) {
       madeProgress = false;
+      consumingFailure = undefined;
       let consumingError: {
         readonly priority: number;
         readonly result: {
@@ -9272,6 +9842,18 @@ export function merge(
           break;
         }
         if (!result.success) {
+          if (
+            result.consumed > 0 && matchesOptionToken({
+              leadingNames: lane.leadingNames,
+              usage: parsers.flatMap((parser) => parser.usage),
+            }, currentContext.buffer[0])
+          ) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              lane.priority,
+            );
+          }
           if (result.consumed > 0 && consumingError == null) {
             consumingError = { priority: lane.priority, result };
           }
@@ -9318,7 +9900,7 @@ export function merge(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -10339,6 +10921,33 @@ export function merge(
   // ownership cannot be resolved from the value alone.
   defineParseLanes(mergeParser, mergeParseLanes);
   defineInheritedAnnotationParser(mergeParser);
+  defineOptionMatch(
+    mergeParser,
+    (state, token) =>
+      combineOptionMatches(
+        sorted.map(([parser], index) =>
+          getOptionMatch(
+            parser,
+            extractParserState(parser, state, index),
+            token,
+          )
+        ),
+      ),
+  );
+  definePassThroughPriority(
+    mergeParser,
+    parsers,
+    (state, token) =>
+      combinePassThroughPriorities(
+        sorted.map(([parser], index) =>
+          getPassThroughPriority(
+            parser,
+            extractParserState(parser, state, index),
+            token,
+          )
+        ),
+      ),
+  );
   return mergeParser;
 }
 
@@ -10781,6 +11390,7 @@ function tryParseSuggestList(
             return preParseSuggestLoop(
               {
                 ...context,
+                ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
                 state: stateArray,
@@ -10849,6 +11459,7 @@ function tryParseSuggestList(
       const mergedExec = mergeChildExec(context.exec, result.next.exec);
       return {
         ...context,
+        ...getPassThroughFailureHint(result.next),
         buffer: result.next.buffer,
         optionsTerminated: result.next.optionsTerminated,
         state: stateArray,
@@ -10931,6 +11542,10 @@ export function concat(
 
   const initialState = parsers.map((parser) => parser.initialState);
 
+  const passThroughParsers = new Set(
+    parsers.filter((parser) => hasPassThroughUsage(parser.usage)),
+  );
+
   type ConcatContext = ParserContext<readonly unknown[]>;
   type ConcatResult = ParserResult<readonly unknown[]>;
 
@@ -10939,6 +11554,8 @@ export function concat(
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Use the exact same logic as tuple() to avoid infinite loops
     while (matchedParsers.size < syncParsers.length) {
@@ -10952,14 +11569,39 @@ export function concat(
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = syncParsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        syncParsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([parser, index]) =>
+            !matchedParsers.has(index) ||
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
+          )
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        ([, index]) => stateArray[index],
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const result = parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
+          ),
         );
 
         if (result.success && result.consumed.length > 0) {
@@ -10982,6 +11624,7 @@ export function concat(
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as readonly unknown[],
@@ -10993,12 +11636,33 @@ export function concat(
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
+          // The deepest matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
+          }
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -11006,8 +11670,24 @@ export function concat(
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const result = parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
+            ),
           );
 
           if (result.success && result.consumed.length < 1) {
@@ -11061,7 +11741,7 @@ export function concat(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -11071,6 +11751,8 @@ export function concat(
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
+    // Keep the first failure until input advances, including settling passes.
+    let consumingFailure: ConsumingFailure | undefined;
 
     // Use the exact same logic as tuple() to avoid infinite loops
     while (matchedParsers.size < parsers.length) {
@@ -11084,14 +11766,39 @@ export function concat(
       const stateArray = currentContext.state as unknown[];
 
       // Create priority-ordered list of remaining parsers
-      const remainingParsers = parsers
-        .map((parser, index) => [parser, index] as [typeof parser, number])
-        .filter(([_, index]) => !matchedParsers.has(index))
-        .sort(([parserA], [parserB]) => parserB.priority - parserA.priority);
+      const remainingParsers = orderBeforePassThrough(
+        parsers
+          .map((parser, index) => [parser, index] as [typeof parser, number])
+          .filter(([parser, index]) =>
+            !matchedParsers.has(index) ||
+            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
+                  ?.continuesCommand === true ||
+              (passThroughParsers.size > 0 &&
+                !currentContext.optionsTerminated &&
+                getOptionMatch(
+                    parser,
+                    stateArray[index],
+                    currentContext.buffer[0],
+                  ) != null))
+          )
+          .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
+        currentContext,
+        ([parser]) => parser,
+        ([, index]) => stateArray[index],
+        passThroughParsers,
+      );
 
       for (const [parser, index] of remainingParsers) {
         const result = await parser.parse(
-          withChildContext(currentContext, index, stateArray[index], parser),
+          withPassThroughFailure(
+            withChildContext(currentContext, index, stateArray[index], parser),
+            consumingFailure,
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
+          ),
         );
 
         if (result.success && result.consumed.length > 0) {
@@ -11114,6 +11821,7 @@ export function concat(
           );
           currentContext = {
             ...currentContext,
+            ...getPassThroughFailureHint(result.next),
             buffer: result.next.buffer,
             optionsTerminated: result.next.optionsTerminated,
             state: newStateArray as readonly unknown[],
@@ -11125,12 +11833,33 @@ export function concat(
               : {}),
           };
 
+          consumingFailure = undefined;
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success && error.consumed < result.consumed) {
-          error = result;
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
+          // The deepest matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
+          }
+          if (error.consumed < result.consumed) error = result;
         }
       }
 
@@ -11138,8 +11867,24 @@ export function concat(
       // or mark failing optional parsers as matched
       if (!foundMatch) {
         for (const [parser, index] of remainingParsers) {
+          // Revisited children already settled; a zero-consuming retry cannot
+          // make progress merely by marking the same slot matched again.
+          if (matchedParsers.has(index)) continue;
           const result = await parser.parse(
-            withChildContext(currentContext, index, stateArray[index], parser),
+            withPassThroughFailure(
+              withChildContext(
+                currentContext,
+                index,
+                stateArray[index],
+                parser,
+              ),
+              consumingFailure,
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
+            ),
           );
 
           if (result.success && result.consumed.length < 1) {
@@ -11193,7 +11938,7 @@ export function concat(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -11685,6 +12430,31 @@ export function concat(
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
+  defineOptionMatch(
+    concatParser,
+    (state, token) =>
+      combineOptionMatches(parsers.map((parser, index) =>
+        getOptionMatch(
+          parser,
+          getAnnotatedChildState(state, state[index], parser),
+          token,
+        )
+      )),
+  );
+  definePassThroughPriority(
+    concatParser,
+    parsers,
+    (state, token) =>
+      combinePassThroughPriorities(
+        parsers.map((parser, index) =>
+          getPassThroughPriority(
+            parser,
+            getAnnotatedChildState(state, state[index], parser),
+            token,
+          )
+        ),
+      ),
+  );
   return concatParser;
 }
 
@@ -11918,6 +12688,16 @@ export function group<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  delegateKnownCompletion(groupParser, parser);
+  defineOptionMatch(
+    groupParser,
+    (state, token) => getOptionMatch(parser, state, token),
+  );
+  definePassThroughPriority(
+    groupParser,
+    [parser],
+    (state, token) => getPassThroughPriority(parser, state, token),
+  );
   return groupParser;
 }
 
@@ -12347,6 +13127,7 @@ export function conditional(
               branchParser,
               branchParser.usage,
             ),
+            ...getPassThroughFailureHint(discriminatorResult.next),
             buffer: discriminatorResult.next.buffer,
             optionsTerminated: discriminatorResult.next.optionsTerminated,
           });
@@ -12621,6 +13402,7 @@ export function conditional(
         // consuming tokens) propagate to the branch probes.
         const speculationContext = {
           ...context,
+          ...getPassThroughFailureHint(discriminatorResult.next),
           buffer: discriminatorResult.next.buffer,
           optionsTerminated: discriminatorResult.next.optionsTerminated,
           ...(discriminatorExec != null
@@ -12888,6 +13670,7 @@ export function conditional(
               branchParser,
               branchParser.usage,
             ),
+            ...getPassThroughFailureHint(discriminatorResult.next),
             buffer: discriminatorResult.next.buffer,
             optionsTerminated: discriminatorResult.next.optionsTerminated,
           });
@@ -14379,5 +15162,66 @@ export function conditional(
     ConditionalState<string>
   >;
   defineInheritedAnnotationParser(conditionalParser);
+  // Constants can resolve their branch without invoking completion. Other
+  // discriminators retain potential branches until parse selects one.
+  const reachableBranches = (state: ConditionalState<string>) => {
+    if (state.selectedBranch != null) {
+      const branch = state.selectedBranch.kind === "default"
+        ? defaultBranch
+        : branches[state.selectedBranch.key];
+      return branch == null ? [] : [{ branch, state: state.branchState }];
+    }
+    const known = getKnownCompletion(discriminator, state.discriminatorState);
+    if (known != null) {
+      const branch = typeof known.value === "string"
+        ? branches[known.value]
+        : undefined;
+      const reachable = branch ?? defaultBranch;
+      return reachable == null
+        ? []
+        : [{ branch: reachable, state: reachable.initialState }];
+    }
+    return allBranchParsers.map((branch) => ({
+      branch,
+      state: branch.initialState,
+    }));
+  };
+  definePassThroughPriority(conditionalParser, [
+    discriminator,
+    ...allBranchParsers,
+  ], (state, token) =>
+    combinePassThroughPriorities([
+      ...(state.selectedBranch == null
+        ? [
+          getPassThroughPriority(
+            discriminator,
+            state.discriminatorState,
+            token,
+          ),
+        ]
+        : []),
+      ...reachableBranches(state).map(({ branch, state }) =>
+        getPassThroughPriority(branch, state, token)
+      ),
+    ]));
+  defineOptionMatch<ConditionalState<string>>(
+    conditionalParser,
+    (state, token) => {
+      if (state.selectedBranch != null) {
+        const branch = state.selectedBranch.kind === "default"
+          ? defaultBranch
+          : branches[state.selectedBranch.key];
+        return branch == null
+          ? undefined
+          : getOptionMatch(branch, state.branchState, token);
+      }
+      return combineOptionMatches([
+        getOptionMatch(discriminator, state.discriminatorState, token),
+        ...reachableBranches(state).map(({ branch, state }) =>
+          getOptionMatch(branch, state, token)
+        ),
+      ]);
+    },
+  );
   return conditionalParser;
 }

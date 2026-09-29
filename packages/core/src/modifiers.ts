@@ -1,4 +1,12 @@
 import {
+  defineKnownCompletionLookup,
+  defineOptionMatch,
+  definePassThroughPriority,
+  getKnownCompletion,
+  getOptionMatch,
+  getPassThroughPriority,
+} from "./internal/passthrough.ts";
+import {
   getDelegatedAnnotationState,
   hasDelegatedAnnotationCarrier,
   isAnnotationWrappedInitialState,
@@ -990,6 +998,32 @@ export function optional<M extends Mode, TValue, TState>(
   defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
+  defineOptionMatch(
+    optionalParser,
+    (state, token) =>
+      getOptionMatch(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
+      ),
+  );
+  definePassThroughPriority(
+    optionalParser,
+    [parser],
+    (state, token) =>
+      getPassThroughPriority(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
+      ),
+  );
+  // A known child succeeds even without input, so parsing wraps its state
+  // and completion preserves its value instead of using the fallback.
+  defineKnownCompletionLookup(
+    optionalParser,
+    (state) =>
+      getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
+  );
   return optionalParser;
 }
 
@@ -1530,6 +1564,32 @@ export function withDefault<
   );
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
+  defineOptionMatch(
+    withDefaultParser,
+    (state, token) =>
+      getOptionMatch(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
+      ),
+  );
+  definePassThroughPriority(
+    withDefaultParser,
+    [parser],
+    (state, token) =>
+      getPassThroughPriority(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
+      ),
+  );
+  // A known child succeeds even without input, so parsing wraps its state
+  // and completion preserves its value instead of using the fallback.
+  defineKnownCompletionLookup(
+    withDefaultParser,
+    (state) =>
+      getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
+  );
   return withDefaultParser;
 }
 
@@ -2968,6 +3028,23 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
+  const matchingItem = (state: MultipleState) => {
+    const current = state.at(-1);
+    if (current != null && !isTerminalMultipleItemState(current)) {
+      return { state: unwrapInjectedWrapper(current) };
+    }
+    return state.length < max ? { state: parser.initialState } : undefined;
+  };
+  defineOptionMatch(resultParser, (state, token) => {
+    const item = matchingItem(state);
+    return item == null ? undefined : getOptionMatch(parser, item.state, token);
+  });
+  definePassThroughPriority(resultParser, [parser], (state, token) => {
+    const item = matchingItem(state);
+    return item == null
+      ? undefined
+      : getPassThroughPriority(parser, item.state, token);
+  });
   return resultParser;
 }
 
@@ -3139,5 +3216,14 @@ export function nonEmpty<M extends Mode, T, TState>(
       enumerable: false,
     });
   }
+  defineOptionMatch(
+    nonEmptyParser,
+    (state, token) => getOptionMatch(parser, state, token),
+  );
+  definePassThroughPriority(
+    nonEmptyParser,
+    [parser],
+    (state, token) => getPassThroughPriority(parser, state, token),
+  );
   return nonEmptyParser;
 }
