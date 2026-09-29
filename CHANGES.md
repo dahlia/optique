@@ -22,10 +22,18 @@ To be released.
     alternative parsers can still recover from consuming failures.
     [[#991], [#993]]
 
+ -  Fixed `argument()` accepting joined option tokens such as `--name=value`
+    as positional arguments before `--`.  Unknown joined options now reach
+    `passThrough()`, and errors from known options are no longer hidden by
+    positional arguments.  Use `--` to pass joined option tokens as literal
+    positional arguments.  [[#990], [#995]]
+
 [#988]: https://github.com/dahlia/optique/issues/988
+[#990]: https://github.com/dahlia/optique/issues/990
 [#991]: https://github.com/dahlia/optique/issues/991
 [#992]: https://github.com/dahlia/optique/pull/992
 [#993]: https://github.com/dahlia/optique/pull/993
+[#995]: https://github.com/dahlia/optique/pull/995
 
 
 Version 1.0.10
