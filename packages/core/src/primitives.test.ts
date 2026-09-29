@@ -5016,6 +5016,209 @@ describe("command() with brief option", () => {
   });
 });
 
+describe("joined option classification", () => {
+  const joinedOptions = [
+    ["--unknown=v", "--unknown"],
+    ["-x=v", "-x"],
+    ["--unknown=", "--unknown"],
+    ["--unknown=a=b", "--unknown"],
+    ["--Opt-123=value", "--Opt-123"],
+    ["--unknown=line1\nline2\r\u2028\u2029", "--unknown"],
+    ["---=v", "---"],
+  ] as const;
+
+  for (const [token, name] of joinedOptions) {
+    it(`should reject joined option ${JSON.stringify(token)} before --`, () => {
+      let valueParserCalls = 0;
+      const parser = argument({
+        ...string(),
+        parse(input: string) {
+          valueParserCalls++;
+          return { success: true as const, value: input };
+        },
+      });
+      const result = parser.parse({
+        buffer: [token],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(!result.success);
+      if (!result.success) {
+        assert.equal(result.consumed, 0);
+        assert.deepEqual(
+          result.error,
+          message`Expected an argument, but got an option: ${{
+            type: "optionName",
+            optionName: name,
+          }}.`,
+        );
+      }
+      assert.equal(valueParserCalls, 0);
+    });
+
+    it(`should accept joined option ${JSON.stringify(token)} after --`, () => {
+      const parser = argument(string());
+      assert.deepEqual(parseSync(parser, ["--", token]), {
+        success: true,
+        value: token,
+      });
+      const result = parser.parse({
+        buffer: [token],
+        state: parser.initialState,
+        optionsTerminated: true,
+        usage: parser.usage,
+      });
+      assert.ok(result.success);
+      if (result.success) {
+        assert.deepEqual(parser.complete(result.next.state), {
+          success: true,
+          value: token,
+        });
+      }
+    });
+  }
+
+  it("should preserve non-option positional spellings", () => {
+    for (
+      const token of [
+        "-",
+        "-.5",
+        "-name.ext",
+        "-name:value",
+        "-=v",
+        "--=v",
+        "--=",
+        "+x=v",
+        "/X:v",
+        "--naïve=1",
+        "--unknown\n",
+      ]
+    ) {
+      assert.deepEqual(parseSync(argument(string()), [token]), {
+        success: true,
+        value: token,
+      });
+    }
+  });
+
+  for (const format of ["equalsOnly", "nextToken"] as const) {
+    it(`should route joined options to ${format} alongside paths`, () => {
+      const parser = object({
+        paths: multiple(argument(string())),
+        extra: passThrough({ format }),
+      });
+      for (const token of ["--unknown=v", "--unknown=", "--unknown=a\nb"]) {
+        assert.deepEqual(parseSync(parser, [token, "a.txt"]), {
+          success: true,
+          value: { paths: ["a.txt"], extra: [token] },
+        });
+        assert.deepEqual(parseSync(parser, ["a.txt", token, "b.txt"]), {
+          success: true,
+          value: { paths: ["a.txt", "b.txt"], extra: [token] },
+        });
+        assert.deepEqual(parseSync(parser, ["--", token, "a.txt"]), {
+          success: true,
+          value: { paths: [token, "a.txt"], extra: [] },
+        });
+      }
+    });
+  }
+
+  it("should keep the two-token spelling in nextToken capture", () => {
+    assert.deepEqual(
+      parseSync(
+        object({
+          paths: multiple(argument(string())),
+          extra: passThrough({ format: "nextToken" }),
+        }),
+        ["--unknown", "v", "a.txt"],
+      ),
+      {
+        success: true,
+        value: { paths: ["a.txt"], extra: ["--unknown", "v"] },
+      },
+    );
+  });
+
+  it("should keep known joined options ahead of paths and capture", () => {
+    const parser = object({
+      name: option("--name", string()),
+      paths: multiple(argument(string())),
+      extra: passThrough({ format: "nextToken" }),
+    });
+    assert.deepEqual(parseSync(parser, ["--name=v", "a.txt"]), {
+      success: true,
+      value: { name: "v", paths: ["a.txt"], extra: [] },
+    });
+  });
+
+  it("should preserve known Boolean attached-value errors alongside paths", () => {
+    const expected = parseSync(option("--debug"), ["--debug=1"]);
+    assert.ok(!expected.success);
+    for (const capture of [false, true]) {
+      const parser = capture
+        ? object({
+          debug: option("--debug"),
+          paths: multiple(argument(string())),
+          extra: passThrough({ format: "nextToken" }),
+        })
+        : object({
+          debug: option("--debug"),
+          paths: multiple(argument(string())),
+        });
+      assert.deepEqual(parseSync(parser, ["--debug=1"]), expected);
+    }
+  });
+
+  it("should forward short equals tokens only with nextToken capture", () => {
+    const parser = object({
+      x: optional(option("-x", string())),
+      paths: multiple(argument(string())),
+      extra: passThrough({ format: "nextToken" }),
+    });
+    assert.deepEqual(parseSync(parser, ["-x=v", "a.txt"]), {
+      success: true,
+      value: { x: undefined, paths: ["a.txt"], extra: ["-x=v"] },
+    });
+    assert.ok(
+      !parseSync(
+        object({
+          paths: multiple(argument(string())),
+          extra: passThrough(),
+        }),
+        ["-x=v"],
+      ).success,
+    );
+  });
+
+  it("should route joined options alongside tuple positionals", () => {
+    const parser = tuple([
+      multiple(argument(string())),
+      passThrough({ format: "nextToken" }),
+    ]);
+    assert.deepEqual(parseSync(parser, ["--unknown=v", "a.txt"]), {
+      success: true,
+      value: [["a.txt"], ["--unknown=v"]],
+    });
+  });
+
+  it("should route joined options alongside async positionals", async () => {
+    const parser = object({
+      paths: multiple(argument(asyncFileSuggestingParser())),
+      extra: passThrough({ format: "nextToken" }),
+    });
+    assert.deepEqual(await parseAsync(parser, ["--unknown=v", "a.txt"]), {
+      success: true,
+      value: { paths: ["a.txt"], extra: ["--unknown=v"] },
+    });
+    assert.deepEqual(await parseAsync(parser, ["--", "--unknown=v"]), {
+      success: true,
+      value: { paths: ["--unknown=v"], extra: [] },
+    });
+  });
+});
+
 describe("passThrough", () => {
   describe("equalsOnly format (default)", () => {
     it("should return plain array without annotation symbols", () => {

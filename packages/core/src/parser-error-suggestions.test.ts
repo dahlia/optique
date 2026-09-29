@@ -5,6 +5,7 @@ import {
   injectAnnotations,
 } from "#src/internal/annotations.ts";
 import {
+  argument,
   command,
   constant,
   flag,
@@ -14,8 +15,11 @@ import {
   or,
   type ParserContext,
 } from "#src/index.ts";
-import { formatMessage } from "#src/message.ts";
-import { string } from "#src/valueparser.ts";
+import { formatMessage, type Message, message } from "#src/message.ts";
+import { string, type ValueParser } from "#src/valueparser.ts";
+import { multiple, optional } from "#src/modifiers.ts";
+import { type Mode, parseAsync, parseSync } from "#src/parser.ts";
+import { findSimilar } from "#src/suggestion.ts";
 
 const issue184Annotations = {
   [Symbol.for("@test/issue-184/error-suggestions")]: true,
@@ -664,4 +668,130 @@ describe("Parser error suggestions", () => {
       }
     });
   });
+});
+
+const asyncString: ValueParser<"async", string> = {
+  mode: "async",
+  metavar: "STRING",
+  placeholder: "",
+  parse: (input) => Promise.resolve({ success: true, value: input }),
+  format: (value) => value,
+};
+
+describe("eager suggestion compatibility", () => {
+  for (const literal of [message`No match.`, [] satisfies Message]) {
+    for (
+      const parser of [
+        option("--verbose", { errors: { noMatch: literal } }),
+        option("--verbose", string(), { errors: { noMatch: literal } }),
+        option("--verbose", asyncString, { errors: { noMatch: literal } }),
+        flag("--verbose", { errors: { noMatch: literal } }),
+      ]
+    ) {
+      it(`skips candidate traversal for ${parser.mode} literal noMatch (${literal.length} terms)`, async () => {
+        let traversals = 0;
+        const result = await parser.parse({
+          buffer: ["--verbos"],
+          state: undefined,
+          optionsTerminated: false,
+          usage: [{
+            type: "option",
+            get names() {
+              traversals++;
+              return ["--verbose"] as const;
+            },
+          }],
+        });
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.equal(result.consumed, 0);
+          assert.strictEqual(result.error, literal);
+        }
+        assert.equal(traversals, 0);
+      });
+    }
+  }
+
+  interface CallbackCall {
+    readonly field: string;
+    readonly token: string;
+    readonly suggestions: readonly string[];
+  }
+  function pathParser<M extends Mode>(
+    valueParser: ValueParser<M, string>,
+    calls: CallbackCall[],
+  ) {
+    const errors = (field: string) => ({
+      noMatch: (token: string, suggestions: readonly string[]) => {
+        calls.push({ field, token, suggestions });
+        return message`No match.`;
+      },
+    });
+    return object({
+      alpha: optional(
+        option("--alpha", valueParser, { errors: errors("alpha") }),
+      ),
+      beta: optional(option("--beta", valueParser, { errors: errors("beta") })),
+      verbose: optional(flag("--verbose", { errors: errors("verbose") })),
+      paths: multiple(argument(valueParser)),
+    });
+  }
+
+  for (const mode of ["sync", "async"] as const) {
+    it(`preserves callback count, order and suggestions in ${mode} compositions`, async () => {
+      const calls: CallbackCall[] = [];
+      const args = ["alpha", "src/filename.ts", "alpha"];
+      const result = mode === "sync"
+        ? parseSync(pathParser(string(), calls), args)
+        : await parseAsync(pathParser(asyncString, calls), args);
+      assert.ok(result.success);
+      if (result.success) assert.deepEqual(result.value.paths, args);
+      const names = ["--alpha", "--beta", "--verbose"];
+      assert.deepEqual(
+        calls,
+        args.flatMap((token) =>
+          ["alpha", "beta", "verbose"].map((field) => ({
+            field,
+            token,
+            suggestions: findSimilar(token, names),
+          }))
+        ),
+      );
+      assert.ok(calls[0].suggestions.length > 0);
+      for (let i = 1; i < calls.length; i++) {
+        assert.notStrictEqual(calls[i].suggestions, calls[i - 1].suggestions);
+      }
+    });
+
+    it(`preserves literal errors and typo diagnostics through ${mode} multiple()`, async () => {
+      const literal = message`Unknown option.`;
+      const custom = mode === "sync"
+        ? parseSync(
+          multiple(
+            option("--verbose", string(), { errors: { noMatch: literal } }),
+          ),
+          ["--verbos"],
+        )
+        : await parseAsync(
+          multiple(
+            option("--verbose", asyncString, { errors: { noMatch: literal } }),
+          ),
+          ["--verbos"],
+        );
+      assert.ok(!custom.success);
+      if (!custom.success) assert.strictEqual(custom.error, literal);
+      const defaultError = mode === "sync"
+        ? parseSync(multiple(option("--verbose", string())), ["--verbos"])
+        : await parseAsync(multiple(option("--verbose", asyncString)), [
+          "--verbos",
+        ]);
+      assert.ok(!defaultError.success);
+      if (!defaultError.success) {
+        assert.equal(
+          formatMessage(defaultError.error),
+          "No matched option for `--verbos`.\n\nDid you mean `--verbose`?",
+        );
+      }
+    });
+  }
 });
