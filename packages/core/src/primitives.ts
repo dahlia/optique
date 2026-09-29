@@ -3004,7 +3004,7 @@ export function command<M extends Mode, T, TState>(
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  definePassThroughPriority(result, [parser], (state) => {
+  definePassThroughPriority(result, [parser], (state, token) => {
     const active = normalizeCommandState(state);
     if (active == null) return undefined;
     const childState = active[0] === "matched"
@@ -3013,6 +3013,7 @@ export function command<M extends Mode, T, TState>(
     return getPassThroughPriority(
       parser,
       getCommandParseChildState(state, childState, parser),
+      token,
     );
   });
   defineOptionMatch<CommandState<TState>>(result, (state, token) => {
@@ -3130,7 +3131,7 @@ export function passThrough(
   const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
   const equalsOptionPattern = /^--[a-z0-9-]+=/i;
 
-  return {
+  const result: Parser<"sync", readonly string[], readonly string[]> = {
     $valueType: [],
     $stateType: [],
     mode: "sync",
@@ -3301,4 +3302,12 @@ export function passThrough(
       return `passThrough(${format})`;
     },
   };
+  definePassThroughPriority(result, [result], (_state, token) => {
+    if (token == null || format === "greedy") return result.priority;
+    const accepts = format === "equalsOnly"
+      ? equalsOptionPattern.test(token)
+      : format === "nextToken" && optionPattern.test(token);
+    return accepts ? result.priority : undefined;
+  });
+  return result;
 }

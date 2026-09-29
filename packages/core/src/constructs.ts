@@ -304,15 +304,30 @@ function orderBeforePassThrough<TPair>(
       getOptionMatch(getParser(pair), getState(pair), token),
     ] as const
   ));
+  const normalizedOptions = new Map<TPair, number>();
   const captures = new Map(pairs.flatMap((pair) => {
     if (!passThroughParsers.has(getParser(pair))) return [];
-    const priority = getPassThroughPriority(getParser(pair), getState(pair));
+    const priority = getPassThroughPriority(
+      getParser(pair),
+      getState(pair),
+      token,
+    );
     const match = matches.get(pair);
-    // A mixed container competes as capture only when capture would beat its
-    // own matching option. Its unrelated aggregate priority cannot decide.
-    return priority == null || (match != null && match.priority >= priority)
-      ? []
-      : [[pair, priority] as const];
+    // A rejected high capture must not raise a matching option's priority,
+    // including when a lower capture still accepts this token.
+    if (match != null && (priority == null || match.priority >= priority)) {
+      const unfiltered = getPassThroughPriority(
+        getParser(pair),
+        getState(pair),
+      );
+      if (
+        priority == null || (unfiltered != null && unfiltered > match.priority)
+      ) {
+        normalizedOptions.set(pair, match.priority);
+      }
+      return [];
+    }
+    return priority == null ? [] : [[pair, priority] as const];
   }));
   const matching = pairs.filter((pair) => !captures.has(pair))
     .flatMap((pair) => {
@@ -330,9 +345,34 @@ function orderBeforePassThrough<TPair>(
     );
   }
   const matchingPriority = Math.max(...matching.map((match) => match.priority));
-  // Keep ordinary siblings in their original order. Only capture moves across
-  // the matching group, so unrelated container priorities retain their meaning.
-  const ordinary = pairs.filter((pair) => !captures.has(pair));
+  // Preserve ordinary siblings' relative order. A container whose capture is
+  // rejected competes among matching options at its own option priority.
+  const ordinary = pairs.filter((pair) =>
+    !captures.has(pair) && !normalizedOptions.has(pair)
+  );
+  const positions = new Map(pairs.map((pair, index) => [pair, index] as const));
+  for (
+    const [pair, priority] of [...normalizedOptions].sort((a, b) => b[1] - a[1])
+  ) {
+    let insertion = ordinary.findIndex((candidate) => {
+      const match = matches.get(candidate);
+      return match != null && (match.priority < priority ||
+        (match.priority === priority &&
+          positions.get(pair)! < positions.get(candidate)!));
+    });
+    if (insertion < 0) {
+      const lastMatch = ordinary.findLastIndex((candidate) =>
+        matches.get(candidate) != null
+      );
+      insertion = lastMatch >= 0
+        ? lastMatch + 1
+        : ordinary.findIndex((candidate) =>
+          positions.get(candidate)! > positions.get(pair)!
+        );
+      if (insertion < 0) insertion = ordinary.length;
+    }
+    ordinary.splice(insertion, 0, pair);
+  }
   const first = ordinary.findIndex((pair) => matches.get(pair) != null);
   const last = ordinary.findLastIndex((pair) => matches.get(pair) != null);
   const before = orderedCaptures.filter(([, priority]) =>
@@ -4150,7 +4190,7 @@ export function or(
         );
       })),
   );
-  definePassThroughPriority(singleResult, parsers, (state) => {
+  definePassThroughPriority(singleResult, parsers, (state, token) => {
     const active = normalizeExclusiveState(state);
     return combinePassThroughPriorities(
       // Parsing still evaluates other alternatives. or() validates replay
@@ -4161,6 +4201,7 @@ export function or(
           active?.[0] === index && active[1].success
             ? active[1].next.state
             : parser.initialState,
+          token,
         )
       ),
     );
@@ -4903,7 +4944,7 @@ export function longestMatch(
         );
       })),
   );
-  definePassThroughPriority(multiResult, parsers, (state) => {
+  definePassThroughPriority(multiResult, parsers, (state, token) => {
     const active = normalizeExclusiveState(state);
     return combinePassThroughPriorities(
       // Parsing still evaluates other alternatives. or() validates replay
@@ -4914,6 +4955,7 @@ export function longestMatch(
           active?.[0] === index && active[1].success
             ? active[1].next.state
             : parser.initialState,
+          token,
         )
       ),
     );
@@ -6254,7 +6296,11 @@ export function object<
               parser,
             ),
             consumingFailure,
-            getPassThroughPriority(parser, getFieldState(field, parser)),
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
 
@@ -6350,7 +6396,11 @@ export function object<
               parser,
             ),
             consumingFailure,
-            getPassThroughPriority(parser, getFieldState(field, parser)),
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
         if (
@@ -6471,7 +6521,11 @@ export function object<
               parser,
             ),
             consumingFailure,
-            getPassThroughPriority(parser, getFieldState(field, parser)),
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
         const result = await resultOrPromise;
@@ -6558,7 +6612,11 @@ export function object<
               parser,
             ),
             consumingFailure,
-            getPassThroughPriority(parser, getFieldState(field, parser)),
+            getPassThroughPriority(
+              parser,
+              getFieldState(field, parser),
+              currentContext.buffer[0],
+            ),
           ),
         );
         const result = await resultOrPromise;
@@ -7328,7 +7386,7 @@ export function object<
   definePassThroughPriority(
     objectParser,
     parserPairs.map(([, parser]) => parser),
-    (state) =>
+    (state, token) =>
       combinePassThroughPriorities(
         parserPairs.map(([field, parser]) =>
           getPassThroughPriority(
@@ -7338,6 +7396,7 @@ export function object<
               typeof field === "number" ? String(field) : field,
               parser,
             ),
+            token,
           )
         ),
       ),
@@ -7999,7 +8058,11 @@ export function tuple<
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
-            getPassThroughPriority(parser, stateArray[index]),
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
           ),
         );
 
@@ -8081,7 +8144,11 @@ export function tuple<
                 parser,
               ),
               consumingFailure,
-              getPassThroughPriority(parser, stateArray[index]),
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
             ),
           );
 
@@ -8190,7 +8257,11 @@ export function tuple<
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
-            getPassThroughPriority(parser, stateArray[index]),
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
           ),
         );
         const result = await resultOrPromise;
@@ -8273,7 +8344,11 @@ export function tuple<
                 parser,
               ),
               consumingFailure,
-              getPassThroughPriority(parser, stateArray[index]),
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
             ),
           );
           const result = await resultOrPromise;
@@ -8839,12 +8914,13 @@ export function tuple<
   definePassThroughPriority(
     tupleParser,
     parsers,
-    (state) =>
+    (state, token) =>
       combinePassThroughPriorities(
         parsers.map((parser, index) =>
           getPassThroughPriority(
             parser,
             getAnnotatedChildState(state, state[index], parser),
+            token,
           )
         ),
       ),
@@ -10862,12 +10938,13 @@ export function merge(
   definePassThroughPriority(
     mergeParser,
     parsers,
-    (state) =>
+    (state, token) =>
       combinePassThroughPriorities(
         sorted.map(([parser], index) =>
           getPassThroughPriority(
             parser,
             extractParserState(parser, state, index),
+            token,
           )
         ),
       ),
@@ -11520,7 +11597,11 @@ export function concat(
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
-            getPassThroughPriority(parser, stateArray[index]),
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
           ),
         );
 
@@ -11602,7 +11683,11 @@ export function concat(
                 parser,
               ),
               consumingFailure,
-              getPassThroughPriority(parser, stateArray[index]),
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
             ),
           );
 
@@ -11709,7 +11794,11 @@ export function concat(
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
-            getPassThroughPriority(parser, stateArray[index]),
+            getPassThroughPriority(
+              parser,
+              stateArray[index],
+              currentContext.buffer[0],
+            ),
           ),
         );
 
@@ -11791,7 +11880,11 @@ export function concat(
                 parser,
               ),
               consumingFailure,
-              getPassThroughPriority(parser, stateArray[index]),
+              getPassThroughPriority(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              ),
             ),
           );
 
@@ -12352,12 +12445,13 @@ export function concat(
   definePassThroughPriority(
     concatParser,
     parsers,
-    (state) =>
+    (state, token) =>
       combinePassThroughPriorities(
         parsers.map((parser, index) =>
           getPassThroughPriority(
             parser,
             getAnnotatedChildState(state, state[index], parser),
+            token,
           )
         ),
       ),
@@ -12603,7 +12697,7 @@ export function group<M extends Mode, TValue, TState>(
   definePassThroughPriority(
     groupParser,
     [parser],
-    (state) => getPassThroughPriority(parser, state),
+    (state, token) => getPassThroughPriority(parser, state, token),
   );
   return groupParser;
 }
@@ -15096,13 +15190,19 @@ export function conditional(
   definePassThroughPriority(conditionalParser, [
     discriminator,
     ...allBranchParsers,
-  ], (state) =>
+  ], (state, token) =>
     combinePassThroughPriorities([
       ...(state.selectedBranch == null
-        ? [getPassThroughPriority(discriminator, state.discriminatorState)]
+        ? [
+          getPassThroughPriority(
+            discriminator,
+            state.discriminatorState,
+            token,
+          ),
+        ]
         : []),
       ...reachableBranches(state).map(({ branch, state }) =>
-        getPassThroughPriority(branch, state)
+        getPassThroughPriority(branch, state, token)
       ),
     ]));
   defineOptionMatch<ConditionalState<string>>(

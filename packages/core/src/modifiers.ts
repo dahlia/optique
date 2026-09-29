@@ -1010,10 +1010,11 @@ export function optional<M extends Mode, TValue, TState>(
   definePassThroughPriority(
     optionalParser,
     [parser],
-    (state) =>
+    (state, token) =>
       getPassThroughPriority(
         parser,
         normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
       ),
   );
   // A known child succeeds even without input, so parsing wraps its state
@@ -1575,10 +1576,11 @@ export function withDefault<
   definePassThroughPriority(
     withDefaultParser,
     [parser],
-    (state) =>
+    (state, token) =>
       getPassThroughPriority(
         parser,
         normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
       ),
   );
   // A known child succeeds even without input, so parsing wraps its state
@@ -3037,11 +3039,11 @@ export function multiple<M extends Mode, TValue, TState>(
     const item = matchingItem(state);
     return item == null ? undefined : getOptionMatch(parser, item.state, token);
   });
-  definePassThroughPriority(resultParser, [parser], (state) => {
+  definePassThroughPriority(resultParser, [parser], (state, token) => {
     const item = matchingItem(state);
     return item == null
       ? undefined
-      : getPassThroughPriority(parser, item.state);
+      : getPassThroughPriority(parser, item.state, token);
   });
   return resultParser;
 }
@@ -3221,7 +3223,7 @@ export function nonEmpty<M extends Mode, T, TState>(
   definePassThroughPriority(
     nonEmptyParser,
     [parser],
-    (state) => getPassThroughPriority(parser, state),
+    (state, token) => getPassThroughPriority(parser, state, token),
   );
   return nonEmptyParser;
 }

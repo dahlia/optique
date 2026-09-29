@@ -9,6 +9,7 @@ import {
 } from "@optique/core/constructs";
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { parseAsync } from "@optique/core/parser";
+import { message } from "@optique/core/message";
 import {
   command,
   constant,
@@ -108,6 +109,82 @@ for (const mode of ["sync", "async"] as const) {
   });
   for (const outer of ["object", "tuple", "concat"] as const) {
     for (const inner of ["object", "tuple", "concat"] as const) {
+      it(`${mode} ${outer} excludes mixed ${inner} captures that reject the token`, async () => {
+        for (const format of ["equalsOnly", "nextToken", "greedy"] as const) {
+          for (const name of ["-m", "/m", "+m", "--message"] as const) {
+            const args = name === "--message"
+              ? ["--message=hello"]
+              : [name, "hello"];
+            const captures = format === "greedy" ||
+              (format === "equalsOnly"
+                ? name === "--message"
+                : name.startsWith("-"));
+            const matched = { ...optional(option(name, value)), priority: 5 };
+            const rest = group("Rest", {
+              ...passThrough({ format }),
+              priority: 15,
+            });
+            const mixed = inner === "object"
+              ? object({ matched, rest })
+              : inner === "tuple"
+              ? tuple([matched, rest])
+              : concat(tuple([matched]), tuple([rest]));
+            const known = { ...optional(option(name, value)), priority: 10 };
+            const parser = outer === "object"
+              ? object({ mixed, known }, { allowDuplicates: true })
+              : outer === "tuple"
+              ? tuple([mixed, known], { allowDuplicates: true })
+              : concat(tuple([mixed]), tuple([known]));
+            const captured = captures ? args : [];
+            const mixedValue = inner === "object"
+              ? { matched: undefined, rest: captured }
+              : [undefined, captured];
+            const knownValue = captures ? undefined : "hello";
+            assert.deepEqual(await parseAsync<unknown>(parser, args), {
+              success: true,
+              value: outer === "object"
+                ? { mixed: mixedValue, known: knownValue }
+                : [mixedValue, knownValue],
+            });
+          }
+        }
+      });
+      it(`${mode} ${outer} retains mixed ${inner} option order after a higher rejection`, async () => {
+        const matched = { ...optional(option("-m", value)), priority: 5 };
+        const rest = { ...passThrough({ format: "equalsOnly" }), priority: 15 };
+        const mixed = inner === "object"
+          ? object({ matched, rest })
+          : inner === "tuple"
+          ? tuple([matched, rest])
+          : concat(tuple([matched]), tuple([rest]));
+        const higherInner = optional(option("-m", string()));
+        const higher = {
+          ...higherInner,
+          parse(context) {
+            if (context.buffer[0] !== "-m") return higherInner.parse(context);
+            return {
+              success: false as const,
+              consumed: 1,
+              error: message`Rejected option.`,
+            };
+          },
+        } satisfies typeof higherInner;
+        const lower = { ...optional(option("-m", value)), priority: 1 };
+        const parser = outer === "object"
+          ? object({ mixed, higher, lower }, { allowDuplicates: true })
+          : outer === "tuple"
+          ? tuple([mixed, higher, lower], { allowDuplicates: true })
+          : concat(tuple([mixed]), tuple([higher]), tuple([lower]));
+        const mixedValue = inner === "object"
+          ? { matched: "hello", rest: [] }
+          : ["hello", []];
+        assert.deepEqual(await parseAsync<unknown>(parser, ["-m", "hello"]), {
+          success: true,
+          value: outer === "object"
+            ? { mixed: mixedValue, higher: undefined, lower: undefined }
+            : [mixedValue, undefined, undefined],
+        });
+      });
       it(`${mode} ${outer} orders mixed ${inner} by its winning capture`, async () => {
         for (const knownPriority of [5, 15, 20]) {
           for (const unrelatedPriority of [0, 25]) {
@@ -152,6 +229,26 @@ for (const mode of ["sync", "async"] as const) {
         }
       });
     }
+    it(`${mode} ${outer} excludes a rejected capture above an eligible lower lane`, async () => {
+      const mixed = object({
+        matched: { ...optional(option("-m", value)), priority: 5 },
+        rejected: { ...passThrough({ format: "equalsOnly" }), priority: 15 },
+        eligible: { ...passThrough({ format: "nextToken" }), priority: 1 },
+      });
+      const known = optional(option("-m", value));
+      const parser = outer === "object"
+        ? object({ mixed, known }, { allowDuplicates: true })
+        : outer === "tuple"
+        ? tuple([mixed, known], { allowDuplicates: true })
+        : concat(tuple([mixed]), tuple([known]));
+      const mixedValue = { matched: undefined, rejected: [], eligible: [] };
+      assert.deepEqual(await parseAsync<unknown>(parser, ["-m", "hello"]), {
+        success: true,
+        value: outer === "object"
+          ? { mixed: mixedValue, known: "hello" }
+          : [mixedValue, "hello"],
+      });
+    });
     it(`${mode} ${outer} orders competing captures inside mixed containers`, async () => {
       const mixed = object({
         unrelated: {

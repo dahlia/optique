@@ -230,6 +230,7 @@ export function delegateOptionParsing<TOuterState, TInnerState>(
   definePassThroughPriority(
     wrapper,
     [inner],
-    (state) => getPassThroughPriority(inner, getInnerState(state)),
+    (state, token) =>
+      getPassThroughPriority(inner, getInnerState(state), token),
   );
 }

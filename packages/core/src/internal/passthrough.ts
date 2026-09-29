@@ -127,7 +127,7 @@ type PrioritySource = Pick<
 interface CapturePriority<TState> {
   readonly ownerPriority: number;
   readonly priority: number;
-  readonly getPriority?: (state: TState) => number | undefined;
+  readonly getPriority?: (state: TState, token?: string) => number | undefined;
 }
 
 /** Checks for capture through usage-preserving wrappers. @internal */
@@ -143,6 +143,8 @@ export function hasPassThroughUsage(usage: Usage): boolean {
 /**
  * Gets the priority of reachable capture, respecting an explicit override.
  * @param parser The parser whose capture priority is needed.
+ * @param state The current parser state.
+ * @param token The current token, omitted for an unfiltered priority lookup.
  * @returns The capture priority, or undefined when capture is absent.
  * @internal
  */
@@ -152,6 +154,7 @@ export function getPassThroughPriority<TState>(
     "priority" | "usage" | "initialState"
   >,
   state: TState = parser.initialState,
+  token?: string,
 ): number | undefined {
   if (!hasPassThroughUsage(parser.usage)) return undefined;
   const annotated: typeof parser & {
@@ -161,7 +164,7 @@ export function getPassThroughPriority<TState>(
   if (hint == null) return parser.priority;
   const priority = hint.getPriority == null
     ? hint.priority
-    : hint.getPriority(state);
+    : hint.getPriority(state, token);
   return priority == null
     ? undefined
     : hint.ownerPriority === parser.priority
@@ -179,7 +182,7 @@ export function getPassThroughPriority<TState>(
 export function definePassThroughPriority<TState>(
   parser: Pick<Parser<Mode, unknown, TState>, "priority" | "initialState">,
   children: readonly PrioritySource[],
-  getPriority?: (state: TState) => number | undefined,
+  getPriority?: (state: TState, token?: string) => number | undefined,
 ): void {
   const priorities = children.filter((child) =>
     hasPassThroughUsage(child.usage)
