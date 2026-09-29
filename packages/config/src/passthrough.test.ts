@@ -1,7 +1,12 @@
-import { concat, object, tuple } from "@optique/core/constructs";
+import { concat, longestMatch, object, tuple } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";
 import { parseAsync } from "@optique/core/parser";
-import { command, option, passThrough } from "@optique/core/primitives";
+import {
+  command,
+  constant,
+  option,
+  passThrough,
+} from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 import assert from "node:assert/strict";
 import { it } from "node:test";
@@ -52,6 +57,35 @@ for (const outer of ["object", "tuple", "concat"] as const) {
     assert.deepEqual(
       await parseAsync<unknown>(parser, ["run", "-m"]),
       expected,
+    );
+  });
+}
+
+for (const outer of ["object", "tuple", "concat"] as const) {
+  it(`config ${outer} preserves errors through a nested zero-success fallback`, async () => {
+    const known = option("-m", string());
+    const inner = optional(
+      object({ alt: longestMatch(known, constant(undefined)) }),
+    );
+    const bound = bindConfig(inner, {
+      context: createConfigContext({
+        schema: z.object({ options: z.unknown().optional() }),
+      }),
+      key: "options",
+      default: { alt: undefined },
+    });
+    const rest = passThrough({ format: "nextToken" });
+    const parser = outer === "object"
+      ? object({ bound, rest })
+      : outer === "tuple"
+      ? tuple([bound, rest])
+      : concat(tuple([bound]), tuple([rest]));
+    assert.deepEqual(
+      await parseAsync<unknown>(parser, ["-m"]),
+      await parseAsync<unknown>(known, ["-m"]),
+    );
+    assert.ok(
+      (await parseAsync<unknown>(parser, ["--unknown", "value"])).success,
     );
   });
 }

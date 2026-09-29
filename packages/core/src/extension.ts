@@ -10,12 +10,7 @@
  */
 
 import { inheritOptionScope as inheritScope } from "./short-option.ts";
-import {
-  defineOptionMatch,
-  definePassThroughPriority,
-  getOptionMatch,
-  getPassThroughPriority,
-} from "./internal/passthrough.ts";
+import { defineReachableChildren } from "./internal/passthrough.ts";
 
 import type { Mode, Parser } from "./parser.ts";
 import {
@@ -242,14 +237,8 @@ export function delegateOptionParsing<TOuterState, TInnerState>(
   inner: Parser<Mode, unknown, TInnerState>,
   getInnerState: (state: TOuterState) => TInnerState,
 ): void {
-  defineOptionMatch(
-    wrapper,
-    (state, token) => getOptionMatch(inner, getInnerState(state), token),
-  );
-  definePassThroughPriority(
-    wrapper,
-    [inner],
-    (state, token) =>
-      getPassThroughPriority(inner, getInnerState(state), token),
-  );
+  defineReachableChildren(wrapper, [inner], (state) => [{
+    parser: inner,
+    state: getInnerState(state),
+  }]);
 }

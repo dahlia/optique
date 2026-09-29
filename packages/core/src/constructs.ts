@@ -10,11 +10,8 @@ import {
   withParserOptionScope,
 } from "./short-option.ts";
 import {
-  combineOptionMatches,
-  combinePassThroughPriorities,
   type ConsumingFailure,
-  defineOptionMatch,
-  definePassThroughPriority,
+  defineReachableChildren,
   delegateKnownCompletion,
   getKnownCompletion,
   getOptionMatch,
@@ -25,6 +22,7 @@ import {
   retainConsumingFailure,
   retainConsumingFailureHint,
   withPassThroughFailure,
+  withReturnedConsumingFailure,
 } from "./internal/passthrough.ts";
 import {
   annotationViewTargets,
@@ -2101,9 +2099,14 @@ function analyzeNoMatchContext(
  * construction. This is a programmer error, not a user error.
  */
 export class DuplicateOptionError extends Error {
+  /** The option name shared by multiple fields. */
+  readonly optionName: string;
+  /** The fields declaring the option. */
+  readonly sources: readonly (string | symbol)[];
+
   constructor(
-    public readonly optionName: string,
-    public readonly sources: readonly (string | symbol)[],
+    optionName: string,
+    sources: readonly (string | symbol)[],
   ) {
     const sourceNames = sources.map((s) =>
       typeof s === "symbol" ? s.description ?? s.toString() : s
@@ -2114,6 +2117,8 @@ export class DuplicateOptionError extends Error {
         `parser combinator.`,
     );
     this.name = "DuplicateOptionError";
+    this.optionName = optionName;
+    this.sources = sources;
   }
 }
 
@@ -2122,9 +2127,12 @@ export class DuplicateOptionError extends Error {
  * during parser construction. This is a programmer error, not a user error.
  */
 class DuplicateCommandNameError extends TypeError {
+  readonly commandName: string;
+  readonly sources: readonly (string | symbol)[];
+
   constructor(
-    public readonly commandName: string,
-    public readonly sources: readonly (string | symbol)[],
+    commandName: string,
+    sources: readonly (string | symbol)[],
   ) {
     const sourceNames = sources.map((s) =>
       typeof s === "symbol" ? s.description ?? s.toString() : s
@@ -2134,6 +2142,8 @@ class DuplicateCommandNameError extends TypeError {
         `${sourceNames.join(", ")}. Each command name or alias must be ` +
         `unique within active parser alternatives.`,
     );
+    this.commandName = commandName;
+    this.sources = sources;
   }
 }
 
@@ -2296,6 +2306,35 @@ interface ExclusiveErrorOptions {
   noMatch?: Message | ((context: NoMatchContext) => Message);
   unexpectedInput?: Message | ((token: string) => Message);
   suggestions?: (suggestions: readonly string[]) => Message;
+}
+
+/** Potential alternatives; only parsing decides whether replay can switch. */
+function selectExclusiveChildren<M extends Mode>(
+  parsers: readonly Parser<M, unknown, unknown>[],
+  state: unknown,
+  activeFirst = false,
+) {
+  const active = normalizeExclusiveState(state);
+  const children = parsers.map((parser, index) => ({
+    parser,
+    index,
+    state: getParseChildState(
+      state,
+      active?.[0] === index && active[1].success
+        ? active[1].next.state
+        : parser.initialState,
+      parser,
+    ),
+  }));
+  return activeFirst
+    ? children.sort((a, b) =>
+      active?.[0] === a.index
+        ? -1
+        : active?.[0] === b.index
+        ? 1
+        : a.index - b.index
+    )
+    : children;
 }
 
 function normalizeExclusiveState(state: unknown): ExclusiveState {
@@ -4466,11 +4505,10 @@ export function or(
   ): ParseResult => {
     let error = getInitialError(context);
     const activeState = normalizeExclusiveState(context.state);
-    const orderedParsers = syncParsers.map((p, i) =>
-      [p, i] as [Parser<"sync", unknown, unknown>, number]
-    );
-    orderedParsers.sort(([_, a], [__, b]) =>
-      activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
+    const orderedParsers = selectExclusiveChildren(
+      syncParsers,
+      context.state,
+      true,
     );
     // Track zero-consuming successful branches as a fallback.
     // Only non-catch-all branches qualify (acceptingAnyToken excludes
@@ -4496,18 +4534,24 @@ export function or(
       | (ParserResult<unknown> & { success: true })
       | null = null;
     let provisionalAmbiguous = false;
-    for (const [parser, i] of orderedParsers) {
-      const result = parser.parse(
-        withChildContext(
-          forkOptionScope(context),
-          i,
-          activeState == null || activeState[0] !== i ||
-            !activeState[1].success
-            ? parser.initialState
-            : activeState[1].next.state,
-          parser,
-        ),
+    for (const { parser, index: i, state: childState } of orderedParsers) {
+      const childContext = withChildContext(
+        forkOptionScope(context),
+        i,
+        childState,
+        parser,
       );
+      const result = parser.parse(childContext);
+      if (result.success && result.consumed.length === 0) {
+        const own = retainConsumingFailureHint(
+          undefined,
+          childContext,
+          result.next,
+        );
+        if (own != null && error.consumed < own.failure.consumed) {
+          error = own.failure;
+        }
+      }
       if (isOptionsTerminatorOnlyResult(context, result)) {
         if (
           activeState?.[0] === i && activeState[1].success &&
@@ -4888,11 +4932,10 @@ export function or(
   ): Promise<ParseResult> => {
     let error = getInitialError(context);
     const activeState = normalizeExclusiveState(context.state);
-    const orderedParsers = parsers.map((p, i) =>
-      [p, i] as [Parser<Mode, unknown, unknown>, number]
-    );
-    orderedParsers.sort(([_, a], [__, b]) =>
-      activeState?.[0] === a ? -1 : activeState?.[0] === b ? 1 : a - b
+    const orderedParsers = selectExclusiveChildren(
+      parsers,
+      context.state,
+      true,
     );
     // Track zero-consuming successful branches (see sync counterpart).
     let zeroConsumedBranch: {
@@ -4911,19 +4954,25 @@ export function or(
       | (ParserResult<unknown> & { success: true })
       | null = null;
     let provisionalAmbiguous = false;
-    for (const [parser, i] of orderedParsers) {
-      const resultOrPromise = parser.parse(
-        withChildContext(
-          forkOptionScope(context),
-          i,
-          activeState == null || activeState[0] !== i ||
-            !activeState[1].success
-            ? parser.initialState
-            : activeState[1].next.state,
-          parser,
-        ),
+    for (const { parser, index: i, state: childState } of orderedParsers) {
+      const childContext = withChildContext(
+        forkOptionScope(context),
+        i,
+        childState,
+        parser,
       );
+      const resultOrPromise = parser.parse(childContext);
       const result = await resultOrPromise;
+      if (result.success && result.consumed.length === 0) {
+        const own = retainConsumingFailureHint(
+          undefined,
+          childContext,
+          result.next,
+        );
+        if (own != null && error.consumed < own.failure.consumed) {
+          error = own.failure;
+        }
+      }
       if (isOptionsTerminatorOnlyResult(context, result)) {
         if (
           activeState?.[0] === i && activeState[1].success &&
@@ -5377,36 +5426,11 @@ export function or(
   // reasoning applies to validateValue (#414): a fallback value may
   // belong to any branch, so revalidating through a single arbitrary
   // branch would reject values that another branch would accept.
-  defineOptionMatch<OrState>(
+  defineReachableChildren(
     singleResult,
-    (state, token) =>
-      combineOptionMatches(parsers.map((parser, index) => {
-        const active = normalizeExclusiveState(state);
-        return getOptionMatch(
-          parser,
-          active?.[0] === index && active[1].success
-            ? active[1].next.state
-            : parser.initialState,
-          token,
-        );
-      })),
+    parsers,
+    (state) => selectExclusiveChildren(parsers, state, true),
   );
-  definePassThroughPriority(singleResult, parsers, (state, token) => {
-    const active = normalizeExclusiveState(state);
-    return combinePassThroughPriorities(
-      // Parsing still evaluates other alternatives. or() validates replay
-      // before switching; longestMatch() compares every branch each time.
-      parsers.map((parser, index) =>
-        getPassThroughPriority(
-          parser,
-          active?.[0] === index && active[1].success
-            ? active[1].next.state
-            : parser.initialState,
-          token,
-        )
-      ),
-    );
-  });
   return fluent(
     scopeParser(
       singleResult as Parser<
@@ -5780,7 +5804,7 @@ function createLongestMatch(
         ],
       };
     const next = selectedResult.consumed.length === 0
-      ? withPassThroughFailure(selectedResult.next, consumingFailure)
+      ? withReturnedConsumingFailure(selectedResult.next, consumingFailure)
       : selectedResult.next;
     const parser = parsers[match.index];
     const mergedExec = mergeChildExec(context.exec, next.exec);
@@ -5884,18 +5908,18 @@ function createLongestMatch(
     const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
     let consumingFailure: ConsumingFailure | undefined;
-    const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
-    for (let i = 0; i < syncParsers.length; i++) {
-      const parser = syncParsers[i];
+    for (
+      const { parser, index: i, state: childState } of selectExclusiveChildren(
+        syncParsers,
+        context.state,
+      )
+    ) {
       const childContext = withChildContext(
         forkOptionScope(context),
         i,
-        activeState == null || activeState[0] !== i ||
-          !activeState[1].success
-          ? parser.initialState
-          : activeState[1].next.state,
+        childState,
         parser,
       );
       const result = parser.parse(childContext);
@@ -5917,6 +5941,12 @@ function createLongestMatch(
           context,
           result.next,
         );
+        if (
+          consumingFailure != null &&
+          error.consumed < consumingFailure.failure.consumed
+        ) {
+          error = consumingFailure.failure;
+        }
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
@@ -5980,18 +6010,18 @@ function createLongestMatch(
     const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
     let consumingFailure: ConsumingFailure | undefined;
-    const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
-    for (let i = 0; i < parsers.length; i++) {
-      const parser = parsers[i];
+    for (
+      const { parser, index: i, state: childState } of selectExclusiveChildren(
+        parsers,
+        context.state,
+      )
+    ) {
       const childContext = withChildContext(
         forkOptionScope(context),
         i,
-        activeState == null || activeState[0] !== i ||
-          !activeState[1].success
-          ? parser.initialState
-          : activeState[1].next.state,
+        childState,
         parser,
       );
       const resultOrPromise = parser.parse(childContext);
@@ -6014,6 +6044,12 @@ function createLongestMatch(
           context,
           result.next,
         );
+        if (
+          consumingFailure != null &&
+          error.consumed < consumingFailure.failure.consumed
+        ) {
+          error = consumingFailure.failure;
+        }
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
@@ -6160,36 +6196,11 @@ function createLongestMatch(
   // branch is unknown at default time—normalizing through the wrong
   // branch would produce values that differ from what parse() returns.
   // The same reasoning applies to validateValue (#414).
-  defineOptionMatch<LongestMatchState>(
+  defineReachableChildren(
     multiResult,
-    (state, token) =>
-      combineOptionMatches(parsers.map((parser, index) => {
-        const active = normalizeExclusiveState(state);
-        return getOptionMatch(
-          parser,
-          active?.[0] === index && active[1].success
-            ? active[1].next.state
-            : parser.initialState,
-          token,
-        );
-      })),
+    parsers,
+    (state) => selectExclusiveChildren(parsers, state, false),
   );
-  definePassThroughPriority(multiResult, parsers, (state, token) => {
-    const active = normalizeExclusiveState(state);
-    return combinePassThroughPriorities(
-      // Parsing still evaluates other alternatives. or() validates replay
-      // before switching; longestMatch() compares every branch each time.
-      parsers.map((parser, index) =>
-        getPassThroughPriority(
-          parser,
-          active?.[0] === index && active[1].success
-            ? active[1].next.state
-            : parser.initialState,
-          token,
-        )
-      ),
-    );
-  });
   return fluent(
     scopeParser(
       multiResult as Parser<
@@ -7508,7 +7519,11 @@ export function object<
   ): ParserResult<ObjectState> => {
     if (!result.success) return result;
     if (result.consumed.length === 0 && result.next.state === fieldState) {
-      return { success: true, next: context, consumed: [] };
+      return {
+        success: true,
+        next: { ...context, ...getPassThroughFailureHint(result.next) },
+        consumed: [],
+      };
     }
     adoptOptionScope(context, result.next);
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
@@ -7679,6 +7694,12 @@ export function object<
             currentContext,
             result.next,
           );
+          if (
+            consumingFailure != null &&
+            error.consumed < consumingFailure.failure.consumed
+          ) {
+            error = consumingFailure.failure;
+          }
         } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
@@ -7776,7 +7797,7 @@ export function object<
     if (anySuccess) {
       return {
         success: true,
-        next: withPassThroughFailure(currentContext, consumingFailure),
+        next: withReturnedConsumingFailure(currentContext, consumingFailure),
         consumed: allConsumed,
       };
     }
@@ -7922,6 +7943,12 @@ export function object<
             currentContext,
             result.next,
           );
+          if (
+            consumingFailure != null &&
+            error.consumed < consumingFailure.failure.consumed
+          ) {
+            error = consumingFailure.failure;
+          }
         } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
@@ -8010,7 +8037,7 @@ export function object<
     if (anySuccess) {
       return {
         success: true,
-        next: withPassThroughFailure(currentContext, consumingFailure),
+        next: withReturnedConsumingFailure(currentContext, consumingFailure),
         consumed: allConsumed,
       };
     }
@@ -8801,38 +8828,19 @@ export function object<
 
   defineParseLanes(objectParser, objectParseLanes);
   defineInheritedAnnotationParser(objectParser);
-  defineOptionMatch(
-    objectParser,
-    (state, token) =>
-      combineOptionMatches(parserPairs.map(([field, parser]) =>
-        getOptionMatch(
-          parser,
-          getAnnotatedFieldState(
-            state,
-            typeof field === "number" ? String(field) : field,
-            parser,
-          ),
-          token,
-        )
-      )),
-  );
-  definePassThroughPriority(
+  defineReachableChildren(
     objectParser,
     parserPairs.map(([, parser]) => parser),
-    (state, token) =>
-      combinePassThroughPriorities(
-        parserPairs.map(([field, parser]) =>
-          getPassThroughPriority(
-            parser,
-            getAnnotatedFieldState(
-              state,
-              typeof field === "number" ? String(field) : field,
-              parser,
-            ),
-            token,
-          )
-        ),
-      ),
+    (state) => {
+      const getFieldState = createFieldStateGetter(
+        state,
+        getObjectParseChildState,
+      );
+      return parserPairs.map(([field, parser]) => ({
+        parser,
+        state: getParseChildState(state, getFieldState(field, parser), parser),
+      }));
+    },
   );
   return fluent(
     scopeParser(
@@ -10348,6 +10356,12 @@ export function tuple<
             currentContext,
             result.next,
           );
+          if (
+            consumingFailure != null &&
+            error.consumed < consumingFailure.failure.consumed
+          ) {
+            error = consumingFailure.failure;
+          }
         } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
@@ -10442,7 +10456,7 @@ export function tuple<
 
     return {
       success: true,
-      next: withPassThroughFailure(currentContext, consumingFailure),
+      next: withReturnedConsumingFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -10548,6 +10562,12 @@ export function tuple<
             currentContext,
             result.next,
           );
+          if (
+            consumingFailure != null &&
+            error.consumed < consumingFailure.failure.consumed
+          ) {
+            error = consumingFailure.failure;
+          }
         } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
@@ -10643,7 +10663,7 @@ export function tuple<
 
     return {
       success: true,
-      next: withPassThroughFailure(currentContext, consumingFailure),
+      next: withReturnedConsumingFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -11209,30 +11229,14 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
-  defineOptionMatch(
-    tupleParser,
-    (state, token) =>
-      combineOptionMatches(parsers.map((parser, index) =>
-        getOptionMatch(
-          parser,
-          getAnnotatedChildState(state, state[index], parser),
-          token,
-        )
-      )),
-  );
-  definePassThroughPriority(
+  defineReachableChildren(
     tupleParser,
     parsers,
-    (state, token) =>
-      combinePassThroughPriorities(
-        parsers.map((parser, index) =>
-          getPassThroughPriority(
-            parser,
-            getAnnotatedChildState(state, state[index], parser),
-            token,
-          )
-        ),
-      ),
+    (state) =>
+      parsers.map((parser, index) => ({
+        parser,
+        state: getParseChildState(state, state[index], parser),
+      })),
   );
   return fluent(
     scopeParser(
@@ -12973,7 +12977,13 @@ export function merge(
           }
         }
         attemptedLane = true;
-        const result = lane.parse(currentContext) as MergeParseResult;
+        // Structural lane priority can come from an unrelated command.
+        // Let the actual capture decide whether it outranks this failure.
+        const childContext = withPassThroughFailure(
+          currentContext,
+          consumingFailure,
+        );
+        const result = lane.parse(childContext) as MergeParseResult;
         laneResults.set(lane, result);
         if (result.success && result.consumed.length > 0) {
           currentContext = result.next;
@@ -12986,6 +12996,21 @@ export function merge(
           }
           madeProgress = true;
           break;
+        }
+        if (result.success) {
+          const own = retainConsumingFailureHint(
+            undefined,
+            childContext,
+            result.next,
+          );
+          if (own != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              own.failure,
+              own.priority,
+            );
+            if (error.consumed < own.failure.consumed) error = own.failure;
+          }
         }
         if (!result.success) {
           if (
@@ -13046,7 +13071,7 @@ export function merge(
 
     return {
       success: true,
-      next: withPassThroughFailure(currentContext, consumingFailure),
+      next: withReturnedConsumingFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -13087,7 +13112,13 @@ export function merge(
           }
         }
         attemptedLane = true;
-        const result = await lane.parse(currentContext);
+        // Structural lane priority can come from an unrelated command.
+        // Let the actual capture decide whether it outranks this failure.
+        const childContext = withPassThroughFailure(
+          currentContext,
+          consumingFailure,
+        );
+        const result = await lane.parse(childContext);
         laneResults.set(lane, result);
         if (result.success && result.consumed.length > 0) {
           currentContext = result.next;
@@ -13100,6 +13131,21 @@ export function merge(
           }
           madeProgress = true;
           break;
+        }
+        if (result.success) {
+          const own = retainConsumingFailureHint(
+            undefined,
+            childContext,
+            result.next,
+          );
+          if (own != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              own.failure,
+              own.priority,
+            );
+            if (error.consumed < own.failure.consumed) error = own.failure;
+          }
         }
         if (!result.success) {
           if (
@@ -13160,7 +13206,7 @@ export function merge(
 
     return {
       success: true,
-      next: withPassThroughFailure(currentContext, consumingFailure),
+      next: withReturnedConsumingFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -14321,32 +14367,18 @@ export function merge(
   // ownership cannot be resolved from the value alone.
   defineParseLanes(mergeParser, mergeParseLanes);
   defineInheritedAnnotationParser(mergeParser);
-  defineOptionMatch(
-    mergeParser,
-    (state, token) =>
-      combineOptionMatches(
-        sorted.map(([parser], index) =>
-          getOptionMatch(
-            parser,
-            extractParserStateFromState(parser, state, index),
-            token,
-          )
-        ),
-      ),
-  );
-  definePassThroughPriority(
+  defineReachableChildren(
     mergeParser,
     parsers,
-    (state, token) =>
-      combinePassThroughPriorities(
-        sorted.map(([parser], index) =>
-          getPassThroughPriority(
-            parser,
-            extractParserStateFromState(parser, state, index),
-            token,
-          )
+    (state) =>
+      sorted.map(([parser], index) => ({
+        parser,
+        state: getParseChildState(
+          state,
+          extractParserStateFromState(parser, state, index),
+          parser,
         ),
-      ),
+      })),
   );
   return fluent(
     scopeParser(
@@ -15062,6 +15094,12 @@ export function concat(
             currentContext,
             result.next,
           );
+          if (
+            consumingFailure != null &&
+            error.consumed < consumingFailure.failure.consumed
+          ) {
+            error = consumingFailure.failure;
+          }
         } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
@@ -15156,7 +15194,7 @@ export function concat(
 
     return {
       success: true,
-      next: withPassThroughFailure(currentContext, consumingFailure),
+      next: withReturnedConsumingFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -15259,6 +15297,12 @@ export function concat(
             currentContext,
             result.next,
           );
+          if (
+            consumingFailure != null &&
+            error.consumed < consumingFailure.failure.consumed
+          ) {
+            error = consumingFailure.failure;
+          }
         } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
@@ -15353,7 +15397,7 @@ export function concat(
 
     return {
       success: true,
-      next: withPassThroughFailure(currentContext, consumingFailure),
+      next: withReturnedConsumingFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -15925,30 +15969,14 @@ export function concat(
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
-  defineOptionMatch(
-    concatParser,
-    (state, token) =>
-      combineOptionMatches(parsers.map((parser, index) =>
-        getOptionMatch(
-          parser,
-          getAnnotatedChildState(state, state[index], parser),
-          token,
-        )
-      )),
-  );
-  definePassThroughPriority(
+  defineReachableChildren(
     concatParser,
     parsers,
-    (state, token) =>
-      combinePassThroughPriorities(
-        parsers.map((parser, index) =>
-          getPassThroughPriority(
-            parser,
-            getAnnotatedChildState(state, state[index], parser),
-            token,
-          )
-        ),
-      ),
+    (state) =>
+      parsers.map((parser, index) => ({
+        parser,
+        state: getParseChildState(state, state[index], parser),
+      })),
   );
   return fluent(
     scopeParser(
@@ -16268,14 +16296,10 @@ export function group<M extends Mode, TValue, TState>(
     });
   }
   delegateKnownCompletion(groupParser, parser);
-  defineOptionMatch(
-    groupParser,
-    (state, token) => getOptionMatch(parser, state, token),
-  );
-  definePassThroughPriority(
+  defineReachableChildren(
     groupParser,
     [parser],
-    (state, token) => getPassThroughPriority(parser, state, token),
+    (state) => [{ parser, state }],
   );
   return fluent(scopeParser(groupParser, combinedOptionScope([parser])));
 }
@@ -16612,6 +16636,12 @@ export function conditional(
     branchParsers.map(([, p]) => p),
   );
 
+  const selectBranch = <M extends Mode>(
+    selected: SelectedBranch<string>,
+    table: Readonly<Record<string, Parser<M, unknown, unknown>>>,
+    fallback: Parser<M, unknown, unknown> | undefined,
+  ) => selected.kind === "default" ? fallback : table[selected.key];
+
   // Sync parse implementation
   const parseSync = (
     context: ParserContext<ConditionalState<string>>,
@@ -16628,9 +16658,11 @@ export function conditional(
 
     // If branch already selected, delegate to it
     if (state.selectedBranch !== undefined) {
-      const branchParser = state.selectedBranch.kind === "default"
-        ? syncDefaultBranch!
-        : syncBranches[state.selectedBranch.key];
+      const branchParser = selectBranch(
+        state.selectedBranch,
+        syncBranches,
+        syncDefaultBranch,
+      )!;
 
       const branchResult = branchParser.parse(
         withChildContext(
@@ -16910,9 +16942,11 @@ export function conditional(
 
     // If branch already selected, delegate to it
     if (state.selectedBranch !== undefined) {
-      const branchParser = state.selectedBranch.kind === "default"
-        ? defaultBranch!
-        : branches[state.selectedBranch.key];
+      const branchParser = selectBranch(
+        state.selectedBranch,
+        branches,
+        defaultBranch,
+      )!;
 
       const branchResult = await branchParser.parse(
         withChildContext(
@@ -19574,9 +19608,11 @@ export function conditional(
   // discriminators retain potential branches until parse selects one.
   const reachableBranches = (state: ConditionalState<string>) => {
     if (state.selectedBranch != null) {
-      const branch = state.selectedBranch.kind === "default"
-        ? defaultBranch
-        : branches[state.selectedBranch.key];
+      const branch = selectBranch(
+        state.selectedBranch,
+        branches,
+        defaultBranch,
+      );
       return branch == null ? [] : [{ branch, state: state.branchState }];
     }
     const known = getKnownCompletion(discriminator, state.discriminatorState);
@@ -19594,50 +19630,30 @@ export function conditional(
       state: branch.initialState,
     }));
   };
-  definePassThroughPriority(conditionalParser, [
+  defineReachableChildren(conditionalParser, [
     discriminator,
     ...allBranchParsers,
-  ], (state, token) =>
-    combinePassThroughPriorities([
-      ...(state.selectedBranch == null
-        ? [
-          getPassThroughPriority(
-            discriminator,
-            state.discriminatorState,
-            token,
-          ),
-        ]
-        : []),
-      ...reachableBranches(state).map(({ branch, state }) =>
-        getPassThroughPriority(branch, state, token)
-      ),
-    ]));
-  defineOptionMatch<ConditionalState<string>>(
-    conditionalParser,
-    (state, token) => {
-      if (state.selectedBranch != null) {
-        const branch = state.selectedBranch.kind === "default"
-          ? defaultBranch
-          : branches[state.selectedBranch.key];
-        return branch == null
-          ? undefined
-          : getOptionMatch(branch, state.branchState, token);
-      }
-      return combineOptionMatches([
-        getOptionMatch(discriminator, state.discriminatorState, token),
-        ...reachableBranches(state).map(({ branch, state }) =>
-          getOptionMatch(branch, state, token)
+  ], (state) => [
+    ...(state.selectedBranch == null
+      ? [{
+        parser: discriminator,
+        state: getParseChildState(
+          state,
+          state.discriminatorState,
+          discriminator,
         ),
-      ]);
-    },
-  );
+      }]
+      : []),
+    ...reachableBranches(state).map(({ branch, state: childState }) => ({
+      parser: branch,
+      state: getParseChildState(state, childState, branch),
+    })),
+  ]);
   return fluent(
     scopeParser(conditionalParser, optionScope.source, (context) => {
       const selected = context.state?.selectedBranch;
       if (selected != null) {
-        const branch = selected.kind === "default"
-          ? defaultBranch
-          : branches[selected.key];
+        const branch = selectBranch(selected, branches, defaultBranch);
         if (branch != null) optionScope.select(context, branch);
       }
     }),

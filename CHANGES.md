@@ -45,6 +45,13 @@ To be released.
     pages without commands free of automatic headings.  Existing titled groups
     are preserved, and help callbacks receive the grouped page.
     [[#972], [#983]]
+ -  Fixed known option errors being hidden by `passThrough()` when a
+    zero-consuming `longestMatch()` fallback is nested inside containers,
+    `or()`, optional or repeated parsers, or source bindings.  Missing values
+    now retain their original diagnostics through these compositions, while
+    ordinary alternatives and higher-priority capture can still recover.
+    Repeated parsers also check fresh item options before forwarding input.
+    [[#994], [#996]]
 
 [#965]: https://github.com/dahlia/optique/issues/965
 [#967]: https://github.com/dahlia/optique/issues/967
@@ -58,6 +65,8 @@ To be released.
 [#985]: https://github.com/dahlia/optique/issues/985
 [#986]: https://github.com/dahlia/optique/pull/986
 [#987]: https://github.com/dahlia/optique/pull/987
+[#994]: https://github.com/dahlia/optique/issues/994
+[#996]: https://github.com/dahlia/optique/pull/996
 
 ### @optique/run
 

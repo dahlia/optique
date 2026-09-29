@@ -32,6 +32,7 @@ interface FailureHint {
   readonly buffer: readonly string[];
   readonly optionsTerminated: boolean;
   readonly failure: ConsumingFailure;
+  readonly own?: ConsumingFailure;
 }
 
 type HintedContext<TState> = ParserContext<TState> & {
@@ -71,6 +72,17 @@ export function withPassThroughFailure<TState>(
   failure: ConsumingFailure | undefined,
   capturePriority = -Infinity,
 ): ParserContext<TState> {
+  // Local provenance travels upward only. A sibling's blocking hint must
+  // never become this child's own diagnostic just because it echoes context.
+  const incoming: HintedContext<TState> = context;
+  if (incoming[passThroughFailure]?.own != null) {
+    const { own: _own, ...hint } = incoming[passThroughFailure];
+    const stripped: HintedContext<TState> = {
+      ...context,
+      [passThroughFailure]: hint,
+    };
+    context = stripped;
+  }
   const token = context.buffer[0];
   const existing = getPassThroughFailure(context);
   if (existing != null && existing.priority < capturePriority) {
@@ -103,7 +115,45 @@ export function withPassThroughFailure<TState>(
   return hinted;
 }
 
-/** Retains a child's rejected option failure only at the parent's cursor. @internal */
+/** Reads locally originated diagnostics at the same cursor. @internal */
+export function getOwnConsumingFailure<TState>(
+  context: ParserContext<TState>,
+): ConsumingFailure | undefined {
+  const hinted: HintedContext<TState> = context;
+  const hint = hinted[passThroughFailure];
+  return hint?.buffer === context.buffer &&
+      hint.optionsTerminated === context.optionsTerminated
+    ? hint.own
+    : undefined;
+}
+
+/**
+ * Returns a successful child's local diagnostic to its parent without merging
+ * its provenance with an inherited sibling diagnostic. Both share a cursor.
+ * @internal
+ */
+export function withReturnedConsumingFailure<TState>(
+  context: ParserContext<TState>,
+  failure: ConsumingFailure | undefined,
+): ParserContext<TState> {
+  const next = withPassThroughFailure(context, failure);
+  if (failure == null || getPassThroughFailure(next) == null) return next;
+  const token = next.buffer[0];
+  if (
+    next.optionsTerminated || token == null || token === "--" ||
+    !/^[-/+]/.test(token) || failure.failure.consumed < 1
+  ) return next;
+  const hinted: HintedContext<TState> = next;
+  const hint = hinted[passThroughFailure];
+  if (hint == null) return next;
+  const returned: HintedContext<TState> = {
+    ...next,
+    [passThroughFailure]: { ...hint, own: failure },
+  };
+  return returned;
+}
+
+/** Retains a child's own rejected option failure at the parent's cursor. @internal */
 export function retainConsumingFailureHint<TState, TChildState>(
   current: ConsumingFailure | undefined,
   context: ParserContext<TState>,
@@ -113,10 +163,10 @@ export function retainConsumingFailureHint<TState, TChildState>(
     next.buffer !== context.buffer ||
     next.optionsTerminated !== context.optionsTerminated
   ) return current;
-  const hint = getPassThroughFailure(next);
-  return hint == null
+  const own = getOwnConsumingFailure(next);
+  return own == null || own === getOwnConsumingFailure(context)
     ? current
-    : retainConsumingFailure(current, hint.failure, hint.priority);
+    : retainConsumingFailure(current, own.failure, own.priority);
 }
 
 const capturePriority = Symbol("capturePriority");
@@ -400,4 +450,51 @@ export function delegateKnownCompletion<TState>(
     } satisfies KnownCompletion<TState>,
     enumerable: true,
   });
+}
+
+/** A structurally reachable child and its parse-time state. @internal */
+export interface ReachableChild<TState> {
+  readonly parser: Pick<
+    Parser<Mode, unknown, TState>,
+    "priority" | "initialState" | "usage" | "leadingNames"
+  >;
+  readonly state: TState;
+  readonly continuesCommand?: boolean;
+}
+
+/**
+ * Installs option and capture inspection from one pure child-state selector.
+ * Static children retain capture metadata even when no child is selected yet.
+ * Selection must not execute parsing, completion, or user callbacks. Potential
+ * alternatives remain candidates until parse-time replay or canSkip resolves
+ * them; inspection cannot safely predict opaque custom parser callbacks.
+ * @internal
+ */
+export function defineReachableChildren<TOuterState, TChildState>(
+  parser: Pick<Parser<Mode, unknown, TOuterState>, "priority" | "initialState">,
+  children: readonly PrioritySource[],
+  select: (state: TOuterState) => readonly ReachableChild<TChildState>[],
+): void {
+  defineOptionMatch(
+    parser,
+    (state, token) =>
+      combineOptionMatches(
+        select(state).map((child) => {
+          const match = getOptionMatch(child.parser, child.state, token);
+          return match == null || !child.continuesCommand
+            ? match
+            : { ...match, continuesCommand: true };
+        }),
+      ),
+  );
+  definePassThroughPriority(
+    parser,
+    children,
+    (state, token) =>
+      combinePassThroughPriorities(
+        select(state).map((child) =>
+          getPassThroughPriority(child.parser, child.state, token)
+        ),
+      ),
+  );
 }
