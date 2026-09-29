@@ -3152,8 +3152,8 @@ export function passThrough(
         };
       }
 
-      const failure = getPassThroughFailure(context);
-      if (failure != null) return failure;
+      const failure = getPassThroughFailure(context, this?.priority ?? -10);
+      if (failure != null) return failure.failure;
 
       const token = context.buffer[0];
 

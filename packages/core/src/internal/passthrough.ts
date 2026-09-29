@@ -2,11 +2,28 @@ import type { Message } from "../message.ts";
 import type { Usage } from "../usage.ts";
 import type { Mode, Parser, ParserContext } from "../parser.ts";
 
-/** A consuming failure from a sibling at the current input position. */
+/** A prioritized consuming failure at the current input position. */
 export interface ConsumingFailure {
-  readonly success: false;
-  readonly consumed: number;
-  readonly error: Message;
+  readonly failure: {
+    readonly success: false;
+    readonly consumed: number;
+    readonly error: Message;
+  };
+  readonly priority: number;
+}
+
+/** Retains the deepest diagnostic and highest matching lane priority. @internal */
+export function retainConsumingFailure(
+  current: ConsumingFailure | undefined,
+  failure: ConsumingFailure["failure"],
+  priority: number,
+): ConsumingFailure {
+  return {
+    failure: current != null && current.failure.consumed >= failure.consumed
+      ? current.failure
+      : failure,
+    priority: Math.max(current?.priority ?? -Infinity, priority),
+  };
 }
 
 const passThroughFailure = Symbol("passThroughFailure");
@@ -30,11 +47,13 @@ type HintedContext<TState> = ParserContext<TState> & {
  */
 export function getPassThroughFailure<TState>(
   context: ParserContext<TState>,
+  capturePriority = -Infinity,
 ): ConsumingFailure | undefined {
   const hinted: HintedContext<TState> = context;
   const hint = hinted[passThroughFailure];
   return hint?.buffer === context.buffer &&
-      hint.optionsTerminated === context.optionsTerminated
+      hint.optionsTerminated === context.optionsTerminated &&
+      hint.failure.priority >= capturePriority
     ? hint.failure
     : undefined;
 }
@@ -50,21 +69,35 @@ export function getPassThroughFailure<TState>(
 export function withPassThroughFailure<TState>(
   context: ParserContext<TState>,
   failure: ConsumingFailure | undefined,
+  capturePriority = -Infinity,
 ): ParserContext<TState> {
   const token = context.buffer[0];
+  const existing = getPassThroughFailure(context);
+  if (existing != null && existing.priority < capturePriority) {
+    const hinted: HintedContext<TState> = context;
+    const { [passThroughFailure]: _discarded, ...rest } = hinted;
+    context = rest;
+  }
   if (
-    failure == null || failure.consumed < 1 || context.optionsTerminated ||
-    token == null || token === "--" || !/^[-/+]/.test(token) ||
-    (getPassThroughFailure(context)?.consumed ?? 0) >= failure.consumed
+    failure == null || failure.failure.consumed < 1 ||
+    failure.priority < capturePriority ||
+    context.optionsTerminated || token == null || token === "--" ||
+    !/^[-/+]/.test(token)
   ) {
     return context;
   }
+  const retained = getPassThroughFailure(context);
+  const combined = retainConsumingFailure(
+    retained,
+    failure.failure,
+    failure.priority,
+  );
   const hinted: HintedContext<TState> = {
     ...context,
     [passThroughFailure]: {
       buffer: context.buffer,
       optionsTerminated: context.optionsTerminated,
-      failure,
+      failure: combined,
     },
   };
   return hinted;
@@ -109,8 +142,14 @@ export function getPassThroughPriority<TState>(
     readonly [capturePriority]?: CapturePriority<TState>;
   } = parser;
   const hint = annotated[capturePriority];
-  return hint != null && hint.ownerPriority === parser.priority
-    ? hint.getPriority == null ? hint.priority : hint.getPriority(state)
+  if (hint == null) return parser.priority;
+  const priority = hint.getPriority == null
+    ? hint.priority
+    : hint.getPriority(state);
+  return priority == null
+    ? undefined
+    : hint.ownerPriority === parser.priority
+    ? priority
     : parser.priority;
 }
 
@@ -281,7 +320,7 @@ export function combineOptionMatches(
 const knownCompletionKey = Symbol("knownCompletion");
 interface KnownCompletion<TState> {
   readonly complete: unknown;
-  readonly value: (state: TState) => unknown;
+  readonly value: (state: TState) => { readonly value: unknown } | undefined;
 }
 
 /** Marks a completion value that can be inspected without running user code. @internal */
@@ -290,7 +329,10 @@ export function defineKnownCompletion<TState>(
   value: (state: TState) => unknown,
 ): void {
   Object.defineProperty(parser, knownCompletionKey, {
-    value: { complete: parser.complete, value } satisfies KnownCompletion<
+    value: {
+      complete: parser.complete,
+      value: (state: TState) => ({ value: value(state) }),
+    } satisfies KnownCompletion<
       TState
     >,
     enumerable: true,
@@ -307,7 +349,7 @@ export function getKnownCompletion<TState>(
   } = parser;
   const hint = annotated[knownCompletionKey];
   return hint != null && hint.complete === parser.complete
-    ? { value: hint.value(state) }
+    ? hint.value(state)
     : undefined;
 }
 
@@ -317,4 +359,18 @@ export function combinePassThroughPriorities(
 ): number | undefined {
   const found = priorities.filter((priority) => priority != null);
   return found.length === 0 ? undefined : Math.max(...found);
+}
+
+/** Forwards known completion through a state-preserving wrapper. @internal */
+export function delegateKnownCompletion<TState>(
+  wrapper: Pick<Parser<Mode, unknown, TState>, "complete">,
+  inner: Pick<Parser<Mode, unknown, TState>, "complete">,
+): void {
+  Object.defineProperty(wrapper, knownCompletionKey, {
+    value: {
+      complete: wrapper.complete,
+      value: (state: TState) => getKnownCompletion(inner, state),
+    } satisfies KnownCompletion<TState>,
+    enumerable: true,
+  });
 }

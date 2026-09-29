@@ -4,12 +4,14 @@ import {
   type ConsumingFailure,
   defineOptionMatch,
   definePassThroughPriority,
+  delegateKnownCompletion,
   getKnownCompletion,
   getOptionMatch,
   getPassThroughFailureHint,
   getPassThroughPriority,
   hasPassThroughUsage,
   matchesOptionToken,
+  retainConsumingFailure,
   withPassThroughFailure,
 } from "./internal/passthrough.ts";
 import {
@@ -6182,6 +6184,7 @@ export function object<
               parser,
             ),
             consumingFailure,
+            getPassThroughPriority(parser, getFieldState(field, parser)),
           ),
         );
 
@@ -6219,18 +6222,17 @@ export function object<
         } else if (!result.success) {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
-          if (
-            result.consumed > 0 &&
-            getOptionMatch(
-                parser,
-                getFieldState(field, parser),
-                currentContext.buffer[0],
-              ) != null
-          ) {
-            if (
-              consumingFailure == null ||
-              result.consumed > consumingFailure.consumed
-            ) consumingFailure = result;
+          const match = getOptionMatch(
+            parser,
+            getFieldState(field, parser),
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
           }
           if (error.consumed < result.consumed) error = result;
         }
@@ -6272,6 +6274,7 @@ export function object<
               parser,
             ),
             consumingFailure,
+            getPassThroughPriority(parser, getFieldState(field, parser)),
           ),
         );
         if (
@@ -6392,6 +6395,7 @@ export function object<
               parser,
             ),
             consumingFailure,
+            getPassThroughPriority(parser, getFieldState(field, parser)),
           ),
         );
         const result = await resultOrPromise;
@@ -6430,18 +6434,17 @@ export function object<
         } else if (!result.success) {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
-          if (
-            result.consumed > 0 &&
-            getOptionMatch(
-                parser,
-                getFieldState(field, parser),
-                currentContext.buffer[0],
-              ) != null
-          ) {
-            if (
-              consumingFailure == null ||
-              result.consumed > consumingFailure.consumed
-            ) consumingFailure = result;
+          const match = getOptionMatch(
+            parser,
+            getFieldState(field, parser),
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
           }
           if (error.consumed < result.consumed) error = result;
         }
@@ -6473,6 +6476,7 @@ export function object<
               parser,
             ),
             consumingFailure,
+            getPassThroughPriority(parser, getFieldState(field, parser)),
           ),
         );
         const result = await resultOrPromise;
@@ -7913,6 +7917,7 @@ export function tuple<
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
+            getPassThroughPriority(parser, stateArray[index]),
           ),
         );
 
@@ -7956,18 +7961,17 @@ export function tuple<
         } else if (!result.success) {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
-          if (
-            result.consumed > 0 &&
-            getOptionMatch(
-                parser,
-                stateArray[index],
-                currentContext.buffer[0],
-              ) != null
-          ) {
-            if (
-              consumingFailure == null ||
-              result.consumed > consumingFailure.consumed
-            ) consumingFailure = result;
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
           }
           if (error.consumed < result.consumed) error = result;
         }
@@ -7989,6 +7993,7 @@ export function tuple<
                 parser,
               ),
               consumingFailure,
+              getPassThroughPriority(parser, stateArray[index]),
             ),
           );
 
@@ -8097,6 +8102,7 @@ export function tuple<
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
+            getPassThroughPriority(parser, stateArray[index]),
           ),
         );
         const result = await resultOrPromise;
@@ -8141,18 +8147,17 @@ export function tuple<
         } else if (!result.success) {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
-          if (
-            result.consumed > 0 &&
-            getOptionMatch(
-                parser,
-                stateArray[index],
-                currentContext.buffer[0],
-              ) != null
-          ) {
-            if (
-              consumingFailure == null ||
-              result.consumed > consumingFailure.consumed
-            ) consumingFailure = result;
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
           }
           if (error.consumed < result.consumed) error = result;
         }
@@ -8174,6 +8179,7 @@ export function tuple<
                 parser,
               ),
               consumingFailure,
+              getPassThroughPriority(parser, stateArray[index]),
             ),
           );
           const result = await resultOrPromise;
@@ -9557,10 +9563,14 @@ export function merge(
             result.consumed > 0 && matchesOptionToken({
               leadingNames: lane.leadingNames,
               usage: parsers.flatMap((parser) => parser.usage),
-            }, currentContext.buffer[0]) &&
-            (consumingFailure == null ||
-              result.consumed > consumingFailure.consumed)
-          ) consumingFailure = result;
+            }, currentContext.buffer[0])
+          ) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              lane.priority,
+            );
+          }
           if (result.consumed > 0 && consumingError == null) {
             consumingError = { priority: lane.priority, result };
           }
@@ -9667,10 +9677,14 @@ export function merge(
             result.consumed > 0 && matchesOptionToken({
               leadingNames: lane.leadingNames,
               usage: parsers.flatMap((parser) => parser.usage),
-            }, currentContext.buffer[0]) &&
-            (consumingFailure == null ||
-              result.consumed > consumingFailure.consumed)
-          ) consumingFailure = result;
+            }, currentContext.buffer[0])
+          ) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              lane.priority,
+            );
+          }
           if (result.consumed > 0 && consumingError == null) {
             consumingError = { priority: lane.priority, result };
           }
@@ -11412,6 +11426,7 @@ export function concat(
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
+            getPassThroughPriority(parser, stateArray[index]),
           ),
         );
 
@@ -11455,18 +11470,17 @@ export function concat(
         } else if (!result.success) {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
-          if (
-            result.consumed > 0 &&
-            getOptionMatch(
-                parser,
-                stateArray[index],
-                currentContext.buffer[0],
-              ) != null
-          ) {
-            if (
-              consumingFailure == null ||
-              result.consumed > consumingFailure.consumed
-            ) consumingFailure = result;
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
           }
           if (error.consumed < result.consumed) error = result;
         }
@@ -11488,6 +11502,7 @@ export function concat(
                 parser,
               ),
               consumingFailure,
+              getPassThroughPriority(parser, stateArray[index]),
             ),
           );
 
@@ -11594,6 +11609,7 @@ export function concat(
           withPassThroughFailure(
             withChildContext(currentContext, index, stateArray[index], parser),
             consumingFailure,
+            getPassThroughPriority(parser, stateArray[index]),
           ),
         );
 
@@ -11637,18 +11653,17 @@ export function concat(
         } else if (!result.success) {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
-          if (
-            result.consumed > 0 &&
-            getOptionMatch(
-                parser,
-                stateArray[index],
-                currentContext.buffer[0],
-              ) != null
-          ) {
-            if (
-              consumingFailure == null ||
-              result.consumed > consumingFailure.consumed
-            ) consumingFailure = result;
+          const match = getOptionMatch(
+            parser,
+            stateArray[index],
+            currentContext.buffer[0],
+          );
+          if (result.consumed > 0 && match != null) {
+            consumingFailure = retainConsumingFailure(
+              consumingFailure,
+              result,
+              match.priority,
+            );
           }
           if (error.consumed < result.consumed) error = result;
         }
@@ -11670,6 +11685,7 @@ export function concat(
                 parser,
               ),
               consumingFailure,
+              getPassThroughPriority(parser, stateArray[index]),
             ),
           );
 
@@ -12473,6 +12489,7 @@ export function group<M extends Mode, TValue, TState>(
       enumerable: false,
     });
   }
+  delegateKnownCompletion(groupParser, parser);
   defineOptionMatch(
     groupParser,
     (state, token) => getOptionMatch(parser, state, token),

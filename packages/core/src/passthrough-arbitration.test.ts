@@ -1,4 +1,10 @@
-import { concat, conditional, object, tuple } from "@optique/core/constructs";
+import {
+  concat,
+  conditional,
+  group,
+  object,
+  tuple,
+} from "@optique/core/constructs";
 import { multiple, optional } from "@optique/core/modifiers";
 import { parseAsync } from "@optique/core/parser";
 import {
@@ -34,6 +40,65 @@ for (const mode of ["sync", "async"] as const) {
     assert.deepEqual(
       await parseAsync<unknown>(parser, ["run", "-m"]),
       expected,
+    );
+  });
+  it(`${mode} exhausted repetitions do not advertise an option match`, async () => {
+    const first = {
+      ...multiple(option("-m", value), { max: 1 }),
+      priority: 15,
+    };
+    const second = { ...multiple(option("-m", value)), priority: 5 };
+    const rest = { ...passThrough({ format: "nextToken" }), priority: 10 };
+    const parser = object({ first, second, rest }, { allowDuplicates: true });
+    assert.deepEqual(
+      await parseAsync<unknown>(parser, ["-m", "first", "-m", "second"]),
+      {
+        success: true,
+        value: { first: ["first"], second: [], rest: ["-m", "second"] },
+      },
+    );
+  });
+  it(`${mode} capture can outrank a carried option error`, async () => {
+    const known = object({
+      verbose: { ...option("-v"), priority: 15 },
+      message: optional(option("-m", value)),
+    });
+    for (
+      const capture of [
+        { ...passThrough({ format: "nextToken" }), priority: 12 },
+        {
+          ...object({ rest: passThrough({ format: "nextToken" }) }),
+          priority: 12,
+        },
+      ]
+    ) {
+      const parser = object({ known, capture });
+      assert.ok((await parseAsync<unknown>(parser, ["-v", "-m"])).success);
+    }
+    const lowerCapture = {
+      ...passThrough({ format: "nextToken" }),
+      priority: 9,
+    };
+    assert.deepEqual(
+      await parseAsync<unknown>(object({ known, capture: lowerCapture }), [
+        "-v",
+        "-m",
+      ]),
+      await parseAsync<unknown>(known, ["-v", "-m"]),
+    );
+  });
+  it(`${mode} grouping retains a known conditional discriminator`, async () => {
+    const cond = conditional(group("Mode", group("Value", constant("run"))), {
+      run: optional(option("-m", value)),
+      other: { ...optional(option("-m", value)), priority: 13 },
+    });
+    const rest = { ...passThrough({ format: "nextToken" }), priority: 12 };
+    assert.deepEqual(
+      await parseAsync<unknown>(object({ cond, rest }), ["-m"]),
+      {
+        success: true,
+        value: { cond: ["run", undefined], rest: ["-m"] },
+      },
     );
   });
   for (const outer of ["object", "tuple", "concat"] as const) {

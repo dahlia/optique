@@ -3010,26 +3010,23 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
-  defineOptionMatch(
-    resultParser,
-    (state, token) =>
-      getOptionMatch(
-        parser,
-        // Unlike terminal-item detection, matching needs the child's exact
-        // state shape: a singleton array can belong to tuple() or multiple().
-        unwrapInjectedWrapper(state.at(-1)) ?? parser.initialState,
-        token,
-      ),
-  );
-  definePassThroughPriority(
-    resultParser,
-    [parser],
-    (state) =>
-      getPassThroughPriority(
-        parser,
-        unwrapInjectedWrapper(state.at(-1)) ?? parser.initialState,
-      ),
-  );
+  const matchingItem = (state: MultipleState) => {
+    const current = state.at(-1);
+    if (current != null && !isTerminalMultipleItemState(current)) {
+      return { state: unwrapInjectedWrapper(current) };
+    }
+    return state.length < max ? { state: parser.initialState } : undefined;
+  };
+  defineOptionMatch(resultParser, (state, token) => {
+    const item = matchingItem(state);
+    return item == null ? undefined : getOptionMatch(parser, item.state, token);
+  });
+  definePassThroughPriority(resultParser, [parser], (state) => {
+    const item = matchingItem(state);
+    return item == null
+      ? undefined
+      : getPassThroughPriority(parser, item.state);
+  });
   return resultParser;
 }
 
