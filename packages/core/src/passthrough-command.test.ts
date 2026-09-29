@@ -52,6 +52,8 @@ for (const mode of ["sync", "async"] as const) {
           map(cmd, (value) => value),
           group("Command", cmd),
           multiple(cmd),
+          multiple(tuple([cmd])),
+          multiple(multiple(cmd, { max: 1 }), { max: 1 }),
           object({ cmd }),
           tuple([cmd]),
           concat(tuple([cmd])),

@@ -2998,7 +2998,9 @@ export function multiple<M extends Mode, TValue, TState>(
     (state, token) =>
       getOptionMatch(
         parser,
-        unwrapMultipleItemState(state.at(-1)).value ?? parser.initialState,
+        // Unlike terminal-item detection, matching needs the child's exact
+        // state shape: a singleton array can belong to tuple() or multiple().
+        unwrapInjectedWrapper(state.at(-1)) ?? parser.initialState,
         token,
       ),
   );
