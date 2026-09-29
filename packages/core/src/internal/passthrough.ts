@@ -1,6 +1,6 @@
 import type { Message } from "../message.ts";
 import type { Usage } from "../usage.ts";
-import type { Parser, ParserContext } from "../parser.ts";
+import type { Mode, Parser, ParserContext } from "../parser.ts";
 
 /** A consuming failure from a sibling at the current input position. */
 export interface ConsumingFailure {
@@ -145,4 +145,123 @@ export function getPassThroughFailureHint<TState>(
   return hint != null && getPassThroughFailure(context) != null
     ? { [passThroughFailure]: hint }
     : {};
+}
+
+/** Finds a Boolean option through usage-preserving wrappers. */
+function hasFlagUsage(usage: Usage, name: string): boolean {
+  return usage.some((term) =>
+    (term.type === "option" && term.metavar == null &&
+      term.names.some((optionName) => optionName === name)) ||
+    ((term.type === "optional" || term.type === "multiple") &&
+      hasFlagUsage(term.terms, name)) ||
+    (term.type === "exclusive" &&
+      term.terms.some((terms) => hasFlagUsage(terms, name)))
+  );
+}
+
+/** Matches exact options, attached values, and leading bundled flags. */
+export function matchesOptionToken(
+  parser: Pick<Parser, "leadingNames" | "usage">,
+  token: string | undefined,
+): boolean {
+  if (token == null || token === "--" || !/^[-/+]/.test(token)) return false;
+  if (parser.leadingNames.has(token)) return true;
+
+  // Long and slash options can include attached values, whose complete token
+  // is not itself a leading name.
+  const slashOption = token.startsWith("/");
+  const separator = slashOption
+    ? token.indexOf(":")
+    : token.startsWith("-")
+    ? token.indexOf("=")
+    : -1;
+  if (
+    separator > (slashOption ? 0 : 2) &&
+    parser.leadingNames.has(token.slice(0, separator))
+  ) return true;
+
+  // Only Boolean short options accept bundles. A value option such as -m
+  // does not recognize -mhello as an attached value.
+  const shortName = token.slice(0, 2);
+  return token.length > 2 && /^-[^-]$/.test(shortName) &&
+    parser.leadingNames.has(shortName) && hasFlagUsage(parser.usage, shortName);
+}
+
+/** A known option reachable at the current parser state. @internal */
+export interface OptionMatch {
+  readonly priority: number;
+  readonly continuesCommand: boolean;
+}
+const optionMatchKey = Symbol("optionMatch");
+interface OptionMatcher<TState> {
+  readonly ownerPriority: number;
+  match(state: TState, token: string): OptionMatch | undefined;
+}
+
+/**
+ * Records state-aware option matching without changing public leading names.
+ * @param parser The newly constructed transparent parser.
+ * @param match Finds a reachable known-option lane.
+ * @internal
+ */
+export function defineOptionMatch<TState>(
+  parser: Pick<Parser<Mode, unknown, TState>, "priority" | "initialState">,
+  match: (state: TState, token: string) => OptionMatch | undefined,
+): void {
+  Object.defineProperty(parser, optionMatchKey, {
+    value: { ownerPriority: parser.priority, match } satisfies OptionMatcher<
+      TState
+    >,
+    enumerable: true,
+  });
+}
+
+/**
+ * Finds a matching option's actual priority, including selected command children.
+ * @param parser The parser to inspect.
+ * @param state Its current state.
+ * @param token The current token.
+ * @returns A reachable option match, or undefined.
+ * @internal
+ */
+export function getOptionMatch<TState>(
+  parser: Pick<
+    Parser<Mode, unknown, TState>,
+    "priority" | "initialState" | "usage" | "leadingNames"
+  >,
+  state: TState,
+  token: string | undefined,
+): OptionMatch | undefined {
+  if (token == null || token === "--" || !/^[-/+]/.test(token)) {
+    return undefined;
+  }
+  const annotated: typeof parser & {
+    readonly [optionMatchKey]?: OptionMatcher<TState>;
+  } = parser;
+  const matcher = annotated[optionMatchKey];
+  if (matcher != null) {
+    const match = matcher.match(state, token);
+    return match == null || matcher.ownerPriority === parser.priority
+      ? match
+      : { ...match, priority: parser.priority };
+  }
+  return matchesOptionToken(parser, token)
+    ? { priority: parser.priority, continuesCommand: false }
+    : undefined;
+}
+
+/**
+ * Combines option matches while retaining active command continuation.
+ * @param matches Matches from transparent children.
+ * @returns Their highest priority and whether any matching command continues.
+ * @internal
+ */
+export function combineOptionMatches(
+  matches: readonly (OptionMatch | undefined)[],
+): OptionMatch | undefined {
+  const found = matches.filter((match) => match != null);
+  return found.length === 0 ? undefined : {
+    priority: Math.max(...found.map((match) => match.priority)),
+    continuesCommand: found.some((match) => match.continuesCommand),
+  };
 }

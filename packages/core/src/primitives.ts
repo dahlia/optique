@@ -1,4 +1,9 @@
-import { getPassThroughFailure } from "./internal/passthrough.ts";
+import {
+  defineOptionMatch,
+  definePassThroughPriority,
+  getOptionMatch,
+  getPassThroughFailure,
+} from "./internal/passthrough.ts";
 import {
   getWrappedChildParseState,
   getWrappedChildState,
@@ -2993,6 +2998,21 @@ export function command<M extends Mode, T, TState>(
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
+  definePassThroughPriority(result, [parser]);
+  defineOptionMatch<CommandState<TState>>(result, (state, token) => {
+    const active = normalizeCommandState(state);
+    if (active == null) return undefined;
+    const childState = active[0] === "matched"
+      ? parser.initialState
+      : active[1];
+    const match = getOptionMatch(
+      parser,
+      getCommandParseChildState(state, childState, parser),
+      token,
+    );
+    return match == null ? undefined : { ...match, continuesCommand: true };
+  });
+
   return result as unknown as Parser<M, T, CommandState<TState>>;
 }
 

@@ -1,4 +1,8 @@
-import { definePassThroughPriority } from "./internal/passthrough.ts";
+import {
+  defineOptionMatch,
+  definePassThroughPriority,
+  getOptionMatch,
+} from "./internal/passthrough.ts";
 import {
   getDelegatedAnnotationState,
   hasDelegatedAnnotationCarrier,
@@ -991,6 +995,15 @@ export function optional<M extends Mode, TValue, TState>(
   defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
+  defineOptionMatch(
+    optionalParser,
+    (state, token) =>
+      getOptionMatch(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
+      ),
+  );
   definePassThroughPriority(optionalParser, [parser]);
   return optionalParser;
 }
@@ -1532,6 +1545,15 @@ export function withDefault<
   );
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
+  defineOptionMatch(
+    withDefaultParser,
+    (state, token) =>
+      getOptionMatch(
+        parser,
+        normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
+        token,
+      ),
+  );
   definePassThroughPriority(withDefaultParser, [parser]);
   return withDefaultParser;
 }
@@ -2971,6 +2993,15 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
+  defineOptionMatch(
+    resultParser,
+    (state, token) =>
+      getOptionMatch(
+        parser,
+        unwrapMultipleItemState(state.at(-1)).value ?? parser.initialState,
+        token,
+      ),
+  );
   definePassThroughPriority(resultParser, [parser]);
   return resultParser;
 }
@@ -3143,6 +3174,10 @@ export function nonEmpty<M extends Mode, T, TState>(
       enumerable: false,
     });
   }
+  defineOptionMatch(
+    nonEmptyParser,
+    (state, token) => getOptionMatch(parser, state, token),
+  );
   definePassThroughPriority(nonEmptyParser, [parser]);
   return nonEmptyParser;
 }
