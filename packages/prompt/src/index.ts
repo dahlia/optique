@@ -18,6 +18,7 @@ import {
 } from "@optique/core/message";
 import {
   defineTraits,
+  delegateOptionParsing,
   delegateSuggestNodes,
   getTraits,
   inheritAnnotations,
@@ -1001,6 +1002,11 @@ export function createPromptAdapter<TConfig>(
     const parserInheritsAnnotations = getTraits(parser).inheritsAnnotations ===
       true;
 
+    const getCliState = (state: TState): TState =>
+      isPromptBindState(state)
+        ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+        : state;
+
     const promptedParser: Parser<"async", TValue, TState> = {
       mode: "async",
       $valueType: parser.$valueType,
@@ -1038,11 +1044,7 @@ export function createPromptAdapter<TConfig>(
         const annotations = getAnnotations(context.state);
         const hadCliValue = isPromptBindState(context.state) &&
           context.state.hasCliValue;
-        const innerState = isPromptBindState(context.state)
-          ? (context.state.hasCliValue
-            ? (context.state.cliState as TState)
-            : parser.initialState)
-          : context.state;
+        const innerState = getCliState(context.state);
         const baseInnerContext = innerState !== context.state
           ? { ...context, state: innerState }
           : context;
@@ -1473,6 +1475,7 @@ export function createPromptAdapter<TConfig>(
       });
     }
 
+    delegateOptionParsing(promptedParser, parser, getCliState);
     return fluent(promptedParser);
   };
 }

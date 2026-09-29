@@ -172,13 +172,23 @@ export function findSimilar(
     if (seen.has(candidate)) continue;
     seen.add(candidate);
 
-    // Calculate distance
-    const distance = levenshteinDistance(normalizedInput, normalizedCandidate);
-
-    // Early termination for exact match
-    if (distance === 0) {
+    // Exact matches take precedence even when thresholds exclude all edits.
+    if (normalizedInput === normalizedCandidate) {
       return [candidate];
     }
+
+    // Each excess UTF-16 code unit needs at least one insertion or deletion.
+    // Use normalized lengths for distance, but the original input length for
+    // the ratio, just as in the exact calculation below.
+    const minimumDistance = Math.abs(
+      normalizedInput.length - normalizedCandidate.length,
+    );
+    if (
+      minimumDistance > maxDistance ||
+      minimumDistance / input.length > maxDistanceRatio
+    ) continue;
+
+    const distance = levenshteinDistance(normalizedInput, normalizedCandidate);
 
     // Check if within thresholds
     const distanceRatio = distance / input.length;

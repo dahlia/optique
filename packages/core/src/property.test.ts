@@ -689,6 +689,36 @@ describe("property-based tests", () => {
     );
   });
 
+  it("nested multiple states preserve suggest parity after an unknown option", async () => {
+    // Fixed counterexample from the random AST property test in CI.
+    const parser = compileRandomParserAst({
+      kind: "tuple",
+      left: {
+        kind: "multiple",
+        child: {
+          kind: "multiple",
+          child: { kind: "argument" },
+          min: 0,
+          max: 1,
+        },
+        min: 0,
+        max: 1,
+      },
+      right: {
+        kind: "optional",
+        child: {
+          kind: "object",
+          left: { kind: "optionInt", name: "x" },
+          right: { kind: "flag", name: "x" },
+        },
+      },
+    });
+    const argv = toSuggestionArgs(["", "--mode=dev"], "");
+    const expected = suggestSync(parser, argv);
+    assert.deepEqual(suggest(parser, argv), expected);
+    assert.deepEqual(await suggestAsync(parser, argv), expected);
+  });
+
   it("random parser ASTs should preserve suggest parity", async () => {
     await fc.assert(
       fc.asyncProperty(

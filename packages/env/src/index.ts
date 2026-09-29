@@ -14,6 +14,7 @@ import { getAnnotations } from "@optique/core/annotations";
 import type { Annotations, SourceContext } from "@optique/core/context";
 import {
   defineTraits,
+  delegateOptionParsing,
   delegateSuggestNodes,
   dispatchByMode,
   getTraits,
@@ -821,11 +822,7 @@ export function bindEnv<
       // state and passes it back on the next iteration.  The inner
       // parser expects its own native state, so we unwrap cliState
       // before delegating.
-      const innerState = isEnvBindState(context.state)
-        ? (context.state.hasCliValue
-          ? (context.state.cliState as TState)
-          : inheritAnnotations(context.state, parser.initialState))
-        : context.state;
+      const innerState = getInnerState(context.state);
       const innerContext = innerState !== context.state
         ? { ...context, state: innerState }
         : context;
@@ -1058,6 +1055,7 @@ export function bindEnv<
       enumerable: false,
     });
   }
+  delegateOptionParsing(boundParser, parser, getInnerState);
   return fluent(boundParser);
 }
 

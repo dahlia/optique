@@ -152,6 +152,39 @@ To be released.
     abort was observed only after the resolver settled.  [[#964], [#979]]
 
 
+Version 1.3.2
+-------------
+
+Released on September 29, 2026.
+
+### @optique/core
+
+ -  Reduced typo suggestion overhead when option parsers encounter positional
+    arguments.  Literal `errors.noMatch` messages now skip suggestion searches,
+    and candidates whose length difference exceeds the suggestion thresholds
+    are excluded before calculating edit distances.  Suggestion results and
+    custom error callback invocations are preserved.
+    [[#988], [#992]]
+ -  Fixed `passThrough()` hiding errors for known options in `object()`,
+    `tuple()`, and `concat()`, including missing values and Boolean options
+    given attached values.  Unknown options are still forwarded, and ordinary
+    alternative parsers can still recover from consuming failures.
+    [[#991], [#993]]
+ -  Fixed `argument()` accepting joined option tokens such as `--name=value`
+    as positional arguments before `--`.  Unknown joined options now reach
+    `passThrough()`, and errors from known options are no longer hidden by
+    positional arguments.  Use `--` to pass joined option tokens as literal
+    positional arguments.
+    [[#990], [#995]]
+
+[#988]: https://github.com/dahlia/optique/issues/988
+[#990]: https://github.com/dahlia/optique/issues/990
+[#991]: https://github.com/dahlia/optique/issues/991
+[#992]: https://github.com/dahlia/optique/pull/992
+[#993]: https://github.com/dahlia/optique/pull/993
+[#995]: https://github.com/dahlia/optique/pull/995
+
+
 Version 1.3.1
 -------------
 
@@ -455,6 +488,32 @@ Released on September 15, 2026.
 [#953]: https://github.com/dahlia/optique/issues/953
 [#954]: https://github.com/dahlia/optique/pull/954
 [#959]: https://github.com/dahlia/optique/issues/959
+
+
+Version 1.2.9
+-------------
+
+Released on September 29, 2026.
+
+### @optique/core
+
+ -  Reduced typo suggestion overhead when option parsers encounter positional
+    arguments.  Literal `errors.noMatch` messages now skip suggestion searches,
+    and candidates whose length difference exceeds the suggestion thresholds
+    are excluded before calculating edit distances.  Suggestion results and
+    custom error callback invocations are preserved.
+    [[#988], [#992]]
+ -  Fixed `passThrough()` hiding errors for known options in `object()`,
+    `tuple()`, and `concat()`, including missing values and Boolean options
+    given attached values.  Unknown options are still forwarded, and ordinary
+    alternative parsers can still recover from consuming failures.
+    [[#991], [#993]]
+ -  Fixed `argument()` accepting joined option tokens such as `--name=value`
+    as positional arguments before `--`.  Unknown joined options now reach
+    `passThrough()`, and errors from known options are no longer hidden by
+    positional arguments.  Use `--` to pass joined option tokens as literal
+    positional arguments.
+    [[#990], [#995]]
 
 
 Version 1.2.8
@@ -836,6 +895,32 @@ Released on July 21, 2026.
 [#867]: https://github.com/dahlia/optique/pull/867
 
 
+Version 1.1.9
+-------------
+
+Released on September 29, 2026.
+
+### @optique/core
+
+ -  Reduced typo suggestion overhead when option parsers encounter positional
+    arguments.  Literal `errors.noMatch` messages now skip suggestion searches,
+    and candidates whose length difference exceeds the suggestion thresholds
+    are excluded before calculating edit distances.  Suggestion results and
+    custom error callback invocations are preserved.  [[#988], [#992]]
+
+ -  Fixed `passThrough()` hiding errors for known options in `object()`,
+    `tuple()`, and `concat()`, including missing values and Boolean options
+    given attached values.  Unknown options are still forwarded, and ordinary
+    alternative parsers can still recover from consuming failures.
+    [[#991], [#993]]
+
+ -  Fixed `argument()` accepting joined option tokens such as `--name=value`
+    as positional arguments before `--`.  Unknown joined options now reach
+    `passThrough()`, and errors from known options are no longer hidden by
+    positional arguments.  Use `--` to pass joined option tokens as literal
+    positional arguments.  [[#990], [#995]]
+
+
 Version 1.1.8
 -------------
 
@@ -1211,6 +1296,32 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.11
+--------------
+
+Released on September 29, 2026.
+
+### @optique/core
+
+ -  Reduced typo suggestion overhead when option parsers encounter positional
+    arguments.  Literal `errors.noMatch` messages now skip suggestion searches,
+    and candidates whose length difference exceeds the suggestion thresholds
+    are excluded before calculating edit distances.  Suggestion results and
+    custom error callback invocations are preserved.  [[#988], [#992]]
+
+ -  Fixed `passThrough()` hiding errors for known options in `object()`,
+    `tuple()`, and `concat()`, including missing values and Boolean options
+    given attached values.  Unknown options are still forwarded, and ordinary
+    alternative parsers can still recover from consuming failures.
+    [[#991], [#993]]
+
+ -  Fixed `argument()` accepting joined option tokens such as `--name=value`
+    as positional arguments before `--`.  Unknown joined options now reach
+    `passThrough()`, and errors from known options are no longer hidden by
+    positional arguments.  Use `--` to pass joined option tokens as literal
+    positional arguments.  [[#990], [#995]]
 
 
 Version 1.0.10
