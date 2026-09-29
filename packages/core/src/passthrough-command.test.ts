@@ -130,6 +130,37 @@ for (const mode of ["sync", "async"] as const) {
       );
     });
 
+    it(`${mode} ${outer} preserves unresolved conditional option errors`, async () => {
+      const cond = conditional(constant("run"), {
+        run: optional(option("-m", value)),
+        other: optional(option("--other", value)),
+      });
+      const expected = await parseAsync<unknown>(cond, ["-m"]);
+      assert.ok(!expected.success);
+      for (const format of ["nextToken", "greedy"] as const) {
+        const rest = passThrough({ format });
+        const parser = outer === "object"
+          ? object({ cond, rest })
+          : outer === "tuple"
+          ? tuple([cond, rest])
+          : concat(tuple([cond]), tuple([rest]));
+        assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), expected);
+        assert.deepEqual(await parseAsync<unknown>(parser, ["-m", "hello"]), {
+          success: true,
+          value: outer === "object"
+            ? { cond: ["run", "hello"], rest: [] }
+            : [["run", "hello"], []],
+        });
+        // A declared option in an inactive branch still belongs to forwarding.
+        assert.deepEqual(await parseAsync<unknown>(parser, ["--other"]), {
+          success: true,
+          value: outer === "object"
+            ? { cond: ["run", undefined], rest: ["--other"] }
+            : [["run", undefined], ["--other"]],
+        });
+      }
+    });
+
     it(`${mode} ${outer} preserves conditional capture priority`, async () => {
       const extra = conditional({ ...constant("run"), priority: 15 }, {
         run: passThrough({ format: "nextToken" }),

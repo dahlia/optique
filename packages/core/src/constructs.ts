@@ -14832,9 +14832,11 @@ export function conditional(
       }
       return combineOptionMatches([
         getOptionMatch(discriminator, state.discriminatorState, token),
-        defaultBranch == null
-          ? undefined
-          : getOptionMatch(defaultBranch, defaultBranch.initialState, token),
+        // Before selection, named branches may consume an option after a
+        // zero-consuming discriminator, or during speculative async parsing.
+        ...allBranchParsers.map((branch) =>
+          getOptionMatch(branch, branch.initialState, token)
+        ),
       ]);
     },
   );
