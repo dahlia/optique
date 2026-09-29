@@ -1,4 +1,12 @@
 import {
+  defineKnownCompletion,
+  defineOptionMatch,
+  definePassThroughPriority,
+  getOptionMatch,
+  getPassThroughFailure,
+  getPassThroughPriority,
+} from "./internal/passthrough.ts";
+import {
   getWrappedChildParseState,
   getWrappedChildState,
   isAnnotationWrappedInitialState,
@@ -287,6 +295,10 @@ export function constant<const T>(value: T): Parser<"sync", T, T> {
       return { fragments: [] };
     },
   };
+  defineKnownCompletion(
+    result,
+    (state) => normalizeInjectedAnnotationState(state),
+  );
   Object.defineProperty(result, "placeholder", {
     value,
     configurable: true,
@@ -1244,6 +1256,15 @@ export function option<M extends Mode, T>(
 
       // Check if custom noMatch error is provided
       if (options.errors?.noMatch) {
+        // Literal messages do not use suggestions.
+        if (typeof options.errors.noMatch !== "function") {
+          return {
+            success: false,
+            consumed: 0,
+            error: options.errors.noMatch,
+          };
+        }
+
         const candidates = new Set<string>();
         for (const name of extractOptionNames(context.usage)) {
           candidates.add(name);
@@ -1254,9 +1275,7 @@ export function option<M extends Mode, T>(
           DEFAULT_FIND_SIMILAR_OPTIONS,
         );
 
-        const errorMessage = typeof options.errors.noMatch === "function"
-          ? options.errors.noMatch(invalidOption, suggestions)
-          : options.errors.noMatch;
+        const errorMessage = options.errors.noMatch(invalidOption, suggestions);
 
         return {
           success: false,
@@ -1798,6 +1817,15 @@ export function flag(
 
       // Check if custom noMatch error is provided
       if (options.errors?.noMatch) {
+        // Literal messages do not use suggestions.
+        if (typeof options.errors.noMatch !== "function") {
+          return {
+            success: false,
+            consumed: 0,
+            error: options.errors.noMatch,
+          };
+        }
+
         const candidates = new Set<string>();
         for (const name of extractOptionNames(context.usage)) {
           candidates.add(name);
@@ -1808,9 +1836,7 @@ export function flag(
           DEFAULT_FIND_SIMILAR_OPTIONS,
         );
 
-        const errorMessage = typeof options.errors.noMatch === "function"
-          ? options.errors.noMatch(invalidOption, suggestions)
-          : options.errors.noMatch;
+        const errorMessage = options.errors.noMatch(invalidOption, suggestions);
 
         return {
           success: false,
@@ -2458,7 +2484,7 @@ export function argument<M extends Mode, T>(
         : options.errors.invalidValue)
       : message`${metavar(valueParser.metavar)}: ${error}`;
 
-  const optionPattern = /^--?[a-z0-9-]+$/i;
+  const optionPattern = /^(?!--=)(--?[a-z0-9-]+)(?:=|$)/i;
   const term: UsageTerm = {
     type: "argument",
     metavar: valueParser.metavar,
@@ -2500,14 +2526,17 @@ export function argument<M extends Mode, T>(
         if (context.buffer[i] === "--") {
           optionsTerminated = true;
           i++;
-        } else if (context.buffer[i].match(optionPattern)) {
-          return {
-            success: false,
-            consumed: i,
-            error: message`Expected an argument, but got an option: ${
-              eOptionName(context.buffer[i])
-            }.`,
-          };
+        } else {
+          const optionMatch = context.buffer[i].match(optionPattern);
+          if (optionMatch != null) {
+            return {
+              success: false,
+              consumed: i,
+              error: message`Expected an argument, but got an option: ${
+                eOptionName(optionMatch[1])
+              }.`,
+            };
+          }
         }
       }
 
@@ -3593,6 +3622,32 @@ export function command<M extends Mode, T, TState>(
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
+  definePassThroughPriority(result, [parser], (state, token) => {
+    const active = normalizeCommandState(state);
+    if (active == null) return undefined;
+    const childState = active[0] === "matched"
+      ? parser.initialState
+      : active[1];
+    return getPassThroughPriority(
+      parser,
+      getCommandParseChildState(state, childState, parser),
+      token,
+    );
+  });
+  defineOptionMatch<CommandState<TState>>(result, (state, token) => {
+    const active = normalizeCommandState(state);
+    if (active == null) return undefined;
+    const childState = active[0] === "matched"
+      ? parser.initialState
+      : active[1];
+    const match = getOptionMatch(
+      parser,
+      getCommandParseChildState(state, childState, parser),
+      token,
+    );
+    return match == null ? undefined : { ...match, continuesCommand: true };
+  });
+
   return result as unknown as Parser<M, T, CommandState<TState>>;
 }
 
@@ -3694,7 +3749,7 @@ export function passThrough(
   const optionPattern = /^-[a-z0-9-]|^--[a-z0-9-]+/i;
   const equalsOptionPattern = /^--[a-z0-9-]+=/i;
 
-  return {
+  const result: Parser<"sync", readonly string[], readonly string[]> = {
     $valueType: [],
     $stateType: [],
     mode: "sync",
@@ -3718,6 +3773,9 @@ export function passThrough(
           error: message`No input to pass through.`,
         };
       }
+
+      const failure = getPassThroughFailure(context, this?.priority ?? -10);
+      if (failure != null) return failure.failure;
 
       const token = context.buffer[0];
 
@@ -3865,4 +3923,12 @@ export function passThrough(
       return `passThrough(${format})`;
     },
   };
+  definePassThroughPriority(result, [result], (_state, token) => {
+    if (token == null || format === "greedy") return result.priority;
+    const accepts = format === "equalsOnly"
+      ? equalsOptionPattern.test(token)
+      : format === "nextToken" && optionPattern.test(token);
+    return accepts ? result.priority : undefined;
+  });
+  return result;
 }
