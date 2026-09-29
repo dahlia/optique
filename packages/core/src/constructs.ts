@@ -1,5 +1,6 @@
 import {
   type ConsumingFailure,
+  getPassThroughFailure,
   withPassThroughFailure,
 } from "./internal/passthrough.ts";
 import {
@@ -276,6 +277,46 @@ function hasPassThroughUsage(usage: Usage): boolean {
   );
 }
 
+/** Finds a Boolean option through usage-preserving wrappers. */
+function hasFlagUsage(usage: Usage, name: string): boolean {
+  return usage.some((term) =>
+    (term.type === "option" && term.metavar == null &&
+      term.names.some((optionName) => optionName === name)) ||
+    ((term.type === "optional" || term.type === "multiple") &&
+      hasFlagUsage(term.terms, name)) ||
+    (term.type === "exclusive" &&
+      term.terms.some((terms) => hasFlagUsage(terms, name)))
+  );
+}
+
+/** Matches exact options, attached values, and leading bundled flags. */
+function matchesOptionToken(
+  parser: Parser<Mode, unknown, unknown>,
+  token: string | undefined,
+): boolean {
+  if (token == null || token === "--" || !/^[-/+]/.test(token)) return false;
+  if (parser.leadingNames.has(token)) return true;
+
+  // Long and slash options can include attached values, whose complete token
+  // is not itself a leading name.
+  const slashOption = token.startsWith("/");
+  const separator = slashOption
+    ? token.indexOf(":")
+    : token.startsWith("-")
+    ? token.indexOf("=")
+    : -1;
+  if (
+    separator > (slashOption ? 0 : 2) &&
+    parser.leadingNames.has(token.slice(0, separator))
+  ) return true;
+
+  // Only Boolean short options accept bundles. A value option such as -m
+  // does not recognize -mhello as an attached value.
+  const shortName = token.slice(0, 2);
+  return token.length > 2 && /^-[^-]$/.test(shortName) &&
+    parser.leadingNames.has(shortName) && hasFlagUsage(parser.usage, shortName);
+}
+
 /**
  * Defers tied pass-through candidates until a known option has been tried.
  * Other siblings retain their relative order, and explicit priorities win.
@@ -293,19 +334,8 @@ function orderBeforePassThrough<TPair>(
     !/^[-/+]/.test(token)
   ) return pairs;
 
-  // Long and slash options can include attached values, whose complete token
-  // is not itself a leading name.
-  const slashOption = token.startsWith("/");
-  const separator = slashOption
-    ? token.indexOf(":")
-    : token.startsWith("-")
-    ? token.indexOf("=")
-    : -1;
-  const name = separator > (slashOption ? 0 : 2)
-    ? token.slice(0, separator)
-    : token;
   const matches = (parser: Parser<Mode, unknown, unknown>): boolean =>
-    parser.leadingNames.has(token) || parser.leadingNames.has(name);
+    matchesOptionToken(parser, token);
   const matchingPriorities = new Set(
     pairs.map(getParser).filter(matches).map((parser) => parser.priority),
   );
@@ -6130,14 +6160,22 @@ export function object<
               }
               : {}),
           };
+          currentContext = withPassThroughFailure(
+            currentContext,
+            getPassThroughFailure(result.next),
+          );
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success) {
-          // The first failure blocks capture; the deepest selects the diagnostic.
-          if (result.consumed > 0) consumingFailure ??= result;
+          // The first matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          if (
+            result.consumed > 0 &&
+            matchesOptionToken(parser, currentContext.buffer[0])
+          ) consumingFailure ??= result;
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -6214,7 +6252,7 @@ export function object<
     if (anySuccess) {
       return {
         success: true,
-        next: currentContext,
+        next: withPassThroughFailure(currentContext, consumingFailure),
         consumed: allConsumed,
       };
     }
@@ -6326,14 +6364,22 @@ export function object<
               }
               : {}),
           };
+          currentContext = withPassThroughFailure(
+            currentContext,
+            getPassThroughFailure(result.next),
+          );
           allConsumed.push(...result.consumed);
           anySuccess = true;
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
         } else if (!result.success) {
-          // The first failure blocks capture; the deepest selects the diagnostic.
-          if (result.consumed > 0) consumingFailure ??= result;
+          // The first matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          if (
+            result.consumed > 0 &&
+            matchesOptionToken(parser, currentContext.buffer[0])
+          ) consumingFailure ??= result;
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -6401,7 +6447,7 @@ export function object<
     if (anySuccess) {
       return {
         success: true,
-        next: currentContext,
+        next: withPassThroughFailure(currentContext, consumingFailure),
         consumed: allConsumed,
       };
     }
@@ -7793,13 +7839,21 @@ export function tuple<
           };
 
           consumingFailure = undefined;
+          currentContext = withPassThroughFailure(
+            currentContext,
+            getPassThroughFailure(result.next),
+          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first failure blocks capture; the deepest selects the diagnostic.
-          if (result.consumed > 0) consumingFailure ??= result;
+          // The first matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          if (
+            result.consumed > 0 &&
+            matchesOptionToken(parser, currentContext.buffer[0])
+          ) consumingFailure ??= result;
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -7949,13 +8003,21 @@ export function tuple<
           };
 
           consumingFailure = undefined;
+          currentContext = withPassThroughFailure(
+            currentContext,
+            getPassThroughFailure(result.next),
+          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first failure blocks capture; the deepest selects the diagnostic.
-          if (result.consumed > 0) consumingFailure ??= result;
+          // The first matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          if (
+            result.consumed > 0 &&
+            matchesOptionToken(parser, currentContext.buffer[0])
+          ) consumingFailure ??= result;
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -11158,13 +11220,21 @@ export function concat(
           };
 
           consumingFailure = undefined;
+          currentContext = withPassThroughFailure(
+            currentContext,
+            getPassThroughFailure(result.next),
+          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first failure blocks capture; the deepest selects the diagnostic.
-          if (result.consumed > 0) consumingFailure ??= result;
+          // The first matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          if (
+            result.consumed > 0 &&
+            matchesOptionToken(parser, currentContext.buffer[0])
+          ) consumingFailure ??= result;
           if (error.consumed < result.consumed) error = result;
         }
       }
@@ -11311,13 +11381,21 @@ export function concat(
           };
 
           consumingFailure = undefined;
+          currentContext = withPassThroughFailure(
+            currentContext,
+            getPassThroughFailure(result.next),
+          );
           allConsumed.push(...result.consumed);
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
         } else if (!result.success) {
-          // The first failure blocks capture; the deepest selects the diagnostic.
-          if (result.consumed > 0) consumingFailure ??= result;
+          // The first matching option failure blocks capture.
+          // The deepest failure selects the diagnostic.
+          if (
+            result.consumed > 0 &&
+            matchesOptionToken(parser, currentContext.buffer[0])
+          ) consumingFailure ??= result;
           if (error.consumed < result.consumed) error = result;
         }
       }

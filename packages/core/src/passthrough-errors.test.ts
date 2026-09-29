@@ -142,6 +142,105 @@ describe("pass-through known-option errors", () => {
         );
       });
 
+      it("parses bundled flags before tied nested capture", () => {
+        const known = object({ verbose: option("-v"), debug: option("-d") });
+        const extra = object({
+          other: option("--other"),
+          rest: passThrough({ format: "nextToken" }),
+        });
+        const parser = compose(extra, known);
+        assert.deepEqual(parseSync<unknown>(parser, ["-vd"]), {
+          success: true,
+          value: name === "object"
+            ? {
+              known: { other: false, rest: [] },
+              extra: { verbose: true, debug: true },
+            }
+            : [{ other: false, rest: [] }, { verbose: true, debug: true }],
+        });
+        for (const input of [["-vv"], ["-v", "-vd"]]) {
+          const expected = parseSync<unknown>(known, input);
+          assert.ok(!expected.success);
+          assert.deepEqual(parseSync<unknown>(parser, input), expected);
+        }
+      });
+
+      it("does not treat attached short-option values as bundles", () => {
+        const extra = object({
+          other: option("--other"),
+          rest: passThrough({ format: "nextToken" }),
+        });
+        const parser = name === "object"
+          ? object({
+            extra,
+            value: optional(option("-m", string())),
+            positional: optional(argument(string())),
+          })
+          : name === "tuple"
+          ? tuple([
+            extra,
+            optional(option("-m", string())),
+            optional(argument(string())),
+          ])
+          : concat(
+            tuple([extra]),
+            tuple([optional(option("-m", string()))]),
+            tuple([optional(argument(string()))]),
+          );
+        assert.deepEqual(parseSync<unknown>(parser, ["-mhello"]), {
+          success: true,
+          value: name === "object"
+            ? {
+              extra: { other: false, rest: ["-mhello"] },
+              value: undefined,
+              positional: undefined,
+            }
+            : [{ other: false, rest: ["-mhello"] }, undefined, undefined],
+        });
+      });
+
+      it("allows ordinary recovery after partial nested progress", () => {
+        const base = option("-m", string());
+        const known = object({
+          verbose: option("-v"),
+          value: optional({
+            ...base,
+            parse: (context) =>
+              context.buffer[0] === "-m"
+                ? {
+                  success: false,
+                  consumed: 1,
+                  error: message`Try another parser.`,
+                }
+                : base.parse(context),
+          }),
+        });
+        const extra = object({
+          recovered: option("-m"),
+          rest: passThrough({ format: "nextToken" }),
+        });
+        const parser = name === "object"
+          ? object({ known, extra }, { allowDuplicates: true })
+          : name === "tuple"
+          ? tuple([known, extra], { allowDuplicates: true })
+          : concat(tuple([known]), tuple([extra]));
+        assert.deepEqual(
+          parseSync<unknown>(parser, ["-v", "-m", "--unknown"]),
+          {
+            success: true,
+            value: name === "object"
+              ? {
+                known: { verbose: true, value: undefined },
+                extra: { recovered: true, rest: ["--unknown"] },
+              }
+              : [{ verbose: true, value: undefined }, {
+                recovered: true,
+                rest: ["--unknown"],
+              }],
+          },
+        );
+      });
+
       it("preserves a custom missing-value diagnostic after earlier input", () => {
         const known = optional(option("-m", string(), {
           errors: { endOfInput: message`Please supply a message.` },
@@ -261,7 +360,7 @@ describe("pass-through known-option errors", () => {
         assert.ok(result.success);
       });
 
-      it("allows a greedy fallback after a consuming positional failure", () => {
+      it("allows a greedy fallback after a non-option consuming failure", () => {
         const failing: SyncParser = {
           ...argument(string()),
           parse: (context) =>
@@ -274,14 +373,29 @@ describe("pass-through known-option errors", () => {
               },
           complete: () => ({ success: true, value: undefined }),
         };
-        assert.ok(
-          parseSync<unknown>(
-            compose(failing, passThrough({ format: "greedy" })),
-            [
-              "positional",
-            ],
-          ).success,
-        );
+        for (
+          const token of [
+            "positional",
+            "--unknown",
+            "-x",
+            "/X",
+            "+x",
+            "--unknown=value",
+          ]
+        ) {
+          assert.deepEqual(
+            parseSync<unknown>(
+              compose(failing, passThrough({ format: "greedy" })),
+              [token],
+            ),
+            {
+              success: true,
+              value: name === "object"
+                ? { known: undefined, extra: [token] }
+                : [undefined, [token]],
+            },
+          );
+        }
       });
 
       it("allows a normal option alternative to recover before forwarding later input", () => {
@@ -372,6 +486,74 @@ describe("pass-through known-option errors", () => {
         );
       });
     }
+  }
+
+  for (const name of ["object", "tuple", "concat"] as const) {
+    it(`forwards unknown option-shaped tokens after a true async ${name} consuming failure`, async () => {
+      const failing: Parser<"async", unknown, unknown> = {
+        ...argument(asyncString),
+        parse: (context) =>
+          Promise.resolve(
+            context.buffer.length === 0
+              ? { success: true, next: context, consumed: [] }
+              : {
+                success: false,
+                consumed: 1,
+                error: message`Speculative failure.`,
+              },
+          ),
+        complete: () => Promise.resolve({ success: true, value: undefined }),
+      };
+      const extra = passThrough({ format: "greedy" });
+      const parser = name === "object"
+        ? object({ failing, extra })
+        : name === "tuple"
+        ? tuple([failing, extra])
+        : concat(tuple([failing]), tuple([extra]));
+      for (const token of ["--unknown", "-x", "/X", "+x", "--unknown=value"]) {
+        assert.deepEqual(await parseAsync<unknown>(parser, [token]), {
+          success: true,
+          value: name === "object"
+            ? { failing: undefined, extra: [token] }
+            : [undefined, [token]],
+        });
+      }
+    });
+
+    it(`parses bundles before tied nested capture in true async ${name}`, async () => {
+      const known = object({
+        verbose: option("-v"),
+        debug: option("-d"),
+        marker: optional(option("--marker", asyncString)),
+      });
+      const extra = object({
+        other: option("--other"),
+        rest: passThrough({ format: "nextToken" }),
+      });
+      const parser = name === "object"
+        ? object({ extra, known })
+        : name === "tuple"
+        ? tuple([extra, known])
+        : concat(tuple([extra]), tuple([known]));
+      assert.deepEqual(await parseAsync<unknown>(parser, ["-vd"]), {
+        success: true,
+        value: name === "object"
+          ? {
+            extra: { other: false, rest: [] },
+            known: { verbose: true, debug: true, marker: undefined },
+          }
+          : [{ other: false, rest: [] }, {
+            verbose: true,
+            debug: true,
+            marker: undefined,
+          }],
+      });
+      for (const input of [["-vv"], ["-v", "-vd"]]) {
+        const expected = await parseAsync<unknown>(known, input);
+        assert.ok(!expected.success);
+        assert.deepEqual(await parseAsync<unknown>(parser, input), expected);
+      }
+    });
   }
 
   it("preserves the original missing-value wording", () => {
