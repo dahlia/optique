@@ -19,6 +19,7 @@ import {
 import { getAnnotations } from "@optique/core/annotations";
 import {
   defineTraits,
+  delegateOptionParsing,
   delegateSuggestNodes,
   getTraits,
   inheritAnnotations,
@@ -911,6 +912,11 @@ export function prompt<M extends Mode, TValue, TState>(
     return validatePromptedValue(result);
   }
 
+  const getCliState = (state: TState): TState =>
+    isPromptBindState(state)
+      ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+      : state;
+
   const promptedParser: Parser<"async", TValue, TState> = {
     mode: "async",
     $valueType: parser.$valueType,
@@ -965,11 +971,7 @@ export function prompt<M extends Mode, TValue, TState>(
       // object() stores the wrapped { hasCliValue, cliState } state and passes
       // it back on the next iteration.  The inner parser expects its own
       // native state, so we unwrap cliState before delegating.
-      const innerState = isPromptBindState(context.state)
-        ? (context.state.hasCliValue
-          ? (context.state.cliState as TState)
-          : parser.initialState)
-        : context.state;
+      const innerState = getCliState(context.state);
       const baseInnerContext = innerState !== context.state
         ? { ...context, state: innerState }
         : context;
@@ -1375,6 +1377,7 @@ export function prompt<M extends Mode, TValue, TState>(
     });
   }
 
+  delegateOptionParsing(promptedParser, parser, getCliState);
   return promptedParser;
 }
 

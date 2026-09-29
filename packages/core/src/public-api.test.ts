@@ -85,6 +85,7 @@ test("annotations module only exposes the annotation read API", () => {
 test("extension module exposes the supported extension helpers", () => {
   assert.deepEqual(Object.keys(extension).sort(), [
     "defineTraits",
+    "delegateOptionParsing",
     "delegateSuggestNodes",
     "dispatchByMode",
     "getTraits",

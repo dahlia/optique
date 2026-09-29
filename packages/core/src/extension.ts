@@ -9,6 +9,13 @@
  * @since 1.0.0
  */
 
+import {
+  defineOptionMatch,
+  definePassThroughPriority,
+  getOptionMatch,
+  getPassThroughPriority,
+} from "./internal/passthrough.ts";
+
 import type { Mode, Parser } from "./parser.ts";
 import {
   annotationWrapperRequiresSourceBindingKey,
@@ -198,4 +205,31 @@ export function mapSourceMetadata<M extends Mode, TValue, TState>(
     parser.dependencyMetadata,
     mapSource,
   ) as Parser<M, TValue, TState>["dependencyMetadata"] | undefined;
+}
+
+/**
+ * Delegates CLI option matching and capture priority through a parser wrapper.
+ * Use the same child-state projection as the wrapper's parse method. This
+ * preserves selected command options without changing public leading names.
+ *
+ * @param wrapper The parser being constructed.
+ * @param inner Its wrapped CLI parser.
+ * @param getInnerState Projects the wrapper state to the CLI parser state.
+ * @throws {TypeError} If metadata cannot be defined on the wrapper.
+ * @since 1.0.11
+ */
+export function delegateOptionParsing<TOuterState, TInnerState>(
+  wrapper: Parser<Mode, unknown, TOuterState>,
+  inner: Parser<Mode, unknown, TInnerState>,
+  getInnerState: (state: TOuterState) => TInnerState,
+): void {
+  defineOptionMatch(
+    wrapper,
+    (state, token) => getOptionMatch(inner, getInnerState(state), token),
+  );
+  definePassThroughPriority(
+    wrapper,
+    [inner],
+    (state) => getPassThroughPriority(inner, getInnerState(state)),
+  );
 }
