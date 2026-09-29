@@ -344,10 +344,18 @@ export function defineKnownCompletion<TState>(
   parser: Pick<Parser<Mode, unknown, TState>, "complete">,
   value: (state: TState) => unknown,
 ): void {
+  defineKnownCompletionLookup(parser, (state) => ({ value: value(state) }));
+}
+
+/** Registers a known-value lookup that may decline unknown completion. @internal */
+export function defineKnownCompletionLookup<TState>(
+  parser: Pick<Parser<Mode, unknown, TState>, "complete">,
+  value: (state: TState) => { readonly value: unknown } | undefined,
+): void {
   Object.defineProperty(parser, knownCompletionKey, {
     value: {
       complete: parser.complete,
-      value: (state: TState) => ({ value: value(state) }),
+      value,
     } satisfies KnownCompletion<
       TState
     >,

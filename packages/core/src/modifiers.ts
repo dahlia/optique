@@ -1,6 +1,8 @@
 import {
+  defineKnownCompletionLookup,
   defineOptionMatch,
   definePassThroughPriority,
+  getKnownCompletion,
   getOptionMatch,
   getPassThroughPriority,
 } from "./internal/passthrough.ts";
@@ -1014,6 +1016,13 @@ export function optional<M extends Mode, TValue, TState>(
         normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
       ),
   );
+  // A known child succeeds even without input, so parsing wraps its state
+  // and completion preserves its value instead of using the fallback.
+  defineKnownCompletionLookup(
+    optionalParser,
+    (state) =>
+      getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
+  );
   return optionalParser;
 }
 
@@ -1571,6 +1580,13 @@ export function withDefault<
         parser,
         normalizeOptionalLikeSuggestState(state, parser.initialState, parser),
       ),
+  );
+  // A known child succeeds even without input, so parsing wraps its state
+  // and completion preserves its value instead of using the fallback.
+  defineKnownCompletionLookup(
+    withDefaultParser,
+    (state) =>
+      getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
   );
   return withDefaultParser;
 }

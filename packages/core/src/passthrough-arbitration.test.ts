@@ -7,7 +7,7 @@ import {
   or,
   tuple,
 } from "@optique/core/constructs";
-import { multiple, optional } from "@optique/core/modifiers";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { parseAsync } from "@optique/core/parser";
 import {
   command,
@@ -16,6 +16,9 @@ import {
   passThrough,
 } from "@optique/core/primitives";
 import { string, type ValueParser } from "@optique/core/valueparser";
+import { getKnownCompletion } from "./internal/passthrough.ts";
+import { optional as optionalLocal } from "./modifiers.ts";
+import { constant as constantLocal } from "./primitives.ts";
 import assert from "node:assert/strict";
 import { it } from "node:test";
 
@@ -252,38 +255,66 @@ for (const mode of ["sync", "async"] as const) {
       }
     });
     it(`${mode} ${outer} ignores inactive conditional option priorities`, async () => {
-      const cond = conditional(constant("run"), {
-        run: optional(option("-m", value)),
-        other: { ...optional(option("-m", value)), priority: 13 },
-      });
-      const rest = { ...passThrough({ format: "nextToken" }), priority: 12 };
-      const parser = outer === "object"
-        ? object({ cond, rest })
-        : outer === "tuple"
-        ? tuple([cond, rest])
-        : concat(tuple([cond]), tuple([rest]));
-      assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), {
-        success: true,
-        value: outer === "object"
-          ? { cond: ["run", undefined], rest: ["-m"] }
-          : [["run", undefined], ["-m"]],
-      });
+      for (
+        const discriminator of [
+          constant("run"),
+          withDefault(withDefault(constant("run"), "other"), "other"),
+          withDefault(constant("run"), "other"),
+          withDefault(
+            withDefault(constant("run"), () => {
+              throw new Error("A known child must not evaluate its fallback.");
+            }),
+            "other",
+          ),
+        ]
+      ) {
+        const cond = conditional(discriminator, {
+          run: optional(option("-m", value)),
+          other: { ...optional(option("-m", value)), priority: 13 },
+        });
+        const rest = { ...passThrough({ format: "nextToken" }), priority: 12 };
+        const parser = outer === "object"
+          ? object({ cond, rest })
+          : outer === "tuple"
+          ? tuple([cond, rest])
+          : concat(tuple([cond]), tuple([rest]));
+        assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), {
+          success: true,
+          value: outer === "object"
+            ? { cond: ["run", undefined], rest: ["-m"] }
+            : [["run", undefined], ["-m"]],
+        });
+      }
     });
     it(`${mode} ${outer} ignores inactive conditional capture priorities`, async () => {
-      const cond = conditional(constant("run"), {
-        run: passThrough({ format: "nextToken" }),
-        other: { ...passThrough({ format: "nextToken" }), priority: 13 },
-      });
-      const known = optional(option("-m", value));
-      for (const capture of [cond, object({ cond }), tuple([cond])]) {
-        const parser = outer === "object"
-          ? object({ capture, known })
-          : outer === "tuple"
-          ? tuple([capture, known])
-          : concat(tuple([capture]), tuple([known]));
-        const expected = await parseAsync<unknown>(known, ["-m"]);
-        assert.ok(!expected.success);
-        assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), expected);
+      for (
+        const discriminator of [
+          constant("run"),
+          withDefault(withDefault(constant("run"), "other"), "other"),
+          withDefault(constant("run"), "other"),
+          withDefault(
+            withDefault(constant("run"), () => {
+              throw new Error("A known child must not evaluate its fallback.");
+            }),
+            "other",
+          ),
+        ]
+      ) {
+        const cond = conditional(discriminator, {
+          run: passThrough({ format: "nextToken" }),
+          other: { ...passThrough({ format: "nextToken" }), priority: 13 },
+        });
+        const known = optional(option("-m", value));
+        for (const capture of [cond, object({ cond }), tuple([cond])]) {
+          const parser = outer === "object"
+            ? object({ capture, known })
+            : outer === "tuple"
+            ? tuple([capture, known])
+            : concat(tuple([capture]), tuple([known]));
+          const expected = await parseAsync<unknown>(known, ["-m"]);
+          assert.ok(!expected.success);
+          assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), expected);
+        }
       }
     });
     it(`${mode} ${outer} preserves ordinary sibling order with capture present`, async () => {
@@ -336,3 +367,26 @@ for (const mode of ["sync", "async"] as const) {
     });
   }
 }
+
+it("optional constants retain a known value without invoking completion", async () => {
+  const child = constantLocal("run");
+  const parser = optionalLocal(child);
+  assert.deepEqual(getKnownCompletion(parser, parser.initialState), {
+    value: "run",
+  });
+  assert.deepEqual(getKnownCompletion(parser, ["run"]), { value: "run" });
+  assert.deepEqual(await parseAsync(parser, []), {
+    success: true,
+    value: "run",
+  });
+  let calls = 0;
+  const changed = optionalLocal({
+    ...child,
+    complete: () => {
+      calls++;
+      return { success: true as const, value: "other" as const };
+    },
+  });
+  assert.equal(getKnownCompletion(changed, changed.initialState), undefined);
+  assert.equal(calls, 0);
+});
