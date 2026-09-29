@@ -2,7 +2,9 @@ import {
   concat,
   conditional,
   group,
+  longestMatch,
   object,
+  or,
   tuple,
 } from "@optique/core/constructs";
 import { multiple, optional } from "@optique/core/modifiers";
@@ -102,6 +104,153 @@ for (const mode of ["sync", "async"] as const) {
     );
   });
   for (const outer of ["object", "tuple", "concat"] as const) {
+    for (const inner of ["object", "tuple", "concat"] as const) {
+      it(`${mode} ${outer} orders mixed ${inner} by its winning capture`, async () => {
+        for (const knownPriority of [5, 15, 20]) {
+          for (const unrelatedPriority of [0, 25]) {
+            const unrelated = {
+              ...optional(command("run", constant(undefined))),
+              priority: unrelatedPriority,
+            };
+            const matched = { ...optional(option("-m", value)), priority: 5 };
+            const rest = {
+              ...passThrough({ format: "nextToken" }),
+              priority: 15,
+            };
+            const mixed = inner === "object"
+              ? object({ unrelated, matched, rest })
+              : inner === "tuple"
+              ? tuple([unrelated, matched, rest])
+              : concat(tuple([unrelated]), tuple([matched]), tuple([rest]));
+            const known = {
+              ...optional(option("-m", value)),
+              priority: knownPriority,
+            };
+            const parser = outer === "object"
+              ? object({ mixed, known }, { allowDuplicates: true })
+              : outer === "tuple"
+              ? tuple([mixed, known], { allowDuplicates: true })
+              : concat(tuple([mixed]), tuple([known]));
+            const captured = knownPriority < 15 ? ["-m", "hello"] : [];
+            const knownValue = knownPriority < 15 ? undefined : "hello";
+            const emptyMixed = inner === "object"
+              ? { unrelated: undefined, matched: undefined, rest: captured }
+              : [undefined, undefined, captured];
+            assert.deepEqual(
+              await parseAsync<unknown>(parser, ["-m", "hello"]),
+              {
+                success: true,
+                value: outer === "object"
+                  ? { mixed: emptyMixed, known: knownValue }
+                  : [emptyMixed, knownValue],
+              },
+            );
+          }
+        }
+      });
+    }
+    it(`${mode} ${outer} orders competing captures inside mixed containers`, async () => {
+      const mixed = object({
+        unrelated: {
+          ...optional(command("run", constant(undefined))),
+          priority: 25,
+        },
+        matched: { ...optional(option("-m", value)), priority: 5 },
+        rest: { ...passThrough({ format: "nextToken" }), priority: 15 },
+      });
+      const rest = { ...passThrough({ format: "nextToken" }), priority: 20 };
+      const parser = outer === "object"
+        ? object({ mixed, rest })
+        : outer === "tuple"
+        ? tuple([mixed, rest])
+        : concat(tuple([mixed]), tuple([rest]));
+      const emptyMixed = { unrelated: undefined, matched: undefined, rest: [] };
+      assert.deepEqual(await parseAsync<unknown>(parser, ["-m", "hello"]), {
+        success: true,
+        value: outer === "object"
+          ? { mixed: emptyMixed, rest: ["-m", "hello"] }
+          : [emptyMixed, ["-m", "hello"]],
+      });
+    });
+    for (const exclusive of ["or", "longestMatch"] as const) {
+      it(`${mode} ${outer} sees capture in a selectable ${exclusive} alternative`, async () => {
+        const verbose = option("-v");
+        const capture = passThrough({ format: "nextToken" });
+        const unrelated = option("--unrelated", value);
+        const alt = exclusive === "or"
+          ? or(verbose, unrelated, capture)
+          : longestMatch(verbose, unrelated, capture);
+        const known = optional(option("-m", value));
+        const parser = outer === "object"
+          ? object({ alt, known })
+          : outer === "tuple"
+          ? tuple([alt, known])
+          : concat(tuple([alt]), tuple([known]));
+        const expected = await parseAsync<unknown>(known, ["-m"]);
+        assert.ok(!expected.success);
+        assert.deepEqual(
+          await parseAsync<unknown>(parser, ["-v", "-m"]),
+          expected,
+        );
+      });
+    }
+    it(`${mode} ${outer} allows recovery from rejected longestMatch errors`, async () => {
+      for (const recovery of ["capture", "option"] as const) {
+        const known = option("-m", value);
+        const alt = recovery === "option"
+          ? longestMatch(known, option("-m"))
+          : longestMatch(known, constant(undefined));
+        const rest = { ...passThrough({ format: "greedy" }), priority: 12 };
+        const parser = outer === "object"
+          ? object({ alt, rest })
+          : outer === "tuple"
+          ? tuple([alt, rest])
+          : concat(tuple([alt]), tuple([rest]));
+        // A higher-priority capture wins outright; an ordinary alternative
+        // is checked with a lower-priority capture so it can consume -m.
+        const ordinaryRest = passThrough({ format: "greedy" });
+        const ordinaryParser = outer === "object"
+          ? object({ alt, rest: ordinaryRest })
+          : outer === "tuple"
+          ? tuple([alt, ordinaryRest])
+          : concat(tuple([alt]), tuple([ordinaryRest]));
+        assert.deepEqual(
+          await parseAsync<unknown>(
+            recovery === "capture" ? parser : ordinaryParser,
+            ["-m"],
+          ),
+          {
+            success: true,
+            value: outer === "object"
+              ? {
+                alt: recovery === "capture" ? undefined : true,
+                rest: recovery === "capture" ? ["-m"] : [],
+              }
+              : [
+                recovery === "capture" ? undefined : true,
+                recovery === "capture" ? ["-m"] : [],
+              ],
+          },
+        );
+      }
+    });
+    it(`${mode} ${outer} retains errors rejected by a longestMatch fallback`, async () => {
+      const known = optional(option("-m", value));
+      const fallback = longestMatch(known, constant(undefined));
+      for (
+        const alt of [fallback, longestMatch(constant(undefined), fallback)]
+      ) {
+        const rest = passThrough({ format: "greedy" });
+        const parser = outer === "object"
+          ? object({ alt, rest })
+          : outer === "tuple"
+          ? tuple([alt, rest])
+          : concat(tuple([alt]), tuple([rest]));
+        const expected = await parseAsync<unknown>(known, ["-m"]);
+        assert.ok(!expected.success);
+        assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), expected);
+      }
+    });
     it(`${mode} ${outer} ignores inactive conditional option priorities`, async () => {
       const cond = conditional(constant("run"), {
         run: optional(option("-m", value)),

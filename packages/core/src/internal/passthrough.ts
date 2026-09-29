@@ -103,6 +103,22 @@ export function withPassThroughFailure<TState>(
   return hinted;
 }
 
+/** Retains a child's rejected option failure only at the parent's cursor. @internal */
+export function retainConsumingFailureHint<TState, TChildState>(
+  current: ConsumingFailure | undefined,
+  context: ParserContext<TState>,
+  next: ParserContext<TChildState>,
+): ConsumingFailure | undefined {
+  if (
+    next.buffer !== context.buffer ||
+    next.optionsTerminated !== context.optionsTerminated
+  ) return current;
+  const hint = getPassThroughFailure(next);
+  return hint == null
+    ? current
+    : retainConsumingFailure(current, hint.failure, hint.priority);
+}
+
 const capturePriority = Symbol("capturePriority");
 type PrioritySource = Pick<
   Parser<Mode, unknown, unknown>,

@@ -12,6 +12,7 @@ import {
   hasPassThroughUsage,
   matchesOptionToken,
   retainConsumingFailure,
+  retainConsumingFailureHint,
   withPassThroughFailure,
 } from "./internal/passthrough.ts";
 import {
@@ -303,22 +304,37 @@ function orderBeforePassThrough<TPair>(
       getOptionMatch(getParser(pair), getState(pair), token),
     ] as const
   ));
-  const matching = [...matches.values()].filter((match) => match != null);
-  if (matching.length === 0) return pairs;
-  const matchingPriority = Math.max(...matching.map((match) => match.priority));
   const captures = new Map(pairs.flatMap((pair) => {
-    if (matches.get(pair) != null || !passThroughParsers.has(getParser(pair))) {
-      return [];
-    }
+    if (!passThroughParsers.has(getParser(pair))) return [];
     const priority = getPassThroughPriority(getParser(pair), getState(pair));
-    return priority == null ? [] : [[pair, priority] as const];
+    const match = matches.get(pair);
+    // A mixed container competes as capture only when capture would beat its
+    // own matching option. Its unrelated aggregate priority cannot decide.
+    return priority == null || (match != null && match.priority >= priority)
+      ? []
+      : [[pair, priority] as const];
   }));
+  const matching = pairs.filter((pair) => !captures.has(pair))
+    .flatMap((pair) => {
+      const match = matches.get(pair);
+      return match == null ? [] : [match];
+    });
+  const orderedCaptures = [...captures].sort((a, b) => b[1] - a[1]);
+  if (matching.length === 0) {
+    if (![...matches.values()].some((match) => match != null)) return pairs;
+    // Every matching container will capture. Reorder only capture slots,
+    // retaining ordinary siblings in place even without a known-option group.
+    let captureIndex = 0;
+    return pairs.map((pair) =>
+      captures.has(pair) ? orderedCaptures[captureIndex++][0] : pair
+    );
+  }
+  const matchingPriority = Math.max(...matching.map((match) => match.priority));
   // Keep ordinary siblings in their original order. Only capture moves across
   // the matching group, so unrelated container priorities retain their meaning.
   const ordinary = pairs.filter((pair) => !captures.has(pair));
   const first = ordinary.findIndex((pair) => matches.get(pair) != null);
   const last = ordinary.findLastIndex((pair) => matches.get(pair) != null);
-  const orderedCaptures = [...captures].sort((a, b) => b[1] - a[1]);
   const before = orderedCaptures.filter(([, priority]) =>
     priority > matchingPriority
   )
@@ -4137,15 +4153,15 @@ export function or(
   definePassThroughPriority(singleResult, parsers, (state) => {
     const active = normalizeExclusiveState(state);
     return combinePassThroughPriorities(
+      // Parsing still evaluates other alternatives. or() validates replay
+      // before switching; longestMatch() compares every branch each time.
       parsers.map((parser, index) =>
-        active != null && active[0] !== index
-          ? undefined
-          : getPassThroughPriority(
-            parser,
-            active?.[0] === index && active[1].success
-              ? active[1].next.state
-              : parser.initialState,
-          )
+        getPassThroughPriority(
+          parser,
+          active?.[0] === index && active[1].success
+            ? active[1].next.state
+            : parser.initialState,
+        )
       ),
     );
   });
@@ -4482,6 +4498,7 @@ export function longestMatch(
     context: ParserContext<LongestMatchState>,
     match: BranchMatch,
     optionsTerminatorResult?: SuccessfulResult,
+    consumingFailure?: ConsumingFailure,
   ): ParseResult => {
     const selectedResult: SuccessfulResult = optionsTerminatorResult == null
       ? match.result
@@ -4498,15 +4515,18 @@ export function longestMatch(
           ...match.result.consumed,
         ],
       };
+    const next = selectedResult.consumed.length === 0
+      ? withPassThroughFailure(selectedResult.next, consumingFailure)
+      : selectedResult.next;
     const parser = parsers[match.index];
-    const mergedExec = mergeChildExec(context.exec, selectedResult.next.exec);
+    const mergedExec = mergeChildExec(context.exec, next.exec);
     return {
       success: true,
       next: {
         ...context,
-        ...getPassThroughFailureHint(selectedResult.next),
-        buffer: selectedResult.next.buffer,
-        optionsTerminated: selectedResult.next.optionsTerminated,
+        ...getPassThroughFailureHint(next),
+        buffer: next.buffer,
+        optionsTerminated: next.optionsTerminated,
         state: createExclusiveState(
           context.state,
           match.index,
@@ -4599,6 +4619,7 @@ export function longestMatch(
     } | null = null;
     const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
+    let consumingFailure: ConsumingFailure | undefined;
     const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
@@ -4627,6 +4648,11 @@ export function longestMatch(
         continue;
       }
       if (result.success) {
+        consumingFailure = retainConsumingFailureHint(
+          consumingFailure,
+          context,
+          result.next,
+        );
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
@@ -4640,8 +4666,20 @@ export function longestMatch(
         ) {
           bestMatch = { index: i, result, consumed };
         }
-      } else if (error.consumed < result.consumed) {
-        error = result;
+      } else {
+        const match = getOptionMatch(
+          parser,
+          childContext.state,
+          context.buffer[0],
+        );
+        if (result.consumed > 0 && match != null) {
+          consumingFailure = retainConsumingFailure(
+            consumingFailure,
+            result,
+            match.priority,
+          );
+        }
+        if (error.consumed < result.consumed) error = result;
       }
     }
 
@@ -4654,7 +4692,14 @@ export function longestMatch(
       return optionsTerminatorResolution;
     }
 
-    if (bestMatch != null) return commitLongestMatch(context, bestMatch);
+    if (bestMatch != null) {
+      return commitLongestMatch(
+        context,
+        bestMatch,
+        undefined,
+        consumingFailure,
+      );
+    }
 
     return { ...error, success: false };
   };
@@ -4670,6 +4715,7 @@ export function longestMatch(
     } | null = null;
     const optionsTerminatorMatches: BranchMatch[] = [];
     let error = getInitialError(context);
+    let consumingFailure: ConsumingFailure | undefined;
     const activeState = normalizeExclusiveState(context.state);
 
     // Try all parsers and find the one with longest match
@@ -4699,6 +4745,11 @@ export function longestMatch(
         continue;
       }
       if (result.success) {
+        consumingFailure = retainConsumingFailureHint(
+          consumingFailure,
+          context,
+          result.next,
+        );
         const consumed = context.buffer.length - result.next.buffer.length;
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
@@ -4712,8 +4763,20 @@ export function longestMatch(
         ) {
           bestMatch = { index: i, result, consumed };
         }
-      } else if (error.consumed < result.consumed) {
-        error = result;
+      } else {
+        const match = getOptionMatch(
+          parser,
+          childContext.state,
+          context.buffer[0],
+        );
+        if (result.consumed > 0 && match != null) {
+          consumingFailure = retainConsumingFailure(
+            consumingFailure,
+            result,
+            match.priority,
+          );
+        }
+        if (error.consumed < result.consumed) error = result;
       }
     }
 
@@ -4726,7 +4789,14 @@ export function longestMatch(
       return optionsTerminatorResolution;
     }
 
-    if (bestMatch != null) return commitLongestMatch(context, bestMatch);
+    if (bestMatch != null) {
+      return commitLongestMatch(
+        context,
+        bestMatch,
+        undefined,
+        consumingFailure,
+      );
+    }
 
     return { ...error, success: false };
   };
@@ -4836,15 +4906,15 @@ export function longestMatch(
   definePassThroughPriority(multiResult, parsers, (state) => {
     const active = normalizeExclusiveState(state);
     return combinePassThroughPriorities(
+      // Parsing still evaluates other alternatives. or() validates replay
+      // before switching; longestMatch() compares every branch each time.
       parsers.map((parser, index) =>
-        active != null && active[0] !== index
-          ? undefined
-          : getPassThroughPriority(
-            parser,
-            active?.[0] === index && active[1].success
-              ? active[1].next.state
-              : parser.initialState,
-          )
+        getPassThroughPriority(
+          parser,
+          active?.[0] === index && active[1].success
+            ? active[1].next.state
+            : parser.initialState,
+        )
       ),
     );
   });
@@ -6219,7 +6289,13 @@ export function object<
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
-        } else if (!result.success) {
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           const match = getOptionMatch(
@@ -6431,7 +6507,13 @@ export function object<
           madeProgress = true;
           consumedFields.add(field as string | symbol);
           break; // Restart the field loop with updated context
-        } else if (!result.success) {
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           const match = getOptionMatch(
@@ -7958,7 +8040,13 @@ export function tuple<
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success) {
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           const match = getOptionMatch(
@@ -8048,7 +8136,7 @@ export function tuple<
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -8144,7 +8232,13 @@ export function tuple<
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success) {
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           const match = getOptionMatch(
@@ -8235,7 +8329,7 @@ export function tuple<
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -11467,7 +11561,13 @@ export function concat(
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success) {
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           const match = getOptionMatch(
@@ -11557,7 +11657,7 @@ export function concat(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
@@ -11650,7 +11750,13 @@ export function concat(
           matchedParsers.add(index);
           foundMatch = true;
           break; // Take the first (highest priority) match that consumes input
-        } else if (!result.success) {
+        } else if (result.success) {
+          consumingFailure = retainConsumingFailureHint(
+            consumingFailure,
+            currentContext,
+            result.next,
+          );
+        } else {
           // The deepest matching option failure blocks capture.
           // The deepest failure selects the diagnostic.
           const match = getOptionMatch(
@@ -11740,7 +11846,7 @@ export function concat(
 
     return {
       success: true,
-      next: currentContext,
+      next: withPassThroughFailure(currentContext, consumingFailure),
       consumed: allConsumed,
     };
   };
