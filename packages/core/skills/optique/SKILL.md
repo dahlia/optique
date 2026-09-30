@@ -44,10 +44,10 @@ Core rules
     `url()`, `origin()`, and `uuid()` instead of validating raw strings after
     parsing. Use `regExp({ flags })` for user-supplied sources, `biject()` for
     one-to-one string-to-value choices, and `transform()` when an existing
-    value parser describes the accepted CLI spelling but your app needs a
-    different result type. Use `path()` from `@optique/run/valueparser` for
-    file-system paths. Write a custom `{ mode, metavar, parse, format }` value
-    parser only when the catalog does not cover the domain.
+    value parser accepts the spelling but your app needs a different result
+    type. Use `normalizeInput()` for raw-string cleanup before validation and
+    `path()` from `@optique/run/valueparser` for file-system paths. Write a
+    custom value parser only when these tools do not cover the domain.
  -  Since 1.4.0, `-p8080`/`-vp8080` accept attached values. Values consume
     the literal suffix (`-p=5` gives `"=5"`); full single-dash names win.
  -  Async value parsers like *@optique/git* make containing parsers async.

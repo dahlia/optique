@@ -40,6 +40,7 @@ with Optique's type system.
 | `choice()`                       | *@optique/core*            | string or number literal union | Enumerated values                                     |
 | `biject()`                       | *@optique/core*            | mapped value type              | One-to-one string-to-value choices                    |
 | `transform()`                    | *@optique/core*            | mapped value type              | Reversible value parser transformation                |
+| `normalizeInput()`               | *@optique/core*            | wrapped parser's value type    | Normalize raw input before validation                 |
 | `firstOf()`                      | *@optique/core*            | union of constituent types     | First-match union of value parsers                    |
 | `json()`                         | *@optique/core*            | `Json`                         | Any JSON value, with optional root type restriction   |
 | `cron()`                         | *@optique/core*            | `CronExpression`               | Cron schedule expression                              |
@@ -852,6 +853,71 @@ biject({
 The parser exposes the mapped values through `choices`, while completion
 suggestions remain based on the input keys.  For example, `biject({ ok: 0 })`
 suggests `ok` to the shell but produces the value `0`.
+
+
+`normalizeInput()` combinator
+-----------------------------
+
+*This combinator is available since Optique 1.4.0.*
+
+Use `normalizeInput()` to change a raw string before an existing value parser
+validates it.  For example, `choice()` can ignore case but does not trim
+whitespace:
+
+~~~~ typescript twoslash
+import { choice, normalizeInput } from "@optique/core/valueparser";
+
+const trim = (input: string) => input.trim();
+const level = normalizeInput(
+  choice(["error", "warn", "debug"], { caseInsensitive: true }),
+  trim,
+);
+
+level.parse(" DEBUG "); // { success: true, value: "debug" }
+level.suggest?.(" de"); // Suggests "debug"
+~~~~
+
+The wrapped parser still decides the result type, error message, and suggested
+spelling.  If it reports an invalid input, that message may show the normalized
+string rather than the original text.  `normalizeInput()` also preserves the
+parser's mode, so it works with synchronous and asynchronous value parsers.
+Its function must be synchronous and return a string.  If it throws or returns
+another type, parsing fails with a normalization error and completion returns
+no suggestions.
+
+The same function runs on completion prefixes, but suggestions are returned
+unchanged.  Use a pure, idempotent function that leaves suggested spellings
+valid.  Shells may still filter suggestions against the original prefix, so
+even a direct `suggest()` result may not appear in a shell for a changed
+prefix.  Nested `normalizeInput()` wrappers run their functions from the
+outside in.
+
+Environment variables use the separate value parser supplied to `bindEnv()`.
+Pass the same wrapped parser to the CLI option and the environment binding
+when both should accept padded input:
+
+~~~~ typescript twoslash
+import { choice, normalizeInput } from "@optique/core/valueparser";
+import { option } from "@optique/core/primitives";
+import { bindEnv, createEnvContext } from "@optique/env";
+
+const levelValue = normalizeInput(
+  choice(["debug", "info"]),
+  (input) => input.trim(),
+);
+const levelOption = bindEnv(option("--level", levelValue), {
+  context: createEnvContext({ source: () => undefined }),
+  key: "LEVEL",
+  parser: levelValue,
+});
+~~~~
+
+`normalizeInput()` only promises to change strings passed to the wrapped
+parser's `parse()` or `suggest()`.  Typed defaults and configuration values
+follow the parser's existing `validate()`/`normalize()` hooks or a
+`format()`/`parse()` round trip, so this function is not a general cleanup step
+for them.  Normalize configuration text in its schema or source when needed.
+`ValueParser.normalize()` is a separate hook for already parsed values.
 
 
 `transform()` combinator
