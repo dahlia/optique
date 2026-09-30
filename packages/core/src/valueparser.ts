@@ -947,6 +947,170 @@ export function biject<const T extends object>(
   return parser;
 }
 
+function applyInputNormalizer(
+  normalize: (input: string) => string,
+  input: string,
+): { readonly success: true; readonly value: string } | {
+  readonly success: false;
+} {
+  try {
+    const value: unknown = normalize(input);
+    if (typeof value === "string") return { success: true, value };
+    // An invalid async callback can return a rejecting promise.  It is still
+    // invalid input, but its rejection must not escape as an unhandled error.
+    void Promise.resolve(value).catch(() => {});
+    return { success: false };
+  } catch {
+    return { success: false };
+  }
+}
+
+function inputNormalizationFailure<T>(): ValueParserResult<T> {
+  return { success: false, error: message`Failed to normalize input.` };
+}
+
+/**
+ * Normalizes raw string input before another value parser parses it.
+ *
+ * The same function receives completion prefixes before the wrapped parser's
+ * `suggest()` method.  Suggestions themselves are left unchanged, so use a
+ * pure, idempotent function that preserves the wrapped parser's suggested
+ * spellings when completion is needed.  This does not change typed fallback
+ * values handled by the wrapped parser's `validate()` or `normalize()` hooks.
+ *
+ * @template M The mode of the wrapped parser.
+ * @template T The value type produced by the wrapped parser.
+ * @param parser The value parser to wrap.
+ * @param normalize A synchronous function that maps raw strings to strings.
+ * @returns A value parser with normalized input and completion prefixes.
+ * @throws {TypeError} If `parser` is invalid, is a dependency source, or
+ *   `normalize` is not a function.
+ * @since 1.4.0
+ */
+export function normalizeInput<M extends Mode, T>(
+  parser: ValueParser<M, T>,
+  normalize: (input: string) => string,
+): ValueParser<M, T> {
+  if (!isValueParser(parser)) {
+    throw new TypeError("Expected parser to be a value parser.");
+  }
+  if (typeof normalize !== "function") {
+    throw new TypeError("Expected normalize to be a function.");
+  }
+  if (isDependencySource(parser)) {
+    throw new TypeError("Cannot normalize a dependency source directly.");
+  }
+  const normalizeValue = parser.normalize?.bind(parser);
+  const validate = parser.validate?.bind(parser);
+  const suggest = parser.suggest?.bind(parser);
+  const wrapped: ValueParser<M, T> = {
+    mode: parser.mode,
+    metavar: parser.metavar,
+    get placeholder(): T {
+      return parser.placeholder;
+    },
+    ...(parser.choices == null ? {} : { choices: parser.choices }),
+    parse(input: string): ModeValue<M, ValueParserResult<T>> {
+      const normalized = applyInputNormalizer(normalize, input);
+      return normalized.success
+        ? parser.parse(normalized.value)
+        : wrapForMode(parser.mode, inputNormalizationFailure<T>());
+    },
+    format(value: T): string {
+      return parser.format(value);
+    },
+    ...(normalizeValue == null ? {} : {
+      normalize(value: T): T {
+        return normalizeValue(value);
+      },
+    }),
+    ...(validate == null ? {} : {
+      validate(value: T): ValueParserResult<T> {
+        return validate(value);
+      },
+    }),
+    ...(suggest == null ? {} : {
+      suggest(prefix: string): ModeIterable<M, Suggestion> {
+        const normalized = applyInputNormalizer(normalize, prefix);
+        return wrapIterableForMode(
+          parser.mode,
+          normalized.success ? suggest(normalized.value) : [],
+        );
+      },
+    }),
+  };
+  if (isDerivedValueParser(parser)) {
+    preserveNormalizedDerivedMetadata(wrapped, parser, normalize);
+  }
+  return wrapped;
+}
+
+function preserveNormalizedDerivedMetadata<M extends Mode, T>(
+  wrapped: ValueParser<M, T>,
+  parser: DerivedValueParser<M, T, unknown>,
+  normalize: (input: string) => string,
+): void {
+  Object.defineProperties(wrapped, {
+    [derivedValueParserMarker]: { value: true, enumerable: true },
+    [dependencyId]: { value: parser[dependencyId], enumerable: true },
+    [parseWithDependency]: {
+      value(
+        input: string,
+        dependencyValue: unknown,
+      ): ModeValue<M, ValueParserResult<T>> {
+        const normalized = applyInputNormalizer(normalize, input);
+        return wrapForMode(
+          parser.mode,
+          normalized.success
+            ? parser[parseWithDependency](
+              normalized.value,
+              dependencyValue,
+            )
+            : inputNormalizationFailure<T>(),
+        );
+      },
+      enumerable: true,
+    },
+  });
+  if (dependencyIds in parser && parser[dependencyIds] != null) {
+    Object.defineProperty(wrapped, dependencyIds, {
+      value: parser[dependencyIds],
+      enumerable: true,
+    });
+  }
+  if (defaultValues in parser && parser[defaultValues] != null) {
+    Object.defineProperty(wrapped, defaultValues, {
+      value: parser[defaultValues],
+      enumerable: true,
+    });
+  }
+  if (singleDefaultValue in parser && parser[singleDefaultValue] != null) {
+    Object.defineProperty(wrapped, singleDefaultValue, {
+      value: parser[singleDefaultValue],
+      enumerable: true,
+    });
+  }
+  if (
+    suggestWithDependency in parser &&
+    parser[suggestWithDependency] != null
+  ) {
+    const suggest = parser[suggestWithDependency].bind(parser);
+    Object.defineProperty(wrapped, suggestWithDependency, {
+      value(
+        prefix: string,
+        dependencyValue: unknown,
+      ): ModeIterable<M, Suggestion> {
+        const normalized = applyInputNormalizer(normalize, prefix);
+        return wrapIterableForMode(
+          parser.mode,
+          normalized.success ? suggest(normalized.value, dependencyValue) : [],
+        );
+      },
+      enumerable: true,
+    });
+  }
+}
+
 /**
  * Creates a value parser that transforms the result of another value parser.
  *

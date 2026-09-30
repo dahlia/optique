@@ -45,7 +45,12 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
-import { choice, integer, string } from "@optique/core/valueparser";
+import {
+  choice,
+  integer,
+  normalizeInput,
+  string,
+} from "@optique/core/valueparser";
 import { bindConfig, createConfigContext } from "@optique/config";
 import {
   collectExplicitSourceValues,
@@ -714,6 +719,40 @@ describe("bindEnv()", () => {
     const result = parse(parser, [], { annotations });
     assert.ok(result.success);
     assert.equal(result.value, 8080);
+  });
+
+  it("normalizes raw env input through its own value parser", () => {
+    const context = createEnvContext({
+      source: (key) => ({ APP_LEVEL: " debug " })[key],
+      prefix: "APP_",
+    });
+    let normalizations = 0;
+    const level = normalizeInput(choice(["debug"]), (input) => {
+      normalizations++;
+      return input.trim();
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+
+    const bound = bindEnv(option("--level", level), {
+      context,
+      key: "LEVEL",
+      parser: level,
+    });
+    const accepted = parse(bound, [], { annotations });
+    assert.ok(accepted.success);
+    assert.equal(accepted.value, "debug");
+    assert.equal(normalizations, 2);
+
+    const bareEnvParser = bindEnv(option("--level", level), {
+      context,
+      key: "LEVEL",
+      parser: choice(["debug"]),
+    });
+    const rejected = parse(bareEnvParser, [], { annotations });
+    assert.ok(!rejected.success);
   });
 
   it("uses default value when CLI and env are missing", () => {

@@ -36,6 +36,9 @@ To be released.
     `DocFragments.sourceOnly` and `environmentBindings` fields preserve
     source-only scopes through built-in combinators; exact raw documentation
     snapshots and fixed maps of doc keys may need updating.  [[#985], [#987]]
+ -  Added `normalizeInput()` for value parsers, allowing applications to clean
+    up CLI and environment strings before validation.  It also normalizes
+    completion prefixes.  [[#971], [#999]]
  -  Added opt-in environment binding annotations and sections to help output,
     with `DocEntry.envVars` metadata and `deriveEnvironmentSection()` for
     custom renderers.  Existing help output stays unchanged unless
@@ -61,6 +64,7 @@ To be released.
 [#967]: https://github.com/dahlia/optique/issues/967
 [#968]: https://github.com/dahlia/optique/issues/968
 [#969]: https://github.com/dahlia/optique/issues/969
+[#971]: https://github.com/dahlia/optique/issues/971
 [#972]: https://github.com/dahlia/optique/issues/972
 [#981]: https://github.com/dahlia/optique/pull/981
 [#982]: https://github.com/dahlia/optique/pull/982
@@ -73,6 +77,7 @@ To be released.
 [#994]: https://github.com/dahlia/optique/issues/994
 [#996]: https://github.com/dahlia/optique/pull/996
 [#997]: https://github.com/dahlia/optique/pull/997
+[#999]: https://github.com/dahlia/optique/pull/999
 
 ### @optique/run
 

@@ -28,6 +28,7 @@ import {
   locale,
   macAddress,
   type NonEmptyString,
+  normalizeInput,
   origin,
   port,
   portRange,
@@ -58,6 +59,7 @@ import {
   type DerivedValueParser,
   derivedValueParserMarker,
   getSnapshottedDefaultDependencyValues,
+  isDerivedValueParser,
   parseWithDependency,
   suggestWithDependency,
 } from "#src/internal/dependency.ts";
@@ -2658,6 +2660,238 @@ describe("non-choice parsers should not have choices metadata", () => {
   it("float() should not have choices", () => {
     const parser = float({});
     assert.equal(parser.choices, undefined);
+  });
+});
+
+describe("normalizeInput", () => {
+  it("trims input before choice validation and completion", () => {
+    const parser = normalizeInput(
+      choice(["error", "warn", "debug"] as const, {
+        caseInsensitive: true,
+      }),
+      (input) => input.trim(),
+    );
+
+    assert.deepEqual(parser.parse(" DEBUG "), {
+      success: true,
+      value: "debug",
+    });
+    assert.deepEqual([...(parser.suggest?.(" de") ?? [])], [
+      { kind: "literal", text: "debug" },
+    ]);
+    assert.deepEqual(parser.choices, ["error", "warn", "debug"]);
+    assert.equal(parser.metavar, "TYPE");
+    assert.equal(parser.placeholder, "error");
+    assert.equal(parser.format("debug"), "debug");
+  });
+
+  it("trims before integer validation and reports normalized input", () => {
+    const parser = normalizeInput(integer(), (input) => input.trim());
+
+    assert.deepEqual(parser.parse(" 42 "), { success: true, value: 42 });
+    const failure = parser.parse(" nope ");
+    const innerFailure = integer().parse("nope");
+    assert.ok(!failure.success);
+    assert.ok(!innerFailure.success);
+    assert.deepEqual(failure.error, innerFailure.error);
+    assert.equal(parser.suggest, undefined);
+  });
+
+  it("preserves typed validation rather than reparsing values", () => {
+    const inner = firstOf(choice(["1"]), integer());
+    const parser = normalizeInput(inner, (input) => input.trim());
+
+    assert.deepEqual(parser.validate?.(1), { success: true, value: 1 });
+    assert.deepEqual(parser.parse(" 1 "), { success: true, value: "1" });
+  });
+
+  it("keeps typed hooks bound to the wrapped parser", () => {
+    const inner: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "WORD",
+      placeholder: "default",
+      parse(input) {
+        return { success: true, value: input };
+      },
+      format(value) {
+        return value;
+      },
+      normalize(value) {
+        return `${this.placeholder}:${value}`;
+      },
+      validate(value) {
+        return { success: true, value: `${this.placeholder}:${value}` };
+      },
+    };
+    const parser = normalizeInput(inner, (input) => input.trim());
+
+    assert.equal(parser.normalize?.("input"), "default:input");
+    assert.deepEqual(parser.validate?.("input"), {
+      success: true,
+      value: "default:input",
+    });
+    assert.equal(parser.suggest, undefined);
+  });
+
+  it("turns normalizer failures into parse failures and empty suggestions", () => {
+    const parser = normalizeInput(choice(["ok"]), () => {
+      throw new TypeError("Bad input.");
+    });
+
+    const result = parser.parse("ok");
+    assert.ok(!result.success);
+    assert.deepEqual(result.error, message`Failed to normalize input.`);
+    assert.deepEqual([...(parser.suggest?.("o") ?? [])], []);
+
+    const nonString = normalizeInput(choice(["ok"]), () => 1 as never);
+    assert.ok(!nonString.parse("ok").success);
+    assert.deepEqual([...(nonString.suggest?.("o") ?? [])], []);
+  });
+
+  it("preserves async parsing and suggestions", async () => {
+    const inner: ValueParser<"async", string> = {
+      mode: "async",
+      metavar: "WORD",
+      placeholder: "ok",
+      async parse(input) {
+        return await Promise.resolve({ success: true, value: input });
+      },
+      format(value) {
+        return value;
+      },
+      async *suggest(prefix) {
+        yield { kind: "literal", text: prefix + "k" };
+      },
+    };
+    const parser = normalizeInput(inner, (input) => input.trim());
+
+    assert.equal(parser.mode, "async");
+    assert.deepEqual(await parser.parse(" o "), {
+      success: true,
+      value: "o",
+    });
+    const suggestions = [];
+    for await (const suggestion of parser.suggest?.(" o ") ?? []) {
+      suggestions.push(suggestion);
+    }
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "ok" }]);
+
+    const failing = normalizeInput(inner, () => Promise.resolve("o") as never);
+    const failure = await failing.parse("o");
+    assert.ok(!failure.success);
+    const empty = [];
+    for await (const suggestion of failing.suggest?.("o") ?? []) {
+      empty.push(suggestion);
+    }
+    assert.deepEqual(empty, []);
+
+    const rejecting = normalizeInput(
+      inner,
+      () => Promise.reject(new TypeError("Bad input.")) as never,
+    );
+    assert.ok(!(await rejecting.parse("o")).success);
+    for await (const _suggestion of rejecting.suggest?.("o") ?? []) {
+      assert.fail("An invalid normalizer should not produce suggestions.");
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  });
+
+  it("rejects invalid inputs and direct dependency sources", () => {
+    assert.throws(() => normalizeInput(null as never, (s) => s), TypeError);
+    assert.throws(() => normalizeInput(string(), null as never), TypeError);
+    assert.throws(
+      () => normalizeInput(dependency(string()), (s) => s),
+      /dependency source/u,
+    );
+  });
+
+  it("preserves derived replay, suggestions, and metadata", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const derived = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value) =>
+        choice(value === "dev" ? ["debug"] as const : ["warn"] as const),
+      defaultValue: () => "dev" as const,
+    });
+    const parser = normalizeInput(derived, (s) => s.trim());
+    assert.ok(isDerivedValueParser(parser));
+
+    const initial = parser.parse(" debug ");
+    assert.deepEqual(initial, {
+      success: true,
+      value: "debug",
+    });
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(initial), ["dev"]);
+    assert.deepEqual(parser[parseWithDependency](" warn ", "prod"), {
+      success: true,
+      value: "warn",
+    });
+    const suggestions = [];
+    for await (
+      const suggestion of parser[suggestWithDependency]?.(" wa", "prod") ?? []
+    ) {
+      suggestions.push(suggestion);
+    }
+    assert.deepEqual(suggestions, [{ kind: "literal", text: "warn" }]);
+    assert.equal(parser[dependencyId], derived[dependencyId]);
+    assert.throws(() => firstOf(parser, string()), /dependency-derived/u);
+  });
+
+  it("normalizes actual dependency replay and its failure path", async () => {
+    const source = dependency(choice(["dev", "prod"] as const));
+    const derived = source.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value) =>
+        choice(value === "dev" ? ["debug"] as const : ["warn"] as const),
+      defaultValue: () => "dev" as const,
+    });
+    const level = normalizeInput(derived, (input) => {
+      if (input === "broken") throw new TypeError("Bad input.");
+      return input.trim();
+    });
+    const parser = object({
+      mode: option("--mode", source),
+      level: option("--level", level),
+    });
+
+    const parsed = parse(parser, ["--mode", "prod", "--level", " warn "]);
+    assert.ok(parsed.success);
+    assert.equal(parsed.value.level, "warn");
+    assert.ok(isDerivedValueParser(level));
+    const failure = await level[parseWithDependency]("broken", "prod");
+    assert.ok(!failure.success);
+    assert.deepEqual(failure.error, message`Failed to normalize input.`);
+    const suggestions = [];
+    for await (
+      const suggestion of level[suggestWithDependency]?.("broken", "prod") ?? []
+    ) {
+      suggestions.push(suggestion);
+    }
+    assert.deepEqual(suggestions, []);
+  });
+
+  it("keeps normalized dependency sources and lazy placeholders valid", () => {
+    const inner: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "WORD",
+      get placeholder(): string {
+        throw new TypeError("Placeholder not ready.");
+      },
+      parse(input) {
+        return { success: true, value: input };
+      },
+      format(value) {
+        return value;
+      },
+    };
+    const wrapped = normalizeInput(inner, (input) => input.trim());
+    assert.ok(Object.keys(wrapped).includes("placeholder"));
+    assert.throws(() => wrapped.placeholder, /Placeholder not ready/u);
+    const source = dependency(normalizeInput(choice(["dev"]), (s) => s.trim()));
+    assert.ok(Object.keys(source).includes("placeholder"));
+    assert.deepEqual(source.parse(" dev "), { success: true, value: "dev" });
   });
 });
 
