@@ -709,6 +709,8 @@ function instead.  Number choices do not support `key`.
 Completion compares `key(choice).startsWith(key(prefix))`.  Some key functions
 do not preserve prefixes, so their completion results may be unhelpful.  An
 invalid choice still reports the original input and declared choices.
+If `key` throws or returns a non-string for an input or completion prefix,
+parsing reports an invalid choice and completion returns no suggestions.
 
 ### Error messages
 

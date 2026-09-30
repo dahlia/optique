@@ -545,8 +545,8 @@ export function isValueParser<M extends Mode, T>(
  * @throws {TypeError} If `caseInsensitive` is `true` and multiple choices
  *         normalize to the same lowercase value.
  * @throws {TypeError} If `key` is not a function, is combined with
- *         `caseInsensitive`, returns a non-string key, or gives distinct
- *         choices the same key.
+ *         `caseInsensitive`, returns a non-string key for a declared choice,
+ *         or gives distinct choices the same key.
  */
 export function choice<const T extends string>(
   choices: readonly T[],
@@ -862,7 +862,15 @@ export function choice<const T extends string | number>(
     placeholder: choices[0],
     choices: stringChoices as readonly T[],
     parse(input: string): ValueParserResult<T> {
-      const index = matchingKeys.indexOf(getMatchingKey(input));
+      let inputKey: string | undefined;
+      try {
+        inputKey = getMatchingKey(input);
+      } catch {
+        inputKey = undefined;
+      }
+      const index = inputKey === undefined
+        ? -1
+        : matchingKeys.indexOf(inputKey);
       if (index < 0) {
         return {
           success: false,
@@ -880,7 +888,12 @@ export function choice<const T extends string | number>(
       return String(value);
     },
     suggest(prefix: string) {
-      const matchingPrefix = getMatchingKey(prefix);
+      let matchingPrefix: string;
+      try {
+        matchingPrefix = getMatchingKey(prefix);
+      } catch {
+        return [];
+      }
 
       return stringChoices
         .filter((_value, index) =>

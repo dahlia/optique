@@ -1355,6 +1355,31 @@ describe("choice", () => {
         /Expected key to return a string/u,
       );
     });
+
+    it("treats runtime key failures as unmatched input and prefix", () => {
+      const parser = choice(["dry-run"], {
+        key: (text) => {
+          if (text === "throws") throw new TypeError("Bad key.");
+          if (text === "non-string") return 1 as never;
+          return text.toLowerCase().replaceAll("_", "-");
+        },
+        errors: {
+          invalidChoice: (input) => message`Invalid choice: ${input}`,
+        },
+      });
+
+      for (const input of ["throws", "non-string"]) {
+        assert.deepEqual(parser.parse(input), {
+          success: false,
+          error: message`Invalid choice: ${input}`,
+        });
+        assert.deepEqual([...parser.suggest!(input)], []);
+      }
+      assert.deepEqual(parser.parse("DRY_RUN"), {
+        success: true,
+        value: "dry-run",
+      });
+    });
   });
 
   describe("custom metavar", () => {
