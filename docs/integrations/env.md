@@ -166,6 +166,57 @@ const result = await runAsync(parser, {
 ~~~~
 
 
+Reading a fallback after a parse error
+--------------------------------------
+
+Keep a reference to a parser returned by `bindEnv()` to read its environment
+fallback in an error handler. `readFallback()` reads the environment variable
+or configured default without using a CLI value from the failed parse. It
+returns a result that may itself be a failure, for example when the environment
+value is invalid. An async bound parser returns a promise.
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { runWith } from "@optique/core/facade";
+import { formatMessage } from "@optique/core/message";
+import { option } from "@optique/core/primitives";
+import { choice, integer } from "@optique/core/valueparser";
+import { bindEnv, createEnvContext } from "@optique/env";
+
+const levels = ["error", "warn", "debug"] as const;
+const envContext = createEnvContext({ prefix: "APP_" });
+const logLevel = bindEnv(option("--log-level", choice(levels)), {
+  context: envContext,
+  key: "LOG_LEVEL",
+  parser: choice(levels),
+  default: "warn",
+});
+
+await runWith(
+  object({ logLevel, topN: option("--top-n", integer()) }),
+  "app",
+  [envContext],
+  {
+    args: ["--top-n", "x"],
+    stderr: () => {},
+    onError: (_, error) => {
+      const fallback = logLevel.readFallback();
+      if (fallback.success) {
+        console.error(`${fallback.value}: ${formatMessage(error)}`);
+      } else {
+        console.error(formatMessage(fallback.error));
+      }
+    },
+  },
+);
+~~~~
+
+`readFallback()` reads the source when called, even if the context was not
+registered for a parse. If the environment variable is absent and there is
+no default, it reports a missing variable. It does not continue into a
+wrapped config or prompt parser's fallback.
+
+
 Boolean values
 --------------
 
@@ -731,7 +782,10 @@ Parameters
         nor environment provides a value.
 
 Returns
-:   A new parser with environment fallback behavior.
+:   A new parser with environment fallback behavior and a
+    `readFallback()` method. The method reads only the environment variable
+    or default, applies the wrapped parser's validation when available, and
+    returns a `ValueParserResult` (or a promise for an async parser).
 
 ### `bool(options?)`
 
