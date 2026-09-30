@@ -1068,7 +1068,19 @@ formatted or disable them entirely for specific parsers.
 #### Option and flag parsers
 
 The `option()` and `flag()` parsers support a `noMatch` error option that
-receives both the invalid input and an array of similar valid options:
+receives both the invalid input and an array of similar valid options.
+
+Optique builds a mismatch message when that failure is selected or its `error`
+property is read.  A successful parse can discard many mismatches without
+calling `noMatch` or searching for suggestions.  When called, the formatter
+receives the same suggestions as before.  Formatters may run zero or more times
+across a parse and should not be used for side effects.  Exceptions from a
+deferred formatter surface when the error is read.
+
+Custom parser wrappers can forward an unselected failure unchanged to preserve
+this deferral.  Reading `result.error`, spreading a failure object, or
+serializing it requests the message.  Top-level `parseSync()` and
+`parseAsync()` return a fully built error on failure.
 
 ~~~~ typescript twoslash
 import { option, flag } from "@optique/core/primitives";

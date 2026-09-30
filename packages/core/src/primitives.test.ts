@@ -4879,6 +4879,7 @@ describe("command() error customization", () => {
       usage: fileCmd.usage,
     });
     assert.ok(!result.success);
+    if (!result.success) assert.equal(formatMessage(result.error), "");
     assert.ok(
       !capturedSuggestions.includes("add"),
       `"add" should not appear in notMatched suggestions, got: [${
@@ -4912,12 +4913,14 @@ describe("command() error customization", () => {
       },
     });
 
-    innerFileCmd.parse({
+    const result = innerFileCmd.parse({
       buffer: ["fil"],
       state: innerFileCmd.initialState,
       optionsTerminated: false,
       usage: topParser.usage, // full context includes "file", "other" as leading
     });
+    assert.ok(!result.success);
+    if (!result.success) assert.equal(formatMessage(result.error), "");
     // "file" should be suggested (typo correction), "add" should not
     assert.ok(
       capturedSuggestions.includes("file"),

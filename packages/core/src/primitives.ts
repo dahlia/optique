@@ -49,6 +49,7 @@ import {
   dispatchIterableByMode,
   wrapForMode,
 } from "./internal/mode-dispatch.ts";
+import { createDeferredFailure } from "./internal/failure.ts";
 import {
   completeOrExtractPhase2Seed,
   extractPhase2SeedKey,
@@ -292,6 +293,38 @@ import {
   type ValueParserResult,
 } from "./valueparser.ts";
 
+/** Defers option/flag typo work until a failure's message is requested. */
+function unmatchedOptionFailure(
+  invalidOption: string,
+  usage: Usage,
+  errors?: {
+    readonly noMatch?:
+      | Message
+      | ((invalidOption: string, suggestions: readonly string[]) => Message);
+  },
+): ParserResult<unknown> & { readonly success: false } {
+  const noMatch = errors?.noMatch;
+  if (noMatch != null && typeof noMatch !== "function") {
+    return { success: false, consumed: 0, error: noMatch };
+  }
+  return createDeferredFailure(0, () => {
+    if (noMatch != null) {
+      const candidates = new Set(extractOptionNames(usage));
+      return noMatch.call(
+        errors,
+        invalidOption,
+        findSimilar(invalidOption, candidates, DEFAULT_FIND_SIMILAR_OPTIONS),
+      );
+    }
+    return createErrorWithSuggestions(
+      message`No matched option for ${eOptionName(invalidOption)}.`,
+      invalidOption,
+      usage,
+      "option",
+    );
+  });
+}
+
 /**
  * Creates a parser that always succeeds without consuming any input and
  * produces a constant value of the type {@link T}.
@@ -462,6 +495,8 @@ export interface OptionErrorOptions {
    * Can be a static message or a function that receives:
    * - invalidOption: The invalid option name that was provided
    * - suggestions: Array of similar valid option names (can be empty)
+   * The callback runs when a retained failure's error is read, and may be
+   * skipped for discarded failures. It should not have side effects.
    *
    * @since 0.7.0
    */
@@ -1381,53 +1416,12 @@ export function option<M extends Mode, T>(
         }
       }
 
-      // Find similar options from context usage and suggest them
       const invalidOption = context.buffer[0];
-
-      // Check if custom noMatch error is provided
-      if (options.errors?.noMatch) {
-        // Literal messages do not use suggestions.
-        if (typeof options.errors.noMatch !== "function") {
-          return {
-            success: false,
-            consumed: 0,
-            error: options.errors.noMatch,
-          };
-        }
-
-        const candidates = new Set<string>();
-        for (const name of extractOptionNames(context.usage)) {
-          candidates.add(name);
-        }
-        const suggestions = findSimilar(
-          invalidOption,
-          candidates,
-          DEFAULT_FIND_SIMILAR_OPTIONS,
-        );
-
-        const errorMessage = options.errors.noMatch(invalidOption, suggestions);
-
-        return {
-          success: false,
-          consumed: 0,
-          error: errorMessage,
-        };
-      }
-
-      const baseError = message`No matched option for ${
-        eOptionName(invalidOption)
-      }.`;
-
-      return {
-        success: false,
-        consumed: 0,
-        error: createErrorWithSuggestions(
-          baseError,
-          invalidOption,
-          context.usage,
-          "option",
-        ),
-      };
+      return unmatchedOptionFailure(
+        invalidOption,
+        context.usage,
+        options.errors,
+      );
     },
     complete(
       state: ValueParserResult<T | boolean> | undefined,
@@ -1777,6 +1771,8 @@ export interface FlagErrorOptions {
    * Can be a static message or a function that receives:
    * - invalidOption: The invalid option name that was provided
    * - suggestions: Array of similar valid option names (can be empty)
+   * The callback runs when a retained failure's error is read, and may be
+   * skipped for discarded failures. It should not have side effects.
    *
    * @since 0.7.0
    */
@@ -1971,53 +1967,12 @@ export function flag(
         };
       }
 
-      // Find similar options from context usage and suggest them
       const invalidOption = context.buffer[0];
-
-      // Check if custom noMatch error is provided
-      if (options.errors?.noMatch) {
-        // Literal messages do not use suggestions.
-        if (typeof options.errors.noMatch !== "function") {
-          return {
-            success: false,
-            consumed: 0,
-            error: options.errors.noMatch,
-          };
-        }
-
-        const candidates = new Set<string>();
-        for (const name of extractOptionNames(context.usage)) {
-          candidates.add(name);
-        }
-        const suggestions = findSimilar(
-          invalidOption,
-          candidates,
-          DEFAULT_FIND_SIMILAR_OPTIONS,
-        );
-
-        const errorMessage = options.errors.noMatch(invalidOption, suggestions);
-
-        return {
-          success: false,
-          consumed: 0,
-          error: errorMessage,
-        };
-      }
-
-      const baseError = message`No matched option for ${
-        eOptionName(invalidOption)
-      }.`;
-
-      return {
-        success: false,
-        consumed: 0,
-        error: createErrorWithSuggestions(
-          baseError,
-          invalidOption,
-          context.usage,
-          "option",
-        ),
-      };
+      return unmatchedOptionFailure(
+        invalidOption,
+        context.usage,
+        options.errors,
+      );
     },
     complete(state, _exec?: ExecutionContext) {
       if (state == null) {
@@ -2196,6 +2151,7 @@ export interface NegatableFlagErrorOptions {
 
   /**
    * Custom error message when no matching flag is found.
+   * Callbacks may be skipped when a mismatch is discarded.
    */
   readonly noMatch?:
     | Message
@@ -2449,39 +2405,11 @@ export function negatableFlag(
         );
       }
 
-      const invalidOption = context.buffer[0];
-      if (options.errors?.noMatch) {
-        const candidates = new Set<string>();
-        for (const name of extractOptionNames(context.usage)) {
-          candidates.add(name);
-        }
-        const suggestions = findSimilar(
-          invalidOption,
-          candidates,
-          DEFAULT_FIND_SIMILAR_OPTIONS,
-        );
-        return {
-          success: false,
-          consumed: 0,
-          error: typeof options.errors.noMatch === "function"
-            ? options.errors.noMatch(invalidOption, suggestions)
-            : options.errors.noMatch,
-        };
-      }
-
-      const baseError = message`No matched option for ${
-        eOptionName(invalidOption)
-      }.`;
-      return {
-        success: false,
-        consumed: 0,
-        error: createErrorWithSuggestions(
-          baseError,
-          invalidOption,
-          context.usage,
-          "option",
-        ),
-      };
+      return unmatchedOptionFailure(
+        context.buffer[0],
+        context.usage,
+        options.errors,
+      );
     },
     complete(state, _exec?: ExecutionContext) {
       if (state == null) {
@@ -3079,6 +3007,8 @@ export interface CommandErrorOptions {
    * - expected: The expected command name
    * - actual: The actual input (or null if no input)
    * - suggestions: Array of similar valid command names (can be empty)
+   * The callback runs when a retained failure's error is read, and may be
+   * skipped for discarded failures. It should not have side effects.
    */
   readonly notMatched?:
     | Message
@@ -3436,56 +3366,37 @@ export function command<M extends Mode, T, TState>(
           !commandNames.includes(context.buffer[0])
         ) {
           const actual = context.buffer.length > 0 ? context.buffer[0] : null;
-
-          // Only suggest commands that are valid at the current parse position
-          // (i.e., leading candidates), not sub-commands nested inside other
-          // commands that the user has not yet entered.
-          // See: https://github.com/dahlia/optique/issues/117
-          const leadingCmds = extractLeadingCommandNames(context.usage);
-          const rawSuggestions = actual
-            ? findSimilar(actual, leadingCmds, DEFAULT_FIND_SIMILAR_OPTIONS)
-            : [];
-          const suggestions = expandCommandAliasSuggestions(
-            context.usage,
-            rawSuggestions,
-          );
-
-          // If custom error is provided, use it
-          if (options.errors?.notMatched) {
-            const errorMessage = options.errors.notMatched;
-            return {
-              success: false,
-              consumed: 0,
-              error: typeof errorMessage === "function"
-                ? errorMessage(name, actual, suggestions)
-                : errorMessage,
-            };
+          const notMatched = options.errors?.notMatched;
+          if (notMatched != null && typeof notMatched !== "function") {
+            return { success: false, consumed: 0, error: notMatched };
           }
-
-          // Generate default error with suggestions
-          if (actual == null) {
-            return {
-              success: false,
-              consumed: 0,
-              error: message`Expected command ${
+          const usage = context.usage;
+          return createDeferredFailure(0, () => {
+            // Only names reachable here may be suggested; include aliases.
+            const leadingCmds = extractLeadingCommandNames(usage);
+            const rawSuggestions = actual
+              ? findSimilar(actual, leadingCmds, DEFAULT_FIND_SIMILAR_OPTIONS)
+              : [];
+            const suggestions = expandCommandAliasSuggestions(
+              usage,
+              rawSuggestions,
+            );
+            if (notMatched != null) {
+              return notMatched(name, actual, suggestions);
+            }
+            if (actual == null) {
+              return message`Expected command ${
                 eOptionName(name)
-              }, but got end of input.`,
-            };
-          }
-
-          // Find similar command names
-          const baseError = message`Expected command ${
-            eOptionName(name)
-          }, but got ${actual}.`;
-
-          const suggestionMsg = createSuggestionMessage(suggestions);
-          return {
-            success: false,
-            consumed: 0,
-            error: suggestionMsg.length > 0
+              }, but got end of input.`;
+            }
+            const baseError = message`Expected command ${
+              eOptionName(name)
+            }, but got ${actual}.`;
+            const suggestionMsg = createSuggestionMessage(suggestions);
+            return suggestionMsg.length > 0
               ? [...baseError, text("\n\n"), ...suggestionMsg]
-              : baseError,
-          };
+              : baseError;
+          });
         }
         commandScope.select(context, enteredScope);
         // Command matched, consume it and move to "matched" state

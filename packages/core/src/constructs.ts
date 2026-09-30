@@ -91,6 +91,11 @@ import {
   dispatchIterableByMode,
 } from "./internal/mode-dispatch.ts";
 import {
+  createDeferredFailure,
+  type DeferredFailure,
+  withConsumedDepth,
+} from "./internal/failure.ts";
+import {
   completeOrExtractPhase2Seed,
   extractPhase2Seed,
   extractPhase2SeedKey,
@@ -1959,6 +1964,8 @@ export interface OrErrorOptions {
    * Custom error message when no parser matches.
    * Can be a static message or a function that receives context about what
    * types of inputs are expected, allowing for more precise error messages.
+   * The callback may be skipped for discarded parse failures. Completion
+   * can invoke it separately, so it should not have side effects.
    *
    * @example
    * ```typescript
@@ -4472,32 +4479,38 @@ export function or(
 
   const getInitialError = (
     context: ParserContext<OrState>,
-  ): { consumed: number; error: Message } => ({
-    consumed: 0,
-    error: context.buffer.length < 1
-      ? getNoMatchError(options, noMatchContext)
-      : (() => {
-        const token = context.buffer[0];
-        const defaultMsg = message`Unexpected option or subcommand: ${
-          eOptionName(token)
-        }.`;
-
-        // If custom error is provided, use it
-        if (options?.errors?.unexpectedInput != null) {
-          return typeof options.errors.unexpectedInput === "function"
-            ? options.errors.unexpectedInput(token)
-            : options.errors.unexpectedInput;
-        }
-
-        // Otherwise, add suggestions scoped to current parsers
-        return createUnexpectedInputErrorWithScopedSuggestions(
-          defaultMsg,
-          token,
-          parsers,
-          options?.errors?.suggestions,
-        );
-      })(),
-  });
+  ): DeferredFailure => {
+    const empty = context.buffer.length < 1;
+    const token = context.buffer[0];
+    const errors = options?.errors;
+    const noMatch = errors?.noMatch;
+    const unexpectedInput = errors?.unexpectedInput;
+    const suggestions = errors?.suggestions;
+    if (empty) {
+      if (noMatch != null && typeof noMatch !== "function") {
+        return { success: false, consumed: 0, error: noMatch };
+      }
+      return createDeferredFailure(
+        0,
+        () =>
+          noMatch != null
+            ? noMatch(noMatchContext)
+            : generateNoMatchError(noMatchContext),
+      );
+    }
+    if (unexpectedInput != null && typeof unexpectedInput !== "function") {
+      return { success: false, consumed: 0, error: unexpectedInput };
+    }
+    return createDeferredFailure(0, () => {
+      if (unexpectedInput != null) return unexpectedInput.call(errors, token);
+      return createUnexpectedInputErrorWithScopedSuggestions(
+        message`Unexpected option or subcommand: ${eOptionName(token)}.`,
+        token,
+        parsers,
+        suggestions,
+      );
+    });
+  };
 
   // Sync parse implementation
   const parseSync = (
@@ -4923,7 +4936,7 @@ export function or(
         optionsTerminatorResult,
       );
     }
-    return { ...error, success: false };
+    return error;
   };
 
   // Async parse implementation
@@ -5314,7 +5327,7 @@ export function or(
         optionsTerminatorResult,
       );
     }
-    return { ...error, success: false };
+    return error;
   };
 
   const singleResult = {
@@ -5468,6 +5481,8 @@ export interface LongestMatchErrorOptions {
    * Custom error message when no parser matches.
    * Can be a static message or a function that receives context about what
    * types of inputs are expected, allowing for more precise error messages.
+   * The callback may be skipped for discarded parse failures. Completion
+   * can invoke it separately, so it should not have side effects.
    *
    * @example
    * ```typescript
@@ -5755,32 +5770,38 @@ function createLongestMatch(
 
   const getInitialError = (
     context: ParserContext<LongestMatchState>,
-  ): { consumed: number; error: Message } => ({
-    consumed: 0,
-    error: context.buffer.length < 1
-      ? getNoMatchError(options, noMatchContext)
-      : (() => {
-        const token = context.buffer[0];
-        const defaultMsg = message`Unexpected option or subcommand: ${
-          eOptionName(token)
-        }.`;
-
-        // If custom error is provided, use it
-        if (options?.errors?.unexpectedInput != null) {
-          return typeof options.errors.unexpectedInput === "function"
-            ? options.errors.unexpectedInput(token)
-            : options.errors.unexpectedInput;
-        }
-
-        // Otherwise, add suggestions scoped to current parsers
-        return createUnexpectedInputErrorWithScopedSuggestions(
-          defaultMsg,
-          token,
-          parsers,
-          options?.errors?.suggestions,
-        );
-      })(),
-  });
+  ): DeferredFailure => {
+    const empty = context.buffer.length < 1;
+    const token = context.buffer[0];
+    const errors = options?.errors;
+    const noMatch = errors?.noMatch;
+    const unexpectedInput = errors?.unexpectedInput;
+    const suggestions = errors?.suggestions;
+    if (empty) {
+      if (noMatch != null && typeof noMatch !== "function") {
+        return { success: false, consumed: 0, error: noMatch };
+      }
+      return createDeferredFailure(
+        0,
+        () =>
+          noMatch != null
+            ? noMatch(noMatchContext)
+            : generateNoMatchError(noMatchContext),
+      );
+    }
+    if (unexpectedInput != null && typeof unexpectedInput !== "function") {
+      return { success: false, consumed: 0, error: unexpectedInput };
+    }
+    return createDeferredFailure(0, () => {
+      if (unexpectedInput != null) return unexpectedInput.call(errors, token);
+      return createUnexpectedInputErrorWithScopedSuggestions(
+        message`Unexpected option or subcommand: ${eOptionName(token)}.`,
+        token,
+        parsers,
+        suggestions,
+      );
+    });
+  };
 
   const commitLongestMatch = (
     context: ParserContext<LongestMatchState>,
@@ -5995,7 +6016,7 @@ function createLongestMatch(
       );
     }
 
-    return { ...error, success: false };
+    return error;
   };
 
   // Async parse implementation
@@ -6098,7 +6119,7 @@ function createLongestMatch(
       );
     }
 
-    return { ...error, success: false };
+    return error;
   };
 
   const multiResult = {
@@ -6247,6 +6268,7 @@ export interface ObjectOptions {
 export interface ObjectErrorOptions {
   /**
    * Error message when an unexpected option or argument is encountered.
+   * The callback may be skipped when another parser accepts the input.
    */
   readonly unexpectedInput?: Message | ((token: string) => Message);
 
@@ -6254,6 +6276,8 @@ export interface ObjectErrorOptions {
    * Error message when end of input is reached unexpectedly.
    * Can be a static message or a function that receives context about what
    * types of inputs are expected, allowing for more precise error messages.
+   * The callback may be skipped for discarded parse failures. Completion
+   * can invoke it separately, so it should not have side effects.
    *
    * @example
    * ```typescript
@@ -6279,6 +6303,7 @@ export interface ObjectErrorOptions {
    * If provided, this will be used instead of the default "Did you mean?"
    * formatting. The function receives an array of similar valid options/commands
    * and should return a formatted message to append to the error.
+   * It is skipped when that initial error is discarded.
    *
    * @param suggestions Array of similar valid option/command names
    * @returns Formatted message to append to the error (can be empty array for no suggestions)
@@ -6298,41 +6323,38 @@ function createObjectLikeInitialError(
   context: ParserContext<unknown>,
   noMatchContext: NoMatchContext,
   errors?: ObjectErrorOptions,
-): { consumed: number; error: Message } {
-  if (context.buffer.length < 1) {
-    const customEndOfInput = errors?.endOfInput;
-    return {
-      consumed: 0,
-      error: customEndOfInput
-        ? (typeof customEndOfInput === "function"
-          ? customEndOfInput(noMatchContext)
-          : customEndOfInput)
-        : generateNoMatchError(noMatchContext),
-    };
-  }
-
+): DeferredFailure {
+  const empty = context.buffer.length < 1;
   const token = context.buffer[0];
-  const customMessage = errors?.unexpectedInput;
-  if (customMessage) {
-    return {
-      consumed: 0,
-      error: typeof customMessage === "function"
-        ? customMessage(token)
-        : customMessage,
-    };
+  const usage = context.usage;
+  const endOfInput = errors?.endOfInput;
+  const unexpectedInput = errors?.unexpectedInput;
+  const suggestions = errors?.suggestions;
+  if (empty) {
+    if (endOfInput != null && typeof endOfInput !== "function") {
+      return { success: false, consumed: 0, error: endOfInput };
+    }
+    return createDeferredFailure(
+      0,
+      () =>
+        endOfInput != null
+          ? endOfInput(noMatchContext)
+          : generateNoMatchError(noMatchContext),
+    );
   }
-
-  const baseError = message`Unexpected option or argument: ${token}.`;
-  return {
-    consumed: 0,
-    error: createErrorWithSuggestions(
-      baseError,
+  if (unexpectedInput != null && typeof unexpectedInput !== "function") {
+    return { success: false, consumed: 0, error: unexpectedInput };
+  }
+  return createDeferredFailure(0, () => {
+    if (unexpectedInput != null) return unexpectedInput(token);
+    return createErrorWithSuggestions(
+      message`Unexpected option or argument: ${token}.`,
       token,
-      context.usage,
+      usage,
       "both",
-      errors?.suggestions,
-    ),
-  };
+      suggestions,
+    );
+  });
 }
 
 /**
@@ -7502,7 +7524,7 @@ export function object<
   type ParseResult = ParserResult<{ readonly [K in keyof T]: unknown }>;
   const getInitialError = (
     context: ParserContext<{ readonly [K in keyof T]: unknown }>,
-  ): { consumed: number; error: Message } =>
+  ): DeferredFailure =>
     createObjectLikeInitialError(
       context,
       noMatchContext,
@@ -7852,7 +7874,7 @@ export function object<
       }
     }
 
-    return { ...error, success: false };
+    return error;
   };
 
   // Async parse implementation
@@ -8091,7 +8113,7 @@ export function object<
       }
     }
 
-    return { ...error, success: false };
+    return error;
   };
 
   const objectParser = {
@@ -10269,7 +10291,8 @@ export function tuple<
     // Similar to object(), try parsers in priority order but maintain tuple semantics
     while (matchedParsers.size < syncParsers.length) {
       let foundMatch = false;
-      let error: { consumed: number; error: Message } = {
+      let error: DeferredFailure = {
+        success: false,
         consumed: 0,
         error: message`No remaining parsers could match the input.`,
       };
@@ -10450,7 +10473,7 @@ export function tuple<
       }
 
       if (!foundMatch) {
-        return { ...error, success: false };
+        return error;
       }
     }
 
@@ -10474,7 +10497,8 @@ export function tuple<
     // Similar to object(), try parsers in priority order but maintain tuple semantics
     while (matchedParsers.size < parsers.length) {
       let foundMatch = false;
-      let error: { consumed: number; error: Message } = {
+      let error: DeferredFailure = {
+        success: false,
         consumed: 0,
         error: message`No remaining parsers could match the input.`,
       };
@@ -10657,7 +10681,7 @@ export function tuple<
       }
 
       if (!foundMatch) {
-        return { ...error, success: false };
+        return error;
       }
     }
 
@@ -11386,10 +11410,11 @@ export function seq<
   const withSeqConsumedDepth = (
     result: ParseFailure,
     consumed: readonly string[],
-  ): ParseFailure => ({
-    ...result,
-    consumed: consumed.length + result.consumed,
-  });
+  ): ParseFailure =>
+    withConsumedDepth(
+      result,
+      consumed.length + result.consumed,
+    );
 
   const reachableSeqScope = (context: ParserContext<SeqState>) => {
     let end = Math.min(context.state.index + 1, parsers.length);
@@ -12848,10 +12873,7 @@ export function merge(
       };
     }
 
-    return {
-      success: false,
-      ...createObjectLikeInitialError(context, noMatchContext),
-    };
+    return createObjectLikeInitialError(context, noMatchContext);
   };
 
   const parseChildrenAsync = async (
@@ -12932,18 +12954,17 @@ export function merge(
       };
     }
 
-    return {
-      success: false,
-      ...createObjectLikeInitialError(context, noMatchContext),
-    };
+    return createObjectLikeInitialError(context, noMatchContext);
   };
 
   const parseSync = (
     context: ParserContext<MergeState>,
   ): MergeParseResult => {
     let currentContext = context;
-    let error: { consumed: number; error: Message } =
-      createObjectLikeInitialError(context, noMatchContext);
+    let error: DeferredFailure = createObjectLikeInitialError(
+      context,
+      noMatchContext,
+    );
     const allConsumed: string[] = [];
     const consumedLanes = new Set<ParseLane<MergeState>>();
     const consumedGroups = new Set<object>();
@@ -13041,11 +13062,11 @@ export function merge(
     if (allConsumed.length === 0) {
       if (attemptedLane) {
         const settled = settleZeroConsumptionLanes(context, laneResults);
-        return settled ?? { ...error, success: false };
+        return settled ?? error;
       }
       const fallback = parseChildrenSync(context);
       if (!fallback.success && fallback.consumed < error.consumed) {
-        return { ...error, success: false };
+        return error;
       }
       return fallback;
     }
@@ -13080,8 +13101,10 @@ export function merge(
     context: ParserContext<MergeState>,
   ): Promise<MergeParseResult> => {
     let currentContext = context;
-    let error: { consumed: number; error: Message } =
-      createObjectLikeInitialError(context, noMatchContext);
+    let error: DeferredFailure = createObjectLikeInitialError(
+      context,
+      noMatchContext,
+    );
     const allConsumed: string[] = [];
     const consumedLanes = new Set<ParseLane<MergeState>>();
     const consumedGroups = new Set<object>();
@@ -13176,11 +13199,11 @@ export function merge(
     if (allConsumed.length === 0) {
       if (attemptedLane) {
         const settled = settleZeroConsumptionLanes(context, laneResults);
-        return settled ?? { ...error, success: false };
+        return settled ?? error;
       }
       const fallback = await parseChildrenAsync(context);
       if (!fallback.success && fallback.consumed < error.consumed) {
-        return { ...error, success: false };
+        return error;
       }
       return fallback;
     }
@@ -15007,7 +15030,8 @@ export function concat(
     // Use the exact same logic as tuple() to avoid infinite loops
     while (matchedParsers.size < syncParsers.length) {
       let foundMatch = false;
-      let error: { consumed: number; error: Message } = {
+      let error: DeferredFailure = {
+        success: false,
         consumed: 0,
         error: message`No remaining parsers could match the input.`,
       };
@@ -15188,7 +15212,7 @@ export function concat(
       }
 
       if (!foundMatch) {
-        return { ...error, success: false };
+        return error;
       }
     }
 
@@ -15210,7 +15234,8 @@ export function concat(
     // Use the exact same logic as tuple() to avoid infinite loops
     while (matchedParsers.size < parsers.length) {
       let foundMatch = false;
-      let error: { consumed: number; error: Message } = {
+      let error: DeferredFailure = {
+        success: false,
         consumed: 0,
         error: message`No remaining parsers could match the input.`,
       };
@@ -15391,7 +15416,7 @@ export function concat(
       }
 
       if (!foundMatch) {
-        return { ...error, success: false };
+        return error;
       }
     }
 
@@ -16628,6 +16653,23 @@ export function conditional(
       : generateNoMatchError(noMatchContext);
   };
 
+  const createNoMatchFailure = (): DeferredFailure => {
+    const errors = options?.errors;
+    const customNoMatch = errors?.noMatch;
+    if (customNoMatch != null && typeof customNoMatch !== "function") {
+      return { success: false, consumed: 0, error: customNoMatch };
+    }
+    return createDeferredFailure(0, () => {
+      const context = analyzeNoMatchContext([
+        discriminator,
+        ...allBranchParsers,
+      ]);
+      return customNoMatch != null
+        ? customNoMatch.call(errors, context)
+        : generateNoMatchError(context);
+    });
+  };
+
   type ParseResult = ParserResult<ConditionalState<string>>;
 
   const optionScope = conditionalOptionScope(
@@ -16927,11 +16969,7 @@ export function conditional(
     }
 
     // Nothing matched
-    return {
-      success: false,
-      consumed: 0,
-      error: getNoMatchError(),
-    };
+    return createNoMatchFailure();
   };
 
   // Async parse implementation
@@ -17478,11 +17516,7 @@ export function conditional(
     }
 
     // Nothing matched
-    return {
-      success: false,
-      consumed: 0,
-      error: getNoMatchError(),
-    };
+    return createNoMatchFailure();
   };
 
   type CompleteResult = ValueParserResult<
