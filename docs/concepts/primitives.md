@@ -399,6 +399,11 @@ See
 [customizing parser error messages](./messages.md#customizing-parser-error-messages)
 for the other error options.
 
+For `option()`, `flag()`, `negatableFlag()`, and `command()`, a mismatch
+callback can be deferred until its error is read.  Ordinary successful parsing
+may discard mismatches without calling it.  Keep these callbacks free of side
+effects; the returned message and suggestions remain available on real failures.
+
 
 `negatableFlag()` parser
 ------------------------

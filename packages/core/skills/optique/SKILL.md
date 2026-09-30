@@ -36,10 +36,10 @@ Core rules
  -  Let TypeScript infer results unless another API needs a separate interface.
  -  Parsers usually require input. `optional(p)` yields `undefined`; use
     `withDefault(p, value)` or `withDefault(flag("-v"), false)` for fallbacks.
- -  Use semantic `message` helpers for descriptions and errors. Since 1.3.0,
-    customize terminal output with `theme` or `messageFormatter`, preserving
-    `initialWidth`, quoting, and width options. Keep canonical errors unthemed.
-    `flag()` supports static/callback `errors.unexpectedValue` since 1.4.0.
+ -  Use semantic `message` helpers; keep canonical errors unthemed. Since
+    1.3.0, `theme`/`messageFormatter` should preserve `initialWidth`, quoting,
+    and width options. `flag()` has static/callback `errors.unexpectedValue`
+    since 1.4.0. Mismatch callbacks may be skipped; avoid side effects.
  -  Use value parsers such as `integer()`, `choice()`, `biject()`, `regExp()`,
     `url()`, `origin()`, and `uuid()` instead of validating raw strings after
     parsing. Use `regExp({ flags })` for user-supplied sources, `biject()` for

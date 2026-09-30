@@ -678,7 +678,7 @@ const asyncString: ValueParser<"async", string> = {
   format: (value) => value,
 };
 
-describe("eager suggestion compatibility", () => {
+describe("deferred suggestion compatibility", () => {
   for (const literal of [message`No match.`, [] satisfies Message]) {
     for (
       const parser of [
@@ -738,7 +738,7 @@ describe("eager suggestion compatibility", () => {
   }
 
   for (const mode of ["sync", "async"] as const) {
-    it(`preserves callback count, order and suggestions in ${mode} compositions`, async () => {
+    it(`skips callbacks for successful ${mode} compositions`, async () => {
       const calls: CallbackCall[] = [];
       const args = ["alpha", "src/filename.ts", "alpha"];
       const result = mode === "sync"
@@ -746,21 +746,44 @@ describe("eager suggestion compatibility", () => {
         : await parseAsync(pathParser(asyncString, calls), args);
       assert.ok(result.success);
       if (result.success) assert.deepEqual(result.value.paths, args);
-      const names = ["--alpha", "--beta", "--verbose"];
+      assert.deepEqual(calls, []);
+    });
+
+    it(`preserves callback suggestions on selected ${mode} failures`, () => {
+      const calls: CallbackCall[] = [];
+      const parent = pathParser(
+        mode === "sync" ? string() : asyncString,
+        calls,
+      );
+      const parser = option("--alpha", {
+        errors: {
+          noMatch: (token, suggestions) => {
+            calls.push({ field: "alpha", token, suggestions });
+            return message`No match.`;
+          },
+        },
+      });
+      for (const token of ["--alph", "--alpa"]) {
+        const result = parser.parse({
+          buffer: [token],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parent.usage,
+        });
+        assert.ok(!result.success);
+        if (!result.success) {
+          assert.equal(formatMessage(result.error), "No match.");
+        }
+      }
       assert.deepEqual(
         calls,
-        args.flatMap((token) =>
-          ["alpha", "beta", "verbose"].map((field) => ({
-            field,
-            token,
-            suggestions: findSimilar(token, names),
-          }))
-        ),
+        ["--alph", "--alpa"].map((token) => ({
+          field: "alpha",
+          token,
+          suggestions: findSimilar(token, ["--alpha", "--beta", "--verbose"]),
+        })),
       );
-      assert.ok(calls[0].suggestions.length > 0);
-      for (let i = 1; i < calls.length; i++) {
-        assert.notStrictEqual(calls[i].suggestions, calls[i - 1].suggestions);
-      }
+      assert.notStrictEqual(calls[0].suggestions, calls[1].suggestions);
     });
 
     it(`preserves literal errors and typo diagnostics through ${mode} multiple()`, async () => {

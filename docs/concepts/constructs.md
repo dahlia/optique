@@ -575,6 +575,12 @@ inputs are expected (options, commands, or arguments). You can customize these
 messages using the `errors.noMatch` option, which supports both static messages
 and dynamic functions for advanced use cases like internationalization:
 
+Initial mismatch messages in `or()`, `longestMatch()`, `object()`, and related
+constructs are built when their failure is selected or its `error` property is
+read.  Their error callbacks may still run in other paths, such as completion
+probes, so callback counts and invocation timing are not fixed.  Use callbacks
+to format messages without side effects.
+
 ~~~~ typescript twoslash
 import { message, or } from "@optique/core";
 import { command, constant } from "@optique/core/primitives";

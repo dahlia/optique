@@ -45,6 +45,10 @@ To be released.
     pages without commands free of automatic headings.  Existing titled groups
     are preserved, and help callbacks receive the grouped page.
     [[#972], [#983]]
+ -  Deferred typo diagnostics for discarded parser failures, reducing parsing
+    time for commands with many positional arguments.  Custom mismatch error
+    callbacks now run when their diagnostic is requested, so callbacks used
+    for side effects may run fewer times.  [[#989], [#997]]
  -  Fixed known option errors being hidden by `passThrough()` when a
     zero-consuming `longestMatch()` fallback is nested inside containers,
     `or()`, optional or repeated parsers, or source bindings.  Missing values
@@ -65,8 +69,10 @@ To be released.
 [#985]: https://github.com/dahlia/optique/issues/985
 [#986]: https://github.com/dahlia/optique/pull/986
 [#987]: https://github.com/dahlia/optique/pull/987
+[#989]: https://github.com/dahlia/optique/issues/989
 [#994]: https://github.com/dahlia/optique/issues/994
 [#996]: https://github.com/dahlia/optique/pull/996
+[#997]: https://github.com/dahlia/optique/pull/997
 
 ### @optique/run
 
