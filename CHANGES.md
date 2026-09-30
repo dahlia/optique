@@ -10,6 +10,9 @@ To be released.
 
 ### @optique/core
 
+ -  Added a `key` option to `choice()` for matching string inputs and
+    completion prefixes against declared choices under a custom rule while
+    returning the declared spelling.  [[#998], [#1000]]
  -  Added attached values for short options, so `-n5` and `-xn5` work like
     `-n 5` and `-x -n 5`, with value completion for attached forms.  Declared
     single-dash full names now take precedence over short-option splitting,
@@ -77,7 +80,9 @@ To be released.
 [#994]: https://github.com/dahlia/optique/issues/994
 [#996]: https://github.com/dahlia/optique/pull/996
 [#997]: https://github.com/dahlia/optique/pull/997
+[#998]: https://github.com/dahlia/optique/issues/998
 [#999]: https://github.com/dahlia/optique/pull/999
+[#1000]: https://github.com/dahlia/optique/pull/1000
 
 ### @optique/run
 

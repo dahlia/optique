@@ -43,9 +43,9 @@ Core rules
  -  Use value parsers such as `integer()`, `choice()`, `biject()`, `regExp()`,
     `url()`, `origin()`, and `uuid()` instead of validating raw strings after
     parsing. Use `regExp({ flags })` for user-supplied sources, `biject()` for
-    one-to-one string-to-value choices, and `transform()` when an existing
-    value parser accepts the spelling but your app needs a different result
-    type. Use `normalizeInput()` for raw-string cleanup before validation and
+    one-to-one mappings, `transform()` for mapped results, and
+    `choice(values, { key })` for custom string matching that returns the
+    declared spelling. Use `normalizeInput()` for raw-string cleanup and
     `path()` from `@optique/run/valueparser` for file-system paths. Write a
     custom value parser only when these tools do not cover the domain.
  -  Since 1.4.0, `-p8080`/`-vp8080` accept attached values. Values consume

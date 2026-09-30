@@ -681,6 +681,37 @@ const format = choice(["JSON", "XML"], {
 // Accepts: "json", "JSON", "Json", "xml", "XML", "Xml"
 ~~~~
 
+### Custom matching keys
+
+*This option is available since Optique 1.4.0.*
+
+Use `key` when both the input and declared choices need the same matching
+rule.  The parser returns the declared spelling, which also appears in help
+and completion:
+
+~~~~ typescript twoslash
+import { choice } from "@optique/core/valueparser";
+
+const mode = choice(["dry-run", "force"], {
+  key: (text) => text.toLowerCase().replace(/_/g, "-"),
+});
+
+mode.parse("DRY_RUN"); // { success: true, value: "dry-run" }
+mode.suggest?.("dry_"); // Suggests "dry-run"
+~~~~
+
+The function must return a string and should be pure: keys for declared
+choices are computed when the parser is created.  Distinct choices with the
+same key are rejected, while repeated identical choices are deduplicated.
+`key` cannot be combined with `caseInsensitive`; include case folding in the
+function instead.  Number choices do not support `key`.
+
+Completion compares `key(choice).startsWith(key(prefix))`.  Some key functions
+do not preserve prefixes, so their completion results may be unhelpful.  An
+invalid choice still reports the original input and declared choices.
+If `key` throws or returns a non-string for an input or completion prefix,
+parsing reports an invalid choice and completion returns no suggestions.
+
 ### Error messages
 
 When invalid choices are provided, the parser lists all valid options:

@@ -333,6 +333,16 @@ export interface ChoiceOptionsString extends ChoiceOptionsBase {
   readonly caseInsensitive?: boolean;
 
   /**
+   * Maps both the input and declared choices to keys for matching.  Parsing
+   * and completion still return the declared spelling.  Cannot be combined
+   * with `caseInsensitive`; include case folding in this function instead.
+   *
+   * The function should preserve prefixes when completion is needed.
+   * @since 1.4.0
+   */
+  readonly key?: (text: string) => string;
+
+  /**
    * Controls whether the error message for an invalid value includes a
    * "Did you mean …?" hint based on Levenshtein distance.
    *
@@ -534,6 +544,9 @@ export function isValueParser<M extends Mode, T>(
  * @throws {TypeError} If `caseInsensitive` is not a boolean.
  * @throws {TypeError} If `caseInsensitive` is `true` and multiple choices
  *         normalize to the same lowercase value.
+ * @throws {TypeError} If `key` is not a function, is combined with
+ *         `caseInsensitive`, returns a non-string key for a declared choice,
+ *         or gives distinct choices the same key.
  */
 export function choice<const T extends string>(
   choices: readonly T[],
@@ -750,19 +763,37 @@ export function choice<const T extends string | number>(
   ]);
   const stringOptions = options as ChoiceOptionsString;
   checkBooleanOption(stringOptions, "caseInsensitive");
+  const customKey = stringOptions.key;
+  if (customKey !== undefined && typeof customKey !== "function") {
+    throw new TypeError("Expected key to be a function.");
+  }
+  if (customKey !== undefined && stringOptions.caseInsensitive !== undefined) {
+    throw new TypeError("Cannot use key with caseInsensitive.");
+  }
   const caseInsensitive = stringOptions.caseInsensitive ?? false;
-  const normalizedValues = caseInsensitive
-    ? stringChoices.map((v) => v.toLowerCase())
-    : stringChoices;
-  if (caseInsensitive) {
+  const matchingKey = customKey ??
+    (caseInsensitive
+      ? (text: string) => text.toLowerCase()
+      : (text: string) => text);
+  function getMatchingKey(text: string): string {
+    const result = matchingKey(text);
+    if (typeof result !== "string") {
+      throw new TypeError("Expected key to return a string.");
+    }
+    return result;
+  }
+  const matchingKeys = stringChoices.map(getMatchingKey);
+  if (caseInsensitive || customKey !== undefined) {
     const seen = new Map<string, string>();
     for (let i = 0; i < stringChoices.length; i++) {
-      const nv = normalizedValues[i];
+      const nv = matchingKeys[i];
       const original = stringChoices[i];
       const prev = seen.get(nv);
       if (prev !== undefined && prev !== original) {
         throw new TypeError(
-          `Ambiguous choices for case-insensitive matching: ` +
+          `Ambiguous choices for ${
+            caseInsensitive ? "case-insensitive" : "custom key"
+          } matching: ` +
             `${JSON.stringify(prev)} and ${JSON.stringify(original)} ` +
             `both normalize to ${JSON.stringify(nv)}.`,
         );
@@ -831,8 +862,15 @@ export function choice<const T extends string | number>(
     placeholder: choices[0],
     choices: stringChoices as readonly T[],
     parse(input: string): ValueParserResult<T> {
-      const normalizedInput = caseInsensitive ? input.toLowerCase() : input;
-      const index = normalizedValues.indexOf(normalizedInput);
+      let inputKey: string | undefined;
+      try {
+        inputKey = getMatchingKey(input);
+      } catch {
+        inputKey = undefined;
+      }
+      const index = inputKey === undefined
+        ? -1
+        : matchingKeys.indexOf(inputKey);
       if (index < 0) {
         return {
           success: false,
@@ -850,13 +888,17 @@ export function choice<const T extends string | number>(
       return String(value);
     },
     suggest(prefix: string) {
-      const normalizedPrefix = caseInsensitive ? prefix.toLowerCase() : prefix;
+      let matchingPrefix: string;
+      try {
+        matchingPrefix = getMatchingKey(prefix);
+      } catch {
+        return [];
+      }
 
       return stringChoices
-        .filter((value) => {
-          const normalizedValue = caseInsensitive ? value.toLowerCase() : value;
-          return normalizedValue.startsWith(normalizedPrefix);
-        })
+        .filter((_value, index) =>
+          matchingKeys[index].startsWith(matchingPrefix)
+        )
         .map((value) => ({ kind: "literal" as const, text: value }));
     },
   };
