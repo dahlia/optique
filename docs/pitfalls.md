@@ -364,8 +364,9 @@ Value parser surprises
  -  *Boolean options reject `=value`.* `--verbose=true` fails for a value-less
     `option("--verbose")`. The `=value` form is for options that take a value.
  -  *`choice()` matches exactly.* It is case-sensitive and whitespace-sensitive
-    by default; pass `{ caseInsensitive: true }` to relax case (string choices
-    only). It infers a literal union type automatically, so you do *not* need
+    by default; pass `{ caseInsensitive: true }` to relax case, or `{ key }`
+    to match both input and declared string choices through a custom key.
+    It infers a literal union type automatically, so you do *not* need
     `as const`.
 
 ~~~~ typescript twoslash

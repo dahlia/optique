@@ -1278,6 +1278,85 @@ describe("choice", () => {
     });
   });
 
+  describe("custom matching keys", () => {
+    const key = (value: string) => value.toLowerCase().replaceAll("_", "-");
+
+    it("matches inputs and completion prefixes using declared choice keys", () => {
+      const parser = choice(["DRY_RUN", "force"] as const, { key });
+
+      assert.deepEqual(parser.parse("dry-run"), {
+        success: true,
+        value: "DRY_RUN",
+      });
+      assert.deepEqual([...parser.suggest!("dry-")], [
+        { kind: "literal", text: "DRY_RUN" },
+      ]);
+      assert.deepEqual(parser.choices, ["DRY_RUN", "force"]);
+      assert.equal(parser.placeholder, "DRY_RUN");
+      assert.equal(parser.format("DRY_RUN"), "DRY_RUN");
+    });
+
+    it("passes the original input and declared choices to error callbacks", () => {
+      let receivedInput: string | undefined;
+      let receivedChoices: readonly string[] | undefined;
+      const parser = choice(["DRY_RUN", "force"], {
+        key,
+        errors: {
+          invalidChoice: (input, choices) => {
+            receivedInput = input;
+            receivedChoices = choices;
+            return message`Invalid choice: ${input}`;
+          },
+        },
+      });
+
+      assert.ok(!parser.parse("UNKNOWN_MODE").success);
+      assert.equal(receivedInput, "UNKNOWN_MODE");
+      assert.deepEqual(receivedChoices, ["DRY_RUN", "force"]);
+    });
+
+    it("deduplicates identical choices before checking key collisions", () => {
+      const parser = choice(["DRY_RUN", "DRY_RUN", "force"], { key });
+
+      assert.deepEqual(parser.choices, ["DRY_RUN", "force"]);
+      assert.deepEqual([...parser.suggest!("dry_")], [
+        { kind: "literal", text: "DRY_RUN" },
+      ]);
+    });
+
+    it("rejects distinct choices with the same key", () => {
+      assert.throws(
+        () => choice(["dry-run", "DRY_RUN"], { key }),
+        /Ambiguous choices.*"dry-run".*"DRY_RUN".*"dry-run"/u,
+      );
+    });
+
+    it("rejects key with caseInsensitive, even when it is false", () => {
+      assert.throws(
+        () => choice(["dry-run"], { key, caseInsensitive: false }),
+        /key.*caseInsensitive/u,
+      );
+      assert.throws(
+        () => choice(["dry-run"], { key, caseInsensitive: true }),
+        /key.*caseInsensitive/u,
+      );
+    });
+
+    it("rejects a non-function key", () => {
+      assert.throws(
+        () => choice(["dry-run"], { key: "lowercase" as never }),
+        TypeError,
+      );
+    });
+
+    it("rejects a non-string key result", () => {
+      assert.throws(
+        () => choice(["dry-run"], { key: () => 1 as never }),
+        /Expected key to return a string/u,
+      );
+    });
+  });
+
   describe("custom metavar", () => {
     it("should use custom metavar when provided", () => {
       const parser = choice(["on", "off"], { metavar: "SWITCH" });
