@@ -663,6 +663,33 @@ export interface BindEnvOptions<M extends Mode, TValue> {
 }
 
 /**
+ * A parser bound to an environment variable whose fallback can also be read
+ * independently of CLI parsing.
+ *
+ * @template M The execution mode of the parser.
+ * @template TValue The parser result value.
+ * @template TState The parser state.
+ * @since 1.4.0
+ */
+export type EnvBoundParser<M extends Mode, TValue, TState> =
+  & FluentParser<M, TValue, TState>
+  & {
+    /**
+     * Reads this binding's environment value or configured default without
+     * reading CLI input or completing the wrapped parser.
+     *
+     * @returns A parsed fallback result, or a failure if the value is invalid
+     *          or neither the environment nor a default supplies a value.
+     *          Async bindings return a promise.
+     * @throws {Error} If the environment source, value parser, or wrapped
+     *                 parser's validation hook throws. Async bindings reject
+     *                 their promise instead.
+     * @since 1.4.0
+     */
+    readonly readFallback: () => ModeValue<M, ValueParserResult<TValue>>;
+  };
+
+/**
  * Binds a parser to environment variables with fallback behavior.
  *
  * Priority order:
@@ -692,7 +719,8 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  *
  * @param parser Parser that reads CLI values.
  * @param options Environment binding options.
- * @returns A parser with environment fallback behavior.
+ * @returns A parser with environment fallback behavior and a direct
+ *          `readFallback()` method.
  * @throws {TypeError} If `key` is not a string or `parser` is not a valid
  *                    {@link ValueParser}.
  * @throws {Error} If the inner parser throws while parsing or completing a
@@ -712,7 +740,7 @@ export function bindEnv<
 >(
   parser: Parser<M, TValue, TState>,
   options: BindEnvOptions<M, TValue>,
-): FluentParser<M, TValue, TState> {
+): EnvBoundParser<M, TValue, TState> {
   if (typeof options.key !== "string") {
     throw new TypeError(
       `Expected key to be a string, but got: ${
@@ -1055,8 +1083,129 @@ export function bindEnv<
       enumerable: false,
     });
   }
+  Object.defineProperty(boundParser, "readFallback", {
+    value: () => {
+      const sourceData: EnvSourceData = {
+        prefix: options.context.prefix,
+        source: options.context.source,
+      };
+      const missing: ValueParserResult<TValue> = {
+        success: false,
+        error: message`Missing required environment variable: ${
+          envVar(`${sourceData.prefix}${options.key}`)
+        }`,
+      };
+      return dispatchByMode(
+        parser.mode,
+        () => {
+          // TypeScript cannot narrow ModeValue<M, T> from the mode branch.
+          const result = getEnvFallback(
+            options,
+            parser.mode,
+            sourceData,
+            parser,
+          ) as ValueParserResult<TValue> | undefined;
+          return result ?? missing;
+        },
+        async () => {
+          const result = getEnvFallback(
+            options,
+            parser.mode,
+            sourceData,
+            parser,
+          );
+          // Generic ModeValue<M, T> is not narrowed in the async branch.
+          const awaited = await result as
+            | ValueParserResult<TValue>
+            | undefined;
+          return awaited ?? missing;
+        },
+      );
+    },
+    configurable: true,
+    enumerable: false,
+  });
   delegateOptionParsing(boundParser, parser, getInnerState);
-  return fluent(boundParser);
+  return fluent(boundParser) as EnvBoundParser<M, TValue, TState>;
+}
+
+/**
+ * Reads and validates the environment value or configured default.
+ * Returns `undefined` before mode dispatch when neither is available, so
+ * normal completion can still delegate to the wrapped parser.
+ */
+function getEnvFallback<M extends Mode, TValue>(
+  options: BindEnvOptions<M, TValue>,
+  mode: M,
+  sourceData?: EnvSourceData,
+  innerParser?: Parser<M, TValue, unknown>,
+): ModeValue<M, ValueParserResult<TValue>> | undefined {
+  const fullKey = `${
+    sourceData?.prefix ?? options.context.prefix
+  }${options.key}`;
+  const rawValue = sourceData?.source(fullKey);
+
+  const validateSync = (
+    parsed: ValueParserResult<TValue>,
+  ): ValueParserResult<TValue> => {
+    if (!parsed.success) return parsed;
+    if (
+      innerParser == null || typeof innerParser.validateValue !== "function"
+    ) {
+      return parsed;
+    }
+    return innerParser.validateValue(
+      parsed.value,
+    ) as ValueParserResult<TValue>;
+  };
+  const validateAsync = async (
+    parsed: ValueParserResult<TValue>,
+  ): Promise<ValueParserResult<TValue>> => {
+    if (!parsed.success) return parsed;
+    if (
+      innerParser == null || typeof innerParser.validateValue !== "function"
+    ) {
+      return parsed;
+    }
+    return await innerParser.validateValue(parsed.value);
+  };
+
+  if (rawValue !== undefined) {
+    if (typeof rawValue !== "string") {
+      const type = rawValue === null
+        ? "null"
+        : Array.isArray(rawValue)
+        ? "array"
+        : typeof rawValue;
+      return wrapForMode(mode, {
+        success: false as const,
+        error: message`Environment variable ${
+          envVar(fullKey)
+        } must be a string, but got: ${type}.`,
+      });
+    }
+    return dispatchByMode(
+      mode,
+      () => {
+        const parsed = (options.parser as ValueParser<"sync", TValue>)
+          .parse(rawValue);
+        return validateSync(parsed);
+      },
+      async () => {
+        const parsed = await options.parser.parse(rawValue);
+        return await validateAsync(parsed);
+      },
+    );
+  }
+
+  if (options.default !== undefined) {
+    return dispatchByMode(
+      mode,
+      () => validateSync({ success: true as const, value: options.default! }),
+      () => validateAsync({ success: true as const, value: options.default! }),
+    );
+  }
+  return undefined;
 }
 
 /**
@@ -1110,85 +1259,8 @@ function getEnvOrDefault<M extends Mode, TValue>(
   const sourceData = annotations?.[options.context.id] as
     | EnvSourceData
     | undefined;
-
-  const fullKey = `${
-    sourceData?.prefix ?? options.context.prefix
-  }${options.key}`;
-  const rawValue = sourceData?.source(fullKey);
-
-  // Helper that runs a (successful) fallback value through the inner
-  // parser's validateValue() hook (#414).  The env parser
-  // (`options.parser`) can be looser than the inner CLI parser, and
-  // configured defaults bypass any validation entirely, so we pipe
-  // every fallback value through the inner parser's constraints when
-  // it exposes a validator.  If the inner parser does not implement
-  // validateValue (e.g., it sits behind map()), we return the value
-  // unchanged to preserve existing behavior.
-  const validateSync = (
-    parsed: ValueParserResult<TValue>,
-  ): ValueParserResult<TValue> => {
-    if (!parsed.success) return parsed;
-    if (
-      innerParser == null || typeof innerParser.validateValue !== "function"
-    ) {
-      return parsed;
-    }
-    return innerParser.validateValue(
-      parsed.value,
-    ) as ValueParserResult<TValue>;
-  };
-  const validateAsync = async (
-    parsed: ValueParserResult<TValue>,
-  ): Promise<ValueParserResult<TValue>> => {
-    if (!parsed.success) return parsed;
-    if (
-      innerParser == null || typeof innerParser.validateValue !== "function"
-    ) {
-      return parsed;
-    }
-    return await innerParser.validateValue(parsed.value);
-  };
-
-  if (rawValue !== undefined) {
-    if (typeof rawValue !== "string") {
-      const type = rawValue === null
-        ? "null"
-        : Array.isArray(rawValue)
-        ? "array"
-        : typeof rawValue;
-      return wrapForMode(mode, {
-        success: false as const,
-        error: message`Environment variable ${
-          envVar(fullKey)
-        } must be a string, but got: ${type}.`,
-      });
-    }
-    // Parse through the env value parser first (its own constraints),
-    // then pipe the result through the inner CLI parser's validator so
-    // that the inner parser's constraints are enforced even when
-    // `options.parser` is a looser value parser than the one the
-    // inner parser was constructed with (#414).
-    return dispatchByMode(
-      mode,
-      () => {
-        const parsed = (options.parser as ValueParser<"sync", TValue>)
-          .parse(rawValue);
-        return validateSync(parsed);
-      },
-      async () => {
-        const parsed = await options.parser.parse(rawValue);
-        return await validateAsync(parsed);
-      },
-    );
-  }
-
-  if (options.default !== undefined) {
-    return dispatchByMode(
-      mode,
-      () => validateSync({ success: true as const, value: options.default! }),
-      () => validateAsync({ success: true as const, value: options.default! }),
-    );
-  }
+  const fallback = getEnvFallback(options, mode, sourceData, innerParser);
+  if (fallback !== undefined) return fallback;
 
   // When the env variable is absent and no default is provided, fall back
   // to the inner parser's complete() so that downstream wrappers (e.g.,
@@ -1206,6 +1278,9 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // the inner parser's own error to avoid misleading low-level callers.
   const envContextAbsent = annotations != null &&
     !(options.context.id in annotations);
+  const fullKey = `${
+    sourceData?.prefix ?? options.context.prefix
+  }${options.key}`;
   if (innerParser != null) {
     const completeState = innerState ??
       (annotations != null &&

@@ -395,6 +395,148 @@ describe("bool()", () => {
 });
 
 describe("bindEnv()", () => {
+  describe("readFallback()", () => {
+    it("reads the env fallback after an unrelated CLI error", () => {
+      const levels = ["error", "warn", "debug"] as const;
+      const context = createEnvContext({
+        prefix: "APP_",
+        source: (key) => key === "APP_LOG_LEVEL" ? "error" : undefined,
+      });
+      const logLevel = bindEnv(option("--log-level", choice(levels)), {
+        context,
+        key: "LOG_LEVEL",
+        parser: choice(levels),
+        default: "warn",
+      });
+      const parser = object({
+        logLevel,
+        topN: option("--top-n", integer()),
+      });
+      const result = parse(parser, ["--top-n", "x"], {
+        annotations: getSyncAnnotations(context),
+      });
+      assert.ok(!result.success);
+      assert.deepEqual(logLevel.readFallback(), {
+        success: true,
+        value: "error",
+      });
+    });
+
+    it("reads the current source on each call and applies the default only when absent", () => {
+      let raw: string | undefined;
+      const context = createEnvContext({ source: () => raw });
+      const parser = bindEnv(option("--port", integer()), {
+        context,
+        key: "PORT",
+        parser: integer(),
+        default: 3000,
+      });
+      assert.deepEqual(parser.readFallback(), { success: true, value: 3000 });
+      raw = "4000";
+      assert.deepEqual(parser.readFallback(), { success: true, value: 4000 });
+      raw = "invalid";
+      assert.ok(!parser.readFallback().success);
+      raw = "";
+      assert.ok(!parser.readFallback().success);
+    });
+
+    it("uses the same inner validation and never completes the CLI parser", () => {
+      const optionParser = option("--port", integer({ min: 1024 }));
+      const inner = {
+        ...optionParser,
+        validateValue: optionParser.validateValue?.bind(optionParser),
+        complete() {
+          throw new Error("Inner completion must not run.");
+        },
+      };
+      const context = createEnvContext({ source: () => "80" });
+      const parser = bindEnv(inner, {
+        context,
+        key: "PORT",
+        parser: integer(),
+      });
+      assert.ok(!parser.readFallback().success);
+    });
+
+    it("reports a missing variable without reading another source", () => {
+      const context = createEnvContext({
+        prefix: "APP_",
+        source: () => undefined,
+      });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+      const result = parser.readFallback();
+      assert.ok(!result.success);
+      assert.equal(
+        formatMessage(result.error),
+        "Missing required environment variable: `APP_NAME`",
+      );
+    });
+
+    it("rejects invalid source values and propagates sync source exceptions", () => {
+      const context = createEnvContext({ source: () => 1 as never });
+      const parser = bindEnv(option("--port", integer()), {
+        context,
+        key: "PORT",
+        parser: integer(),
+        default: 3000,
+      });
+      assert.ok(!parser.readFallback().success);
+      const throwingContext = createEnvContext({
+        source: () => {
+          throw new Error("Source failed.");
+        },
+      });
+      const throwingParser = bindEnv(option("--port", integer()), {
+        context: throwingContext,
+        key: "PORT",
+        parser: integer(),
+      });
+      assert.throws(() => throwingParser.readFallback(), /Source failed/u);
+    });
+
+    it("returns a promise and rejects source exceptions for async bindings", async () => {
+      const valueParser = asyncChoice(["error", "warn"] as const);
+      const context = createEnvContext({ source: () => "error" });
+      const parser = bindEnv(option("--level", valueParser), {
+        context,
+        key: "LEVEL",
+        parser: valueParser,
+      });
+      const result: Promise<ValueParserResult<"error" | "warn">> = parser
+        .readFallback();
+      assert.deepEqual(await result, { success: true, value: "error" });
+      const throwingContext = createEnvContext({
+        source: () => {
+          throw new Error("Source failed.");
+        },
+      });
+      const throwingParser = bindEnv(option("--level", valueParser), {
+        context: throwingContext,
+        key: "LEVEL",
+        parser: valueParser,
+      });
+      await assert.rejects(throwingParser.readFallback(), /Source failed/u);
+    });
+
+    it("does not copy the method to fluent-derived parsers", () => {
+      const context = createEnvContext({ source: () => "value" });
+      const parser = bindEnv(option("--name", string()), {
+        context,
+        key: "NAME",
+        parser: string(),
+      });
+      assert.ok(!Object.keys(parser).includes("readFallback"));
+      const mapped = parser.map((value) => value.toUpperCase());
+      assert.ok(!("readFallback" in mapped));
+      // @ts-expect-error Fluent-derived parsers do not retain the binding method.
+      void mapped.readFallback;
+    });
+  });
+
   it("should return a fluent parser", () => {
     const context = createEnvContext({
       source: () => undefined,

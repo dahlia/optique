@@ -248,10 +248,10 @@ Common mistakes checklist
  -  Use structured `message` values for errors and descriptions.
  -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,
     and `bindKeyring()` in the runner's `contexts` option.
+ -  Use `bindEnv().readFallback()` for env/default in error handlers.
  -  Enable `showEnvironment` for env-only help; set `documentation.description`.
- -  Do not flatten a multi-level dependency graph into duplicated one-level
-    factories. Wrap each derived value that becomes a later source with
-    `dependency()` and derive the next parser from it.
+ -  Keep multi-level dependency graphs with `dependency()` rather than
+    duplicating one-level factories.
  -  Do not probe runtime capabilities eagerly before constructing a prompt
     parser. Put synchronous or asynchronous checks in the prompt config's
     `when` field and provide a typed `otherwise` value. The check then runs

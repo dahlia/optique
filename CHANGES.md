@@ -141,6 +141,12 @@ To be released.
  -  Added full environment variable names to the documentation entries produced
     by `bindEnv()`, so help and man page renderers can display declared
     fallback bindings without reading their values.  [[#969], [#986]]
+ -  Added `readFallback()` to parsers returned by `bindEnv()`, so error
+    handlers can read and validate the environment value or configured
+    default after CLI parsing fails.  [[#970], [#1001]]
+
+[#970]: https://github.com/dahlia/optique/issues/970
+[#1001]: https://github.com/dahlia/optique/pull/1001
 
 ### @optique/man
 
