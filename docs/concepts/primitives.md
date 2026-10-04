@@ -716,7 +716,7 @@ const installCommand = command("install", object({
 });
 ~~~~
 
-~~~~
+~~~~ text
   install                     Install a package. (aliases: i, add)
 ~~~~
 
