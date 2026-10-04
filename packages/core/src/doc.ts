@@ -731,7 +731,7 @@ export interface DocPageFormatOptions {
    * { showAliases: { prefix: " [", suffix: "]", label: "aka " } }
    * ```
    */
-  showAliases?: boolean | ShowAliasesOptions;
+  readonly showAliases?: boolean | ShowAliasesOptions;
 
   /**
    * A custom comparator function to control the order of sections in the
