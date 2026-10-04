@@ -75,9 +75,9 @@ Core rules
     `context.previousValidationMessage`, and forward `context.signal` when the
     prompt library supports aborting active work. Adapter-native validation
     remains separate and completes inside one shared attempt.
- -  Build subcommands with `command()` combined by `or()`. Put a literal field
-    such as `command: constant("serve")` in each branch when you want a
-    discriminated union.
+ -  Build subcommands with `command()` combined by `or()`; add a literal field
+    such as `command: constant("serve")` per branch for a discriminated union.
+    Show hidden `aliases` in help with `showAliases` on `command()` or runner.
  -  Use `run(parser, { completion: "both" })` for completion, or the object form
     with `completion.errors` for custom shell errors. Do not hand-write scripts.
  -  Use `usageLine: [{ type: "ellipsis" }]` in runner options when a large root
