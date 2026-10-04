@@ -2981,13 +2981,29 @@ export interface CommandOptions {
   /**
    * Additional names that invoke this command.
    *
-   * Aliases are functional at runtime and are suggested by shell completion,
-   * but are hidden from usage and documentation output.  The `name` parameter
-   * passed to {@link command} remains the canonical display name.
+   * Aliases are functional at runtime and are suggested by shell completion.
+   * By default they are hidden from usage and documentation output; set
+   * {@link showAliases} or the help formatter's `showAliases` option to list
+   * them next to the command in command lists.  Usage lines always show
+   * only the `name` parameter passed to {@link command}, which remains the
+   * canonical display name.
    *
    * @since 1.1.0
    */
   readonly aliases?: readonly [string, ...string[]];
+
+  /**
+   * Whether to show {@link aliases} next to this command in command lists
+   * of help and documentation output, e.g., `(aliases: i, add)`.
+   *
+   * When omitted, the help formatter's `showAliases` option decides, which
+   * defaults to hiding aliases.  `true` shows them and `false` hides them
+   * regardless of that option.  This setting does not affect usage lines
+   * and does not apply to nested subcommands.
+   *
+   * @since 1.4.0
+   */
+  readonly showAliases?: boolean;
 
   /**
    * Error messages customization.
@@ -3106,6 +3122,17 @@ function getVisibleCommandAliases(
     );
   }
   return aliases;
+}
+
+function getShowCommandAliases(
+  options: CommandOptions,
+): boolean | undefined {
+  const showAliases: unknown = options.showAliases;
+  if (showAliases == null) return undefined;
+  if (typeof showAliases !== "boolean") {
+    throw new TypeError("Command showAliases must be a boolean.");
+  }
+  return showAliases;
 }
 
 function getHiddenCommandAliases(
@@ -3269,6 +3296,7 @@ async function* suggestCommandAsync<T, TState>(
  *          to the inner parser for the remaining arguments.
  * @throws {TypeError} If `name` is empty, whitespace-only, contains
  *         embedded whitespace, or contains control characters.
+ * @throws {TypeError} If `options.showAliases` is present but not a boolean.
  */
 export function command<M extends Mode, T, TState>(
   name: string,
@@ -3277,6 +3305,7 @@ export function command<M extends Mode, T, TState>(
 ): FluentParser<M, T, CommandState<TState>> {
   const commandNames = getCommandNames(name, options);
   const aliases = getVisibleCommandAliases(options);
+  const showAliases = getShowCommandAliases(options);
   const hiddenAliases = getHiddenCommandAliases(options);
   validateCommandNames(commandNames, "Command");
   validateUniqueCommandNames(commandNames);
@@ -3676,8 +3705,13 @@ export function command<M extends Mode, T, TState>(
           fragments: [
             {
               type: "entry",
-              term: { type: "command", name },
+              term: {
+                type: "command",
+                name,
+                ...(aliases.length > 0 && { aliases }),
+              },
               description: options.brief ?? options.description,
+              ...(showAliases != null && { showAliases }),
             },
           ],
         };

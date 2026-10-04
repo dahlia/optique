@@ -22,6 +22,7 @@ import type {
 import type { Program } from "@optique/core/program";
 import type {
   DocSection,
+  ShowAliasesOptions,
   ShowChoicesOptions,
   ShowDefaultOptions,
   ShowEnvironmentOptions,
@@ -143,6 +144,23 @@ export interface RunOptions {
    * @since 0.10.0
    */
   readonly showChoices?: boolean | ShowChoicesOptions;
+
+  /**
+   * Whether and how to display command aliases in command lists of help
+   * output.
+   *
+   * - `boolean`: When `true`, displays aliases using format
+   *   `(aliases: i, add)`
+   * - `ShowAliasesOptions`: Custom formatting with configurable prefix,
+   *   suffix, and label
+   *
+   * This is the fallback for commands that do not set their own
+   * `showAliases` option.  Usage lines always show canonical command names.
+   *
+   * @default `false`
+   * @since 1.4.0
+   */
+  readonly showAliases?: boolean | ShowAliasesOptions;
 
   /**
    * Displays declared environment bindings in help. `true` selects inline
@@ -935,6 +953,7 @@ function buildCoreOptions(
   const termWidth = options.termWidth;
   const showDefault = options.showDefault;
   const showChoices = options.showChoices;
+  const showAliases = options.showAliases;
   const showEnvironment = options.showEnvironment;
   const showUsage = options.showUsage;
   const usageLine = options.usageLine;
@@ -1007,6 +1026,7 @@ function buildCoreOptions(
     termWidth,
     showDefault,
     showChoices,
+    showAliases,
     showEnvironment,
     showUsage,
     usageLine,
@@ -1054,6 +1074,7 @@ const knownRunOptionsKeyList = [
   "termWidth",
   "showDefault",
   "showChoices",
+  "showAliases",
   "showEnvironment",
   "showUsage",
   "usageLine",

@@ -340,6 +340,45 @@ Run tests
 ~~~~
 
 
+Command alias documentation
+---------------------------
+
+*This feature is available since Optique 1.4.0.*
+
+Command [aliases](./primitives.md#command-aliases) are left out of man pages
+by default.  Pass `showAliases` to `generateManPage()`, `generateManPageSync()`,
+`generateManPageAsync()`, or `formatDocPageAsMan()` to document them next to
+each command:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { command } from "@optique/core/primitives";
+import { generateManPage } from "@optique/man";
+
+const parser = or(
+  command("install", object({}), {
+    aliases: ["i", "add"],
+    description: message`Install a package.`,
+  }),
+  command("remove", object({}), {
+    description: message`Remove a package.`,
+  }),
+);
+
+const manPage = generateManPage(parser, {
+  name: "pkg",
+  section: 1,
+  showAliases: true,
+});
+~~~~
+
+This renders the *install* entry as `Install a package. (aliases: i, add)`.
+Like the help option, `showAliases` also accepts `prefix`, `suffix`, and
+`label` to customize the annotation, and a command's own `showAliases` option
+takes precedence over it.
+
+
 Environment documentation
 -------------------------
 
@@ -641,6 +680,10 @@ optique-man ./src/cli.ts -s 1 -o myapp.1
     ~~~~ bash
     optique-man ./src/cli.ts -s 1 --show-environment section
     ~~~~
+
+`--show-aliases` (since 1.4.0)
+:   Document command aliases next to their commands, as in
+    `(aliases: i, add)`.  Omitted by default.
 
 ### TypeScript support
 

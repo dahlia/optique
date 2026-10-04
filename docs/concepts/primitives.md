@@ -692,9 +692,40 @@ const installCommand = command("install", object({
 ~~~~
 
 Aliases parse exactly like the canonical command name.  They are suggested by
-shell completion, but usage and help output continue to show only the canonical
-name.  This keeps the public help text focused on the preferred command name
-without requiring a duplicate hidden command branch.
+shell completion, but by default usage and help output continue to show only
+the canonical name.  This keeps the public help text focused on the preferred
+command name without requiring a duplicate hidden command branch.
+
+*Showing aliases in command lists is available since Optique 1.4.0.*
+
+To let users discover aliases from help, set `showAliases` on the command.
+Its entry in command lists then gets an annotation after the description:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { command, option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+
+const installCommand = command("install", object({
+  packageName: option("--package", string())
+}), {
+  aliases: ["i", "add"],
+  showAliases: true, // [!code highlight]
+  description: message`Install a package.`,
+});
+~~~~
+
+~~~~ text
+  install                     Install a package. (aliases: i, add)
+~~~~
+
+To show the aliases of every command at once, pass `showAliases` to the
+runner instead; see [alias display](./runners.md#alias-display).  A command's
+own `showAliases` always takes precedence over the runner option, so
+`showAliases: false` keeps a particular command's aliases hidden even when
+the runner shows the others.  The setting applies only to that command's
+entry, not to its subcommands, and usage lines always show the canonical name.
 
 Command aliases share the command namespace with sibling commands in
 alternative-style compositions.  Optique throws a `TypeError` when a command

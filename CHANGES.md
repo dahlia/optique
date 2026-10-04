@@ -13,6 +13,19 @@ To be released.
  -  Added a `key` option to `choice()` for matching string inputs and
     completion prefixes against declared choices under a custom rule while
     returning the declared spelling.  [[#998], [#1000]]
+ -  Added a way to show command aliases in help output, so users can discover
+    them without relying on shell completion.  Set `showAliases: true` on
+    `command()` to list a command's aliases next to its description, as in
+    `install  Install a package. (aliases: i, add)`, or pass `showAliases` to
+    `formatDocPage()` and the runner functions to do so for every command.
+    A command's own setting takes precedence over the runner option in both
+    directions.  Aliases stay hidden by default, and usage lines keep showing
+    only canonical names.  [[#1002], [#1005]]
+ -  Added `ShowAliasesOptions` for customizing the alias annotation's prefix,
+    suffix, and label, `DocEntry.showAliases` for per-entry overrides, and
+    `annotationStyles.aliases` to `TerminalTheme` for styling the annotation.
+    Command list entries produced by `command()` now carry the command's
+    visible aliases in their term.  [[#1002], [#1005]]
  -  Added attached values for short options, so `-n5` and `-xn5` work like
     `-n 5` and `-x -n 5`, with value completion for attached forms.  Declared
     single-dash full names now take precedence over short-option splitting,
@@ -83,6 +96,8 @@ To be released.
 [#998]: https://github.com/dahlia/optique/issues/998
 [#999]: https://github.com/dahlia/optique/pull/999
 [#1000]: https://github.com/dahlia/optique/pull/1000
+[#1002]: https://github.com/dahlia/optique/issues/1002
+[#1005]: https://github.com/dahlia/optique/pull/1005
 
 ### @optique/run
 
@@ -92,6 +107,8 @@ To be released.
  -  Added the `helpSections` option to `run()`, `runSync()`, and `runAsync()`
     to separate command lists from options in help while keeping pages without
     commands free of automatic headings.  [[#972], [#983]]
+ -  Added the `showAliases` option to `run()`, `runSync()`, and `runAsync()`
+    to list command aliases next to commands in help output.  [[#1002], [#1005]]
  -  Added the `showEnvironment` option to display environment binding names
     inline, in a separate help section, or both.  [[#969], [#986]]
 
@@ -102,6 +119,10 @@ To be released.
  -  Added support for `helpSections` in `runProgram()` to separate discovered
     commands from options in help while keeping pages without commands free of
     automatic headings.  [[#972], [#983]]
+ -  Added support for `showAliases` in `runProgram()` and in command metadata,
+    listing discovered command aliases in help.  Root command lists spell
+    them as full command paths, such as `remote a` for `remote add`.
+    [[#1002], [#1005]]
  -  Preserved independent root environment documentation in command discovery
     help, while keeping descendant bindings scoped to their own command pages.
     Root-only programs also show environment bindings added by outer wrappers.
@@ -158,6 +179,10 @@ To be released.
     sections to man pages, including `--show-environment` in the generator
     CLI.  Explicit `environment` sections retain priority over generated
     sections.  [[#969], [#986]]
+ -  Added the `showAliases` option to `generateManPage()`,
+    `generateManPageSync()`, `generateManPageAsync()`, and
+    `formatDocPageAsMan()`, and the `--show-aliases` flag to `optique-man`,
+    for documenting command aliases next to their commands.  [[#1002], [#1005]]
 
 ### @optique/inquirer
 

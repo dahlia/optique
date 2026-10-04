@@ -121,6 +121,7 @@ function extractParserAndOptions<M extends Mode>(
         seeAlso: programOptions.seeAlso,
         environment: programOptions.environment,
         showEnvironment: programOptions.showEnvironment,
+        showAliases: programOptions.showAliases,
         files: programOptions.files,
         exitStatus: programOptions.exitStatus,
       },

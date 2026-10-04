@@ -21,6 +21,7 @@ import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   argument,
   command,
+  type CommandOptions,
   constant,
   fail,
   flag,
@@ -44,6 +45,10 @@ import {
   deriveFromSync,
 } from "#src/internal/dependency.ts";
 import { annotationKey } from "#src/internal/annotations.ts";
+import {
+  hiddenCommandAliasesKey,
+  type HiddenCommandAliasOptions,
+} from "#src/internal/command-alias.ts";
 import { extractDependencyMetadata } from "#src/dependency-metadata.ts";
 import { extractRawInputFromState } from "#src/dependency-runtime.ts";
 import {
@@ -3701,6 +3706,93 @@ describe("command", () => {
     const result = parseSync(parser, ["i"]);
 
     assert.deepEqual(result, { success: true, value: ["install"] });
+  });
+
+  it("should expose visible aliases on command list entries", () => {
+    const parser = command("install", object({}), {
+      aliases: ["i", "add"],
+      description: message`Install a package.`,
+    });
+
+    const docs = parser.getDocFragments({ kind: "unavailable" });
+
+    assert.deepEqual(docs.fragments, [{
+      type: "entry",
+      term: { type: "command", name: "install", aliases: ["i", "add"] },
+      description: message`Install a package.`,
+    }]);
+  });
+
+  it("should forward showAliases to command list entries", () => {
+    for (const showAliases of [true, false]) {
+      const parser = command("install", object({}), {
+        aliases: ["i"],
+        showAliases,
+      });
+
+      const docs = parser.getDocFragments({ kind: "unavailable" });
+
+      assert.deepEqual(docs.fragments, [{
+        type: "entry",
+        term: { type: "command", name: "install", aliases: ["i"] },
+        description: undefined,
+        showAliases,
+      }]);
+    }
+  });
+
+  it("should allow showAliases without aliases", () => {
+    const parser = command("install", object({}), { showAliases: true });
+
+    const docs = parser.getDocFragments({ kind: "unavailable" });
+
+    assert.deepEqual(docs.fragments, [{
+      type: "entry",
+      term: { type: "command", name: "install" },
+      description: undefined,
+      showAliases: true,
+    }]);
+  });
+
+  it("should not expose hidden aliases on command list entries", () => {
+    const options: CommandOptions & HiddenCommandAliasOptions = {
+      [hiddenCommandAliasesKey]: ["h"],
+    };
+    const parser = command("help", object({}), options);
+
+    const docs = parser.getDocFragments({ kind: "unavailable" });
+
+    assert.deepEqual(docs.fragments, [{
+      type: "entry",
+      term: { type: "command", name: "help" },
+      description: undefined,
+    }]);
+  });
+
+  it("should keep showAliases out of the usage term", () => {
+    const parser = command("install", object({}), {
+      aliases: ["i"],
+      showAliases: true,
+    });
+
+    assert.deepEqual(parser.usage, [
+      { type: "command", name: "install", aliases: ["i"] },
+    ]);
+    assert.doesNotMatch(formatUsage("mytool", parser.usage), /\bi\b/);
+  });
+
+  it("should reject non-boolean showAliases", () => {
+    assert.throws(
+      () =>
+        command("install", object({}), {
+          aliases: ["i"],
+          showAliases: "yes" as never,
+        }),
+      {
+        name: "TypeError",
+        message: "Command showAliases must be a boolean.",
+      },
+    );
   });
 
   it("should reject duplicate command aliases", () => {

@@ -111,6 +111,26 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       assert.notEqual(invalid.exitCode, 0);
     });
 
+    it("passes --show-aliases for Program and Parser exports", async () => {
+      if (!hasReliableSubprocess) return;
+      const file = join(fixturesDir, "aliases.ts");
+      for (const exportName of ["default", "parser"]) {
+        const hidden = await cli.invoke(file, "-s", "1", "-e", exportName);
+        assert.equal(hidden.exitCode, 0, hidden.stderr);
+        assert.ok(!hidden.stdout.includes("(aliases:"));
+        const shown = await cli.invoke(
+          file,
+          "-s",
+          "1",
+          "-e",
+          exportName,
+          "--show-aliases",
+        );
+        assert.equal(shown.exitCode, 0, shown.stderr);
+        assert.ok(shown.stdout.includes("Install a package. (aliases: i)"));
+      }
+    });
+
     it("generates man page from Program export", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const result = await cli.invoke(programFile, "-s", "1");

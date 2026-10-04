@@ -22,7 +22,9 @@ export interface LabelTerm {
     | "examples"
     | "author"
     | "bugs"
-    | "choices";
+    | "choices"
+    /** Command alias annotation label. @since 1.4.0 */
+    | "aliases";
 }
 /**
  * Punctuation supplied by a terminal renderer.
@@ -44,7 +46,11 @@ export interface SyntaxPunctuationTerm {
     | "defaultPrefix"
     | "defaultSuffix"
     | "choicesPrefix"
-    | "choicesSuffix";
+    | "choicesSuffix"
+    /** Command alias annotation prefix. @since 1.4.0 */
+    | "aliasesPrefix"
+    /** Command alias annotation suffix. @since 1.4.0 */
+    | "aliasesSuffix";
 }
 /**
  * The label preceding an error message.
@@ -158,6 +164,8 @@ export type TerminalTheme = Partial<Formatters> & {
     readonly choices?: TerminalStyle;
     /** Environment annotation style. @since 1.4.0 */
     readonly environment?: TerminalStyle;
+    /** Command alias annotation style. @since 1.4.0 */
+    readonly aliases?: TerminalStyle;
   };
 };
 const plain = (text: string): TerminalFragment => ({ type: "text", text });
@@ -225,7 +233,8 @@ export const defaultTerminalTheme: Formatters & {
   }),
   programName: (_term, ctx) => styled(ctx.text, { bold: true }),
   label: (term, ctx) =>
-    term.kind === "usageSummary" || term.kind === "choices"
+    term.kind === "usageSummary" || term.kind === "choices" ||
+      term.kind === "aliases"
       ? plain(ctx.text)
       : styled(ctx.text, { bold: true, dim: true }),
   syntaxPunctuation: (term, ctx) =>
@@ -236,6 +245,8 @@ export const defaultTerminalTheme: Formatters & {
         "defaultSuffix",
         "choicesPrefix",
         "choicesSuffix",
+        "aliasesPrefix",
+        "aliasesSuffix",
       ].includes(term.kind)
       ? plain(ctx.text)
       : styled(ctx.text, { dim: true }),

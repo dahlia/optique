@@ -71,6 +71,9 @@ a ${metavar("PROGRAM")} or ${metavar("PARSER")} to generate a man page from.`,
           message`Document declared environment bindings inline, in a section, or both.`,
       },
     )),
+    showAliases: option("--show-aliases", {
+      description: message`Document command aliases next to their commands.`,
+    }),
     exportName: withDefault(
       option("-e", "--export", string({ metavar: "NAME" }), {
         description: message`JavaScript export name to use. The export must be
@@ -595,6 +598,7 @@ export async function main(): Promise<void> {
         showEnvironment: args.showEnvironment == null
           ? undefined
           : { placement: args.showEnvironment },
+        showAliases: args.showAliases,
       });
     } else {
       manPage = await generateManPageAsync(target, {
@@ -606,6 +610,7 @@ export async function main(): Promise<void> {
         showEnvironment: args.showEnvironment == null
           ? undefined
           : { placement: args.showEnvironment },
+        showAliases: args.showAliases,
       });
     }
   } catch (error) {
