@@ -402,6 +402,9 @@ export function cacheTerminalTheme(theme: TerminalTheme = {}): TerminalTheme {
       environment: theme.annotationStyles.environment == null
         ? undefined
         : { ...theme.annotationStyles.environment },
+      aliases: theme.annotationStyles.aliases == null
+        ? undefined
+        : { ...theme.annotationStyles.aliases },
     },
   };
 }

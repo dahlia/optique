@@ -3718,3 +3718,273 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
     assert.deepEqual(titles, ["Visible"]);
   });
 });
+
+describe("formatDocPage() showAliases", () => {
+  const commandPage = (
+    entry: Partial<DocEntry> = {},
+    aliases: readonly string[] | null = ["i", "add"],
+  ): DocPage => ({
+    sections: [{
+      entries: [{
+        term: {
+          type: "command",
+          name: "install",
+          ...(aliases != null && { aliases }),
+        },
+        description: message`Install a package.`,
+        ...entry,
+      }],
+    }],
+  });
+
+  it("does not show aliases by default", () => {
+    const expected = "\n  install                     Install a package.\n";
+    assert.equal(formatDocPage("app", commandPage()), expected);
+    assert.equal(
+      formatDocPage("app", commandPage(), { showAliases: false }),
+      expected,
+    );
+  });
+
+  it("shows aliases when showAliases is true", () => {
+    assert.equal(
+      formatDocPage("app", commandPage(), { showAliases: true }),
+      "\n  install                     Install a package. (aliases: i, add)\n",
+    );
+  });
+
+  it("uses custom prefix, suffix, and label", () => {
+    const result = formatDocPage("app", commandPage(), {
+      showAliases: { prefix: " [", suffix: "]", label: "aka " },
+    });
+    assert.ok(result.includes("Install a package. [aka i, add]"));
+  });
+
+  it("uses default formatting for omitted ShowAliasesOptions fields", () => {
+    const result = formatDocPage("app", commandPage(), { showAliases: {} });
+    assert.ok(result.includes("Install a package. (aliases: i, add)"));
+  });
+
+  it("lets an entry force aliases on when the global option is off", () => {
+    const page = commandPage({ showAliases: true });
+    assert.ok(
+      formatDocPage("app", page).includes(
+        "Install a package. (aliases: i, add)",
+      ),
+    );
+    assert.ok(
+      formatDocPage("app", page, { showAliases: false }).includes(
+        "(aliases: i, add)",
+      ),
+    );
+  });
+
+  it("uses global formatting for an entry forcing aliases on", () => {
+    const result = formatDocPage("app", commandPage({ showAliases: true }), {
+      showAliases: { label: "aka: " },
+    });
+    assert.ok(result.includes("Install a package. (aka: i, add)"));
+  });
+
+  it("lets an entry force aliases off when the global option is on", () => {
+    assert.equal(
+      formatDocPage("app", commandPage({ showAliases: false }), {
+        showAliases: true,
+      }),
+      "\n  install                     Install a package.\n",
+    );
+  });
+
+  it("renders nothing for commands without aliases", () => {
+    assert.equal(
+      formatDocPage("app", commandPage({}, null), { showAliases: true }),
+      "\n  install                     Install a package.\n",
+    );
+    assert.equal(
+      formatDocPage("app", commandPage({}, []), { showAliases: true }),
+      "\n  install                     Install a package.\n",
+    );
+  });
+
+  it("ignores showAliases on non-command entries", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--verbose"] },
+          description: message`Be verbose.`,
+          showAliases: true,
+        }],
+      }],
+    };
+    assert.equal(
+      formatDocPage("app", page, { showAliases: true }),
+      "\n  --verbose                   Be verbose.\n",
+    );
+  });
+
+  it("does not render hidden aliases", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "help", hiddenAliases: ["h"] },
+          description: message`Show help.`,
+        }],
+      }],
+    };
+    assert.equal(
+      formatDocPage("app", page, { showAliases: true }),
+      "\n  help                        Show help.\n",
+    );
+  });
+
+  it("renders the annotation alone for entries without a description", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "install", aliases: ["i"] },
+        }],
+      }],
+    };
+    assert.ok(!formatDocPage("app", page).includes("aliases"));
+    assert.equal(
+      formatDocPage("app", page, { showAliases: true }),
+      "\n  install                      (aliases: i)\n",
+    );
+  });
+
+  it("dims the annotation by default when colors are enabled", () => {
+    const result = formatDocPage("app", commandPage(), {
+      showAliases: true,
+      colors: true,
+    });
+    assert.ok(result.includes("\x1b[2m (aliases: i, add)\x1b[0m"));
+  });
+
+  it("applies annotationStyles.aliases from the theme", () => {
+    const colored = formatDocPage("app", commandPage(), {
+      showAliases: true,
+      colors: true,
+      theme: { annotationStyles: { aliases: { foreground: "red" } } },
+    });
+    assert.ok(colored.includes("\x1b[31m (aliases: i, add)\x1b[0m"));
+    const plain = formatDocPage("app", commandPage(), {
+      showAliases: true,
+      colors: true,
+      theme: { annotationStyles: { aliases: {} } },
+    });
+    assert.ok(plain.includes(" (aliases: i, add)"));
+    assert.ok(!plain.includes("\x1b[2m"));
+  });
+
+  it("passes alias label and punctuation through the theme", () => {
+    const result = formatDocPage("app", commandPage(), {
+      showAliases: true,
+      theme: {
+        label: (term, ctx) =>
+          term.kind === "aliases"
+            ? { type: "text", text: "ALIASES=" }
+            : ctx.format(term),
+        syntaxPunctuation: (term, ctx) =>
+          term.kind === "aliasesPrefix"
+            ? { type: "text", text: " <<" }
+            : term.kind === "aliasesSuffix"
+            ? { type: "text", text: ">>" }
+            : { type: "text", text: ctx.text },
+      },
+    });
+    assert.ok(result.includes("Install a package. <<ALIASES=i, add>>"));
+  });
+
+  it("orders aliases before default and choices annotations", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "command", name: "install", aliases: ["i"] },
+          description: message`Install.`,
+          default: message`${"x"}`,
+          choices: valueSet(["a", "b"], { fallback: "", type: "unit" }),
+        }],
+      }],
+    };
+    const result = formatDocPage("app", page, {
+      showAliases: true,
+      showDefault: true,
+      showChoices: true,
+    });
+    assert.ok(
+      result.includes('Install. (aliases: i) ["x"] (choices: a, b)'),
+      result,
+    );
+  });
+
+  it("wraps the annotation within maxWidth", () => {
+    const page = commandPage({}, ["i", "add", "get", "fetch", "obtain"]);
+    const result = formatDocPage("app", page, {
+      showAliases: true,
+      maxWidth: 50,
+    });
+    for (const line of result.split("\n")) {
+      assert.ok(getDisplayWidth(line) <= 50, `${line} exceeds 50`);
+    }
+    assert.ok(
+      result.replace(/\s+/g, " ").includes(
+        "(aliases: i, add, get, fetch, obtain)",
+      ),
+    );
+  });
+
+  it("counts annotation-only entries for automatic term width", () => {
+    const page: DocPage = {
+      sections: [{
+        entries: [
+          { term: { type: "command", name: "a-very-long-command" } },
+          {
+            term: { type: "command", name: "install", aliases: ["i"] },
+          },
+        ],
+      }],
+    };
+    assert.equal(
+      formatDocPage("app", page, { termWidth: "auto", showAliases: true }),
+      "\n  a-very-long-command\n  install   (aliases: i)\n",
+    );
+  });
+
+  it("validates maxWidth against a visible alias annotation", () => {
+    // prefix " (" (2) + label "aliases: " (9) = 11 => minimum
+    // termIndent(2) + 2 + max(2, 2*11 - 1) = 25.
+    const page = commandPage({}, ["i"]);
+    assert.throws(
+      () => formatDocPage("app", page, { maxWidth: 24, showAliases: true }),
+      { name: "RangeError", message: "maxWidth must be at least 25, got 24." },
+    );
+    assert.throws(
+      () =>
+        formatDocPage("app", commandPage({ showAliases: true }, ["i"]), {
+          maxWidth: 24,
+        }),
+      { name: "RangeError", message: "maxWidth must be at least 25, got 24." },
+    );
+  });
+
+  it("ignores hidden alias annotations in maxWidth validation", () => {
+    const page = commandPage({ showAliases: false }, ["i"]);
+    const result = formatDocPage("app", page, {
+      maxWidth: 24,
+      showAliases: { label: "a very long alias label: " },
+    });
+    assert.ok(!result.includes("alias"));
+  });
+});
+
+describe("cloneDocEntry() showAliases", () => {
+  it("preserves showAliases and command aliases", () => {
+    const entry: DocEntry = {
+      term: { type: "command", name: "install", aliases: ["i"] },
+      showAliases: false,
+    };
+    const cloned = cloneDocEntry(entry);
+    assert.deepEqual(cloned, entry);
+    assert.notEqual(cloned.term, entry.term);
+  });
+});

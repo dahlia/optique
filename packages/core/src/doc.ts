@@ -88,6 +88,16 @@ export interface DocEntry {
    * @since 1.4.0
    */
   readonly envVars?: readonly string[];
+
+  /**
+   * Per-entry override for showing the aliases of a command term.  When
+   * `true`, the term's `aliases` are shown even if the formatter's
+   * `showAliases` option is off; when `false`, they are hidden even if it is
+   * on.  When omitted, the formatter's `showAliases` option decides.
+   * Ignored for entries whose term is not a command.
+   * @since 1.4.0
+   */
+  readonly showAliases?: boolean;
 }
 
 /**
@@ -374,6 +384,7 @@ export function cloneDocEntry(entry: DocEntry): DocEntry {
     ...(entry.choices != null && {
       choices: cloneMessage(entry.choices),
     }),
+    ...(entry.showAliases != null && { showAliases: entry.showAliases }),
   };
 }
 
@@ -561,6 +572,31 @@ export interface ShowChoicesOptions {
 }
 
 /**
+ * Configuration for customizing how command aliases are displayed in help
+ * output.
+ * @since 1.4.0
+ */
+export interface ShowAliasesOptions {
+  /**
+   * Text to display before the alias list.
+   * @default `" ("`
+   */
+  readonly prefix?: string;
+
+  /**
+   * Text to display after the alias list.
+   * @default `")"`
+   */
+  readonly suffix?: string;
+
+  /**
+   * Label text to display before the individual aliases.
+   * @default `"aliases: "`
+   */
+  readonly label?: string;
+}
+
+/**
  * Options for formatting a documentation page.
  */
 export interface DocPageFormatOptions {
@@ -670,6 +706,32 @@ export interface DocPageFormatOptions {
    * ```
    */
   showChoices?: boolean | ShowChoicesOptions;
+
+  /**
+   * Whether and how to display the aliases of commands in command lists.
+   *
+   * - `boolean`: When `true`, displays aliases using format
+   *   `(aliases: i, add)`
+   * - `ShowAliasesOptions`: Custom formatting with configurable prefix,
+   *   suffix, and label
+   *
+   * This is the fallback for entries that do not set
+   * {@link DocEntry.showAliases}; an entry's own setting always wins.
+   * Aliases are automatically dimmed when `colors` is enabled.
+   *
+   * @default `false`
+   * @since 1.4.0
+   *
+   * @example
+   * ```typescript
+   * // Basic usage - shows "(aliases: i, add)"
+   * { showAliases: true }
+   *
+   * // Custom format - shows "[aka i, add]"
+   * { showAliases: { prefix: " [", suffix: "]", label: "aka " } }
+   * ```
+   */
+  showAliases?: boolean | ShowAliasesOptions;
 
   /**
    * A custom comparator function to control the order of sections in the
@@ -786,6 +848,19 @@ export function formatDocPage(
   const environmentAmbient = options.theme?.annotationStyles?.environment ??
     { dim: true };
   const environmentStyle = styleCode(environmentAmbient);
+  const aliasesAmbient = options.theme?.annotationStyles?.aliases ??
+    { dim: true };
+  const aliasesStyle = styleCode(aliasesAmbient);
+  const showAliasesByDefault = options.showAliases != null &&
+    options.showAliases !== false;
+  const aliasesContent = (entry: DocEntry): Message => {
+    if (entry.term.type !== "command") return [];
+    if (!(entry.showAliases ?? showAliasesByDefault)) return [];
+    return (entry.term.aliases ?? []).filter((alias) => alias !== "")
+      .flatMap((alias, i) =>
+        i === 0 ? [text(alias)] : [text(", "), text(alias)]
+      );
+  };
   const environmentPlacement = typeof options.showEnvironment === "object"
     ? options.showEnvironment.placement ?? "inline"
     : options.showEnvironment
@@ -808,7 +883,11 @@ export function formatDocPage(
         options.theme,
         options.colors,
         undefined,
-        kind === "choices" ? choicesAmbient : undefined,
+        kind === "choices"
+          ? choicesAmbient
+          : kind === "aliases"
+          ? aliasesAmbient
+          : undefined,
       );
       labelCache.set(key, rendered);
     }
@@ -831,6 +910,8 @@ export function formatDocPage(
           ? defaultAmbient
           : kind.startsWith("choices")
           ? choicesAmbient
+          : kind.startsWith("aliases")
+          ? aliasesAmbient
           : undefined,
       );
       punctuationCache.set(key, rendered);
@@ -915,18 +996,31 @@ export function formatDocPage(
       hasContent(entry.default) ||
     (options.showChoices === true || typeof options.showChoices === "object") &&
       hasContent(entry.choices) ||
-    showInlineEnvironment && hasContent(environmentContent(entry));
+    showInlineEnvironment && hasContent(environmentContent(entry)) ||
+    hasContent(aliasesContent(entry));
   const annotations = new Map<
-    "default" | "choices" | "environment",
+    "default" | "choices" | "environment" | "aliases",
     AnnotationLayout
   >();
   const annotation = (
-    kind: "default" | "choices" | "environment",
+    kind: "default" | "choices" | "environment" | "aliases",
   ): AnnotationLayout => {
     const cached = annotations.get(kind);
     if (cached != null) return cached;
     if (kind === "environment") {
       const layout = measureAnnotation(" [env: ", "]");
+      annotations.set(kind, layout);
+      return layout;
+    }
+    if (kind === "aliases") {
+      const config = typeof options.showAliases === "object"
+        ? options.showAliases
+        : {};
+      const layout = measureAnnotation(
+        punctuation(config.prefix ?? " (", "aliasesPrefix") +
+          label(config.label ?? "aliases: ", "aliases"),
+        punctuation(config.suffix ?? ")", "aliasesSuffix"),
+      );
       annotations.set(kind, layout);
       return layout;
     }
@@ -1012,12 +1106,16 @@ export function formatDocPage(
     // reserved from the content budget; later suffix lines stand alone.
     let minDescWidth = 1;
     if (needsDescColumn) {
-      for (const kind of ["default", "choices", "environment"] as const) {
+      for (
+        const kind of ["default", "choices", "environment", "aliases"] as const
+      ) {
         const enabled = kind === "default"
           ? options.showDefault
           : kind === "choices"
           ? options.showChoices
-          : showInlineEnvironment;
+          : kind === "environment"
+          ? showInlineEnvironment
+          : true;
         if (
           enabled &&
           page.sections.some((section) =>
@@ -1025,6 +1123,8 @@ export function formatDocPage(
               hasContent(
                 kind === "environment"
                   ? environmentContent(entry)
+                  : kind === "aliases"
+                  ? aliasesContent(entry)
                   : entry[kind],
               )
             )
@@ -1251,6 +1351,17 @@ export function formatDocPage(
           : annotationText;
         cursor = suffix.cursor;
       };
+
+      const aliases = aliasesContent(entry);
+      if (hasContent(aliases)) {
+        appendAnnotation(
+          aliases,
+          annotation("aliases"),
+          aliasesStyle,
+          aliasesAmbient,
+          false,
+        );
+      }
 
       if (options.showDefault && hasContent(entry.default)) {
         appendAnnotation(

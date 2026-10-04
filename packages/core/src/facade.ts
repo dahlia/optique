@@ -33,6 +33,7 @@ import {
   type DocSection,
   formatDocPage,
   isDocEntryHidden,
+  type ShowAliasesOptions,
   type ShowChoicesOptions,
   type ShowDefaultOptions,
   type ShowEnvironmentOptions,
@@ -89,6 +90,7 @@ import {
   normalizeUsage,
   type OptionName,
   type Usage,
+  type UsageTerm,
 } from "./usage.ts";
 import { type DeferredMap, string } from "./valueparser.ts";
 import { type Annotations, injectAnnotations } from "./internal/annotations.ts";
@@ -1240,6 +1242,23 @@ export interface RunOptions<THelp, TError> {
   readonly showChoices?: boolean | ShowChoicesOptions;
 
   /**
+   * Whether and how to display command aliases in command lists of help
+   * output.
+   *
+   * - `boolean`: When `true`, displays aliases using format
+   *   `(aliases: i, add)`
+   * - `ShowAliasesOptions`: Custom formatting with configurable prefix,
+   *   suffix, and label
+   *
+   * This is the fallback for commands that do not set their own
+   * `showAliases` option.  Usage lines always show canonical command names.
+   *
+   * @default `false`
+   * @since 1.4.0
+   */
+  readonly showAliases?: boolean | ShowAliasesOptions;
+
+  /**
    * Displays declared environment bindings in help. `true` selects inline
    * annotations; an object can select a section or both. Names without visible
    * CLI references get a fallback section even in inline mode. Defaults to `false`.
@@ -2249,6 +2268,7 @@ export function runParser<
     termWidth,
     showDefault,
     showChoices,
+    showAliases,
     showEnvironment,
     sectionOrder,
     helpSections,
@@ -2757,6 +2777,7 @@ export function runParser<
                 termWidth,
                 showDefault,
                 showChoices,
+                showAliases,
                 showEnvironment,
                 sectionOrder,
                 showUsage,
@@ -2900,6 +2921,7 @@ export function runParser<
                   termWidth,
                   showDefault,
                   showChoices,
+                  showAliases,
                   showEnvironment,
                   sectionOrder,
                   showUsage,
@@ -3223,7 +3245,8 @@ function collapseTopLevelCommandEntries(
       commandIndexes.set(topLevelName, collapsed.length);
       collapsed.push(
         isTopLevel ? entry : {
-          term: { ...entry.term, name: topLevelName },
+          // A synthesized parent must not inherit the child's aliases:
+          term: omitCommandAliases({ ...entry.term, name: topLevelName }),
         },
       );
       continue;
@@ -3232,6 +3255,13 @@ function collapseTopLevelCommandEntries(
     if (isTopLevel) collapsed[existingIndex] = entry;
   }
   return collapsed;
+}
+
+function omitCommandAliases(
+  term: Extract<UsageTerm, { readonly type: "command" }>,
+): UsageTerm {
+  const { aliases: _aliases, ...rest } = term;
+  return rest;
 }
 
 function getTopLevelCommandName(name: string): string {

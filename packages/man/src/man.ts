@@ -3,6 +3,7 @@ import {
   type DocEntry,
   type DocPage,
   type DocSection,
+  type ShowAliasesOptions,
   type ShowEnvironmentOptions,
 } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
@@ -105,6 +106,15 @@ export interface ManPageOptions {
    * @since 1.4.0
    */
   readonly showEnvironment?: boolean | ShowEnvironmentOptions;
+
+  /**
+   * Whether and how to display command aliases next to commands, e.g.,
+   * `(aliases: i, add)`.  This is the fallback for entries that do not set
+   * their own `showAliases`; an entry's own setting always wins.
+   * Defaults to `false`.
+   * @since 1.4.0
+   */
+  readonly showAliases?: boolean | ShowAliasesOptions;
 
   /**
    * File paths to document in the FILES section.
@@ -492,6 +502,28 @@ function inferSectionTitle(entries: readonly DocEntry[]): string {
 }
 
 /**
+ * Builds the plain text of a command entry's alias annotation, or returns
+ * `undefined` when the entry has no aliases to show.  The text is not yet
+ * escaped for roff.
+ */
+function formatAliasesAnnotation(
+  entry: DocEntry,
+  showAliases: boolean | ShowAliasesOptions,
+): { readonly prefix: string; readonly body: string } | undefined {
+  if (entry.term.type !== "command") return undefined;
+  if (!(entry.showAliases ?? showAliases !== false)) return undefined;
+  const aliases = (entry.term.aliases ?? []).filter((alias) => alias !== "");
+  if (aliases.length < 1) return undefined;
+  const config = typeof showAliases === "object" ? showAliases : {};
+  return {
+    prefix: config.prefix ?? " (",
+    body: `${config.label ?? "aliases: "}${aliases.join(", ")}${
+      config.suffix ?? ")"
+    }`,
+  };
+}
+
+/**
  * Formats a {@link DocSection} as roff markup with .TP macros.
  *
  * @param section The section to format.
@@ -501,6 +533,7 @@ function formatDocSectionEntries(
   section: DocSection,
   showEnvironment = false,
   generatedEnvironment = false,
+  showAliases: boolean | ShowAliasesOptions = false,
 ): string {
   const lines: string[] = [];
 
@@ -522,11 +555,16 @@ function formatDocSectionEntries(
         ).join(", ")
       }]`;
 
+    const aliases = formatAliasesAnnotation(entry, showAliases);
+
     if (entry.description) {
       let desc = formatMessageAsRoff(
         entry.description,
         generatedEnvironment ? { quotes: false } : {},
       );
+      if (aliases != null) {
+        desc += escapeHyphens(escapeRoff(aliases.prefix + aliases.body));
+      }
       if (entry.default) {
         desc += ` [${formatMessageAsRoff(entry.default)}]`;
       }
@@ -540,8 +578,15 @@ function formatDocSectionEntries(
         ? desc
         : desc + separator + envAnnotation;
       lines.push(generatedEnvironment && body === "" ? "\\&" : body);
-    } else if (entry.default || entry.choices || envAnnotation !== "") {
+    } else if (
+      aliases != null || entry.default || entry.choices || envAnnotation !== ""
+    ) {
       const parts: string[] = [];
+      if (aliases != null) {
+        parts.push(
+          escapeHyphens(escapeRoff(aliases.prefix.trimStart() + aliases.body)),
+        );
+      }
       if (entry.default) {
         parts.push(`[${formatMessageAsRoff(entry.default)}]`);
       }
@@ -690,7 +735,12 @@ export function formatDocPageAsMan(
   for (const section of page.sections) {
     if (section.entries.length === 0) continue;
 
-    const content = formatDocSectionEntries(section, inlineEnvironment);
+    const content = formatDocSectionEntries(
+      section,
+      inlineEnvironment,
+      false,
+      options.showAliases ?? false,
+    );
     if (content === "") continue;
 
     const title = section.title?.toUpperCase() ??

@@ -1038,6 +1038,56 @@ Choice values are automatically dimmed when colors are enabled, making them
 visually distinct from the main help text.  Both `showDefault` and
 `showChoices` can be enabled simultaneously.
 
+### Alias display
+
+*This API is available since Optique 1.4.0.*
+
+Command [aliases](./primitives.md#command-aliases) are hidden from help output
+by default.  Use `showAliases` to list them next to each command in command
+lists:
+
+~~~~ typescript twoslash
+import { object, or } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { command } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const parser = or(
+  command("install", object({}), {
+    aliases: ["i", "add"],
+    description: message`Install a package.`,
+  }),
+  command("remove", object({}), {
+    aliases: ["rm"],
+    description: message`Remove a package.`,
+  }),
+);
+
+const config = run(parser, {
+  showAliases: true,  // Shows: install  Install a package. (aliases: i, add)
+});
+
+// Custom formatting
+const config2 = run(parser, {
+  showAliases: {
+    prefix: " [",
+    suffix: "]",
+    label: "aka ",
+  }  // Shows: install  Install a package. [aka i, add]
+});
+~~~~
+
+The runner option is a fallback: a command's own `showAliases` option wins in
+both directions, so individual commands can opt in while the runner option is
+off, or opt out while it is on.  Usage lines keep showing only canonical
+command names.
+
+The option is accepted by `run()`, its sync and async variants, the core
+runner functions, and `runProgram()` from *@optique/discover*, where root
+command lists spell aliases as full command paths such as `remote a`.  It also
+applies to `aboveError: "help"`.  Aliases are dimmed when colors are enabled;
+customize this with `theme.annotationStyles.aliases`.
+
 ### Environment display
 
 *This API is available since Optique 1.4.0.*

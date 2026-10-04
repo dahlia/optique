@@ -17459,3 +17459,166 @@ describe("helpSections entry metadata", () => {
     assert.deepEqual(getDocPage(parser, []), raw);
   });
 });
+
+describe("runParser() showAliases", () => {
+  function createAliasParser(
+    installShowAliases?: boolean,
+  ) {
+    return or(
+      command("install", object({ pkg: option("--package", string()) }), {
+        aliases: ["i", "add"],
+        description: message`Install a package.`,
+        ...(installShowAliases != null && { showAliases: installShowAliases }),
+      }),
+      command("remove", object({}), {
+        aliases: ["rm"],
+        description: message`Remove a package.`,
+      }),
+    );
+  }
+
+  function captureHelp(
+    parser: Parameters<typeof runParserSync>[0],
+    args: readonly string[],
+    options: Omit<RunOptions<string, string>, "stdout" | "stderr"> = {},
+  ): string {
+    let output = "";
+    runParserSync(parser, "app", args, {
+      help: { option: true, command: true, onShow: () => "help" },
+      onError: () => "error",
+      ...options,
+      stdout: (text) => {
+        output += text;
+      },
+      stderr: (text) => {
+        output += text;
+      },
+    });
+    return output;
+  }
+
+  it("does not show aliases by default", () => {
+    const output = captureHelp(createAliasParser(), ["--help"]);
+    assert.match(output, /install\s+Install a package\.\n/);
+    assert.doesNotMatch(output, /aliases/);
+  });
+
+  it("shows aliases in the root command list", () => {
+    const output = captureHelp(createAliasParser(), ["--help"], {
+      showAliases: true,
+    });
+    assert.match(output, /install\s+Install a package\. \(aliases: i, add\)/);
+    assert.match(output, /remove\s+Remove a package\. \(aliases: rm\)/);
+    assert.match(output, /Usage: app install --package STRING/);
+    assert.doesNotMatch(output, /install\/i/);
+  });
+
+  it("shows aliases in the help command output", () => {
+    const output = captureHelp(createAliasParser(), ["help"], {
+      showAliases: { label: "aka " },
+    });
+    assert.match(output, /Install a package\. \(aka i, add\)/);
+  });
+
+  it("keeps the canonical name when help is requested via an alias", () => {
+    const output = captureHelp(createAliasParser(), ["i", "--help"], {
+      showAliases: true,
+    });
+    assert.match(output, /Usage: app install --package STRING/);
+    assert.doesNotMatch(output, /Usage: app i /);
+  });
+
+  it("lets a command override the global option", () => {
+    const forcedOn = captureHelp(createAliasParser(true), ["--help"]);
+    assert.match(forcedOn, /Install a package\. \(aliases: i, add\)/);
+    assert.doesNotMatch(forcedOn, /aliases: rm/);
+
+    const forcedOff = captureHelp(createAliasParser(false), ["--help"], {
+      showAliases: true,
+    });
+    assert.match(forcedOff, /install\s+Install a package\.\n/);
+    assert.match(forcedOff, /Remove a package\. \(aliases: rm\)/);
+  });
+
+  it("does not cascade a parent setting to subcommands", () => {
+    const createParser = (showAliases: boolean) =>
+      command(
+        "remote",
+        or(
+          command("add", object({}), {
+            aliases: ["a"],
+            description: message`Add a remote.`,
+          }),
+          command("remove", object({}), {
+            description: message`Remove a remote.`,
+          }),
+        ),
+        { aliases: ["r"], showAliases, description: message`Remotes.` },
+      );
+
+    const parentOn = captureHelp(createParser(true), ["remote", "--help"]);
+    assert.match(parentOn, /add\s+Add a remote\.\n/);
+    assert.doesNotMatch(parentOn, /aliases/);
+
+    const parentOff = captureHelp(createParser(false), ["remote", "--help"], {
+      showAliases: true,
+    });
+    assert.match(parentOff, /add\s+Add a remote\. \(aliases: a\)/);
+
+    const rootOff = captureHelp(createParser(false), ["--help"], {
+      showAliases: true,
+    });
+    assert.doesNotMatch(rootOff, /aliases: r/);
+  });
+
+  it("shows aliases in help above errors", () => {
+    const output = captureHelp(createAliasParser(), ["unknown"], {
+      aboveError: "help",
+      showAliases: true,
+    });
+    assert.match(output, /Install a package\. \(aliases: i, add\)/);
+    assert.match(output, /Error:/);
+  });
+
+  it("shows aliases with async parsers", async () => {
+    let output = "";
+    await runParserAsync(createAliasParser(), "app", ["--help"], {
+      help: { option: true, onShow: () => "help" },
+      showAliases: true,
+      stdout: (text) => {
+        output += text;
+      },
+    });
+    assert.match(output, /Install a package\. \(aliases: i, add\)/);
+  });
+
+  it("does not leak child aliases into collapsed top-level entries", () => {
+    const parser: Parser<"sync", undefined, undefined> = {
+      ...createFlatCommandDocParser(),
+      getDocFragments() {
+        return {
+          fragments: [{
+            type: "section",
+            entries: [{
+              term: {
+                type: "command",
+                name: "remote add",
+                aliases: ["remote a"],
+              },
+              description: message`Add a remote.`,
+              showAliases: true,
+            }],
+          }],
+        };
+      },
+    };
+    const output = captureHelp(parser, ["--help"], {
+      commandList: "top-level",
+      showAliases: true,
+      showUsage: false,
+    });
+    assert.match(output, /remote/);
+    assert.doesNotMatch(output, /aliases/);
+    assert.doesNotMatch(output, /remote a\b/);
+  });
+});

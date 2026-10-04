@@ -4,7 +4,7 @@ import type {
   SourceContextRequest,
 } from "@optique/core/context";
 import type { DocState } from "@optique/core/parser";
-import type { DocFragment, DocFragments } from "@optique/core/doc";
+import type { DocEntry, DocFragment, DocFragments } from "@optique/core/doc";
 import type { RuntimeNode } from "@optique/core/dependency-runtime";
 import {
   dispatchByMode,
@@ -1725,6 +1725,7 @@ function namespaceCommandMetadata(
   const hidden = mergeHidden(inheritedHidden, metadata?.hidden);
   if (
     metadata?.aliases == null &&
+    metadata?.showAliases == null &&
     metadata?.errors == null &&
     hidden == null &&
     metadata?.usageLine == null
@@ -1733,6 +1734,8 @@ function namespaceCommandMetadata(
   }
   return {
     ...(metadata?.aliases != null && { aliases: metadata.aliases }),
+    ...(metadata?.showAliases != null &&
+      { showAliases: metadata.showAliases }),
     ...(metadata?.errors != null && { errors: metadata.errors }),
     ...(hidden != null && { hidden }),
     ...(metadata?.usageLine != null && { usageLine: metadata.usageLine }),
@@ -1801,15 +1804,24 @@ function withRootDocs(
     if (listedCommands.length > 0) {
       fragments.push({
         type: "section",
-        entries: listedCommands.map((entry) => ({
-          term: {
-            type: "command",
-            name: entry.path.join(" "),
-            hidden: commandPathHidden(entry.path, commandsByPath),
-          },
-          description: entry.command.metadata?.brief ??
-            entry.command.metadata?.description,
-        })),
+        entries: listedCommands.map((entry): DocEntry => {
+          const aliases = qualifiedCommandAliases(
+            entry.path,
+            entry.command.metadata?.aliases,
+          );
+          const showAliases = entry.command.metadata?.showAliases;
+          return {
+            term: {
+              type: "command",
+              name: entry.path.join(" "),
+              ...(aliases.length > 0 && { aliases }),
+              hidden: commandPathHidden(entry.path, commandsByPath),
+            },
+            description: entry.command.metadata?.brief ??
+              entry.command.metadata?.description,
+            ...(showAliases != null && { showAliases }),
+          };
+        }),
       });
     }
     return {
@@ -1874,10 +1886,33 @@ function rootListedCommands(
   return [...topLevelEntries.values()];
 }
 
+/**
+ * Spells each alias of the command at `path` as a full command path, since
+ * root command lists name commands by their full paths.
+ */
+function qualifiedCommandAliases(
+  path: CommandPath,
+  aliases: readonly string[] | undefined,
+): readonly string[] {
+  if (aliases == null) return [];
+  const parent = path.slice(0, -1);
+  return aliases.map((alias) => [...parent, alias].join(" "));
+}
+
+/**
+ * Strips the documentation of a descendant command that stands in for a
+ * synthetic namespace, including its aliases, which belong to the
+ * descendant rather than the namespace.
+ */
 function withoutCommandDocs(commandDefinition: AnyCommand): AnyCommand {
   if (commandDefinition.metadata == null) return commandDefinition;
-  const { brief: _brief, description: _description, ...metadata } =
-    commandDefinition.metadata;
+  const {
+    brief: _brief,
+    description: _description,
+    aliases: _aliases,
+    showAliases: _showAliases,
+    ...metadata
+  } = commandDefinition.metadata;
   return {
     ...commandDefinition,
     metadata,

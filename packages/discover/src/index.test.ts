@@ -3513,3 +3513,179 @@ describe("helpSections forwarding", () => {
     }
   });
 });
+
+describe("command alias display", () => {
+  function createAliasCommands() {
+    return [
+      {
+        path: ["install"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: { brief: message`Install a package.`, aliases: ["i"] },
+          handler() {},
+        }),
+      },
+      {
+        path: ["remote"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: {
+            brief: message`Manage remotes.`,
+            aliases: ["r"],
+            showAliases: false,
+          },
+          handler() {},
+        }),
+      },
+      {
+        path: ["remote", "add"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: {
+            brief: message`Add a remote.`,
+            aliases: ["a", "new"],
+          },
+          handler() {},
+        }),
+      },
+    ] as const;
+  }
+
+  it("does not show aliases in root docs by default", async () => {
+    const parser = createProgramParser(createAliasCommands());
+    const page = await getDocPageAsync(parser);
+    assert.ok(page);
+    const output = formatDocPage("tool", page, { showUsage: false });
+    assert.doesNotMatch(output, /aliases/);
+  });
+
+  it("shows qualified aliases in recursive root docs", async () => {
+    const parser = createProgramParser(createAliasCommands());
+    const page = await getDocPageAsync(parser);
+    assert.ok(page);
+    const output = formatDocPage("tool", page, {
+      showUsage: false,
+      showAliases: true,
+    });
+    assert.match(output, /install\s+Install a package\. \(aliases: i\)/);
+    assert.match(output, /remote\s+Manage remotes\.\n/);
+    assert.match(
+      output,
+      /remote add\s+Add a remote\. \(aliases: remote a, remote new\)/,
+    );
+  });
+
+  it("forwards namespace showAliases to the namespace entry", async () => {
+    const commands = createAliasCommands().map((entry) =>
+      entry.path.join(" ") === "remote"
+        ? {
+          path: entry.path,
+          command: defineCommand({
+            parser: object({}),
+            metadata: {
+              brief: message`Manage remotes.`,
+              aliases: ["r"],
+              showAliases: true,
+            },
+            handler() {},
+          }),
+        }
+        : entry
+    );
+    const parser = createProgramParser(commands, { commandList: "top-level" });
+    const page = await getDocPageAsync(parser);
+    assert.ok(page);
+    const output = formatDocPage("tool", page, { showUsage: false });
+    assert.match(output, /remote\s+Manage remotes\. \(aliases: r\)/);
+    assert.doesNotMatch(output, /aliases: i/);
+  });
+
+  it("shows aliases of subcommands in namespace help", async () => {
+    let stdout = "";
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: createAliasCommands().map((entry) =>
+            defineCommand({ ...entry.command, path: entry.path })
+          ),
+          metadata: { name: "tool" },
+          args: ["remote", "--help"],
+          showAliases: true,
+          showUsage: false,
+          stdout(text) {
+            stdout += `${text}\n`;
+          },
+          stderr() {},
+          onExit(exitCode): never {
+            throw new ExitSignal(exitCode);
+          },
+        }),
+      ExitSignal,
+    );
+    assert.match(stdout, /add\s+Add a remote\. \(aliases: a, new\)/);
+  });
+
+  it("forwards showAliases of nested namespaces to their list entries", async () => {
+    let stdout = "";
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [
+            defineCommand({
+              path: ["remote", "origin"],
+              parser: object({}),
+              metadata: {
+                brief: message`Origin.`,
+                aliases: ["o"],
+                showAliases: true,
+              },
+              handler() {},
+            }),
+            defineCommand({
+              path: ["remote", "origin", "set"],
+              parser: object({}),
+              metadata: { brief: message`Set the origin.` },
+              handler() {},
+            }),
+          ],
+          metadata: { name: "tool" },
+          args: ["remote", "--help"],
+          showUsage: false,
+          stdout(text) {
+            stdout += `${text}\n`;
+          },
+          stderr() {},
+          onExit(exitCode): never {
+            throw new ExitSignal(exitCode);
+          },
+        }),
+      ExitSignal,
+    );
+    assert.match(stdout, /origin\s+Origin\. \(aliases: o\)/);
+  });
+
+  it("does not attach descendant aliases to synthetic namespaces", async () => {
+    const parser = createProgramParser([
+      {
+        path: ["remote", "add"],
+        command: defineCommand({
+          parser: object({}),
+          metadata: {
+            brief: message`Add a remote.`,
+            aliases: ["a"],
+            showAliases: true,
+          },
+          handler() {},
+        }),
+      },
+    ], { commandList: "top-level" });
+    const page = await getDocPageAsync(parser);
+    assert.ok(page);
+    const output = formatDocPage("tool", page, {
+      showUsage: false,
+      showAliases: true,
+    });
+    assert.match(output, /remote/);
+    assert.doesNotMatch(output, /aliases/);
+  });
+});

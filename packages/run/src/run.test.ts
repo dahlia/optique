@@ -3398,3 +3398,93 @@ describe("helpSections forwarding", () => {
     for (const options of received) assert.equal(options, undefined);
   });
 });
+
+describe("run() showAliases", () => {
+  const parser = or(
+    command("install", object({}), {
+      aliases: ["i"],
+      description: message`Install a package.`,
+    }),
+    command("remove", object({}), {
+      aliases: ["rm"],
+      description: message`Remove a package.`,
+    }),
+  );
+
+  async function captureHelp(
+    invoke: (options: RunOptions) => unknown,
+  ): Promise<string> {
+    const output: string[] = [];
+    const exited = new Error("Exited.");
+    await assert.rejects(
+      async () =>
+        await invoke({
+          args: ["--help"],
+          programName: "app",
+          help: "option",
+          colors: false,
+          showAliases: { label: "aka " },
+          stdout: (line) => output.push(line),
+          onExit() {
+            throw exited;
+          },
+        }),
+      (error) => error === exited,
+    );
+    return output.join("\n");
+  }
+
+  it("forwards showAliases through runSync", async () => {
+    const output = await captureHelp((options) => runSync(parser, options));
+    assert.match(output, /Install a package\. \(aka i\)/);
+    assert.match(output, /Remove a package\. \(aka rm\)/);
+  });
+
+  it("forwards showAliases through runAsync", async () => {
+    const output = await captureHelp((options) => runAsync(parser, options));
+    assert.match(output, /Install a package\. \(aka i\)/);
+  });
+
+  it("does not show aliases by default", () => {
+    const output: string[] = [];
+    const exited = new Error("Exited.");
+    assert.throws(
+      () =>
+        runSync(parser, {
+          args: ["--help"],
+          programName: "app",
+          help: "option",
+          colors: false,
+          stdout: (line) => output.push(line),
+          onExit() {
+            throw exited;
+          },
+        }),
+      (error) => error === exited,
+    );
+    assert.doesNotMatch(output.join("\n"), /aliases/);
+  });
+
+  it("forwards showAliases when contexts are used", async () => {
+    const envContext = createEnvContext({ prefix: "APP_" });
+    const output: string[] = [];
+    const exited = new Error("Exited.");
+    await assert.rejects(
+      async () =>
+        await run(parser, {
+          args: ["--help"],
+          programName: "app",
+          contexts: [envContext],
+          help: "option",
+          colors: false,
+          showAliases: true,
+          stdout: (line) => output.push(line),
+          onExit() {
+            throw exited;
+          },
+        }),
+      (error) => error === exited,
+    );
+    assert.match(output.join("\n"), /Install a package\. \(aliases: i\)/);
+  });
+});

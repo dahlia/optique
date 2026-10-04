@@ -156,7 +156,9 @@ export type UsageTerm =
     /**
      * Additional command names that invoke the same parser.
      * These aliases participate in parsing, completion, and typo
-     * suggestions, but are not rendered in usage or documentation output.
+     * suggestions.  They are never rendered in usage lines, and are rendered
+     * in documentation command lists only when enabled through
+     * `DocEntry.showAliases` or the `showAliases` formatting option.
      * @since 1.1.0
      */
     readonly aliases?: readonly string[];
