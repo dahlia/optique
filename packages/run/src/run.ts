@@ -21,6 +21,7 @@ import type {
   ShowDefaultOptions,
 } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
+import { writeOutput } from "./output.ts";
 import path from "node:path";
 import process from "node:process";
 
@@ -46,6 +47,11 @@ export interface RunOptions {
    * Function used to output help and usage messages.  Assumes it prints the
    * ending newline.
    *
+   * When `process.stdout` is a pipe or a file on POSIX systems under Node.js or
+   * Bun, the default writes directly to its file descriptor and returns only
+   * after the whole text has been written, even if the reader is slow, so that
+   * exiting the process right afterward does not truncate the output.
+   *
    * @default Writes to `process.stdout` with a trailing newline
    */
   readonly stdout?: (text: string) => void;
@@ -53,6 +59,11 @@ export interface RunOptions {
   /**
    * Function used to output error messages.  Assumes it prints the ending
    * newline.
+   *
+   * When `process.stderr` is a pipe or a file on POSIX systems under Node.js or
+   * Bun, the default writes directly to its file descriptor and returns only
+   * after the whole text has been written, even if the reader is slow, so that
+   * exiting the process right afterward does not truncate the output.
    *
    * @default Writes to `process.stderr` with a trailing newline
    */
@@ -812,11 +823,13 @@ function buildCoreOptions(
   const programName = options.programName ??
     path.basename(process.argv[1] ?? "cli");
   const args = options.args ?? process.argv.slice(2);
+  // The default writers finish writing to pipes and files before returning,
+  // so that exiting right afterward cannot truncate the output:
   const stdout = options.stdout ?? ((line: string) => {
-    process.stdout.write(`${line}\n`);
+    writeOutput("stdout", `${line}\n`);
   });
   const stderr = options.stderr ?? ((line: string) => {
-    process.stderr.write(`${line}\n`);
+    writeOutput("stderr", `${line}\n`);
   });
   const onExit = options.onExit ??
     ((exitCode: number) => process.exit(exitCode) as never);
