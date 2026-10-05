@@ -121,6 +121,25 @@ describe("required options in SYNOPSIS", () => {
       '.B "repro"\n[(\\fB\\-a\\fR | \\fB\\-\\-all\\fR)]',
     );
   });
+
+  const hiddenBranches: readonly (readonly [
+    string,
+    Parser<"sync", unknown, unknown>,
+  ])[] = [
+    ["optional", optional(flag("--secret", { hidden: true }))],
+    ["zero-minimum repeated", multiple(flag("--secret", { hidden: true }))],
+  ];
+  for (const [name, hidden] of hiddenBranches) {
+    it(`keeps a visible flag optional beside a hidden ${name} branch`, () => {
+      const parser = or(hidden, flag("--visible"));
+      assert.ok(parse(hidden, []).success);
+      assert.ok(parse(parser, ["--visible"]).success);
+      assert.equal(
+        getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+        '.B "repro"\n[\\fB\\-\\-visible\\fR]',
+      );
+    });
+  }
 });
 
 describe("generateManPage()", () => {

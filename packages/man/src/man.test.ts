@@ -440,6 +440,76 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
+  for (
+    const [name, terms, acceptsNoTokens] of [
+      ["nested exclusive", [{
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--secret"], hidden: true }],
+          [{
+            type: "optional",
+            terms: [{ type: "command", name: "secret", hidden: true }],
+          }],
+        ],
+      }], true],
+      ["positive-minimum repetition of optional terms", [{
+        type: "multiple",
+        min: 1,
+        terms: [{
+          type: "optional",
+          terms: [{ type: "option", names: ["--secret"], hidden: true }],
+        }],
+      }], true],
+      ["positive-minimum repetition of required terms", [{
+        type: "multiple",
+        min: 1,
+        terms: [{ type: "option", names: ["--secret"], hidden: true }],
+      }], false],
+      ["optional term followed by a required term", [
+        {
+          type: "optional",
+          terms: [{ type: "option", names: ["--secret"], hidden: true }],
+        },
+        { type: "command", name: "secret", hidden: true },
+      ], false],
+      ["exclusive with only required branches", [{
+        type: "exclusive",
+        terms: [
+          [{ type: "option", names: ["--secret"], hidden: true }],
+          [{ type: "command", name: "secret", hidden: true }],
+        ],
+      }], false],
+    ] satisfies readonly (readonly [string, Usage, boolean])[]
+  ) {
+    it(`accounts for a hidden ${name} branch`, () => {
+      const term: UsageTerm = {
+        type: "exclusive",
+        terms: [terms, [{ type: "option", names: ["--visible"] }]],
+      };
+      const visible = "\\fB\\-\\-visible\\fR";
+      assert.equal(
+        formatUsageTermAsRoff(term),
+        acceptsNoTokens ? `[${visible}]` : visible,
+      );
+    });
+  }
+
+  it("preserves visible optional exclusive alternatives without extra brackets", () => {
+    assert.equal(
+      formatUsageTermAsRoff({
+        type: "exclusive",
+        terms: [
+          [{
+            type: "optional",
+            terms: [{ type: "option", names: ["--first"] }],
+          }],
+          [{ type: "option", names: ["--second"] }],
+        ],
+      }),
+      "([\\fB\\-\\-first\\fR] | \\fB\\-\\-second\\fR)",
+    );
+  });
+
   it("formats literal term", () => {
     const term: UsageTerm = { type: "literal", value: "debug" };
     assert.equal(formatUsageTermAsRoff(term), "debug");

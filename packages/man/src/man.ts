@@ -209,6 +209,26 @@ function hasSingleVisibleTermOfType(
   return visible.length === 1 && visible[0].type === type;
 }
 
+/**
+ * Checks whether a usage sequence allows zero tokens before hiding terms.
+ * Hidden required terms still consume tokens; wrappers determine optionality.
+ */
+function acceptsNoTokens(terms: Usage): boolean {
+  return terms.every((term) => {
+    switch (term.type) {
+      case "optional":
+      case "passthrough":
+        return true;
+      case "multiple":
+        return term.min < 1 || acceptsNoTokens(term.terms);
+      case "exclusive":
+        return term.terms.some(acceptsNoTokens);
+      default:
+        return false;
+    }
+  });
+}
+
 function formatUsageTermAsRoffInternal(
   term: UsageTerm,
   insideBrackets: boolean,
@@ -289,11 +309,17 @@ function formatUsageTermAsRoffInternal(
     }
 
     case "exclusive": {
-      // A literally empty branch accepts no tokens.  A branch containing
-      // hidden terms still requires those tokens and must not add optionality.
-      const hasEmptyBranch = term.terms.some((terms) => terms.length === 0);
-      const alternatives = term.terms
-        .map((t) => formatUsageAsRoffInternal(t, false))
+      const branches = term.terms.map((terms) => ({
+        terms,
+        text: formatUsageAsRoffInternal(terms, false),
+      }));
+      // Visible optional branches already express omission in their output.
+      // Only a disappearing zero-token branch needs enclosing brackets.
+      const hasEmptyBranch = branches.some(
+        ({ terms, text }) => text === "" && acceptsNoTokens(terms),
+      );
+      const alternatives = branches
+        .map(({ text }) => text)
         .filter((s) => s !== "");
       if (alternatives.length === 0) return "";
       const inner = alternatives.length === 1
