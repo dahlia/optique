@@ -99,12 +99,14 @@ describe("writeAllSync()", () => {
     assert.equal(calls.length, 2);
   });
 
-  it("stops without throwing on EPIPE", () => {
-    const bytes = Buffer.from("0123456789");
-    const { calls, writeSync } = fakeWriteSync([4, "EPIPE"]);
-    writeAllSync(1, bytes, { writeSync });
-    assert.equal(calls.length, 2);
-  });
+  for (const code of ["EPIPE", "ECONNRESET"]) {
+    it(`stops without throwing on ${code}`, () => {
+      const bytes = Buffer.from("0123456789");
+      const { calls, writeSync } = fakeWriteSync([4, code]);
+      writeAllSync(1, bytes, { writeSync });
+      assert.equal(calls.length, 2);
+    });
+  }
 
   it("propagates other errors, even after partial success", () => {
     const bytes = Buffer.from("0123456789");

@@ -58,8 +58,9 @@ function getErrorCode(error: unknown): unknown {
  * Partial writes resume from the next unwritten byte.  When the descriptor
  * is non-blocking and temporarily full (`EAGAIN`/`EWOULDBLOCK`), this sleeps
  * briefly and retries, blocking the current thread until the reader catches
- * up.  When the reader has closed the pipe (`EPIPE`), the rest of the output
- * cannot be delivered, so this returns silently.
+ * up.  When the reader has closed the pipe (`EPIPE`) or reset the socket
+ * (`ECONNRESET`), the rest of the output cannot be delivered, so this returns
+ * silently.
  *
  * @param fd The file descriptor to write to.
  * @param bytes The bytes to write.
@@ -87,7 +88,8 @@ export function writeAllSync(
         continue;
       }
       if (code === "EINTR") continue;
-      if (code === "EPIPE") return;
+      // The reader is gone, whether it closed a pipe or reset a socket:
+      if (code === "EPIPE" || code === "ECONNRESET") return;
       throw error;
     }
     if (written <= 0) {
