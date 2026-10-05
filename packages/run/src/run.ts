@@ -52,6 +52,9 @@ export interface RunOptions {
    * after the whole text has been written, even if the reader is slow, so that
    * exiting the process right afterward does not truncate the output.
    *
+   * A custom writer using `console.log()` can lose large piped output on
+   * affected Bun versions.  See the Bun output warning on {@link run}.
+   *
    * @default Writes to `process.stdout` with a trailing newline
    */
   readonly stdout?: (text: string) => void;
@@ -71,6 +74,12 @@ export interface RunOptions {
 
   /**
    * Function used to exit the process on help/version display or parse error.
+   *
+   * The default `process.exit()` handler does not wait for writes queued by
+   * application code or custom output handlers.  Before calling
+   * `process.exit()`, wait for the completion callbacks of pending
+   * `process.stdout.write()` and `process.stderr.write()` calls.  An arbitrary
+   * delay does not guarantee that output has been flushed.
    *
    * @default `process.exit`
    */
@@ -435,6 +444,22 @@ function resolveProgramInput<
  * - Exit the process with appropriate codes on help or error
  * - Format output according to terminal capabilities
  *
+ * On affected Bun versions, importing `@optique/run` can cause large
+ * application `console.log()` output to be silently truncated when piped,
+ * even after successful parsing and natural process exit.  This is
+ * [Bun issue #36419](https://github.com/oven-sh/bun/issues/36419), reported
+ * on macOS arm64 with Bun 1.3.14 and 1.4.2.  Write application data with
+ * `process.stdout.write()` and let the process exit naturally.  If explicit
+ * termination is necessary, wait for the completion callbacks of all pending
+ * stdout/stderr writes before calling `process.exit()`; a delay is not a
+ * flush guarantee.  Waiting after `console.log()` cannot recover dropped bytes.
+ *
+ * Setting `colors` and `maxWidth` explicitly does not avoid this Bun bug:
+ * importing `node:process`, which this module does, was enough to trigger it
+ * in Bun 1.3.14.  The upstream fix was merged in
+ * [Bun PR #43868](https://github.com/oven-sh/bun/pull/43868); check whether
+ * your Bun release includes it.
+ *
  * @template T The parser type being executed.
  * @param parser The command-line parser to execute.
  * @param options Configuration options for customizing behavior.
@@ -618,6 +643,8 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
  * Use this when you know your parser is sync-only to get direct return values
  * without Promise wrappers.
  *
+ * See {@link run} for Bun's piped console output warning and workarounds.
+ *
  * @template T The sync parser type being executed.
  * @param parser The synchronous command-line parser to execute.
  * @param options Configuration options for customizing behavior.
@@ -731,6 +758,8 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
  * This function accepts any parser (sync or async) and always returns a
  * Promise. Use this when working with parsers that may contain async
  * value parsers.
+ *
+ * See {@link run} for Bun's piped console output warning and workarounds.
  *
  * @template T The parser type being executed.
  * @param parser The command-line parser to execute.
