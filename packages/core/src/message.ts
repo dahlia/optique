@@ -1,4 +1,4 @@
-import { getDisplayWidth } from "./displaywidth.ts";
+import { getDisplayWidth, stripAnsi } from "./displaywidth.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 
 /**
@@ -808,9 +808,14 @@ export function formatMessage(
         continue;
       }
     }
-    // An empty token has nothing to place, so it must not flush a pending
-    // wrap and leave a dangling newline.
-    if (text === "") continue;
+    // A token with nothing to print (e.g. an empty value, possibly wrapped in
+    // ANSI styling) must not flush a deferred wrap; that would leave a
+    // dangling newline, or a blank line before a hard break.  Its styling
+    // stays at the end of the previous line.
+    if (pendingWrap && stripAnsi(text) === "") {
+      output += text;
+      continue;
+    }
     if (wraps) {
       output += "\n";
       totalWidth = 0;

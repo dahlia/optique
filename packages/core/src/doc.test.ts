@@ -1341,6 +1341,25 @@ describe("formatDocPage", () => {
       );
     });
 
+    it("should wrap the suffix when the choices content is empty", () => {
+      const result = formatDocPage(
+        "app",
+        {
+          sections: [{
+            entries: [{
+              term: { type: "option", names: ["--x"] },
+              choices: [value("")],
+            }],
+          }],
+        },
+        {
+          maxWidth: 15,
+          showChoices: { prefix: "  ", label: " X ", suffix: " Z" },
+        },
+      );
+      assert.equal(result, "\n  --x       X \n          Z\n");
+    });
+
     it("should drop the space with colors enabled", () => {
       const result = formatDocPage(
         "app",

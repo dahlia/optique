@@ -1214,8 +1214,34 @@ describe("formatMessage - whitespace at automatic wraps", () => {
     );
     assert.equal(
       formatMessage(msg, { quotes: false, colors: true, maxWidth: 3 }),
-      "abc\n\x1b[32m\x1b[0mdef",
+      "abc\x1b[32m\x1b[0m\ndef",
     );
+  });
+
+  it("should not flush a deferred wrap for a styled empty value", () => {
+    const options = { quotes: false, colors: true, maxWidth: 3 } as const;
+    assert.equal(
+      formatMessage([text("abc"), text(" "), value("")], options),
+      "abc\x1b[32m\x1b[0m",
+    );
+    assert.equal(
+      formatMessage(
+        [text("abc"), text(" "), value(""), lineBreak(), text("def")],
+        options,
+      ),
+      "abc\x1b[32m\x1b[0m\ndef",
+    );
+  });
+
+  it("should still wrap before an empty value on an overfull line", () => {
+    // formatDocPage() relies on this to move an annotation suffix to the
+    // next line when the annotation content is empty.
+    const options: MessageFormatOptions & { readonly startWidth?: number } = {
+      quotes: false,
+      maxWidth: 3,
+      startWidth: 5,
+    };
+    assert.equal(formatMessage([value("")], options), "\n");
   });
 
   it("should drop the separator between values() items when it wraps", () => {
