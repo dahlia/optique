@@ -961,6 +961,16 @@ function automatically:
  -  Exits with code `1` (or custom) for parse errors
  -  Never returns on errors by default (calls `process.exit()`)
 
+On Node.js and Bun on POSIX systems, when standard output or standard error
+is a pipe or a file, the default writers write directly to its file
+descriptor and wait until the whole text has been written before the
+process exits.  This keeps large help pages, completion scripts, and error
+messages intact when they are piped into a slow reader, but it also means
+the runner blocks while the reader is behind.  Terminals, Windows, and Deno
+(whose streams do not lose output on exit) keep using the stream's
+`write()` method.  Output that your own code has already queued in
+`process.stdout` or `process.stderr` is not flushed before exiting.
+
 You can override this process integration by injecting custom handlers:
 
  -  `stdout`: controls where help/version/completion output is written
