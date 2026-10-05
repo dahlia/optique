@@ -1,6 +1,11 @@
-import { shouldWriteDirectly, writeAllSync } from "./output.ts";
+import {
+  getDefaultEncoding,
+  shouldWriteDirectly,
+  writeAllSync,
+} from "./output.ts";
 import { Buffer } from "node:buffer";
 import assert from "node:assert/strict";
+import { Writable } from "node:stream";
 import { describe, it } from "node:test";
 
 function errnoError(code: string): NodeJS.ErrnoException {
@@ -171,6 +176,26 @@ describe("shouldWriteDirectly()", () => {
     assert.ok(shouldWriteDirectly({ isTTY: false, fd: 1 }, "linux", false));
   });
 
+  it("accepts a UTF-8 default encoding", () => {
+    for (const defaultEncoding of [undefined, "utf8", "utf-8", "UTF8"]) {
+      assert.ok(
+        shouldWriteDirectly({ fd: 1, defaultEncoding }, "linux", false),
+        String(defaultEncoding),
+      );
+    }
+  });
+
+  it("rejects other default encodings", () => {
+    // The stream would have encoded the text differently, for example after
+    // process.stdout.setDefaultEncoding("latin1"):
+    for (const defaultEncoding of ["latin1", "utf16le", 0]) {
+      assert.ok(
+        !shouldWriteDirectly({ fd: 1, defaultEncoding }, "linux", false),
+        String(defaultEncoding),
+      );
+    }
+  });
+
   it("rejects streams without a valid file descriptor", () => {
     // For example, process.stdout in a Node.js worker thread has no fd:
     assert.ok(!shouldWriteDirectly({}, "linux", false));
@@ -178,5 +203,18 @@ describe("shouldWriteDirectly()", () => {
     assert.ok(!shouldWriteDirectly({ fd: -1 }, "linux", false));
     assert.ok(!shouldWriteDirectly({ fd: 1.5 }, "linux", false));
     assert.ok(!shouldWriteDirectly({ fd: "1" }, "linux", false));
+  });
+});
+
+describe("getDefaultEncoding()", () => {
+  it("reads the encoding set with setDefaultEncoding()", () => {
+    const stream = new Writable({ write: (_chunk, _encoding, cb) => cb() });
+    assert.equal(getDefaultEncoding(stream), "utf8");
+    stream.setDefaultEncoding("latin1");
+    assert.equal(getDefaultEncoding(stream), "latin1");
+  });
+
+  it("returns undefined when the stream exposes no encoding", () => {
+    assert.equal(getDefaultEncoding({}), undefined);
   });
 });

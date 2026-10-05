@@ -110,6 +110,33 @@ export function writeAllSync(
 export interface StdioStreamLike {
   readonly isTTY?: boolean;
   readonly fd?: unknown;
+  /** The encoding the stream applies to strings, if known. */
+  readonly defaultEncoding?: unknown;
+}
+
+/**
+ * Reads the encoding a writable stream applies to strings, which
+ * `setDefaultEncoding()` changes.  Node.js and Bun expose it only through
+ * the stream's internal state, so this returns `undefined` when that is not
+ * available.
+ *
+ * @param stream The stream to inspect.
+ * @returns The default encoding, or `undefined` if it cannot be read.
+ * @internal
+ */
+export function getDefaultEncoding(stream: object): unknown {
+  if (!("_writableState" in stream)) return undefined;
+  const state = stream._writableState;
+  return typeof state === "object" && state != null &&
+      "defaultEncoding" in state
+    ? state.defaultEncoding
+    : undefined;
+}
+
+function isUtf8Encoding(encoding: unknown): boolean {
+  return encoding === undefined ||
+    (typeof encoding === "string" &&
+      ["utf8", "utf-8"].includes(encoding.toLowerCase()));
 }
 
 /**
@@ -124,7 +151,9 @@ export interface StdioStreamLike {
  * Deno is excluded as well: its streams do not lose queued output on exit,
  * and its `fs.writeSync()` can write part of the buffer to a non-blocking
  * pipe and then throw `EAGAIN` without reporting how much it wrote, which
- * would make retrying duplicate output.
+ * would make retrying duplicate output.  Finally, streams whose default
+ * encoding is not UTF-8 keep going through the stream, since direct writes
+ * always encode the text as UTF-8.
  *
  * @param stream The stream to inspect.
  * @param platform The value of `process.platform`.
@@ -139,7 +168,8 @@ export function shouldWriteDirectly(
 ): boolean {
   const fd = stream.fd;
   return !deno && platform !== "win32" && !stream.isTTY &&
-    typeof fd === "number" && Number.isInteger(fd) && fd >= 0;
+    typeof fd === "number" && Number.isInteger(fd) && fd >= 0 &&
+    isUtf8Encoding(stream.defaultEncoding);
 }
 
 const encoder = new TextEncoder();
@@ -163,7 +193,12 @@ export function writeOutput(
   text: string,
 ): void {
   const stream = process[streamName];
-  if (shouldWriteDirectly(stream, process.platform, "Deno" in globalThis)) {
+  const streamLike: StdioStreamLike = {
+    isTTY: stream.isTTY,
+    fd: stream.fd,
+    defaultEncoding: getDefaultEncoding(stream),
+  };
+  if (shouldWriteDirectly(streamLike, process.platform, "Deno" in globalThis)) {
     writeAllSync(stream.fd, encoder.encode(text));
   } else {
     stream.write(text);
