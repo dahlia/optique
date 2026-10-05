@@ -1199,6 +1199,25 @@ describe("formatMessage - whitespace at automatic wraps", () => {
     );
   });
 
+  it("should keep trimming at a wrapped line start after empty values", () => {
+    const msg: Message = [text("abc"), text(" "), value(""), text(" def")];
+    assert.equal(
+      formatMessage(msg, { quotes: false, maxWidth: 3 }),
+      "abc\ndef",
+    );
+    assert.equal(
+      formatMessage([text("abc"), text(" "), value("")], {
+        quotes: false,
+        maxWidth: 3,
+      }),
+      "abc",
+    );
+    assert.equal(
+      formatMessage(msg, { quotes: false, colors: true, maxWidth: 3 }),
+      "abc\n\x1b[32m\x1b[0mdef",
+    );
+  });
+
   it("should drop the separator between values() items when it wraps", () => {
     const msg: Message = [values(["aaa", "bbb"])];
     assert.equal(

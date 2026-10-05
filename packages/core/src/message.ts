@@ -779,6 +779,10 @@ export function formatMessage(
   // is deferred until the next token so that it is neither left dangling at
   // the end nor doubled by a hard line break.
   let pendingWrap = false;
+  // Set while an automatically wrapped line has no visible content yet, so
+  // that a separator after a zero-width token (e.g. an empty value) is still
+  // trimmed.
+  let atWrappedLineStart = false;
   for (const token of stream()) {
     let { text, width } = token;
     // Handle hard line breaks (marked with width -1)
@@ -786,31 +790,36 @@ export function formatMessage(
       output += text; // Add the newline
       totalWidth = 0; // Reset width tracking
       pendingWrap = false;
+      atWrappedLineStart = false;
       continue;
     }
 
     // Handle automatic word wrapping
-    if (
-      pendingWrap || options.maxWidth != null && totalWidth > 0 &&
-        totalWidth + width > options.maxWidth
-    ) {
-      if (token.trimOnWrap) {
-        // Drop the whitespace that separated this token from the previous
-        // line so that the new line starts at its first column.
-        const trimmed = text.trimStart();
-        width -= getDisplayWidth(text.slice(0, text.length - trimmed.length));
-        text = trimmed;
-        if (text === "") {
-          pendingWrap = true;
-          continue;
-        }
+    const wraps = pendingWrap || options.maxWidth != null &&
+        totalWidth > 0 && totalWidth + width > options.maxWidth;
+    if ((wraps || atWrappedLineStart) && token.trimOnWrap) {
+      // Drop the whitespace that separated this token from the previous
+      // line so that the new line starts at its first column.
+      const trimmed = text.trimStart();
+      width -= getDisplayWidth(text.slice(0, text.length - trimmed.length));
+      text = trimmed;
+      if (text === "") {
+        if (wraps) pendingWrap = true;
+        continue;
       }
+    }
+    // An empty token has nothing to place, so it must not flush a pending
+    // wrap and leave a dangling newline.
+    if (text === "") continue;
+    if (wraps) {
       output += "\n";
       totalWidth = 0;
       pendingWrap = false;
+      atWrappedLineStart = true;
     }
     output += text;
     totalWidth += width;
+    if (width > 0) atWrappedLineStart = false;
   }
   return output;
 }
