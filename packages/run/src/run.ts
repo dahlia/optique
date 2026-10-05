@@ -75,11 +75,17 @@ export interface RunOptions {
   /**
    * Function used to exit the process on help/version display or parse error.
    *
-   * The default `process.exit()` handler does not wait for writes queued by
-   * application code or custom output handlers.  Before calling
-   * `process.exit()`, wait for the completion callbacks of pending
-   * `process.stdout.write()` and `process.stderr.write()` calls.  An arbitrary
-   * delay does not guarantee that output has been flushed.
+   * This hook is synchronous and runs immediately after an output handler
+   * returns.  With the default `process.exit()` handler, custom `stdout` and
+   * `stderr` handlers must finish writing synchronously before returning.
+   * The default exit handler also does not wait for writes queued by
+   * application code.
+   *
+   * To wait for asynchronous writes, record their completion promises and
+   * throw an exception carrying the exit code from `onExit`.  Catch that
+   * exception outside the runner, await the recorded promises, then call
+   * `process.exit()` with that code.
+   * An arbitrary delay does not guarantee that output has been flushed.
    *
    * @default `process.exit`
    */

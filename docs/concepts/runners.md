@@ -1040,9 +1040,9 @@ const result = run(parser);
 process.stdout.write(`${JSON.stringify(result)}\n`);
 ~~~~
 
-If you must call `process.exit()`, wait for the completion callbacks of all
-pending stdout/stderr writes first.  For example, when this is the only pending
-write:
+If your application code must call `process.exit()`, wait for the completion
+callbacks of all pending stdout/stderr writes first.  For example, when this is
+the only pending write:
 
 ~~~~ typescript twoslash
 import process from "node:process";
@@ -1058,9 +1058,16 @@ process.exit(0);
 ~~~~
 
 An arbitrary delay is not a flush guarantee.  Waiting after `console.log()`
-cannot recover bytes that Bun has already dropped.  These workarounds apply to
-application output and custom output handlers; Optique's default writers have
-the behavior described in [Error handling behavior](#error-handling-behavior).
+cannot recover bytes that Bun has already dropped.
+
+Custom `stdout`/`stderr` handlers must finish writing synchronously before
+returning when using the default `onExit`: the runner invokes it immediately
+after an output handler returns.  The `onExit` hook is synchronous and cannot
+await writes.  To use asynchronous custom writers, record their completion
+promises and throw an exception carrying the exit code from `onExit`.  Catch
+that exception outside the runner, await the recorded promises, then call
+`process.exit()` with that code.  Optique's default writers have the behavior
+described in [Error handling behavior](#error-handling-behavior).
 
 The upstream fix was merged in [Bun PR #43868].  Check whether your Bun release
 includes it before relying on piped console output.
