@@ -1020,9 +1020,13 @@ Parsing can succeed and the application can exit naturally with code `0` while
 still losing output.  [Bun issue #36419] reports this behavior on macOS arm64
 with Bun 1.3.14 and 1.4.2.
 
-Accessing `process.stdout` makes the pipe nonblocking, and Bun's native console
-writer can drop the unwritten remainder when the pipe is full.  In tests with
-Bun 1.3.14, importing `node:process` alone was enough to trigger the problem.
+Large `console.error()` output to piped stderr is affected too; [Bun PR #43868]
+includes tests for both `console.log()` and `console.error()`.
+
+Accessing `process.stdout` or `process.stderr` makes the corresponding pipe
+nonblocking, and Bun's native console writer can drop the unwritten remainder
+when the pipe is full.  In tests with Bun 1.3.14, importing `node:process` alone
+was enough to trigger the problem.
 *@optique/run* imports that module and reads stdout's terminal capabilities.
 Setting `colors` and `maxWidth` explicitly to skip TTY detection does not avoid
 the import's effect.
@@ -1039,6 +1043,9 @@ const parser = object({});
 const result = run(parser);
 process.stdout.write(`${JSON.stringify(result)}\n`);
 ~~~~
+
+For diagnostics, use `process.stderr.write()` instead of `console.error()` and
+let the process exit naturally.
 
 If your application code must call `process.exit()`, wait for the completion
 callbacks of all pending stdout/stderr writes first.  For example, when this is
@@ -1057,8 +1064,8 @@ await new Promise<void>((resolve, reject) => {
 process.exit(0);
 ~~~~
 
-An arbitrary delay is not a flush guarantee.  Waiting after `console.log()`
-cannot recover bytes that Bun has already dropped.
+An arbitrary delay is not a flush guarantee.  Waiting after `console.log()` or
+`console.error()` cannot recover bytes that Bun has already dropped.
 
 Custom `stdout`/`stderr` handlers must finish writing synchronously before
 returning when using the default `onExit`: the runner invokes it immediately

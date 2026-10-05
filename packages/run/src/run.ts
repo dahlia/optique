@@ -68,6 +68,9 @@ export interface RunOptions {
    * after the whole text has been written, even if the reader is slow, so that
    * exiting the process right afterward does not truncate the output.
    *
+   * A custom writer using `console.error()` can lose large piped output on
+   * affected Bun versions.  See the Bun output warning on {@link run}.
+   *
    * @default Writes to `process.stderr` with a trailing newline
    */
   readonly stderr?: (text: string) => void;
@@ -454,11 +457,13 @@ function resolveProgramInput<
  * application `console.log()` output to be silently truncated when piped,
  * even after successful parsing and natural process exit.  This is
  * [Bun issue #36419](https://github.com/oven-sh/bun/issues/36419), reported
- * on macOS arm64 with Bun 1.3.14 and 1.4.2.  Write application data with
- * `process.stdout.write()` and let the process exit naturally.  If explicit
- * termination is necessary, wait for the completion callbacks of all pending
- * stdout/stderr writes before calling `process.exit()`; a delay is not a
- * flush guarantee.  Waiting after `console.log()` cannot recover dropped bytes.
+ * on macOS arm64 with Bun 1.3.14 and 1.4.2.  Use `process.stdout.write()`
+ * instead of `console.log()` for application data, and `process.stderr.write()`
+ * instead of `console.error()` for diagnostics.  Both console methods can lose
+ * large piped output.  Let the process exit naturally.  If explicit termination
+ * is necessary, wait for the completion callbacks of all pending stdout/stderr
+ * writes before calling `process.exit()`; a delay is not a flush guarantee.  Waiting after `console.log()` or `console.error()` cannot
+ * recover dropped bytes.
  *
  * Setting `colors` and `maxWidth` explicitly does not avoid this Bun bug:
  * importing `node:process`, which this module does, was enough to trigger it
