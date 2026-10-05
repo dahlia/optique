@@ -592,7 +592,13 @@ export function formatMessage(
   const useQuotes = options.quotes ?? true;
   const resetSequence = `\x1b[0m${resetSuffix}`;
 
-  function* stream(): Generator<{ text: string; width: number }> {
+  // trimOnWrap marks a token whose leading whitespace only separates it from
+  // the preceding content, so an automatic wrap may drop that whitespace.
+  // It is set on tokens of text terms and on generated separators, never on
+  // semantic content such as values, whose whitespace must be kept.
+  function* stream(): Generator<
+    { text: string; width: number; trimOnWrap?: boolean }
+  > {
     const wordPattern = /\s*\S+\s*/g;
     let prevWasLineBreak = false;
     for (const term of msg) {
@@ -640,7 +646,11 @@ export function formatMessage(
             while (true) {
               const match = wordPattern.exec(paragraph);
               if (match == null) break;
-              yield { text: match[0], width: getDisplayWidth(match[0]) };
+              yield {
+                text: match[0],
+                width: getDisplayWidth(match[0]),
+                trimOnWrap: true,
+              };
             }
           }
         } else {
@@ -649,13 +659,17 @@ export function formatMessage(
 
           // Handle whitespace-only text specially to preserve spaces
           if (normalizedText.trim() === "" && normalizedText.length > 0) {
-            yield { text: " ", width: 1 };
+            yield { text: " ", width: 1, trimOnWrap: true };
           } else {
             wordPattern.lastIndex = 0;
             while (true) {
               const match = wordPattern.exec(normalizedText);
               if (match == null) break;
-              yield { text: match[0], width: getDisplayWidth(match[0]) };
+              yield {
+                text: match[0],
+                width: getDisplayWidth(match[0]),
+                trimOnWrap: true,
+              };
             }
           }
         }
@@ -700,7 +714,7 @@ export function formatMessage(
         };
       } else if (term.type === "values") {
         for (let i = 0; i < term.values.length; i++) {
-          if (i > 0) yield { text: " ", width: 1 };
+          if (i > 0) yield { text: " ", width: 1, trimOnWrap: true };
           const value = useQuotes
             ? JSON.stringify(term.values[i])
             : term.values[i];
@@ -761,21 +775,39 @@ export function formatMessage(
 
   let output = "";
   let totalWidth = options.startWidth ?? 0;
-  for (const { text, width } of stream()) {
+  // Set when an automatic wrap fell on a whitespace-only token.  The newline
+  // is deferred until the next token so that it is neither left dangling at
+  // the end nor doubled by a hard line break.
+  let pendingWrap = false;
+  for (const token of stream()) {
+    let { text, width } = token;
     // Handle hard line breaks (marked with width -1)
     if (width === -1) {
       output += text; // Add the newline
       totalWidth = 0; // Reset width tracking
+      pendingWrap = false;
       continue;
     }
 
     // Handle automatic word wrapping
     if (
-      options.maxWidth != null && totalWidth > 0 &&
-      totalWidth + width > options.maxWidth
+      pendingWrap || options.maxWidth != null && totalWidth > 0 &&
+        totalWidth + width > options.maxWidth
     ) {
+      if (token.trimOnWrap) {
+        // Drop the whitespace that separated this token from the previous
+        // line so that the new line starts at its first column.
+        const trimmed = text.trimStart();
+        width -= getDisplayWidth(text.slice(0, text.length - trimmed.length));
+        text = trimmed;
+        if (text === "") {
+          pendingWrap = true;
+          continue;
+        }
+      }
       output += "\n";
       totalWidth = 0;
+      pendingWrap = false;
     }
     output += text;
     totalWidth += width;

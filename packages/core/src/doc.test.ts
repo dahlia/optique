@@ -8,7 +8,8 @@ import {
   type DocSection,
   formatDocPage,
 } from "@optique/core/doc";
-import { message, valueSet } from "@optique/core/message";
+import { message, value, valueSet } from "@optique/core/message";
+import type { OptionName } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getDisplayWidth } from "./displaywidth.ts";
@@ -1212,6 +1213,147 @@ describe("formatDocPage", () => {
       const thirdPos = result.indexOf("Third:");
       assert.ok(firstPos < secondPos, "First should appear before Second");
       assert.ok(secondPos < thirdPos, "Second should appear before Third");
+    });
+  });
+
+  // https://github.com/dahlia/optique/issues/1003
+  describe("annotation prefixes at automatic wraps", () => {
+    const page = (
+      name: OptionName,
+      description: string,
+      extra: Pick<DocEntry, "default" | "choices">,
+    ): DocPage => ({
+      sections: [{
+        entries: [{
+          term: { type: "option", names: [name] },
+          description: [{ type: "text", text: description }],
+          ...extra,
+        }],
+      }],
+    });
+
+    it("should drop the custom showDefault prefix's leading space", () => {
+      const result = formatDocPage(
+        "app",
+        page("--color", "Enable or disable syntax highlighting", {
+          default: [{ type: "text", text: "auto" }],
+        }),
+        { maxWidth: 50, showDefault: { prefix: " (default: ", suffix: ")" } },
+      );
+      assert.equal(
+        result,
+        "\n  --color                     Enable or disable \n" +
+          "                              syntax highlighting\n" +
+          "                              (default: auto)\n",
+      );
+    });
+
+    it("should measure the default content from the trimmed prefix", () => {
+      // The description column is 16 wide; "[" plus the 14-column default
+      // and the "]" suffix fill it exactly, which " [" would not allow.
+      const result = formatDocPage(
+        "app",
+        page("--port", "Listening port.", {
+          default: [{ type: "text", text: "12345678901234" }],
+        }),
+        { maxWidth: 46, showDefault: true },
+      );
+      assert.equal(
+        result,
+        "\n  --port                      Listening port.\n" +
+          "                              [12345678901234]\n",
+      );
+    });
+
+    it("should drop the showChoices prefix's leading space", () => {
+      const result = formatDocPage(
+        "app",
+        page("--format", "Output format.", { choices: [value("json")] }),
+        { maxWidth: 46, showChoices: true },
+      );
+      assert.equal(
+        result,
+        "\n  --format                    Output format.\n" +
+          "                              (choices: json)\n",
+      );
+    });
+
+    it("should measure the choices from the trimmed heading", () => {
+      // "(choices: abcde)" fills the 16-column description column exactly,
+      // which the untrimmed " (choices: " heading would not allow.
+      const result = formatDocPage(
+        "app",
+        page("--format", "Output format.", { choices: [value("abcde")] }),
+        { maxWidth: 46, showChoices: true },
+      );
+      assert.equal(
+        result,
+        "\n  --format                    Output format.\n" +
+          "                              (choices: abcde)\n",
+      );
+    });
+
+    it("should drop leading spaces across the showChoices prefix and label", () => {
+      const result = formatDocPage(
+        "app",
+        page("--format", "Output format.", { choices: [value("json")] }),
+        {
+          maxWidth: 46,
+          showChoices: { prefix: " ", label: " choices: ", suffix: "" },
+        },
+      );
+      assert.equal(
+        result,
+        "\n  --format                    Output format.\n" +
+          "                              choices: json\n",
+      );
+    });
+
+    it("should drop the spaces when both annotations wrap", () => {
+      const result = formatDocPage(
+        "app",
+        page("--port", "Listening port.", {
+          default: [{ type: "text", text: "8080" }],
+          choices: [value("80")],
+        }),
+        { maxWidth: 46, showDefault: true, showChoices: true },
+      );
+      assert.equal(
+        result,
+        "\n  --port                      Listening port.\n" +
+          "                              [8080]\n" +
+          "                              (choices: 80)\n",
+      );
+    });
+
+    it("should drop the space when the term is wider than termWidth", () => {
+      const result = formatDocPage(
+        "app",
+        page("--extremely-long-option-name", "Short text", {
+          default: [{ type: "text", text: "auto" }],
+        }),
+        { maxWidth: 50, showDefault: { prefix: " (default: ", suffix: ")" } },
+      );
+      assert.equal(
+        result,
+        "\n  --extremely-long-option-name  Short text\n" +
+          "                              (default: auto)\n",
+      );
+    });
+
+    it("should drop the space with colors enabled", () => {
+      const result = formatDocPage(
+        "app",
+        page("--port", "Listening port.", {
+          default: [{ type: "text", text: "8080" }],
+        }),
+        { maxWidth: 46, showDefault: true, colors: true },
+      );
+      const lines = result.split("\n");
+      assert.equal(
+        lines[2],
+        `${" ".repeat(30)}\x1b[2m[8080]\x1b[0m`,
+      );
     });
   });
 
