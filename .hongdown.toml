@@ -1,2 +1,7 @@
 include = ["*.md", "**/*.md"]
-exclude = [".git/**", "**/node_modules/**", "**/dist/**"]
+exclude = [
+  ".git/**",
+  "changes.d/**",
+  "**/node_modules/**",
+  "**/dist/**",
+]
