@@ -441,6 +441,9 @@ function resolveProgramInput<
  *                See {@link RunOptions} for available settings.
  * @returns The parsed result if successful. On help display or parse errors,
  *          the function will call `process.exit()` and not return.
+ * @throws {Error} If the default `stdout` or `stderr` writer fails to write
+ *         to the stream's file descriptor for a reason other than the reader
+ *         having gone away (for example, `ENOSPC`).
  *
  * @example
  * ```typescript
@@ -621,6 +624,9 @@ export function run<T extends Parser<Mode, unknown, unknown>>(
  * @returns The parsed result if successful.
  * @throws {TypeError} If an async parser (or a {@link Program} wrapping one)
  * is passed at runtime.  Use {@link run} or {@link runAsync} instead.
+ * @throws {Error} If the default `stdout` or `stderr` writer fails to write
+ *         to the stream's file descriptor for a reason other than the reader
+ *         having gone away (for example, `ENOSPC`).
  * @since 0.9.0
  */
 // Overload: parser with contexts
@@ -730,6 +736,9 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
  * @param parser The command-line parser to execute.
  * @param options Configuration options for customizing behavior.
  * @returns A Promise of the parsed result if successful.
+ * @throws {Error} If the default `stdout` or `stderr` writer fails to write
+ *         to the stream's file descriptor for a reason other than the reader
+ *         having gone away (for example, `ENOSPC`).
  * @since 0.9.0
  */
 // Overload: parser with contexts

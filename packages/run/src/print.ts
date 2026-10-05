@@ -105,6 +105,9 @@ export function print(message: Message, options: PrintOptions = {}): void {
  *
  * @param message The structured error message to print.
  * @param options Optional formatting options and exit code.
+ * @throws {Error} If `exitCode` is specified and writing the message directly
+ *         to the output stream's file descriptor fails for a reason other
+ *         than the reader having gone away (for example, `ENOSPC`).
  *
  * @example
  * ```typescript
