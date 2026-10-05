@@ -179,12 +179,12 @@ export function formatUsageTermAsRoff(term: UsageTerm): string {
 }
 
 /**
- * Returns whether a usage list contains exactly one visible term that
- * produces its own brackets.  When true, a parent wrapper can safely elide
- * its own brackets to avoid redundant nesting.  Multiple bracket-producing
- * siblings must keep their individual brackets for disambiguation.
+ * Returns whether a usage list contains exactly one visible term that can
+ * share enclosing brackets.  Options need no brackets of their own, while
+ * optional and repeated terms can elide redundant brackets.  Multiple
+ * visible siblings must retain their individual grouping boundaries.
  */
-function hasSingleBracketedTerm(terms: Usage): boolean {
+function hasSingleElidableTerm(terms: Usage): boolean {
   const visible = terms.filter(
     (t) => !("hidden" in t && isUsageHidden(t.hidden)),
   );
@@ -227,31 +227,33 @@ function formatUsageTermAsRoffInternal(
       const metavarPart = term.metavar
         ? ` \\fI${escapeRoff(term.metavar)}\\fR`
         : "";
-      if (insideBrackets) return `${names}${metavarPart}`;
-      return `[${names}${metavarPart}]`;
+      if (insideBrackets || term.names.length < 2) {
+        return `${names}${metavarPart}`;
+      }
+      return `(${names})${metavarPart}`;
     }
 
     case "command":
       return formatCommandNameAsRoff(term.name);
 
     case "optional": {
-      const childrenBracketed = hasSingleBracketedTerm(term.terms);
+      const childrenElidable = hasSingleElidableTerm(term.terms);
 
       // Don't elide when the child is a multiple, to preserve
       // the grouping boundary between repetition layers.
-      const childIsMultiple = childrenBracketed &&
+      const childIsMultiple = childrenElidable &&
         hasSingleVisibleTermOfType(term.terms, "multiple");
 
       const inner = formatUsageAsRoffInternal(
         term.terms,
-        childrenBracketed,
+        childrenElidable,
       );
       if (inner === "") return "";
 
       // If this optional is already inside brackets and it wraps a single
-      // bracketed term (that is not a multiple), we can skip adding
+      // elidable term (that is not a multiple), we can skip adding
       // another layer of brackets.
-      if (insideBrackets && childrenBracketed && !childIsMultiple) {
+      if (insideBrackets && childrenElidable && !childIsMultiple) {
         return inner;
       }
       return `[${inner}]`;
@@ -259,17 +261,17 @@ function formatUsageTermAsRoffInternal(
 
     case "multiple": {
       const wrapInBrackets = term.min < 1;
-      const childrenBracketed = hasSingleBracketedTerm(term.terms);
+      const childrenElidable = hasSingleElidableTerm(term.terms);
 
       // Don't elide when the child is also a multiple, to preserve
       // the grouping boundary between repetition layers.
-      const childIsMultiple = childrenBracketed &&
+      const childIsMultiple = childrenElidable &&
         hasSingleVisibleTermOfType(term.terms, "multiple");
 
       // A child term should elide its brackets if this multiple term
-      // will wrap it in brackets, and the child is a single elide-able
-      // bracketed term.
-      const passInsideBrackets = wrapInBrackets && childrenBracketed &&
+      // will wrap it in brackets, and the child is a single elidable
+      // term.
+      const passInsideBrackets = wrapInBrackets && childrenElidable &&
         !childIsMultiple;
       const inner = formatUsageAsRoffInternal(
         term.terms,
@@ -279,7 +281,7 @@ function formatUsageTermAsRoffInternal(
 
       if (wrapInBrackets) {
         // This multiple term should skip its own brackets if it's already
-        // inside brackets and it's wrapping a single elide-able term.
+        // inside brackets and it's wrapping a single elidable term.
         if (insideBrackets && passInsideBrackets) return `${inner} ...`;
         return `[${inner} ...]`;
       }
@@ -287,12 +289,17 @@ function formatUsageTermAsRoffInternal(
     }
 
     case "exclusive": {
+      // A literally empty branch accepts no tokens.  A branch containing
+      // hidden terms still requires those tokens and must not add optionality.
+      const hasEmptyBranch = term.terms.some((terms) => terms.length === 0);
       const alternatives = term.terms
         .map((t) => formatUsageAsRoffInternal(t, false))
         .filter((s) => s !== "");
       if (alternatives.length === 0) return "";
-      if (alternatives.length === 1) return alternatives[0];
-      return `(${alternatives.join(" | ")})`;
+      const inner = alternatives.length === 1
+        ? alternatives[0]
+        : `(${alternatives.join(" | ")})`;
+      return hasEmptyBranch ? `[${inner}]` : inner;
     }
 
     case "literal":

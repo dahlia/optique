@@ -39,6 +39,19 @@ To be released.
 [#1008]: https://github.com/dahlia/optique/issues/1008
 [#1010]: https://github.com/dahlia/optique/pull/1010
 
+### @optique/man
+
+ -  Fixed `formatUsageTermAsRoff()`, `formatDocPageAsMan()`, and the
+    `generateManPage*()` functions to render required options without optional
+    brackets in the man page SYNOPSIS, including options in exclusive branches
+    and required repetitions.  Exclusive branches that accept no arguments
+    keep their alternatives optional.  Required option aliases now use
+    parentheses, such as `(-n | --name) STRING`, to preserve their grouping.
+    [[#1004], [#1012]]
+
+[#1004]: https://github.com/dahlia/optique/issues/1004
+[#1012]: https://github.com/dahlia/optique/pull/1012
+
 
 Version 1.0.11
 --------------

@@ -48,7 +48,7 @@ describe("formatUsageTermAsRoff()", () => {
     const term: UsageTerm = { type: "option", names: ["--verbose", "-v"] };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR]",
+      "(\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR)",
     );
   });
 
@@ -60,13 +60,13 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[\\fB\\-\\-config\\fR | \\fB\\-c\\fR \\fIFILE\\fR]",
+      "(\\fB\\-\\-config\\fR | \\fB\\-c\\fR) \\fIFILE\\fR",
     );
   });
 
   it("formats single option name", () => {
     const term: UsageTerm = { type: "option", names: ["--help"] };
-    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-help\\fR]");
+    assert.equal(formatUsageTermAsRoff(term), "\\fB\\-\\-help\\fR");
   });
 
   it("formats command term", () => {
@@ -97,7 +97,7 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[\\fB\\-\\-dir\\fR \\fIC:\\\\TMP\\fR]",
+      "\\fB\\-\\-dir\\fR \\fIC:\\\\TMP\\fR",
     );
   });
 
@@ -139,7 +139,7 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
-  it("keeps child brackets for optional wrapping multiple options", () => {
+  it("groups aliases for optional wrapping multiple required options", () => {
     const term: UsageTerm = {
       type: "optional",
       terms: [
@@ -149,7 +149,7 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[[\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR] [\\fB\\-\\-output\\fR | \\fB\\-o\\fR \\fIFILE\\fR]]",
+      "[(\\fB\\-\\-verbose\\fR | \\fB\\-v\\fR) (\\fB\\-\\-output\\fR | \\fB\\-o\\fR) \\fIFILE\\fR]",
     );
   });
 
@@ -170,7 +170,7 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
-  it("preserves option brackets in mixed optional group", () => {
+  it("keeps an option required within a mixed optional group", () => {
     const term: UsageTerm = {
       type: "optional",
       terms: [
@@ -180,11 +180,11 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[\\fIFILE\\fR [\\fB\\-\\-flag\\fR]]",
+      "[\\fIFILE\\fR \\fB\\-\\-flag\\fR]",
     );
   });
 
-  it("preserves option brackets in mixed multiple(min=0) group", () => {
+  it("keeps an option required within a mixed repeated group", () => {
     const term: UsageTerm = {
       type: "multiple",
       terms: [
@@ -195,7 +195,7 @@ describe("formatUsageTermAsRoff()", () => {
     };
     assert.equal(
       formatUsageTermAsRoff(term),
-      "[\\fIFILE\\fR [\\fB\\-\\-recursive\\fR] ...]",
+      "[\\fIFILE\\fR \\fB\\-\\-recursive\\fR ...]",
     );
   });
 
@@ -323,6 +323,120 @@ describe("formatUsageTermAsRoff()", () => {
     assert.equal(
       formatUsageTermAsRoff(term),
       "(\\fBstart\\fR | \\fBstop\\fR)",
+    );
+  });
+
+  it("keeps an option required in an exclusive branch", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [{ type: "argument", metavar: "FILE" }],
+        [
+          { type: "option", names: ["--help"] },
+          {
+            type: "optional",
+            terms: [{ type: "argument", metavar: "TOPIC" }],
+          },
+        ],
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "(\\fIFILE\\fR | \\fB\\-\\-help\\fR [\\fITOPIC\\fR])",
+    );
+  });
+
+  it("groups required aliases inside command alternatives", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [
+          { type: "command", name: "add" },
+          { type: "option", names: ["-n", "--name"], metavar: "STRING" },
+        ],
+        [
+          { type: "command", name: "rm" },
+          { type: "option", names: ["-f"] },
+        ],
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "(\\fBadd\\fR (\\fB\\-n\\fR | \\fB\\-\\-name\\fR) \\fISTRING\\fR | \\fBrm\\fR \\fB\\-f\\fR)",
+    );
+  });
+
+  it("shares wrapper brackets with an option beside a hidden leaf", () => {
+    const term: UsageTerm = {
+      type: "optional",
+      terms: [
+        { type: "option", names: ["--secret"], hidden: true },
+        { type: "option", names: ["-a", "--all"], metavar: "STRING" },
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[\\fB\\-a\\fR | \\fB\\-\\-all\\fR \\fISTRING\\fR]",
+    );
+  });
+
+  it("groups aliases beside a wrapper containing only hidden terms", () => {
+    const terms: Usage = [
+      {
+        type: "optional",
+        terms: [{ type: "option", names: ["--secret"], hidden: true }],
+      },
+      { type: "option", names: ["-a", "--all"], metavar: "STRING" },
+    ];
+    assert.equal(
+      formatUsageTermAsRoff({ type: "optional", terms }),
+      "[(\\fB\\-a\\fR | \\fB\\-\\-all\\fR) \\fISTRING\\fR]",
+    );
+    assert.equal(
+      formatUsageTermAsRoff({ type: "multiple", terms, min: 0 }),
+      "[(\\fB\\-a\\fR | \\fB\\-\\-all\\fR) \\fISTRING\\fR ...]",
+    );
+  });
+
+  it("preserves alias grouping when an exclusive branch is hidden", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [{ type: "option", names: ["-a", "--all"] }],
+        [{ type: "command", name: "secret", hidden: true }],
+      ],
+    };
+    const aliases = "(\\fB\\-a\\fR | \\fB\\-\\-all\\fR)";
+    assert.equal(formatUsageTermAsRoff(term), aliases);
+    assert.equal(
+      formatUsageTermAsRoff({ type: "optional", terms: [term] }),
+      `[${aliases}]`,
+    );
+    assert.equal(
+      formatUsageTermAsRoff({ type: "multiple", terms: [term], min: 0 }),
+      `[${aliases} ...]`,
+    );
+  });
+
+  it("preserves an empty exclusive branch as an optional alternative", () => {
+    const term: UsageTerm = {
+      type: "exclusive",
+      terms: [
+        [],
+        [{ type: "argument", metavar: "FILE" }],
+        [{ type: "option", names: ["--name"], metavar: "STRING" }],
+      ],
+    };
+    assert.equal(
+      formatUsageTermAsRoff(term),
+      "[(\\fIFILE\\fR | \\fB\\-\\-name\\fR \\fISTRING\\fR)]",
+    );
+  });
+
+  it("omits an exclusive term with only empty branches", () => {
+    assert.equal(
+      formatUsageTermAsRoff({ type: "exclusive", terms: [[], []] }),
+      "",
     );
   });
 
