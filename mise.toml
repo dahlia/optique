@@ -37,6 +37,7 @@ description = "Check code formatting, linting, and type checking"
 run = ["deno task check", "sacho check"]
 
 [tasks.check-versions]
+alias = "check:versions"
 description = "Check that all subpackages have matching versions"
 usage = '''
 flag "--fix" help="Automatically fix version mismatches"
@@ -48,6 +49,19 @@ else
   deno task check-versions
 fi
 '''
+
+[tasks."bump-version"]
+description = "Bump the version of all packages"
+usage = """
+arg "<version>" help="Version to bump to (e.g., 1.2.3)"
+"""
+shell = "nu -c"
+run = """
+sacho next $env.usage_version
+open packages/core/deno.json | upsert version $env.usage_version | save -f packages/core/deno.json
+deno fmt packages/core/deno.json
+deno task check-versions --fix
+"""
 
 [tasks."test:deno"]
 description = "Run the test suite using Deno"
