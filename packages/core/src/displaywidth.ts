@@ -25,6 +25,18 @@ export function getDisplayWidth(text: string): number {
   return width;
 }
 
+/**
+ * Removes ANSI escape sequences (CSI and OSC) from a string, leaving only
+ * the text a terminal would print.
+ *
+ * @param text The string to strip.
+ * @returns The string without ANSI escape sequences.
+ * @internal
+ */
+export function stripAnsi(text: string): string {
+  return text.replace(ansiRegex, "");
+}
+
 // A grapheme consisting entirely of format chars (Cf), nonspacing
 // marks (Mn), or enclosing marks (Me) occupies zero terminal columns.
 // The + quantifier handles clusters of consecutive combining marks that

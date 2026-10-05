@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getDisplayWidth } from "./displaywidth.ts";
+import { getDisplayWidth, stripAnsi } from "./displaywidth.ts";
 
 describe("getDisplayWidth", () => {
   describe("ASCII", () => {
@@ -313,5 +313,17 @@ describe("getDisplayWidth", () => {
     it("should handle ANSI + CJK", () => {
       assert.equal(getDisplayWidth("\x1b[1m한글\x1b[0m"), 4);
     });
+  });
+});
+
+describe("stripAnsi", () => {
+  it("should remove CSI and OSC sequences", () => {
+    assert.equal(stripAnsi("\x1b[32m\x1b[0m"), "");
+    assert.equal(stripAnsi("\x1b[1;4mPATH\x1b[0m\x1b[2m"), "PATH");
+    assert.equal(
+      stripAnsi("\x1b]8;;https://example.com/\x1b\\link\x1b]8;;\x1b\\"),
+      "link",
+    );
+    assert.equal(stripAnsi("é"), "é");
   });
 });

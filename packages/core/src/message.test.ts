@@ -8,6 +8,7 @@ import {
   link,
   type Message,
   message,
+  type MessageFormatOptions,
   type MessageTerm,
   metavar,
   optionName,
@@ -1151,6 +1152,180 @@ ${commandLine("myapp status")}        Show status`;
   });
 });
 
+// https://github.com/dahlia/optique/issues/1003
+describe("formatMessage - whitespace at automatic wraps", () => {
+  it("should drop a text term's leading space when it wraps", () => {
+    const msg: Message = [
+      text("Enable or disable highlighting"),
+      text(" (default: auto)"),
+    ];
+    assert.equal(
+      formatMessage(msg, { maxWidth: 20 }),
+      "Enable or disable \nhighlighting\n(default: auto)",
+    );
+  });
+
+  it("should not count the dropped space toward the new line", () => {
+    // " bb " wraps; without its leading space, "bb cc" fits in 5 columns.
+    const msg: Message = [text("aaaa"), text(" bb cc")];
+    assert.equal(formatMessage(msg, { maxWidth: 5 }), "aaaa\nbb cc");
+  });
+
+  it("should drop the leading space of a term with paragraph breaks", () => {
+    const msg: Message = [text("abc"), text(" def\n\nghi")];
+    assert.equal(formatMessage(msg, { maxWidth: 3 }), "abc\ndef\n\nghi");
+  });
+
+  it("should not start a line with a whitespace-only text term", () => {
+    const msg: Message = [text("abc"), text(" "), text("def")];
+    assert.equal(formatMessage(msg, { maxWidth: 3 }), "abc\ndef");
+  });
+
+  it("should not end with a newline for a trailing whitespace term", () => {
+    const msg: Message = [text("abc"), text(" ")];
+    assert.equal(formatMessage(msg, { maxWidth: 3 }), "abc");
+  });
+
+  it("should not emit an extra newline before a lineBreak() term", () => {
+    const msg: Message = [text("abc"), text(" "), lineBreak(), text("def")];
+    assert.equal(formatMessage(msg, { maxWidth: 3 }), "abc\ndef");
+  });
+
+  it("should keep zero-width content after a dropped space on the new line", () => {
+    const msg: Message = [text("abc"), text(" "), value("́")];
+    assert.equal(
+      formatMessage(msg, { quotes: false, maxWidth: 3 }),
+      "abc\ń",
+    );
+  });
+
+  it("should keep trimming at a wrapped line start after empty values", () => {
+    const msg: Message = [text("abc"), text(" "), value(""), text(" def")];
+    assert.equal(
+      formatMessage(msg, { quotes: false, maxWidth: 3 }),
+      "abc\ndef",
+    );
+    assert.equal(
+      formatMessage([text("abc"), text(" "), value("")], {
+        quotes: false,
+        maxWidth: 3,
+      }),
+      "abc",
+    );
+    assert.equal(
+      formatMessage(msg, { quotes: false, colors: true, maxWidth: 3 }),
+      "abc\x1b[32m\x1b[0m\ndef",
+    );
+  });
+
+  it("should not flush a deferred wrap for a styled empty value", () => {
+    const options = { quotes: false, colors: true, maxWidth: 3 } as const;
+    assert.equal(
+      formatMessage([text("abc"), text(" "), value("")], options),
+      "abc\x1b[32m\x1b[0m",
+    );
+    assert.equal(
+      formatMessage(
+        [text("abc"), text(" "), value(""), lineBreak(), text("def")],
+        options,
+      ),
+      "abc\x1b[32m\x1b[0m\ndef",
+    );
+  });
+
+  it("should still wrap before an empty value on an overfull line", () => {
+    // formatDocPage() relies on this to move an annotation suffix to the
+    // next line when the annotation content is empty.
+    const options: MessageFormatOptions & { readonly startWidth?: number } = {
+      quotes: false,
+      maxWidth: 3,
+      startWidth: 5,
+    };
+    assert.equal(formatMessage([value("")], options), "\n");
+  });
+
+  it("should drop the separator between values() items when it wraps", () => {
+    const msg: Message = [values(["aaa", "bbb"])];
+    assert.equal(
+      formatMessage(msg, { quotes: false, maxWidth: 3 }),
+      "aaa\nbbb",
+    );
+    assert.equal(
+      formatMessage(msg, { quotes: false, colors: true, maxWidth: 3 }),
+      "\x1b[32maaa\nbbb\x1b[0m",
+    );
+  });
+
+  it("should keep whitespace that belongs to values", () => {
+    assert.equal(
+      formatMessage([text("abc"), value(" xyz")], {
+        quotes: false,
+        maxWidth: 3,
+      }),
+      "abc\n xyz",
+    );
+    assert.equal(
+      formatMessage([text("abc"), values(["abc", " b"])], {
+        quotes: false,
+        maxWidth: 3,
+      }),
+      "abc\nabc\n b",
+    );
+  });
+
+  it("should keep leading whitespace placed by the caller", () => {
+    assert.equal(
+      formatMessage([text("  indented text here")], { maxWidth: 10 }),
+      "  indented \ntext here",
+    );
+    assert.equal(
+      formatMessage([text("first\n\n  second line")], { maxWidth: 8 }),
+      "first\n\n  second \nline",
+    );
+    assert.equal(
+      formatMessage([text("a"), lineBreak(), text("  bb"), text(" cc")], {
+        maxWidth: 4,
+      }),
+      "a\n  bb\ncc",
+    );
+  });
+
+  it("should drop the space with colors enabled", () => {
+    const msg: Message = [
+      text("Use "),
+      optionName("--color"),
+      text(" to enable highlighting"),
+    ];
+    assert.equal(
+      formatMessage(msg, { colors: true, maxWidth: 13 }),
+      "Use \x1b[3m`--color`\x1b[0m\nto enable \nhighlighting",
+    );
+  });
+
+  it("should drop ideographic spaces by display width", () => {
+    const msg: Message = [text("한글"), text("　한글 한")];
+    // After dropping U+3000 (2 columns), "한글 " (5) + "한" (2) fits in 7.
+    assert.equal(
+      formatMessage(msg, { quotes: false, maxWidth: 7 }),
+      "한글\n한글 한",
+    );
+  });
+
+  it("should drop the space when the start width forces a wrap", () => {
+    // startWidth is an internal option; see formatMessage().
+    const at = (startWidth: number) => {
+      const options: MessageFormatOptions & { readonly startWidth?: number } = {
+        maxWidth: 10,
+        startWidth,
+      };
+      return options;
+    };
+    assert.equal(formatMessage([text(" ab cd")], at(10)), "\nab cd");
+    assert.equal(formatMessage([text(" ab cd")], at(12)), "\nab cd");
+    assert.equal(formatMessage([text("ab"), text(" cd")], at(7)), "ab\ncd");
+  });
+});
+
 describe("valueSet", () => {
   it("should format list with conjunction by default", () => {
     const msg = valueSet(["error", "warn", "info"], {
@@ -1606,6 +1781,41 @@ describe("property-based tests", () => {
 
           assert.deepEqual(extractedValues, valuesInput);
           assert.ok(msg.length > 0);
+        },
+      ),
+      propertyParameters,
+    );
+  });
+
+  // https://github.com/dahlia/optique/issues/1003
+  it("should never start an automatically wrapped line with whitespace", () => {
+    const wordArbitrary = fc.stringMatching(/^[a-z]{1,8}$/);
+    const termArbitrary = fc.record({
+      leadingSpace: fc.boolean(),
+      trailingSpace: fc.boolean(),
+      words: fc.array(wordArbitrary, { minLength: 1, maxLength: 4 }),
+    });
+    fc.assert(
+      fc.property(
+        fc.array(termArbitrary, { minLength: 1, maxLength: 8 }),
+        fc.integer({ min: 1, max: 30 }),
+        (terms, maxWidth) => {
+          const msg: Message = terms.map((term, i) =>
+            text(
+              `${term.leadingSpace && i > 0 ? " " : ""}${term.words.join(" ")}${
+                term.trailingSpace ? " " : ""
+              }`,
+            )
+          );
+          const formatted = formatMessage(msg, { maxWidth });
+          for (const line of formatted.split("\n")) {
+            assert.ok(!/^\s/.test(line), JSON.stringify(formatted));
+          }
+          assert.equal(
+            formatted.replace(/\s/g, ""),
+            msg.map((term) => term.type === "text" ? term.text : "").join("")
+              .replace(/\s/g, ""),
+          );
         },
       ),
       propertyParameters,
