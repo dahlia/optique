@@ -27,6 +27,31 @@ function getSynopsis(manPage: string): string {
 }
 
 describe("required options in SYNOPSIS", () => {
+  it("keeps a flag required beside a repetition of optional failure", () => {
+    const repeated = multiple(optional(fail<true>()), { min: 1 });
+    const parser = or(repeated, flag("--visible"));
+    assert.ok(!parse(repeated, []).success);
+    assert.ok(!parse(parser, []).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n\\fB\\-\\-visible\\fR',
+    );
+  });
+
+  it("recognizes a zero-token repetition item through nested alternatives", () => {
+    const repeated = multiple(or(fail<string>(), constant("x")), { min: 1 });
+    const parser = or(repeated, flag("--visible"));
+    assert.deepEqual(parse(repeated, []), { success: true, value: ["x"] });
+    assert.ok(parse(parser, []).success);
+    const term = parser.usage[0];
+    assert.ok(term != null);
+    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-visible\\fR]");
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n[\\fB\\-\\-visible\\fR]',
+    );
+  });
+
   for (const min of [1, 2]) {
     it(`formats a zero-token constant repetition with min ${min} directly`, () => {
       const repeated = multiple(constant("x"), { min });

@@ -2621,6 +2621,20 @@ describe("normalizeUsage", () => {
     const impossible: Usage = [{ type: "exclusive", terms: [] }];
     const visible: Usage = [{ type: "option", names: ["--required"] }];
 
+    it("drops required repetition of an optional impossible child", () => {
+      assert.deepEqual(
+        normalizeUsage([{
+          type: "exclusive",
+          terms: [[{
+            type: "multiple",
+            min: 1,
+            terms: [{ type: "optional", terms: impossible }],
+          }], visible],
+        }]),
+        [{ type: "exclusive", terms: [visible] }],
+      );
+    });
+
     it("drops a failing branch rather than making it an empty alternative", () => {
       assert.deepEqual(
         normalizeUsage([{

@@ -220,12 +220,28 @@ function acceptsNoTokens(terms: Usage): boolean {
       case "passthrough":
         return true;
       case "multiple":
-        // A zero-consuming optional item does not satisfy a positive minimum.
-        // An empty child sequence (constant()) can produce one item, but the
-        // parser stops after that zero-consuming iteration.
-        return term.min < 1 || term.min === 1 && term.terms.length === 0;
+        // Omission cannot satisfy a positive minimum.  A child that produces
+        // an item without tokens can satisfy one iteration before parsing stops.
+        return term.min < 1 ||
+          term.min === 1 && canProduceZeroTokenItem(term.terms);
       case "exclusive":
         return term.terms.some(acceptsNoTokens);
+      default:
+        return false;
+    }
+  });
+}
+
+/** Checks for a zero-token item, rather than an omitted optional child. */
+function canProduceZeroTokenItem(terms: Usage): boolean {
+  return terms.every((term) => {
+    switch (term.type) {
+      case "optional":
+        return canProduceZeroTokenItem(term.terms);
+      case "multiple":
+        return term.min <= 1 && canProduceZeroTokenItem(term.terms);
+      case "exclusive":
+        return term.terms.some(canProduceZeroTokenItem);
       default:
         return false;
     }

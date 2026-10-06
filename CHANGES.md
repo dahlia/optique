@@ -18,7 +18,8 @@ To be released.
     Leading whitespace at the start of a message, after `lineBreak()`, or in
     `value()` and `values()` items is kept.  [[#1003], [#1006]]
  -  Fixed usage descriptions for `or(fail(), ...)` to omit the failing branch,
-    so required alternatives no longer appear optional in man page SYNOPSIS.
+    including required repetitions of `optional(fail())`, so required
+    alternatives no longer appear optional in man page SYNOPSIS.
     `fail().usage` now represents no successful alternatives, distinguishing
     it from the empty usage of `constant()`.  [[#1004], [#1012]]
 
@@ -53,7 +54,8 @@ To be released.
     and required repetitions.  Empty or hidden optional exclusive branches
     keep their visible alternatives optional.  Positive repetition minima
     remain required when their children are omitted optional options, while
-    a single zero-token constant repetition stays optional.  Required option
+    a single zero-token constant repetition stays optional, including constants
+    nested in exclusive branches.  Required option
     aliases now use parentheses, such as `(-n | --name) STRING`, to preserve
     their grouping. [[#1004], [#1012]]
 

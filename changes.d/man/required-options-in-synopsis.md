@@ -9,6 +9,7 @@ links:
     and required repetitions.  Empty or hidden optional exclusive branches
     keep their visible alternatives optional.  Positive repetition minima
     remain required when their children are omitted optional options, while
-    a single zero-token constant repetition stays optional.  Required option
+    a single zero-token constant repetition stays optional, including constants
+    nested in exclusive branches.  Required option
     aliases now use parentheses, such as `(-n | --name) STRING`, to preserve
     their grouping. [[#1004], [#1012]]

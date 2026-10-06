@@ -687,15 +687,21 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
 /**
  * Recognizes sequences with no successful alternatives before normalization
  * removes empty exclusive terms.  Optional and zero-minimum wrappers can
- * still succeed by omitting their impossible children.
+ * still succeed by omitting their impossible children, unless a surrounding
+ * repetition requires them to produce an item.
  */
-function isImpossibleUsage(usage: Usage): boolean {
+function isImpossibleUsage(usage: Usage, requiresItem = false): boolean {
   return usage.some((term) => {
     if (term.type === "exclusive") {
-      return term.terms.every(isImpossibleUsage);
+      return term.terms.every((branch) =>
+        isImpossibleUsage(branch, requiresItem)
+      );
     }
-    return term.type === "multiple" && term.min > 0 &&
-      isImpossibleUsage(term.terms);
+    if (term.type === "optional") {
+      return requiresItem && isImpossibleUsage(term.terms, true);
+    }
+    return term.type === "multiple" && (term.min > 0 || requiresItem) &&
+      isImpossibleUsage(term.terms, true);
   });
 }
 
