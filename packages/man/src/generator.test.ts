@@ -5,7 +5,7 @@ import {
   generateManPageAsync,
   generateManPageSync,
 } from "./generator.ts";
-import { object, or, tuple } from "@optique/core/constructs";
+import { longestMatch, object, or, tuple } from "@optique/core/constructs";
 import {
   argument,
   command,
@@ -18,8 +18,13 @@ import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { defineProgram } from "@optique/core/program";
 import { parse, type Parser } from "@optique/core/parser";
-import { multiple, optional, withDefault } from "@optique/core/modifiers";
-import { formatUsage } from "@optique/core/usage";
+import {
+  multiple,
+  nonEmpty,
+  optional,
+  withDefault,
+} from "@optique/core/modifiers";
+import { cloneUsage, formatUsage } from "@optique/core/usage";
 import { formatUsageTermAsRoff } from "./man.ts";
 
 function getSynopsis(manPage: string): string {
@@ -27,6 +32,75 @@ function getSynopsis(manPage: string): string {
 }
 
 describe("required options in SYNOPSIS", () => {
+  it("keeps generated alternatives required for a min-two constant repetition", () => {
+    const parser = or(multiple(constant("x"), { min: 2 }), flag("--visible"));
+    assert.ok(!parse(parser, []).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n\\fB\\-\\-visible\\fR',
+    );
+  });
+
+  for (const value of [null, undefined]) {
+    it(`keeps nullish constant repetitions required (${value})`, () => {
+      const parser = or(
+        multiple(constant(value), { min: 1 }),
+        flag("--visible"),
+      );
+      assert.ok(!parse(parser, []).success);
+      assert.equal(
+        formatUsageTermAsRoff(parser.usage[0]),
+        "\\fB\\-\\-visible\\fR",
+      );
+      assert.equal(
+        getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+        '.B "repro"\n\\fB\\-\\-visible\\fR',
+      );
+    });
+  }
+
+  it("preserves nonEmpty's consumption requirement", () => {
+    const parser = or(nonEmpty(constant("x")), flag("--visible"));
+    assert.ok(!parse(parser, []).success);
+    assert.equal(
+      formatUsageTermAsRoff(parser.usage[0]),
+      "\\fB\\-\\-visible\\fR",
+    );
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n\\fB\\-\\-visible\\fR',
+    );
+  });
+
+  it("distinguishes ambiguous or branches from longestMatch tie breaking", () => {
+    const ambiguous = or(constant("a"), constant("b"), flag("--visible"));
+    const first = longestMatch(constant("a"), constant("b"), flag("--visible"));
+    assert.ok(!parse(ambiguous, []).success);
+    assert.ok(parse(first, []).success);
+    assert.equal(
+      formatUsageTermAsRoff(ambiguous.usage[0]),
+      "\\fB\\-\\-visible\\fR",
+    );
+    assert.equal(
+      formatUsageTermAsRoff(cloneUsage(ambiguous.usage)[0]),
+      "\\fB\\-\\-visible\\fR",
+    );
+    assert.equal(
+      formatUsageTermAsRoff(first.usage[0]),
+      "[\\fB\\-\\-visible\\fR]",
+    );
+    assert.equal(
+      getSynopsis(
+        generateManPageSync(ambiguous, { name: "repro", section: 1 }),
+      ),
+      '.B "repro"\n\\fB\\-\\-visible\\fR',
+    );
+    assert.equal(
+      getSynopsis(generateManPageSync(first, { name: "repro", section: 1 })),
+      '.B "repro"\n[\\fB\\-\\-visible\\fR]',
+    );
+  });
+
   it("keeps a flag required beside a repetition of optional failure", () => {
     const repeated = multiple(optional(fail<true>()), { min: 1 });
     const parser = or(repeated, flag("--visible"));

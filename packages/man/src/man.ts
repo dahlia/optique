@@ -220,11 +220,13 @@ function acceptsNoTokens(terms: Usage): boolean {
       case "passthrough":
         return true;
       case "multiple":
+        if (term.acceptsEmpty != null) return term.acceptsEmpty;
         // Omission cannot satisfy a positive minimum.  A child that produces
         // an item without tokens can satisfy one iteration before parsing stops.
         return term.min < 1 ||
           term.min === 1 && canProduceZeroTokenItem(term.terms);
       case "exclusive":
+        if (term.acceptsEmpty != null) return term.acceptsEmpty;
         return term.terms.some(acceptsNoTokens);
       default:
         return false;
@@ -239,9 +241,11 @@ function canProduceZeroTokenItem(terms: Usage): boolean {
       case "optional":
         return canProduceZeroTokenItem(term.terms);
       case "multiple":
-        return term.min <= 1 && canProduceZeroTokenItem(term.terms);
+        return term.acceptsEmpty !== false && term.min <= 1 &&
+          canProduceZeroTokenItem(term.terms);
       case "exclusive":
-        return term.terms.some(canProduceZeroTokenItem);
+        return term.acceptsEmpty !== false &&
+          term.terms.some(canProduceZeroTokenItem);
       default:
         return false;
     }
@@ -336,7 +340,7 @@ function formatUsageTermAsRoffInternal(
       // Only a disappearing zero-token branch needs enclosing brackets.
       const hasEmptyBranch = branches.some(
         ({ terms, text }) => text === "" && acceptsNoTokens(terms),
-      );
+      ) && term.acceptsEmpty !== false;
       const alternatives = branches
         .map(({ text }) => text)
         .filter((s) => s !== "");

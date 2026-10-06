@@ -14,6 +14,7 @@ import {
   normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
+import { acceptsEmptyUsage } from "./internal/empty-usage.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
@@ -2389,7 +2390,14 @@ export function multiple<M extends Mode, TValue, TState>(
     $valueType: [] as readonly TValue[],
     $stateType: [] as readonly TState[],
     priority: parser.priority,
-    usage: [{ type: "multiple", terms: parser.usage, min }],
+    usage: [{
+      type: "multiple",
+      terms: parser.usage,
+      min,
+      ...(min > 0 && parser.usage.length === 0 && parser.initialState == null
+        ? { acceptsEmpty: false }
+        : {}),
+    }],
     leadingNames: parser.leadingNames,
     // multiple(min=0) can succeed without consuming, so only propagate
     // catch-all status when at least one match is required.
@@ -3130,7 +3138,11 @@ export function nonEmpty<M extends Mode, T, TState>(
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    usage: parser.usage,
+    usage: parser.usage.length === 0
+      ? [{ type: "exclusive", terms: [] }]
+      : acceptsEmptyUsage(parser.usage)
+      ? [{ type: "exclusive", terms: [parser.usage], acceptsEmpty: false }]
+      : parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,

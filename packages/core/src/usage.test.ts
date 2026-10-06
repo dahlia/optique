@@ -3529,23 +3529,22 @@ describe("property-based tests", () => {
     );
   });
 
-  it("normalizeUsage should preserve extracted names", () => {
+  it("normalizeUsage should not invent extracted names", () => {
     fc.assert(
       fc.property(usageArbitrary(2), (usage: Usage) => {
         const normalized = normalizeUsage(usage);
 
-        assert.deepEqual(
-          extractOptionNames(normalized),
-          extractOptionNames(usage),
-        );
-        assert.deepEqual(
-          extractCommandNames(normalized),
-          extractCommandNames(usage),
-        );
-        assert.deepEqual(
-          extractArgumentMetavars(normalized),
-          extractArgumentMetavars(usage),
-        );
+        // Impossible branches may lose names when they are discarded.
+        for (
+          const extract of [
+            extractOptionNames,
+            extractCommandNames,
+            extractArgumentMetavars,
+          ]
+        ) {
+          const original = extract(usage);
+          for (const name of extract(normalized)) assert.ok(original.has(name));
+        }
       }),
       propertyParameters,
     );

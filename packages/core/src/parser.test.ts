@@ -1052,6 +1052,7 @@ describe("Parser usage field", () => {
         ],
       }];
       assert.deepEqual(parser.usage, expected);
+      assert.ok(!parse(parser, []).success);
     });
 
     it("should work with three parsers", () => {

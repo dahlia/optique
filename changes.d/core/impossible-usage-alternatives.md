@@ -7,4 +7,7 @@ links:
     including required repetitions of `optional(fail())`, so required
     alternatives no longer appear optional in man page SYNOPSIS.
     `fail().usage` now represents no successful alternatives, distinguishing
-    it from the empty usage of `constant()`.  [[#1004], [#1012]]
+    it from the empty usage of `constant()`.  Usage also preserves `nonEmpty()`
+    consumption requirements, ambiguous empty `or()` alternatives, and
+    repetition minima for zero-token constants, including nullish values.
+    [[#1004], [#1012]]

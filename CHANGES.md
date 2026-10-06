@@ -21,7 +21,10 @@ To be released.
     including required repetitions of `optional(fail())`, so required
     alternatives no longer appear optional in man page SYNOPSIS.
     `fail().usage` now represents no successful alternatives, distinguishing
-    it from the empty usage of `constant()`.  [[#1004], [#1012]]
+    it from the empty usage of `constant()`.  Usage also preserves `nonEmpty()`
+    consumption requirements, ambiguous empty `or()` alternatives, and
+    repetition minima for zero-token constants, including nullish values.
+    [[#1004], [#1012]]
 
 [#1003]: https://github.com/dahlia/optique/issues/1003
 [#1004]: https://github.com/dahlia/optique/issues/1004
@@ -55,7 +58,9 @@ To be released.
     keep their visible alternatives optional.  Positive repetition minima
     remain required when their children are omitted optional options, while
     a single zero-token constant repetition stays optional, including constants
-    nested in exclusive branches.  Required option
+    nested in exclusive branches.  Alternatives remain required beside
+    `nonEmpty()` constants, nullish constant repetitions, and ambiguous empty
+    `or()` branches.  Required option
     aliases now use parentheses, such as `(-n | --name) STRING`, to preserve
     their grouping. [[#1004], [#1012]]
 

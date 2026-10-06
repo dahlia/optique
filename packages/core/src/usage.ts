@@ -185,6 +185,12 @@ export type UsageTerm =
      * The minimum number of times the term must occur.
      */
     readonly min: number;
+    /**
+     * Whether empty input can satisfy this repetition.  When omitted,
+     * infer it from the minimum and child usage.
+     * @since 1.0.12
+     */
+    readonly acceptsEmpty?: boolean;
   }
   | /**
    * An exclusive term, which represents a group of terms that are mutually
@@ -202,6 +208,12 @@ export type UsageTerm =
      * the list represents a zero-token alternative.
      */
     readonly terms: readonly Usage[];
+    /**
+     * Whether empty input can select this group.  This can be false even
+     * when individual branches accept it, for example for ambiguous matches.
+     * @since 1.0.12
+     */
+    readonly acceptsEmpty?: boolean;
   }
   /**
    * A literal term, which represents a fixed string value in the command-line
@@ -644,6 +656,7 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
     return { type: "optional", terms: normalized };
   } else if (term.type === "multiple") {
     return {
+      ...term,
       type: "multiple",
       terms: normalizeUsage(term.terms),
       min: term.min,
@@ -653,7 +666,10 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
     for (const usage of term.terms) {
       if (isImpossibleUsage(usage)) continue;
       const normalized = normalizeUsage(usage);
-      if (normalized.length >= 1 && normalized[0].type === "exclusive") {
+      if (
+        normalized.length >= 1 && normalized[0].type === "exclusive" &&
+        normalized[0].acceptsEmpty == null
+      ) {
         const rest = normalized.slice(1);
         for (const subUsage of normalized[0].terms) {
           terms.push([...subUsage, ...rest]);
@@ -667,7 +683,7 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
         terms.push(normalized);
       }
     }
-    return { type: "exclusive", terms };
+    return { ...term, type: "exclusive", terms };
   } else {
     // Clone leaf terms so the normalized output is referentially distinct
     // from the input.  Use a manual spread instead of cloneUsageTerm() to
@@ -692,6 +708,10 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
  */
 function isImpossibleUsage(usage: Usage, requiresItem = false): boolean {
   return usage.some((term) => {
+    if (
+      (term.type === "multiple" || term.type === "exclusive") &&
+      term.acceptsEmpty === false && !canConsumeUsage([term])
+    ) return true;
     if (term.type === "exclusive") {
       return term.terms.every((branch) =>
         isImpossibleUsage(branch, requiresItem)
@@ -700,8 +720,20 @@ function isImpossibleUsage(usage: Usage, requiresItem = false): boolean {
     if (term.type === "optional") {
       return requiresItem && isImpossibleUsage(term.terms, true);
     }
-    return term.type === "multiple" && (term.min > 0 || requiresItem) &&
-      isImpossibleUsage(term.terms, true);
+    return term.type === "multiple" &&
+      (term.min > 1 && !canConsumeUsage(term.terms) ||
+        (term.min > 0 || requiresItem) && isImpossibleUsage(term.terms, true));
+  });
+}
+
+/** Checks whether a usage sequence contains a path that can consume a token. */
+function canConsumeUsage(usage: Usage): boolean {
+  return usage.some((term) => {
+    if (term.type === "exclusive") return term.terms.some(canConsumeUsage);
+    if (term.type === "optional" || term.type === "multiple") {
+      return canConsumeUsage(term.terms);
+    }
+    return true;
   });
 }
 
@@ -762,12 +794,14 @@ export function cloneUsageTerm(term: UsageTerm): UsageTerm {
       return { type: "optional", terms: term.terms.map(cloneUsageTerm) };
     case "multiple":
       return {
+        ...term,
         type: "multiple",
         terms: term.terms.map(cloneUsageTerm),
         min: term.min,
       };
     case "exclusive":
       return {
+        ...term,
         type: "exclusive",
         terms: term.terms.map((u) => u.map(cloneUsageTerm)),
       };
@@ -817,7 +851,12 @@ function filterUsageForDisplay(
     if (term.type === "multiple") {
       const filtered = filterUsageForDisplay(term.terms, isHidden);
       if (filtered.length > 0) {
-        terms.push({ type: "multiple", terms: filtered, min: term.min });
+        terms.push({
+          ...term,
+          type: "multiple",
+          terms: filtered,
+          min: term.min,
+        });
       }
       continue;
     }
@@ -835,7 +874,7 @@ function filterUsageForDisplay(
         })
         .filter((branch) => branch.length > 0);
       if (filteredBranches.length > 0) {
-        terms.push({ type: "exclusive", terms: filteredBranches });
+        terms.push({ ...term, type: "exclusive", terms: filteredBranches });
       }
       continue;
     }
