@@ -320,7 +320,12 @@ function formatUsageTermAsRoffInternal(
     }
 
     case "exclusive": {
+      // As in formatUsage(), an alternative whose leading command is hidden
+      // is dropped as a whole, trailing terms included.
       const alternatives = term.terms
+        .filter((t) =>
+          !(t[0]?.type === "command" && isUsageHidden(t[0].hidden))
+        )
         .map((t) => formatUsageAsRoffInternal(t, false))
         .filter((s) => s !== "");
       if (alternatives.length === 0) return "";

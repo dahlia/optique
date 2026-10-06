@@ -72,6 +72,26 @@ describe("formatUsageTermAsRoff()", () => {
     );
   });
 
+  it("drops an alternative whose leading command is hidden", () => {
+    assert.equal(
+      formatUsageTermAsRoff({
+        type: "exclusive",
+        terms: [
+          [
+            { type: "command", name: "secret", hidden: true },
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
+          [{ type: "optional", terms: [{ type: "command", name: "open" }] }],
+        ],
+        acceptsEmpty: false,
+      }),
+      "\\fBopen\\fR",
+    );
+  });
+
   it("formats argument term", () => {
     const term: UsageTerm = { type: "argument", metavar: "FILE" };
     assert.equal(formatUsageTermAsRoff(term), "\\fIFILE\\fR");
