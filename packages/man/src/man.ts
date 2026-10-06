@@ -168,6 +168,8 @@ function formatCommandNameAsRoff(name: string): string {
 
 /**
  * Formats a single {@link UsageTerm} as roff markup for the SYNOPSIS section.
+ * Optionality follows the supplied usage wrappers.  Usage describes display
+ * structure; empty-input acceptance depends on the parser's runtime behavior.
  *
  * @param term The usage term to format.
  * @returns The roff-formatted string.
@@ -207,49 +209,6 @@ function hasSingleVisibleTermOfType(
     (t) => !("hidden" in t && isUsageHidden(t.hidden)),
   );
   return visible.length === 1 && visible[0].type === type;
-}
-
-/**
- * Checks whether a usage sequence allows zero tokens before hiding terms.
- * Hidden required terms still consume tokens; wrappers determine optionality.
- */
-function acceptsNoTokens(terms: Usage): boolean {
-  return terms.every((term) => {
-    switch (term.type) {
-      case "optional":
-      case "passthrough":
-        return true;
-      case "multiple":
-        if (term.acceptsEmpty != null) return term.acceptsEmpty;
-        // Omission cannot satisfy a positive minimum.  A child that produces
-        // an item without tokens can satisfy one iteration before parsing stops.
-        return term.min < 1 ||
-          term.min === 1 && canProduceZeroTokenItem(term.terms);
-      case "exclusive":
-        if (term.acceptsEmpty != null) return term.acceptsEmpty;
-        return term.terms.some(acceptsNoTokens);
-      default:
-        return false;
-    }
-  });
-}
-
-/** Checks for a zero-token item, rather than an omitted optional child. */
-function canProduceZeroTokenItem(terms: Usage): boolean {
-  return terms.every((term) => {
-    switch (term.type) {
-      case "optional":
-        return canProduceZeroTokenItem(term.terms);
-      case "multiple":
-        return term.acceptsEmpty !== false && term.min <= 1 &&
-          canProduceZeroTokenItem(term.terms);
-      case "exclusive":
-        return term.acceptsEmpty !== false &&
-          term.terms.some(canProduceZeroTokenItem);
-      default:
-        return false;
-    }
-  });
 }
 
 function formatUsageTermAsRoffInternal(
@@ -332,23 +291,12 @@ function formatUsageTermAsRoffInternal(
     }
 
     case "exclusive": {
-      const branches = term.terms.map((terms) => ({
-        terms,
-        text: formatUsageAsRoffInternal(terms, false),
-      }));
-      // Visible optional branches already express omission in their output.
-      // Only a disappearing zero-token branch needs enclosing brackets.
-      const hasEmptyBranch = branches.some(
-        ({ terms, text }) => text === "" && acceptsNoTokens(terms),
-      ) && term.acceptsEmpty !== false;
-      const alternatives = branches
-        .map(({ text }) => text)
+      const alternatives = term.terms
+        .map((t) => formatUsageAsRoffInternal(t, false))
         .filter((s) => s !== "");
       if (alternatives.length === 0) return "";
-      const inner = alternatives.length === 1
-        ? alternatives[0]
-        : `(${alternatives.join(" | ")})`;
-      return hasEmptyBranch ? `[${inner}]` : inner;
+      if (alternatives.length === 1) return alternatives[0];
+      return `(${alternatives.join(" | ")})`;
     }
 
     case "literal":

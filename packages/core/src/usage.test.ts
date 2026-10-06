@@ -2617,62 +2617,6 @@ describe("normalizeUsage", () => {
     });
   });
 
-  describe("impossible exclusive branches", () => {
-    const impossible: Usage = [{ type: "exclusive", terms: [] }];
-    const visible: Usage = [{ type: "option", names: ["--required"] }];
-
-    it("drops required repetition of an optional impossible child", () => {
-      assert.deepEqual(
-        normalizeUsage([{
-          type: "exclusive",
-          terms: [[{
-            type: "multiple",
-            min: 1,
-            terms: [{ type: "optional", terms: impossible }],
-          }], visible],
-        }]),
-        [{ type: "exclusive", terms: [visible] }],
-      );
-    });
-
-    it("drops a failing branch rather than making it an empty alternative", () => {
-      assert.deepEqual(
-        normalizeUsage([{
-          type: "exclusive",
-          terms: [impossible, visible],
-        }]),
-        [{ type: "exclusive", terms: [visible] }],
-      );
-    });
-
-    it("drops a sequence containing a failing term", () => {
-      assert.deepEqual(
-        normalizeUsage([{
-          type: "exclusive",
-          terms: [[...visible, ...impossible], visible],
-        }]),
-        [{ type: "exclusive", terms: [visible] }],
-      );
-    });
-
-    for (
-      const wrapper of [
-        { type: "optional", terms: impossible },
-        { type: "multiple", terms: impossible, min: 0 },
-      ] satisfies Usage
-    ) {
-      it(`preserves a zero-token ${wrapper.type} wrapper around failure`, () => {
-        assert.deepEqual(
-          normalizeUsage([{
-            type: "exclusive",
-            terms: [[wrapper], visible],
-          }]),
-          [{ type: "exclusive", terms: [[], visible] }],
-        );
-      });
-    }
-  });
-
   describe("sorting behavior", () => {
     it("should place commands first", () => {
       const usage: Usage = [
@@ -3529,22 +3473,23 @@ describe("property-based tests", () => {
     );
   });
 
-  it("normalizeUsage should not invent extracted names", () => {
+  it("normalizeUsage should preserve extracted names", () => {
     fc.assert(
       fc.property(usageArbitrary(2), (usage: Usage) => {
         const normalized = normalizeUsage(usage);
 
-        // Impossible branches may lose names when they are discarded.
-        for (
-          const extract of [
-            extractOptionNames,
-            extractCommandNames,
-            extractArgumentMetavars,
-          ]
-        ) {
-          const original = extract(usage);
-          for (const name of extract(normalized)) assert.ok(original.has(name));
-        }
+        assert.deepEqual(
+          extractOptionNames(normalized),
+          extractOptionNames(usage),
+        );
+        assert.deepEqual(
+          extractCommandNames(normalized),
+          extractCommandNames(usage),
+        );
+        assert.deepEqual(
+          extractArgumentMetavars(normalized),
+          extractArgumentMetavars(usage),
+        );
       }),
       propertyParameters,
     );

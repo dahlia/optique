@@ -781,7 +781,6 @@ import {
   type UsageTerm,
 } from "./usage.ts";
 import { collectLeadingCandidates } from "./usage-internals.ts";
-import { producesEmptyItem } from "./internal/empty-usage.ts";
 import { validateLabel } from "./validate.ts";
 
 function createUnexpectedInputErrorWithScopedSuggestions(
@@ -4091,13 +4090,7 @@ export function or(
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
-    usage: [{
-      type: "exclusive",
-      terms: parsers.map((p) => p.usage),
-      ...(parsers.filter((p) => producesEmptyItem(p.usage)).length > 1
-        ? { acceptsEmpty: false }
-        : {}),
-    }],
+    usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
     leadingNames: unionLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,

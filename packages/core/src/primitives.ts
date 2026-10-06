@@ -316,8 +316,7 @@ export function fail<T>(): Parser<"sync", T, undefined> {
     $stateType: [],
     mode: "sync",
     priority: 0,
-    // No alternatives can succeed, unlike constant()'s empty sequence.
-    usage: [{ type: "exclusive", terms: [] }],
+    usage: [],
     leadingNames: EMPTY_LEADING_NAMES,
     acceptingAnyToken: false,
     initialState: undefined,

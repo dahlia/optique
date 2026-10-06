@@ -6,12 +6,6 @@ links:
  -  Fixed `formatUsageTermAsRoff()`, `formatDocPageAsMan()`, and the
     `generateManPage*()` functions to render required options without optional
     brackets in the man page SYNOPSIS, including options in exclusive branches
-    and required repetitions.  Empty or hidden optional exclusive branches
-    keep their visible alternatives optional.  Positive repetition minima
-    remain required when their children are omitted optional options, while
-    a single zero-token constant repetition stays optional, including constants
-    nested in exclusive branches.  Alternatives remain required beside
-    `nonEmpty()` constants, nullish constant repetitions, and ambiguous empty
-    `or()` branches.  Required option
-    aliases now use parentheses, such as `(-n | --name) STRING`, to preserve
-    their grouping. [[#1004], [#1012]]
+    and required repetitions.  Required option aliases now use
+    parentheses, such as `(-n | --name) STRING`, to preserve their grouping.
+    [[#1004], [#1012]]

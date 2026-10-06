@@ -6391,15 +6391,11 @@ describe("nonEmpty", () => {
     assert.deepEqual(fragments, baseFragments);
   });
 
-  it("should retain child usage and record the consumption requirement", () => {
+  it("should preserve usage from inner parser", () => {
     const baseParser = option("-v", "--verbose");
     const nonEmptyParser = nonEmpty(baseParser);
 
-    assert.deepEqual(nonEmptyParser.usage, [{
-      type: "exclusive",
-      terms: [baseParser.usage],
-      acceptsEmpty: false,
-    }]);
+    assert.deepEqual(nonEmptyParser.usage, baseParser.usage);
   });
 
   it("should work with withDefault wrapper", () => {

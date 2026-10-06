@@ -5,7 +5,7 @@ import {
   generateManPageAsync,
   generateManPageSync,
 } from "./generator.ts";
-import { longestMatch, object, or, tuple } from "@optique/core/constructs";
+import { group, object, or, tuple } from "@optique/core/constructs";
 import {
   argument,
   command,
@@ -18,169 +18,45 @@ import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { defineProgram } from "@optique/core/program";
 import { parse, type Parser } from "@optique/core/parser";
-import {
-  multiple,
-  nonEmpty,
-  optional,
-  withDefault,
-} from "@optique/core/modifiers";
-import { cloneUsage, formatUsage } from "@optique/core/usage";
-import { formatUsageTermAsRoff } from "./man.ts";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import { formatUsage } from "@optique/core/usage";
 
 function getSynopsis(manPage: string): string {
   return manPage.split(".SH SYNOPSIS\n")[1].split("\n.SH ")[0].trimEnd();
 }
 
 describe("required options in SYNOPSIS", () => {
-  it("keeps generated alternatives required for a min-two constant repetition", () => {
-    const parser = or(multiple(constant("x"), { min: 2 }), flag("--visible"));
+  it("does not infer omission from a hidden exclusive branch", () => {
+    const parser = or(
+      optional(flag("--secret", { hidden: true })),
+      argument(string({ metavar: "FILE" })),
+    );
     assert.ok(!parse(parser, []).success);
     assert.equal(
       getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-      '.B "repro"\n\\fB\\-\\-visible\\fR',
+      '.B "repro"\n\\fIFILE\\fR',
     );
   });
 
-  for (const value of [null, undefined]) {
-    it(`keeps nullish constant repetitions required (${value})`, () => {
-      const parser = or(
-        multiple(constant(value), { min: 1 }),
-        flag("--visible"),
-      );
-      assert.ok(!parse(parser, []).success);
-      assert.equal(
-        formatUsageTermAsRoff(parser.usage[0]),
-        "\\fB\\-\\-visible\\fR",
-      );
-      assert.equal(
-        getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-        '.B "repro"\n\\fB\\-\\-visible\\fR',
-      );
-    });
-  }
-
-  it("preserves nonEmpty's consumption requirement", () => {
-    const parser = or(nonEmpty(constant("x")), flag("--visible"));
-    assert.ok(!parse(parser, []).success);
+  it("keeps displayed terms stable when document visibility changes", () => {
+    const parser = or(
+      constant("a"),
+      constant("b"),
+      argument(string({ metavar: "FILE" })),
+    );
+    const grouped = group("g", parser, { hidden: "doc" });
+    assert.ok(!parse(grouped, []).success);
+    const options = { name: "repro", section: 1 as const };
     assert.equal(
-      formatUsageTermAsRoff(parser.usage[0]),
-      "\\fB\\-\\-visible\\fR",
+      getSynopsis(generateManPageSync(grouped, options)),
+      getSynopsis(generateManPageSync(parser, options)),
     );
     assert.equal(
-      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-      '.B "repro"\n\\fB\\-\\-visible\\fR',
+      getSynopsis(generateManPageSync(grouped, options)),
+      '.B "repro"\n\\fIFILE\\fR',
     );
   });
 
-  it("distinguishes ambiguous or branches from longestMatch tie breaking", () => {
-    const ambiguous = or(constant("a"), constant("b"), flag("--visible"));
-    const first = longestMatch(constant("a"), constant("b"), flag("--visible"));
-    assert.ok(!parse(ambiguous, []).success);
-    assert.ok(parse(first, []).success);
-    assert.equal(
-      formatUsageTermAsRoff(ambiguous.usage[0]),
-      "\\fB\\-\\-visible\\fR",
-    );
-    assert.equal(
-      formatUsageTermAsRoff(cloneUsage(ambiguous.usage)[0]),
-      "\\fB\\-\\-visible\\fR",
-    );
-    assert.equal(
-      formatUsageTermAsRoff(first.usage[0]),
-      "[\\fB\\-\\-visible\\fR]",
-    );
-    assert.equal(
-      getSynopsis(
-        generateManPageSync(ambiguous, { name: "repro", section: 1 }),
-      ),
-      '.B "repro"\n\\fB\\-\\-visible\\fR',
-    );
-    assert.equal(
-      getSynopsis(generateManPageSync(first, { name: "repro", section: 1 })),
-      '.B "repro"\n[\\fB\\-\\-visible\\fR]',
-    );
-  });
-
-  it("keeps a flag required beside a repetition of optional failure", () => {
-    const repeated = multiple(optional(fail<true>()), { min: 1 });
-    const parser = or(repeated, flag("--visible"));
-    assert.ok(!parse(repeated, []).success);
-    assert.ok(!parse(parser, []).success);
-    assert.equal(
-      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-      '.B "repro"\n\\fB\\-\\-visible\\fR',
-    );
-  });
-
-  it("recognizes a zero-token repetition item through nested alternatives", () => {
-    const repeated = multiple(or(fail<string>(), constant("x")), { min: 1 });
-    const parser = or(repeated, flag("--visible"));
-    assert.deepEqual(parse(repeated, []), { success: true, value: ["x"] });
-    assert.ok(parse(parser, []).success);
-    const term = parser.usage[0];
-    assert.ok(term != null);
-    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-visible\\fR]");
-    assert.equal(
-      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-      '.B "repro"\n[\\fB\\-\\-visible\\fR]',
-    );
-  });
-
-  for (const min of [1, 2]) {
-    it(`formats a zero-token constant repetition with min ${min} directly`, () => {
-      const repeated = multiple(constant("x"), { min });
-      const parser = or(repeated, flag("--visible"));
-      const term = parser.usage[0];
-      assert.ok(term != null);
-      if (min === 1) {
-        assert.deepEqual(parse(repeated, []), { success: true, value: ["x"] });
-        assert.ok(parse(parser, []).success);
-      } else {
-        assert.ok(!parse(repeated, []).success);
-        assert.ok(!parse(parser, []).success);
-      }
-      const visible = "\\fB\\-\\-visible\\fR";
-      assert.equal(
-        formatUsageTermAsRoff(term),
-        min === 1 ? `[${visible}]` : visible,
-      );
-    });
-  }
-
-  for (const min of [1, 2]) {
-    it(`keeps a flag required beside a hidden optional repetition with min ${min}`, () => {
-      const hidden = multiple(optional(flag("--secret", { hidden: true })), {
-        min,
-      });
-      const parser = or(hidden, flag("--visible"));
-      assert.ok(!parse(hidden, []).success);
-      assert.ok(!parse(parser, []).success);
-      assert.ok(parse(parser, ["--visible"]).success);
-      assert.equal(
-        getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-        '.B "repro"\n\\fB\\-\\-visible\\fR',
-      );
-    });
-  }
-
-  it("keeps a flag required beside an always-failing branch", () => {
-    const parser = or(fail<true>(), flag("--required"));
-    assert.ok(!parse(parser, []).success);
-    assert.ok(parse(parser, ["--required"]).success);
-    assert.equal(
-      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-      '.B "repro"\n\\fB\\-\\-required\\fR',
-    );
-  });
-
-  it("keeps a flag optional beside an optional always-failing branch", () => {
-    const parser = or(optional(fail<true>()), flag("--visible"));
-    assert.ok(parse(optional(fail<true>()), []).success);
-    assert.equal(
-      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-      '.B "repro"\n[\\fB\\-\\-visible\\fR]',
-    );
-  });
   it("renders a required value option without brackets", () => {
     const parser = object({ name: option("--name", string()) });
     assert.ok(!parse(parser, []).success);
@@ -266,35 +142,6 @@ describe("required options in SYNOPSIS", () => {
       '.B "repro"\n(\\fB\\-v\\fR | \\fB\\-\\-verbose\\fR) ...',
     );
   });
-
-  it("keeps a flag optional when an exclusive branch accepts no arguments", () => {
-    const parser = or(flag("-a", "--all"), constant("fallback"));
-    assert.ok(parse(parser, []).success);
-    assert.ok(parse(parser, ["--all"]).success);
-    assert.equal(
-      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-      '.B "repro"\n[(\\fB\\-a\\fR | \\fB\\-\\-all\\fR)]',
-    );
-  });
-
-  const hiddenBranches: readonly (readonly [
-    string,
-    Parser<"sync", unknown, unknown>,
-  ])[] = [
-    ["optional", optional(flag("--secret", { hidden: true }))],
-    ["zero-minimum repeated", multiple(flag("--secret", { hidden: true }))],
-  ];
-  for (const [name, hidden] of hiddenBranches) {
-    it(`keeps a visible flag optional beside a hidden ${name} branch`, () => {
-      const parser = or(hidden, flag("--visible"));
-      assert.ok(parse(hidden, []).success);
-      assert.ok(parse(parser, ["--visible"]).success);
-      assert.equal(
-        getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
-        '.B "repro"\n[\\fB\\-\\-visible\\fR]',
-      );
-    });
-  }
 });
 
 describe("generateManPage()", () => {
