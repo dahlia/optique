@@ -462,8 +462,9 @@ function resolveProgramInput<
  * instead of `console.error()` for diagnostics.  Both console methods can lose
  * large piped output.  Let the process exit naturally.  If explicit termination
  * is necessary, wait for the completion callbacks of all pending stdout/stderr
- * writes before calling `process.exit()`; a delay is not a flush guarantee.  Waiting after `console.log()` or `console.error()` cannot
- * recover dropped bytes.
+ * writes before calling `process.exit()`; a delay is not a flush guarantee.
+ * Waiting after `console.log()` or `console.error()` cannot recover dropped
+ * bytes.
  *
  * Setting `colors` and `maxWidth` explicitly does not avoid this Bun bug:
  * importing `node:process`, which this module does, was enough to trigger it
