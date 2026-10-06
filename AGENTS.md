@@ -166,6 +166,10 @@ When adding a new package to the monorepo, update the following files:
 
  -  *README.md* (root): Add the package to the Packages table
  -  *AGENTS.md*: Add the package to the Package structure list (if applicable)
+ -  *sacho.toml*: Add a `[[sections]]` entry for the package, keeping it in the
+    same order as the package list.  Set `id` to the package name (for example,
+    `@optique/foo`), `directory` to the package directory name, and `paths` to
+    `["packages/foo/**"]`
  -  *docs/package.json*: Add `"@optique/<name>": "workspace:"` to
     `devDependencies` (required for Twoslash type checking in documentation)
 
@@ -183,6 +187,52 @@ This project follows test-driven development (TDD) practices:
  -  *Regression tests for bugs*: When fixing bugs, first write a regression
     test that reproduces the bug.  Confirm that the test fails, then fix the
     bug and verify the test passes.
+
+### Changelog entries
+
+Optique uses [Sacho] to keep unreleased changelog entries as small Markdown
+fragments in *changes.d/*.  Add a fragment for every user-visible change and
+commit it with the code it describes.  Do not edit the unreleased section of
+*CHANGES.md* directly.
+
+Create a fragment with a short, topic-based name in the section of the
+package it affects.  Section ids are package names, as listed in *sacho.toml*:
+
+~~~~ bash
+sacho add --section @optique/core clearer-errors
+~~~~
+
+Write one top-level unordered list in the generated file.  Describe the public
+effect for someone upgrading Optique, not the implementation work or commit
+history.  Start with a past-tense verb and finish the first paragraph with any
+related issue and pull request references.  If you are an outside contributor,
+add your preferred name after the pull request reference:
+
+~~~~ markdown
+ -  Fixed option errors to include the invalid field name, making a bad setting
+    easier to locate.  [[#123], [#456] by Jane Doe]
+~~~~
+
+Use the same fragment when the change evolves before release.  Changes with no
+user-visible effect, such as an internal refactor or a test-only change, do not
+need an entry.  If a branch-level changelog check requires an explicit
+exemption, add `Changelog: none` to the commit message.
+
+Format the fragments, preview the compiled result, and check it before
+committing:
+
+~~~~ bash
+sacho fmt
+sacho preview
+sacho check
+~~~~
+
+Read [Sacho's philosophy] for the reasoning behind these rules and the
+[everyday workflow] for more detail.
+
+[Sacho]: https://sacho.dev/
+[Sacho's philosophy]: https://sacho.dev/philosophy.md
+[everyday workflow]: https://sacho.dev/guide/everyday-workflow.md
 
 ### Commit messages
 

@@ -850,13 +850,17 @@ export function formatDocPage(
         // when the term extends past termWidth.
         const prefixWidth = getDisplayWidth(prefix);
         const suffixWidth = getDisplayWidth(suffix);
+        let defaultPrefix = prefix;
         let defaultStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
           const effectiveLastW = lastW + currentExtraOffset();
           if (effectiveLastW + prefixWidth >= descColumnWidth) {
+            // The prefix starts a new line, so its leading whitespace no
+            // longer separates it from anything; drop it.
             description += "\n";
-            defaultStartWidth = prefixWidth;
+            defaultPrefix = prefix.trimStart();
+            defaultStartWidth = getDisplayWidth(defaultPrefix);
           } else {
             defaultStartWidth = effectiveLastW + prefixWidth;
           }
@@ -885,7 +889,7 @@ export function formatDocPage(
           entry.default,
           defaultFormatOptions,
         );
-        const defaultText = `${prefix}${defaultContent}${suffix}`;
+        const defaultText = `${defaultPrefix}${defaultContent}${suffix}`;
         const formattedDefault = options.colors
           ? `\x1b[2m${defaultText}\x1b[0m`
           : defaultText;
@@ -938,14 +942,18 @@ export function formatDocPage(
         const choicesPrefixWidth = getDisplayWidth(prefix);
         const choicesSuffixWidth = getDisplayWidth(suffix);
         const choicesLabelWidth = getDisplayWidth(label);
+        let choicesHeading = `${prefix}${label}`;
         let choicesStartWidth: number | undefined;
         if (descColumnWidth != null) {
           const lastW = lastLineVisibleLength(description);
           const effectiveLastW = lastW + currentExtraOffset();
           const prefixLabelLen = choicesPrefixWidth + choicesLabelWidth;
           if (effectiveLastW + prefixLabelLen >= descColumnWidth) {
+            // The heading starts a new line, so its leading whitespace,
+            // which may span both the prefix and the label, is dropped.
             description += "\n";
-            choicesStartWidth = prefixLabelLen;
+            choicesHeading = choicesHeading.trimStart();
+            choicesStartWidth = getDisplayWidth(choicesHeading);
           } else {
             choicesStartWidth = effectiveLastW + prefixLabelLen;
           }
@@ -972,7 +980,7 @@ export function formatDocPage(
           truncatedTerms,
           choicesFormatOptions,
         );
-        const choicesText = `${prefix}${label}${choicesDisplay}${suffix}`;
+        const choicesText = `${choicesHeading}${choicesDisplay}${suffix}`;
         const formattedChoices = options.colors
           ? `\x1b[2m${choicesText}\x1b[0m`
           : choicesText;
