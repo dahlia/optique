@@ -220,7 +220,8 @@ function acceptsNoTokens(terms: Usage): boolean {
       case "passthrough":
         return true;
       case "multiple":
-        return term.min < 1 || acceptsNoTokens(term.terms);
+        // A zero-consuming optional item does not satisfy a positive minimum.
+        return term.min < 1;
       case "exclusive":
         return term.terms.some(acceptsNoTokens);
       default:

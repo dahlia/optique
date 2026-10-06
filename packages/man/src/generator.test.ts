@@ -26,6 +26,22 @@ function getSynopsis(manPage: string): string {
 }
 
 describe("required options in SYNOPSIS", () => {
+  for (const min of [1, 2]) {
+    it(`keeps a flag required beside a hidden optional repetition with min ${min}`, () => {
+      const hidden = multiple(optional(flag("--secret", { hidden: true })), {
+        min,
+      });
+      const parser = or(hidden, flag("--visible"));
+      assert.ok(!parse(hidden, []).success);
+      assert.ok(!parse(parser, []).success);
+      assert.ok(parse(parser, ["--visible"]).success);
+      assert.equal(
+        getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+        '.B "repro"\n\\fB\\-\\-visible\\fR',
+      );
+    });
+  }
+
   it("keeps a flag required beside an always-failing branch", () => {
     const parser = or(fail<true>(), flag("--required"));
     assert.ok(!parse(parser, []).success);

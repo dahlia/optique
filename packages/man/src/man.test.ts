@@ -459,7 +459,7 @@ describe("formatUsageTermAsRoff()", () => {
           type: "optional",
           terms: [{ type: "option", names: ["--secret"], hidden: true }],
         }],
-      }], true],
+      }], false],
       ["positive-minimum repetition of required terms", [{
         type: "multiple",
         min: 1,
