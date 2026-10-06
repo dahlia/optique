@@ -160,6 +160,20 @@ describe("resolveUsageForDisplay()", () => {
     assert.equal(formatUsage("app", resolved), "app ([FILE] | DIR)");
   });
 
+  it("ignores an alternative whose leading command is hidden", () => {
+    // Display drops the whole "secret" alternative, so it cannot keep the
+    // optional "open" alternative from being drawn as required.
+    const usage: Usage = [{
+      type: "exclusive",
+      terms: [
+        [{ type: "command", name: "secret", hidden: true }, optionalFile],
+        [{ type: "optional", terms: [{ type: "command", name: "open" }] }],
+      ],
+      acceptsEmpty: false,
+    }];
+    assert.equal(formatUsage("app", usage), "app (open)");
+  });
+
   it("depends on the visibility context", () => {
     const docHidden: UsageTerm = {
       type: "option",

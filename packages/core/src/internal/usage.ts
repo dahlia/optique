@@ -60,6 +60,22 @@ function projectTerms(
   return { visible, omissible, hidesRequired };
 }
 
+/**
+ * Projects an alternative of an exclusive term.  Display filtering drops an
+ * alternative whose leading command is hidden as a whole, trailing terms
+ * included.
+ */
+function projectBranch(
+  branch: Usage,
+  isHidden: HiddenPredicate,
+): Projection {
+  const first = branch[0];
+  if (first?.type === "command" && isHidden(first.hidden)) {
+    return { ...EMPTY, hidesRequired: true };
+  }
+  return projectTerms(branch, isHidden);
+}
+
 function projectTerm(term: UsageTerm, isHidden: HiddenPredicate): Projection {
   if (isHiddenLeaf(term, isHidden)) {
     return {
@@ -96,7 +112,7 @@ function projectTerm(term: UsageTerm, isHidden: HiddenPredicate): Projection {
       let omissible = false;
       let hidesRequired = false;
       for (const branch of term.terms) {
-        const projection = projectTerms(branch, isHidden);
+        const projection = projectBranch(branch, isHidden);
         hidesRequired ||= projection.hidesRequired;
         if (!projection.visible) continue;
         visible = true;
@@ -167,7 +183,7 @@ function resolveTerm(term: UsageTerm, isHidden: HiddenPredicate): UsageTerm {
         // terms.  Branches without visible terms are dropped by display
         // filtering anyway.
         const visible = branches.filter((branch) =>
-          projectTerms(branch, isHidden).visible
+          projectBranch(branch, isHidden).visible
         );
         return {
           type: "optional",
@@ -178,7 +194,7 @@ function resolveTerm(term: UsageTerm, isHidden: HiddenPredicate): UsageTerm {
       }
       const required: Usage[] = [];
       for (const branch of branches) {
-        const branchProjection = projectTerms(branch, isHidden);
+        const branchProjection = projectBranch(branch, isHidden);
         if (!branchProjection.visible || !branchProjection.omissible) {
           required.push(branch);
           continue;
