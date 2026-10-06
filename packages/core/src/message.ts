@@ -6,7 +6,7 @@ import {
   serializeTokens,
   type TerminalToken,
 } from "./terminal-internal.ts";
-import { getDisplayWidth } from "./displaywidth.ts";
+import { getDisplayWidth, stripAnsi } from "./displaywidth.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 
 /**
@@ -705,6 +705,7 @@ function renderMessage(
                 text: match[0],
                 width: getDisplayWidth(match[0]),
                 scopes: [],
+                trimOnWrap: true,
               };
             }
           }
@@ -714,7 +715,7 @@ function renderMessage(
 
           // Handle whitespace-only text specially to preserve spaces
           if (normalizedText.trim() === "" && normalizedText.length > 0) {
-            yield { text: " ", width: 1, scopes: [] };
+            yield { text: " ", width: 1, scopes: [], trimOnWrap: true };
           } else {
             wordPattern.lastIndex = 0;
             while (true) {
@@ -724,6 +725,7 @@ function renderMessage(
                 text: match[0],
                 width: getDisplayWidth(match[0]),
                 scopes: [],
+                trimOnWrap: true,
               };
             }
           }
@@ -739,21 +741,59 @@ function renderMessage(
 
   const tokens: TerminalToken[] = [];
   let totalWidth = initialWidth;
-  for (const token of stream()) {
+  // Set when an automatic wrap fell on a whitespace-only token.  The newline
+  // is deferred until the next token so that it is neither left dangling at
+  // the end nor doubled by a hard line break.
+  let pendingWrap = false;
+  // Set while an automatically wrapped line has no visible content yet, so
+  // that a separator after a zero-width token (e.g. an empty value) is still
+  // trimmed.
+  let atWrappedLineStart = false;
+  for (let token of stream()) {
+    // Handle hard line breaks (marked with width -1)
     if (token.width === -1) {
       tokens.push(token);
       totalWidth = 0;
+      pendingWrap = false;
+      atWrappedLineStart = false;
       continue;
     }
-    if (
-      options.maxWidth != null && totalWidth > 0 &&
-      totalWidth + token.width > options.maxWidth
-    ) {
+
+    // Handle automatic word wrapping
+    const wraps = pendingWrap || options.maxWidth != null &&
+        totalWidth > 0 && totalWidth + token.width > options.maxWidth;
+    if ((wraps || atWrappedLineStart) && token.trimOnWrap) {
+      // Drop the whitespace that separated this token from the previous
+      // line so that the new line starts at its first column.
+      const text = token.text.trimStart();
+      token = {
+        ...token,
+        text,
+        width: token.width -
+          getDisplayWidth(token.text.slice(0, token.text.length - text.length)),
+      };
+      if (text === "") {
+        if (wraps) pendingWrap = true;
+        continue;
+      }
+    }
+    // A token with nothing to print (e.g. an empty value, possibly wrapped in
+    // ANSI styling) must not flush a deferred wrap; that would leave a
+    // dangling newline, or a blank line before a hard break.  Its styling
+    // stays at the end of the previous line.
+    if (pendingWrap && stripAnsi(token.text) === "") {
+      tokens.push(token);
+      continue;
+    }
+    if (wraps) {
       tokens.push({ text: "\n", width: -1, scopes: [] });
       totalWidth = 0;
+      pendingWrap = false;
+      atWrappedLineStart = true;
     }
     tokens.push(token);
     totalWidth += token.width;
+    if (token.width > 0) atWrappedLineStart = false;
   }
   return serializeTokens(
     tokens,

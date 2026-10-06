@@ -26,6 +26,23 @@ describe("environment documentation", () => {
     assert.equal(render({ showEnvironment: false }), render());
   });
 
+  it("drops the prefix's leading space when the names wrap", () => {
+    const wide: DocPage = {
+      sections: [{
+        entries: [{ ...entry, description: message`Verbosity level.` }],
+      }],
+    };
+    assert.equal(
+      formatDocPage("app", wide, {
+        colors: false,
+        maxWidth: 50,
+        showEnvironment: true,
+      }),
+      "\n  --level LEVEL               Verbosity level.\n" +
+        "                              [env: APP_LEVEL]\n",
+    );
+  });
+
   it("renders inline names after defaults and choices", () => {
     const options: DocPageFormatOptions = {
       showEnvironment: true,

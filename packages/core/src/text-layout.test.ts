@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as fc from "fast-check";
-import { measureText, placeText } from "./text-layout.ts";
+import { measureText, placeText, trimLeadingSpace } from "./text-layout.ts";
 
 const pieces = fc.array(fc.constantFrom(
   "a",
@@ -103,5 +103,26 @@ describe("placeText", () => {
       }),
       { seed: 908, numRuns: 300 },
     );
+  });
+});
+
+describe("trimLeadingSpace", () => {
+  it("should drop the whitespace that begins the text", () => {
+    assert.equal(trimLeadingSpace(" [default: x]"), "[default: x]");
+    assert.equal(trimLeadingSpace(" \t (x)"), "(x)");
+    assert.equal(trimLeadingSpace("[x]"), "[x]");
+  });
+
+  it("should keep escape sequences before the whitespace", () => {
+    assert.equal(trimLeadingSpace("\x1b[2m [\x1b[0m"), "\x1b[2m[\x1b[0m");
+    assert.equal(
+      trimLeadingSpace("\x1b]8;;https://example.com\x07 link"),
+      "\x1b]8;;https://example.com\x07link",
+    );
+  });
+
+  it("should keep a leading line feed and whitespace after it", () => {
+    assert.equal(trimLeadingSpace("\n [x]"), "\n [x]");
+    assert.equal(trimLeadingSpace(" \n [x]"), "\n [x]");
   });
 });

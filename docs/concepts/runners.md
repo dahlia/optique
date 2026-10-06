@@ -1287,6 +1287,16 @@ function automatically:
  -  Exits with code `1` (or custom) for parse errors
  -  Never returns on errors by default (calls `process.exit()`)
 
+On Node.js and Bun on POSIX systems, when standard output or standard error
+is a pipe or a file, the default writers write directly to its file
+descriptor and wait until the whole text has been written before the
+process exits.  This keeps large help pages, completion scripts, and error
+messages intact when they are piped into a slow reader, but it also means
+the runner blocks while the reader is behind.  Terminals, Windows, and Deno
+(whose streams do not lose output on exit) keep using the stream's
+`write()` method.  Output that your own code has already queued in
+`process.stdout` or `process.stderr` is not flushed before exiting.
+
 You can override this process integration by injecting custom handlers:
 
  -  `stdout`: controls where help/version/completion output is written
@@ -1332,6 +1342,76 @@ Tests rarely need to assemble those handlers by hand.  The `captureRun()`
 helper from *@optique/testing/run* packages exactly this pattern, returning the
 captured output and exit code instead of writing to process streams.  See
 [*Testing*](./testing.md) for the rest of the testing helpers.
+
+### Piped application output on Bun
+
+On affected Bun versions, importing *@optique/run* can cause large
+`console.log()` output to be silently truncated when piped to another process.
+Parsing can succeed and the application can exit naturally with code `0` while
+still losing output.  [Bun issue #36419] reports this behavior on macOS arm64
+with Bun 1.3.14 and 1.4.2.
+
+Large `console.error()` output to piped stderr is affected too; [Bun PR #43868]
+includes tests for both `console.log()` and `console.error()`.
+
+Accessing `process.stdout` or `process.stderr` makes the corresponding pipe
+nonblocking, and Bun's native console writer can drop the unwritten remainder
+when the pipe is full.  In tests with Bun 1.3.14, importing `node:process` alone
+was enough to trigger the problem.
+*@optique/run* imports that module and reads stdout's terminal capabilities.
+Setting `colors` and `maxWidth` explicitly to skip TTY detection does not avoid
+the import's effect.
+
+Write application data through `process.stdout.write()` instead of
+`console.log()`, then let the process exit naturally:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { run } from "@optique/run";
+import process from "node:process";
+
+const parser = object({});
+const result = run(parser);
+process.stdout.write(`${JSON.stringify(result)}\n`);
+~~~~
+
+For diagnostics, use `process.stderr.write()` instead of `console.error()` and
+let the process exit naturally.
+
+If your application code must call `process.exit()`, wait for the completion
+callbacks of all pending stdout/stderr writes first.  For example, when this is
+the only pending write:
+
+~~~~ typescript twoslash
+import process from "node:process";
+
+const result = { data: "x".repeat(200_000) };
+await new Promise<void>((resolve, reject) => {
+  process.stdout.write(`${JSON.stringify(result)}\n`, (error) => {
+    if (error != null) reject(error);
+    else resolve();
+  });
+});
+process.exit(0);
+~~~~
+
+An arbitrary delay is not a flush guarantee.  Waiting after `console.log()` or
+`console.error()` cannot recover bytes that Bun has already dropped.
+
+Custom `stdout`/`stderr` handlers must finish writing synchronously before
+returning when using the default `onExit`: the runner invokes it immediately
+after an output handler returns.  The `onExit` hook is synchronous and cannot
+await writes.  To use asynchronous custom writers, record their completion
+promises and throw an exception carrying the exit code from `onExit`.  Catch
+that exception outside the runner, await the recorded promises, then call
+`process.exit()` with that code.  Optique's default writers have the behavior
+described in [Error handling behavior](#error-handling-behavior).
+
+The upstream fix was merged in [Bun PR #43868].  Check whether your Bun release
+includes it before relying on piped console output.
+
+[Bun issue #36419]: https://github.com/oven-sh/bun/issues/36419
+[Bun PR #43868]: https://github.com/oven-sh/bun/pull/43868
 
 
 Async parser execution
