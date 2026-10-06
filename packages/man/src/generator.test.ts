@@ -5,10 +5,11 @@ import {
   generateManPageAsync,
   generateManPageSync,
 } from "./generator.ts";
-import { object } from "@optique/core/constructs";
+import { group, object, or, tuple } from "@optique/core/constructs";
 import {
   argument,
   command,
+  constant,
   fail,
   flag,
   option,
@@ -16,7 +17,132 @@ import {
 import { choice, integer, string } from "@optique/core/valueparser";
 import { message } from "@optique/core/message";
 import { defineProgram } from "@optique/core/program";
-import type { Parser } from "@optique/core/parser";
+import { parse, type Parser } from "@optique/core/parser";
+import { multiple, optional, withDefault } from "@optique/core/modifiers";
+import { formatUsage } from "@optique/core/usage";
+
+function getSynopsis(manPage: string): string {
+  return manPage.split(".SH SYNOPSIS\n")[1].split("\n.SH ")[0].trimEnd();
+}
+
+describe("required options in SYNOPSIS", () => {
+  it("does not infer omission from a hidden exclusive branch", () => {
+    const parser = or(
+      optional(flag("--secret", { hidden: true })),
+      argument(string({ metavar: "FILE" })),
+    );
+    assert.ok(!parse(parser, []).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n\\fIFILE\\fR',
+    );
+  });
+
+  it("keeps displayed terms stable when document visibility changes", () => {
+    const parser = or(
+      constant("a"),
+      constant("b"),
+      argument(string({ metavar: "FILE" })),
+    );
+    const grouped = group("g", parser, { hidden: "doc" });
+    assert.ok(!parse(grouped, []).success);
+    const options = { name: "repro", section: 1 as const };
+    assert.equal(
+      getSynopsis(generateManPageSync(grouped, options)),
+      getSynopsis(generateManPageSync(parser, options)),
+    );
+    assert.equal(
+      getSynopsis(generateManPageSync(grouped, options)),
+      '.B "repro"\n\\fIFILE\\fR',
+    );
+  });
+
+  it("renders a required value option without brackets", () => {
+    const parser = object({ name: option("--name", string()) });
+    assert.ok(!parse(parser, []).success);
+    assert.deepEqual(parse(parser, ["--name", "Ada"]), {
+      success: true,
+      value: { name: "Ada" },
+    });
+    assert.equal(formatUsage("repro", parser.usage), "repro --name STRING");
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n\\fB\\-\\-name\\fR \\fISTRING\\fR',
+    );
+  });
+
+  it("distinguishes a required flag from an optional Boolean option", () => {
+    const parser = object({
+      force: flag("-f", "--force"),
+      verbose: option("-v", "--verbose"),
+    });
+    assert.ok(!parse(parser, []).success);
+    assert.ok(parse(parser, ["--force"]).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n(\\fB\\-f\\fR | \\fB\\-\\-force\\fR) [\\fB\\-v\\fR | \\fB\\-\\-verbose\\fR]',
+    );
+  });
+
+  it("keeps explicitly optional and defaulted value options bracketed", () => {
+    const parser = object({
+      alpha: optional(option("-a", "--alpha", string())),
+      beta: withDefault(option("--beta", string()), "default"),
+    });
+    assert.ok(parse(parser, []).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n[\\fB\\-a\\fR | \\fB\\-\\-alpha\\fR \\fISTRING\\fR] [\\fB\\-\\-beta\\fR \\fISTRING\\fR]',
+    );
+  });
+
+  it("keeps the flag required in an exclusive branch with an optional topic", () => {
+    const parser = or(
+      argument(string({ metavar: "FILE" })),
+      tuple([
+        flag("--help"),
+        optional(argument(string({ metavar: "TOPIC" }))),
+      ]),
+    );
+    assert.equal(
+      formatUsage("repro", parser.usage),
+      "repro (FILE | --help [TOPIC])",
+    );
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n(\\fIFILE\\fR | \\fB\\-\\-help\\fR [\\fITOPIC\\fR])',
+    );
+  });
+
+  it("keeps repeated aliased options required when min is one", () => {
+    const parser = multiple(option("-t", "--tag", string()), { min: 1 });
+    assert.ok(!parse(parser, []).success);
+    assert.ok(parse(parser, ["--tag", "one", "-t", "two"]).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n(\\fB\\-t\\fR | \\fB\\-\\-tag\\fR) \\fISTRING\\fR ...',
+    );
+  });
+
+  it("keeps repeated options optional when min is zero", () => {
+    const parser = multiple(option("-t", "--tag", string()), { min: 0 });
+    assert.ok(parse(parser, []).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n[\\fB\\-t\\fR | \\fB\\-\\-tag\\fR \\fISTRING\\fR ...]',
+    );
+  });
+
+  it("keeps repeated flags required when min is one", () => {
+    const parser = multiple(flag("-v", "--verbose"), { min: 1 });
+    assert.ok(!parse(parser, []).success);
+    assert.ok(parse(parser, ["-v", "--verbose"]).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n(\\fB\\-v\\fR | \\fB\\-\\-verbose\\fR) ...',
+    );
+  });
+});
 
 describe("generateManPage()", () => {
   it("generates man page from simple option parser", () => {
