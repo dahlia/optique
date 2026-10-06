@@ -52,7 +52,8 @@ To be released.
     brackets in the man page SYNOPSIS, including options in exclusive branches
     and required repetitions.  Empty or hidden optional exclusive branches
     keep their visible alternatives optional.  Positive repetition minima
-    remain required even when their children are optional.  Required option
+    remain required when their children are omitted optional options, while
+    a single zero-token constant repetition stays optional.  Required option
     aliases now use parentheses, such as `(-n | --name) STRING`, to preserve
     their grouping. [[#1004], [#1012]]
 

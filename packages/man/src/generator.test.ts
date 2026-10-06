@@ -20,12 +20,34 @@ import { defineProgram } from "@optique/core/program";
 import { parse, type Parser } from "@optique/core/parser";
 import { multiple, optional, withDefault } from "@optique/core/modifiers";
 import { formatUsage } from "@optique/core/usage";
+import { formatUsageTermAsRoff } from "./man.ts";
 
 function getSynopsis(manPage: string): string {
   return manPage.split(".SH SYNOPSIS\n")[1].split("\n.SH ")[0].trimEnd();
 }
 
 describe("required options in SYNOPSIS", () => {
+  for (const min of [1, 2]) {
+    it(`formats a zero-token constant repetition with min ${min} directly`, () => {
+      const repeated = multiple(constant("x"), { min });
+      const parser = or(repeated, flag("--visible"));
+      const term = parser.usage[0];
+      assert.ok(term != null);
+      if (min === 1) {
+        assert.deepEqual(parse(repeated, []), { success: true, value: ["x"] });
+        assert.ok(parse(parser, []).success);
+      } else {
+        assert.ok(!parse(repeated, []).success);
+        assert.ok(!parse(parser, []).success);
+      }
+      const visible = "\\fB\\-\\-visible\\fR";
+      assert.equal(
+        formatUsageTermAsRoff(term),
+        min === 1 ? `[${visible}]` : visible,
+      );
+    });
+  }
+
   for (const min of [1, 2]) {
     it(`keeps a flag required beside a hidden optional repetition with min ${min}`, () => {
       const hidden = multiple(optional(flag("--secret", { hidden: true })), {

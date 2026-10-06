@@ -221,7 +221,9 @@ function acceptsNoTokens(terms: Usage): boolean {
         return true;
       case "multiple":
         // A zero-consuming optional item does not satisfy a positive minimum.
-        return term.min < 1;
+        // An empty child sequence (constant()) can produce one item, but the
+        // parser stops after that zero-consuming iteration.
+        return term.min < 1 || term.min === 1 && term.terms.length === 0;
       case "exclusive":
         return term.terms.some(acceptsNoTokens);
       default:
