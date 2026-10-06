@@ -3,6 +3,7 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/output.ts",
     "src/run.ts",
     "src/valueparser.ts",
   ],

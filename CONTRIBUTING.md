@@ -255,10 +255,11 @@ fragments in *changes.d/*.  Add a fragment for every user-visible change and
 commit it with the code it describes.  Do not edit the unreleased section of
 *CHANGES.md* directly.
 
-Create a fragment with a short, topic-based name:
+Create a fragment with a short, topic-based name in the section of the
+package it affects.  Section ids are package names, as listed in *sacho.toml*:
 
 ~~~~ bash
-sacho add clearer-errors
+sacho add --section @optique/core clearer-errors
 ~~~~
 
 Write one top-level unordered list in the generated file.  Describe the public

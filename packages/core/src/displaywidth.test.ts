@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
-import { getDisplayWidth } from "#src/displaywidth.ts";
+import { getDisplayWidth, stripAnsi } from "#src/displaywidth.ts";
 
 const propertyParameters = { numRuns: 200 } as const;
 const printableAsciiArbitrary = fc.string({
@@ -394,5 +394,17 @@ describe("getDisplayWidth", () => {
     it("should count rare CJK U+30000 (𰀀) as width 2 if in font", () => {
       assert.equal(getDisplayWidth("\u{30000}"), 2);
     });
+  });
+});
+
+describe("stripAnsi", () => {
+  it("should remove CSI and OSC sequences", () => {
+    assert.equal(stripAnsi("\x1b[32m\x1b[0m"), "");
+    assert.equal(stripAnsi("\x1b[1;4mPATH\x1b[0m\x1b[2m"), "PATH");
+    assert.equal(
+      stripAnsi("\x1b]8;;https://example.com/\x1b\\link\x1b]8;;\x1b\\"),
+      "link",
+    );
+    assert.equal(stripAnsi("é"), "é");
   });
 });

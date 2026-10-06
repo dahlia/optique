@@ -131,21 +131,37 @@ describe("print module", () => {
     });
 
     it("should exit with specified exit code", () => {
-      const exitMock = createMockFn();
+      // The message itself is not captured here: when stderr is a pipe or a
+      // file, it bypasses process.stderr.write() and goes directly to the
+      // file descriptor.  The subprocess tests in output-exit.test.ts check
+      // the written output.
       const originalExit = process.exit;
-      process.exit = exitMock.fn as typeof process.exit;
+      const exitCodes: (number | undefined)[] = [];
+      process.exit = ((code?: number) => {
+        exitCodes.push(code);
+        throw new Error("EXIT");
+      }) as typeof process.exit;
+
+      try {
+        const msg = message`Critical error`;
+        assert.throws(() => printError(msg, { exitCode: 2 }), /EXIT/);
+        assert.deepEqual(exitCodes, [2]);
+      } finally {
+        process.exit = originalExit;
+      }
+    });
+
+    it("should write the message at most once if process.exit() returns", () => {
+      const originalExit = process.exit;
+      process.exit = (() => {}) as typeof process.exit;
 
       const stderrWriteMock = createMockFn();
       const originalStderrWrite = process.stderr.write;
       process.stderr.write = stderrWriteMock.fn as typeof process.stderr.write;
 
       try {
-        const msg = message`Critical error`;
-        printError(msg, { exitCode: 2 });
-
-        assert.strictEqual(stderrWriteMock.calls.length, 1);
-        assert.strictEqual(exitMock.calls.length, 1);
-        assert.strictEqual(exitMock.calls[0].arguments[0], 2);
+        printError(message`Critical error`, { exitCode: 2 });
+        assert.ok(stderrWriteMock.calls.length <= 1);
       } finally {
         process.exit = originalExit;
         process.stderr.write = originalStderrWrite;
@@ -317,10 +333,15 @@ describe("print module", () => {
 
       // Mock to prevent actual exit
       const originalExit = process.exit;
-      process.exit = (() => {}) as typeof process.exit;
+      process.exit = (() => {
+        throw new Error("EXIT");
+      }) as typeof process.exit;
 
       try {
-        printError(message`Test error`, printErrorOpts);
+        assert.throws(
+          () => printError(message`Test error`, printErrorOpts),
+          /EXIT/,
+        );
       } finally {
         process.exit = originalExit;
       }
@@ -329,13 +350,17 @@ describe("print module", () => {
     it("should return never type when exitCode is provided", () => {
       // Mock to prevent actual exit
       const originalExit = process.exit;
-      process.exit = (() => {}) as typeof process.exit;
+      process.exit = (() => {
+        throw new Error("EXIT");
+      }) as typeof process.exit;
 
       try {
-        // This should have return type 'never' when exitCode is provided
-        const _result1: never = printError(message`Fatal error`, {
-          exitCode: 1,
-        });
+        assert.throws(() => {
+          // This should have return type 'never' when exitCode is provided
+          const _result1: never = printError(message`Fatal error`, {
+            exitCode: 1,
+          });
+        }, /EXIT/);
 
         // This should have return type 'void' when exitCode is not provided
         const _result2: void = printError(message`Warning`);
