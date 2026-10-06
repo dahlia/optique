@@ -281,9 +281,9 @@ describe("fail", () => {
     assert.ok(!result.success);
   });
 
-  it("should have empty usage", () => {
+  it("should describe no successful usage alternatives", () => {
     const parser = fail<string>();
-    assert.deepEqual(parser.usage, []);
+    assert.deepEqual(parser.usage, [{ type: "exclusive", terms: [] }]);
   });
 
   it("should return no doc fragments", () => {

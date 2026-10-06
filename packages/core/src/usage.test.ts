@@ -2617,6 +2617,48 @@ describe("normalizeUsage", () => {
     });
   });
 
+  describe("impossible exclusive branches", () => {
+    const impossible: Usage = [{ type: "exclusive", terms: [] }];
+    const visible: Usage = [{ type: "option", names: ["--required"] }];
+
+    it("drops a failing branch rather than making it an empty alternative", () => {
+      assert.deepEqual(
+        normalizeUsage([{
+          type: "exclusive",
+          terms: [impossible, visible],
+        }]),
+        [{ type: "exclusive", terms: [visible] }],
+      );
+    });
+
+    it("drops a sequence containing a failing term", () => {
+      assert.deepEqual(
+        normalizeUsage([{
+          type: "exclusive",
+          terms: [[...visible, ...impossible], visible],
+        }]),
+        [{ type: "exclusive", terms: [visible] }],
+      );
+    });
+
+    for (
+      const wrapper of [
+        { type: "optional", terms: impossible },
+        { type: "multiple", terms: impossible, min: 0 },
+      ] satisfies Usage
+    ) {
+      it(`preserves a zero-token ${wrapper.type} wrapper around failure`, () => {
+        assert.deepEqual(
+          normalizeUsage([{
+            type: "exclusive",
+            terms: [[wrapper], visible],
+          }]),
+          [{ type: "exclusive", terms: [[], visible] }],
+        );
+      });
+    }
+  });
+
   describe("sorting behavior", () => {
     it("should place commands first", () => {
       const usage: Usage = [

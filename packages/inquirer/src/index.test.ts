@@ -1094,20 +1094,17 @@ describe("prompt()", () => {
       assert.equal((usage[0] as { type: string }).type, "optional");
     });
 
-    it("fail() with prompt has empty optional usage", () => {
+    it("fail() with prompt wraps impossible usage as optional", () => {
       const parser = prompt(fail<string>(), {
         type: "input",
         message: "Enter name:",
         prompter: () => Promise.resolve(""),
       });
 
-      const usage = parser.usage;
-      // fail() has empty usage; optional wrapper around empty is still empty-ish
-      assert.equal(usage.length, 1);
-      assert.equal((usage[0] as { type: string }).type, "optional");
-      const terms = (usage[0] as unknown as { terms: unknown[] }).terms;
-      assert.deepEqual(terms, []);
-      // NOSONAR: The cast above uses 'unknown' as an intermediate for intentional narrowing.
+      assert.deepEqual(parser.usage, [{
+        type: "optional",
+        terms: [{ type: "exclusive", terms: [] }],
+      }]);
     });
 
     it("does not double-wrap already-optional inner parser", () => {

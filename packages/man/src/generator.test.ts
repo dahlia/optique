@@ -26,6 +26,24 @@ function getSynopsis(manPage: string): string {
 }
 
 describe("required options in SYNOPSIS", () => {
+  it("keeps a flag required beside an always-failing branch", () => {
+    const parser = or(fail<true>(), flag("--required"));
+    assert.ok(!parse(parser, []).success);
+    assert.ok(parse(parser, ["--required"]).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n\\fB\\-\\-required\\fR',
+    );
+  });
+
+  it("keeps a flag optional beside an optional always-failing branch", () => {
+    const parser = or(optional(fail<true>()), flag("--visible"));
+    assert.ok(parse(optional(fail<true>()), []).success);
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, { name: "repro", section: 1 })),
+      '.B "repro"\n[\\fB\\-\\-visible\\fR]',
+    );
+  });
   it("renders a required value option without brackets", () => {
     const parser = object({ name: option("--name", string()) });
     assert.ok(!parse(parser, []).success);

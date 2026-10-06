@@ -198,6 +198,8 @@ export type UsageTerm =
     /**
      * The terms that are mutually exclusive, which can include
      * arguments, options, commands, or other usage terms.
+     * An empty list has no successful alternatives; an empty branch within
+     * the list represents a zero-token alternative.
      */
     readonly terms: readonly Usage[];
   }
@@ -589,8 +591,10 @@ export function formatUsage(
  *    recursive normalization.  Exclusive branches representing valid
  *    zero-token alternatives (e.g., `conditional()` default branches or
  *    `optional(constant(...))`) and empty-value literals are preserved.
- *    Only branches that become empty because all their content was
- *    malformed are removed.
+ *    Branches that contain an impossible exclusive term, or become empty
+ *    because all their content was malformed, are removed.  Optional and
+ *    zero-minimum wrappers around impossible terms remain valid zero-token
+ *    alternatives.
  *
  * 2. *Flattening*: Recursively processes all usage terms and merges any
  *    nested exclusive terms into their parent exclusive term to avoid
@@ -647,6 +651,7 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   } else if (term.type === "exclusive") {
     const terms: Usage[] = [];
     for (const usage of term.terms) {
+      if (isImpossibleUsage(usage)) continue;
       const normalized = normalizeUsage(usage);
       if (normalized.length >= 1 && normalized[0].type === "exclusive") {
         const rest = normalized.slice(1);
@@ -677,6 +682,21 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
     }
     return { ...term };
   }
+}
+
+/**
+ * Recognizes sequences with no successful alternatives before normalization
+ * removes empty exclusive terms.  Optional and zero-minimum wrappers can
+ * still succeed by omitting their impossible children.
+ */
+function isImpossibleUsage(usage: Usage): boolean {
+  return usage.some((term) => {
+    if (term.type === "exclusive") {
+      return term.terms.every(isImpossibleUsage);
+    }
+    return term.type === "multiple" && term.min > 0 &&
+      isImpossibleUsage(term.terms);
+  });
 }
 
 function isNonDegenerateTerm(term: UsageTerm): boolean {

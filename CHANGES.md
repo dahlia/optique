@@ -17,9 +17,15 @@ To be released.
     dropped, so the line starts at the same column as the text above it.
     Leading whitespace at the start of a message, after `lineBreak()`, or in
     `value()` and `values()` items is kept.  [[#1003], [#1006]]
+ -  Fixed usage descriptions for `or(fail(), ...)` to omit the failing branch,
+    so required alternatives no longer appear optional in man page SYNOPSIS.
+    `fail().usage` now represents no successful alternatives, distinguishing
+    it from the empty usage of `constant()`.  [[#1004], [#1012]]
 
 [#1003]: https://github.com/dahlia/optique/issues/1003
+[#1004]: https://github.com/dahlia/optique/issues/1004
 [#1006]: https://github.com/dahlia/optique/pull/1006
+[#1012]: https://github.com/dahlia/optique/pull/1012
 
 ### @optique/run
 
@@ -48,9 +54,6 @@ To be released.
     keep their visible alternatives optional.  Required option aliases now use
     parentheses, such as `(-n | --name) STRING`, to preserve their grouping.
     [[#1004], [#1012]]
-
-[#1004]: https://github.com/dahlia/optique/issues/1004
-[#1012]: https://github.com/dahlia/optique/pull/1012
 
 
 Version 1.0.11
