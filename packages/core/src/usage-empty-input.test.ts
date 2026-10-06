@@ -486,6 +486,14 @@ describe("usage of empty-input behavior with expandCommands", () => {
     );
   });
 
+  it("keeps a lone optional alternative that is not a command", () => {
+    const parser = or(constant(0), flag("--help"));
+    assert.equal(
+      formatUsage("app", parser.usage, { expandCommands: true }),
+      "app [--help]",
+    );
+  });
+
   it("expands a nested command group that has a fallback alternative", () => {
     const parser = object({
       cmd: or(

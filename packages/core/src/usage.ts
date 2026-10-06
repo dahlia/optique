@@ -634,13 +634,17 @@ function formatUsageLines(
     // A command group drawn as optional because it accepts empty input
     // still expands into one line per command, unlike a group declared
     // optional.
-    // When only one alternative is visible, the optional term holds that
-    // alternative itself.
     if (lastTerm?.type === "optional" && declaredLast?.type === "exclusive") {
-      lastTerm = lastTerm.terms.length === 1 &&
-          lastTerm.terms[0].type === "exclusive"
-        ? lastTerm.terms[0]
-        : { type: "exclusive", terms: [lastTerm.terms] };
+      if (
+        lastTerm.terms.length === 1 && lastTerm.terms[0].type === "exclusive"
+      ) {
+        lastTerm = lastTerm.terms[0];
+      } else if (lastTerm.terms[0]?.type === "command") {
+        // When only one command is visible, the optional term holds that
+        // command's alternative itself.  Other lone alternatives, such as
+        // a help option, keep their brackets.
+        lastTerm = { type: "exclusive", terms: [lastTerm.terms] };
+      }
     }
     if (
       usage.length > 0 &&
