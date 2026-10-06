@@ -474,6 +474,18 @@ describe("usage of empty-input behavior with expandCommands", () => {
     );
   });
 
+  it("expands a single command that has a fallback alternative", () => {
+    const parser = or(
+      command("serve", object({ port: option("--port", string()) })),
+      constant(0),
+    );
+    assert.equal(render(parser), "app [serve --port STRING]");
+    assert.equal(
+      formatUsage("app", parser.usage, { expandCommands: true }),
+      "app serve --port STRING",
+    );
+  });
+
   it("expands a nested command group that has a fallback alternative", () => {
     const parser = object({
       cmd: or(
