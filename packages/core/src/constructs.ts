@@ -1,4 +1,15 @@
 import {
+  acceptsEmptyInput,
+  type EmptyInputFacts,
+  type ExclusiveBranch,
+  getEmptyInputFacts,
+  longestMatchFacts,
+  objectFacts,
+  orFacts,
+  tupleFacts,
+  withEmptyInputFacts,
+} from "./internal/empty-input.ts";
+import {
   adoptOptionScope,
   combinedOptionScope,
   conditionalOptionScope,
@@ -1795,6 +1806,7 @@ function applyHiddenToUsageTerm(
       type: "multiple",
       terms: applyHiddenToUsage(term.terms, hidden),
       min: term.min,
+      ...(term.acceptsEmpty == null ? {} : { acceptsEmpty: term.acceptsEmpty }),
     };
   }
   if (term.type === "sequence") {
@@ -1807,6 +1819,7 @@ function applyHiddenToUsageTerm(
     return {
       type: "exclusive",
       terms: term.terms.map((u) => applyHiddenToUsage(u, hidden)),
+      ...(term.acceptsEmpty == null ? {} : { acceptsEmpty: term.acceptsEmpty }),
     };
   }
   if (
@@ -2438,6 +2451,35 @@ function preserveExclusiveStateAfterOptionsTerminator(
     },
     consumed: result.consumed,
   };
+}
+
+/**
+ * Describes the branches of an exclusive combinator for the empty-input
+ * rules.
+ */
+function getExclusiveBranches(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+): readonly ExclusiveBranch[] {
+  return parsers.map((parser) => ({
+    facts: getEmptyInputFacts(parser),
+    matchesTokens: parser.leadingNames.size > 0 || parser.acceptingAnyToken,
+  }));
+}
+
+/**
+ * Builds the exclusive usage term of `or()` and `longestMatch()`, recording
+ * whether the combinator accepts an empty argument list when known.
+ */
+function exclusiveUsage(
+  parsers: readonly Parser<Mode, unknown, unknown>[],
+  facts: EmptyInputFacts,
+): Usage {
+  const acceptsEmpty = acceptsEmptyInput(facts);
+  return [{
+    type: "exclusive",
+    terms: parsers.map((p) => p.usage),
+    ...(acceptsEmpty == null ? {} : { acceptsEmpty }),
+  }];
 }
 
 /**
@@ -5330,12 +5372,13 @@ export function or(
     return error;
   };
 
+  const emptyInputFacts = orFacts(getExclusiveBranches(parsers));
   const singleResult = {
     mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
-    usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    usage: exclusiveUsage(parsers, emptyInputFacts),
     leadingNames: unionLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,
@@ -5444,7 +5487,7 @@ export function or(
     parsers,
     (state) => selectExclusiveChildren(parsers, state, true),
   );
-  return fluent(
+  return fluent(withEmptyInputFacts(
     scopeParser(
       singleResult as Parser<
         Mode,
@@ -5453,7 +5496,8 @@ export function or(
       >,
       combinedOptionScope(parsers, parsers.map((_, index) => index)),
     ),
-  );
+    emptyInputFacts,
+  ));
 }
 
 /**
@@ -6122,12 +6166,13 @@ function createLongestMatch(
     return error;
   };
 
+  const emptyInputFacts = longestMatchFacts(getExclusiveBranches(parsers));
   const multiResult = {
     mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
-    usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    usage: exclusiveUsage(parsers, emptyInputFacts),
     leadingNames: unionLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,
@@ -6222,7 +6267,7 @@ function createLongestMatch(
     parsers,
     (state) => selectExclusiveChildren(parsers, state, false),
   );
-  return fluent(
+  return fluent(withEmptyInputFacts(
     scopeParser(
       multiResult as Parser<
         Mode,
@@ -6231,7 +6276,8 @@ function createLongestMatch(
       >,
       combinedOptionScope(parsers, parsers.map((_, index) => index)),
     ),
-  );
+    emptyInputFacts,
+  ));
 }
 
 /**
@@ -8864,7 +8910,7 @@ export function object<
       }));
     },
   );
-  return fluent(
+  return fluent(withEmptyInputFacts(
     scopeParser(
       objectParser,
       combinedOptionScope(
@@ -8874,7 +8920,16 @@ export function object<
       undefined,
       true,
     ),
-  );
+    combinedMode === "sync"
+      ? objectFacts(
+        parserPairs.map(([, p]) => ({
+          facts: getEmptyInputFacts(p),
+          matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
+        })),
+        parserPairs.map(([field]) => field),
+      )
+      : {},
+  ));
 }
 
 /**
@@ -11262,7 +11317,7 @@ export function tuple<
         state: getParseChildState(state, state[index], parser),
       })),
   );
-  return fluent(
+  return fluent(withEmptyInputFacts(
     scopeParser(
       tupleParser,
       combinedOptionScope(
@@ -11270,7 +11325,13 @@ export function tuple<
         parsers.map((_, index) => index),
       ),
     ),
-  );
+    tupleFacts(
+      parsers.map((p) => ({
+        facts: getEmptyInputFacts(p),
+        matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
+      })),
+    ),
+  ));
 }
 
 /**
@@ -16326,7 +16387,12 @@ export function group<M extends Mode, TValue, TState>(
     [parser],
     (state) => [{ parser, state }],
   );
-  return fluent(scopeParser(groupParser, combinedOptionScope([parser])));
+  return fluent(
+    withEmptyInputFacts(
+      scopeParser(groupParser, combinedOptionScope([parser])),
+      getEmptyInputFacts(parser),
+    ),
+  );
 }
 
 /**

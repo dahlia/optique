@@ -64,6 +64,16 @@ To be released.
     pages without commands free of automatic headings.  Existing titled groups
     are preserved, and help callbacks receive the grouped page.
     [[#972], [#983]]
+ -  Changed usage output to draw `or()`, `longestMatch()`, and `multiple()`
+    groups as optional exactly when the parser accepts an empty argument list,
+    if that is known from the parsers themselves.  For example,
+    `or(optional(argument(FILE)), optional(argument(DIR)))` now reads
+    `(FILE | DIR)`, because the choice between two empty alternatives is
+    ambiguous and parsing fails, while `or(constant("x"), argument(FILE))`
+    reads `[FILE]`.  Such groups record the outcome in the new `acceptsEmpty`
+    field of `exclusive` and `multiple` usage terms.  Custom parsers and
+    parsers bound to outside sources keep the notation they declare.
+    [[#1013], [#1015]]
  -  Deferred typo diagnostics for discarded parser failures, reducing parsing
     time for commands with many positional arguments.  Custom mismatch error
     callbacks now run when their diagnostic is requested, so callbacks used
@@ -98,6 +108,8 @@ To be released.
 [#1000]: https://github.com/dahlia/optique/pull/1000
 [#1002]: https://github.com/dahlia/optique/issues/1002
 [#1005]: https://github.com/dahlia/optique/pull/1005
+[#1013]: https://github.com/dahlia/optique/issues/1013
+[#1015]: https://github.com/dahlia/optique/pull/1015
 
 ### @optique/run
 
@@ -183,6 +195,9 @@ To be released.
     `generateManPageSync()`, `generateManPageAsync()`, and
     `formatDocPageAsMan()`, and the `--show-aliases` flag to `optique-man`,
     for documenting command aliases next to their commands.  [[#1002], [#1005]]
+ -  Changed the SYNOPSIS section to follow the same rule as `formatUsage()`
+    when drawing `or()`, `longestMatch()`, and `multiple()` groups, so both
+    show the same optional and required parts.  [[#1013], [#1015]]
 
 ### @optique/inquirer
 

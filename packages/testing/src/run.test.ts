@@ -91,7 +91,8 @@ describe("captureRun()", () => {
     assert.deepEqual(result, {
       kind: "exited",
       exitCode: 0,
-      stdout: "Usage: tool --help\n\n" +
+      // The parser accepts no arguments, so --help can be omitted.
+      stdout: "Usage: tool [--help]\n\n" +
         "  --help                      Show help information.\n\n",
       stderr: "",
     });

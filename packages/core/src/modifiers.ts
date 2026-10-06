@@ -16,6 +16,15 @@ import {
   normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
+import {
+  acceptsEmptyInput,
+  defineEmptyInputFacts,
+  type EmptyInputFacts,
+  getEmptyInputFacts,
+  multipleFacts,
+  optionalLikeFacts,
+  resolveEmptyStepState,
+} from "./internal/empty-input.ts";
 import { defineForwardedEffectfulSchedulingNodes } from "./dependency-runtime.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
@@ -103,6 +112,21 @@ function isUnstartedMultipleItemState(
         typeof unwrappedOriginalState.value === "object"
       )
     );
+}
+
+/**
+ * Returns whether an optional-style wrapper around the given parser is known
+ * to complete successfully from its initial state without delegating to a
+ * source binding or a deferred completion.
+ */
+function completesOptionalLikeFallback(
+  parser: Parser<Mode, unknown, unknown>,
+): boolean | undefined {
+  return typeof parser.shouldDeferCompletion !== "function" &&
+      parser.dependencyMetadata?.source == null &&
+      parser[unmatchedNonCliDependencySourceStateMarker] !== true
+    ? true
+    : undefined;
 }
 
 function isBoundCliWrapperState(
@@ -1075,7 +1099,19 @@ export function optional<M extends Mode, TValue, TState>(
     (state) =>
       getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
   );
-  return fluent(scopeParser(optionalParser, combinedOptionScope([parser])));
+  const scopedOptionalParser = scopeParser(
+    optionalParser,
+    combinedOptionScope([parser]),
+  );
+  defineEmptyInputFacts(
+    scopedOptionalParser,
+    optionalLikeFacts(
+      getEmptyInputFacts(parser),
+      parser.initialState,
+      completesOptionalLikeFallback(parser),
+    ),
+  );
+  return fluent(scopedOptionalParser);
 }
 
 /**
@@ -1675,7 +1711,23 @@ export function withDefault<
     (state) =>
       getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
   );
-  return fluent(scopeParser(withDefaultParser, combinedOptionScope([parser])));
+  const scopedWithDefaultParser = scopeParser(
+    withDefaultParser,
+    combinedOptionScope([parser]),
+  );
+  // A function default may throw, which completion reports as a failure,
+  // so only a plain default value is known to complete.
+  defineEmptyInputFacts(
+    scopedWithDefaultParser,
+    optionalLikeFacts(
+      getEmptyInputFacts(parser),
+      parser.initialState,
+      typeof defaultValue === "function"
+        ? undefined
+        : completesOptionalLikeFallback(parser),
+    ),
+  );
+  return fluent(scopedWithDefaultParser);
 }
 
 /**
@@ -1930,6 +1982,9 @@ export function map<M extends Mode, T, U, TState>(
   defineForwardedEffectfulSchedulingNodes(mappedParser, parser);
   // map() copies parse/suggest and their enumerable scope metadata. Reuse
   // that scope rather than stacking another wrapper around the same calls.
+  // map() keeps the inner parse and state; a transform that throws escapes
+  // as an exception rather than a failed result.
+  defineEmptyInputFacts(mappedParser, getEmptyInputFacts(parser));
   return fluent(mappedParser);
 }
 
@@ -2269,6 +2324,34 @@ export interface MultipleErrorOptions {
    * Error message when more than the maximum number of values are provided.
    */
   readonly tooMany?: Message | ((max: number, actual: number) => Message);
+}
+
+/**
+ * Computes the empty-input facts of `multiple(parser, options)`.
+ */
+function getMultipleEmptyInputFacts(
+  parser: Parser<Mode, unknown, unknown>,
+  options: MultipleOptions,
+): EmptyInputFacts {
+  // An upper bound changes how items are opened, and a fractional minimum
+  // is compared differently at runtime; leave both unknown.
+  const min = options.min ?? 0;
+  if (options.max != null || !Number.isInteger(min) || min < 0) return {};
+  const facts = getEmptyInputFacts(parser);
+  const childInitialState = parser.initialState;
+  const retainsItem = facts.step === "success" ||
+      facts.step === "provisional"
+    ? facts.next == null ? undefined : !isUnstartedMultipleItemState(
+      resolveEmptyStepState(facts.next, childInitialState),
+      childInitialState,
+    )
+    : false;
+  return multipleFacts(
+    facts,
+    retainsItem,
+    childInitialState,
+    min,
+  );
 }
 
 /**
@@ -2811,17 +2894,25 @@ export function multiple<M extends Mode, TValue, TState>(
     };
   };
 
+  const initialState: MultipleState = [];
+  const emptyInputFacts = getMultipleEmptyInputFacts(parser, options);
+  const acceptsEmpty = acceptsEmptyInput(emptyInputFacts);
   const resultParser = {
     mode: parser.mode,
     $valueType: [] as readonly TValue[],
     $stateType: [] as readonly TState[],
     priority: parser.priority,
-    usage: [{ type: "multiple", terms: parser.usage, min }],
+    usage: [{
+      type: "multiple",
+      terms: parser.usage,
+      min,
+      ...(acceptsEmpty == null ? {} : { acceptsEmpty }),
+    }],
     leadingNames: parser.leadingNames,
     // multiple(min=0) can succeed without consuming, so only propagate
     // catch-all status when at least one match is required.
     acceptingAnyToken: min > 0 && (parser.acceptingAnyToken ?? false),
-    initialState: [] as readonly TState[],
+    initialState,
     canSkip(state: MultipleState, exec?: ExecutionContext) {
       if (state.length < min) return false;
       const currentItemState = state.at(-1);
@@ -3481,7 +3572,12 @@ export function multiple<M extends Mode, TValue, TState>(
         state: unwrapInjectedWrapper(item.state),
       })),
   );
-  return fluent(scopeParser(resultParser, repeatedOptionScope(parser)));
+  const scopedResultParser = scopeParser(
+    resultParser,
+    repeatedOptionScope(parser),
+  );
+  defineEmptyInputFacts(scopedResultParser, emptyInputFacts);
+  return fluent(scopedResultParser);
 }
 
 /**
@@ -3681,7 +3777,20 @@ export function nonEmpty<M extends Mode, T, TState>(
     [parser],
     (state) => [{ parser, state }],
   );
-  return fluent(scopeParser(nonEmptyParser, combinedOptionScope([parser])));
+  const scopedNonEmptyParser = scopeParser(
+    nonEmptyParser,
+    combinedOptionScope([parser]),
+  );
+  // nonEmpty() rejects any step that consumes no tokens, but completes
+  // from the initial state exactly as its inner parser does.
+  const innerFacts = getEmptyInputFacts(parser);
+  defineEmptyInputFacts(scopedNonEmptyParser, {
+    step: "failure",
+    ...(innerFacts.fromInitial == null
+      ? {}
+      : { fromInitial: innerFacts.fromInitial }),
+  });
+  return fluent(scopedNonEmptyParser);
 }
 
 const fluentParserMarker = Symbol.for("@optique/core/fluent");

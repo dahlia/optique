@@ -13,6 +13,11 @@ import {
   getPassThroughFailure,
 } from "./internal/passthrough.ts";
 import {
+  defineEmptyInputFacts,
+  failingStepFacts,
+  UNCHANGED,
+} from "./internal/empty-input.ts";
+import {
   getWrappedChildParseState,
   getWrappedChildState,
   isAnnotationWrappedInitialState,
@@ -360,6 +365,12 @@ export function constant<const T>(value: T): FluentParser<"sync", T, T> {
     result,
     (state) => normalizeInjectedAnnotationState(state),
   );
+  defineEmptyInputFacts(result, {
+    step: "success",
+    next: UNCHANGED,
+    afterStep: true,
+    fromInitial: true,
+  });
   Object.defineProperty(result, "placeholder", {
     value,
     configurable: true,
@@ -389,7 +400,7 @@ export function constant<const T>(value: T): FluentParser<"sync", T, T> {
  * @since 1.0.0
  */
 export function fail<T>(): FluentParser<"sync", T, undefined> {
-  return fluent({
+  const result: Parser<"sync", T, undefined> = {
     $valueType: [],
     $stateType: [],
     mode: "sync",
@@ -420,7 +431,9 @@ export function fail<T>(): FluentParser<"sync", T, undefined> {
     getDocFragments(_state, _defaultValue?) {
       return { fragments: [], sourceOnly: true };
     },
-  });
+  };
+  defineEmptyInputFacts(result, failingStepFacts(false));
+  return fluent(result);
 }
 
 /**
@@ -1685,6 +1698,10 @@ export function option<M extends Mode, T>(
       configurable: true,
       enumerable: false,
     });
+  } else {
+    // A Boolean option without a value parser completes to false when it
+    // is absent; an option with a value is required.
+    defineEmptyInputFacts(result, failingStepFacts(valueParser == null));
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
@@ -2050,6 +2067,7 @@ export function flag(
     enumerable: false,
     writable: false,
   });
+  defineEmptyInputFacts(result, failingStepFacts(false));
   return fluent(result);
 }
 
@@ -2917,6 +2935,8 @@ export function argument<M extends Mode, T>(
       configurable: true,
       enumerable: false,
     });
+  } else {
+    defineEmptyInputFacts(result, failingStepFacts(false));
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
@@ -3828,7 +3848,7 @@ export function command<M extends Mode, T, TState>(
     },
   );
 
-  return fluent(scopeParser(
+  const scoped = scopeParser(
     result as unknown as Parser<M, T, CommandState<TState>>,
     commandScope.source,
     (context) => {
@@ -3836,7 +3856,9 @@ export function command<M extends Mode, T, TState>(
         commandScope.select(context, enteredScope);
       }
     },
-  ));
+  );
+  defineEmptyInputFacts(scoped, failingStepFacts(false));
+  return fluent(scoped);
 }
 
 /**
@@ -4118,5 +4140,6 @@ export function passThrough(
       : format === "nextToken" && optionPattern.test(token);
     return accepts ? result.priority : undefined;
   });
+  defineEmptyInputFacts(result, failingStepFacts(true));
   return fluent(result);
 }

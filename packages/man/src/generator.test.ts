@@ -144,6 +144,80 @@ describe("required options in SYNOPSIS", () => {
   });
 });
 
+describe("empty-input behavior in SYNOPSIS", () => {
+  const options = { name: "repro", section: 1 as const };
+
+  it("requires one of ambiguous optional alternatives", () => {
+    const parser = or(
+      optional(argument(string({ metavar: "FILE" }))),
+      optional(argument(string({ metavar: "DIR" }))),
+    );
+    assert.ok(!parse(parser, []).success);
+    assert.equal(formatUsage("repro", parser.usage), "repro (FILE | DIR)");
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, options)),
+      '.B "repro"\n(\\fIFILE\\fR | \\fIDIR\\fR)',
+    );
+  });
+
+  it("makes an alternative optional when another one needs no tokens", () => {
+    const parser = or(
+      multiple(tuple([optional(fail()), constant("x")]), { min: 1 }),
+      argument(string({ metavar: "FILE" })),
+    );
+    assert.ok(parse(parser, []).success);
+    assert.equal(formatUsage("repro", parser.usage), "repro [FILE]");
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, options)),
+      '.B "repro"\n[\\fIFILE\\fR]',
+    );
+  });
+
+  it("requires an optional option that or() cannot choose without input", () => {
+    const parser = or(
+      optional(option("--x", string())),
+      argument(string({ metavar: "FILE" })),
+    );
+    assert.ok(!parse(parser, []).success);
+    assert.equal(
+      formatUsage("repro", parser.usage),
+      "repro (--x STRING | FILE)",
+    );
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, options)),
+      '.B "repro"\n(\\fB\\-\\-x\\fR \\fISTRING\\fR | \\fIFILE\\fR)',
+    );
+  });
+
+  it("requires optional items of a repetition that rejects empty input", () => {
+    const parser = multiple(
+      optional(argument(string({ metavar: "FILE" }))),
+      { min: 1 },
+    );
+    assert.ok(!parse(parser, []).success);
+    assert.equal(formatUsage("repro", parser.usage), "repro FILE...");
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, options)),
+      '.B "repro"\n\\fIFILE\\fR ...',
+    );
+  });
+
+  it("keeps the record through document visibility changes", () => {
+    const parser = group(
+      "g",
+      or(
+        optional(argument(string({ metavar: "FILE" }))),
+        optional(argument(string({ metavar: "DIR" }))),
+      ),
+      { hidden: "doc" },
+    );
+    assert.equal(
+      getSynopsis(generateManPageSync(parser, options)),
+      '.B "repro"\n(\\fIFILE\\fR | \\fIDIR\\fR)',
+    );
+  });
+});
+
 describe("generateManPage()", () => {
   it("generates man page from simple option parser", () => {
     const parser = object({
