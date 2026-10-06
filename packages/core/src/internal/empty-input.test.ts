@@ -272,6 +272,21 @@ describe("empty-input facts", () => {
     assert.equal(acceptsEmptyInput(getEmptyInputFacts(repeated)), true);
   });
 
+  it("does not assume that a map() transform succeeds", () => {
+    // The transform throws for the value that the first branch completes
+    // to without input, so parsing an empty argument list throws.
+    const parser = or(
+      map(optional(FILE()), (value: string | undefined) => value!.length),
+      FILE(),
+    );
+    assert.throws(() => parse(parser, []), TypeError);
+    assert.equal(acceptsEmptyInput(getEmptyInputFacts(parser)), undefined);
+    assert.equal(
+      acceptsEmptyInput(getEmptyInputFacts(map(FILE(), (v) => v.length))),
+      false,
+    );
+  });
+
   it("leaves repetition with a fractional minimum unknown", () => {
     const parser = multiple(constant(null), { min: 0.5 });
     assert.deepEqual(getEmptyInputFacts(parser), {});

@@ -1982,9 +1982,16 @@ export function map<M extends Mode, T, U, TState>(
   defineForwardedEffectfulSchedulingNodes(mappedParser, parser);
   // map() copies parse/suggest and their enumerable scope metadata. Reuse
   // that scope rather than stacking another wrapper around the same calls.
-  // map() keeps the inner parse and state; a transform that throws escapes
-  // as an exception rather than a failed result.
-  defineEmptyInputFacts(mappedParser, getEmptyInputFacts(parser));
+  // map() keeps the inner parse and state, so the step facts carry over.  A
+  // successful completion runs the transform, which may throw, so only a
+  // failing completion is known without running user code.
+  const innerFacts = getEmptyInputFacts(parser);
+  defineEmptyInputFacts(mappedParser, {
+    ...(innerFacts.step == null ? {} : { step: innerFacts.step }),
+    ...(innerFacts.next == null ? {} : { next: innerFacts.next }),
+    ...(innerFacts.afterStep === false ? { afterStep: false } : {}),
+    ...(innerFacts.fromInitial === false ? { fromInitial: false } : {}),
+  });
   return fluent(mappedParser);
 }
 
