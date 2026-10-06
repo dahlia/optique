@@ -13,6 +13,7 @@ import {
   type Usage,
   type UsageTerm,
 } from "@optique/core/usage";
+import { resolveUsageForDisplay } from "@optique/core/internal/usage";
 import {
   escapeHyphens,
   escapeRequestArg,
@@ -195,8 +196,9 @@ function formatCommandNameAsRoff(name: string): string {
 
 /**
  * Formats a single {@link UsageTerm} as roff markup for the SYNOPSIS section.
- * Optionality follows the supplied usage wrappers.  Usage describes display
- * structure; empty-input acceptance depends on the parser's runtime behavior.
+ * Optionality follows the supplied usage wrappers, except that a group
+ * recording `acceptsEmpty` is drawn as omissible exactly when its parser
+ * accepts an empty argument list, as in `formatUsage()`.
  *
  * @param term The usage term to format.
  * @returns The roff-formatted string.
@@ -204,7 +206,7 @@ function formatCommandNameAsRoff(name: string): string {
  * @since 0.10.0
  */
 export function formatUsageTermAsRoff(term: UsageTerm): string {
-  return formatUsageTermAsRoffInternal(term, false);
+  return formatUsageAsRoff([term]);
 }
 
 /**
@@ -318,7 +320,12 @@ function formatUsageTermAsRoffInternal(
     }
 
     case "exclusive": {
+      // As in formatUsage(), an alternative whose leading command is hidden
+      // is dropped as a whole, trailing terms included.
       const alternatives = term.terms
+        .filter((t) =>
+          !(t[0]?.type === "command" && isUsageHidden(t[0].hidden))
+        )
         .map((t) => formatUsageAsRoffInternal(t, false))
         .filter((s) => s !== "");
       if (alternatives.length === 0) return "";
@@ -354,7 +361,10 @@ function formatUsageTermAsRoffInternal(
  * @returns The roff-formatted string.
  */
 function formatUsageAsRoff(usage: Usage): string {
-  return formatUsageAsRoffInternal(usage, false);
+  return formatUsageAsRoffInternal(
+    resolveUsageForDisplay(usage, isUsageHidden),
+    false,
+  );
 }
 
 function formatUsageAsRoffInternal(

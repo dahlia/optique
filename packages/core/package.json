@@ -227,6 +227,14 @@
       },
       "import": "./dist/internal/terminal.js",
       "require": "./dist/internal/terminal.cjs"
+    },
+    "./internal/usage": {
+      "types": {
+        "import": "./dist/internal/usage.d.ts",
+        "require": "./dist/internal/usage.d.cts"
+      },
+      "import": "./dist/internal/usage.js",
+      "require": "./dist/internal/usage.cjs"
     }
   },
   "imports": {

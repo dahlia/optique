@@ -680,6 +680,55 @@ bindEnv(option("--mode", string()), {
 })
 ~~~~
 
+### Fallback branches in usage output
+
+Usage output follows the same rule.  When Optique can tell from the parsers
+themselves whether `or()` picks a branch for an empty argument list, help text
+and man page synopses draw the whole group as optional or required to match:
+
+~~~~ typescript twoslash
+import { or } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { argument, constant, option } from "@optique/core/primitives";
+import { formatUsage } from "@optique/core/usage";
+import { string } from "@optique/core/valueparser";
+// ---cut-before---
+// Two branches succeed without input, so the choice is ambiguous and an
+// empty argument list fails:
+formatUsage("app", or(
+  optional(argument(string({ metavar: "FILE" }))),
+  optional(argument(string({ metavar: "DIR" }))),
+).usage);
+// "app (FILE | DIR)"
+
+// constant() is the only fallback, so FILE may be omitted:
+formatUsage("app", or(
+  constant("default"),
+  argument(string({ metavar: "FILE" })),
+).usage);
+// "app [FILE]"
+
+// The optional option has a leading name, so it is not a fallback:
+formatUsage("app", or(
+  optional(option("--name", string())),
+  argument(string({ metavar: "FILE" })),
+).usage);
+// "app (--name STRING | FILE)"
+~~~~
+
+The same applies to `longestMatch()` and to `multiple()`, which is drawn as
+`FILE...` or `[FILE...]` depending on whether it can finish without input.
+
+A few cases keep the notation the parsers declare.  Custom parsers and
+parsers bound to an outside source, such as `bindEnv()` or `bindConfig()`,
+can only be judged at run time.  An alternative made of several optional
+terms means “at least one of them,” which synopsis notation cannot say
+without listing combinations, so it stays as written.  Hidden terms are left
+out of the judgment as well: a group whose only required parts are hidden
+looks the way its visible terms read.  Each group is also judged on its own,
+so a group can read as optional even when an enclosing `object()` still
+needs input; see the `acceptsEmpty` field of `UsageTerm` for details.
+
 
 `merge()` parser
 ----------------

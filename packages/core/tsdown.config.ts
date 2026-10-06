@@ -22,6 +22,7 @@ export default defineConfig({
     "src/internal/dependency.ts",
     "src/internal/parser.ts",
     "src/internal/terminal.ts",
+    "src/internal/usage.ts",
     "src/message.ts",
     "src/message-renderer.ts",
     "src/message-registry.ts",

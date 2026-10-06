@@ -3778,3 +3778,137 @@ describe("cloneUsage", () => {
     }
   });
 });
+
+describe("acceptsEmpty", () => {
+  const optionalFile: Usage = [{
+    type: "optional",
+    terms: [{ type: "argument", metavar: "FILE" }],
+  }];
+  const optionalDir: Usage = [{
+    type: "optional",
+    terms: [{ type: "argument", metavar: "DIR" }],
+  }];
+
+  it("is preserved by cloneUsage()", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [optionalFile, optionalDir],
+        acceptsEmpty: false,
+      },
+      { type: "multiple", terms: optionalFile, min: 1, acceptsEmpty: false },
+    ];
+    assert.deepEqual(cloneUsage(usage), usage);
+  });
+
+  it("is preserved by normalizeUsage()", () => {
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [optionalFile, optionalDir],
+        acceptsEmpty: false,
+      },
+      { type: "multiple", terms: optionalFile, min: 1, acceptsEmpty: false },
+    ];
+    assert.deepEqual(normalizeUsage(usage), usage);
+  });
+
+  it("keeps an annotated inner exclusive nested in normalizeUsage()", () => {
+    const inner: UsageTerm = {
+      type: "exclusive",
+      terms: [optionalFile, optionalDir],
+      acceptsEmpty: false,
+    };
+    const usage: Usage = [{
+      type: "exclusive",
+      terms: [[inner], [{ type: "command", name: "init" }]],
+    }];
+    assert.deepEqual(normalizeUsage(usage), usage);
+    // Without the record, nested alternatives are flattened as before:
+    assert.deepEqual(
+      normalizeUsage([{
+        type: "exclusive",
+        terms: [
+          [{ type: "exclusive", terms: [optionalFile, optionalDir] }],
+          [{ type: "command", name: "init" }],
+        ],
+      }]),
+      [{
+        type: "exclusive",
+        terms: [optionalFile, optionalDir, [{ type: "command", name: "init" }]],
+      }],
+    );
+  });
+
+  it("keeps an annotated group without terms in normalizeUsage()", () => {
+    const usage: Usage = [{
+      type: "multiple",
+      terms: [],
+      min: 2,
+      acceptsEmpty: false,
+    }];
+    assert.deepEqual(normalizeUsage(usage), usage);
+    assert.deepEqual(
+      normalizeUsage([{ type: "multiple", terms: [], min: 2 }]),
+      [],
+    );
+  });
+
+  it("decides how formatUsage() draws a group", () => {
+    assert.equal(
+      formatUsage("app", [{
+        type: "exclusive",
+        terms: [optionalFile, optionalDir],
+        acceptsEmpty: false,
+      }]),
+      "app (FILE | DIR)",
+    );
+    assert.equal(
+      formatUsage("app", [{
+        type: "exclusive",
+        terms: [[], [{ type: "argument", metavar: "FILE" }]],
+        acceptsEmpty: true,
+      }]),
+      "app [FILE]",
+    );
+    assert.equal(
+      formatUsage("app", [{
+        type: "multiple",
+        terms: optionalFile,
+        min: 1,
+        acceptsEmpty: false,
+      }]),
+      "app FILE...",
+    );
+    assert.equal(
+      formatUsage("app", [{
+        type: "multiple",
+        terms: [{ type: "argument", metavar: "FILE" }],
+        min: 1,
+        acceptsEmpty: true,
+      }]),
+      "app [FILE...]",
+    );
+  });
+
+  it("decides how formatUsageTerm() draws a group", () => {
+    assert.equal(
+      formatUsageTerm({
+        type: "exclusive",
+        terms: [optionalFile, optionalDir],
+        acceptsEmpty: false,
+      }),
+      "(FILE | DIR)",
+    );
+  });
+
+  it("leaves groups without the record as declared", () => {
+    assert.equal(
+      formatUsage("app", [{
+        type: "exclusive",
+        terms: [optionalFile, optionalDir],
+      }]),
+      "app ([FILE] | [DIR])",
+    );
+  });
+});

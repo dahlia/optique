@@ -39,6 +39,59 @@ describe("formatDateForMan()", () => {
 });
 
 describe("formatUsageTermAsRoff()", () => {
+  it("draws a group as omissible exactly when it accepts empty input", () => {
+    const file: UsageTerm = { type: "argument", metavar: "FILE" };
+    const dir: UsageTerm = { type: "argument", metavar: "DIR" };
+    assert.equal(
+      formatUsageTermAsRoff({
+        type: "exclusive",
+        terms: [
+          [{ type: "optional", terms: [file] }],
+          [{ type: "optional", terms: [dir] }],
+        ],
+        acceptsEmpty: false,
+      }),
+      "(\\fIFILE\\fR | \\fIDIR\\fR)",
+    );
+    assert.equal(
+      formatUsageTermAsRoff({
+        type: "exclusive",
+        terms: [[], [file]],
+        acceptsEmpty: true,
+      }),
+      "[\\fIFILE\\fR]",
+    );
+    assert.equal(
+      formatUsageTermAsRoff({
+        type: "multiple",
+        terms: [{ type: "optional", terms: [file] }],
+        min: 1,
+        acceptsEmpty: false,
+      }),
+      "\\fIFILE\\fR ...",
+    );
+  });
+
+  it("drops an alternative whose leading command is hidden", () => {
+    assert.equal(
+      formatUsageTermAsRoff({
+        type: "exclusive",
+        terms: [
+          [
+            { type: "command", name: "secret", hidden: true },
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
+          [{ type: "optional", terms: [{ type: "command", name: "open" }] }],
+        ],
+        acceptsEmpty: false,
+      }),
+      "\\fBopen\\fR",
+    );
+  });
+
   it("formats argument term", () => {
     const term: UsageTerm = { type: "argument", metavar: "FILE" };
     assert.equal(formatUsageTermAsRoff(term), "\\fIFILE\\fR");

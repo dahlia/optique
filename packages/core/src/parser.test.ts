@@ -970,6 +970,7 @@ describe("Parser usage field", () => {
           metavar: "STRING",
         }],
         min: 0,
+        acceptsEmpty: true,
       }];
       assert.deepEqual(parser.usage, expected);
     });
@@ -984,6 +985,7 @@ describe("Parser usage field", () => {
           metavar: "STRING",
         }],
         min: 2,
+        acceptsEmpty: false,
       }];
       assert.deepEqual(parser.usage, expected);
     });
@@ -999,6 +1001,7 @@ describe("Parser usage field", () => {
           metavar: "STRING",
         }],
         min: 1,
+        acceptsEmpty: false,
       }];
       assert.deepEqual(parser.usage, expected);
     });
@@ -1125,6 +1128,9 @@ describe("Parser usage field", () => {
             }],
           }],
         ],
+        // Neither branch can be chosen without input, since both match
+        // option names, so or() rejects an empty argument list.
+        acceptsEmpty: false,
       }];
       assert.deepEqual(parser.usage, expected);
     });

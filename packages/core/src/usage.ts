@@ -12,6 +12,7 @@ import {
   type TerminalToken,
 } from "./terminal-internal.ts";
 import { getDisplayWidth } from "./displaywidth.ts";
+import { forgetEmptyInput, resolveUsageForDisplay } from "./internal/usage.ts";
 import type { NonEmptyString } from "./nonempty.ts";
 import { validateProgramName } from "./validate.ts";
 
@@ -214,6 +215,16 @@ export type UsageTerm =
      * The minimum number of times the term must occur.
      */
     readonly min: number;
+    /**
+     * Whether the parser that produced this group succeeds when it parses an
+     * empty argument list on its own.  Built-in combinators set this when
+     * the outcome is statically known and omit it otherwise.  Usage
+     * formatters use it to decide whether to draw the group as omissible;
+     * it is a declaration for display, not evidence about how any other
+     * parser behaves.
+     * @since 1.4.0
+     */
+    readonly acceptsEmpty?: boolean;
   }
   | /**
    * An exclusive term, which represents a group of terms that are mutually
@@ -229,6 +240,16 @@ export type UsageTerm =
      * arguments, options, commands, or other usage terms.
      */
     readonly terms: readonly Usage[];
+    /**
+     * Whether the parser that produced this group succeeds when it parses an
+     * empty argument list on its own.  Built-in combinators set this when
+     * the outcome is statically known and omit it otherwise.  Usage
+     * formatters use it to decide whether to draw the group as omissible;
+     * it is a declaration for display, not evidence about how any other
+     * parser behaves.
+     * @since 1.4.0
+     */
+    readonly acceptsEmpty?: boolean;
   }
   /**
    * A sequence term, which preserves the declaration order of its child
@@ -579,9 +600,52 @@ export function formatUsage(
 ): string {
   options = { ...options, theme: cacheTerminalTheme(options.theme) };
   validateProgramName(programName);
-  usage = normalizeUsage(filterUsageForDisplay(usage));
+  return formatUsageLines(
+    programName,
+    normalizeUsage(
+      filterUsageForDisplay(resolveUsageForDisplay(usage, isUsageHidden)),
+    ),
+    normalizeUsage(filterUsageForDisplay(forgetEmptyInput(usage))),
+    options,
+  );
+}
+
+/**
+ * Formats a display-ready usage, expanding a trailing command group into one
+ * line per command when requested.
+ * @param programName The program name.
+ * @param usage The usage to draw, already resolved, filtered and normalized.
+ * @param declared The same usage as declared, without empty-input records,
+ *                 filtered and normalized.  It tells a group that was drawn
+ *                 as optional because it accepts empty input apart from a
+ *                 group declared optional.
+ * @param options The formatting options.
+ * @returns The formatted usage.
+ */
+function formatUsageLines(
+  programName: string,
+  usage: Usage,
+  declared: Usage,
+  options: UsageFormatOptions,
+): string {
   if (options.expandCommands) {
-    const lastTerm = usage.at(-1)!;
+    let lastTerm = usage.at(-1)!;
+    const declaredLast = declared.at(-1);
+    // A command group drawn as optional because it accepts empty input
+    // still expands into one line per command, unlike a group declared
+    // optional.
+    if (lastTerm?.type === "optional" && declaredLast?.type === "exclusive") {
+      if (
+        lastTerm.terms.length === 1 && lastTerm.terms[0].type === "exclusive"
+      ) {
+        lastTerm = lastTerm.terms[0];
+      } else if (lastTerm.terms[0]?.type === "command") {
+        // When only one command is visible, the optional term holds that
+        // command's alternative itself.  Other lone alternatives, such as
+        // a help option, keep their brackets.
+        lastTerm = { type: "exclusive", terms: [lastTerm.terms] };
+      }
+    }
     if (
       usage.length > 0 &&
       usage.slice(0, -1).every((t) => t.type === "command") &&
@@ -595,8 +659,14 @@ export function formatUsage(
               t[0].terms[0].type === "argument"))
       )
     ) {
+      // Declared alternatives line up with the drawn ones unless drawing
+      // dropped some; then each line falls back to its drawn form.
+      const declaredBranches = declaredLast?.type === "exclusive" &&
+          declaredLast.terms.length === lastTerm.terms.length
+        ? declaredLast.terms
+        : undefined;
       const lines = [];
-      for (let command of lastTerm.terms) {
+      for (const [index, command] of lastTerm.terms.entries()) {
         // Skip hidden commands in usage expansion
         const firstTerm = command[0];
         if (
@@ -605,10 +675,20 @@ export function formatUsage(
         ) {
           continue;
         }
-        if (usage.length > 1) {
-          command = [...usage.slice(0, -1), ...command];
-        }
-        lines.push(formatUsage(programName, command, options));
+        const line = normalizeUsage(
+          filterUsageForDisplay([...usage.slice(0, -1), ...command]),
+        );
+        lines.push(formatUsageLines(
+          programName,
+          line,
+          declaredBranches == null ? line : normalizeUsage(
+            filterUsageForDisplay([
+              ...declared.slice(0, -1),
+              ...declaredBranches[index],
+            ]),
+          ),
+          options,
+        ));
       }
       if (lines.length > 0) {
         return lines.join("\n");
@@ -695,6 +775,7 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
       type: "multiple",
       terms: normalizeUsage(term.terms),
       min: term.min,
+      ...acceptsEmptyOf(term),
     };
   } else if (term.type === "sequence") {
     return {
@@ -705,7 +786,12 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
     const terms: Usage[] = [];
     for (const usage of term.terms) {
       const normalized = normalizeUsage(usage);
-      if (normalized.length >= 1 && normalized[0].type === "exclusive") {
+      // An inner group that records its empty-input behavior keeps its
+      // boundary, since flattening would lose that record.
+      if (
+        normalized.length >= 1 && normalized[0].type === "exclusive" &&
+        normalized[0].acceptsEmpty == null
+      ) {
         const rest = normalized.slice(1);
         for (const subUsage of normalized[0].terms) {
           terms.push([...subUsage, ...rest]);
@@ -719,7 +805,7 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
         terms.push(normalized);
       }
     }
-    return { type: "exclusive", terms };
+    return { type: "exclusive", terms, ...acceptsEmptyOf(term) };
   } else {
     // Clone leaf terms so the normalized output is referentially distinct
     // from the input.  Use a manual spread instead of cloneUsageTerm() to
@@ -736,10 +822,24 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
   }
 }
 
+function acceptsEmptyOf(
+  term: UsageTerm & { readonly type: "multiple" | "exclusive" },
+): { readonly acceptsEmpty?: boolean } {
+  return term.acceptsEmpty == null ? {} : { acceptsEmpty: term.acceptsEmpty };
+}
+
 function isNonDegenerateTerm(term: UsageTerm): boolean {
   if (term.type === "option") return term.names.length > 0;
   if (term.type === "command") return term.name !== "";
   if (term.type === "argument") return term.metavar.length > 0;
+  if (
+    (term.type === "multiple" || term.type === "exclusive") &&
+    term.acceptsEmpty != null
+  ) {
+    // A group without visible terms still records whether its parser
+    // accepts empty input.
+    return true;
+  }
   if (
     term.type === "optional" || term.type === "multiple" ||
     term.type === "exclusive" || term.type === "sequence"
@@ -812,11 +912,13 @@ export function cloneUsageTerm(term: UsageTerm): UsageTerm {
         type: "multiple",
         terms: term.terms.map(cloneUsageTerm),
         min: term.min,
+        ...acceptsEmptyOf(term),
       };
     case "exclusive":
       return {
         type: "exclusive",
         terms: term.terms.map((u) => u.map(cloneUsageTerm)),
+        ...acceptsEmptyOf(term),
       };
     case "sequence":
       return { type: "sequence", terms: term.terms.map(cloneUsageTerm) };
@@ -866,7 +968,12 @@ function filterUsageForDisplay(
     if (term.type === "multiple") {
       const filtered = filterUsageForDisplay(term.terms, isHidden);
       if (filtered.length > 0) {
-        terms.push({ type: "multiple", terms: filtered, min: term.min });
+        terms.push({
+          type: "multiple",
+          terms: filtered,
+          min: term.min,
+          ...acceptsEmptyOf(term),
+        });
       }
       continue;
     }
@@ -884,7 +991,11 @@ function filterUsageForDisplay(
         })
         .filter((branch) => branch.length > 0);
       if (filteredBranches.length > 0) {
-        terms.push({ type: "exclusive", terms: filteredBranches });
+        terms.push({
+          type: "exclusive",
+          terms: filteredBranches,
+          ...acceptsEmptyOf(term),
+        });
       }
       continue;
     }
@@ -976,7 +1087,10 @@ export function formatUsageTerm(
 ): string {
   options = { ...options, theme: cacheTerminalTheme(options.theme) };
   const hiddenCheck = options.context === "doc" ? isDocHidden : isUsageHidden;
-  const visibleTerms = filterUsageForDisplay([term], hiddenCheck);
+  const visibleTerms = filterUsageForDisplay(
+    resolveUsageForDisplay([term], hiddenCheck),
+    hiddenCheck,
+  );
   if (visibleTerms.length < 1) return "";
 
   return wrapUsageTokens(
