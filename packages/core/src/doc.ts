@@ -22,6 +22,7 @@ import {
   measureText,
   placeText,
   spaceAfterLabel,
+  trimLeadingSpace,
 } from "./text-layout.ts";
 import {
   cloneMessage,
@@ -999,9 +1000,16 @@ export function formatDocPage(
         ambient: TerminalStyle,
         quotes: boolean,
       ) => {
-        const prefix = placeText(layout.prefix, cursor, descColumnWidth, 1);
-        // Keep a layout-inserted break outside the ambient style, as before.
-        if (prefix.text !== layout.prefix) description += "\n";
+        let prefixText = layout.prefix;
+        let prefix = placeText(prefixText, cursor, descColumnWidth, 1);
+        if (prefix.text !== layout.prefix) {
+          // Keep a layout-inserted break outside the ambient style, as before.
+          description += "\n";
+          // The prefix (with any label) now starts a new line, so its leading
+          // whitespace no longer separates it from anything; drop it.
+          prefixText = trimLeadingSpace(layout.prefix);
+          prefix = placeText(prefixText, { line: "", column: 0 });
+        }
         const rendered = formatMessage(content, {
           colors: options.colors ? { resetSuffix: style } : false,
           quotes,
@@ -1020,7 +1028,7 @@ export function formatDocPage(
           placeText(rendered, prefix.cursor).cursor,
           descColumnWidth,
         );
-        const annotationText = `${layout.prefix}${rendered}${
+        const annotationText = `${prefixText}${rendered}${
           opaqueFormatter && options.colors ? style : ""
         }${suffix.text}`;
         description += options.colors

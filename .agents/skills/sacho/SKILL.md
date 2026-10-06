@@ -59,12 +59,16 @@ before you depend on a specific flag or output format.
      -  `https://sacho.dev/guide/ci-and-hooks.md` for coverage enforcement.
      -  `https://sacho.dev/guide/version-control.md` for merge drivers and
         presets.
+     -  `https://sacho.dev/guide/package-monorepos.md` for deriving sections
+        from regular package layouts.
      -  `https://sacho.dev/concepts/fragments.md`,
         `https://sacho.dev/concepts/changelog-lifecycle.md`, and
         `https://sacho.dev/concepts/sections.md` for the model.
      -  `https://sacho.dev/reference/commands.md` and
         `https://sacho.dev/reference/configuration.md` for exhaustive
         references.
+     -  `https://sacho.dev/reference/section-patterns.md` for the capture
+        grammar and precedence rules.
      -  `https://sacho.dev/troubleshooting.md` when something misbehaves.
 
 
@@ -89,18 +93,26 @@ Adopting Sacho in a project
 Run `sacho init` from the repository root. It creates `sacho.toml`,
 `changes.d/`, and `CHANGES.md`, and in a Git repository registers the merge
 drivers. Interactive setup infers issue-link templates from the remote and can
-install commit hooks; `sacho init --interactive` forces the questions and
+install commit hooks. When an existing changelog is present, it also offers
+level-three headings found across the changelog as section candidates and
+suggests directories and source path globs. When multiple selected headings
+map to one unambiguous sibling package directory, it can store them as one
+section pattern. `sacho init --interactive` forces the questions and
 `--no-interactive` suppresses them.
 
-Adoption needs no migration. Sacho never rewrites existing released sections, so
-leave the old `CHANGES.md` history exactly as it is and start using fragments
-for the next version. Set that version with `sacho next 1.2.0` so the unreleased
-heading and `release` know what is being prepared.
+Leave old released sections exactly as they are. If the current `Unreleased` or
+`Version X` region contains entries, run `sacho import-unreleased` before
+creating fragments. Inspect and confirm its normalization diff; in a
+noninteractive workflow, review the diff from the refused run before using
+`--force`. The command creates deterministic *imported-unreleased.md* fragments
+and infers the next version from `Version X`. If there are no current entries,
+skip the import and set the version with `sacho next 1.2.0`.
 
 Two configuration decisions matter early, both covered in
 `reference/configuration.md`: whether to enforce fragment coverage
-(`[check].paths`), and, for a monorepo, whether to define `[[sections]]` so each
-package's changes require a fragment in that package's section.
+(`[check].paths`), and, for a monorepo, whether to define explicit
+`[[sections]]` or one `[[section-patterns]]` family so each package's changes
+require a fragment in that package's section.
 
 
 Writing a fragment for a change
@@ -224,14 +236,14 @@ After the release commit, `sacho show` prints one frozen section:
 
 ~~~~ sh
 sacho show 1.2.0
-sacho show 1.2.0 --skip-heading --output-file release-notes.md
+sacho show 1.2.0 --skip-heading --no-word-wrap --output-file release-notes.md
 ~~~~
 
 A tag-triggered GitHub Actions job can hand that file to the GitHub CLI:
 
 ~~~~ sh
 version="${GITHUB_REF_NAME#v}"
-sacho show "$version" --skip-heading --output-file release-notes.md
+sacho show "$version" --skip-heading --no-word-wrap --output-file release-notes.md
 gh release create "$GITHUB_REF_NAME" --notes-file release-notes.md
 ~~~~
 

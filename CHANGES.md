@@ -8,6 +8,49 @@ Version 1.3.3
 
 To be released.
 
+### @optique/core
+
+ -  Fixed `formatMessage()` and `formatDocPage()` starting automatically
+    wrapped lines with a space.  When a text term that begins with a space,
+    a `values()` separator, or a `showDefault`/`showChoices` prefix such as
+    the default `" ["` wraps onto a new line, its leading whitespace is now
+    dropped, so the line starts at the same column as the text above it.
+    Leading whitespace at the start of a message, after `lineBreak()`, or in
+    `value()` and `values()` items is kept.  [[#1003], [#1006]]
+
+[#1003]: https://github.com/dahlia/optique/issues/1003
+[#1006]: https://github.com/dahlia/optique/pull/1006
+
+### @optique/run
+
+ -  Fixed `run()`, `runSync()`, and `runAsync()` truncating help, version,
+    completion, and error output when it was piped into a slow reader on
+    Node.js or Bun.  The process used to exit with the expected code after
+    only the first few kilobytes had been delivered.  When standard output
+    or standard error is a pipe or a file on POSIX systems, the default
+    writers now write directly to its file descriptor and return only after
+    the whole text has been written, so the exit that follows no longer
+    discards the rest.  `printError()` with `exitCode` does the same before
+    it exits, which means a mock of `process.stderr.write()` no longer sees
+    its message in that case.  Terminals, Windows, and Deno are unaffected,
+    and custom `stdout`, `stderr`, and `onExit` callbacks work as before.
+    [[#1008], [#1010]]
+
+[#1008]: https://github.com/dahlia/optique/issues/1008
+[#1010]: https://github.com/dahlia/optique/pull/1010
+
+### @optique/man
+
+ -  Fixed `formatUsageTermAsRoff()`, `formatDocPageAsMan()`, and the
+    `generateManPage*()` functions to render required options without optional
+    brackets in the man page SYNOPSIS, including options in exclusive branches
+    and required repetitions.  Required option aliases now use
+    parentheses, such as `(-n | --name) STRING`, to preserve their grouping.
+    [[#1004], [#1012]]
+
+[#1004]: https://github.com/dahlia/optique/issues/1004
+[#1012]: https://github.com/dahlia/optique/pull/1012
+
 
 Version 1.3.2
 -------------
@@ -347,6 +390,46 @@ Released on September 15, 2026.
 [#959]: https://github.com/dahlia/optique/issues/959
 
 
+Version 1.2.10
+--------------
+
+Released on October 6, 2026.
+
+### @optique/core
+
+ -  Fixed `formatMessage()` and `formatDocPage()` starting automatically
+    wrapped lines with a space.  When a text term that begins with a space,
+    a `values()` separator, or a `showDefault`/`showChoices` prefix such as
+    the default `" ["` wraps onto a new line, its leading whitespace is now
+    dropped, so the line starts at the same column as the text above it.
+    Leading whitespace at the start of a message, after `lineBreak()`, or in
+    `value()` and `values()` items is kept.  [[#1003], [#1006]]
+
+### @optique/run
+
+ -  Fixed `run()`, `runSync()`, and `runAsync()` truncating help, version,
+    completion, and error output when it was piped into a slow reader on
+    Node.js or Bun.  The process used to exit with the expected code after
+    only the first few kilobytes had been delivered.  When standard output
+    or standard error is a pipe or a file on POSIX systems, the default
+    writers now write directly to its file descriptor and return only after
+    the whole text has been written, so the exit that follows no longer
+    discards the rest.  `printError()` with `exitCode` does the same before
+    it exits, which means a mock of `process.stderr.write()` no longer sees
+    its message in that case.  Terminals, Windows, and Deno are unaffected,
+    and custom `stdout`, `stderr`, and `onExit` callbacks work as before.
+    [[#1008], [#1010]]
+
+### @optique/man
+
+ -  Fixed `formatUsageTermAsRoff()`, `formatDocPageAsMan()`, and the
+    `generateManPage*()` functions to render required options without optional
+    brackets in the man page SYNOPSIS, including options in exclusive branches
+    and required repetitions.  Required option aliases now use
+    parentheses, such as `(-n | --name) STRING`, to preserve their grouping.
+    [[#1004], [#1012]]
+
+
 Version 1.2.9
 -------------
 
@@ -571,6 +654,13 @@ Released on July 21, 2026.
     keys, returns the corresponding mapped value, and rejects empty mappings
     or duplicate mapped values at construction time.  [[#866]]
 
+ -  Added `cron()` value parser for validating cron schedule expressions.
+    The parser returns a `CronExpression` object with one property per field,
+    validates ranges, lists, intervals, month names, and weekday names, and
+    supports optional leading seconds and trailing year fields.  A `quartz`
+    option enables common Quartz day-field tokens such as `?`, `L`, `W`, and
+    `#`.  [[#809]]
+
  -  Added `showUsage` to `DocPageFormatOptions` and the core runner
     `RunOptions`.  Passing `showUsage: false` omits the `Usage:` synopsis
     from full help pages, including `aboveError: "help"` output, while leaving
@@ -589,6 +679,7 @@ Released on July 21, 2026.
     maintained reference pages for API details, and keeps its inline TypeScript
     examples covered by a snippet type-checking test.  [[#850], [#852]]
 
+[#809]: https://github.com/dahlia/optique/issues/809
 [#842]: https://github.com/dahlia/optique/issues/842
 [#843]: https://github.com/dahlia/optique/pull/843
 [#846]: https://github.com/dahlia/optique/issues/846
@@ -750,6 +841,46 @@ Released on July 21, 2026.
     selection behavior remains unchanged.  [[#867]]
 
 [#867]: https://github.com/dahlia/optique/pull/867
+
+
+Version 1.1.10
+--------------
+
+Released on October 6, 2026.
+
+### @optique/core
+
+ -  Fixed `formatMessage()` and `formatDocPage()` starting automatically
+    wrapped lines with a space.  When a text term that begins with a space,
+    a `values()` separator, or a `showDefault`/`showChoices` prefix such as
+    the default `" ["` wraps onto a new line, its leading whitespace is now
+    dropped, so the line starts at the same column as the text above it.
+    Leading whitespace at the start of a message, after `lineBreak()`, or in
+    `value()` and `values()` items is kept.  [[#1003], [#1006]]
+
+### @optique/run
+
+ -  Fixed `run()`, `runSync()`, and `runAsync()` truncating help, version,
+    completion, and error output when it was piped into a slow reader on
+    Node.js or Bun.  The process used to exit with the expected code after
+    only the first few kilobytes had been delivered.  When standard output
+    or standard error is a pipe or a file on POSIX systems, the default
+    writers now write directly to its file descriptor and return only after
+    the whole text has been written, so the exit that follows no longer
+    discards the rest.  `printError()` with `exitCode` does the same before
+    it exits, which means a mock of `process.stderr.write()` no longer sees
+    its message in that case.  Terminals, Windows, and Deno are unaffected,
+    and custom `stdout`, `stderr`, and `onExit` callbacks work as before.
+    [[#1008], [#1010]]
+
+### @optique/man
+
+ -  Fixed `formatUsageTermAsRoff()`, `formatDocPageAsMan()`, and the
+    `generateManPage*()` functions to render required options without optional
+    brackets in the man page SYNOPSIS, including options in exclusive branches
+    and required repetitions.  Required option aliases now use
+    parentheses, such as `(-n | --name) STRING`, to preserve their grouping.
+    [[#1004], [#1012]]
 
 
 Version 1.1.9
@@ -1007,13 +1138,6 @@ Released on June 16, 2026.
     the TypeScript return type accordingly.  Also exports the `Json` type
     representing any JSON-serializable value.  [[#811], [#817]]
 
- -  Added `cron()` value parser for validating cron schedule expressions.
-    The parser returns a `CronExpression` object with one property per field,
-    validates ranges, lists, intervals, month names, and weekday names, and
-    supports optional leading seconds and trailing year fields.  A `quartz`
-    option enables common Quartz day-field tokens such as `?`, `L`, `W`, and
-    `#`.  [[#809]]
-
  -  Added `seq()` as an ordered construct combinator for CLI grammars where
     child parsers must run in declaration order instead of shared-buffer
     priority order.  It returns a tuple of child values, preserves declaration
@@ -1069,7 +1193,6 @@ Released on June 16, 2026.
 [#805]: https://github.com/dahlia/optique/pull/805
 [#807]: https://github.com/dahlia/optique/issues/807
 [#808]: https://github.com/dahlia/optique/issues/808
-[#809]: https://github.com/dahlia/optique/issues/809
 [#810]: https://github.com/dahlia/optique/issues/810
 [#811]: https://github.com/dahlia/optique/issues/811
 [#814]: https://github.com/dahlia/optique/pull/814
@@ -1153,6 +1276,46 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.12
+--------------
+
+Released on October 6, 2026.
+
+### @optique/core
+
+ -  Fixed `formatMessage()` and `formatDocPage()` starting automatically
+    wrapped lines with a space.  When a text term that begins with a space,
+    a `values()` separator, or a `showDefault`/`showChoices` prefix such as
+    the default `" ["` wraps onto a new line, its leading whitespace is now
+    dropped, so the line starts at the same column as the text above it.
+    Leading whitespace at the start of a message, after `lineBreak()`, or in
+    `value()` and `values()` items is kept.  [[#1003], [#1006]]
+
+### @optique/run
+
+ -  Fixed `run()`, `runSync()`, and `runAsync()` truncating help, version,
+    completion, and error output when it was piped into a slow reader on
+    Node.js or Bun.  The process used to exit with the expected code after
+    only the first few kilobytes had been delivered.  When standard output
+    or standard error is a pipe or a file on POSIX systems, the default
+    writers now write directly to its file descriptor and return only after
+    the whole text has been written, so the exit that follows no longer
+    discards the rest.  `printError()` with `exitCode` does the same before
+    it exits, which means a mock of `process.stderr.write()` no longer sees
+    its message in that case.  Terminals, Windows, and Deno are unaffected,
+    and custom `stdout`, `stderr`, and `onExit` callbacks work as before.
+    [[#1008], [#1010]]
+
+### @optique/man
+
+ -  Fixed `formatUsageTermAsRoff()`, `formatDocPageAsMan()`, and the
+    `generateManPage*()` functions to render required options without optional
+    brackets in the man page SYNOPSIS, including options in exclusive branches
+    and required repetitions.  Required option aliases now use
+    parentheses, such as `(-n | --name) STRING`, to preserve their grouping.
+    [[#1004], [#1012]]
 
 
 Version 1.0.11

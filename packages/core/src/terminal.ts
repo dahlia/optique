@@ -1,4 +1,5 @@
 import type { MessageTerm } from "./message.ts";
+import { wrapTrimmableFragments } from "./terminal-separators.ts";
 
 /**
  * A program's executable name.
@@ -164,6 +165,9 @@ const styled = (text: string, style: TerminalStyle): TerminalFragment => ({
   style,
   children: [plain(text)],
 });
+// The space between values only separates them, so a wrap may drop it.
+const valuesSeparator = plain(" ");
+wrapTrimmableFragments.add(valuesSeparator);
 /**
  * Optique's built-in terminal theme, with every formatter available for delegation.
  * @since 1.3.0
@@ -210,7 +214,7 @@ export const defaultTerminalTheme: Formatters & {
   values: (term, ctx) => ({
     type: "concat",
     children: term.values.flatMap((value, i) => [
-      ...(i === 0 ? [] : [plain(" ")]),
+      ...(i === 0 ? [] : [valuesSeparator]),
       ctx.format({ type: "value", value }),
     ]),
   }),

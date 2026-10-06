@@ -75,6 +75,23 @@ export function placeText(
   };
 }
 
+// Escape sequences (CSI and OSC) followed by the whitespace that begins the
+// first line, excluding line feeds, which are hard breaks.
+const leadingSpacePattern = // deno-lint-ignore no-control-regex
+  /^((?:\x1B(?:\[[0-9;:]*[@-~]|\][^\x1B\x07]*(?:\x1B\\|\x07)))*)[^\S\n]+/;
+
+/**
+ * Removes the whitespace that begins a text's first line, keeping any
+ * escape sequences before it.  Used when layout moves text that starts with
+ * a separating space to a fresh line.
+ * @param text Rendered text, possibly containing ANSI styles or OSC links.
+ * @returns The text without its leading whitespace.
+ * @internal
+ */
+export function trimLeadingSpace(text: string): string {
+  return text.replace(leadingSpacePattern, "$1");
+}
+
 /** Fixed annotation geometry shared by preflight and placement. @internal */
 export interface AnnotationLayout {
   readonly prefix: string;

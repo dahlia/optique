@@ -36,6 +36,12 @@ declare module "node:fs" {
   }
   export function existsSync(path: string): boolean;
   export function statSync(path: string): Stats;
+  export function writeSync(
+    fd: number,
+    buffer: Uint8Array,
+    offset?: number,
+    length?: number,
+  ): number;
 }
 
 declare module "node:path" {
@@ -53,12 +59,14 @@ declare module "node:path" {
 declare module "node:process" {
   interface WritableStreamLike {
     readonly columns?: number;
+    readonly fd: number;
     readonly isTTY?: boolean;
     write(chunk: string): boolean;
   }
 
   declare const process: {
     argv: string[];
+    platform: string;
     readonly env: Readonly<Record<string, string | undefined>>;
     stdout: WritableStreamLike;
     stderr: WritableStreamLike;

@@ -16,7 +16,8 @@
   ],
   "publish": {
     "exclude": [
-      "src/fixtures/terminal-capabilities.ts"
+      "src/fixtures/terminal-capabilities.ts",
+      "test-fixtures/"
     ]
   },
   "tasks": {

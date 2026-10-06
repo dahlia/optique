@@ -8,6 +8,7 @@ import {
   type TerminalTerm,
   type TerminalTheme,
 } from "./terminal.ts";
+import { wrapTrimmableFragments } from "./terminal-separators.ts";
 
 export interface Scope {
   readonly kind: "style" | "link";
@@ -24,6 +25,11 @@ export interface TerminalToken {
   readonly programBoundary?: boolean;
   /** Enables only the legacy default formatter whitespace behavior. */
   readonly legacyWhitespace?: boolean;
+  /**
+   * Leading whitespace only separates the token from preceding content, so
+   * message wrapping may drop it when the token starts a wrapped line.
+   */
+  readonly trimOnWrap?: boolean;
 }
 export function terminalText(text: string): TerminalFragment {
   return { type: "text", text };
@@ -236,11 +242,19 @@ export function* fragmentTokens(
   inherited: TerminalStyle = {},
 ): Generator<TerminalToken> {
   if (fragment.type === "text") {
+    const marks = wrapTrimmableFragments.has(fragment)
+      ? { trimOnWrap: true }
+      : {};
     const lines = fragment.text.split("\n");
     for (let i = 0; i < lines.length; i++) {
       if (i > 0) yield { text: "\n", width: -1, scopes };
       if (lines[i].length > 0 || lines.length === 1) {
-        yield { text: lines[i], width: getDisplayWidth(lines[i]), scopes };
+        yield {
+          text: lines[i],
+          width: getDisplayWidth(lines[i]),
+          scopes,
+          ...marks,
+        };
       }
     }
     return;

@@ -8,6 +8,7 @@ import type {
   MessageFormatOptions,
   MessageFormatter,
 } from "@optique/core/message";
+import { writeOutput } from "./output.ts";
 import process from "node:process";
 
 /**
@@ -40,6 +41,12 @@ export interface PrintErrorOptions extends PrintOptions {
   /**
    * Exit code to use when exiting the process.
    * If specified, the process will exit with this code after printing the error.
+   *
+   * When the output stream is a pipe or a file on POSIX systems under Node.js
+   * or Bun, the error message is written directly to its file descriptor, and
+   * the process exits only after the whole message has been written, even if
+   * the reader is slow.  Output that earlier calls queued in the stream is not
+   * flushed.
    */
   readonly exitCode?: number;
 }
@@ -118,6 +125,9 @@ export function print(message: Message, options: PrintOptions = {}): void {
  * @param options Optional formatting options and exit code.
  * @throws {TypeError} If initialWidth is not a finite integer.
  * @throws {RangeError} If initialWidth is negative or a theme color is invalid.
+ * @throws {Error} If `exitCode` is specified and writing the message directly
+ *         to the output stream's file descriptor fails for a reason other
+ *         than the reader having gone away (for example, `ENOSPC`).
  *
  * @example
  * ```typescript
@@ -160,9 +170,14 @@ export function printError(
     quotes,
     maxWidth: options.maxWidth ?? output.columns,
   });
-  output.write(formatted + "\n");
+  const text = formatted + "\n";
 
-  if (options.exitCode != null) {
+  if (options.exitCode == null) {
+    output.write(text);
+  } else {
+    // Finish writing to pipes and files before exiting, since process.exit()
+    // discards output still queued in the stream:
+    writeOutput(stream, text);
     process.exit(options.exitCode);
   }
 }
@@ -198,7 +213,21 @@ export function printError(
  */
 export function createPrinter(options: PrinterOptions = {}): Printer {
   const stream = options.stream ?? "stdout";
-  const output = process[stream];
+  const format = createFormatter(options);
+
+  return (message: Message) => {
+    process[stream].write(format(message) + "\n");
+  };
+}
+
+/**
+ * Creates a function that formats messages for the given stream, resolving
+ * terminal-dependent defaults once, at creation time.
+ */
+function createFormatter(
+  options: PrinterOptions,
+): (message: Message) => string {
+  const output = process[options.stream ?? "stdout"];
 
   const formatMessage = resolveMessageFormatter(options);
   const formatOptions: MessageFormatOptions = {
@@ -208,13 +237,5 @@ export function createPrinter(options: PrinterOptions = {}): Printer {
     maxWidth: options.maxWidth ?? output.columns,
   };
 
-  return (message: Message) => {
-    const formatted = formatMessage(message, formatOptions);
-
-    if (stream === "stderr") {
-      process.stderr.write(formatted + "\n");
-    } else {
-      process.stdout.write(formatted + "\n");
-    }
-  };
+  return (message: Message) => formatMessage(message, formatOptions);
 }
