@@ -1,3 +1,8 @@
+import {
+  defineEmptyInputBehavior,
+  getEmptyInputBehavior,
+} from "@optique/core/extension";
+import { formatUsage } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
@@ -6,6 +11,7 @@ import {
   concat,
   conditional,
   group,
+  longestMatch,
   merge,
   object,
   or,
@@ -9136,5 +9142,69 @@ describe("nested command-line sources beside a prompted source", () => {
         nested: { fw: "hono" },
       });
     }
+  });
+});
+
+describe("empty-input behavior", () => {
+  it("should declare only source-independent steps without evaluating fallbacks", async () => {
+    const { prompt, calls } = createTestPrompt();
+    const bind = (inner: Parser<"sync", string, unknown>) =>
+      prompt(inner, { value: "fallback" });
+    const provisional: Parser<"sync", string, undefined> = {
+      ...fail<string>(),
+      parse(context) {
+        return {
+          success: true,
+          provisional: true,
+          next: context,
+          consumed: [],
+        };
+      },
+    };
+    defineEmptyInputBehavior(provisional, {
+      step: "provisional",
+      afterStep: false,
+      fromInitial: false,
+    });
+    const cases: readonly (readonly [
+      Parser<"sync", string, unknown>,
+      "success" | "provisional" | undefined,
+    ])[] = [
+      [fail<string>(), "success"],
+      [constant("value"), "success"],
+      [provisional, "provisional"],
+      [{ ...fail<string>() }, undefined],
+    ];
+    for (const [inner, step] of cases) {
+      const parser = bind(inner);
+      assert.deepEqual(
+        getEmptyInputBehavior(parser),
+        step === undefined ? {} : { step },
+      );
+      assert.equal(calls.length, 0);
+      const result = await parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(result.success);
+      assert.equal(result.provisional === true, step === "provisional");
+      assert.equal(
+        getEmptyInputBehavior(longestMatch(parser, constant("fallback")))
+          .afterStep,
+        step === "provisional" ? true : undefined,
+      );
+      assert.equal(getEmptyInputBehavior(tuple([parser])).afterStep, undefined);
+    }
+    const bound = bind(fail<string>());
+    const ambiguous = or(
+      bound,
+      bound,
+      optional(argument(string({ metavar: "FILE" }))),
+    );
+    assert.equal(getEmptyInputBehavior(ambiguous).step, "failure");
+    assert.equal(formatUsage("app", ambiguous.usage), "app (FILE)");
+    assert.ok(!(await parseAsync(ambiguous, [])).success);
   });
 });

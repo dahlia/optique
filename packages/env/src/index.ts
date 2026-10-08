@@ -1,4 +1,8 @@
 import {
+  defineEmptyInputBehavior,
+  getEmptyInputBehavior,
+} from "@optique/core/extension";
+import {
   type DocEntry,
   type EnvironmentBindingDoc,
   isDocEntryHidden,
@@ -1126,6 +1130,14 @@ export function bindEnv<
     enumerable: false,
   });
   delegateOptionParsing(boundParser, parser, getInnerState);
+  // Sources and fallback validators are only resolved during completion.
+  // The empty step preserves success/provisional or accepts a non-match.
+  const emptyStep = getEmptyInputBehavior(parser).step;
+  defineEmptyInputBehavior(boundParser, {
+    ...(emptyStep === undefined ? {} : {
+      step: emptyStep === "failure" ? "success" : emptyStep,
+    }),
+  });
   return fluent(boundParser) as EnvBoundParser<M, TValue, TState>;
 }
 

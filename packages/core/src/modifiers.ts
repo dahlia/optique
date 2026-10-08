@@ -1987,6 +1987,16 @@ export function map<M extends Mode, T, U, TState>(
   // failing completion is known without running user code.
   const innerFacts = getEmptyInputFacts(parser);
   defineEmptyInputFacts(mappedParser, {
+    ...(innerFacts.probe == null ? {} : {
+      probe: {
+        step: innerFacts.probe.step,
+        next: innerFacts.probe.next,
+        ...(innerFacts.probe.afterStep === false ? { afterStep: false } : {}),
+        ...(innerFacts.probe.fromInitial === false
+          ? { fromInitial: false }
+          : {}),
+      },
+    }),
     ...(innerFacts.step == null ? {} : { step: innerFacts.step }),
     ...(innerFacts.next == null ? {} : { next: innerFacts.next }),
     ...(innerFacts.afterStep === false ? { afterStep: false } : {}),
@@ -3792,6 +3802,9 @@ export function nonEmpty<M extends Mode, T, TState>(
   // from the initial state exactly as its inner parser does.
   const innerFacts = getEmptyInputFacts(parser);
   defineEmptyInputFacts(scopedNonEmptyParser, {
+    ...(innerFacts.probe == null ? {} : {
+      probe: { step: "failure", fromInitial: innerFacts.probe.fromInitial },
+    }),
     step: "failure",
     ...(innerFacts.fromInitial == null
       ? {}

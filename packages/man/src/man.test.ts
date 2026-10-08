@@ -9,9 +9,11 @@ import {
 import type { DocPage, DocSection } from "@optique/core/doc";
 import type { Usage, UsageTerm } from "@optique/core/usage";
 import { message, valueSet } from "@optique/core/message";
-import { command, constant } from "@optique/core/primitives";
-import { or } from "@optique/core/constructs";
-import { getDocPage } from "@optique/core/parser";
+import { argument, command, constant } from "@optique/core/primitives";
+import { group, or } from "@optique/core/constructs";
+import { getDocPage, parse } from "@optique/core/parser";
+import { defineEmptyInputBehavior } from "@optique/core/extension";
+import { string } from "@optique/core/valueparser";
 
 describe("formatDateForMan()", () => {
   it("formats Date object to 'Month Year' format", () => {
@@ -39,6 +41,22 @@ describe("formatDateForMan()", () => {
 });
 
 describe("formatUsageTermAsRoff()", () => {
+  it("should honor custom declarations through document normalization and visibility", () => {
+    const custom = { ...constant("fallback") };
+    const branch = argument(string({ metavar: "FILE" }));
+    const unknown = or(custom, branch);
+    assert.equal(formatUsageTermAsRoff(unknown.usage[0]), "\\fIFILE\\fR");
+    defineEmptyInputBehavior(custom, {
+      step: "success",
+      afterStep: true,
+      fromInitial: true,
+    });
+    const parser = group("files", or(custom, branch), { hidden: "doc" });
+    assert.ok(parse(parser, []).success);
+    const page = getDocPage(parser);
+    assert.ok(page?.usage);
+    assert.equal(formatUsageTermAsRoff(page.usage[0]), "[\\fIFILE\\fR]");
+  });
   it("draws a group as omissible exactly when it accepts empty input", () => {
     const file: UsageTerm = { type: "argument", metavar: "FILE" };
     const dir: UsageTerm = { type: "argument", metavar: "DIR" };

@@ -1,3 +1,7 @@
+import {
+  defineEmptyInputBehavior,
+  getEmptyInputBehavior,
+} from "@optique/core/extension";
 /**
  * Configuration file support for Optique with Standard Schema validation.
  *
@@ -1078,6 +1082,14 @@ export function bindConfig<
     });
   }
   delegateOptionParsing(boundParser, parser, getCliState);
+  // Sources and fallback validators are only resolved during completion.
+  // The empty step preserves success/provisional or accepts a non-match.
+  const emptyStep = getEmptyInputBehavior(parser).step;
+  defineEmptyInputBehavior(boundParser, {
+    ...(emptyStep === undefined ? {} : {
+      step: emptyStep === "failure" ? "success" : emptyStep,
+    }),
+  });
   return fluent(boundParser);
 }
 

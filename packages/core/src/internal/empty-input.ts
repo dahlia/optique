@@ -7,8 +7,8 @@
  *
  * The facts are *sound but incomplete*: every rule below returns an unknown
  * fact (`undefined`) for any input it does not explicitly handle, and
- * custom parsers never carry facts.  Facts are never inferred from usage
- * notation.
+ * undeclared custom parsers carry no facts. Facts are never inferred from
+ * usage notation.
  * @internal
  * @module
  */
@@ -17,6 +17,7 @@
  * @internal
  */
 export interface FactsTarget {
+  readonly mode?: unknown;
   readonly parse: unknown;
   readonly complete: unknown;
   readonly initialState: unknown;
@@ -35,6 +36,12 @@ export type EmptyInputStep = "success" | "provisional" | "failure";
  * @internal
  */
 export interface EmptyInputFacts {
+  /**
+   * Facts valid when completion is called as a parse-phase probe. An absent
+   * override means the internal facts hold in both phases.
+   */
+  readonly probe?: EmptyInputFacts;
+
   /**
    * The outcome of `parse()` on an empty buffer from the initial state.
    */
@@ -100,8 +107,35 @@ interface StoredFacts {
   readonly facts: EmptyInputFacts;
   readonly parse: unknown;
   readonly complete: unknown;
-  /** The initial state, unless it is computed by a getter. */
-  readonly initialState?: { readonly value: unknown };
+  readonly mode: unknown;
+  readonly initialState: InitialStateBinding;
+}
+
+type InitialStateBinding =
+  | { readonly kind: "data"; readonly value: unknown }
+  | { readonly kind: "accessor"; readonly get: unknown };
+
+function initialStateBinding(parser: FactsTarget): InitialStateBinding {
+  let target: object | null = parser;
+  while (target != null) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, "initialState");
+    if (descriptor != null) {
+      return "value" in descriptor
+        ? { kind: "data", value: descriptor.value }
+        : { kind: "accessor", get: descriptor.get };
+    }
+    target = Object.getPrototypeOf(target);
+  }
+  return { kind: "data", value: undefined };
+}
+
+function sameInitialState(
+  a: InitialStateBinding,
+  b: InitialStateBinding,
+): boolean {
+  return a.kind === "data" && b.kind === "data"
+    ? Object.is(a.value, b.value)
+    : a.kind === "accessor" && b.kind === "accessor" && a.get === b.get;
 }
 
 type ParserWithFacts = {
@@ -114,7 +148,8 @@ const UNKNOWN: EmptyInputFacts = Object.freeze({});
  * Attaches empty-input facts to a parser.  The facts are stored as a
  * non-enumerable property, so object spread does not copy them, and they
  * are bound to the parser's current `parse`, `complete`, and
- * `initialState`, so replacing any of those invalidates them.
+ * `initialState`, and mode, so replacing any of those invalidates them.
+ * State accessors are bound by getter identity without invoking them.
  * @param parser The parser to annotate.
  * @param facts The facts to attach.
  * @internal
@@ -123,17 +158,19 @@ export function defineEmptyInputFacts(
   parser: FactsTarget,
   facts: EmptyInputFacts,
 ): void {
-  if (Object.keys(facts).length < 1) return;
+  if (Object.keys(facts).length < 1) {
+    if (!Reflect.deleteProperty(parser, emptyInputFactsKey)) {
+      throw new TypeError("Cannot clear empty-input facts on this parser.");
+    }
+    return;
+  }
   Object.defineProperty(parser, emptyInputFactsKey, {
     value: {
-      facts,
+      facts: Object.freeze({ ...facts }),
       parse: parser.parse,
       complete: parser.complete,
-      // Some parsers compute a fresh initial state on every access, so
-      // only a plain initial state value can be compared by identity.
-      ...(Object.getOwnPropertyDescriptor(parser, "initialState")?.get == null
-        ? { initialState: { value: parser.initialState } }
-        : {}),
+      mode: parser.mode,
+      initialState: initialStateBinding(parser),
     } satisfies StoredFacts,
     configurable: true,
     enumerable: false,
@@ -151,16 +188,46 @@ export function defineEmptyInputFacts(
 export function getEmptyInputFacts(
   parser: FactsTarget,
 ): EmptyInputFacts {
+  if (!Object.hasOwn(parser, emptyInputFactsKey)) return UNKNOWN;
   const stored = (parser as ParserWithFacts)[emptyInputFactsKey];
   if (
     stored == null || stored.parse !== parser.parse ||
-    stored.complete !== parser.complete ||
-    (stored.initialState != null &&
-      stored.initialState.value !== parser.initialState)
+    stored.complete !== parser.complete || stored.mode !== parser.mode ||
+    !sameInitialState(stored.initialState, initialStateBinding(parser))
   ) {
     return UNKNOWN;
   }
   return stored.facts;
+}
+
+/**
+ * Copies facts for an explicitly transparent wrapper, preserving internal
+ * state information only when its execution members match the source.
+ * @param wrapper The receiving parser.
+ * @param inner The wrapped parser.
+ * @internal
+ */
+export function inheritEmptyInputFacts(
+  wrapper: FactsTarget,
+  inner: FactsTarget,
+): void {
+  const facts = getEmptyInputFacts(inner);
+  const identical = wrapper.parse === inner.parse &&
+    wrapper.complete === inner.complete &&
+    sameInitialState(initialStateBinding(wrapper), initialStateBinding(inner));
+  defineEmptyInputFacts(
+    wrapper,
+    identical ? facts : {
+      ...(Object.keys(facts).length < 1 ? {} : {
+        probe: facts.step === undefined ? {} : { step: facts.step },
+      }),
+      ...(facts.step === undefined ? {} : { step: facts.step }),
+      ...(facts.afterStep === undefined ? {} : { afterStep: facts.afterStep }),
+      ...(facts.fromInitial === undefined
+        ? {}
+        : { fromInitial: facts.fromInitial }),
+    },
+  );
 }
 
 /**
@@ -233,6 +300,24 @@ export function optionalLikeFacts(
   childInitialState: unknown,
   fromInitial: boolean | undefined,
 ): EmptyInputFacts {
+  const facts = computeOptionalLikeFacts(child, childInitialState, fromInitial);
+  return child.probe !== undefined
+    ? {
+      ...facts,
+      probe: computeOptionalLikeFacts(
+        probeFacts(child),
+        childInitialState,
+        fromInitial,
+      ),
+    }
+    : facts;
+}
+
+function computeOptionalLikeFacts(
+  child: EmptyInputFacts,
+  childInitialState: unknown,
+  fromInitial: boolean | undefined,
+): EmptyInputFacts {
   if (child.step === "failure") {
     return {
       step: "success",
@@ -263,6 +348,31 @@ export function optionalLikeFacts(
  * @internal
  */
 export function multipleFacts(
+  child: EmptyInputFacts,
+  retainsItem: boolean | undefined,
+  childInitialState: unknown,
+  min: number,
+): EmptyInputFacts {
+  const facts = computeMultipleFacts(
+    child,
+    retainsItem,
+    childInitialState,
+    min,
+  );
+  return child.probe !== undefined
+    ? {
+      ...facts,
+      probe: computeMultipleFacts(
+        probeFacts(child),
+        retainsItem,
+        childInitialState,
+        min,
+      ),
+    }
+    : facts;
+}
+
+function computeMultipleFacts(
   child: EmptyInputFacts,
   retainsItem: boolean | undefined,
   childInitialState: unknown,
@@ -357,6 +467,20 @@ function exclusiveNextState(index: number): EmptyStepState {
 export function orFacts(
   branches: readonly ExclusiveBranch[],
 ): EmptyInputFacts {
+  const facts = computeOrFacts(branches);
+  return branches.some((c) => c.facts.probe !== undefined)
+    ? {
+      ...facts,
+      probe: computeOrFacts(
+        branches.map((b) => ({ ...b, facts: probeFacts(b.facts) })),
+      ),
+    }
+    : facts;
+}
+
+function computeOrFacts(
+  branches: readonly ExclusiveBranch[],
+): EmptyInputFacts {
   const candidate = selectZeroInputCandidate(branches);
   if (candidate === undefined) return {};
   const fromInitial = exclusiveFromInitial(branches);
@@ -380,6 +504,20 @@ export function orFacts(
 export function longestMatchFacts(
   branches: readonly ExclusiveBranch[],
 ): EmptyInputFacts {
+  const facts = computeLongestMatchFacts(branches);
+  return branches.some((c) => c.facts.probe !== undefined)
+    ? {
+      ...facts,
+      probe: computeLongestMatchFacts(
+        branches.map((b) => ({ ...b, facts: probeFacts(b.facts) })),
+      ),
+    }
+    : facts;
+}
+
+function computeLongestMatchFacts(
+  branches: readonly ExclusiveBranch[],
+): EmptyInputFacts {
   const fromInitial = exclusiveFromInitial(branches);
   let best: { readonly index: number; readonly facts: EmptyInputFacts } | null =
     null;
@@ -397,7 +535,8 @@ export function longestMatchFacts(
   }
   if (best == null) return { step: "failure", fromInitial };
   return {
-    step: best.facts.step,
+    // longestMatch() commits even a provisional candidate definitively.
+    step: "success",
     next: exclusiveNextState(best.index),
     afterStep: best.facts.afterStep,
     fromInitial,
@@ -432,6 +571,20 @@ export interface SequentialChild {
  * @internal
  */
 export function tupleFacts(
+  children: readonly SequentialChild[],
+): EmptyInputFacts {
+  const facts = computeTupleFacts(children);
+  return children.some((c) => c.facts.probe !== undefined)
+    ? {
+      ...facts,
+      probe: computeTupleFacts(
+        children.map((c) => ({ ...c, facts: probeFacts(c.facts) })),
+      ),
+    }
+    : facts;
+}
+
+function computeTupleFacts(
   children: readonly SequentialChild[],
 ): EmptyInputFacts {
   const fromInitial = all(children.map((c) => c.facts.fromInitial));
@@ -505,6 +658,26 @@ export function objectFacts(
   children: readonly SequentialChild[],
   keys: readonly PropertyKey[],
 ): EmptyInputFacts {
+  const completion = computeObjectFacts(children, keys);
+  if (!children.some((c) => c.facts.probe !== undefined)) return completion;
+  // object() decides its empty parse step using completion in the parse
+  // phase. Public completion outcomes cannot prove that probe succeeds.
+  const probe = computeObjectFacts(
+    children.map((c) => ({ ...c, facts: probeFacts(c.facts) })),
+    keys,
+  );
+  return {
+    ...probe,
+    fromInitial: completion.fromInitial,
+    afterStep: probe.step === "success" ? completion.afterStep : undefined,
+    probe,
+  };
+}
+
+function computeObjectFacts(
+  children: readonly SequentialChild[],
+  keys: readonly PropertyKey[],
+): EmptyInputFacts {
   const fromInitial = all(children.map((c) => c.facts.fromInitial));
   const outcomes: (boolean | undefined)[] = [];
   const changed: [PropertyKey, EmptyStepState][] = [];
@@ -556,4 +729,8 @@ export function withEmptyInputFacts<P extends FactsTarget>(
 ): P {
   defineEmptyInputFacts(parser, facts);
   return parser;
+}
+
+function probeFacts(facts: EmptyInputFacts): EmptyInputFacts {
+  return facts.probe ?? facts;
 }
