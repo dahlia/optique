@@ -177,6 +177,14 @@ To be released.
     signal.  OS-delivered `SIGINT`/`SIGTERM` also stops waiting and rejects with
     an `AbortError`; interactive <kbd>^C</kbd> retains Clack's process-exit
     behavior.  Omit the option to keep resolution silent.  [[#980], [#1018]]
+
+ -  Added `autocomplete` and `autocomplete-multiselect` prompt types for
+    filtering a list of options while choosing one or several values.
+    Both support custom filters and initial selections.  [[#978], [#1019]]
+
+    An enabled option remains selectable when a disabled option shares its
+    value.
+
  -  `prompt()` now accepts a `derivePromptConfig()` result without
     dependency sources, so a selection prompt can load its options
     asynchronously right before it opens.  The resolver receives the abort
@@ -185,9 +193,11 @@ To be released.
     types are re-exported for convenience.  [[#964], [#979]]
 
 [#964]: https://github.com/dahlia/optique/issues/964
+[#978]: https://github.com/dahlia/optique/issues/978
 [#979]: https://github.com/dahlia/optique/pull/979
 [#980]: https://github.com/dahlia/optique/issues/980
 [#1018]: https://github.com/dahlia/optique/pull/1018
+[#1019]: https://github.com/dahlia/optique/pull/1019
 
 ### @optique/derived-defaults
 
@@ -242,6 +252,10 @@ To be released.
 
 ### @optique/inquirer
 
+ -  Added the `search` prompt type for loading choices as the user types.
+    Its `source` callback accepts synchronous or asynchronous results and
+    receives a signal to cancel requests when the query changes.
+    [[#978], [#1019]]
  -  `prompt()` now accepts a `derivePromptConfig()` result without
     dependency sources, so a selection prompt can load its choices
     asynchronously right before it opens.  The resolver receives the abort

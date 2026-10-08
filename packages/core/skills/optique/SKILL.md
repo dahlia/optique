@@ -57,19 +57,20 @@ Core rules
     `dependency(source.deriveSync(...))`. Optique resolves such chains by
     dependency order, independently of object/tuple field order.
  -  Use `derivePromptConfig(source, resolver)` from *@optique/prompt* or its
-    adapter re-exports for choices or messages that depend on parsed values.
-    Async resolvers run at the real fallback after sources resolve; pass
-    `[sourceA, sourceB]` for several sources. Return a prompt kind matching the
-    parser's value type. Derive the CLI parser separately; make it a dependency
-    source only if another consumer needs its answer. Use a lone resolver for
-    fetched choices and forward its `signal`. Clack's third argument accepts
-    `pendingMessage` for a resolver spinner; omit it for silent prompter tests.
- -  Pass `{ validate, maxAttempts, signal }` as a generated prompt wrapper's
-    third argument, including `prompt()` from *@optique/inquirer* and
-    *@optique/clack*. The validator returns `undefined` to accept the prompted
-    value or a structured `Message` to retry, synchronously or asynchronously.
-    Attempt limits must be positive integers and default to unlimited retries.
-    Selection prompts keep their config and use the shared `validate` option.
+    adapters for choices/messages depending on parsed values; use
+    `[sourceA, sourceB]` for several sources. Async resolvers run at fallback
+    after sources resolve. Match the prompt kind to the parser's value type;
+    derive the CLI parser separately. A lone resolver fetches choices lazily;
+    forward its `signal`. Clack `pendingMessage` enables a resolver spinner.
+ -  Pass `{ validate, maxAttempts, signal }` as `prompt()`'s third argument.
+    Return `undefined` to accept or a structured `Message` to retry, sync/async.
+    Attempt limits are positive integers; retries default to unlimited.
+    Clack `autocomplete` also has sync native validation; Inquirer `search`
+    has sync/async native validation. Multi selections use shared validation.
+ -  Clack `autocomplete` filters one selection; `autocomplete-multiselect`
+    returns `readonly string[]`. Both take array `options`. Inquirer `search`
+    calls `source(term, { signal })` per query; forward the signal to requests.
+    Empty search input gives `undefined`.
  -  Implement a custom adapter's `execute(config, context)` so retries can show
     `context.previousValidationMessage`, and forward `context.signal` when the
     prompt library supports aborting active work. Adapter-native validation
