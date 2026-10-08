@@ -1325,9 +1325,15 @@ export function formatDocPage(
       ) => {
         let prefixText = layout.prefix;
         let prefix = placeText(prefixText, cursor, descColumnWidth, 1);
-        if (prefix.text !== layout.prefix) {
+        if (
+          prefix.text !== layout.prefix ||
+          descColumnWidth != null && cursor.column === 0 &&
+            layout.prefixMetrics.firstLineWidth > descColumnWidth
+        ) {
           // Keep a layout-inserted break outside the ambient style, as before.
-          description += "\n";
+          // At column zero the heading can start here, even if placeText did
+          // not request a break for an overflowing multiline first line.
+          if (cursor.column > 0) description += "\n";
           // The prefix (with any label) now starts a new line, so its leading
           // whitespace no longer separates it from anything; drop it.
           prefixText = trimLeadingSpace(layout.prefix);

@@ -83,6 +83,11 @@ To be released.
     time for commands with many positional arguments.  Custom mismatch error
     callbacks now run when their diagnostic is requested, so callbacks used
     for side effects may run fewer times.  [[#989], [#997]]
+ -  Fixed `formatDocPage()` to accept narrow widths when annotation headings
+    for defaults, choices, aliases, and environment variables fit after
+    removing their leading separator whitespace.  Headings that need trimming
+    now start in an empty description column without an extra line break.
+    [[#1009], [#1017]]
  -  Fixed known option errors being hidden by `passThrough()` when a
     zero-consuming `longestMatch()` fallback is nested inside containers,
     `or()`, optional or repeated parsers, or source bindings.  Missing values
@@ -113,10 +118,12 @@ To be released.
 [#1000]: https://github.com/dahlia/optique/pull/1000
 [#1002]: https://github.com/dahlia/optique/issues/1002
 [#1005]: https://github.com/dahlia/optique/pull/1005
+[#1009]: https://github.com/dahlia/optique/issues/1009
 [#1013]: https://github.com/dahlia/optique/issues/1013
 [#1014]: https://github.com/dahlia/optique/issues/1014
 [#1015]: https://github.com/dahlia/optique/pull/1015
 [#1016]: https://github.com/dahlia/optique/pull/1016
+[#1017]: https://github.com/dahlia/optique/pull/1017
 
 ### @optique/run
 

@@ -9,11 +9,17 @@ import {
   formatDocPage,
   isDocEntryHidden,
 } from "@optique/core/doc";
-import { message, value, valueSet } from "@optique/core/message";
+import {
+  lineBreak,
+  message,
+  text,
+  value,
+  valueSet,
+} from "@optique/core/message";
 import type { OptionName } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getDisplayWidth } from "#src/displaywidth.ts";
+import { getDisplayWidth, stripAnsi } from "#src/displaywidth.ts";
 
 describe("formatDocPage", () => {
   it("should format a minimal page with only sections", () => {
@@ -1615,6 +1621,243 @@ describe("formatDocPage", () => {
     });
   });
 
+  // https://github.com/dahlia/optique/issues/1009
+  describe("annotation headings in narrow columns", () => {
+    const page = (entry: Omit<DocEntry, "term">): DocPage => ({
+      sections: [{
+        entries: [{ term: { type: "option", names: ["-c"] }, ...entry }],
+      }],
+    });
+    const showDefault = { prefix: "    [", suffix: "]" };
+
+    it("should accept the issue example and fit its wrapped annotation", () => {
+      const result = formatDocPage(
+        "app",
+        page({
+          description: [text("Color")],
+          default: [text("x")],
+        }),
+        { maxWidth: 10, showDefault },
+      );
+      // The unbreakable description word retains its existing overflow.
+      assert.equal(result, "\n  -c   Color\n       [x]\n");
+      assert.equal(getDisplayWidth(result.split("\n")[2]), 10);
+    });
+
+    for (const colors of [false, true]) {
+      it(`should fit a wrapped default with colors=${colors}`, () => {
+        const result = formatDocPage(
+          "app",
+          page({
+            description: [text("C")],
+            default: [text("x")],
+          }),
+          { maxWidth: 10, showDefault, colors },
+        );
+        assert.equal(stripAnsi(result), "\n  -c   C\n       [x]\n");
+        assertLinesWithinMaxWidth(result, 10);
+      });
+
+      it(`should trim the joined choices heading with colors=${colors}`, () => {
+        const options = {
+          maxWidth: 7,
+          termWidth: 1,
+          showChoices: { prefix: "    ", label: " X ", suffix: "" },
+          colors,
+        };
+        const choicesPage = page({ choices: [text("a")] });
+        assert.throws(
+          () => formatDocPage("app", choicesPage, { ...options, maxWidth: 6 }),
+          {
+            name: "RangeError",
+            message: "maxWidth must be at least 7, got 6.",
+          },
+        );
+        const result = formatDocPage("app", choicesPage, options);
+        assert.equal(stripAnsi(result), "\n  -c  \n     X \n     a\n");
+        assertLinesWithinMaxWidth(result, 7);
+      });
+    }
+
+    it("should keep a trimmed default on the term line without a description", () => {
+      for (const description of [undefined, [], [text("")]]) {
+        const result = formatDocPage(
+          "app",
+          page({
+            description,
+            default: [text("x")],
+          }),
+          { maxWidth: 10, showDefault },
+        );
+        assert.equal(result, "\n  -c   [x]\n");
+        assertLinesWithinMaxWidth(result, 10);
+      }
+      assert.equal(
+        formatDocPage("app", page({ default: [text("x")] }), {
+          maxWidth: 13,
+          showDefault,
+        }),
+        "\n  -c    [x]\n",
+      );
+    });
+
+    it("should place a default on the term line at its minimum width", () => {
+      assert.equal(
+        formatDocPage("app", {
+          sections: [{
+            entries: [{
+              term: { type: "argument", metavar: "X" },
+              default: [text("0")],
+            }],
+          }],
+        }, { maxWidth: 7, showDefault: true }),
+        "\n  X  [\n     0]\n",
+      );
+    });
+
+    it("should keep fitting separator spaces inline and at column zero", () => {
+      for (const description of [undefined, [text("C")]]) {
+        const result = formatDocPage(
+          "app",
+          page({
+            description,
+            default: [text("x")],
+          }),
+          { maxWidth: 12, termWidth: 2, showDefault: true },
+        );
+        assert.equal(
+          result,
+          description == null ? "\n  -c   [x]\n" : "\n  -c  C [x]\n",
+        );
+      }
+    });
+
+    it("should not add a blank line after an explicit description break", () => {
+      assert.equal(
+        formatDocPage(
+          "app",
+          page({
+            description: [text("C"), lineBreak()],
+            default: [text("x")],
+          }),
+          { maxWidth: 10, showDefault },
+        ),
+        "\n  -c   C\n       [x]\n",
+      );
+    });
+
+    it("should not add a blank line after an annotation suffix break", () => {
+      assert.equal(
+        formatDocPage(
+          "app",
+          page({
+            default: [text("x")],
+            choices: [text("y")],
+          }),
+          {
+            maxWidth: 10,
+            showDefault: { prefix: "[", suffix: "]\n" },
+            showChoices: { prefix: "    (", label: "", suffix: ")" },
+          },
+        ),
+        "\n  -c   [x]\n       (y)\n",
+      );
+    });
+
+    it("should keep the continuation break after an overwide term", () => {
+      const result = formatDocPage("app", page({ choices: [text("x")] }), {
+        maxWidth: 15,
+        termWidth: 1,
+        showChoices: true,
+      });
+      assert.equal(result, "\n  -c  \n     (choices: \n     x)\n");
+      assertLinesWithinMaxWidth(result, 15);
+    });
+
+    it("should place choices on the term line at the split minimum", () => {
+      const result = formatDocPage("app", page({ choices: [text("x")] }), {
+        maxWidth: 23,
+        showChoices: true,
+      });
+      assert.equal(result, "\n  -c         (choices: \n             x)\n");
+      assertLinesWithinMaxWidth(result, 23);
+    });
+
+    it("should trim an overflowing multiline heading at column zero", () => {
+      for (const description of [undefined, [text("C"), lineBreak()]]) {
+        const choicesPage = page({ description, choices: [text("x")] });
+        const options = {
+          maxWidth: 21,
+          showChoices: { label: "choices:\n" },
+        };
+        assert.throws(
+          () => formatDocPage("app", choicesPage, { ...options, maxWidth: 20 }),
+          {
+            name: "RangeError",
+            message: "maxWidth must be at least 21, got 20.",
+          },
+        );
+        const result = formatDocPage("app", choicesPage, options);
+        assert.equal(
+          result,
+          description == null
+            ? "\n  -c        (choices:\n            x)\n"
+            : "\n  -c        C\n            (choices:\n            x)\n",
+        );
+        assertLinesWithinMaxWidth(result, 21);
+      }
+      const result = formatDocPage("app", page({ default: [text("x")] }), {
+        maxWidth: 8,
+        showDefault: { prefix: "    [\n", suffix: "]" },
+      });
+      assert.equal(result, "\n  -c  [\n      x]\n");
+      assertLinesWithinMaxWidth(result, 8);
+    });
+
+    it("should retain suffix and later heading line width constraints", () => {
+      for (
+        const showDefault of [
+          { prefix: "    [", suffix: "]]" },
+          { prefix: "    [\nABC", suffix: "]" },
+          { prefix: "    [", suffix: "]\nABC" },
+        ]
+      ) {
+        assert.throws(
+          () =>
+            formatDocPage("app", page({ default: [text("x")] }), {
+              maxWidth: 8,
+              showDefault,
+            }),
+          {
+            name: "RangeError",
+            message: "maxWidth must be at least 9, got 8.",
+          },
+        );
+      }
+    });
+
+    it("should use the trimmed environment heading minimum", () => {
+      const envPage = page({ envVars: ["X"] });
+      assert.throws(
+        () =>
+          formatDocPage("app", envPage, {
+            maxWidth: 14,
+            showEnvironment: true,
+          }),
+        {
+          name: "RangeError",
+          message: "maxWidth must be at least 15, got 14.",
+        },
+      );
+      const result = formatDocPage("app", envPage, {
+        maxWidth: 15,
+        showEnvironment: true,
+      });
+      assert.equal(result, "\n  -c     [env: \n         X]\n");
+      assertLinesWithinMaxWidth(result, 15);
+    });
+  });
+
   // https://github.com/dahlia/optique/issues/1003
   describe("annotation prefixes at automatic wraps", () => {
     const page = (
@@ -2383,20 +2626,6 @@ describe("formatDocPage", () => {
       }],
     };
 
-    function assertLinesWithinMaxWidth(
-      result: string,
-      maxWidth: number,
-    ): void {
-      for (const line of result.split("\n")) {
-        assert.ok(
-          getDisplayWidth(line) <= maxWidth,
-          `Line exceeds maxWidth ${maxWidth}: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
-        );
-      }
-    }
-
     it("should not exceed maxWidth when smaller than default layout budget", () => {
       const maxWidth = 20;
       const result = formatDocPage("myapp", simplePage, { maxWidth });
@@ -2700,21 +2929,20 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // showChoices prefix " (" (2) + label "choices: " (9) = 11
-      // suffix wraps with content
-      // minDescWidth=11, minimum = termIndent(2) + max(4, 2*11+1) = 2 + 23 = 25
+      // Trimmed heading "(choices: " is 10 columns wide.
+      // Split minimum = termIndent(2) + gap(2) + (2*10 - 1) = 23.
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 24, showChoices: true }),
+        () => formatDocPage("app", page, { maxWidth: 22, showChoices: true }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 25, got 24.",
+          message: "maxWidth must be at least 23, got 22.",
         },
       );
       const result = formatDocPage("app", page, {
-        maxWidth: 25,
+        maxWidth: 23,
         showChoices: true,
       });
-      assertLinesWithinMaxWidth(result, 25);
+      assertLinesWithinMaxWidth(result, 23);
     });
 
     it("should reject maxWidth in the gap between split and non-split ranges", () => {
@@ -2728,34 +2956,34 @@ describe("formatDocPage", () => {
         }],
       };
       // Default termWidth=26, termIndent=2.
-      // showChoices prefix+label = 2+9 = 11
-      // Split range works at small maxWidth (e.g. 25).
-      // Non-split needs: 2 + 26 + 2 + 11 = 41.
-      // Gap: 26..40 should be rejected.
-      const result25 = formatDocPage("app", page, {
-        maxWidth: 25,
+      // Trimmed showChoices heading = 1+9 = 10.
+      // Split range works at small maxWidth (e.g. 23).
+      // Non-split needs: 2 + 26 + 2 + 10 = 40.
+      // Fixed-term widths 31..39 leave too little description space.
+      const result23 = formatDocPage("app", page, {
+        maxWidth: 23,
         showChoices: true,
       });
-      assertLinesWithinMaxWidth(result25, 25);
+      assertLinesWithinMaxWidth(result23, 23);
       assert.throws(
         () => formatDocPage("app", page, { maxWidth: 31, showChoices: true }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 41, got 31.",
+          message: "maxWidth must be at least 40, got 31.",
         },
       );
       assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 40, showChoices: true }),
+        () => formatDocPage("app", page, { maxWidth: 39, showChoices: true }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 41, got 40.",
+          message: "maxWidth must be at least 40, got 39.",
         },
       );
-      const result41 = formatDocPage("app", page, {
-        maxWidth: 41,
+      const result40 = formatDocPage("app", page, {
+        maxWidth: 40,
         showChoices: true,
       });
-      assertLinesWithinMaxWidth(result41, 41);
+      assertLinesWithinMaxWidth(result40, 40);
     });
 
     it("should treat empty-array defaults and choices as absent", () => {
@@ -2834,26 +3062,26 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // termWidth=1: fixedEntryMin = 2+2+1+11 = 16, splitEntryMin = 2+2+21 = 25
-      // min(16, 25) = 16
+      // Trimmed choices heading is 10 columns wide.
+      // termWidth=1: fixed minimum is 2+2+1+10 = 15; split minimum is 23.
       assert.throws(
         () =>
           formatDocPage("app", page, {
-            maxWidth: 15,
+            maxWidth: 14,
             showChoices: true,
             termWidth: 1,
           }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 16, got 15.",
+          message: "maxWidth must be at least 15, got 14.",
         },
       );
       const result = formatDocPage("app", page, {
-        maxWidth: 16,
+        maxWidth: 15,
         showChoices: true,
         termWidth: 1,
       });
-      assertLinesWithinMaxWidth(result, 16);
+      assertLinesWithinMaxWidth(result, 15);
     });
 
     it("should use max of all applicable minimums", () => {
@@ -2920,25 +3148,24 @@ describe("formatDocPage", () => {
           }],
         }],
       };
-      // Custom label "v: " (3), prefix " (" (2), suffix wraps with content
-      // minDescWidth = 2 + 3 = 5
-      // minimum = termIndent(2) + max(4, 2*5+1) = 2 + 11 = 13
+      // Trimmed heading "(v: " is 4 columns wide.
+      // Split minimum = termIndent(2) + gap(2) + (2*4 - 1) = 11.
       assert.throws(
         () =>
           formatDocPage("app", page, {
-            maxWidth: 12,
+            maxWidth: 10,
             showChoices: { label: "v: " },
           }),
         {
           name: "RangeError",
-          message: "maxWidth must be at least 13, got 12.",
+          message: "maxWidth must be at least 11, got 10.",
         },
       );
       const result = formatDocPage("app", page, {
-        maxWidth: 13,
+        maxWidth: 11,
         showChoices: { label: "v: " },
       });
-      assertLinesWithinMaxWidth(result, 13);
+      assertLinesWithinMaxWidth(result, 11);
     });
 
     it("uses fallback prefix ' [' when showDefault has no prefix (maxWidth path)", () => {
@@ -4120,20 +4347,29 @@ describe("formatDocPage() showAliases", () => {
   });
 
   it("validates maxWidth against a visible alias annotation", () => {
-    // prefix " (" (2) + label "aliases: " (9) = 11 => minimum
-    // termIndent(2) + 2 + max(2, 2*11 - 1) = 25.
+    // Trimmed heading "(aliases: " is 10 columns wide => minimum
+    // termIndent(2) + 2 + max(2, 2*10 - 1) = 23.
     const page = commandPage({}, ["i"]);
     assert.throws(
-      () => formatDocPage("app", page, { maxWidth: 24, showAliases: true }),
-      { name: "RangeError", message: "maxWidth must be at least 25, got 24." },
+      () => formatDocPage("app", page, { maxWidth: 22, showAliases: true }),
+      { name: "RangeError", message: "maxWidth must be at least 23, got 22." },
     );
     assert.throws(
       () =>
         formatDocPage("app", commandPage({ showAliases: true }, ["i"]), {
-          maxWidth: 24,
+          maxWidth: 22,
         }),
-      { name: "RangeError", message: "maxWidth must be at least 25, got 24." },
+      { name: "RangeError", message: "maxWidth must be at least 23, got 22." },
     );
+  });
+
+  it("accepts the trimmed alias heading at its minimum width", () => {
+    const result = formatDocPage("app", commandPage({}, ["i"]), {
+      maxWidth: 23,
+      showAliases: true,
+    });
+    assert.ok(result.includes("(aliases: "));
+    assertLinesWithinMaxWidth(result, 23);
   });
 
   it("ignores hidden alias annotations in maxWidth validation", () => {
@@ -4157,3 +4393,19 @@ describe("cloneDocEntry() showAliases", () => {
     assert.notEqual(cloned.term, entry.term);
   });
 });
+
+// Helpers
+
+function assertLinesWithinMaxWidth(
+  result: string,
+  maxWidth: number,
+): void {
+  for (const line of result.split("\n")) {
+    assert.ok(
+      getDisplayWidth(line) <= maxWidth,
+      `Line exceeds maxWidth ${maxWidth}: "${line}" (${
+        getDisplayWidth(line)
+      } columns)`,
+    );
+  }
+}

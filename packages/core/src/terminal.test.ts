@@ -848,6 +848,38 @@ it("resets occupied width after multiline default prefixes", () => {
 });
 
 describe("physical-line annotation layout", () => {
+  it("should fit a trimmed styled and linked heading at narrow width", () => {
+    const theme: TerminalTheme = {
+      syntaxPunctuation: (term, context) =>
+        term.kind === "defaultPrefix"
+          ? {
+            type: "style",
+            style: { foreground: "red" },
+            children: [{
+              type: "link",
+              href: "https://example.com/",
+              children: [{ type: "text", text: "    [" }],
+            }],
+          }
+          : defaultTerminalTheme.syntaxPunctuation(term, context),
+    };
+    for (const colors of [false, true]) {
+      const result = formatDocPage("app", {
+        sections: [{
+          entries: [{
+            term: { type: "option", names: ["-c"] },
+            default: message`x`,
+          }],
+        }],
+      }, { theme, colors, maxWidth: 10, showDefault: true });
+      assert.equal(stripAnsi(result), "\n  -c   [x]\n");
+      if (colors) {
+        assert.ok(result.includes("\x1b[31m"));
+        assert.ok(result.includes("\x1b]8;;https://example.com/"));
+      }
+    }
+  });
+
   for (const kind of ["default", "choices"] as const) {
     it(`should reserve only the first line of a ${kind} suffix`, () => {
       const result = formatDocPage("app", {
@@ -992,8 +1024,9 @@ describe("annotation composition properties", () => {
       "A\nB",
       "\n\nC\n",
     );
+    const headingPrefix = fc.oneof(affix, fc.constantFrom(" ", " ["));
     fc.assert(
-      fc.property(affix, affix, affix, (prefix, label, suffix) => {
+      fc.property(headingPrefix, affix, affix, (prefix, label, suffix) => {
         const page = {
           sections: [{
             entries: [{
