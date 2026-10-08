@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as fc from "fast-check";
-import { measureText, placeText, trimLeadingSpace } from "./text-layout.ts";
+import {
+  measureAnnotation,
+  measureText,
+  placeText,
+  trimLeadingSpace,
+} from "./text-layout.ts";
 
 const pieces = fc.array(fc.constantFrom(
   "a",
@@ -103,6 +108,39 @@ describe("placeText", () => {
       }),
       { seed: 908, numRuns: 300 },
     );
+  });
+});
+
+describe("measureAnnotation", () => {
+  it("should measure the trimmed heading while retaining inline geometry", () => {
+    const layout = measureAnnotation("    [", "]");
+    assert.equal(layout.minWidth, 2);
+    assert.equal(layout.prefix, "    [");
+    assert.equal(layout.prefixMetrics.firstLineWidth, 5);
+  });
+
+  it("should retain content reservation and every suffix line", () => {
+    assert.equal(measureAnnotation("    ", "").minWidth, 1);
+    assert.equal(measureAnnotation("    [", "]]").minWidth, 3);
+    assert.equal(measureAnnotation("    [", "]\nABCD").minWidth, 4);
+  });
+
+  it("should preserve later heading lines and explicit leading breaks", () => {
+    assert.equal(measureAnnotation("    [\nABCD", "]").minWidth, 4);
+    assert.equal(measureAnnotation("\n    [", "]").minWidth, 5);
+  });
+
+  it("should measure headings with leading ANSI styles and OSC links", () => {
+    for (
+      const prefix of [
+        "\x1b[31m    [\x1b[0m",
+        "\x1b]8;;https://example.com\x1b\\    [\x1b]8;;\x1b\\",
+      ]
+    ) {
+      const layout = measureAnnotation(prefix, "]");
+      assert.equal(layout.minWidth, 2);
+      assert.equal(layout.prefixMetrics.firstLineWidth, 5);
+    }
   });
 });
 

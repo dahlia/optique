@@ -994,6 +994,11 @@ const config2 = run(parser, {
 Default values are automatically dimmed when colors are enabled, making them
 visually distinct from the main help text.
 
+When a default, choices, alias, or environment heading does not fit after the
+description, it continues on the next line without its leading separator
+whitespace.  Width validation uses that trimmed heading too.  If the description
+column is empty, the trimmed heading starts there without an extra line break.
+
 ### Choice display
 
 *This API is available since Optique 0.10.0.*

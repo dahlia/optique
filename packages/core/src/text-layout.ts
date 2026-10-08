@@ -105,8 +105,9 @@ export interface AnnotationLayout {
  * Measures an annotation's fixed text without invoking theme callbacks.
  * @param prefix The already joined prefix and optional label.
  * @param suffix The closing text.
- * @returns Geometry reserving at least one content column after the suffix's
- * first-line width has been deducted from the formatter budget.
+ * @returns Geometry for a heading placed on a fresh line without its leading
+ * separator whitespace, reserving at least one content column after the
+ * suffix's first-line width has been deducted from the formatter budget.
  * @internal
  */
 export function measureAnnotation(
@@ -121,7 +122,7 @@ export function measureAnnotation(
     prefixMetrics,
     suffixMetrics,
     minWidth: Math.max(
-      prefixMetrics.maxLineWidth,
+      measureText(trimLeadingSpace(prefix)).maxLineWidth,
       suffixMetrics.maxLineWidth,
       suffixMetrics.firstLineWidth + 1,
     ),
