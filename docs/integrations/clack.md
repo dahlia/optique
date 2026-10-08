@@ -264,6 +264,109 @@ const color = prompt(option("--color", string()), {
 
 [`Option`]: #option
 
+### `autocomplete`
+
+*Available since Optique 1.4.0.*
+
+Lets the user type to filter a list and choose one value:
+
+~~~~ typescript twoslash
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { prompt } from "@optique/clack";
+
+const region = prompt(option("--region", string()), {
+  type: "autocomplete",
+  message: "Pick a region:",
+  options: ["us-east-1", "us-west-2", { value: "eu-west-1", label: "Ireland" }],
+  placeholder: "Type to search…",
+  maxItems: 8,
+});
+~~~~
+
+`options` accepts a readonly array of strings or [`Option`] objects, just
+like `select`. The list is filtered locally; to fetch it before the prompt
+opens, use [a derived configuration](#options-loaded-at-prompt-time).
+`options` does not accept a function.
+
+`autocomplete` properties
+
+`message`
+:   *(required)* The question to display.
+
+`options`
+:   *(required)* The available strings or `Option` objects.
+
+`initialValue`
+:   The initially selected option value.
+
+`initialUserInput`
+:   Initial text in the search input, separate from the selected value.
+
+`placeholder`
+:   Hint text when the input is empty. Pressing Tab copies it into the input.
+
+`maxItems`
+:   Maximum number of options shown at once.
+
+`filter`
+:   A function `(search, option) => boolean` that replaces Clack's default
+    matching. It receives normalized options: a string becomes an object
+    with that string as both `value` and `label`.
+
+`validate`
+:   A synchronous function `(value: string) => string | void`. Return an
+    error string to keep the prompt open. For asynchronous validation, use
+    the shared `validate` option in `prompt()`'s third argument.
+
+Submitting with no matching option keeps the prompt open and displays a
+validation message. If a custom `prompter` returns a value other than a
+string, parsing fails.
+
+### `autocomplete-multiselect`
+
+*Available since Optique 1.4.0.*
+
+Filters a local list while allowing several selections. The type name uses
+kebab case; the Clack function it calls is `autocompleteMultiselect()`.
+
+~~~~ typescript twoslash
+import { multiple } from "@optique/core/modifiers";
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { message } from "@optique/core/message";
+import { prompt } from "@optique/clack";
+
+const tags = prompt(multiple(option("--tag", string())), {
+  type: "autocomplete-multiselect",
+  message: "Pick tags:",
+  options: ["typescript", "deno", "node", "bun"],
+  initialValues: ["typescript"],
+  required: true,
+  placeholder: "Type to search…",
+}, {
+  validate: (values) => values.length >= 2 ? undefined : message`Pick two tags.`,
+  maxAttempts: 3,
+});
+~~~~
+
+Returns `readonly string[]`. It accepts `message`, `options`, `placeholder`,
+`maxItems`, and `filter` as described for `autocomplete`, plus:
+
+`initialValues`
+:   A readonly array of initially selected values. These preselect items in
+    the prompt; they are not shown as a CLI default in help text.
+
+`required`
+:   Whether at least one option must be selected. Defaults to `false`.
+
+This type has no `initialUserInput` or config-level `validate`. Use the shared
+`validate` option for validation and retries, as in the example.
+Both autocomplete types accept a custom `prompter` with the current
+[`PromptExecutionContext`].
+
+[`PromptExecutionContext`]: #promptexecutioncontext
+
 ### `multiselect`—multi-select
 
 Shows a list where the user selects multiple options:
@@ -686,12 +789,12 @@ prompt configuration union.  Every variant also accepts either both `when`
 and `otherwise`, or neither.  `when` may be synchronous or asynchronous, and
 `otherwise` must match `T`.
 
-| Value type          | Accepted config type                                                                                              |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `boolean`           | [`ConfirmConfig`]                                                                                                 |
-| `number`            | [`NumberPromptConfig`]                                                                                            |
-| `string`            | [`TextConfig`] \| [`PasswordConfig`](#password—masked-input) \| [`SelectConfig`](#select—arrow-key-single-select) |
-| `readonly string[]` | [`MultiselectConfig`]                                                                                             |
+| Value type          | Accepted config type                                                                                                                                       |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `boolean`           | [`ConfirmConfig`]                                                                                                                                          |
+| `number`            | [`NumberPromptConfig`]                                                                                                                                     |
+| `string`            | [`TextConfig`] \| [`PasswordConfig`](#password—masked-input) \| [`SelectConfig`](#select—arrow-key-single-select) \| [`AutocompleteConfig`](#autocomplete) |
+| `readonly string[]` | [`MultiselectConfig`] \| [`AutocompleteMultiselectConfig`](#autocomplete-multiselect)                                                                      |
 
 Optional variants (`boolean | undefined`, `string | undefined`, etc.) map
 to the same config types as their non-optional counterparts.
@@ -753,7 +856,8 @@ this context.  See the
 ### `Option`
 
 An object with `value`, optional `label`, `hint`, and `disabled` fields.
-Used in `select` and `multiselect` prompts.
+Used in `select`, `multiselect`, `autocomplete`, and
+`autocomplete-multiselect` prompts.
 
 
 Prompt and inner parser independence

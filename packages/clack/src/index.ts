@@ -5,6 +5,8 @@
  * @since 1.2.0
  */
 import {
+  autocomplete,
+  autocompleteMultiselect,
   confirm,
   isCancel,
   log,
@@ -50,6 +52,8 @@ export type {
  * @since 1.2.0
  */
 interface PromptFunctions {
+  readonly autocomplete: typeof autocomplete;
+  readonly autocompleteMultiselect: typeof autocompleteMultiselect;
   readonly spinner: typeof spinner;
   readonly text: typeof text;
   readonly password: typeof password;
@@ -65,6 +69,8 @@ const promptFunctionsOverrideSymbol = Symbol.for(
 );
 
 const defaultPromptFunctions: PromptFunctions = {
+  autocomplete,
+  autocompleteMultiselect,
   spinner,
   text,
   password,
@@ -117,7 +123,7 @@ function getPromptFunctions(): PromptFunctions {
 }
 
 /**
- * A choice item for `select` and `multiselect` prompts.
+ * A choice item for selection and autocomplete prompts.
  *
  * @since 1.2.0
  */
@@ -282,12 +288,67 @@ export interface MultiselectConfig {
   ) => Promise<readonly string[]>;
 }
 
+/** Shared settings for filtering a list of options. */
+interface AutocompleteSettings {
+  /** The question to display to the user. */
+  readonly message: string;
+  /** Available options. Use a derived config to load them lazily. */
+  readonly options: readonly (string | Option)[];
+  /** Hint text shown when the search input is empty. */
+  readonly placeholder?: string;
+  /** Maximum number of options displayed at once. */
+  readonly maxItems?: number;
+  /** Matches search input against a normalized option. */
+  readonly filter?: (search: string, option: Option) => boolean;
+}
+
+/**
+ * Configuration for an `autocomplete` prompt that filters a local list.
+ *
+ * @since 1.4.0
+ */
+export interface AutocompleteConfig extends AutocompleteSettings {
+  readonly type: "autocomplete";
+  /** Initially selected option value. */
+  readonly initialValue?: string;
+  /** Initial text in the search input. */
+  readonly initialUserInput?: string;
+  /** Synchronous validation of the selected value inside the prompt. */
+  readonly validate?: (value: string) => string | void;
+  /** Overrides prompt execution. Useful for testing. */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
+}
+
+/**
+ * Configuration for an `autocomplete-multiselect` prompt.
+ *
+ * Use shared prompt options for validation; Clack does not run a custom
+ * validator for this prompt type.
+ *
+ * @since 1.4.0
+ */
+export interface AutocompleteMultiselectConfig extends AutocompleteSettings {
+  readonly type: "autocomplete-multiselect";
+  /** Initially selected option values. */
+  readonly initialValues?: readonly string[];
+  /** Whether at least one option must be selected. */
+  readonly required?: boolean;
+  /** Overrides prompt execution. Useful for testing. */
+  readonly prompter?: (
+    context: PromptExecutionContext,
+  ) => Promise<readonly string[]>;
+}
+
 /**
  * A union of all string-valued prompt configurations.
  *
  * @since 1.2.0
  */
-export type StringPromptConfig = TextConfig | PasswordConfig | SelectConfig;
+export type StringPromptConfig =
+  | TextConfig
+  | PasswordConfig
+  | SelectConfig
+  | AutocompleteConfig;
 
 /**
  * Type-safe Clack prompt configuration for a given parser value type `T`.
@@ -302,7 +363,8 @@ export type PromptConfig<T> =
 type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
   : T extends number ? NumberPromptConfig
   : T extends string ? StringPromptConfig
-  : T extends readonly string[] ? MultiselectConfig
+  : T extends readonly string[]
+    ? MultiselectConfig | AutocompleteMultiselectConfig
   : never;
 
 /**
@@ -320,7 +382,8 @@ export type RuntimePromptConfig =
   | ConfirmConfig
   | NumberPromptConfig
   | StringPromptConfig
-  | MultiselectConfig;
+  | MultiselectConfig
+  | AutocompleteMultiselectConfig;
 
 type ClackText = (config: {
   readonly message: string;
@@ -360,6 +423,25 @@ type ClackMultiselect = (config: {
   readonly options: readonly Option[];
   readonly required?: boolean;
 }) => Promise<unknown>;
+
+type ClackAutocomplete = (
+  config:
+    & Omit<AutocompleteConfig, "type" | "options" | "validate" | "prompter">
+    & {
+      readonly options: readonly Option[];
+      readonly signal?: AbortSignal;
+      readonly validate: (value: unknown) => string | undefined;
+    },
+) => Promise<unknown>;
+
+type ClackAutocompleteMultiselect = (
+  config:
+    & Omit<AutocompleteMultiselectConfig, "type" | "options" | "prompter">
+    & {
+      readonly options: readonly Option[];
+      readonly signal?: AbortSignal;
+    },
+) => Promise<unknown>;
 
 /**
  * Shared prompt options and Clack's derived configuration pending indicator.
@@ -487,7 +569,29 @@ async function executePromptRaw<TValue>(
     if (context.previousValidationMessage !== undefined) {
       prompts.logError(formatMessage(context.previousValidationMessage));
     }
-    result = await executeClackPromptWithSignal(cfg, prompts, context.signal);
+    const disabled = cfg.type === "autocomplete-multiselect"
+      ? new Set(
+        normalizeOptions(cfg.options).filter((option) => option.disabled)
+          .map((option) => option.value),
+      )
+      : undefined;
+    while (true) {
+      result = await executeClackPromptWithSignal(cfg, prompts, context.signal);
+      if (
+        cfg.type !== "autocomplete-multiselect" || disabled === undefined ||
+        !Array.isArray(result)
+      ) break;
+      // Clack can toggle a disabled initial cursor before any navigation.
+      const values = result.filter((value: unknown) =>
+        typeof value !== "string" || !disabled.has(value)
+      );
+      if (cfg.required === true && result.length > 0 && values.length === 0) {
+        prompts.logError("No option selected.");
+        continue;
+      }
+      result = values;
+      break;
+    }
   }
 
   if (prompts.isCancel(result)) {
@@ -497,7 +601,10 @@ async function executePromptRaw<TValue>(
   if (cfg.type === "number") {
     return normalizeNumberResult(result);
   }
-  if (cfg.type === "multiselect") {
+  if (cfg.type === "autocomplete" && typeof result !== "string") {
+    return { success: false, error: message`No option selected.` };
+  }
+  if (cfg.type === "multiselect" || cfg.type === "autocomplete-multiselect") {
     return normalizeMultiselectResult(result, cfg);
   }
   return { success: true, value: result as TValue };
@@ -526,7 +633,8 @@ async function executeClackPromptWithSignal(
 
 function isPromptType(value: unknown): value is RuntimePromptConfig["type"] {
   return value === "text" || value === "password" || value === "confirm" ||
-    value === "number" || value === "select" || value === "multiselect";
+    value === "number" || value === "select" || value === "multiselect" ||
+    value === "autocomplete" || value === "autocomplete-multiselect";
 }
 
 function executeClackPrompt(
@@ -598,6 +706,50 @@ function executeClackPrompt(
           : {}),
       });
 
+    case "autocomplete": {
+      const options = normalizeOptions(cfg.options);
+      return (prompts.autocomplete as ClackAutocomplete)({
+        message: cfg.message,
+        options,
+        ...(signal === undefined ? {} : { signal }),
+        ...(cfg.initialValue === undefined
+          ? {}
+          : { initialValue: cfg.initialValue }),
+        ...(cfg.initialUserInput === undefined
+          ? {}
+          : { initialUserInput: cfg.initialUserInput }),
+        ...(cfg.placeholder === undefined
+          ? {}
+          : { placeholder: cfg.placeholder }),
+        ...(cfg.maxItems === undefined ? {} : { maxItems: cfg.maxItems }),
+        ...(cfg.filter === undefined ? {} : { filter: cfg.filter }),
+        // Clack may submit undefined when the input matches no options.
+        validate: (value) => {
+          if (typeof value !== "string") return "No option selected.";
+          if (
+            options.some((option) => option.value === value && option.disabled)
+          ) return "Option is unavailable.";
+          return cfg.validate?.(value) ?? undefined;
+        },
+      });
+    }
+
+    case "autocomplete-multiselect":
+      return (prompts.autocompleteMultiselect as ClackAutocompleteMultiselect)({
+        message: cfg.message,
+        options: normalizeOptions(cfg.options),
+        ...(signal === undefined ? {} : { signal }),
+        ...(cfg.initialValues === undefined
+          ? {}
+          : { initialValues: [...cfg.initialValues] }),
+        ...(cfg.required === undefined ? {} : { required: cfg.required }),
+        ...(cfg.placeholder === undefined
+          ? {}
+          : { placeholder: cfg.placeholder }),
+        ...(cfg.maxItems === undefined ? {} : { maxItems: cfg.maxItems }),
+        ...(cfg.filter === undefined ? {} : { filter: cfg.filter }),
+      });
+
     case "multiselect":
       return (prompts.multiselect as ClackMultiselect)({
         message: cfg.message,
@@ -624,7 +776,7 @@ function normalizeNumberResult<TValue>(
 
 function normalizeMultiselectResult<TValue>(
   result: unknown,
-  config: MultiselectConfig,
+  config: { readonly required?: boolean },
 ): ValueParserResult<TValue> {
   const values = Array.isArray(result) ? result : [];
   if (config.required === true && values.length < 1) {

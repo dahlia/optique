@@ -1463,3 +1463,402 @@ describe("native pending spinner cancellation", () => {
     }
   }
 });
+
+describe("autocomplete prompts", () => {
+  it("should reject disabled autocomplete values before user validation", async () => {
+    let validationCalls = 0;
+    await withPromptFunctionsOverride({
+      autocomplete: (config: {
+        readonly validate: (value: unknown) => string | undefined;
+      }) => {
+        assert.equal(config.validate("locked"), "Option is unavailable.");
+        assert.equal(config.validate("unavailable"), "Option is unavailable.");
+        assert.equal(validationCalls, 0);
+        assert.equal(config.validate("open"), undefined);
+        assert.equal(config.validate("empty-reason"), undefined);
+        return Promise.resolve("open");
+      },
+    }, async () => {
+      assert.deepEqual(
+        await parseAsync(
+          prompt(option("--region", string()), {
+            type: "autocomplete",
+            message: "Region",
+            options: [
+              { value: "locked", disabled: true },
+              { value: "unavailable", disabled: "Locked" },
+              { value: "open", disabled: false },
+              { value: "empty-reason", disabled: "" },
+            ],
+            validate: () => {
+              validationCalls++;
+            },
+          }),
+          [],
+        ),
+        { success: true, value: "open" },
+      );
+      assert.equal(validationCalls, 2);
+    });
+  });
+
+  it("should remove disabled native multiselections and retry required selections", async () => {
+    await withPromptFunctionsOverride({
+      autocompleteMultiselect: () => Promise.resolve(["locked", "open"]),
+    }, async () => {
+      const options = [{ value: "locked", disabled: true }, "open"];
+      assert.deepEqual(
+        await parseAsync(
+          prompt(multiple(option("--region", string())), {
+            type: "autocomplete-multiselect",
+            message: "Regions",
+            options,
+            required: true,
+          }),
+          [],
+        ),
+        { success: true, value: ["open"] },
+      );
+    });
+    let calls = 0;
+    const messages: string[] = [];
+    await withPromptFunctionsOverride({
+      autocompleteMultiselect: () =>
+        Promise.resolve(++calls === 1 ? ["locked"] : ["open"]),
+      logError: (text: string) => messages.push(text),
+    }, async () => {
+      const result = await parseAsync(
+        prompt(multiple(option("--region", string())), {
+          type: "autocomplete-multiselect",
+          message: "Regions",
+          options: [{ value: "locked", disabled: "Unavailable" }, "open"],
+          required: true,
+        }),
+        [],
+      );
+      assert.deepEqual(result, { success: true, value: ["open"] });
+      assert.equal(calls, 2);
+      assert.deepEqual(messages, ["No option selected."]);
+    });
+  });
+
+  it("should preserve cancellation after a disabled multiselection retry", async () => {
+    const cancel = Symbol("cancel");
+    let calls = 0;
+    await withPromptFunctionsOverride({
+      autocompleteMultiselect: () =>
+        Promise.resolve(++calls === 1 ? ["locked"] : cancel),
+      isCancel: (value: unknown) => value === cancel,
+      logError: () => {},
+    }, async () => {
+      const result = await parseAsync(
+        prompt(multiple(option("--region", string())), {
+          type: "autocomplete-multiselect",
+          message: "Regions",
+          options: [{ value: "locked", disabled: true }, "open"],
+          required: true,
+        }),
+        [],
+      );
+      assert.ok(!result.success);
+      assert.equal(formatMessage(result.error), "Prompt cancelled.");
+      assert.equal(calls, 2);
+    });
+  });
+
+  it("should normalize and forward single autocomplete settings", async () => {
+    const controller = new AbortController();
+    const options = Object.freeze([
+      "east",
+      Object.freeze({
+        value: "west",
+        label: "West",
+        hint: "Region",
+        disabled: false,
+      }),
+    ]);
+    const validated: string[] = [];
+    const filter = (search: string, option: { readonly value: string }) =>
+      option.value.startsWith(search);
+    await withPromptFunctionsOverride({
+      autocomplete: (config: {
+        readonly options: readonly unknown[];
+        readonly initialValue?: string;
+        readonly initialUserInput?: string;
+        readonly placeholder?: string;
+        readonly maxItems?: number;
+        readonly filter?: typeof filter;
+        readonly validate: (value: unknown) => string | undefined;
+        readonly signal?: AbortSignal;
+      }) => {
+        assert.deepEqual(config.options, [
+          { value: "east", label: "east" },
+          options[1],
+        ]);
+        assert.notEqual(config.options, options);
+        assert.equal(config.initialValue, "");
+        assert.equal(config.initialUserInput, "ea");
+        assert.equal(config.placeholder, "");
+        assert.equal(config.maxItems, 8);
+        assert.equal(config.filter, filter);
+        assert.equal(config.validate(undefined), "No option selected.");
+        assert.equal(config.validate("west"), "Choose east.");
+        assert.equal(config.validate("east"), undefined);
+        assert.ok(config.signal);
+        assert.notEqual(config.signal, controller.signal);
+        return Promise.resolve("east");
+      },
+    }, async () => {
+      const parser = prompt(option("--region", string()), {
+        type: "autocomplete",
+        message: "Region",
+        options,
+        initialValue: "",
+        initialUserInput: "ea",
+        placeholder: "",
+        maxItems: 8,
+        filter,
+        validate: (value) => {
+          validated.push(value);
+          return value === "east" ? undefined : "Choose east.";
+        },
+      }, { signal: controller.signal });
+      assert.deepEqual(await parseAsync(parser, []), {
+        success: true,
+        value: "east",
+      });
+      assert.deepEqual(validated, ["west", "east"]);
+    });
+  });
+
+  it("should reject an absent selection without invoking user validation", async () => {
+    await withPromptFunctionsOverride(
+      { autocomplete: () => Promise.resolve(undefined) },
+      async () => {
+        const result = await parseAsync(
+          prompt(option("--region", string()), {
+            type: "autocomplete",
+            message: "Region",
+            options: [],
+          }),
+          [],
+        );
+        assert.ok(!result.success);
+        assert.equal(formatMessage(result.error), "No option selected.");
+      },
+    );
+  });
+
+  it("should forward multiselect settings and retry shared validation", async () => {
+    const initialValues = Object.freeze(["east"]);
+    const controller = new AbortController();
+    const messages: string[] = [];
+    let calls = 0;
+    await withPromptFunctionsOverride({
+      autocompleteMultiselect: (config: {
+        readonly options: readonly unknown[];
+        readonly initialValues?: readonly string[];
+        readonly required?: boolean;
+        readonly placeholder?: string;
+        readonly maxItems?: number;
+        readonly signal?: AbortSignal;
+      }) => {
+        assert.deepEqual(config.options, [{ value: "east", label: "east" }, {
+          value: "west",
+          label: "west",
+        }]);
+        assert.deepEqual(config.initialValues, initialValues);
+        assert.notEqual(config.initialValues, initialValues);
+        assert.ok(config.required);
+        assert.equal(config.placeholder, "Search");
+        assert.equal(config.maxItems, 4);
+        assert.ok(config.signal);
+        return Promise.resolve(++calls === 1 ? ["east"] : ["east", "west"]);
+      },
+      logError: (text: string) => messages.push(text),
+    }, async () => {
+      const parser = prompt(multiple(option("--region", string())), {
+        type: "autocomplete-multiselect",
+        message: "Regions",
+        options: ["east", "west"],
+        initialValues,
+        required: true,
+        placeholder: "Search",
+        maxItems: 4,
+      }, {
+        signal: controller.signal,
+        validate: (values) =>
+          values.length === 2 ? undefined : message`Pick two.`,
+        maxAttempts: 2,
+      });
+      assert.deepEqual(await parseAsync(parser, []), {
+        success: true,
+        value: ["east", "west"],
+      });
+      assert.deepEqual(messages, ["Pick two."]);
+    });
+  });
+
+  for (const type of ["autocomplete", "autocomplete-multiselect"] as const) {
+    it(`should preserve cancellation for ${type}`, async () => {
+      const cancel = Symbol("cancel");
+      await withPromptFunctionsOverride({
+        autocomplete: () => Promise.resolve(cancel),
+        autocompleteMultiselect: () => Promise.resolve(cancel),
+        isCancel: (value: unknown) => value === cancel,
+      }, async () => {
+        const parser = type === "autocomplete"
+          ? prompt(option("--region", string()), {
+            type,
+            message: "Region",
+            options: [],
+          })
+          : prompt(multiple(option("--region", string())), {
+            type,
+            message: "Regions",
+            options: [],
+          });
+        const result = await parseAsync<unknown>(parser, []);
+        assert.ok(!result.success);
+        assert.equal(formatMessage(result.error), "Prompt cancelled.");
+      });
+    });
+  }
+
+  it("should honor required with a custom multiselect prompter", async () => {
+    const result = await parseAsync(
+      prompt(multiple(option("--region", string())), {
+        type: "autocomplete-multiselect",
+        message: "Regions",
+        options: [],
+        required: true,
+        prompter: () => Promise.resolve([]),
+      }),
+      [],
+    );
+    assert.ok(!result.success);
+    assert.equal(formatMessage(result.error), "No option selected.");
+  });
+
+  it("should skip lazy autocomplete config for CLI input", async () => {
+    let calls = 0;
+    const parser = prompt(
+      option("--region", string()),
+      derivePromptConfig(() => {
+        calls++;
+        return {
+          type: "autocomplete",
+          message: "Region",
+          options: ["east"],
+          prompter: () => Promise.resolve("east"),
+        };
+      }),
+    );
+    assert.deepEqual(await parseAsync(parser, ["--region", "west"]), {
+      success: true,
+      value: "west",
+    });
+    assert.equal(calls, 0);
+    assert.deepEqual(await parseAsync(parser, []), {
+      success: true,
+      value: "east",
+    });
+    assert.equal(calls, 1);
+  });
+
+  it("should restrict autocomplete configs to matching parser value types", () => {
+    prompt(option("--region", string()), {
+      // @ts-expect-error Multi selections require an array-valued parser.
+      type: "autocomplete-multiselect",
+      message: "Regions",
+      options: [],
+    });
+    prompt(multiple(option("--region", string())), {
+      // @ts-expect-error Single selections require a string-valued parser.
+      type: "autocomplete",
+      message: "Region",
+      options: [],
+    });
+    prompt(multiple(option("--region", string())), {
+      type: "autocomplete-multiselect",
+      message: "Regions",
+      options: [],
+      // @ts-expect-error Use shared validation; Clack ignores native multi validate.
+      validate: (_value: readonly string[]) => undefined,
+    });
+  });
+});
+
+describe("autocomplete abort", () => {
+  it("should reject with the outer reason and forward cancellation", async () => {
+    const controller = new AbortController();
+    const reason = new Error("Stop searching.");
+    let entered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let receivedSignal: AbortSignal | undefined;
+    await withPromptFunctionsOverride({
+      autocomplete: (config: { readonly signal?: AbortSignal }) => {
+        receivedSignal = config.signal;
+        entered();
+        return new Promise((_resolve, reject) => {
+          receivedSignal?.addEventListener(
+            "abort",
+            () => reject(receivedSignal?.reason),
+            { once: true },
+          );
+        });
+      },
+    }, async () => {
+      const parser = prompt(option("--region", string()), {
+        type: "autocomplete",
+        message: "Region",
+        options: [],
+      }, { signal: controller.signal });
+      const pending = parseAsync(parser, []);
+      await ready;
+      controller.abort(reason);
+      await assert.rejects(pending, (error) => error === reason);
+      assert.ok(receivedSignal?.aborted);
+      assert.equal(receivedSignal.reason, reason);
+    });
+  });
+});
+
+describe("autocomplete-multiselect abort", () => {
+  it("should reject with the outer reason and forward cancellation", async () => {
+    const controller = new AbortController();
+    const reason = new Error("Stop searching.");
+    let entered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let receivedSignal: AbortSignal | undefined;
+    await withPromptFunctionsOverride({
+      autocompleteMultiselect: (config: { readonly signal?: AbortSignal }) => {
+        receivedSignal = config.signal;
+        entered();
+        return new Promise((_resolve, reject) => {
+          receivedSignal?.addEventListener(
+            "abort",
+            () => reject(receivedSignal?.reason),
+            { once: true },
+          );
+        });
+      },
+    }, async () => {
+      const parser = prompt(multiple(option("--region", string())), {
+        type: "autocomplete-multiselect",
+        message: "Region",
+        options: [],
+      }, { signal: controller.signal });
+      const pending = parseAsync(parser, []);
+      await ready;
+      controller.abort(reason);
+      await assert.rejects(pending, (error) => error === reason);
+      assert.ok(receivedSignal?.aborted);
+      assert.equal(receivedSignal.reason, reason);
+    });
+  });
+});

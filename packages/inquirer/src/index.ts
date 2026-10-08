@@ -14,6 +14,7 @@ import {
   number,
   password,
   rawlist,
+  search,
   select,
   Separator,
 } from "@inquirer/prompts";
@@ -61,6 +62,7 @@ interface PromptFunctions {
   readonly password: typeof password;
   readonly editor: typeof editor;
   readonly select: typeof select;
+  readonly search: typeof search;
   readonly rawlist: typeof rawlist;
   readonly expand: typeof expand;
   readonly checkbox: typeof checkbox;
@@ -81,6 +83,7 @@ const defaultPromptFunctions: PromptFunctions = {
   password,
   editor,
   select,
+  search,
   rawlist,
   expand,
   checkbox,
@@ -147,7 +150,7 @@ function isExitPromptError(error: unknown): boolean {
 
 /**
  * A choice item for selection-type prompts (`select`, `rawlist`, `expand`,
- * `checkbox`).
+ * `checkbox`, `search`).
  *
  * @since 1.0.0
  */
@@ -346,6 +349,38 @@ export interface SelectConfig {
 }
 
 /**
+ * Configuration for a `search` prompt that loads choices for each search term.
+ *
+ * @since 1.4.0
+ */
+export interface SearchConfig {
+  readonly type: "search";
+  /** The question to display to the user. */
+  readonly message: string;
+  /**
+   * Returns choices for the current input; undefined means empty input.
+   * Forward the signal to cancel requests when the input changes or the
+   * prompt closes. Inquirer displays Error rejections without ending the prompt.
+   */
+  readonly source: (
+    term: string | undefined,
+    context: { readonly signal: AbortSignal },
+  ) =>
+    | readonly (string | Choice | Separator)[]
+    | Promise<readonly (string | Choice | Separator)[]>;
+  /** Initially highlighted choice value. */
+  readonly default?: string;
+  /** Number of choices displayed before pagination. */
+  readonly pageSize?: number;
+  /** Native validation called when the user submits a selection. */
+  readonly validate?: (
+    value: string,
+  ) => boolean | string | Promise<boolean | string>;
+  /** Overrides prompt execution. Useful for testing. */
+  readonly prompter?: (context: PromptExecutionContext) => Promise<string>;
+}
+
+/**
  * Configuration for a `rawlist` prompt (numbered list).
  *
  * @since 1.0.0
@@ -415,6 +450,7 @@ export type StringPromptConfig =
   | PasswordConfig
   | EditorConfig
   | SelectConfig
+  | SearchConfig
   | RawlistConfig
   | ExpandConfig;
 
@@ -458,6 +494,7 @@ const validPromptTypes: ReadonlySet<string> = new Set([
   "password",
   "editor",
   "select",
+  "search",
   "rawlist",
   "expand",
   "checkbox",
@@ -598,6 +635,19 @@ async function executePromptRaw<TValue>(
             message: cfg.message,
             choices: normalizeChoices(cfg.choices),
             ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+          }, inquirerContext) as TValue,
+        };
+
+      case "search":
+        return {
+          success: true,
+          value: await prompts.search({
+            message: cfg.message,
+            source: async (term, sourceContext) =>
+              normalizeChoices(await cfg.source(term, sourceContext)),
+            ...(cfg.default === undefined ? {} : { default: cfg.default }),
+            ...(cfg.pageSize === undefined ? {} : { pageSize: cfg.pageSize }),
+            ...(cfg.validate === undefined ? {} : { validate: cfg.validate }),
           }, inquirerContext) as TValue,
         };
 

@@ -6970,3 +6970,222 @@ describe("prompt() with zero-dependency derived configurations", () => {
     assert.equal(result.value, "a.txt");
   });
 });
+
+describe("search prompts", () => {
+  it("should normalize each source result and preserve query signals", async () => {
+    const outer = new AbortController();
+    const first = new AbortController();
+    const second = new AbortController();
+    const separator = new Separator("Regions");
+    const choices = Object.freeze([
+      "east",
+      Object.freeze({
+        value: "west",
+        name: "West",
+        description: "Region",
+        short: "W",
+        disabled: "Unavailable",
+      }),
+      separator,
+    ]);
+    const queries: (string | undefined)[] = [];
+    const validate = (value: string) => value === "east" || "Choose east.";
+    await withPromptFunctionsOverride({
+      search: async (config: {
+        readonly source: (
+          term: string | undefined,
+          context: { readonly signal: AbortSignal },
+        ) => Promise<readonly unknown[]>;
+        readonly default?: string;
+        readonly pageSize?: number;
+        readonly validate?: typeof validate;
+      }, context: { readonly signal?: AbortSignal }) => {
+        assert.equal(context.signal, outer.signal);
+        assert.equal(config.default, "");
+        assert.equal(config.pageSize, 8);
+        assert.equal(config.validate, validate);
+        assert.deepEqual(
+          await config.source(undefined, { signal: first.signal }),
+          [{ value: "east", name: "east" }, choices[1], separator],
+        );
+        first.abort();
+        const result = await config.source("we", { signal: second.signal });
+        assert.deepEqual(result, [
+          { value: "east", name: "east" },
+          choices[1],
+          separator,
+        ]);
+        assert.equal(result[2], separator);
+        return Promise.resolve("east");
+      },
+    }, async () => {
+      const parser = prompt(option("--region", string()), {
+        type: "search",
+        message: "Region",
+        default: "",
+        pageSize: 8,
+        validate,
+        source: (term, { signal }) => {
+          queries.push(term);
+          assert.equal(
+            signal,
+            term === undefined ? first.signal : second.signal,
+          );
+          assert.notEqual(signal, outer.signal);
+          return term === undefined ? choices : Promise.resolve(choices);
+        },
+      }, { signal: outer.signal });
+      assert.deepEqual(await parseAsync(parser, []), {
+        success: true,
+        value: "east",
+      });
+      assert.deepEqual(queries, [undefined, "we"]);
+    });
+  });
+
+  it("should turn synchronous source throws into rejected source calls", async () => {
+    const failure = new Error("Source failed.");
+    await withPromptFunctionsOverride({
+      search: async (
+        config: {
+          readonly source: (
+            term: string | undefined,
+            context: { readonly signal: AbortSignal },
+          ) => Promise<unknown>;
+        },
+      ) => {
+        await assert.rejects(
+          config.source("e", { signal: new AbortController().signal }),
+          (error) => error === failure,
+        );
+        return Promise.resolve("east");
+      },
+    }, async () => {
+      assert.deepEqual(
+        await parseAsync(
+          prompt(option("--region", string()), {
+            type: "search",
+            message: "Region",
+            source: () => {
+              throw failure;
+            },
+          }),
+          [],
+        ),
+        { success: true, value: "east" },
+      );
+    });
+  });
+
+  it("should bypass search source for CLI and custom prompters", async () => {
+    const parser = prompt(option("--region", string()), {
+      type: "search",
+      message: "Region",
+      source: () => assert.fail("Source must stay lazy."),
+      prompter: ({ attempt }) => {
+        assert.equal(attempt, 1);
+        return Promise.resolve("east");
+      },
+    });
+    assert.deepEqual(await parseAsync(parser, ["--region", "west"]), {
+      success: true,
+      value: "west",
+    });
+    assert.deepEqual(await parseAsync(parser, []), {
+      success: true,
+      value: "east",
+    });
+  });
+
+  it("should execute search resolved from a lazy config", async () => {
+    await withPromptFunctionsOverride(
+      { search: () => Promise.resolve("east") },
+      async () => {
+        const parser = prompt(
+          option("--region", string()),
+          derivePromptConfig(() =>
+            Promise.resolve({
+              type: "search",
+              message: "Region",
+              source: () => ["east"],
+            })
+          ),
+        );
+        assert.deepEqual(await parseAsync(parser, []), {
+          success: true,
+          value: "east",
+        });
+      },
+    );
+  });
+
+  it("should retain user cancellation handling for search", async () => {
+    await withPromptFunctionsOverride({
+      search: () => {
+        const error = new Error("Cancelled.");
+        error.name = "ExitPromptError";
+        return Promise.reject(error);
+      },
+    }, async () => {
+      const result = await parseAsync(
+        prompt(option("--region", string()), {
+          type: "search",
+          message: "Region",
+          source: () => [],
+        }),
+        [],
+      );
+      assert.ok(!result.success);
+      assert.equal(formatMessage(result.error), "Prompt cancelled.");
+    });
+  });
+
+  it("should restrict search to string-valued parsers", () => {
+    prompt(option("--count", integer()), {
+      // @ts-expect-error Search returns a string, not a number.
+      type: "search",
+      message: "Count",
+      source: () => ["one"],
+    });
+  });
+});
+
+describe("search abort", () => {
+  it("should reject with the outer reason and forward cancellation", async () => {
+    const controller = new AbortController();
+    const reason = new Error("Stop searching.");
+    let entered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let receivedSignal: AbortSignal | undefined;
+    await withPromptFunctionsOverride({
+      search: (
+        _config: unknown,
+        context: { readonly signal?: AbortSignal },
+      ) => {
+        receivedSignal = context.signal;
+        entered();
+        return new Promise((_resolve, reject) => {
+          receivedSignal?.addEventListener(
+            "abort",
+            () => reject(receivedSignal?.reason),
+            { once: true },
+          );
+        });
+      },
+    }, async () => {
+      const parser = prompt(option("--region", string()), {
+        type: "search",
+        message: "Region",
+        source: () => [],
+      }, { signal: controller.signal });
+      const pending = parseAsync(parser, []);
+      await ready;
+      controller.abort(reason);
+      await assert.rejects(pending, (error) => error === reason);
+      assert.ok(receivedSignal?.aborted);
+      assert.equal(receivedSignal.reason, reason);
+    });
+  });
+});

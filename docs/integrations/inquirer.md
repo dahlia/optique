@@ -280,6 +280,76 @@ const color = prompt(option("--color", string()), {
 
 [`Choice`]: #choice
 
+### `search`
+
+*Available since Optique 1.4.0.*
+
+Loads choices for each search term as the user types:
+
+~~~~ typescript twoslash
+declare function listObjects(options: {
+  readonly prefix: string;
+  readonly signal: AbortSignal;
+}): Promise<readonly { readonly key: string }[]>;
+// ---cut-before---
+import { option } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { prompt } from "@optique/inquirer";
+
+const key = prompt(option("--key", string()), {
+  type: "search",
+  message: "Pick an object:",
+  source: async (term, { signal }) =>
+    (await listObjects({ prefix: term ?? "", signal })).map((object) => object.key),
+  pageSize: 8,
+});
+~~~~
+
+`source` runs only when the interactive prompt opens, then again when its
+search input changes. CLI values and a custom `prompter` bypass it. Unlike
+Clack's [autocomplete](./clack.md#autocomplete), it can query a remote service
+for each term instead of filtering a list already in memory. Inquirer has
+no multi-select search counterpart.
+
+`search` properties
+
+`message`
+:   *(required)* The question to display.
+
+`source`
+:   *(required)* A function `(term, { signal })` returning a readonly array of
+    strings, [`Choice`] objects, or [`Separator`] instances, synchronously or
+    as a promise. Empty input is passed as `undefined`. Choices are normalized
+    in the same way as `select` choices.
+
+`default`
+:   Initially highlighted choice value.
+
+`pageSize`
+:   Number of choices shown before pagination. Inquirer defaults to seven.
+
+`validate`
+:   Native validation of the selected string. Return `true` to accept or an
+    error string/`false` to reject; promises are supported. Inquirer may copy
+    a highlighted choice's name into the input and search again before showing
+    a validation error. Shared validation in the third argument works as well.
+
+`prompter`
+:   Overrides prompt execution with the current [`PromptExecutionContext`].
+
+Forward `source`'s signal to your request. Inquirer aborts it when the input
+changes or the prompt closes, including when the shared prompt signal aborts.
+This is a separate signal for each query. Aborting the shared signal rejects
+parsing with its reason.
+
+If `source` throws an `Error` or returns a promise that rejects with an
+`Error`, Inquirer displays its message and keeps the prompt open for another
+search. Other thrown values or rejection reasons do not display an error
+message. A source failure does not itself end parsing.
+
+[`Separator`]: #separator
+[`PromptExecutionContext`]: #promptexecutioncontext
+
 ### `rawlist`—numbered list
 
 Shows a numbered list and prompts the user to type a number:
@@ -712,12 +782,12 @@ prompt configuration union.  Every variant also accepts either both `when`
 and `otherwise`, or neither.  `when` may be synchronous or asynchronous, and
 `otherwise` must match `T`.
 
-| Value type          | Accepted config type                                                                                                                                                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `boolean`           | [`ConfirmConfig`]                                                                                                                                                                                                                                                         |
-| `number`            | [`NumberPromptConfig`]                                                                                                                                                                                                                                                    |
-| `string`            | [`InputConfig`] \| [`PasswordConfig`](#password—masked-input) \| [`EditorConfig`](#editor—multi-line-text) \| [`SelectConfig`](#select—arrow-key-single-select) \| [`RawlistConfig`](#rawlist—numbered-list) \| [`ExpandConfig`](#expand—keyboard-shortcut-single-select) |
-| `readonly string[]` | [`CheckboxConfig`]                                                                                                                                                                                                                                                        |
+| Value type          | Accepted config type                                                                                                                                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `boolean`           | [`ConfirmConfig`]                                                                                                                                                                                                                                                                                      |
+| `number`            | [`NumberPromptConfig`]                                                                                                                                                                                                                                                                                 |
+| `string`            | [`InputConfig`] \| [`PasswordConfig`](#password—masked-input) \| [`EditorConfig`](#editor—multi-line-text) \| [`SelectConfig`](#select—arrow-key-single-select) \| [`RawlistConfig`](#rawlist—numbered-list) \| [`ExpandConfig`](#expand—keyboard-shortcut-single-select) \| [`SearchConfig`](#search) |
+| `readonly string[]` | [`CheckboxConfig`]                                                                                                                                                                                                                                                                                     |
 
 Optional variants (`boolean | undefined`, `string | undefined`, etc.) map
 to the same config types as their non-optional counterparts.
@@ -768,7 +838,8 @@ this context.  See the
 ### `Choice`
 
 An object with `value`, optional `name`, `description`, `short`, and
-`disabled` fields.  Used in `select`, `rawlist`, and `checkbox` prompts.
+`disabled` fields.  Used in `select`, `rawlist`, `checkbox`, and `search`
+prompts.
 
 ### `ExpandChoice`
 
