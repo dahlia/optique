@@ -236,13 +236,11 @@ Common mistakes checklist
     `parse()` in tests and embedded use. Do not pre-parse `process.argv`.
  -  Declare only static facts with `defineEmptyInputBehavior()` in
     `@optique/core/extension`; use `inheritEmptyInputBehavior()` for
-    transparent wrappers. See <https://optique.dev/concepts/extend.md>.
+    transparent wrappers. See [extension APIs].
  -  Do not treat `or(a, b)` as “zero or more alternatives.” Wrap it in
     `optional()` or `withDefault()` to allow no matching branch.
- -  Do not use `object()` for mutually exclusive subcommands. Use
-    `or(command(...), command(...))`.
- -  Do not forget that `flag("--x")` is required. Wrap it in `optional()` or
-    `withDefault(..., false)` for ordinary optional flags.
+ -  Use `or(command(...), command(...))` for mutually exclusive subcommands.
+ -  Wrap required `flag("--x")` in `optional()` or `withDefault(..., false)`.
  -  Do not expect `multiple(p)` to fail when absent; it returns `[]`. Wrap with
     `nonEmpty()` when at least one value is required.
  -  Do not confuse free-order parsing with `seq()`. Most constructs let child
@@ -258,6 +256,8 @@ Common mistakes checklist
     only at fallback, never eagerly during construction.
 
 For the detailed maintained guide, use <https://optique.dev/pitfalls.md>.
+
+[extension APIs]: https://optique.dev/concepts/extend.md
 
 
 Reference links
