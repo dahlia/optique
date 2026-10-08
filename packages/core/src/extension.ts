@@ -290,6 +290,7 @@ export interface EmptyInputBehavior {
  *
  * @param parser The parser to annotate.
  * @param behavior The known outcomes; omitted fields stay unknown.
+ * @returns Nothing; updates the parser's metadata in place.
  * @throws {TypeError} If a value is invalid, afterStep is supplied for a failing
  *                    step, or the metadata cannot be defined or cleared.
  * @since 1.4.0
@@ -355,6 +356,7 @@ export function getEmptyInputBehavior(
  *
  * @param wrapper The parser receiving the facts.
  * @param inner The parser whose behavior is preserved.
+ * @returns Nothing; updates the wrapper's metadata in place.
  * @throws {TypeError} If modes differ or metadata cannot be defined or cleared.
  * @since 1.4.0
  */
