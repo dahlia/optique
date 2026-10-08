@@ -56,15 +56,14 @@ Core rules
     For a multi-level chain, wrap the middle derivation too:
     `dependency(source.deriveSync(...))`. Optique resolves such chains by
     dependency order, independently of object/tuple field order.
- -  Use `derivePromptConfig(source, resolver)` (from *@optique/prompt*,
-    re-exported by *@optique/inquirer* and *@optique/clack*) when a prompt's
-    choices or message depend on another parsed value. The resolver may be
-    async and runs only at the real prompt fallback, after the named sources
-    resolve; pass `[sourceA, sourceB]` when it reads several sources. The
-    resolver's prompt kind must return the wrapped parser's value type. Derive
-    the wrapped parser separately when the CLI domain should change, and make
-    it a dependency source only if another consumer needs its answer. Pass a
-    lone resolver for fetched choices, forwarding its `signal` to the fetch.
+ -  Use `derivePromptConfig(source, resolver)` from *@optique/prompt* or its
+    adapter re-exports for choices or messages that depend on parsed values.
+    Async resolvers run at the real fallback after sources resolve; pass
+    `[sourceA, sourceB]` for several sources. Return a prompt kind matching the
+    parser's value type. Derive the CLI parser separately; make it a dependency
+    source only if another consumer needs its answer. Use a lone resolver for
+    fetched choices and forward its `signal`. Clack's third argument accepts
+    `pendingMessage` for a resolver spinner; omit it for silent prompter tests.
  -  Pass `{ validate, maxAttempts, signal }` as a generated prompt wrapper's
     third argument, including `prompt()` from *@optique/inquirer* and
     *@optique/clack*. The validator returns `undefined` to accept the prompted

@@ -520,7 +520,7 @@ const result = await parseAsync(parser, []);
 // result.value === "Alice"
 ~~~~
 
-A custom `prompter` replaces the Clack UI completely, so the adapter does not
+A custom `prompter` replaces the interactive prompt, so the adapter does not
 log `previousValidationMessage` automatically.  The function can inspect or
 display that message itself.  Each invocation is one shared attempt.
 
@@ -609,6 +609,7 @@ const key = prompt(
     message: "Object to download:",
     options: await listObjects({ signal }),
   })),
+  { pendingMessage: "Loading objects" },
 );
 ~~~~
 
@@ -617,6 +618,29 @@ forward it to the request so that an abort also cancels the fetch.
 When you store the derived configuration in a variable before passing it to
 `prompt()`, add `satisfies SelectConfig` to the returned object so that
 `type: "select"` does not widen to `string`.
+
+Set `pendingMessage` in `prompt()`'s third argument to show a Clack spinner
+while the resolver runs.  This is opt-in: omitting it keeps resolution silent.
+The final line keeps the message with a success, error, or cancellation symbol.
+A resolver failure still becomes a parse failure; aborting stops the indicator
+immediately, even if the resolver ignores the signal or settles later.
+Sending SIGINT or SIGTERM to the process while the spinner is pending rejects
+parsing with an `AbortError` and prevents the prompt from opening.  This stops
+waiting; it does not abort the resolver's requests.
+
+In an interactive terminal, Clack's spinner puts stdin into raw mode.  Pressing
+Ctrl+C then makes Clack exit the process with status 0, before Optique can
+reject parsing or run resolver cleanup.  Use the shared `signal` for
+application-controlled cancellation that needs cleanup.
+
+The indicator also works with dependency-based `derivePromptConfig()` calls.
+It does not run for static configurations, CLI or source-bound values, skipped
+conditions, help, or suggestions.  Validation retries reuse the resolved
+configuration without starting the indicator again.
+
+A custom `prompter` is only known after the resolver returns, so an explicit
+`pendingMessage` also shows the indicator with a custom `prompter`.  Omit the
+option in tests that need no terminal output.
 
 
 API reference
@@ -636,11 +660,12 @@ Parameters
         resolver may return any [`RuntimePromptConfig`] member; see the
         [*@optique/prompt* documentation](./prompt.md#derived-prompt-configurations)
         for the resolver contract.
-     -  `options`: Optional shared [`PromptOptions<T>`].  `validate` runs after
+     -  `options`: Optional [`ClackPromptOptions<T>`].  `validate` runs after
         each successful adapter execution, independently of config-level native
         validation.  `maxAttempts` limits adapter executions, including custom
         `prompter` invocations.  `signal` can stop an active adapter execution,
-        validator, or derived configuration resolver.
+        validator, or derived configuration resolver.  `pendingMessage` opts
+        into a spinner while a derived configuration resolves.
 
 Returns
 :   A new parser with `mode: "async"` and Clack prompt fallback.  The `usage`
@@ -652,7 +677,7 @@ Throws
 
 [`PromptConfig<T>`]: #promptconfigt
 [`RuntimePromptConfig`]: #runtimepromptconfig
-[`PromptOptions<T>`]: #promptoptionst
+[`ClackPromptOptions<T>`]: #clackpromptoptions-t
 
 ### `PromptConfig<T>`
 
@@ -704,6 +729,17 @@ returns `undefined` to accept it or a `Message` to retry.  See the
 Re-exported from *@optique/prompt*.  It supplies the shared `validate`,
 `maxAttempts`, and `signal` options.  See the
 [*@optique/prompt* API reference](./prompt.md#promptoptionstvalue).
+
+### `ClackPromptOptions<T>`
+
+*Available since Optique 1.4.0.*
+
+Extends [`PromptOptions<T>`] with `pendingMessage?: string`.  Any string,
+including an empty one, enables the derived configuration spinner; omitting
+it keeps resolution silent.  Static configurations ignore this option.
+See [Options loaded at prompt time](#options-loaded-at-prompt-time).
+
+[`PromptOptions<T>`]: #promptoptions-t
 
 ### `PromptExecutionContext`
 

@@ -126,6 +126,16 @@ export interface PromptExecutionContext {
 }
 
 /**
+ * Context for an adapter's pending derived configuration indicator.
+ *
+ * @since 1.4.0
+ */
+export interface PromptPendingContext {
+  /** Signal supplied through the prompt's shared options, when present. */
+  readonly signal?: AbortSignal;
+}
+
+/**
  * Prompt adapter used by {@link createPromptAdapter}.
  *
  * The adapter owns library-specific prompt execution and maps the result into
@@ -138,6 +148,31 @@ export interface PromptExecutionContext {
  * @since 1.2.0
  */
 export interface PromptAdapter<TConfig> {
+  /**
+   * Presents a pending state while a derived configuration resolver runs.
+   *
+   * Called only after dependencies and declared defaults are available, never
+   * for static configurations or skipped prompt fallbacks. Invoke `work()`
+   * and preserve its value or rejection. Repeated calls share one promise;
+   * `work()` never throws synchronously. Resolver failures become parse
+   * failures after this hook sees the rejection. The hook's own errors
+   * propagate unchanged, with cancellation taking precedence.
+   *
+   * Finish the indicator before returning. Clean it up on abort even when the
+   * resolver ignores the signal, and avoid terminal writes on late settlement.
+   *
+   * @typeParam T Configuration produced by the resolver.
+   * @param work Runs the resolver, rejecting promptly on abort.
+   * @param context Optional abort signal for this resolution.
+   * @returns The configuration produced by `work()`.
+   * @throws Any resolver, cancellation, or indicator failure.
+   * @since 1.4.0
+   */
+  readonly whilePending?: <T>(
+    work: () => Promise<T>,
+    context: PromptPendingContext,
+  ) => Promise<T>;
+
   /**
    * Executes the library-specific prompt.
    *
@@ -564,6 +599,7 @@ async function resolveDerivedPromptConfig<TConfig>(
   ownSourceId: symbol | undefined,
   ownLabel: string | undefined,
   signal: AbortSignal | undefined,
+  adapter: PromptAdapter<TConfig>,
 ): Promise<DerivedConfigResolution<TConfig>> {
   const runtime = exec?.dependencyRuntime;
   const ids = config.dependencyIds;
@@ -634,22 +670,54 @@ async function resolveDerivedPromptConfig<TConfig>(
     }
   }
 
+  const context: PromptPendingContext = signal === undefined ? {} : { signal };
+  let pending: Promise<TConfig> | undefined;
+  let resolverFailure: { readonly error: unknown } | undefined;
+  let disposeWork: (() => void) | undefined;
+  const work = (): Promise<TConfig> => {
+    if (pending == null) {
+      pending = racePromptWorkWithAbort(
+        signal,
+        () =>
+          Promise.resolve(config.resolve(
+            values,
+            usedDefaults,
+            context,
+          )),
+        (dispose) => {
+          disposeWork = dispose;
+        },
+      );
+      // Observe without rethrowing so even a hook that fails to consume work
+      // cannot leave an unhandled rejection. Keep arbitrary rejection values.
+      pending.then(undefined, (error: unknown) => {
+        resolverFailure = { error };
+      });
+    }
+    return pending;
+  };
   try {
     return {
       ok: true,
-      config: await config.resolve(
-        values,
-        usedDefaults,
-        signal === undefined ? {} : { signal },
-      ),
+      config: await (adapter.whilePending == null
+        ? work()
+        : adapter.whilePending(work, context)),
     };
   } catch (error) {
+    throwIfPromptAborted(signal);
+    if (resolverFailure == null || !Object.is(resolverFailure.error, error)) {
+      throw error;
+    }
     return {
       ok: false,
       error: message`Prompt configuration resolution failed: ${
         describeThrown(error)
       }`,
     };
+  } finally {
+    // A hook may stop waiting before the resolver settles (e.g. native UI
+    // cancellation). Release its abort listener but still consume late work.
+    disposeWork?.();
   }
 }
 
@@ -756,6 +824,7 @@ function throwIfPromptAborted(signal: AbortSignal | undefined): void {
 function racePromptWorkWithAbort<T>(
   signal: AbortSignal | undefined,
   work: () => Promise<T>,
+  registerCleanup?: (dispose: () => void) => void,
 ): Promise<T> {
   if (signal == null) {
     try {
@@ -772,6 +841,7 @@ function racePromptWorkWithAbort<T>(
     };
     const cleanup = () => signal.removeEventListener("abort", onAbort);
     signal.addEventListener("abort", onAbort, { once: true });
+    registerCleanup?.(cleanup);
     let outcome: Promise<T>;
     try {
       outcome = work();
@@ -971,6 +1041,7 @@ export function createPromptAdapter<TConfig>(
               source?.sourceId,
               source?.metavar,
               signal,
+              adapter,
             ),
         );
         if (!resolved.ok) return { success: false, error: resolved.error };

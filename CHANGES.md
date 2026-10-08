@@ -171,6 +171,12 @@ To be released.
 
 ### @optique/clack
 
+ -  Added `ClackPromptOptions.pendingMessage` to show a spinner while a
+    derived prompt configuration resolves.  The indicator stops on success,
+    failure, or cancellation, including when the resolver ignores the abort
+    signal.  OS-delivered `SIGINT`/`SIGTERM` also stops waiting and rejects with
+    an `AbortError`; interactive <kbd>^C</kbd> retains Clack's process-exit
+    behavior.  Omit the option to keep resolution silent.  [[#980], [#1018]]
  -  `prompt()` now accepts a `derivePromptConfig()` result without
     dependency sources, so a selection prompt can load its options
     asynchronously right before it opens.  The resolver receives the abort
@@ -180,6 +186,8 @@ To be released.
 
 [#964]: https://github.com/dahlia/optique/issues/964
 [#979]: https://github.com/dahlia/optique/pull/979
+[#980]: https://github.com/dahlia/optique/issues/980
+[#1018]: https://github.com/dahlia/optique/pull/1018
 
 ### @optique/derived-defaults
 
@@ -254,6 +262,10 @@ To be released.
     `signal` in their context, and aborting while a resolver is pending now
     rejects parsing right away with the signal's reason.  Previously, the
     abort was observed only after the resolver settled.  [[#964], [#979]]
+ -  Added an optional `PromptAdapter.whilePending()` hook for displaying a
+    pending state while a derived prompt configuration resolves.  The hook
+    receives resolver failures and cancellation before prompt execution.
+    [[#980], [#1018]]
  -  Recorded the known empty parse step of `prompt()` so alternative groups
     with ambiguous empty fallbacks can be drawn as required. Completion that
     depends on sources or validation remains unknown. [[#1014], [#1016]]
