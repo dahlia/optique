@@ -177,9 +177,14 @@ To be released.
     signal.  OS-delivered `SIGINT`/`SIGTERM` also stops waiting and rejects with
     an `AbortError`; interactive <kbd>^C</kbd> retains Clack's process-exit
     behavior.  Omit the option to keep resolution silent.  [[#980], [#1018]]
+
  -  Added `autocomplete` and `autocomplete-multiselect` prompt types for
     filtering a list of options while choosing one or several values.
     Both support custom filters and initial selections.  [[#978], [#1019]]
+
+    An enabled option remains selectable when a disabled option shares its
+    value.
+
  -  `prompt()` now accepts a `derivePromptConfig()` result without
     dependency sources, so a selection prompt can load its options
     asynchronously right before it opens.  The resolver receives the abort

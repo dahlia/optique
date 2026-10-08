@@ -1465,6 +1465,59 @@ describe("native pending spinner cancellation", () => {
 });
 
 describe("autocomplete prompts", () => {
+  for (
+    const options of [
+      [{ value: "shared", disabled: true }, "shared"],
+      ["shared", { value: "shared", disabled: "Unavailable" }],
+    ] as const
+  ) {
+    it(`should allow an enabled duplicate in autocomplete (${typeof options[0]})`, async () => {
+      await withPromptFunctionsOverride({
+        autocomplete: (config: {
+          readonly validate: (value: unknown) => string | undefined;
+        }) => {
+          assert.equal(config.validate("shared"), undefined);
+          return Promise.resolve("shared");
+        },
+      }, async () => {
+        assert.deepEqual(
+          await parseAsync(
+            prompt(option("--region", string()), {
+              type: "autocomplete",
+              message: "Region",
+              options,
+            }),
+            [],
+          ),
+          { success: true, value: "shared" },
+        );
+      });
+    });
+
+    it(`should retain an enabled duplicate in multiselect (${typeof options[0]})`, async () => {
+      let calls = 0;
+      await withPromptFunctionsOverride({
+        autocompleteMultiselect: () => {
+          assert.equal(++calls, 1);
+          return Promise.resolve(["shared"]);
+        },
+      }, async () => {
+        assert.deepEqual(
+          await parseAsync(
+            prompt(multiple(option("--region", string())), {
+              type: "autocomplete-multiselect",
+              message: "Regions",
+              options,
+              required: true,
+            }),
+            [],
+          ),
+          { success: true, value: ["shared"] },
+        );
+      });
+    });
+  }
+
   it("should reject disabled autocomplete values before user validation", async () => {
     let validationCalls = 0;
     await withPromptFunctionsOverride({

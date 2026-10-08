@@ -570,10 +570,7 @@ async function executePromptRaw<TValue>(
       prompts.logError(formatMessage(context.previousValidationMessage));
     }
     const disabled = cfg.type === "autocomplete-multiselect"
-      ? new Set(
-        normalizeOptions(cfg.options).filter((option) => option.disabled)
-          .map((option) => option.value),
-      )
+      ? getDisabledOptionValues(normalizeOptions(cfg.options))
       : undefined;
     while (true) {
       result = await executeClackPromptWithSignal(cfg, prompts, context.signal);
@@ -708,6 +705,7 @@ function executeClackPrompt(
 
     case "autocomplete": {
       const options = normalizeOptions(cfg.options);
+      const disabled = getDisabledOptionValues(options);
       return (prompts.autocomplete as ClackAutocomplete)({
         message: cfg.message,
         options,
@@ -726,9 +724,7 @@ function executeClackPrompt(
         // Clack may submit undefined when the input matches no options.
         validate: (value) => {
           if (typeof value !== "string") return "No option selected.";
-          if (
-            options.some((option) => option.value === value && option.disabled)
-          ) return "Option is unavailable.";
+          if (disabled.has(value)) return "Option is unavailable.";
           return cfg.validate?.(value) ?? undefined;
         },
       });
@@ -789,6 +785,19 @@ function parseNumberPromptValue(value: string): number | null {
   if (value.trim() === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getDisabledOptionValues(
+  options: readonly Option[],
+): ReadonlySet<string> {
+  const disabled = new Set(
+    options.filter((option) => option.disabled).map((option) => option.value),
+  );
+  // Values may be shared by options; any enabled match makes a value usable.
+  for (const option of options) {
+    if (!option.disabled) disabled.delete(option.value);
+  }
+  return disabled;
 }
 
 function normalizeOptions(
