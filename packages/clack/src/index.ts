@@ -11,6 +11,7 @@ import {
   multiselect,
   password,
   select,
+  spinner,
   text,
 } from "@clack/prompts";
 import type { FluentParser } from "@optique/core/fluent";
@@ -23,6 +24,7 @@ import {
   type PromptCondition,
   type PromptExecutionContext,
   type PromptOptions,
+  type PromptPendingContext,
 } from "@optique/prompt";
 
 export { derivePromptConfig, isDerivedPromptConfig } from "@optique/prompt";
@@ -48,6 +50,7 @@ export type {
  * @since 1.2.0
  */
 interface PromptFunctions {
+  readonly spinner: typeof spinner;
   readonly text: typeof text;
   readonly password: typeof password;
   readonly confirm: typeof confirm;
@@ -62,6 +65,7 @@ const promptFunctionsOverrideSymbol = Symbol.for(
 );
 
 const defaultPromptFunctions: PromptFunctions = {
+  spinner,
   text,
   password,
   confirm,
@@ -358,29 +362,100 @@ type ClackMultiselect = (config: {
 }) => Promise<unknown>;
 
 /**
+ * Shared prompt options and Clack's derived configuration pending indicator.
+ *
+ * @typeParam TValue Value produced by the wrapped parser.
+ * @since 1.4.0
+ */
+export interface ClackPromptOptions<TValue> extends PromptOptions<TValue> {
+  /**
+   * Shows a spinner with this message while a derived configuration resolves.
+   * Omit it for silent resolution. An empty string also enables the spinner.
+   * Static configurations ignore this option. Explicit opt-in also shows the
+   * indicator when the resolved configuration has a custom `prompter`.
+   * The final line keeps this message with a success, error, or cancel symbol.
+   */
+  readonly pendingMessage?: string;
+}
+
+/**
  * Wraps a parser with an interactive Clack prompt fallback.
  *
  * @param parser Inner parser that reads CLI values.
  * @param config Type-safe Clack prompt configuration, or a configuration
  *               derived from dependency sources via `derivePromptConfig()`.
- * @param options Shared validation, retry, and cancellation options.
+ * @param options Shared validation, retry, cancellation, and optional pending
+ *                indicator options.
  * @returns A parser with interactive prompt fallback, always in async mode.
  * @throws {RangeError} If `maxAttempts` is not a positive integer.
+ * @throws {DOMException} With name `AbortError` when an OS-delivered SIGINT or
+ *                       SIGTERM cancels the pending spinner. Interactive
+ *                       Ctrl+C follows Clack's process-exit behavior.
  * @throws {Error} If prompt execution fails with an unexpected error or if the
  *                 inner parser throws while parsing or completing.
  * @since 1.2.0
  * @since 1.3.0 Added shared options and the prompter context.
+ * @since 1.4.0 Added the optional pending indicator.
  */
 export function prompt<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   config:
     | PromptConfig<TValue>
     | DerivedPromptConfig<RuntimePromptConfig, NoInfer<TValue>>,
-  options?: PromptOptions<NoInfer<TValue>>,
+  options?: ClackPromptOptions<NoInfer<TValue>>,
 ): FluentParser<"async", TValue, TState> {
+  const pendingMessage = options?.pendingMessage;
   const promptWithAdapter = createPromptAdapter<RuntimePromptConfig>({
     execute: executePromptRaw,
     getDefaultValue: getConfigDefault,
+    ...(pendingMessage == null ? {} : {
+      async whilePending<T>(
+        work: () => Promise<T>,
+        { signal }: PromptPendingContext,
+      ): Promise<T> {
+        if (signal?.aborted) return work();
+        // Own abort cleanup rather than forwarding the signal: the parse can
+        // stop waiting before a resolver that ignores cancellation settles.
+        let finished = false;
+        let rejectCancellation!: (reason: unknown) => void;
+        const cancelled = new Promise<never>((_resolve, reject) => {
+          rejectCancellation = reject;
+        });
+        const indicator = getPromptFunctions().spinner({
+          cancelMessage: pendingMessage,
+          onCancel() {
+            if (finished) return;
+            // Clack has already stopped its timer and restored the terminal.
+            finished = true;
+            signal?.removeEventListener("abort", onAbort);
+            rejectCancellation(
+              new DOMException("Prompt cancelled.", "AbortError"),
+            );
+          },
+        });
+        const finish = (outcome: "stop" | "error" | "cancel") => {
+          if (finished) return;
+          finished = true;
+          signal?.removeEventListener("abort", onAbort);
+          indicator[outcome](pendingMessage);
+        };
+        const onAbort = () => finish("cancel");
+        try {
+          indicator.start(pendingMessage);
+          signal?.addEventListener("abort", onAbort, { once: true });
+          // Native SIGINT/SIGTERM cancellation must stop waiting even when
+          // the resolver ignores cancellation. Race consumes late settlement.
+          const result = await Promise.race([work(), cancelled]);
+          finish("stop");
+          return result;
+        } catch (error) {
+          finish(signal?.aborted ? "cancel" : "error");
+          throw error;
+        } finally {
+          signal?.removeEventListener("abort", onAbort);
+        }
+      },
+    }),
   });
   return promptWithAdapter(parser, config, options);
 }

@@ -13,7 +13,8 @@ interactive prompt integrations.  Most applications should use
 *@optique/inquirer* or *@optique/clack* directly.  Reach for this package when
 you want to connect Optique to another prompt library.
 
-The adapter controls only prompt execution.  *@optique/prompt* handles the
+The adapter controls prompt execution and can optionally present a pending
+state while a derived configuration resolves.  *@optique/prompt* handles the
 parser behavior: CLI values take priority, source bindings such as
 `bindEnv()` and `bindConfig()` can satisfy values before prompting, usage is
 marked optional, completion and suggestion behavior is preserved, and the
@@ -965,6 +966,36 @@ Adapter object accepted by `createPromptAdapter()`.
 `getDefaultValue(config)`
 :   Optional function that returns a prompt-level default for documentation
     fragments.  Never called with a derived configuration.
+
+`whilePending(work, context)`
+:   Optional generic hook for presenting a pending state while a derived
+    configuration resolver runs, available since 1.4.0.  It receives
+    `work: () => Promise<T>` and a
+    [`PromptPendingContext`](#promptpendingcontext). Call `work()` and preserve
+    its result or rejection.  Repeated calls return the same promise and run
+    the resolver once; `work()` never throws synchronously.  Resolver failures
+    become parse failures after the hook sees the original rejection.  Errors
+    raised by the hook itself propagate unchanged; cancellation takes
+    precedence.
+
+    Finish the indicator before returning.  Clean it up immediately on abort,
+    even if the resolver ignores the signal, and avoid terminal writes when
+    that resolver settles later.  The work promise rejects promptly with the
+    signal's exact reason.  A separate abort listener can release UI resources
+    synchronously; remove it after success, failure, or cancellation.
+
+    The hook runs only after dependency and declared-default checks succeed.
+    Static configurations, CLI or source-bound values, false runtime
+    conditions, help, suggestions, and deferred completion probes skip it.
+    Validation retries reuse the resolved configuration without calling the
+    hook again.  Adapters that omit the hook retain silent resolution.
+
+### `PromptPendingContext`
+
+*Available since Optique 1.4.0.*
+
+Context for `PromptAdapter.whilePending()`.  Its optional `signal` is the same
+`AbortSignal` supplied through the prompt's shared options.
 
 ### `PromptValidator<TValue>`
 

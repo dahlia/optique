@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { getEventListeners } from "node:events";
 import { describe, it } from "node:test";
 import { concat, object, tuple } from "@optique/core/constructs";
@@ -1084,4 +1086,380 @@ describe("prompt() with zero-dependency derived configurations", () => {
     assert.ok(result.success);
     assert.equal(result.value, "a.txt");
   });
+});
+
+// https://github.com/dahlia/optique/issues/980
+describe("derived prompt pending indicators", () => {
+  function recordingSpinner(events: string[]) {
+    return (options?: { readonly signal?: AbortSignal }) => {
+      assert.equal(options?.signal, undefined);
+      return {
+        start: (label?: string) => events.push(`start:${label}`),
+        stop: (label?: string) => events.push(`stop:${label}`),
+        error: (label?: string) => events.push(`error:${label}`),
+        cancel: (label?: string) => events.push(`cancel:${label}`),
+      };
+    };
+  }
+
+  for (const pendingMessage of ["Loading objects", ""]) {
+    it(`should finish the requested indicator before prompting (${JSON.stringify(pendingMessage)})`, async () => {
+      const events: string[] = [];
+      await withPromptFunctionsOverride({
+        spinner: recordingSpinner(events),
+        select: () => {
+          events.push("select");
+          return Promise.resolve("object");
+        },
+      }, async () => {
+        const parser = prompt(
+          option("--key", string()),
+          derivePromptConfig(() => ({
+            type: "select",
+            message: "Pick an object",
+            options: ["object"],
+          })),
+          { pendingMessage },
+        );
+        assert.deepEqual(await parseAsync(parser, []), {
+          success: true,
+          value: "object",
+        });
+        assert.deepEqual(await parseAsync(parser, []), {
+          success: true,
+          value: "object",
+        });
+      });
+      assert.deepEqual(events, [
+        `start:${pendingMessage}`,
+        `stop:${pendingMessage}`,
+        "select",
+        `start:${pendingMessage}`,
+        `stop:${pendingMessage}`,
+        "select",
+      ]);
+    });
+  }
+
+  it("should show an error when the resolver rejects", async () => {
+    const events: string[] = [];
+    await withPromptFunctionsOverride(
+      { spinner: recordingSpinner(events) },
+      async () => {
+        const result = await parseAsync(
+          prompt(
+            option("--key", string()),
+            derivePromptConfig(() =>
+              Promise.reject(new Error("Fetch failed."))
+            ),
+            { pendingMessage: "Loading objects" },
+          ),
+          [],
+        );
+        assert.ok(!result.success);
+        assert.deepEqual(
+          result.error,
+          message`Prompt configuration resolution failed: ${"Fetch failed."}`,
+        );
+      },
+    );
+    assert.deepEqual(events, [
+      "start:Loading objects",
+      "error:Loading objects",
+    ]);
+  });
+
+  for (const lateRejection of [true, false]) {
+    it(`should cancel immediately without output after late ${lateRejection ? "rejection" : "fulfillment"}`, async () => {
+      const events: string[] = [];
+      const controller = new AbortController();
+      const reason = new Error("Stop loading.");
+      const started = deferred<void>();
+      const settled = deferred<void>();
+      await withPromptFunctionsOverride(
+        { spinner: recordingSpinner(events) },
+        async () => {
+          const parser = prompt(
+            option("--key", string()),
+            derivePromptConfig(async () => {
+              started.resolve();
+              await settled.promise;
+              if (lateRejection) throw new Error("Late failure.");
+              return {
+                type: "text",
+                message: "Key",
+                prompter: () => {
+                  events.push("prompt");
+                  return Promise.resolve("object");
+                },
+              };
+            }),
+            { pendingMessage: "Loading objects", signal: controller.signal },
+          );
+          const parsing = parseAsync(parser, []);
+          const rejected = assert.rejects(parsing, (error) => error === reason);
+          await started.promise;
+          controller.abort(reason);
+          // Cleanup must happen within abort(), even if the resolver never settles.
+          assert.deepEqual(events, [
+            "start:Loading objects",
+            "cancel:Loading objects",
+          ]);
+          await rejected;
+          settled.resolve();
+          await settled.promise;
+          // Let the resolver and the consumed rejection handlers finish.
+          await new Promise<void>((resolve) => queueMicrotask(resolve));
+          assert.deepEqual(events, [
+            "start:Loading objects",
+            "cancel:Loading objects",
+          ]);
+          assert.deepEqual(getEventListeners(controller.signal, "abort"), []);
+        },
+      );
+    });
+  }
+
+  it("should stay silent without opting in, including custom prompters", async () => {
+    await withPromptFunctionsOverride({
+      spinner: () => assert.fail("No indicator requested."),
+    }, async () => {
+      const config = {
+        type: "text" as const,
+        message: "Key",
+        prompter: () => Promise.resolve("object"),
+      };
+      assert.deepEqual(
+        await parseAsync(
+          prompt(option("--key", string()), derivePromptConfig(() => config)),
+          [],
+        ),
+        { success: true, value: "object" },
+      );
+      assert.deepEqual(
+        await parseAsync(
+          prompt(option("--key", string()), config, {
+            pendingMessage: "Ignored for static config",
+          }),
+          [],
+        ),
+        { success: true, value: "object" },
+      );
+    });
+  });
+
+  it("should honor explicit opt-in with a custom prompter", async () => {
+    const events: string[] = [];
+    const controller = new AbortController();
+    await withPromptFunctionsOverride(
+      { spinner: recordingSpinner(events) },
+      async () => {
+        const result = await parseAsync(
+          prompt(
+            option("--key", string()),
+            derivePromptConfig(() => ({
+              type: "text",
+              message: "Key",
+              prompter: () => {
+                events.push("prompter");
+                return Promise.resolve("object");
+              },
+            })),
+            { pendingMessage: "Loading objects", signal: controller.signal },
+          ),
+          [],
+        );
+        assert.deepEqual(result, { success: true, value: "object" });
+      },
+    );
+    assert.deepEqual(events, [
+      "start:Loading objects",
+      "stop:Loading objects",
+      "prompter",
+    ]);
+    assert.deepEqual(getEventListeners(controller.signal, "abort"), []);
+  });
+
+  it("should not start an indicator for CLI values, skipped or pre-aborted prompts", async () => {
+    await withPromptFunctionsOverride({
+      spinner: () => assert.fail("Resolution not needed."),
+    }, async () => {
+      const inner = option("--key", string());
+      const config = derivePromptConfig(() => ({
+        type: "text" as const,
+        message: "Key",
+      }));
+      assert.deepEqual(
+        await parseAsync(prompt(inner, config, { pendingMessage: "Loading" }), [
+          "--key",
+          "cli",
+        ]),
+        { success: true, value: "cli" },
+      );
+      assert.deepEqual(
+        await parseAsync(
+          prompt(
+            inner,
+            derivePromptConfig(() => ({ type: "text", message: "Key" }), {
+              when: () => false,
+              otherwise: "skipped",
+            }),
+            { pendingMessage: "Loading" },
+          ),
+          [],
+        ),
+        { success: true, value: "skipped" },
+      );
+      const controller = new AbortController();
+      controller.abort("cancelled");
+      await assert.rejects(
+        parseAsync(
+          prompt(inner, config, {
+            pendingMessage: "Loading",
+            signal: controller.signal,
+          }),
+          [],
+        ),
+        (error) => error === "cancelled",
+      );
+    });
+  });
+
+  it("should preserve a successful indicator if abort happens before the prompt opens", async () => {
+    const events: string[] = [];
+    const controller = new AbortController();
+    const reason = new Error("Stop before prompting.");
+    await withPromptFunctionsOverride({
+      spinner: () => ({
+        start: () => events.push("start"),
+        stop: () => {
+          events.push("stop");
+          controller.abort(reason);
+        },
+        cancel: () => events.push("cancel"),
+        error: () => events.push("error"),
+      }),
+    }, async () => {
+      await assert.rejects(
+        parseAsync(
+          prompt(
+            option("--key", string()),
+            derivePromptConfig(() => ({
+              type: "text",
+              message: "Key",
+              prompter: () => {
+                events.push("prompter");
+                return Promise.resolve("object");
+              },
+            })),
+            { pendingMessage: "Loading", signal: controller.signal },
+          ),
+          [],
+        ),
+        (error) => error === reason,
+      );
+    });
+    assert.deepEqual(events, ["start", "stop"]);
+    assert.deepEqual(getEventListeners(controller.signal, "abort"), []);
+  });
+});
+
+describe("native pending spinner cancellation", () => {
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    for (const settlement of ["stalled", "resolve", "reject"] as const) {
+      it(`should stop waiting after ${signal} with ${settlement} work`, {
+        skip: process.platform === "win32",
+      }, async () => {
+        if (process.platform === "win32") return;
+        const script = `
+          import { prompt, derivePromptConfig } from "@optique/clack";
+          import { parseAsync } from "@optique/core/parser";
+          import { option } from "@optique/core/primitives";
+          import { string } from "@optique/core/valueparser";
+          import { getEventListeners } from "node:events";
+          const controller = new AbortController();
+          const settlement = ${JSON.stringify(settlement)};
+          const gate = settlement === "stalled" ? new Promise(() => {})
+            : new Promise(resolve => process.stdin.once("data", resolve));
+          const parser = prompt(option("--key", string()), derivePromptConfig(async () => {
+            process.stdout.write("READY\\n");
+            await gate;
+            if (settlement === "reject") throw new Error("Late failure.");
+            return { type: "text", message: "Key", prompter: () => {
+              console.log("PROMPTED"); return Promise.resolve("object");
+            } };
+          }), { pendingMessage: "Loading objects", signal: controller.signal });
+          try {
+            await parseAsync(parser, []);
+            console.log("UNEXPECTED_SUCCESS");
+            process.exitCode = 1;
+          } catch (error) {
+            if (error?.name !== "AbortError") throw error;
+            console.log("CANCELLED");
+          }
+          if (getEventListeners(controller.signal, "abort").length !== 0) {
+            throw new Error("Abort listener leaked.");
+          }
+          if (controller.signal.aborted) throw new Error("Caller signal aborted.");
+          if (settlement !== "stalled") {
+            // Clack closes its readline interface on cancellation, pausing
+            // stdin. Resume the test's independent resolver-release channel.
+            process.stdin.resume();
+            await gate;
+            await new Promise(resolve => setImmediate(resolve));
+            console.log("LATE_SETTLED");
+          }
+        `;
+        const args = process.versions.deno != null
+          ? ["eval", script]
+          : process.versions.bun != null
+          ? ["--eval", script]
+          : ["--input-type=module", "--eval", script];
+        const child = spawn(process.execPath, args, {
+          cwd: fileURLToPath(new URL("../", import.meta.url)),
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        let output = "";
+        let errors = "";
+        let sent = false;
+        let released = false;
+        child.stdout.on("data", (chunk) => {
+          output += String(chunk);
+          if (!sent && output.includes("READY")) {
+            sent = true;
+            child.kill(signal);
+          }
+          if (
+            settlement !== "stalled" && !released &&
+            output.includes("CANCELLED")
+          ) {
+            released = true;
+            child.stdin.end("settle");
+          }
+        });
+        child.stderr.on("data", (chunk) => {
+          errors += String(chunk);
+        });
+        // A broken cancellation path must fail rather than leave the test hung.
+        const timeout = setTimeout(() => child.kill("SIGKILL"), 10000);
+        try {
+          const code = await new Promise<number | null>((resolve, reject) => {
+            child.once("error", reject);
+            child.once("close", resolve);
+          });
+          assert.equal(code, 0, errors + output);
+          assert.ok(sent, errors + output);
+          assert.match(output, /CANCELLED/);
+          assert.ok(!output.includes("UNEXPECTED_SUCCESS"));
+          assert.ok(!output.includes("PROMPTED"));
+          if (settlement !== "stalled") assert.match(output, /LATE_SETTLED/);
+        } finally {
+          clearTimeout(timeout);
+          if (child.exitCode == null && child.signalCode == null) {
+            child.kill("SIGKILL");
+          }
+        }
+      });
+    }
+  }
 });

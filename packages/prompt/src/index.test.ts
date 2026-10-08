@@ -4,6 +4,7 @@ import {
 } from "@optique/core/extension";
 import { formatUsage } from "@optique/core/usage";
 import assert from "node:assert/strict";
+import { getEventListeners } from "node:events";
 import * as fc from "fast-check";
 import { describe, it } from "node:test";
 import { type Annotations, getAnnotations } from "@optique/core/annotations";
@@ -9206,5 +9207,373 @@ describe("empty-input behavior", () => {
     assert.equal(getEmptyInputBehavior(ambiguous).step, "failure");
     assert.equal(formatUsage("app", ambiguous.usage), "app (FILE)");
     assert.ok(!(await parseAsync(ambiguous, [])).success);
+  });
+});
+
+// https://github.com/dahlia/optique/issues/980
+describe("derived prompt pending hooks", () => {
+  it("should preserve the configuration and run work once across retries", async () => {
+    const events: string[] = [];
+    const config = { value: "loaded" };
+    let resolverCalls = 0;
+    const prompt = createPromptAdapter<TestPromptConfig<unknown>>({
+      async whilePending(work) {
+        events.push("pending");
+        const first = work();
+        assert.equal(work(), first);
+        const result = await first;
+        assert.equal(result, config);
+        events.push("settled");
+        return result;
+      },
+      execute<TValue>(
+        resolved: TestPromptConfig<unknown>,
+        context: PromptExecutionContext,
+      ) {
+        assert.equal(resolved, config);
+        events.push(`attempt-${context.attempt}`);
+        return Promise.resolve({
+          success: true,
+          value: resolved.value as TValue,
+        });
+      },
+    });
+    let validations = 0;
+    const result = await parseAsync(
+      prompt(
+        option("--name", string()),
+        derivePromptConfig(() => {
+          resolverCalls++;
+          return config;
+        }),
+        {
+          validate: () => ++validations === 1 ? message`Try again.` : undefined,
+        },
+      ),
+      [],
+    );
+    assert.deepEqual(result, { success: true, value: "loaded" });
+    assert.equal(resolverCalls, 1);
+    assert.deepEqual(events, ["pending", "settled", "attempt-1", "attempt-2"]);
+  });
+
+  for (const error of [new Error("Fetch failed."), undefined, NaN]) {
+    for (const synchronous of [true, false]) {
+      it(`should expose a ${synchronous ? "thrown" : "rejected"} resolver error before mapping it (${String(error)})`, async () => {
+        const observed: unknown[] = [];
+        const prompt = createPromptAdapter<EmptyPromptConfig>({
+          async whilePending(work) {
+            try {
+              return await work();
+            } catch (reason) {
+              observed.push(reason);
+              throw reason;
+            }
+          },
+          execute() {
+            assert.fail("A failed resolver must not open a prompt.");
+          },
+        });
+        const result = await parseAsync(
+          prompt(
+            option("--name", string()),
+            derivePromptConfig(() => {
+              if (synchronous) throw error;
+              return Promise.reject(error);
+            }),
+          ),
+          [],
+        );
+        assert.ok(!result.success);
+        assert.equal(observed.length, 1);
+        assert.ok(Object.is(observed[0], error));
+        assert.deepEqual(
+          result.error,
+          message`Prompt configuration resolution failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
+    }
+  }
+
+  for (const afterWork of [true, false]) {
+    it(`should propagate a hook error ${afterWork ? "after" : "before"} work`, async () => {
+      const reason = new Error("Indicator failed.");
+      const prompt = createPromptAdapter<EmptyPromptConfig>({
+        async whilePending(work) {
+          if (afterWork) await work();
+          throw reason;
+        },
+        execute() {
+          assert.fail("A failed hook must not open a prompt.");
+        },
+      });
+      await assert.rejects(
+        parseAsync(
+          prompt(
+            option("--name", string()),
+            derivePromptConfig(() => ({})),
+          ),
+          [],
+        ),
+        (error) => error === reason,
+      );
+    });
+  }
+
+  for (const settle of ["resolve", "reject"] as const) {
+    it(`should abort pending work and consume its late ${settle}`, async () => {
+      const controller = new AbortController();
+      const started = deferred<void>();
+      const finished = deferred<void>();
+      const work = deferred<EmptyPromptConfig>();
+      const reason = new Error("Stop loading.");
+      const prompt = createPromptAdapter<EmptyPromptConfig>({
+        async whilePending(run, context) {
+          assert.equal(context.signal, controller.signal);
+          try {
+            return await run();
+          } catch (error) {
+            assert.equal(error, reason);
+            throw error;
+          } finally {
+            finished.resolve();
+          }
+        },
+        execute() {
+          assert.fail("Aborted work must not open a prompt.");
+        },
+      });
+      const parsing = parseAsync(
+        prompt(
+          option("--name", string()),
+          derivePromptConfig(() => {
+            started.resolve();
+            return work.promise;
+          }),
+          { signal: controller.signal },
+        ),
+        [],
+      );
+      const rejected = assert.rejects(parsing, (error) => error === reason);
+      await started.promise;
+      controller.abort(reason);
+      await rejected;
+      await finished.promise;
+      if (settle === "resolve") work.resolve({});
+      else work.reject(new Error("Late failure."));
+      await work.promise.catch(() => {});
+    });
+  }
+
+  it("should release the resolver abort listener when a hook stops waiting", async () => {
+    const controller = new AbortController();
+    const resolution = deferred<EmptyPromptConfig>();
+    const reason = new DOMException("Prompt cancelled.", "AbortError");
+    const prompt = createPromptAdapter<EmptyPromptConfig>({
+      whilePending(work) {
+        work();
+        throw reason;
+      },
+      execute() {
+        assert.fail("Cancelled pending work must not open a prompt.");
+      },
+    });
+    await assert.rejects(
+      parseAsync(
+        prompt(
+          option("--name", string()),
+          derivePromptConfig(() => resolution.promise),
+          { signal: controller.signal },
+        ),
+        [],
+      ),
+      (error) => error === reason,
+    );
+    assert.deepEqual(getEventListeners(controller.signal, "abort"), []);
+    assert.ok(!controller.signal.aborted);
+    resolution.reject(new Error("Late failure."));
+    await resolution.promise.catch(() => {});
+  });
+
+  it("should skip pending hooks when configuration resolution is unnecessary", async () => {
+    const prompt = createPromptAdapter<TestPromptConfig<unknown>>({
+      whilePending() {
+        assert.fail("Pending hook must be skipped.");
+      },
+      execute<TValue>(config: TestPromptConfig<unknown>) {
+        return Promise.resolve({
+          success: true,
+          value: config.value as TValue,
+        });
+      },
+    });
+    const inner = option("--name", string());
+    assert.deepEqual(await parseAsync(prompt(inner, { value: "static" }), []), {
+      success: true,
+      value: "static",
+    });
+    const derived = prompt(
+      inner,
+      derivePromptConfig(() => ({ value: "loaded" })),
+    );
+    assert.deepEqual(await parseAsync(derived, ["--name", "cli"]), {
+      success: true,
+      value: "cli",
+    });
+    assert.deepEqual(
+      await parseAsync(
+        prompt(
+          inner,
+          derivePromptConfig(() => ({ value: "loaded" }), {
+            when: () => false,
+            otherwise: "skipped",
+          }),
+        ),
+        [],
+      ),
+      { success: true, value: "skipped" },
+    );
+    await getDocPageAsync(derived);
+    await suggestAsync(derived, [""]);
+    const controller = new AbortController();
+    controller.abort("already aborted");
+    await assert.rejects(
+      parseAsync(
+        prompt(inner, derivePromptConfig(() => ({ value: "loaded" })), {
+          signal: controller.signal,
+        }),
+        [],
+      ),
+      (error) => error === "already aborted",
+    );
+  });
+
+  it("should not start a hook when an environment binding supplies the value", async () => {
+    const prompt = createPromptAdapter<TestPromptConfig<unknown>>({
+      whilePending() {
+        assert.fail("Source-bound values skip resolution.");
+      },
+      execute() {
+        assert.fail("Source-bound values skip the prompt.");
+      },
+    });
+    const env = createEnvContext({ source: () => "environment" });
+    const result = await runWith(
+      prompt(
+        bindEnv(option("--name", string()), {
+          context: env,
+          key: "NAME",
+          parser: string(),
+        }),
+        derivePromptConfig(() => ({ value: "loaded" })),
+      ),
+      "test",
+      [env],
+      { args: [] },
+    );
+    assert.equal(result, "environment");
+  });
+
+  it("should show pending state only in the real phase of two-pass parsing", async () => {
+    const events: string[] = [];
+    const prompt = createPromptAdapter<TestPromptConfig<unknown>>({
+      async whilePending(work) {
+        events.push("pending");
+        return await work();
+      },
+      execute<TValue>(config: TestPromptConfig<unknown>) {
+        events.push("execute");
+        return Promise.resolve({
+          success: true,
+          value: config.value as TValue,
+        });
+      },
+    });
+    const context: SourceContext = {
+      id: Symbol("pending-two-pass"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    const result = await runWith(
+      prompt(
+        option("--name", string()),
+        derivePromptConfig(() => {
+          events.push("resolve");
+          return { value: "loaded" };
+        }),
+      ),
+      "test",
+      [context],
+      { args: [] },
+    );
+    assert.equal(result, "loaded");
+    assert.deepEqual(events, ["pending", "resolve", "execute"]);
+  });
+
+  it("should not start a hook for missing dependencies or failing defaults", async () => {
+    const source = dependency(string());
+    const prompt = createPromptAdapter<EmptyPromptConfig>({
+      whilePending() {
+        assert.fail("Dependency checks precede the hook.");
+      },
+      execute() {
+        assert.fail("Invalid dependencies must not open a prompt.");
+      },
+    });
+    for (
+      const config of [
+        derivePromptConfig(source, () => ({})),
+        derivePromptConfig(source, () => ({}), {
+          defaultValue() {
+            throw new Error("Default failed.");
+          },
+        }),
+      ]
+    ) {
+      const result = await parseAsync(
+        prompt(option("--name", string()), config),
+        [],
+      );
+      assert.ok(!result.success);
+    }
+  });
+
+  it("should wrap a dependency-based resolver after its source resolves", async () => {
+    const source = dependency(string());
+    const events: string[] = [];
+    const prompt = createPromptAdapter<TestPromptConfig<unknown>>({
+      async whilePending(work) {
+        events.push("pending");
+        return await work();
+      },
+      execute<TValue>(config: TestPromptConfig<unknown>) {
+        return Promise.resolve({
+          success: true,
+          value: config.value as TValue,
+        });
+      },
+    });
+    const result = await parseAsync(
+      object({
+        source: option("--source", source),
+        name: prompt(
+          option("--name", string()),
+          derivePromptConfig(source, (value) => {
+            events.push(value);
+            return { value };
+          }),
+        ),
+      }),
+      ["--source", "upstream"],
+    );
+    assert.deepEqual(result, {
+      success: true,
+      value: { source: "upstream", name: "upstream" },
+    });
+    assert.deepEqual(events, ["pending", "upstream"]);
   });
 });
