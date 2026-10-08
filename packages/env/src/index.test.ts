@@ -1,3 +1,8 @@
+import {
+  defineEmptyInputBehavior,
+  getEmptyInputBehavior,
+} from "@optique/core/extension";
+import { formatUsage } from "@optique/core/usage";
 import assert from "node:assert/strict";
 import * as fc from "fast-check";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -12,6 +17,7 @@ import { injectAnnotations } from "@optique/core/extension";
 import {
   concat,
   group,
+  longestMatch,
   merge,
   object,
   or,
@@ -5015,6 +5021,95 @@ describe("bindEnv() error messages for unregistered context", () => {
         formatted.includes("contexts option"),
         `Expected "contexts option" in: ${formatted}`,
       );
+    }
+  });
+});
+
+describe("empty-input behavior", () => {
+  it("should declare only source-independent steps without evaluating fallbacks", async () => {
+    let sourceCalls = 0;
+    const context = createEnvContext({
+      source: () => {
+        sourceCalls++;
+        return undefined;
+      },
+    });
+    const bind = (inner: Parser<"sync", string, unknown>) =>
+      bindEnv(inner, { context, key: "VALUE", parser: string() });
+    const provisional: Parser<"sync", string, undefined> = {
+      ...fail<string>(),
+      parse(context) {
+        return {
+          success: true,
+          provisional: true,
+          next: context,
+          consumed: [],
+        };
+      },
+    };
+    defineEmptyInputBehavior(provisional, {
+      step: "provisional",
+      afterStep: false,
+      fromInitial: false,
+    });
+    const cases: readonly (readonly [
+      Parser<"sync", string, unknown>,
+      "success" | "provisional" | undefined,
+    ])[] = [
+      [fail<string>(), "success"],
+      [constant("value"), "success"],
+      [provisional, "provisional"],
+      [{ ...fail<string>() }, undefined],
+    ];
+    for (const [inner, step] of cases) {
+      const parser = bind(inner);
+      assert.deepEqual(
+        getEmptyInputBehavior(parser),
+        step === undefined ? {} : { step },
+      );
+      assert.equal(sourceCalls, 0);
+
+      const result = await parser.parse({
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(result.success);
+      assert.equal(result.provisional === true, step === "provisional");
+      assert.equal(
+        getEmptyInputBehavior(longestMatch(parser, constant("fallback")))
+          .afterStep,
+        step === "provisional" ? true : undefined,
+      );
+      assert.equal(getEmptyInputBehavior(tuple([parser])).afterStep, undefined);
+    }
+    const bound = bind(fail<string>());
+    const ambiguous = or(
+      bound,
+      bound,
+      optional(argument(string({ metavar: "FILE" }))),
+    );
+    assert.equal(getEmptyInputBehavior(ambiguous).step, "failure");
+    assert.equal(formatUsage("app", ambiguous.usage), "app (FILE)");
+    assert.ok(!(await parse(ambiguous, [])).success);
+  });
+});
+
+describe("source-dependent empty completion", () => {
+  it("should leave completion unknown for present, missing and invalid env values", () => {
+    for (const raw of ["42", undefined, "invalid"]) {
+      const context = createEnvContext({ source: () => raw });
+      const parser = bindEnv(fail<number>(), {
+        context,
+        key: "VALUE",
+        parser: integer(),
+      });
+      assert.deepEqual(getEmptyInputBehavior(parser), { step: "success" });
+      const annotations = context.getAnnotations();
+      assert.ok(!(annotations instanceof Promise));
+      assert.equal(parse(parser, [], { annotations }).success, raw === "42");
+      assert.deepEqual(getEmptyInputBehavior(parser), { step: "success" });
     }
   });
 });

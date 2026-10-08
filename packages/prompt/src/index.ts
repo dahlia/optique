@@ -1,3 +1,7 @@
+import {
+  defineEmptyInputBehavior,
+  getEmptyInputBehavior,
+} from "@optique/core/extension";
 /**
  * Generic prompt adapter support for Optique.
  *
@@ -1476,6 +1480,14 @@ export function createPromptAdapter<TConfig>(
     }
 
     delegateOptionParsing(promptedParser, parser, getCliState);
+    // Sources and fallback validators are only resolved during completion.
+    // The empty step preserves success/provisional or accepts a non-match.
+    const emptyStep = getEmptyInputBehavior(parser).step;
+    defineEmptyInputBehavior(promptedParser, {
+      ...(emptyStep === undefined ? {} : {
+        step: emptyStep === "failure" ? "success" : emptyStep,
+      }),
+    });
     return fluent(promptedParser);
   };
 }

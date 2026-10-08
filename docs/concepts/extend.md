@@ -264,7 +264,8 @@ Optique exposes a few low-level helper modules for custom parser authors:
     `isInjectedAnnotationState()`, `unwrapInjectedAnnotationState()`,
     `withAnnotationView()`, `dispatchByMode()`, `mapModeValue()`,
     `wrapForMode()`, `inheritOptionScope()`, `delegateSuggestNodes()`, and
-    `mapSourceMetadata()`.
+    `mapSourceMetadata()`, `defineEmptyInputBehavior()`,
+    `getEmptyInputBehavior()`, and `inheritEmptyInputBehavior()`.
  -  `@optique/core/fluent`: Decorate a custom parser with method-style
     modifier helpers using `fluent()` when you want it to support calls such as
     `.map()` and `.optional()` without making those methods part of the base
@@ -309,6 +310,113 @@ Most custom parsers do *not* need this flag.  It is primarily relevant
 for construct-level parsers that compose multiple sub-parsers and need
 to distinguish between “matched without input” (like `constant()`) and
 “partially resolved, pending more input.”
+
+
+Declaring empty-input behavior
+------------------------------
+
+*Available since Optique 1.4.0.*
+
+A custom parser can declare what happens when it receives no arguments with
+`defineEmptyInputBehavior()` from `@optique/core/extension`. Combinators use
+these facts to decide whether their usage groups should be optional. They do
+not execute the parser to discover the facts, and the declaration does not
+change parsing.
+
+~~~~ typescript twoslash
+import type { Parser } from "@optique/core/parser";
+import { defineEmptyInputBehavior } from "@optique/core/extension";
+import { or } from "@optique/core/constructs";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { formatUsage } from "@optique/core/usage";
+
+const fallback: Parser<"sync", string, undefined> = {
+  mode: "sync",
+  $valueType: [],
+  $stateType: [],
+  priority: 0,
+  usage: [],
+  leadingNames: new Set(),
+  acceptingAnyToken: false,
+  initialState: undefined,
+  parse: (context) => ({ success: true, next: context, consumed: [] }),
+  complete: () => ({ success: true, value: "auto" }),
+  suggest: () => [],
+  getDocFragments: () => ({ fragments: [] }),
+};
+defineEmptyInputBehavior(fallback, {
+  step: "success",
+  afterStep: true,
+  fromInitial: true,
+});
+const parser = or(fallback, argument(string({ metavar: "FILE" })));
+formatUsage("app", parser.usage); // "app [FILE]"
+~~~~
+
+`EmptyInputBehavior` has three optional, read-only fields:
+
+`step`
+:   The result of `parse()` from `initialState` on an empty buffer, with
+    options not terminated: `"success"`, `"provisional"`, or `"failure"`.
+    A provisional step succeeds with `provisional: true`. No tokens can be
+    consumed from an empty buffer, including on failure.
+
+`afterStep`
+:   Whether `complete()` succeeds on the state left by a successful or
+    provisional empty step. Omit it for a failing step.
+
+`fromInitial`
+:   Whether `complete()` succeeds directly from `initialState`.
+
+Completion facts refer to the real completion phase, rather than a parse or
+suggestion probe. Each omitted field stays unknown. Declare only facts that
+hold across runtime annotations and source contexts. For example, a source
+wrapper can declare a known step while leaving completion unknown because a
+source may be absent or invalid. An option-like parser can declare only
+`fromInitial` if its empty step is unknown. `or()` still uses `leadingNames`
+and `acceptingAnyToken` to decide which branches qualify as empty fallbacks.
+
+The declaration is copied and frozen. An empty declaration clears it, and
+`getEmptyInputBehavior()` returns a frozen copy of the public facts without
+running the parser or its state getter. Methods, mode, and the initial-state
+value or getter identity bind the facts to the parser: replacing any of them
+invalidates the declaration. Object spread does not copy it. Finalize methods
+before declaring, and keep parsers unchanged after composition, since
+combinators capture facts and usage when constructed. Changes inside closures
+or mutable states cannot be detected. State getters must remain cheap,
+side-effect free, and semantically stable.
+
+A transparent wrapper can call `inheritEmptyInputBehavior(wrapper, inner)`
+when it preserves all three outcomes:
+
+~~~~ typescript twoslash
+import type { Parser } from "@optique/core/parser";
+declare const inner: Parser<"sync", string, unknown>;
+// ---cut-before---
+import { inheritEmptyInputBehavior } from "@optique/core/extension";
+
+const wrapper: typeof inner = {
+  ...inner,
+  getDocFragments(state, defaultValue) {
+    return inner.getDocFragments(state, defaultValue);
+  },
+};
+inheritEmptyInputBehavior(wrapper, inner);
+~~~~
+
+A wrapper that changes empty-step or completion behavior must instead read
+`getEmptyInputBehavior(inner)` and declare only the facts it preserves. Modes
+must match when inheriting. Internal state information is transferred only
+when the execution methods and initial-state binding are identical; spreading
+an initial-state getter snapshots its value and loses that information. A
+wrapper can preserve a getter with property descriptors or prototype
+delegation.
+
+State information used to count repetition items remains internal. Thus a
+public declaration of a successful empty step alone cannot tell `multiple()`
+whether an item is retained; that outcome stays unknown. The formatting
+promise remains per usage group, not for the synopsis as a whole.
 
 
 Use cases
@@ -896,6 +1004,19 @@ API reference
 `mapSourceMetadata(parser, mapSource)`
 :   Rewrites only the source capability inside dependency metadata while
     leaving derived and transform capabilities unchanged.
+
+`defineEmptyInputBehavior(parser, behavior)`
+:   Declares the known, context-independent empty-input outcomes. An empty
+    object clears an earlier declaration; invalid field values raise a
+    `TypeError`. See
+    [declaring empty-input behavior](#declaring-empty-input-behavior).
+
+`getEmptyInputBehavior(parser)`
+:   Returns a frozen public view of valid facts, omitting unknown fields.
+
+`inheritEmptyInputBehavior(wrapper, inner)`
+:   Passes facts to a transparent wrapper that preserves empty-input outcomes.
+    Different execution modes raise a `TypeError`.
 
 ### Functions from `@optique/core/facade`
 

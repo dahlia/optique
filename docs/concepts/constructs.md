@@ -719,9 +719,11 @@ formatUsage("app", or(
 The same applies to `longestMatch()` and to `multiple()`, which is drawn as
 `FILE...` or `[FILE...]` depending on whether it can finish without input.
 
-A few cases keep the notation the parsers declare.  Custom parsers and
-parsers bound to an outside source, such as `bindEnv()` or `bindConfig()`,
-can only be judged at run time.  An alternative made of several optional
+A few cases keep the notation the parsers declare. Custom parsers without
+[declared empty-input behavior](./extend.md#declaring-empty-input-behavior)
+remain unknown. Parsers bound to an outside source, such as `bindEnv()` or
+`bindConfig()`, declare their known parse step but leave completion unknown
+when it depends on runtime data.  An alternative made of several optional
 terms means “at least one of them,” which synopsis notation cannot say
 without listing combinations, so it stays as written.  Hidden terms are left
 out of the judgment as well: a group whose only required parts are hidden

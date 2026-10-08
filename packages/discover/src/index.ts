@@ -9,6 +9,7 @@ import type { RuntimeNode } from "@optique/core/dependency-runtime";
 import {
   dispatchByMode,
   inheritAnnotations,
+  inheritEmptyInputBehavior,
   mapModeValue,
   wrapForMode,
 } from "@optique/core/extension";
@@ -1679,7 +1680,7 @@ function createNamespaceCommandParser(
   );
   const description = metadata?.brief ?? metadata?.description;
   if (description == null) return parser;
-  return {
+  const documentedParser: typeof parser = {
     ...parser,
     getDocFragments(state, defaultValue) {
       const fragments = parser.getDocFragments(state, defaultValue);
@@ -1693,6 +1694,8 @@ function createNamespaceCommandParser(
       return withNamespaceListDocDescription(fragments, name, description);
     },
   };
+  inheritEmptyInputBehavior(documentedParser, parser);
+  return documentedParser;
 }
 
 function withNamespaceListDocDescription(
@@ -1772,13 +1775,15 @@ function createLeafParser(
     ) => void | Promise<void>,
   })) as Parser<Mode, ProgramInvocation, unknown>;
   if (!includeMetadata) return parser;
-  return {
+  const documentedParser: typeof parser = {
     ...parser,
     getDocFragments(state, defaultValue) {
       const fragments = parser.getDocFragments(state, defaultValue);
       return withCommandDocMetadata(fragments, commandDefinition.metadata);
     },
   };
+  inheritEmptyInputBehavior(documentedParser, parser);
+  return documentedParser;
 }
 
 function withRootDocs(
@@ -1837,7 +1842,7 @@ function withRootDocs(
       fragments,
     };
   };
-  return {
+  const documentedParser: typeof parser = {
     ...parser,
     getDocFragments(
       state: DocState<unknown>,
@@ -1852,6 +1857,8 @@ function withRootDocs(
       return parser.getDocFragments(state, defaultValue);
     },
   };
+  inheritEmptyInputBehavior(documentedParser, parser);
+  return documentedParser;
 }
 
 function rootListedCommands(

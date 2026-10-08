@@ -110,13 +110,16 @@ test("annotations module only exposes the annotation read API", () => {
 
 test("extension module exposes the supported extension helpers", () => {
   assert.deepEqual(Object.keys(extension).sort(), [
+    "defineEmptyInputBehavior",
     "defineTraits",
     "delegateOptionParsing",
     "delegateSuggestNodes",
     "dispatchByMode",
     "extractPhase2SeedKey",
+    "getEmptyInputBehavior",
     "getTraits",
     "inheritAnnotations",
+    "inheritEmptyInputBehavior",
     "inheritOptionScope",
     "injectAnnotations",
     "isInjectedAnnotationState",

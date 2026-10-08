@@ -234,13 +234,13 @@ Common mistakes checklist
 
  -  Pass parsers to `run()` for apps; use explicit argument arrays with
     `parse()` in tests and embedded use. Do not pre-parse `process.argv`.
- -  Do not treat `or(a, b)` as “zero or more alternatives.” It requires one
-    matching branch unless the whole `or()` is wrapped in `optional()` or
-    `withDefault()`.
- -  Do not use `object()` for mutually exclusive subcommands. Use
-    `or(command(...), command(...))`.
- -  Do not forget that `flag("--x")` is required. Wrap it in `optional()` or
-    `withDefault(..., false)` for ordinary optional flags.
+ -  Declare only static facts with `defineEmptyInputBehavior()` in
+    `@optique/core/extension`; use `inheritEmptyInputBehavior()` for
+    transparent wrappers. See [extension APIs].
+ -  Do not treat `or(a, b)` as “zero or more alternatives.” Wrap it in
+    `optional()` or `withDefault()` to allow no matching branch.
+ -  Use `or(command(...), command(...))` for mutually exclusive subcommands.
+ -  Wrap required `flag("--x")` in `optional()` or `withDefault(..., false)`.
  -  Do not expect `multiple(p)` to fail when absent; it returns `[]`. Wrap with
     `nonEmpty()` when at least one value is required.
  -  Do not confuse free-order parsing with `seq()`. Most constructs let child
@@ -252,12 +252,12 @@ Common mistakes checklist
  -  Enable `showEnvironment` for env-only help; set `documentation.description`.
  -  Keep multi-level dependency graphs with `dependency()` rather than
     duplicating one-level factories.
- -  Do not probe runtime capabilities eagerly before constructing a prompt
-    parser. Put synchronous or asynchronous checks in the prompt config's
-    `when` field and provide a typed `otherwise` value. The check then runs
-    only if parsing reaches the prompt fallback.
+ -  Put runtime prompt checks in `when`, with typed `otherwise`; evaluate them
+    only at fallback, never eagerly during construction.
 
 For the detailed maintained guide, use <https://optique.dev/pitfalls.md>.
+
+[extension APIs]: https://optique.dev/concepts/extend.md
 
 
 Reference links

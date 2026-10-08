@@ -44,6 +44,11 @@ To be released.
  -  Fixed completion requests for inherited object names such as `toString`
     to report an unsupported shell instead of throwing, unless the name is
     explicitly registered as a custom shell.  [[#967], [#982]]
+ -  Added `defineEmptyInputBehavior()`, `getEmptyInputBehavior()`, and
+    `inheritEmptyInputBehavior()` to `@optique/core/extension` so custom parsers
+    and transparent wrappers can contribute known empty-input behavior to
+    usage groups. Undeclared and context-dependent outcomes stay unknown.
+    [[#1014], [#1016]]
  -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
     value is attached to a flag.  It accepts a static message or a callback
     receiving the matched option name and the supplied value.  [[#968], [#984]]
@@ -73,7 +78,7 @@ To be released.
     reads `[FILE]`.  Such groups record the outcome in the new `acceptsEmpty`
     field of `exclusive` and `multiple` usage terms.  Custom parsers and
     parsers bound to outside sources keep the notation they declare.
-    [[#1013], [#1015]]
+    [[#1013], [#1015], [#1016]]
  -  Deferred typo diagnostics for discarded parser failures, reducing parsing
     time for commands with many positional arguments.  Custom mismatch error
     callbacks now run when their diagnostic is requested, so callbacks used
@@ -109,7 +114,9 @@ To be released.
 [#1002]: https://github.com/dahlia/optique/issues/1002
 [#1005]: https://github.com/dahlia/optique/pull/1005
 [#1013]: https://github.com/dahlia/optique/issues/1013
+[#1014]: https://github.com/dahlia/optique/issues/1014
 [#1015]: https://github.com/dahlia/optique/pull/1015
+[#1016]: https://github.com/dahlia/optique/pull/1016
 
 ### @optique/run
 
@@ -148,6 +155,9 @@ To be released.
     such as `"~/.myapp.json"` finds the file there.  It defaults to `false`,
     since `~` is a valid file name character on most platforms.
     [[#973], [#977]]
+ -  Recorded the known empty parse step of `bindConfig()` so alternative groups
+    with ambiguous empty fallbacks can be drawn as required. Completion that
+    depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 [#973]: https://github.com/dahlia/optique/issues/973
 [#977]: https://github.com/dahlia/optique/pull/977
@@ -164,6 +174,13 @@ To be released.
 [#964]: https://github.com/dahlia/optique/issues/964
 [#979]: https://github.com/dahlia/optique/pull/979
 
+### @optique/derived-defaults
+
+ -  Recorded the known empty parse step of `bindDerivedDefault()` so
+    alternative groups with ambiguous empty fallbacks can be drawn as required.
+    Completion that depends on sources or validation remains unknown.
+    [[#1014], [#1016]]
+
 ### @optique/env
 
  -  Added automatic documentation for `bindEnv(fail(), ...)` and other
@@ -177,9 +194,18 @@ To be released.
  -  Added `readFallback()` to parsers returned by `bindEnv()`, so error
     handlers can read and validate the environment value or configured
     default after CLI parsing fails.  [[#970], [#1001]]
+ -  Recorded the known empty parse step of `bindEnv()` so alternative groups
+    with ambiguous empty fallbacks can be drawn as required. Completion that
+    depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 [#970]: https://github.com/dahlia/optique/issues/970
 [#1001]: https://github.com/dahlia/optique/pull/1001
+
+### @optique/keyring
+
+ -  Recorded the known empty parse step of `bindKeyring()` so alternative groups
+    with ambiguous empty fallbacks can be drawn as required. Completion that
+    depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 ### @optique/man
 
@@ -197,7 +223,7 @@ To be released.
     for documenting command aliases next to their commands.  [[#1002], [#1005]]
  -  Changed the SYNOPSIS section to follow the same rule as `formatUsage()`
     when drawing `or()`, `longestMatch()`, and `multiple()` groups, so both
-    show the same optional and required parts.  [[#1013], [#1015]]
+    show the same optional and required parts.  [[#1013], [#1015], [#1016]]
 
 ### @optique/inquirer
 
@@ -221,6 +247,9 @@ To be released.
     `signal` in their context, and aborting while a resolver is pending now
     rejects parsing right away with the signal's reason.  Previously, the
     abort was observed only after the resolver settled.  [[#964], [#979]]
+ -  Recorded the known empty parse step of `prompt()` so alternative groups
+    with ambiguous empty fallbacks can be drawn as required. Completion that
+    depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 
 Version 1.3.3

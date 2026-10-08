@@ -2,6 +2,7 @@
 links:
   '#1013': https://github.com/dahlia/optique/issues/1013
   '#1015': https://github.com/dahlia/optique/pull/1015
+  '#1016': https://github.com/dahlia/optique/pull/1016
 ---
  -  Changed usage output to draw `or()`, `longestMatch()`, and `multiple()`
     groups as optional exactly when the parser accepts an empty argument list,
@@ -12,4 +13,4 @@ links:
     reads `[FILE]`.  Such groups record the outcome in the new `acceptsEmpty`
     field of `exclusive` and `multiple` usage terms.  Custom parsers and
     parsers bound to outside sources keep the notation they declare.
-    [[#1013], [#1015]]
+    [[#1013], [#1015], [#1016]]

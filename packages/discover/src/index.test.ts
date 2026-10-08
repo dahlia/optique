@@ -1,3 +1,5 @@
+import { fail } from "@optique/core/primitives";
+import { getEmptyInputBehavior } from "@optique/core/extension";
 import { object } from "@optique/core/constructs";
 import { getAnnotations } from "@optique/core/annotations";
 import { dependency } from "@optique/core/dependency";
@@ -3687,5 +3689,22 @@ describe("command alias display", () => {
     });
     assert.match(output, /remote/);
     assert.doesNotMatch(output, /aliases/);
+  });
+});
+
+describe("empty-input behavior", () => {
+  it("should preserve root failure facts through documentation wrappers", () => {
+    const parser = createProgramParser([{
+      path: [],
+      command: defineCommand({
+        parser: fail<string>(),
+        handler() {},
+        metadata: { brief: message`Root command.` },
+      }),
+    }]);
+    assert.deepEqual(getEmptyInputBehavior(parser), {
+      step: "failure",
+      fromInitial: false,
+    });
   });
 });
