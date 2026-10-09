@@ -12,6 +12,10 @@ import {
   selectableOptionScope,
 } from "./short-option.ts";
 import {
+  getCommandDocMetadata,
+  withCommandDocMetadata,
+} from "./internal/command-doc-metadata.ts";
+import {
   defineKnownCompletion,
   definePassThroughPriority,
   defineReachableChildren,
@@ -1532,7 +1536,10 @@ export function option<M extends Mode, T>(
       defaultValue?: T | boolean,
     ) {
       if (isDocHidden(options.hidden)) {
-        return { fragments: [], description: options.description };
+        return withCommandDocMetadata({
+          fragments: [],
+          description: options.description,
+        }, {});
       }
       const choicesMessage: Message | undefined =
         valueParser?.choices != null && valueParser.choices.length > 0
@@ -1554,7 +1561,10 @@ export function option<M extends Mode, T>(
           : undefined,
         choices: choicesMessage,
       }];
-      return { fragments, description: options.description };
+      return withCommandDocMetadata({
+        fragments,
+        description: options.description,
+      }, {});
     },
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
@@ -2048,7 +2058,10 @@ export function flag(
       _defaultValue?,
     ) {
       if (isDocHidden(options.hidden)) {
-        return { fragments: [], description: options.description };
+        return withCommandDocMetadata({
+          fragments: [],
+          description: options.description,
+        }, {});
       }
       const fragments: readonly DocFragment[] = [{
         type: "entry",
@@ -2058,7 +2071,10 @@ export function flag(
         },
         description: options.description,
       }];
-      return { fragments, description: options.description };
+      return withCommandDocMetadata({
+        fragments,
+        description: options.description,
+      }, {});
     },
     [Symbol.for("Deno.customInspect")]() {
       return `flag(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
@@ -2817,7 +2833,10 @@ export function argument<M extends Mode, T>(
       defaultValue?: T,
     ) {
       if (isDocHidden(options.hidden)) {
-        return { fragments: [], description: options.description };
+        return withCommandDocMetadata({
+          fragments: [],
+          description: options.description,
+        }, {});
       }
       const choicesMessage: Message | undefined =
         valueParser.choices != null && valueParser.choices.length > 0
@@ -2835,7 +2854,10 @@ export function argument<M extends Mode, T>(
           : message`${valueParser.format(defaultValue)}`,
         choices: choicesMessage,
       }];
-      return { fragments, description: options.description };
+      return withCommandDocMetadata({
+        fragments,
+        description: options.description,
+      }, {});
     },
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
@@ -3752,11 +3774,14 @@ export function command<M extends Mode, T, TState>(
       if (state.kind === "unavailable" || typeof commandState === "undefined") {
         // When the command is not matched (showing in a list), apply hidden option
         if (isDocHidden(options.hidden)) {
-          return { fragments: [], description: options.description };
+          return withCommandDocMetadata({
+            fragments: [],
+            description: options.description,
+          }, {});
         }
         // When showing command in a list, use brief if available,
         // otherwise fall back to description
-        return {
+        return withCommandDocMetadata({
           description: options.description,
           fragments: [
             {
@@ -3770,7 +3795,7 @@ export function command<M extends Mode, T, TState>(
               ...(showAliases != null && { showAliases }),
             },
           ],
-        };
+        }, {});
       }
       // When the command is matched and executing, show inner parser documentation
       // regardless of hidden status
@@ -3795,12 +3820,23 @@ export function command<M extends Mode, T, TState>(
       // `brief` appears at the very top (before Usage) and `description`
       // appears below the Usage line.  Inner parsers' values take precedence
       // via the spread; this command's own values fill in any gaps.
-      return {
+      // Built-in entry docs carry an empty payload.  Unmarked custom parsers
+      // can supply page fields through the public DocFragments contract.
+      const innerMetadata = getCommandDocMetadata(innerFragments) ??
+        innerFragments;
+      return withCommandDocMetadata({
         ...innerFragments,
         brief: innerFragments.brief ?? options.brief,
         description: innerFragments.description ?? options.description,
         footer: innerFragments.footer ?? options.footer,
-      };
+      }, {
+        origin: "command",
+        // Composite parents must not promote descriptions from ordinary entries
+        // or unselected subcommands into this command's page metadata.
+        brief: innerMetadata?.brief ?? options.brief,
+        description: innerMetadata?.description ?? options.description,
+        footer: innerMetadata?.footer ?? options.footer,
+      });
     },
     [Symbol.for("Deno.customInspect")]() {
       return `command(${JSON.stringify(name)})`;
@@ -4154,16 +4190,19 @@ export function passThrough(
 
     getDocFragments(_state, _defaultValue?) {
       if (isDocHidden(options.hidden)) {
-        return { fragments: [], description: options.description };
+        return withCommandDocMetadata({
+          fragments: [],
+          description: options.description,
+        }, {});
       }
-      return {
+      return withCommandDocMetadata({
         fragments: [{
           type: "entry",
           term: { type: "passthrough" },
           description: options.description,
         }],
         description: options.description,
-      };
+      }, {});
     },
 
     [Symbol.for("Deno.customInspect")]() {

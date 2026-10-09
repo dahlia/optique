@@ -25,6 +25,12 @@ import {
   withParserOptionScope,
 } from "./short-option.ts";
 import {
+  collectCommandDocMetadata,
+  type CommandDocMetadata,
+  getCommandDocMetadata,
+  withCommandDocMetadata,
+} from "./internal/command-doc-metadata.ts";
+import {
   type ConsumingFailure,
   defineReachableChildren,
   delegateKnownCompletion,
@@ -5456,6 +5462,7 @@ export function or(
         children.push(docs);
         return docs.fragments;
       };
+      let commandMetadata: CommandDocMetadata | undefined;
       let brief: Message | undefined;
       let description: Message | undefined;
       let footer: Message | undefined;
@@ -5476,6 +5483,7 @@ export function or(
           innerState,
           undefined,
         );
+        commandMetadata = getCommandDocMetadata(docFragments);
         brief = docFragments.brief;
         description = docFragments.description;
         footer = docFragments.footer;
@@ -5489,13 +5497,13 @@ export function or(
       if (state.kind === "unavailable" || state.state == null) {
         fragments = deduplicateDocFragments(fragments);
       }
-      return {
+      return withCommandDocMetadata({
         ...sourceDocumentation(children),
         brief,
         description,
         footer,
         fragments,
-      };
+      }, commandMetadata);
     },
   };
   const singleDependencyMetadata = composeExclusiveDependencyMetadata(parsers);
@@ -6250,6 +6258,7 @@ function createLongestMatch(
         children.push(docs);
         return docs.fragments;
       };
+      let commandMetadata: CommandDocMetadata | undefined;
       let brief: Message | undefined;
       let description: Message | undefined;
       let footer: Message | undefined;
@@ -6268,6 +6277,7 @@ function createLongestMatch(
           const docResult = parsers[i].getDocFragments(
             { kind: "available", state: result.next.state },
           );
+          commandMetadata = getCommandDocMetadata(docResult);
           brief = docResult.brief;
           description = docResult.description;
           footer = docResult.footer;
@@ -6281,7 +6291,7 @@ function createLongestMatch(
         }
       }
 
-      return {
+      return withCommandDocMetadata({
         ...sourceDocumentation(children),
         brief,
         description,
@@ -6289,7 +6299,7 @@ function createLongestMatch(
           ? deduplicateDocFragments(fragments)
           : fragments,
         footer,
-      };
+      }, commandMetadata);
     },
   };
   const multiDependencyMetadata = composeExclusiveDependencyMetadata(parsers);
@@ -8858,11 +8868,17 @@ export function object<
         children.push(docs);
         return docs.fragments;
       };
+      let commandMetadata: CommandDocMetadata | undefined;
       const fragments = parserPairs.flatMap(([field, p]) => {
         const fieldState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
           : { kind: "available", state: state.state[field] };
-        return collect(p.getDocFragments(fieldState, defaultValue?.[field]));
+        const docs = p.getDocFragments(fieldState, defaultValue?.[field]);
+        // Only selected commands supply page metadata.  Primitive descriptions
+        // belong to their entries.  First-defined values follow the same
+        // priority order as the fragments (stable field order for ties).
+        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        return collect(docs);
       });
       const hiddenAwareFragments = applyHiddenToDocFragments(
         fragments,
@@ -8882,10 +8898,11 @@ export function object<
       }
       const section: DocSection = { title: label, entries };
       sections.push(section);
-      return {
+      return withCommandDocMetadata({
         ...sourceDocumentation(children, options.hidden),
+        ...commandMetadata,
         fragments: sections.map((s) => ({ ...s, type: "section" })),
-      };
+      }, commandMetadata);
     },
     // Type assertion needed because TypeScript cannot verify the combined mode
     // of multiple parsers at compile time. Runtime behavior is correct via mode dispatch.
@@ -11270,6 +11287,7 @@ export function tuple<
         children.push(docs);
         return docs.fragments;
       };
+      let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((p, i) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
@@ -11277,7 +11295,9 @@ export function tuple<
             kind: "available",
             state: (state.state as readonly unknown[])[i],
           };
-        return collect(p.getDocFragments(indexState, defaultValue?.[i]));
+        const docs = p.getDocFragments(indexState, defaultValue?.[i]);
+        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        return collect(docs);
       });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
       const sections: DocSection[] = [];
@@ -11291,10 +11311,11 @@ export function tuple<
       }
       const section: DocSection = { title: label, entries };
       sections.push(section);
-      return {
+      return withCommandDocMetadata({
         ...sourceDocumentation(children),
+        ...commandMetadata,
         fragments: sections.map((s) => ({ ...s, type: "section" })),
-      };
+      }, commandMetadata);
     },
     [Symbol.for("Deno.customInspect")]() {
       const parsersStr = parsers.length === 1
@@ -14393,6 +14414,7 @@ export function merge(
         children.push(docs);
         return docs.fragments;
       };
+      let commandMetadata: CommandDocMetadata | undefined;
       let brief: Message | undefined;
       let description: Message | undefined;
       let footer: Message | undefined;
@@ -14431,6 +14453,11 @@ export function merge(
           parserState as DocState<Record<string | symbol, unknown>>,
           undefined,
         );
+        commandMetadata = collectCommandDocMetadata(
+          commandMetadata,
+          docFragments,
+          true,
+        );
         brief ??= docFragments.brief;
         description ??= docFragments.description;
         footer ??= docFragments.footer;
@@ -14457,7 +14484,7 @@ export function merge(
       if (label) {
         const labeledSection: DocSection = { title: label, entries };
         sections.push(labeledSection);
-        return {
+        return withCommandDocMetadata({
           ...sourceDocumentation(children, options.hidden),
           brief,
           description,
@@ -14466,10 +14493,10 @@ export function merge(
             ...s,
             type: "section",
           })),
-        };
+        }, commandMetadata);
       }
 
-      return {
+      return withCommandDocMetadata({
         ...sourceDocumentation(children, options.hidden),
         brief,
         description,
@@ -14478,7 +14505,7 @@ export function merge(
           ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
           { type: "section", entries },
         ],
-      };
+      }, commandMetadata);
     },
   } as Parser<
     Mode,
@@ -16068,11 +16095,14 @@ export function concat(
         children.push(docs);
         return docs.fragments;
       };
+      let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((p, index) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
           : { kind: "available", state: state.state[index] };
-        return collect(p.getDocFragments(indexState, undefined));
+        const docs = p.getDocFragments(indexState, undefined);
+        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        return collect(docs);
       });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
@@ -16090,10 +16120,11 @@ export function concat(
       if (entries.length > 0) {
         result.push({ type: "section", entries });
       }
-      return {
+      return withCommandDocMetadata({
         ...sourceDocumentation(children),
+        ...commandMetadata,
         fragments: result,
-      };
+      }, commandMetadata);
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
@@ -16342,7 +16373,7 @@ export function group<M extends Mode, TValue, TState>(
         ? { title: label, entries: allEntries }
         : { entries: allEntries };
 
-      return {
+      return withCommandDocMetadata({
         ...sourceDocumentation(children, options.hidden),
         brief,
         description,
@@ -16354,7 +16385,7 @@ export function group<M extends Mode, TValue, TState>(
           })),
           { type: "section", ...labeledSection },
         ],
-      };
+      }, getCommandDocMetadata(docs));
     },
   };
   defineParseLanes(groupParser, getOwnParseLanes(parser));

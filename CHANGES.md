@@ -296,6 +296,26 @@ To be released.
     depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 
+Version 1.3.4
+-------------
+
+Released on October 10, 2026.
+
+### @optique/core
+
+ -  Fixed subcommand help to retain the selected command's brief, description,
+    and footer when commands are wrapped in `object()`, `tuple()`, or
+    `concat()`, including labeled objects and nested command groups.  This also
+    preserves custom page metadata through `merge()`, decorators that copy or
+    edit documentation, and duplicate package instances, including mixed
+    ESM/CommonJS builds.  Command page descriptions no longer pick up text
+    from sibling custom parsers or edited options.
+    [[#1021], [#1022]]
+
+[#1021]: https://github.com/dahlia/optique/issues/1021
+[#1022]: https://github.com/dahlia/optique/pull/1022
+
+
 Version 1.3.3
 -------------
 
@@ -681,6 +701,23 @@ Released on September 15, 2026.
 [#953]: https://github.com/dahlia/optique/issues/953
 [#954]: https://github.com/dahlia/optique/pull/954
 [#959]: https://github.com/dahlia/optique/issues/959
+
+
+Version 1.2.11
+--------------
+
+Released on October 10, 2026.
+
+### @optique/core
+
+ -  Fixed subcommand help to retain the selected command's brief, description,
+    and footer when commands are wrapped in `object()`, `tuple()`, or
+    `concat()`, including labeled objects and nested command groups.  This also
+    preserves custom page metadata through `merge()`, decorators that copy or
+    edit documentation, and duplicate package instances, including mixed
+    ESM/CommonJS builds.  Command page descriptions no longer pick up text
+    from sibling custom parsers or edited options.
+    [[#1021], [#1022]]
 
 
 Version 1.2.10
@@ -1136,6 +1173,23 @@ Released on July 21, 2026.
 [#867]: https://github.com/dahlia/optique/pull/867
 
 
+Version 1.1.11
+--------------
+
+Released on October 10, 2026.
+
+### @optique/core
+
+ -  Fixed subcommand help to retain the selected command's brief, description,
+    and footer when commands are wrapped in `object()`, `tuple()`, or
+    `concat()`, including labeled objects and nested command groups.  This also
+    preserves custom page metadata through `merge()`, decorators that copy or
+    edit documentation, and duplicate package instances, including mixed
+    ESM/CommonJS builds.  Command page descriptions no longer pick up text
+    from sibling custom parsers or edited options.
+    [[#1021], [#1022]]
+
+
 Version 1.1.10
 --------------
 
@@ -1569,6 +1623,22 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.13
+--------------
+
+Released on October 10, 2026.
+
+### @optique/core
+
+ -  Fixed subcommand help to retain the selected command's brief, description,
+    and footer when commands are wrapped in `object()`, `tuple()`, or
+    `concat()`, including labeled objects and nested command groups.  This also
+    preserves custom page metadata through `merge()`, decorators that copy or
+    edit documentation, and duplicate package instances, including mixed
+    ESM/CommonJS builds.  Command page descriptions no longer pick up text
+    from sibling custom parsers or edited options.  [[#1021], [#1022]]
 
 
 Version 1.0.12
