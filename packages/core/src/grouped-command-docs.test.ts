@@ -11,7 +11,14 @@ import { formatDocPage } from "./doc.ts";
 import { message } from "./message.ts";
 import { map, optional, withDefault } from "./modifiers.ts";
 import { getDocPage, getDocPageAsync, type Parser } from "./parser.ts";
-import { argument, command, constant, flag, option } from "./primitives.ts";
+import {
+  argument,
+  command,
+  constant,
+  flag,
+  option,
+  passThrough,
+} from "./primitives.ts";
 import { string, type ValueParser } from "./valueparser.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -67,6 +74,66 @@ describe("command documentation inside object", () => {
       { fragments: [{ type: "section", title: undefined, entries: [] }] },
     );
   });
+
+  it("reads command metadata from a separate module instance", async () => {
+    const other: typeof import("./internal/command-doc-metadata.ts") =
+      await import(
+        new URL(
+          "./internal/command-doc-metadata.ts?second-instance",
+          import.meta.url,
+        ).href
+      );
+    const docs = other.withCommandDocMetadata({ fragments: [] }, {
+      brief,
+      description,
+      footer,
+    });
+    const inner = { ...constant("build"), getDocFragments: () => docs };
+    const page = getDocPage(object({ cmd: command("build", inner) }), [
+      "build",
+    ]);
+    assert.ok(page);
+    assert.deepEqual(page.brief, brief);
+    assert.deepEqual(page.description, description);
+    assert.deepEqual(page.footer, footer);
+  });
+
+  for (const withOptions of [false, true]) {
+    for (const composite of ["object", "tuple"] as const) {
+      it(`preserves custom inner page metadata through ${composite}${withOptions ? " with command fallbacks" : ""}`, () => {
+        const inner = {
+          ...constant("build"),
+          getDocFragments: () => ({
+            fragments:
+              option("--verbose", { description: message`Verbose output` })
+                .getDocFragments({ kind: "unavailable" }).fragments,
+            brief,
+            description,
+            footer,
+          }),
+        };
+        const cmd = command(
+          "build",
+          inner,
+          withOptions
+            ? {
+              brief: message`Fallback brief`,
+              description: message`Fallback description`,
+              footer: message`Fallback footer`,
+            }
+            : {},
+        );
+        const parser = composite === "object" ? object({ cmd }) : tuple([cmd]);
+        for (const candidate of [cmd, parser]) {
+          const page = getDocPage(candidate, ["build"]);
+          assert.ok(page);
+          assert.deepEqual(page.brief, brief);
+          assert.deepEqual(page.description, description);
+          assert.deepEqual(page.footer, footer);
+        }
+      });
+    }
+  }
 
   for (const labeled of [false, true]) {
     it(`preserves command metadata in a ${labeled ? "labeled" : "plain"} object`, () => {
@@ -267,6 +334,7 @@ describe("command documentation inside object", () => {
     option: () => option("--verbose", { description: message`Verbose output` }),
     flag: () => flag("--verbose", { description: message`Verbose output` }),
     argument: () => argument(string(), { description: message`An input file` }),
+    passThrough: () => passThrough({ description: message`Extra arguments` }),
     group: () =>
       group(
         "Options",

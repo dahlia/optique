@@ -1,7 +1,11 @@
 import type { DocFragments } from "../doc.ts";
 import type { Message } from "../message.ts";
 
-/** Page metadata from a selected command, rather than an option entry. */
+/**
+ * Page metadata from a selected command, rather than an option entry.
+ * An empty payload marks built-in entry documentation with no page metadata;
+ * unmarked custom documentation retains its public page metadata contract.
+ */
 export interface CommandDocMetadata {
   readonly brief?: Message;
   readonly description?: Message;
@@ -10,7 +14,9 @@ export interface CommandDocMetadata {
 
 // Non-enumerable so public fragments keep their existing equality/serialization
 // behavior.  Wrappers that rebuild fragments explicitly preserve the provenance.
-const commandDocMetadata: unique symbol = Symbol("commandDocMetadata");
+const commandDocMetadata: unique symbol = Symbol.for(
+  "@optique/core/commandDocMetadata",
+);
 type CommandDocFragments = DocFragments & {
   readonly [commandDocMetadata]?: CommandDocMetadata;
 };
