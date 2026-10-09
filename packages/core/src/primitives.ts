@@ -1,4 +1,8 @@
 import {
+  getCommandDocMetadata,
+  withCommandDocMetadata,
+} from "./internal/command-doc-metadata.ts";
+import {
   defineKnownCompletion,
   defineOptionMatch,
   definePassThroughPriority,
@@ -2975,12 +2979,19 @@ export function command<M extends Mode, T, TState>(
       // `brief` appears at the very top (before Usage) and `description`
       // appears below the Usage line.  Inner parsers' values take precedence
       // via the spread; this command's own values fill in any gaps.
-      return {
+      const innerMetadata = getCommandDocMetadata(innerFragments);
+      return withCommandDocMetadata({
         ...innerFragments,
         brief: innerFragments.brief ?? options.brief,
         description: innerFragments.description ?? options.description,
         footer: innerFragments.footer ?? options.footer,
-      };
+      }, {
+        // Composite parents must not promote descriptions from ordinary entries
+        // or unselected subcommands into this command's page metadata.
+        brief: innerMetadata?.brief ?? options.brief,
+        description: innerMetadata?.description ?? options.description,
+        footer: innerMetadata?.footer ?? options.footer,
+      });
     },
     [Symbol.for("Deno.customInspect")]() {
       return `command(${JSON.stringify(name)})`;
