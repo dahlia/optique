@@ -1,4 +1,12 @@
-import { group, longestMatch, merge, object, or } from "./constructs.ts";
+import {
+  concat,
+  group,
+  longestMatch,
+  merge,
+  object,
+  or,
+  tuple,
+} from "./constructs.ts";
 import { formatDocPage } from "./doc.ts";
 import { message } from "./message.ts";
 import { map, optional, withDefault } from "./modifiers.ts";
@@ -46,6 +54,17 @@ describe("command documentation inside object", () => {
         state: ["matched", "build"],
       }),
       { fragments: [], brief, description, footer },
+    );
+  });
+
+  it("omits undefined page fields from selected command objects", () => {
+    const parser = object({ command: command("build", constant("build")) });
+    assert.deepEqual(
+      parser.getDocFragments({
+        kind: "available",
+        state: { command: ["matched", "build"] },
+      }),
+      { fragments: [{ type: "section", title: undefined, entries: [] }] },
     );
   });
 
@@ -188,6 +207,37 @@ describe("command documentation inside object", () => {
       assert.deepEqual(page.description, description);
       assert.deepEqual(page.footer, footer);
     });
+  }
+
+  const arrayComposites = {
+    tuple: () =>
+      tuple([
+        commands(),
+        option("--verbose", { description: message`Verbose` }),
+      ]),
+    labeledTuple: () => tuple("Commands", [commands()]),
+    concat: () =>
+      concat(
+        tuple([commands()]),
+        tuple([option("--verbose", { description: message`Verbose` })]),
+      ),
+  };
+  for (const [name, create] of Object.entries(arrayComposites)) {
+    for (const wrapped of [false, true]) {
+      it(`preserves selected metadata through ${name}${wrapped ? " inside object" : ""}`, () => {
+        const parser = wrapped ? object({ command: create() }) : create();
+        const root = getDocPage(parser);
+        assert.ok(root);
+        assert.equal(root.brief, undefined);
+        assert.equal(root.description, undefined);
+        assert.equal(root.footer, undefined);
+        const page = getDocPage(parser, ["build"]);
+        assert.ok(page);
+        assert.deepEqual(page.brief, brief);
+        assert.deepEqual(page.description, description);
+        assert.deepEqual(page.footer, footer);
+      });
+    }
   }
 
   it("keeps ordinary option descriptions out of enclosing command metadata", () => {

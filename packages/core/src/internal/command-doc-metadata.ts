@@ -54,9 +54,12 @@ export function collectCommandDocMetadata(
 ): CommandDocMetadata | undefined {
   const next = getCommandDocMetadata(docs);
   if (next == null) return current;
+  const brief = current?.brief ?? next.brief;
+  const description = current?.description ?? next.description;
+  const footer = current?.footer ?? next.footer;
   return {
-    brief: current?.brief ?? next.brief,
-    description: current?.description ?? next.description,
-    footer: current?.footer ?? next.footer,
+    ...(brief == null ? {} : { brief }),
+    ...(description == null ? {} : { description }),
+    ...(footer == null ? {} : { footer }),
   };
 }

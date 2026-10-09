@@ -8841,6 +8841,7 @@ export function tuple<
       state: DocState<TupleState>,
       defaultValue?: TupleState,
     ) {
+      let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((p, i) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
@@ -8848,7 +8849,9 @@ export function tuple<
             kind: "available",
             state: (state.state as readonly unknown[])[i],
           };
-        return p.getDocFragments(indexState, defaultValue?.[i]).fragments;
+        const docs = p.getDocFragments(indexState, defaultValue?.[i]);
+        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        return docs.fragments;
       });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
       const sections: DocSection[] = [];
@@ -8862,7 +8865,10 @@ export function tuple<
       }
       const section: DocSection = { title: label, entries };
       sections.push(section);
-      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+      return withCommandDocMetadata({
+        ...commandMetadata,
+        fragments: sections.map((s) => ({ ...s, type: "section" })),
+      }, commandMetadata);
     },
     [Symbol.for("Deno.customInspect")]() {
       const parsersStr = parsers.length === 1
@@ -12428,11 +12434,14 @@ export function concat(
       })();
     },
     getDocFragments(state: DocState<readonly unknown[]>, _defaultValue?) {
+      let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((p, index) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
           : { kind: "available", state: state.state[index] };
-        return p.getDocFragments(indexState, undefined).fragments;
+        const docs = p.getDocFragments(indexState, undefined);
+        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        return docs.fragments;
       });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
       const sections: DocSection[] = [];
@@ -12450,7 +12459,10 @@ export function concat(
       if (entries.length > 0) {
         result.push({ type: "section", entries });
       }
-      return { fragments: result };
+      return withCommandDocMetadata({
+        ...commandMetadata,
+        fragments: result,
+      }, commandMetadata);
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
