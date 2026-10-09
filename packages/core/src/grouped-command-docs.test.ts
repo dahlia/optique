@@ -88,7 +88,10 @@ describe("command documentation inside object", () => {
       description,
       footer,
     });
-    const inner = { ...constant("build"), getDocFragments: () => docs };
+    const inner = {
+      ...constant("build"),
+      getDocFragments: () => ({ ...docs }),
+    };
     const page = getDocPage(object({ cmd: command("build", inner) }), [
       "build",
     ]);
@@ -96,6 +99,44 @@ describe("command documentation inside object", () => {
     assert.deepEqual(page.brief, brief);
     assert.deepEqual(page.description, description);
     assert.deepEqual(page.footer, footer);
+  });
+
+  const cloneComposites = {
+    object: (p: Parser<"sync", unknown, unknown>) => object({ cmd: p }),
+    tuple: (p: Parser<"sync", unknown, unknown>) => tuple([p]),
+    concat: (p: Parser<"sync", unknown, unknown>) => concat(tuple([p])),
+  };
+  for (const [name, combine] of Object.entries(cloneComposites)) {
+    it(`preserves selected metadata after a custom documentation clone inside ${name}`, () => {
+      const inner = buildCommand();
+      const cloned = {
+        ...inner,
+        getDocFragments: (
+          ...args: Parameters<typeof inner.getDocFragments>
+        ) => ({ ...inner.getDocFragments(...args) }),
+      };
+      const page = getDocPage(combine(cloned), ["build"]);
+      assert.ok(page);
+      assert.deepEqual(page.brief, brief);
+      assert.deepEqual(page.description, description);
+      assert.deepEqual(page.footer, footer);
+    });
+  }
+
+  it("keeps cloned option descriptions out of command page metadata", () => {
+    const inner = option("--verbose", { description: message`Verbose output` });
+    const cloned = {
+      ...inner,
+      getDocFragments: (...args: Parameters<typeof inner.getDocFragments>) => ({
+        ...inner.getDocFragments(...args),
+      }),
+    };
+    const page = getDocPage(
+      object({ cmd: command("build", cloned, { description }) }),
+      ["build"],
+    );
+    assert.ok(page);
+    assert.deepEqual(page.description, description);
   });
 
   for (const withOptions of [false, true]) {

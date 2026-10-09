@@ -21,6 +21,18 @@ type CommandDocFragments = DocFragments & {
   readonly [commandDocMetadata]?: CommandDocMetadata;
 };
 
+// Object spread preserves the fragments array.  Carry a snapshot there as well,
+// without making either symbol enumerable or mutating a child's array.
+const commandDocCarrier: unique symbol = Symbol.for(
+  "@optique/core/commandDocMetadataCarrier",
+);
+interface CommandDocCarrier extends CommandDocMetadata {
+  readonly metadata: CommandDocMetadata;
+}
+type CommandDocFragmentList = DocFragments["fragments"] & {
+  readonly [commandDocCarrier]?: CommandDocCarrier;
+};
+
 /**
  * Reads selected-command metadata attached by this module.
  * @param docs The child's documentation.
@@ -29,7 +41,15 @@ type CommandDocFragments = DocFragments & {
 export function getCommandDocMetadata(
   docs: DocFragments,
 ): CommandDocMetadata | undefined {
-  return (docs as CommandDocFragments)[commandDocMetadata];
+  const metadata = (docs as CommandDocFragments)[commandDocMetadata];
+  if (metadata != null) return metadata;
+  const carrier = (docs.fragments as CommandDocFragmentList)[commandDocCarrier];
+  // Reusing an array while replacing public page fields defines new custom
+  // documentation; do not let the previous snapshot override those fields.
+  return carrier != null && carrier.brief === docs.brief &&
+      carrier.description === docs.description && carrier.footer === docs.footer
+    ? carrier.metadata
+    : undefined;
 }
 
 /**
@@ -43,7 +63,16 @@ export function withCommandDocMetadata(
   metadata: CommandDocMetadata | undefined,
 ): DocFragments {
   if (metadata == null) return docs;
-  const result: DocFragments = { ...docs };
+  const fragments = [...docs.fragments];
+  Object.defineProperty(fragments, commandDocCarrier, {
+    value: {
+      metadata,
+      brief: docs.brief,
+      description: docs.description,
+      footer: docs.footer,
+    },
+  });
+  const result: DocFragments = { ...docs, fragments };
   Object.defineProperty(result, commandDocMetadata, { value: metadata });
   return result;
 }
