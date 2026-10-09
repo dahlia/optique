@@ -123,6 +123,95 @@ describe("command documentation inside object", () => {
     });
   }
 
+  for (const field of ["brief", "description", "footer"] as const) {
+    for (const [name, combine] of Object.entries(cloneComposites)) {
+      it(`retains other command fields when a decorator replaces ${field} inside ${name}`, () => {
+        const inner = buildCommand();
+        const replacement = message`Replacement page field`;
+        const decorated = {
+          ...inner,
+          getDocFragments: (
+            ...args: Parameters<typeof inner.getDocFragments>
+          ) => ({
+            ...inner.getDocFragments(...args),
+            [field]: replacement,
+          }),
+        };
+        const page = getDocPage(combine(decorated), ["build"]);
+        assert.ok(page);
+        const expected = { brief, description, footer, [field]: replacement };
+        assert.deepEqual(page.brief, expected.brief);
+        assert.deepEqual(page.description, expected.description);
+        assert.deepEqual(page.footer, expected.footer);
+      });
+    }
+  }
+
+  it("preserves decorator removals without losing other command fields", () => {
+    const inner = buildCommand();
+    const decorated = {
+      ...inner,
+      getDocFragments: (...args: Parameters<typeof inner.getDocFragments>) => ({
+        ...inner.getDocFragments(...args),
+        description: undefined,
+      }),
+    };
+    const page = getDocPage(object({ cmd: decorated }), ["build"]);
+    assert.ok(page);
+    assert.deepEqual(page.brief, brief);
+    assert.equal(page.description, undefined);
+    assert.deepEqual(page.footer, footer);
+  });
+
+  for (const labeled of [false, true]) {
+    for (const customFirst of [false, true]) {
+      it(`preserves custom page fields in ${labeled ? "labeled" : "plain"} merge with custom parser ${customFirst ? "first" : "last"}`, () => {
+        const custom = {
+          ...constant({}),
+          getDocFragments: () => ({
+            fragments: [],
+            brief,
+            description,
+            footer,
+          }),
+        };
+        const builtIn = object({ verbose: option("--verbose") });
+        const inner = customFirst
+          ? labeled ? merge("Options", custom, builtIn) : merge(custom, builtIn)
+          : labeled
+          ? merge("Options", builtIn, custom)
+          : merge(builtIn, custom);
+        const cmd = command("build", inner, { description: message`Fallback` });
+        for (const parser of [cmd, object({ cmd })]) {
+          const page = getDocPage(parser, ["build"]);
+          assert.ok(page);
+          assert.deepEqual(page.brief, brief);
+          assert.deepEqual(page.description, description);
+          assert.deepEqual(page.footer, footer);
+        }
+      });
+    }
+  }
+
+  it("does not promote an entry description when a decorator adds a page brief", () => {
+    const inner = option("--verbose", { description: message`Verbose output` });
+    const decorated = {
+      ...inner,
+      getDocFragments: (...args: Parameters<typeof inner.getDocFragments>) => ({
+        ...inner.getDocFragments(...args),
+        brief,
+      }),
+    };
+    const page = getDocPage(
+      object({ cmd: command("build", decorated, { description, footer }) }),
+      ["build"],
+    );
+    assert.ok(page);
+    assert.deepEqual(page.brief, brief);
+    assert.deepEqual(page.description, description);
+    assert.deepEqual(page.footer, footer);
+  });
+
   it("keeps cloned option descriptions out of command page metadata", () => {
     const inner = option("--verbose", { description: message`Verbose output` });
     const cloned = {

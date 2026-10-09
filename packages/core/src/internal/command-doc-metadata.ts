@@ -34,21 +34,38 @@ type CommandDocFragmentList = DocFragments["fragments"] & {
 };
 
 /**
- * Reads selected-command metadata attached by this module.
+ * Reads effective page metadata, including custom collection-level fields.
  * @param docs The child's documentation.
  * @returns Its selected-command metadata, if any.
  */
 export function getCommandDocMetadata(
   docs: DocFragments,
 ): CommandDocMetadata | undefined {
+  const carrier = (docs.fragments as CommandDocFragmentList)[commandDocCarrier];
+  if (carrier != null) {
+    // A decorator can replace or remove one public field without discarding
+    // provenance for the others.  Unchanged entry descriptions stay excluded.
+    const brief = docs.brief === carrier.brief
+      ? carrier.metadata.brief
+      : docs.brief;
+    const description = docs.description === carrier.description
+      ? carrier.metadata.description
+      : docs.description;
+    const footer = docs.footer === carrier.footer
+      ? carrier.metadata.footer
+      : docs.footer;
+    return {
+      ...(brief == null ? {} : { brief }),
+      ...(description == null ? {} : { description }),
+      ...(footer == null ? {} : { footer }),
+    };
+  }
   const metadata = (docs as CommandDocFragments)[commandDocMetadata];
   if (metadata != null) return metadata;
-  const carrier = (docs.fragments as CommandDocFragmentList)[commandDocCarrier];
-  // Reusing an array while replacing public page fields defines new custom
-  // documentation; do not let the previous snapshot override those fields.
-  return carrier != null && carrier.brief === docs.brief &&
-      carrier.description === docs.description && carrier.footer === docs.footer
-    ? carrier.metadata
+  // Custom parsers use the public collection-level fields as page metadata.
+  // Built-in entry documentation supplies an explicit empty payload instead.
+  return docs.brief != null || docs.description != null || docs.footer != null
+    ? { brief: docs.brief, description: docs.description, footer: docs.footer }
     : undefined;
 }
 

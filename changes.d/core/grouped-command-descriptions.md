@@ -6,6 +6,6 @@ links:
  -  Fixed subcommand help to retain the selected command's brief, description,
     and footer when commands are wrapped in `object()`, `tuple()`, or
     `concat()`, including labeled objects and nested command groups.  This also
-    preserves page metadata from custom parsers and decorators that copy
-    documentation, and works across duplicate package instances, including mixed
+    preserves custom page metadata through `merge()`, decorators that copy or
+    edit documentation, and duplicate package instances, including mixed
     ESM/CommonJS builds.  [[#1021], [#1022]]
