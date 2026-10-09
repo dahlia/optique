@@ -8,4 +8,5 @@ links:
     `concat()`, including labeled objects and nested command groups.  This also
     preserves custom page metadata through `merge()`, decorators that copy or
     edit documentation, and duplicate package instances, including mixed
-    ESM/CommonJS builds.  [[#1021], [#1022]]
+    ESM/CommonJS builds.  Command page descriptions no longer pick up text
+    from sibling custom parsers or edited options.  [[#1021], [#1022]]

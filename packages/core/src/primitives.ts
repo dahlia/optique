@@ -3010,6 +3010,7 @@ export function command<M extends Mode, T, TState>(
         description: innerFragments.description ?? options.description,
         footer: innerFragments.footer ?? options.footer,
       }, {
+        origin: "command",
         // Composite parents must not promote descriptions from ordinary entries
         // or unselected subcommands into this command's page metadata.
         brief: innerMetadata?.brief ?? options.brief,

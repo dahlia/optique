@@ -10890,6 +10890,7 @@ export function merge(
         commandMetadata = collectCommandDocMetadata(
           commandMetadata,
           docFragments,
+          true,
         );
         brief ??= docFragments.brief;
         description ??= docFragments.description;

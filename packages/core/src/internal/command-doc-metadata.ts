@@ -3,13 +3,25 @@ import type { Message } from "../message.ts";
 
 /**
  * Page metadata from a selected command, rather than an option entry.
- * An empty payload marks built-in entry documentation with no page metadata;
- * unmarked custom documentation retains its public page metadata contract.
+ * Origin survives empty payloads. Custom page fields become command metadata
+ * only when they occur within a selected command.
  */
 export interface CommandDocMetadata {
+  /** Built-in empty payloads default to entry documentation. */
+  readonly origin?: "entry" | "custom" | "command";
   readonly brief?: Message;
   readonly description?: Message;
   readonly footer?: Message;
+}
+
+// Keep provenance out of public spreads as well as equality/serialization.
+function withOrigin(
+  metadata: CommandDocMetadata,
+  origin: NonNullable<CommandDocMetadata["origin"]>,
+): CommandDocMetadata {
+  const result = { ...metadata };
+  Object.defineProperty(result, "origin", { value: origin, enumerable: false });
+  return result;
 }
 
 // Non-enumerable so public fragments keep their existing equality/serialization
@@ -48,24 +60,32 @@ export function getCommandDocMetadata(
     const brief = docs.brief === carrier.brief
       ? carrier.metadata.brief
       : docs.brief;
-    const description = docs.description === carrier.description
+    const origin = carrier.metadata.origin ?? "entry";
+    const customPage = origin === "entry" &&
+      (docs.brief !== carrier.brief || docs.footer !== carrier.footer);
+    const description = (origin === "entry" && !customPage) ||
+        docs.description === carrier.description
       ? carrier.metadata.description
       : docs.description;
     const footer = docs.footer === carrier.footer
       ? carrier.metadata.footer
       : docs.footer;
-    return {
+    return withOrigin({
       ...(brief == null ? {} : { brief }),
       ...(description == null ? {} : { description }),
       ...(footer == null ? {} : { footer }),
-    };
+    }, customPage ? "custom" : origin);
   }
   const metadata = (docs as CommandDocFragments)[commandDocMetadata];
   if (metadata != null) return metadata;
   // Custom parsers use the public collection-level fields as page metadata.
   // Built-in entry documentation supplies an explicit empty payload instead.
   return docs.brief != null || docs.description != null || docs.footer != null
-    ? { brief: docs.brief, description: docs.description, footer: docs.footer }
+    ? withOrigin({
+      brief: docs.brief,
+      description: docs.description,
+      footer: docs.footer,
+    }, "custom")
     : undefined;
 }
 
@@ -80,6 +100,7 @@ export function withCommandDocMetadata(
   metadata: CommandDocMetadata | undefined,
 ): DocFragments {
   if (metadata == null) return docs;
+  metadata = withOrigin(metadata, metadata.origin ?? "entry");
   const fragments = [...docs.fragments];
   Object.defineProperty(fragments, commandDocCarrier, {
     value: {
@@ -98,20 +119,30 @@ export function withCommandDocMetadata(
  * Collects selected-command metadata in documentation traversal order.
  * @param current Metadata from earlier children.
  * @param docs The next child's documentation.
- * @returns The first defined value for each page metadata field.
+ * @param includeCustom Whether to retain custom page fields inside merge().
+ * @returns The first defined value from children with the same origin.
  */
 export function collectCommandDocMetadata(
   current: CommandDocMetadata | undefined,
   docs: DocFragments,
+  includeCustom = false,
 ): CommandDocMetadata | undefined {
   const next = getCommandDocMetadata(docs);
   if (next == null) return current;
+  const origin = next.origin ?? "entry";
+  if (origin === "entry" || (origin === "custom" && !includeCustom)) {
+    return current ?? withOrigin({}, "entry");
+  }
+  // A selected command wins over unrelated custom collection fields, regardless
+  // of traversal order. Custom fields remain usable within command(merge(...)).
+  if (current?.origin === "command" && origin !== "command") return current;
+  if (current?.origin !== origin) current = undefined;
   const brief = current?.brief ?? next.brief;
   const description = current?.description ?? next.description;
   const footer = current?.footer ?? next.footer;
-  return {
+  return withOrigin({
     ...(brief == null ? {} : { brief }),
     ...(description == null ? {} : { description }),
     ...(footer == null ? {} : { footer }),
-  };
+  }, origin);
 }

@@ -212,6 +212,75 @@ describe("command documentation inside object", () => {
     assert.deepEqual(page.footer, footer);
   });
 
+  for (const composite of ["object", "tuple", "concat"] as const) {
+    it(`excludes sibling custom metadata through ${composite}`, () => {
+      const sibling = {
+        ...constant([]),
+        getDocFragments: () => ({
+          fragments: [],
+          description: message`Sibling extension entry`,
+          footer,
+        }),
+      };
+      const cmd = command("build", constant([]), { brief });
+      const parser = composite === "object"
+        ? object({ sibling, cmd })
+        : composite === "tuple"
+        ? tuple([sibling, cmd])
+        : concat(sibling, cmd);
+      const page = getDocPage(parser, ["build"]);
+      assert.ok(page);
+      assert.deepEqual(page.brief, brief);
+      assert.equal(page.description, undefined);
+      assert.equal(page.footer, undefined);
+    });
+
+    it(`excludes edited sibling option descriptions through ${composite}`, () => {
+      const inner = option("--verbose", { description: watchDescription });
+      const sibling = {
+        ...inner,
+        getDocFragments: (
+          ...args: Parameters<typeof inner.getDocFragments>
+        ) => ({
+          ...inner.getDocFragments(...args),
+          description: message`Edited option description`,
+        }),
+      };
+      const cmd = command("build", constant([]), { description });
+      const parser = composite === "object"
+        ? object({ sibling, cmd })
+        : composite === "tuple"
+        ? tuple([sibling, cmd])
+        : concat(map(sibling, () => []), cmd);
+      const page = getDocPage(parser, ["build"]);
+      assert.ok(page);
+      assert.deepEqual(page.description, description);
+    });
+
+    it(`retains empty command origin through ${composite}`, () => {
+      const cmd = command("build", constant([]));
+      function decorate<T, S>(inner: Parser<"sync", T, S>) {
+        return {
+          ...inner,
+          getDocFragments: (
+            ...args: Parameters<typeof inner.getDocFragments>
+          ) => ({
+            ...inner.getDocFragments(...args),
+            description,
+          }),
+        };
+      }
+      const decorated = composite === "object"
+        ? decorate(object({ cmd }))
+        : composite === "tuple"
+        ? decorate(tuple([cmd]))
+        : decorate(concat(cmd));
+      const page = getDocPage(object({ decorated }), ["build"]);
+      assert.ok(page);
+      assert.deepEqual(page.description, description);
+    });
+  }
+
   it("keeps cloned option descriptions out of command page metadata", () => {
     const inner = option("--verbose", { description: message`Verbose output` });
     const cloned = {
