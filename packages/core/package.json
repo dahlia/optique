@@ -235,6 +235,14 @@
       },
       "import": "./dist/internal/usage.js",
       "require": "./dist/internal/usage.cjs"
+    },
+    "./internal/command-doc-policy": {
+      "types": {
+        "import": "./dist/internal/command-doc-policy.d.ts",
+        "require": "./dist/internal/command-doc-policy.d.cts"
+      },
+      "import": "./dist/internal/command-doc-policy.js",
+      "require": "./dist/internal/command-doc-policy.cjs"
     }
   },
   "imports": {

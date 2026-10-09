@@ -64,6 +64,11 @@ To be released.
     with `DocEntry.envVars` metadata and `deriveEnvironmentSection()` for
     custom renderers.  Existing help output stays unchanged unless
     `showEnvironment` is enabled.  [[#969], [#986]]
+ -  Added `showUsage` to `command()` options so subcommands can override the
+    runner's usage visibility.  Descendants inherit the nearest explicit
+    command setting.  `DocPage.showUsage` preserves the resolved default for
+    custom help rendering, and explicit `formatDocPage()` options override it.
+    [[#1020], [#1023]]
  -  Added the `helpSections` option to the Core runners to group untitled
     command and option entries on help pages with visible commands, leaving
     pages without commands free of automatic headings.  Existing titled groups
@@ -124,6 +129,8 @@ To be released.
 [#1015]: https://github.com/dahlia/optique/pull/1015
 [#1016]: https://github.com/dahlia/optique/pull/1016
 [#1017]: https://github.com/dahlia/optique/pull/1017
+[#1020]: https://github.com/dahlia/optique/issues/1020
+[#1023]: https://github.com/dahlia/optique/pull/1023
 
 ### @optique/run
 
@@ -149,6 +156,10 @@ To be released.
     listing discovered command aliases in help.  Root command lists spell
     them as full command paths, such as `remote a` for `remote add`.
     [[#1002], [#1005]]
+ -  Added support for `showUsage` in discovered subcommand metadata so
+    subcommand help can override `runProgram()`'s default.  Descendants inherit
+    the nearest explicit ancestor setting, and synthetic namespaces do not
+    inherit their descendants' settings.  [[#1020], [#1023]]
  -  Preserved independent root environment documentation in command discovery
     help, while keeping descendant bindings scoped to their own command pages.
     Root-only programs also show environment bindings added by outer wrappers.

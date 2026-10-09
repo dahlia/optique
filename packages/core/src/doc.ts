@@ -129,6 +129,13 @@ export interface EnvironmentBindingDoc {
  * for commands, options, and other related information.
  */
 export interface DocPage {
+  /**
+   * Default visibility of the usage synopsis for this page.
+   * Explicit formatter options override this value; omission defaults to true.
+   * Runner-produced pages include the selected command or runner setting.
+   * @since 1.4.0
+   */
+  readonly showUsage?: boolean;
   /** Independent environment documentation in this page's scope. @since 1.4.0 */
   readonly environmentBindings?: readonly EnvironmentBindingDoc[];
   readonly brief?: Message;
@@ -648,9 +655,10 @@ export interface DocPageFormatOptions {
   maxWidth?: number;
 
   /**
-   * Whether to include the usage synopsis in the output.
+   * Whether to include the usage synopsis in the output. Overrides the
+   * page's `showUsage` default when supplied.
    *
-   * @default `true`
+   * @default The page default, or `true` when it is omitted.
    * @since 1.2.0
    */
   showUsage?: boolean;
@@ -919,7 +927,8 @@ export function formatDocPage(
     }
     return rendered;
   };
-  const usageLabel = page.usage != null && options.showUsage !== false
+  const showUsage = options.showUsage ?? page.showUsage ?? true;
+  const usageLabel = page.usage != null && showUsage
     ? spaceAfterLabel(label("Usage:", "usage"))
     : "";
   const usageLabelWidth = measureText(usageLabel).lastLineWidth;
@@ -931,7 +940,6 @@ export function formatDocPage(
   );
   validateProgramName(programName);
   const termIndent = options.termIndent ?? 2;
-  const showUsage = options.showUsage ?? true;
   if (
     options.maxWidth != null &&
     (!Number.isFinite(options.maxWidth) || !Number.isInteger(options.maxWidth))

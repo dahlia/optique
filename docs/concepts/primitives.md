@@ -782,6 +782,32 @@ const config = command("config", configCommands, {
 The `ellipsis` term is display-only.  It does not change parsing behavior
 or shell completion.
 
+### Command usage visibility
+
+Since Optique 1.4.0, `showUsage` on `command()` can override the runner's
+usage visibility for that command and its descendants. This lets root help
+omit the synopsis while subcommand help keeps it:
+
+~~~~ typescript twoslash
+import { or } from "@optique/core/constructs";
+import { command, option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+const cli = or(
+  command("build", option("--watch"), { showUsage: true }),
+  command("test", option("--verbose"), { showUsage: true }),
+);
+
+run(cli, { help: "both", showUsage: false });
+~~~~
+
+Here, `--help` hides the usage line, while `build --help` and `help build`
+show it. An omitted command setting inherits the nearest ancestor's explicit
+setting, then the runner's setting, with a final default of `true`. A child
+can set either `true` or `false` to override that inherited value. These
+settings also apply to full help above errors with `aboveError: "help"`;
+usage-only error preambles remain unchanged.
+
 ### Nested subcommands
 
 You can nest commands multiple levels deep by using `command()` parsers as inner

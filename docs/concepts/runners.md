@@ -347,7 +347,11 @@ Pass `showUsage: false` when a command menu should show the brief,
 description, and generated sections without the `Usage:` synopsis.  The
 setting applies to full help pages, including help rendered above parse
 errors with `aboveError: "help"`.  It does not change the explicit
-usage-only preamble from `aboveError: "usage"`.
+usage-only preamble from `aboveError: "usage"`. Since Optique 1.4.0,
+[`command()`](./primitives.md#command-parser) can override this default with
+its own `showUsage` option. Descendants inherit the nearest explicit command
+setting, so a command can restore the synopsis with `showUsage: true` even
+when the runner hides it.
 
 Pass `commandList: "top-level"` when a top-level command menu should show
 only first-level commands instead of recursively listing every nested leaf
@@ -398,8 +402,10 @@ runParser(argument(string()), "myapp", ["--help"], {
 ~~~~
 
 Treat the page as read-only. It is the formatter's input: colors, widths,
-section ordering, and settings such as `showUsage` still belong to
-`formatDocPage()`. Optional fields may be `undefined`.
+and section ordering still belong to `formatDocPage()`. Since Optique 1.4.0,
+`page.showUsage` includes the resolved command or runner default. Passing
+`showUsage` directly to `formatDocPage()` overrides that page default.
+Optional fields may be `undefined`.
 
 The callback works with `runParserSync()`, `runParserAsync()`, and the
 `runWith()` family. Existing handlers accepting only the exit code or no

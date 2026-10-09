@@ -1,3 +1,4 @@
+import { mergeCommandDocPolicy } from "@optique/core/internal/command-doc-policy";
 import { longestMatch, or } from "@optique/core/constructs";
 import type {
   SourceContext,
@@ -1602,7 +1603,7 @@ function mergeExecutableNodeChildExec(
 ): ExecutionContext | undefined {
   if (parent == null) return child;
   if (child == null) return parent;
-  return {
+  return mergeCommandDocPolicy(parent, child, {
     ...parent,
     trace: child.trace ?? parent.trace,
     dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
@@ -1612,7 +1613,7 @@ function mergeExecutableNodeChildExec(
       parent.preCompletedByParser,
     excludedSourceFields: child.excludedSourceFields ??
       parent.excludedSourceFields,
-  };
+  });
 }
 
 function withCommandDocMetadata(
@@ -1731,7 +1732,8 @@ function namespaceCommandMetadata(
     metadata?.showAliases == null &&
     metadata?.errors == null &&
     hidden == null &&
-    metadata?.usageLine == null
+    metadata?.usageLine == null &&
+    metadata?.showUsage == null
   ) {
     return undefined;
   }
@@ -1742,6 +1744,7 @@ function namespaceCommandMetadata(
     ...(metadata?.errors != null && { errors: metadata.errors }),
     ...(hidden != null && { hidden }),
     ...(metadata?.usageLine != null && { usageLine: metadata.usageLine }),
+    ...(metadata?.showUsage != null && { showUsage: metadata.showUsage }),
   };
 }
 
@@ -1918,6 +1921,7 @@ function withoutCommandDocs(commandDefinition: AnyCommand): AnyCommand {
     description: _description,
     aliases: _aliases,
     showAliases: _showAliases,
+    showUsage: _showUsage,
     ...metadata
   } = commandDefinition.metadata;
   return {

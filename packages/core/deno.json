@@ -25,7 +25,8 @@
     "./valueparser": "./src/valueparser.ts",
     "./terminal": "./src/terminal.ts",
     "./internal/terminal": "./src/internal/terminal.ts",
-    "./internal/usage": "./src/internal/usage.ts"
+    "./internal/usage": "./src/internal/usage.ts",
+    "./internal/command-doc-policy": "./src/internal/command-doc-policy.ts"
   },
   "imports": {
     "#src/": "./src/"

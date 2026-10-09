@@ -84,9 +84,9 @@ Core rules
     synopsis should become a compact `Usage: myapp ...` line. This applies only
     to root full help; use `command()`'s `usageLine` for subcommand help.
  -  Use `showUsage: false` in runner options when full help should show the
-    brief and command or option sections without the `Usage:` synopsis.
-    For deeply nested command trees, add `commandList: "top-level"` when root
-    help should list only first-level command groups.
+    brief and sections without `Usage:`. Set `command()`'s `showUsage: true`
+    to restore it; children inherit the nearest explicit ancestor setting.
+    Add `commandList: "top-level"` to list only first-level command groups.
  -  Use `termWidth: "auto"` in runner options when descriptions should align
     after the widest visible help term. Optique measures terminal display
     width after adding built-in help/version/completion entries.
