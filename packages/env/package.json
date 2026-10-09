@@ -1,6 +1,6 @@
 {
   "name": "@optique/env",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "description": "Environment variable support for Optique",
   "keywords": [
     "CLI",

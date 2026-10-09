@@ -1,6 +1,6 @@
 {
   "name": "@optique/logtape",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "description": "LogTape logging integration for Optique CLI parser",
   "keywords": [
     "CLI",
