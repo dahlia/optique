@@ -2927,3 +2927,57 @@ describe("runSync async parser rejection", () => {
     );
   });
 });
+
+describe("grouped command help", () => {
+  it("shows command descriptions inside object with program metadata", () => {
+    const parser = object("Commands", {
+      command: or(
+        command(
+          "build",
+          object({
+            action: constant("build"),
+            watch: option("-w", "--watch", {
+              description: message`Rebuild on change`,
+            }),
+          }),
+          {
+            brief: message`Compile the code`,
+            description: message`Run all the compilation tools.`,
+            footer: message`See the build guide.`,
+          },
+        ),
+        command("test", object({ action: constant("test") })),
+      ),
+    });
+    const output: string[] = [];
+    const exit = new Error("Help displayed.");
+    assert.throws(() =>
+      run({
+        parser,
+        metadata: {
+          name: "optique-demo",
+          brief: message`A modern build tool for JavaScript projects`,
+        },
+      }, {
+        args: ["build", "--help"],
+        help: "option",
+        colors: false,
+        stdout: (text) => output.push(text),
+        onExit: (code) => {
+          assert.equal(code, 0);
+          throw exit;
+        },
+      }), (error: unknown) => error === exit);
+    const help = output.join("\n");
+    for (
+      const text of [
+        "Compile the code",
+        "Run all the compilation tools.",
+        "See the build guide.",
+        "Rebuild on change",
+        "Usage: optique-demo build",
+      ]
+    ) assert.ok(help.includes(text), help);
+    assert.ok(!help.includes("A modern build tool for JavaScript projects"));
+  });
+});

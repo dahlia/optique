@@ -1,4 +1,8 @@
 import {
+  getCommandDocMetadata,
+  withCommandDocMetadata,
+} from "./internal/command-doc-metadata.ts";
+import {
   defineKnownCompletionLookup,
   defineOptionMatch,
   definePassThroughPriority,
@@ -1489,10 +1493,10 @@ export function withDefault<
           }
           return fragment;
         });
-        return {
+        return withCommandDocMetadata({
           ...fragments,
           fragments: modifiedFragments,
-        };
+        }, getCommandDocMetadata(fragments));
       }
 
       return fragments;
