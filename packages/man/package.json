@@ -1,6 +1,6 @@
 {
   "name": "@optique/man",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Man page generator for Optique CLI parsers",
   "keywords": [
     "CLI",
