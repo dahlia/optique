@@ -19,6 +19,7 @@ export default defineConfig({
     "src/fluent.ts",
     "src/input-trace.ts",
     "src/internal/annotations.ts",
+    "src/internal/command-doc-policy.ts",
     "src/internal/dependency.ts",
     "src/internal/parser.ts",
     "src/internal/terminal.ts",

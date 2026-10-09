@@ -1,4 +1,8 @@
 import {
+  mergeCommandDocPolicy,
+  withoutCommandDocPolicySubtree,
+} from "./internal/command-doc-policy.ts";
+import {
   acceptsEmptyInput,
   type EmptyInputFacts,
   type ExclusiveBranch,
@@ -2433,7 +2437,11 @@ function preserveExclusiveStateAfterOptionsTerminator(
   context: ParserContext<ExclusiveState>,
   result: ParserResult<unknown> & { success: true },
 ): ParserResult<ExclusiveState> & { success: true } {
-  const mergedExec = mergeChildExec(context.exec, result.next.exec);
+  const childExec = mergeChildExec(context.exec, result.next.exec);
+  // A global terminator advances the input without selecting a new branch.
+  const mergedExec = childExec == null
+    ? childExec
+    : mergeCommandDocPolicy(context.exec, context.exec, childExec);
   return {
     success: true,
     next: {
@@ -4591,7 +4599,7 @@ export function or(
     let provisionalAmbiguous = false;
     for (const { parser, index: i, state: childState } of orderedParsers) {
       const childContext = withChildContext(
-        forkOptionScope(context),
+        forkOptionScope(commandDocBranchContext(context, activeState?.[0], i)),
         i,
         childState,
         parser,
@@ -4691,7 +4699,12 @@ export function or(
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = activeState[1].consumed;
           const checkResult = parser.parse({
-            ...withChildContext(context, i, parser.initialState, parser),
+            ...withChildContext(
+              commandDocBranchContext(context, activeState?.[0], i),
+              i,
+              parser.initialState,
+              parser,
+            ),
             buffer: previouslyConsumed,
           });
           // If the new branch can consume exactly the same input,
@@ -4889,7 +4902,13 @@ export function or(
         const previouslyConsumed = activeState[1].consumed;
         const checkResult = provisionalConsuming.parser.parse({
           ...withChildContext(
-            forkOptionScope(context),
+            forkOptionScope(
+              commandDocBranchContext(
+                context,
+                activeState?.[0],
+                provisionalConsuming.index,
+              ),
+            ),
             provisionalConsuming.index,
             provisionalConsuming.parser.initialState,
             provisionalConsuming.parser,
@@ -5011,7 +5030,7 @@ export function or(
     let provisionalAmbiguous = false;
     for (const { parser, index: i, state: childState } of orderedParsers) {
       const childContext = withChildContext(
-        forkOptionScope(context),
+        forkOptionScope(commandDocBranchContext(context, activeState?.[0], i)),
         i,
         childState,
         parser,
@@ -5101,7 +5120,12 @@ export function or(
           // consume the previously consumed input (shared options case).
           const previouslyConsumed = activeState[1].consumed;
           const checkResultOrPromise = parser.parse({
-            ...withChildContext(context, i, parser.initialState, parser),
+            ...withChildContext(
+              commandDocBranchContext(context, activeState?.[0], i),
+              i,
+              parser.initialState,
+              parser,
+            ),
             buffer: previouslyConsumed,
           });
           const checkResult = await checkResultOrPromise;
@@ -5290,7 +5314,13 @@ export function or(
         const previouslyConsumed = activeState[1].consumed;
         const checkResult = await provisionalConsuming.parser.parse({
           ...withChildContext(
-            forkOptionScope(context),
+            forkOptionScope(
+              commandDocBranchContext(
+                context,
+                activeState?.[0],
+                provisionalConsuming.index,
+              ),
+            ),
             provisionalConsuming.index,
             provisionalConsuming.parser.initialState,
             provisionalConsuming.parser,
@@ -5982,7 +6012,13 @@ function createLongestMatch(
       )
     ) {
       const childContext = withChildContext(
-        forkOptionScope(context),
+        forkOptionScope(
+          commandDocBranchContext(
+            context,
+            normalizeExclusiveState(context.state)?.[0],
+            i,
+          ),
+        ),
         i,
         childState,
         parser,
@@ -6084,7 +6120,13 @@ function createLongestMatch(
       )
     ) {
       const childContext = withChildContext(
-        forkOptionScope(context),
+        forkOptionScope(
+          commandDocBranchContext(
+            context,
+            normalizeExclusiveState(context.state)?.[0],
+            i,
+          ),
+        ),
         i,
         childState,
         parser,
@@ -19758,4 +19800,19 @@ export function conditional(
       }
     }),
   );
+}
+
+// Document provenance must follow the selected branch, including a replacement
+// branch that consumes the same input without matching any command.
+function commandDocBranchContext<TState>(
+  context: ParserContext<TState>,
+  activeIndex: number | undefined,
+  nextIndex: number,
+): ParserContext<TState> {
+  if (activeIndex == null || activeIndex === nextIndex) return context;
+  const exec = withoutCommandDocPolicySubtree(
+    context.exec,
+    [...(context.exec?.path ?? []), activeIndex],
+  );
+  return exec === context.exec ? context : { ...context, exec };
 }

@@ -1,4 +1,9 @@
 import {
+  getBareCommandDocPolicy,
+  getCommandDocPolicy,
+  trackCommandDocPolicy,
+} from "./command-doc-policy.ts";
+import {
   cloneDocEntry,
   type DocEntry,
   type DocFragments,
@@ -2242,12 +2247,12 @@ function getDocPageSyncImpl(
   options?: ParseOptions,
 ): DocPage | undefined {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const exec: ExecutionContext = {
+  const exec = trackCommandDocPolicy({
     usage: parser.usage,
     phase: "parse",
     path: [],
     trace: createInputTrace(),
-  };
+  });
   let context: ParserContext<unknown> = createParserContext(
     { buffer: args, state: initialState, optionsTerminated: false },
     exec,
@@ -2282,12 +2287,12 @@ async function getDocPageAsyncImpl(
   options?: ParseOptions,
 ): Promise<DocPage | undefined> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
-  const exec: ExecutionContext = {
+  const exec = trackCommandDocPolicy({
     usage: parser.usage,
     phase: "parse",
     path: [],
     trace: createInputTrace(),
-  };
+  });
   let context: ParserContext<unknown> = createParserContext(
     { buffer: args, state: initialState, optionsTerminated: false },
     exec,
@@ -2324,6 +2329,7 @@ function buildDocPage(
   matchedCommandArgIndices?: ReadonlySet<number>,
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
+  let showUsage = getCommandDocPolicy(context.exec);
   let { brief, description, fragments, footer, environmentBindings } = parser
     .getDocFragments(
       { kind: "available", state: context.state },
@@ -2356,6 +2362,7 @@ function buildDocPage(
     );
     ({ brief, description, fragments, footer, environmentBindings } = matched);
     effectiveArgs = [cmdName];
+    showUsage = getBareCommandDocPolicy(parser);
   }
   // Build sections in the order that entries first appear in the fragment
   // stream, merging same-titled sections together.  This ensures that the
@@ -2487,6 +2494,7 @@ function buildDocPage(
     }),
   }));
   return {
+    ...(showUsage != null && { showUsage }),
     ...(visibleBindings != null && visibleBindings.length > 0 && {
       environmentBindings: visibleBindings,
     }),

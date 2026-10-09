@@ -200,7 +200,8 @@ export interface RunOptions {
   readonly showEnvironment?: boolean | ShowEnvironmentOptions;
 
   /**
-   * Whether to include the usage synopsis in full help output.
+   * Default visibility of the usage synopsis in full help output.
+   * Command-level `showUsage` settings override this default.
    *
    * This affects help pages produced by `--help`, the help command, and
    * `aboveError: "help"`.  It does not suppress usage-only error preambles

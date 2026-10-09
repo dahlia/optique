@@ -1267,7 +1267,8 @@ export interface RunOptions<THelp, TError> {
   readonly showEnvironment?: boolean | ShowEnvironmentOptions;
 
   /**
-   * Whether to include the usage synopsis in full help output.
+   * Default visibility of the usage synopsis in full help output.
+   * Command-level `showUsage` settings override this default.
    *
    * This affects help pages produced by `--help`, the help command, and
    * `aboveError: "help"`.  It does not suppress usage-only error preambles
@@ -1343,8 +1344,8 @@ export interface RunOptions<THelp, TError> {
        * page passed to {@link formatDocPage}. Treat the page as read-only.
        * It includes runner-provided entries and root usage customization.
        * Subcommand and meta-command help use the selected command's docs,
-       * with the run-level footer as a fallback. Formatting options remain
-       * separate from the page.
+       * with the run-level footer as a fallback. The resolved `showUsage`
+       * default is included in the page; other formatting options remain separate.
        *
        * Handlers may ignore either argument. Wrappers that invoke this
        * callback themselves must forward both arguments.
@@ -1603,7 +1604,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
         stderr(
           formatDocPage(
             programName,
-            doc,
+            withDocShowUsage(doc, showUsage),
             completionDocOptions({
               messageFormatter,
               theme,
@@ -1611,7 +1612,6 @@ function handleCompletion<M extends Mode, THelp, TError>(
               maxWidth,
               termWidth,
               sectionOrder,
-              showUsage,
             }),
           ),
         );
@@ -2763,9 +2763,12 @@ export function runParser<
               isTopLevel,
             );
             const groupedDoc = applyHelpSections(augmentedDoc, helpSections);
-            const renderedDoc = isTopLevel && usageLine != null
-              ? applyUsageLine(groupedDoc, usageLine)
-              : groupedDoc;
+            const renderedDoc = withDocShowUsage(
+              isTopLevel && usageLine != null
+                ? applyUsageLine(groupedDoc, usageLine)
+                : groupedDoc,
+              showUsage,
+            );
             stdout(formatDocPage(
               programName,
               renderedDoc,
@@ -2780,7 +2783,6 @@ export function runParser<
                 showAliases,
                 showEnvironment,
                 sectionOrder,
-                showUsage,
               }),
             ));
             return onHelp(0, renderedDoc);
@@ -2903,13 +2905,12 @@ export function runParser<
                 ? normalizeUsage(getRootHelpGeneratorParser().usage)
                 : augmentedDoc.usage ?? [];
               const groupedDoc = applyHelpSections(augmentedDoc, helpSections);
-              const renderedDoc = isTopLevel && usageLine != null
-                ? applyUsageLine(
-                  groupedDoc,
-                  usageLine,
-                  defaultRootUsage,
-                )
-                : groupedDoc;
+              const renderedDoc = withDocShowUsage(
+                isTopLevel && usageLine != null
+                  ? applyUsageLine(groupedDoc, usageLine, defaultRootUsage)
+                  : groupedDoc,
+                showUsage,
+              );
               stderr(formatDocPage(
                 programName,
                 renderedDoc,
@@ -2924,7 +2925,6 @@ export function runParser<
                   showAliases,
                   showEnvironment,
                   sectionOrder,
-                  showUsage,
                 }),
               ));
             }
@@ -3107,6 +3107,14 @@ export function runParserAsync<
 ): Promise<InferValue<TParser>> {
   const result = runParser(parser, programName, args, options);
   return Promise.resolve(result) as Promise<InferValue<TParser>>;
+}
+
+function withDocShowUsage(
+  page: DocPage,
+  fallback: boolean | undefined,
+): DocPage {
+  const showUsage = page.showUsage ?? fallback;
+  return showUsage == null ? page : { ...page, showUsage };
 }
 
 function applyUsageLine(

@@ -1,4 +1,9 @@
 import {
+  defineBareCommandDocPolicy,
+  enterCommandDocPolicy,
+  matchCommandDocPolicy,
+} from "./internal/command-doc-policy.ts";
+import {
   attachedValuePrefix,
   combinedOptionScope,
   fullNameOwnsToken,
@@ -2987,6 +2992,15 @@ export interface CommandOptions {
   readonly usageLine?: Usage | ((defaultUsageLine: Usage) => Usage);
 
   /**
+   * Whether to show the usage synopsis in this command's full help.
+   * Descendants inherit this setting unless they explicitly override it.
+   * Omission inherits the nearest ancestor setting, then the runner setting,
+   * with a final default of `true`. Usage-only error preambles are unaffected.
+   * @since 1.4.0
+   */
+  readonly showUsage?: boolean;
+
+  /**
    * Controls command visibility:
    *
    * - `true`: hide from usage, docs, and suggestions
@@ -3155,6 +3169,15 @@ function getShowCommandAliases(
   return showAliases;
 }
 
+function getShowCommandUsage(options: CommandOptions): boolean | undefined {
+  const showUsage: unknown = options.showUsage;
+  if (showUsage == null) return undefined;
+  if (typeof showUsage !== "boolean") {
+    throw new TypeError("Command showUsage must be a boolean.");
+  }
+  return showUsage;
+}
+
 function getHiddenCommandAliases(
   options: CommandOptions,
 ): readonly string[] {
@@ -3316,7 +3339,8 @@ async function* suggestCommandAsync<T, TState>(
  *          to the inner parser for the remaining arguments.
  * @throws {TypeError} If `name` is empty, whitespace-only, contains
  *         embedded whitespace, or contains control characters.
- * @throws {TypeError} If `options.showAliases` is present but not a boolean.
+ * @throws {TypeError} If `options.showAliases` or `options.showUsage` is
+ *         non-nullish and not a boolean.
  */
 export function command<M extends Mode, T, TState>(
   name: string,
@@ -3326,6 +3350,8 @@ export function command<M extends Mode, T, TState>(
   const commandNames = getCommandNames(name, options);
   const aliases = getVisibleCommandAliases(options);
   const showAliases = getShowCommandAliases(options);
+  const showUsage = getShowCommandUsage(options);
+  const commandId = Symbol("commandDocScope");
   const hiddenAliases = getHiddenCommandAliases(options);
   validateCommandNames(commandNames, "Command");
   validateUniqueCommandNames(commandNames);
@@ -3460,7 +3486,11 @@ export function command<M extends Mode, T, TState>(
             ),
             ...(context.exec != null
               ? {
-                exec: appendCommandPath(context.exec, name),
+                exec: matchCommandDocPolicy(
+                  appendCommandPath(context.exec, name),
+                  commandId,
+                  showUsage,
+                ),
               }
               : {}),
           },
@@ -3512,7 +3542,10 @@ export function command<M extends Mode, T, TState>(
             wrapState(
               syncInnerParser.parse(
                 withChildContext(
-                  context,
+                  {
+                    ...context,
+                    exec: enterCommandDocPolicy(context.exec, commandId),
+                  },
                   name,
                   innerState,
                   parser.usage,
@@ -3523,7 +3556,10 @@ export function command<M extends Mode, T, TState>(
             wrapState(
               await parser.parse(
                 withChildContext(
-                  context,
+                  {
+                    ...context,
+                    exec: enterCommandDocPolicy(context.exec, commandId),
+                  },
                   name,
                   innerState,
                   parser.usage,
@@ -3770,6 +3806,7 @@ export function command<M extends Mode, T, TState>(
       return `command(${JSON.stringify(name)})`;
     },
   };
+  defineBareCommandDocPolicy(result, showUsage);
   // Forward value normalization as non-enumerable so that withDefault()
   // can normalize defaults through command() wrappers.
   if (typeof parser.normalizeValue === "function") {

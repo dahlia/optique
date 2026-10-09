@@ -1,3 +1,4 @@
+import { mergeCommandDocPolicy } from "./internal/command-doc-policy.ts";
 import { withOptionScopeChild } from "./short-option.ts";
 import type { ExecutionContext, ParserContext } from "./parser.ts";
 import type { Usage } from "./usage.ts";
@@ -27,7 +28,7 @@ export function mergeChildExec(
 ): ExecutionContext | undefined {
   if (parent == null) return child;
   if (child == null) return parent;
-  return {
+  return mergeCommandDocPolicy(parent, child, {
     ...parent,
     trace: child.trace ?? parent.trace,
     dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
@@ -37,7 +38,7 @@ export function mergeChildExec(
       parent.preCompletedByParser,
     excludedSourceFields: child.excludedSourceFields ??
       parent.excludedSourceFields,
-  };
+  });
 }
 
 /**
