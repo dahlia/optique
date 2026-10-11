@@ -144,7 +144,9 @@ help should omit the synopsis entirely.  Both settings also apply when
 `commandList: "top-level"` when the root command menu should list only
 first-level command groups and let users drill down with `<command> --help`.
 
-Since Optique 1.4.0, a subcommand definition's `metadata.showUsage` overrides
+*Subcommand `metadata.showUsage` is available since Optique 1.4.0.*
+
+A subcommand definition's `metadata.showUsage` overrides
 the runner default. Child commands inherit the nearest explicit ancestor
 setting and can override it with `true` or `false`. A namespace created
 implicitly from a descendant's path does not inherit that descendant's setting.
@@ -152,7 +154,9 @@ Root help uses `runProgram()`'s `showUsage` option.
 
 ### Help for bare command groups
 
-Since Optique 1.4.0, `help.bareGroup` can show help when the input consists
+*This API is available since Optique 1.4.0.*
+
+`help.bareGroup` can show help when the input consists
 only of a command group path. A group has child commands; the root counts as a
 group when it has children. The default, `"never"`, preserves normal parsing
 and handler dispatch.

@@ -885,7 +885,9 @@ try {
 
 ### Fallback validation
 
-Since Optique 1.0.0, fallback values produced by `bindConfig()` are
+*Fallback validation is available since Optique 1.0.0.*
+
+Fallback values produced by `bindConfig()` are
 re-validated against the inner CLI parser's constraints (regex patterns,
 numeric bounds, `choice()` values, etc.).  This applies to both values
 loaded from the config file and to the configured `default`.

@@ -640,7 +640,9 @@ Invalid Boolean value: "maybe". Expected one of "true", "1", "yes", "on",
 
 ### Fallback validation
 
-Since Optique 1.0.0, fallback values produced by `bindEnv()` are
+*Fallback validation is available since Optique 1.0.0.*
+
+Fallback values produced by `bindEnv()` are
 re-validated against the inner CLI parser's constraints (regex patterns,
 numeric bounds, `choice()` values, etc.).  This applies to both
 environment variable values—which may have been parsed by a looser
