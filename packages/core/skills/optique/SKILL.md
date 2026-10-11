@@ -295,5 +295,5 @@ Integration packages
 | `@optique/git`              | Async Git reference validation              | <https://optique.dev/integrations/git.md>             |
 | `@optique/logtape`          | LogTape levels and formatter/output options | <https://optique.dev/integrations/logtape.md>         |
 | `@optique/man`              | Man page generation                         | <https://optique.dev/concepts/man.md>                 |
-| `@optique/discover`         | File-based command discovery                | <https://optique.dev/concepts/discover.md>            |
+| `@optique/discover`         | Command discovery; opt-in `help.bareGroup`  | <https://optique.dev/concepts/discover.md>            |
 | `@optique/testing`          | Layered CLI testing at a chosen boundary    | <https://optique.dev/concepts/testing.md>             |

@@ -1,3 +1,4 @@
+import { withHelpRequest } from "@optique/core/internal/help-request";
 import { mergeCommandDocPolicy } from "@optique/core/internal/command-doc-policy";
 import { longestMatch, or } from "@optique/core/constructs";
 import type {
@@ -246,6 +247,24 @@ export interface RuntimeExtensionOptions {
   readonly nodeTypeScriptSupport?: boolean;
 }
 
+/**
+ * Help entry points and automatic help for bare command groups.
+ * @since 1.4.0
+ */
+export interface ProgramHelpOptions {
+  /** Help command configuration. Both entry points default to enabled when neither is set. */
+  readonly command?: Extract<RunOptions["help"], object>["command"];
+  /** Help option configuration. Specifying only one entry point enables only that entry point. */
+  readonly option?: Extract<RunOptions["help"], object>["option"];
+  /**
+   * Shows help for a path with child commands and no additional input.
+   * `"namespace"` applies only when the group has no command definition;
+   * `"always"` also replaces executable parent dispatch. Leaves are unaffected.
+   * @default `"never"`
+   */
+  readonly bareGroup?: "never" | "namespace" | "always";
+}
+
 interface RunProgramBaseOptions<R = unknown> extends
   Omit<
     RunOptions,
@@ -268,7 +287,10 @@ interface RunProgramBaseOptions<R = unknown> extends
    *
    * @default `"both"`
    */
-  readonly help?: RunOptions["help"] | false;
+  readonly help?:
+    | Exclude<RunOptions["help"], object>
+    | ProgramHelpOptions
+    | false;
 
   /**
    * Version configuration.  Pass `false` to disable built-in version output.
@@ -557,6 +579,16 @@ export function createProgramParser(
   commands: readonly CommandEntry[],
   options: CreateProgramParserOptions = {},
 ): FluentParser<Mode, ProgramInvocation, unknown> {
+  return createProgram(commands, options).parser;
+}
+
+function createProgram(
+  commands: readonly CommandEntry[],
+  options: CreateProgramParserOptions,
+): {
+  readonly parser: FluentParser<Mode, ProgramInvocation, unknown>;
+  readonly tree: CommandTreeNode;
+} {
   if (commands.length < 1) {
     throw new TypeError("createProgramParser() requires at least one command.");
   }
@@ -569,7 +601,10 @@ export function createProgramParser(
   );
   const rootNode = buildCommandTree(sortedCommands);
   const parser = buildNodeParser(rootNode);
-  return fluent(withRootDocs(parser, sortedCommands, options));
+  return {
+    parser: fluent(withRootDocs(parser, sortedCommands, options)),
+    tree: rootNode,
+  };
 }
 
 /**
@@ -595,6 +630,10 @@ export async function runProgram<R = unknown>(
     throw new TypeError("Expected object.");
   }
   if (options.hooks != null) validateHooks(options.hooks, "Program");
+  const help = normalizeProgramHelp(options.help);
+  const policy = options.help != null && typeof options.help === "object"
+    ? options.help.bareGroup ?? "never"
+    : "never";
   let commands: readonly Pick<DiscoveredCommand, "path" | "command">[];
   if (isStaticRunProgramOptions(options)) {
     commands = staticCommandsToEntries(options.commands);
@@ -605,11 +644,19 @@ export async function runProgram<R = unknown>(
       entryFileName: options.entryFileName,
     });
   }
-  const parser = createProgramParser(commands, {
+  const { parser, tree } = createProgram(commands, {
     ...options.metadata,
     commandList: options.commandList,
   });
-  const invocation = await runAsync(parser, buildRunOptions(options));
+  const args = options.args ?? process.argv.slice(2);
+  const target = policy === "never" ? undefined : resolveBareGroup(tree, args);
+  const runOptions = { ...buildRunOptions(options, help), args };
+  const invocation = await runAsync(
+    parser,
+    target != null && (policy === "always" || target.node.command == null)
+      ? withHelpRequest(runOptions, target.path)
+      : runOptions,
+  );
   await dispatchInvocation(invocation, options.hooks);
 }
 
@@ -1945,7 +1992,47 @@ function commandPathHidden(
   return hidden;
 }
 
-function buildRunOptions<R>(options: RunProgramOptions<R>): RunOptions {
+function normalizeProgramHelp(
+  help: RunProgramOptions["help"],
+): RunOptions["help"] {
+  if (help === false) return undefined;
+  if (help == null || typeof help === "string") return help ?? "both";
+  const { command, option, bareGroup } = help;
+  if (
+    bareGroup != null && !["never", "namespace", "always"].includes(bareGroup)
+  ) {
+    throw new TypeError(`Invalid bareGroup help policy: ${bareGroup}`);
+  }
+  if (command == null && option == null) return { command: true, option: true };
+  if (command != null) return { command, ...(option != null && { option }) };
+  if (option != null) return { option };
+  return { command: true, option: true };
+}
+
+function resolveBareGroup(
+  root: CommandTreeNode,
+  args: readonly string[],
+):
+  | { readonly node: CommandTreeNode; readonly path: readonly string[] }
+  | undefined {
+  let node = root;
+  const path: string[] = [];
+  for (const token of args) {
+    if (token.startsWith("-")) return undefined;
+    const entry = [...node.children].find(([name, child]) =>
+      name === token || child.command?.metadata?.aliases?.includes(token)
+    );
+    if (entry == null) return undefined;
+    path.push(entry[0]);
+    node = entry[1];
+  }
+  return node.children.size > 0 ? { node, path } : undefined;
+}
+
+function buildRunOptions<R>(
+  options: RunProgramOptions<R>,
+  normalizedHelp: RunOptions["help"],
+): RunOptions {
   const metadata = options.metadata;
   const {
     dir: _dir,
@@ -1954,7 +2041,7 @@ function buildRunOptions<R>(options: RunProgramOptions<R>): RunOptions {
     entryFileName: _entryFileName,
     metadata: _metadata,
     hooks: _hooks,
-    help,
+    help: _help,
     version,
     completion,
     ...rest
@@ -1969,7 +2056,7 @@ function buildRunOptions<R>(options: RunProgramOptions<R>): RunOptions {
     author: options.author ?? metadata.author,
     bugs: options.bugs ?? metadata.bugs,
     footer: options.footer ?? metadata.footer,
-    help: help === false ? undefined : help ?? "both",
+    help: normalizedHelp,
     version: version === false
       ? undefined
       : version ?? (metadata.version == null ? undefined : metadata.version),

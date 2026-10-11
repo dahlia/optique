@@ -1,3 +1,7 @@
+import {
+  getHelpRequest,
+  withHelpRequest,
+} from "@optique/core/internal/help-request";
 import { withAutomaticWidth } from "@optique/core/internal/terminal";
 import type { MessageFormatter } from "@optique/core/message";
 import type { TerminalTheme } from "@optique/core/terminal";
@@ -1112,12 +1116,16 @@ function buildCoreOptions(
     },
   };
 
+  const helpRequest = getHelpRequest(options);
+  const requestedCoreOptions = helpRequest == null
+    ? coreOptions
+    : withHelpRequest(coreOptions, helpRequest);
   return {
     programName,
     args,
     coreOptions: options.maxWidth == null
-      ? withAutomaticWidth(coreOptions)
-      : coreOptions,
+      ? withAutomaticWidth(requestedCoreOptions)
+      : requestedCoreOptions,
   };
 }
 
