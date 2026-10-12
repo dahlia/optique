@@ -303,6 +303,21 @@ To be released.
     depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 
+Version 1.3.5
+-------------
+
+Released on October 12, 2026.
+
+### @optique/core
+
+ -  Fixed option and flag completion to stop suggesting option names and values
+    after the `--` option terminator.
+    [[#1028], [#1029]]
+
+[#1028]: https://github.com/dahlia/optique/issues/1028
+[#1029]: https://github.com/dahlia/optique/pull/1029
+
+
 Version 1.3.4
 -------------
 
@@ -708,6 +723,18 @@ Released on September 15, 2026.
 [#953]: https://github.com/dahlia/optique/issues/953
 [#954]: https://github.com/dahlia/optique/pull/954
 [#959]: https://github.com/dahlia/optique/issues/959
+
+
+Version 1.2.12
+--------------
+
+Released on October 12, 2026.
+
+### @optique/core
+
+ -  Fixed option and flag completion to stop suggesting option names and values
+    after the `--` option terminator.
+    [[#1028], [#1029]]
 
 
 Version 1.2.11
@@ -1180,6 +1207,18 @@ Released on July 21, 2026.
 [#867]: https://github.com/dahlia/optique/pull/867
 
 
+Version 1.1.12
+--------------
+
+Released on October 12, 2026.
+
+### @optique/core
+
+ -  Fixed option and flag completion to stop suggesting option names and values
+    after the `--` option terminator.
+    [[#1028], [#1029]]
+
+
 Version 1.1.11
 --------------
 
@@ -1630,6 +1669,17 @@ Released on June 16, 2026.
     implementation rejects curated IANA links such as `CET`.  The curated
     cross-runtime allowlist is now applied before runtime Temporal validation
     for single-segment identifiers.  [[#818]]
+
+
+Version 1.0.14
+--------------
+
+Released on October 12, 2026.
+
+### @optique/core
+
+ -  Fixed option and flag completion to stop suggesting option names and values
+    after the `--` option terminator.  [[#1028], [#1029]]
 
 
 Version 1.0.13

@@ -2023,8 +2023,8 @@ export function flag(
         error: message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
-    suggest(_context, prefix) {
-      if (isSuggestionHidden(options.hidden)) {
+    suggest(context, prefix) {
+      if (isSuggestionHidden(options.hidden) || context.optionsTerminated) {
         return [];
       }
       const suggestions: Suggestion[] = [];
