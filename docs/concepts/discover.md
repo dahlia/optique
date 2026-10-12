@@ -144,11 +144,52 @@ help should omit the synopsis entirely.  Both settings also apply when
 `commandList: "top-level"` when the root command menu should list only
 first-level command groups and let users drill down with `<command> --help`.
 
-Since Optique 1.4.0, a subcommand definition's `metadata.showUsage` overrides
+*Subcommand `metadata.showUsage` is available since Optique 1.4.0.*
+
+A subcommand definition's `metadata.showUsage` overrides
 the runner default. Child commands inherit the nearest explicit ancestor
 setting and can override it with `true` or `false`. A namespace created
 implicitly from a descendant's path does not inherit that descendant's setting.
 Root help uses `runProgram()`'s `showUsage` option.
+
+### Help for bare command groups
+
+*This API is available since Optique 1.4.0.*
+
+`help.bareGroup` can show help when the input consists
+only of a command group path. A group has child commands; the root counts as a
+group when it has children. The default, `"never"`, preserves normal parsing
+and handler dispatch.
+
+~~~~ typescript twoslash
+import { runProgram } from "@optique/discover";
+
+await runProgram({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: { name: "admin" },
+  help: { bareGroup: "always" },
+});
+~~~~
+
+With `user add` and `user remove` commands, `admin` shows root help and
+`admin user` shows the group's help. `"namespace"` limits this behavior to
+root/group paths without their own command definition. `"always"` also shows
+help for executable parents, skipping their handlers even if their parsers
+would require an argument. Choose it only when bare parent invocations should
+serve as command menus.
+
+Automatic help exits with code 0 and uses the same output settings as explicit
+help. It skips execution hooks and second-pass source resolution. Leaf
+commands, unknown paths, and inputs containing options, positional arguments,
+or `--` retain normal parsing. Command aliases work as they do with explicit
+help.
+
+When a help object omits both `command` and `option`, both entry points are
+enabled. To expose only the help command, use
+`help: { command: true, bareGroup: "always" }`; custom help names work too.
+`help: false` disables built-in help and cannot carry a bare-group policy. The
+policy works with file discovery, module maps, and statically registered
+commands.
 
 
 Running with static module maps

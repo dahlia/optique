@@ -149,6 +149,10 @@ To be released.
 
  -  Added `completion.errors` to `runProgram()` for customizing missing or
     unsupported completion shell messages.  [[#967], [#982]]
+ -  Added opt-in help for bare command groups through `runProgram()`'s
+    `help.bareGroup` setting.  Use `"namespace"` for groups without their own
+    command definition or `"always"` to show help instead of executing bare
+    parent commands.  Existing behavior remains the default.  [[#1026], [#1027]]
  -  Added support for `helpSections` in `runProgram()` to separate discovered
     commands from options in help while keeping pages without commands free of
     automatic headings.  [[#972], [#983]]
@@ -164,6 +168,9 @@ To be released.
     help, while keeping descendant bindings scoped to their own command pages.
     Root-only programs also show environment bindings added by outer wrappers.
     [[#985], [#987]]
+
+[#1026]: https://github.com/dahlia/optique/issues/1026
+[#1027]: https://github.com/dahlia/optique/pull/1027
 
 ### @optique/config
 

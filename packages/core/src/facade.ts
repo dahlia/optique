@@ -1,3 +1,4 @@
+import { getHelpRequest } from "./internal/help-request.ts";
 import {
   collectActiveOptionNames,
   collectRootOptionNames,
@@ -2980,6 +2981,29 @@ export function runParser<
   };
 
   const parserMode = parser.mode as InferMode<TParser>;
+  const helpRequest = getHelpRequest(options);
+  if (helpRequest != null) {
+    return dispatchByMode(
+      parserMode,
+      () => {
+        const handled = handleResult({
+          type: "help",
+          commands: helpRequest,
+          preferUserCommandDocs: true,
+        });
+        if (handled instanceof Promise) {
+          throw new RunParserError("Synchronous parser returned async result.");
+        }
+        return handled;
+      },
+      async () =>
+        await handleResult({
+          type: "help",
+          commands: helpRequest,
+          preferUserCommandDocs: true,
+        }),
+    );
+  }
   return dispatchByMode(
     parserMode,
     () => {
@@ -3354,6 +3378,7 @@ function needsEarlyExitSync<THelp, TError>(
   args: readonly string[],
   options: RunWithOptions<THelp, TError>,
 ): boolean {
+  if (getHelpRequest(options) != null) return true;
   const attempted = attemptParseSync(parser, args, { mode: "parse-only" });
   if (attempted.kind === "success") return false;
   return isMetaEarlyExit(classifyEarlyExitFailure(attempted, options));
@@ -3367,6 +3392,7 @@ async function needsEarlyExitAsync<THelp, TError>(
   args: readonly string[],
   options: RunWithOptions<THelp, TError>,
 ): Promise<boolean> {
+  if (getHelpRequest(options) != null) return true;
   const attempted = await attemptParseAsync(parser, args, {
     mode: "parse-only",
   });

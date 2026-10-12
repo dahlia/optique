@@ -21,6 +21,7 @@ export default defineConfig({
     "src/internal/annotations.ts",
     "src/internal/command-doc-policy.ts",
     "src/internal/dependency.ts",
+    "src/internal/help-request.ts",
     "src/internal/parser.ts",
     "src/internal/terminal.ts",
     "src/internal/usage.ts",

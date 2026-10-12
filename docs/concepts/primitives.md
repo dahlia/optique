@@ -377,7 +377,9 @@ consistent option handling.
 
 ### Custom errors
 
-Since Optique 1.4.0, `errors.unexpectedValue` customizes the error for a value
+*The `errors.unexpectedValue` option is available since Optique 1.4.0.*
+
+`errors.unexpectedValue` customizes the error for a value
 attached to a flag as `--name=value`, `-name=value` (a single-dash long name),
 or `/name:value`.  It accepts a static `Message` or a function that receives
 the matched option name and the value after the separator, including an
@@ -784,7 +786,9 @@ or shell completion.
 
 ### Command usage visibility
 
-Since Optique 1.4.0, `showUsage` on `command()` can override the runner's
+*This API is available since Optique 1.4.0.*
+
+`showUsage` on `command()` can override the runner's
 usage visibility for that command and its descendants. This lets root help
 omit the synopsis while subcommand help keeps it:
 

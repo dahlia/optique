@@ -243,6 +243,14 @@
       },
       "import": "./dist/internal/command-doc-policy.js",
       "require": "./dist/internal/command-doc-policy.cjs"
+    },
+    "./internal/help-request": {
+      "types": {
+        "import": "./dist/internal/help-request.d.ts",
+        "require": "./dist/internal/help-request.d.cts"
+      },
+      "import": "./dist/internal/help-request.js",
+      "require": "./dist/internal/help-request.cjs"
     }
   },
   "imports": {

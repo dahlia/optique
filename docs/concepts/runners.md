@@ -347,11 +347,14 @@ Pass `showUsage: false` when a command menu should show the brief,
 description, and generated sections without the `Usage:` synopsis.  The
 setting applies to full help pages, including help rendered above parse
 errors with `aboveError: "help"`.  It does not change the explicit
-usage-only preamble from `aboveError: "usage"`. Since Optique 1.4.0,
-[`command()`](./primitives.md#command-parser) can override this default with
-its own `showUsage` option. Descendants inherit the nearest explicit command
-setting, so a command can restore the synopsis with `showUsage: true` even
-when the runner hides it.
+usage-only preamble from `aboveError: "usage"`.
+
+*Command-level usage visibility is available since Optique 1.4.0.*
+
+[`command()`](./primitives.md#command-parser) can override the runner's
+`showUsage` default with its own `showUsage` option. Descendants inherit the
+nearest explicit command setting, so a command can restore the synopsis with
+`showUsage: true` even when the runner hides it.
 
 Pass `commandList: "top-level"` when a top-level command menu should show
 only first-level commands instead of recursively listing every nested leaf
@@ -402,7 +405,10 @@ runParser(argument(string()), "myapp", ["--help"], {
 ~~~~
 
 Treat the page as read-only. It is the formatter's input: colors, widths,
-and section ordering still belong to `formatDocPage()`. Since Optique 1.4.0,
+and section ordering still belong to `formatDocPage()`.
+
+*The resolved `page.showUsage` default is available since Optique 1.4.0.*
+
 `page.showUsage` includes the resolved command or runner default. Passing
 `showUsage` directly to `formatDocPage()` overrides that page default.
 Optional fields may be `undefined`.
@@ -574,7 +580,9 @@ handles those meta requests and exits with code 0.
 
 ### Terminal defaults
 
-Since Optique 1.3, `run()`, `runSync()`, and `runAsync()` honor environment
+*Environment-based color defaults are available since Optique 1.3.0.*
+
+`run()`, `runSync()`, and `runAsync()` honor environment
 preferences when `colors` is omitted. A nonempty `FORCE_COLOR` enables colors,
 including when output is piped. Any nonempty value works, including `0`,
 `false`, or whitespace. Otherwise, a nonempty `NO_COLOR` or the presence of

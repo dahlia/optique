@@ -161,6 +161,17 @@ For large command trees, pass `commandList: "top-level"` to keep root help
 focused on first-level command groups while subcommand help remains available
 through `<command> --help`.
 
+*The `help.bareGroup` option is available since Optique 1.4.0.*
+
+Set `help: { bareGroup: "always" }` to show help when the
+root or a group is invoked without further arguments. This also skips an
+executable parent's handler. Use `"namespace"` to limit automatic help to
+groups without their own command definition, or `"never"` (the default) to
+preserve normal dispatch. Leaves and inputs with extra arguments retain normal
+parsing. Help objects without `command` or `option` enable both help entry
+points; `help: { command: true, bareGroup: "always" }` enables only the help
+command.
+
 For more resources, see the [docs] and the [*examples/*](/examples/)
 directory.
 
