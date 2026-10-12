@@ -8,6 +8,14 @@ Version 1.0.14
 
 To be released.
 
+### @optique/core
+
+ -  Fixed option and flag completion to stop suggesting option names and values
+    after the `--` option terminator.  [[#1028], [#1029]]
+
+[#1028]: https://github.com/dahlia/optique/issues/1028
+[#1029]: https://github.com/dahlia/optique/pull/1029
+
 
 Version 1.0.13
 --------------
