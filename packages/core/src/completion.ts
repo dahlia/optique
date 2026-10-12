@@ -693,7 +693,9 @@ fi
           if (index > 0) yield "\n";
           yield `__JOINED_FILE__:${encodePattern(prefix)}:${file.type}:${
             encodeExtensions(file.extensions)
-          }::${file.includeHidden ? "1" : "0"}`;
+          }:${encodePattern(file.pattern ?? "")}:${
+            file.includeHidden ? "1" : "0"
+          }`;
         }
       } else if (suggestion.kind === "literal") {
         yield encodeBashLiteral(suggestion.text);

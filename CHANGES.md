@@ -18,13 +18,14 @@ To be released.
     without executing shell substitutions. File values preserve their full
     prefix and filtering metadata when option names overlap, unquoted tilde
     expansion after quoted or split option names, and quoted path prefixes.
-    Exact literal
-    candidates, including dot-prefixed values, remain available alongside file
-    suggestions when hidden files are excluded. Hidden candidates allowed by
-    one file suggestion remain available alongside other file suggestions.
-    Option names quoted or escaped from their first character, partial option
-    names, and literal values resembling file
-    completion markers also complete correctly. [[#1031], [#1033]]
+    Exact literal candidates, including dot-prefixed values, remain available
+    alongside file suggestions when hidden files are excluded. Hidden candidates
+    allowed by one file suggestion remain available alongside other file
+    suggestions. Option names quoted or escaped from their first character,
+    partial option names, and literal values resembling file
+    completion markers also complete correctly. File suggestions with fixed
+    search patterns enumerate matching paths instead of inserting the pattern
+    as literal text. [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed
@@ -86,6 +87,7 @@ To be released.
 
 [#1030]: https://github.com/dahlia/optique/issues/1030
 [#1031]: https://github.com/dahlia/optique/issues/1031
+[#1032]: https://github.com/dahlia/optique/issues/1032
 [#1033]: https://github.com/dahlia/optique/pull/1033
 [#1034]: https://github.com/dahlia/optique/pull/1034
 [#1035]: https://github.com/dahlia/optique/issues/1035
@@ -106,6 +108,7 @@ To be released.
 [#1067]: https://github.com/dahlia/optique/pull/1067
 [#1069]: https://github.com/dahlia/optique/pull/1069
 [#1076]: https://github.com/dahlia/optique/pull/1076
+[#1079]: https://github.com/dahlia/optique/pull/1079
 
 
 Version 1.0.14

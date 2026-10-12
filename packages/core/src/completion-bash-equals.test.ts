@@ -14,7 +14,7 @@ import { join } from "node:path";
 import process from "node:process";
 import { describe, it } from "node:test";
 import { bash } from "./completion.ts";
-import { object } from "./constructs.ts";
+import { merge, object } from "./constructs.ts";
 import { multiple, optional } from "./modifiers.ts";
 import { suggest } from "./parser.ts";
 import { argument, option } from "./primitives.ts";
@@ -167,6 +167,54 @@ const withoutPattern = object({
   ...fields,
   config: optional(option("--config", patternlessFiles)),
 });
+const fixedPatternFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "file", type: "file", pattern: "src/*.toml" };
+  },
+};
+const fixedDirectories: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "file", type: "directory", pattern: "src/*" };
+  },
+};
+const fixedHiddenTomlFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield {
+      kind: "file",
+      type: "file",
+      pattern: "src/*",
+      extensions: [".toml"],
+      includeHidden: true,
+    };
+  },
+};
+const withFixedPattern = object({
+  ...fields,
+  config: optional(option("--config", "-config", fixedPatternFiles)),
+  directory: optional(option("--directory", fixedDirectories)),
+  hidden: optional(option("--hidden", fixedHiddenTomlFiles)),
+});
+const withFixedPatternAndSibling = merge(
+  withFixedPattern,
+  object({ positional: optional(argument(files)) }),
+);
+const literalCollisionFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "file", type: "file", pattern: "json" };
+  },
+};
+const withLiteralCollision = merge(
+  object({ format: optional(option("--format", choice(["json", "yaml"]))) }),
+  object({ positional: optional(argument(literalCollisionFiles)) }),
+);
+const withDirectoryLiteralCollision = merge(
+  object({ out: optional(option("--out", files)) }),
+  object({ positional: optional(argument(choice(["build", "test"]))) }),
+);
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
@@ -218,6 +266,10 @@ function tab(
   positional = false,
   omitPattern = false,
   cursorLeft = 0,
+  fixedPattern = false,
+  fixedPatternWithSibling = false,
+  literalCollision = false,
+  directoryLiteralCollision = false,
 ): {
   readonly line: string;
   readonly replies: readonly string[];
@@ -230,6 +282,16 @@ function tab(
     writeFileSync(join(dir, "=leading.toml"), "");
     mkdirSync(join(dir, "dir=x"));
     writeFileSync(join(dir, "dir=x", ".hidden.toml"), "");
+    if (fixedPattern || fixedPatternWithSibling) {
+      mkdirSync(join(dir, "src"));
+      writeFileSync(join(dir, "src", "main.toml"), "");
+      writeFileSync(join(dir, "src", ".hidden.toml"), "");
+      mkdirSync(join(dir, "src", "nested"));
+    }
+    if (directoryLiteralCollision) {
+      mkdirSync(join(dir, "build"));
+      writeFileSync(join(dir, "build", "a.txt"), "");
+    }
     const requests = [args];
     const branches = requests.map((request) => {
       const [first, ...rest] = request;
@@ -238,6 +300,14 @@ function tab(
         bash.encodeSuggestions(
           omitPattern
             ? suggest(withoutPattern, [first, ...rest])
+            : directoryLiteralCollision
+            ? suggest(withDirectoryLiteralCollision, [first, ...rest])
+            : literalCollision
+            ? suggest(withLiteralCollision, [first, ...rest])
+            : fixedPatternWithSibling
+            ? suggest(withFixedPatternAndSibling, [first, ...rest])
+            : fixedPattern
+            ? suggest(withFixedPattern, [first, ...rest])
             : positional
             ? suggest(withPositionalFiles, [first, ...rest])
             : suggest(parser, [first, ...rest]),
@@ -294,6 +364,181 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("enumerates a fixed file pattern for a joined value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/ma",
+      ["--config=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.calls, [
+      ["--config=src/ma"],
+    ]);
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=src/main.toml ");
+  });
+  it("enumerates a fixed pattern through a single-dash long option alias", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp -config=src/ma",
+      ["-config=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.calls, [["-config=src/ma"]]);
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp -config=src/main.toml ");
+  });
+  it("enumerates a fixed pattern for an empty joined value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=",
+      ["--config="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml", "src/nested/"]);
+    assert.equal(result.line, "eqapp --config=src/");
+  });
+  it("preserves a fixed pattern when equals is not a word break", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/ma",
+      ["--config=src/ma"],
+      'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["--config=src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=src/main.toml ");
+  });
+  it("preserves fixed directory suggestion metadata", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --directory=src/ne",
+      ["--directory=src/ne"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/nested/"]);
+    assert.equal(result.line, "eqapp --directory=src/nested/");
+  });
+  it("preserves fixed extension and hidden-file metadata", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --hidden=src/.h",
+      ["--hidden=src/.h"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/.hidden.toml"]);
+    assert.equal(result.line, "eqapp --hidden=src/.hidden.toml ");
+  });
+  it("does not accept an unrelated sibling file directive", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const retrySuggestions = Array.from(
+      suggest(withFixedPatternAndSibling, ["--config", "src/ma"]),
+    );
+    assert.deepEqual(retrySuggestions, [
+      { kind: "file", type: "file", pattern: "src/*.toml" },
+      { kind: "file", type: "file", pattern: "src/ma" },
+    ]);
+    const result = tab(
+      "eqapp --config=src/ma",
+      ["--config=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      false,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=src/main.toml ");
+  });
+  it("preserves a literal that collides with a sibling file pattern", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    assert.deepEqual(
+      Array.from(suggest(withLiteralCollision, ["--format", "j"])),
+      [
+        { kind: "literal", text: "json" },
+        { kind: "file", type: "file", pattern: "json" },
+      ],
+    );
+    const result = tab(
+      "eqapp --format=j",
+      ["--format=j"],
+      "",
+      false,
+      false,
+      0,
+      false,
+      false,
+      true,
+    );
+    assert.deepEqual(result.replies, ["json"]);
+    assert.equal(result.line, "eqapp --format=json ");
+  });
+  it("keeps files when a sibling literal matches their pattern", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    assert.deepEqual(
+      Array.from(suggest(withDirectoryLiteralCollision, ["--out", "build"])),
+      [
+        { kind: "file", type: "file", pattern: "build" },
+        { kind: "literal", text: "build" },
+      ],
+    );
+    const result = tab(
+      "eqapp --out=build",
+      ["--out=build"],
+      "",
+      false,
+      false,
+      0,
+      false,
+      false,
+      false,
+      true,
+    );
+    assert.deepEqual(result.replies, ["build/"]);
+    assert.equal(result.line, "eqapp --out=build/");
+  });
   for (
     const word of [
       "'--mode'=de",
