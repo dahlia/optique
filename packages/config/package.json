@@ -1,6 +1,6 @@
 {
   "name": "@optique/config",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Configuration file support for Optique with Standard Schema validation",
   "keywords": [
     "CLI",
