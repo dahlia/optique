@@ -110,14 +110,58 @@ export const bash: ShellCompletion = {
     return `
 function _${programName} () {
   COMPREPLY=()
-  local current="\${COMP_WORDS[COMP_CWORD]}"
+  local __raw_current="\${COMP_WORDS[COMP_CWORD]}"
+  local current="" __quote="" __char __next __index __quote_offset=0
+  # Dequote the shell word without evaluating filename contents.  Readline
+  # returns escaped words after Tab, and users may start with an open quote.
+  for ((__index=0; __index<\${#__raw_current}; __index++)); do
+    __char="\${__raw_current:__index:1}"
+    if [[ -z "$__quote" ]]; then
+      case "$__char" in
+        \\\\) ((++__index)); current+="\${__raw_current:__index:1}" ;;
+        \\'|\\") __quote="$__char"; __quote_offset=\${#current} ;;
+        *) current+="$__char" ;;
+      esac
+    elif [[ "$__quote" == "'" ]]; then
+      if [[ "$__char" == "'" ]]; then
+        __quote=""
+      else
+        current+="$__char"
+      fi
+    else
+      case "$__char" in
+        \\") __quote="" ;;
+        \\\\)
+          __next="\${__raw_current:__index+1:1}"
+          case "$__next" in
+            \\$|\\\`|\\"|\\\\)
+              ((++__index)); current+="$__next" ;;
+            *) current+="$__char" ;;
+          esac ;;
+        *) current+="$__char" ;;
+      esac
+    fi
+  done
+  local __tilde_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)$'
+  local __tilde_glob_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
   while IFS= read -r line; do
     if [[ "$line" == __FILE__:* ]]; then
+      # Let Readline quote filenames and keep directory paths open.
+      if [[ $(type -t compopt) == builtin ]]; then
+        compopt -o filenames 2>/dev/null || true
+      fi
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
       extensions="\${extensions//,\\./,}"; extensions="\${extensions#.}"
       pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
+      local __reply_start=\${#COMPREPLY[@]}
+
+      # path() echoes the raw shell word as its pattern.  Once dequoted,
+      # use the literal current-word prefix instead of the escaped pattern.
+      if [[ "$pattern" == "$__raw_current" && "$current" != "$__raw_current" ]]; then
+        pattern=""
+      fi
 
       # Save and adjust glob/shell options for safe file completion
       local __dotglob_was_set=0 __failglob_was_set=0 __noglob_was_set=0
@@ -134,7 +178,7 @@ function _${programName} () {
 
       # Expand tilde prefix for file globbing
       local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
-      if [[ "$current" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)$ ]]; then
+      if [[ "$__raw_current" == "~"* && "$current" =~ $__tilde_pattern ]]; then
         __tilde_prefix="\${BASH_REMATCH[1]}"
         eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
         if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
@@ -171,7 +215,7 @@ function _${programName} () {
           __tilde_prefix=""
           __tilde_expanded=""
           __glob_current="$pattern"
-          if [[ "$pattern" =~ ^(~[a-zA-Z0-9_.+-]*)(/.*)?$ ]]; then
+          if [[ "$pattern" =~ $__tilde_glob_pattern ]]; then
             __tilde_prefix="\${BASH_REMATCH[1]}"
             eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
             if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
@@ -240,10 +284,11 @@ function _${programName} () {
           if [[ -n "$extensions" ]]; then
             # Files with extension filtering + directories
             local ext_pattern="\${extensions//,/|}"
+            ext_pattern='\\.('"$ext_pattern"')$'
             for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
-              elif [[ -f "$item" && "$item" =~ \\.($ext_pattern)$ ]]; then
+              elif [[ -f "$item" && "$item" =~ $ext_pattern ]]; then
                 COMPREPLY+=("$item")
               fi
             done
@@ -270,10 +315,11 @@ function _${programName} () {
             # Files with extension filtering + directories
             # Files with extension filtering
             local ext_pattern="\${extensions//,/|}"
+            ext_pattern='\\.('"$ext_pattern"')$'
             for item in "\${__candidates[@]}"; do
               if [[ -d "$item" ]]; then
                 COMPREPLY+=("$item/")
-              elif [[ ( -e "$item" || -L "$item" ) && "$item" =~ \\.($ext_pattern)$ ]]; then
+              elif [[ ( -e "$item" || -L "$item" ) && "$item" =~ $ext_pattern ]]; then
                 COMPREPLY+=("$item")
               fi
             done
@@ -292,7 +338,8 @@ function _${programName} () {
       esac
 
       # Restore tilde prefix in completion results
-      if [[ -n "$__tilde_prefix" ]]; then
+      if [[ -n "$__tilde_prefix" &&
+            ( -z "$__quote" || $__quote_offset -gt 0 ) ]]; then
         local __i
         for __i in "\${!COMPREPLY[@]}"; do
           COMPREPLY[\$__i]="\${COMPREPLY[\$__i]/#\$__tilde_expanded/\$__tilde_prefix}"
@@ -307,6 +354,49 @@ function _${programName} () {
       if [[ "$__failglob_was_set" == "1" ]]; then shopt -s failglob; fi
       if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
 
+      # Readline replaces only the text after an open quote.  Remove the
+      # already typed prefix so it is not inserted a second time.
+      if [[ -n "$__quote" && $__quote_offset -gt 0 ]]; then
+        local __quote_prefix="\${current:0:__quote_offset}"
+        local __reply_index
+        for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
+          COMPREPLY[__reply_index]="\${COMPREPLY[__reply_index]#"$__quote_prefix"}"
+        done
+      fi
+
+      # Readline expands a leading tilde in a returned filename even when the
+      # user did not type one.  Keep such local paths explicitly relative.
+      if [[ "$__raw_current" != "~"* && -z "$__tilde_prefix" ]]; then
+        local __reply_index
+        for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
+          if [[ "\${COMPREPLY[__reply_index]}" =~ $__tilde_glob_pattern ]]; then
+            COMPREPLY[__reply_index]="./\${COMPREPLY[__reply_index]}"
+          fi
+        done
+      fi
+
+      # Readline does not escape substitutions inside an already open double
+      # quote.  Quote the two characters it leaves special in that context.
+      if [[ "$__quote" == '"' && $(type -t compopt) == builtin ]]; then
+        local __escaped_reply __escape_index
+        for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
+          __escaped_reply=""
+          for ((__escape_index=0; __escape_index<\${#COMPREPLY[__reply_index]}; __escape_index++)); do
+            __char="\${COMPREPLY[__reply_index]:__escape_index:1}"
+            __next="\${COMPREPLY[__reply_index]:__escape_index+1:1}"
+            if [[ "$__char" == '\\' &&
+                  ( "$__next" == '$' || "$__next" == '\`' ) ]]; then
+              __escaped_reply+="\\\\$__char"
+            elif [[ "$__char" == '$' || "$__char" == '\`' ]]; then
+              __escaped_reply+="\\\\$__char"
+            else
+              __escaped_reply+="$__char"
+            fi
+          done
+          COMPREPLY[__reply_index]="$__escaped_reply"
+        done
+      fi
+
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" && "$__prefix_targets_hidden" == "0" ]]; then
         local filtered=()
@@ -317,14 +407,20 @@ function _${programName} () {
         done
         COMPREPLY=("\${filtered[@]}")
       fi
+
     else
       # Regular literal completion
       COMPREPLY+=("$line")
     fi
-  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$current" 2>/dev/null)
+  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__raw_current" 2>/dev/null)
 }
 
-complete -F _${programName} -- ${programName}
+# Bash 3.2 has no compopt: use filename quoting for all candidates there.
+if [[ $(type -t compopt) == builtin ]]; then
+  complete -F _${programName} -- ${programName}
+else
+  complete -o filenames -F _${programName} -- ${programName}
+fi
     `;
   },
   *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {
