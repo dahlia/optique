@@ -149,7 +149,80 @@ function _${programName} () {
   local __tilde_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)$'
   local __tilde_glob_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
-  while IFS= read -r line; do
+  # Bash splits unquoted '=' at its default word breaks. Reassemble only
+  # adjacent fragments, leaving whitespace-separated arguments intact.
+  local __raw_current="$current" __remove="" __word
+  if [[ \${COMP_LINE+x} && "$COMP_WORDBREAKS" == *=* ]]; then
+    local -a __words=()
+    local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
+    for ((__i=0; __i<=COMP_CWORD; __i++)); do
+      __word="\${COMP_WORDS[__i]}"
+      __space=0
+      while [[ "$__rest" == [[:space:]]* ]]; do
+        __space=1
+        __rest="\${__rest:1}"
+      done
+      if [[ "\${__rest:0:\${#__word}}" != "$__word" ]]; then
+        __valid=0
+        break
+      fi
+      if (( __i > 1 && !__space )) &&
+          { [[ -n "$__word" && -z "\${__word//=/}" ]] ||
+            [[ -n "$__previous" && -z "\${__previous//=/}" ]]; }; then
+        __words[__j-1]+="$__word"
+      else
+        __words[__j]="$__word"
+        ((++__j))
+      fi
+      __rest="\${__rest:\${#__word}}"
+      __previous="$__word"
+    done
+    if (( __valid )); then
+      current="\${__words[__j-1]}"
+      prev=("\${__words[@]:1:__j-2}")
+      if [[ -n "$__raw_current" && -z "\${__raw_current//=/}" ]]; then
+        __remove="$current"
+      else
+        __remove="\${current:0:\${#current}-\${#__raw_current}}"
+      fi
+    fi
+  fi
+
+  # Keep the joined request for literal suggestions. Core represents joined
+  # file suggestions as an echo of the prefix (or just option= when no
+  # pattern is provided); probe those cases for native
+  # file directives without changing the protocol used by other shells.
+  local -a __lines=() __value_files=() __replies=()
+  local __echo=0 __value="" __option_prefix="" line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" ]] && continue
+    __lines+=("$line")
+    [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]] && __echo=1
+  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$current" 2>/dev/null)
+  if (( __echo )) && [[ "$current" == -*=* ]]; then
+    __option_prefix="\${current%%=*}="
+    __value="\${current#*=}"
+    # The split protocol also treats '=' inside a value as option syntax.
+    # Ask with the prefix before it, but glob against the complete value.
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == __FILE__:* ]] && __value_files+=("$line")
+    done < <(${programName} ${escapedArgs} "\${prev[@]}" "\${current%%=*}" "\${__value%%=*}" 2>/dev/null)
+  fi
+
+  local __index=0 __reply_prefix="" __file_current="$current"
+  for line in "\${__lines[@]}" "\${__value_files[@]}"; do
+    COMPREPLY=()
+    __reply_prefix=""
+    __file_current="$current"
+    if (( __index >= \${#__lines[@]} )); then
+      __reply_prefix="$__option_prefix"
+      __file_current="$__value"
+    fi
+    ((++__index))
+    if (( \${#__value_files[@]} )) &&
+        [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]]; then
+      continue
+    fi
     if [[ "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
@@ -177,12 +250,12 @@ function _${programName} () {
       unset GLOBIGNORE
 
       # Expand tilde prefix for file globbing
-      local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
-      if [[ "$__raw_current" == "~"* && "$current" =~ $__tilde_pattern ]]; then
+      local __glob_current="$__file_current" __tilde_prefix="" __tilde_expanded=""
+      if [[ "$__raw_current" == "~"* && "$__file_current" =~ $__tilde_pattern ]]; then
         __tilde_prefix="\${BASH_REMATCH[1]}"
         eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
         if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
-          __glob_current="\${__tilde_expanded}\${current#\$__tilde_prefix}"
+          __glob_current="\${__tilde_expanded}\${__file_current#\$__tilde_prefix}"
         else
           __tilde_prefix=""
         fi
@@ -196,7 +269,7 @@ function _${programName} () {
       local __from_pattern=0
       if [[ -n "$pattern" ]]; then
         # Normalize leading ./ so that ./src/ma matches pattern src/
-        local __norm_current="\${current#./}"
+        local __norm_current="\${__file_current#./}"
         local __norm_pattern="\${pattern#./}"
         # For wildcard patterns, compare only the directory prefix before
         # any wildcards so that typing src/ma narrows src/*.ts correctly
@@ -205,7 +278,7 @@ function _${programName} () {
           __compare_pattern="\${__compare_pattern%%[\*\?]*}"
           [[ "$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
         fi
-        if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$current" != "$pattern" ]]; then
+        if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$__file_current" != "$pattern" ]]; then
           # User has typed beyond or an equivalent form of the pattern
           true
         else
@@ -432,7 +505,16 @@ function _${programName} () {
       # Regular literal completion
       COMPREPLY+=("$line")
     fi
-  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__raw_current" 2>/dev/null)
+    for __word in "\${COMPREPLY[@]}"; do
+      __replies+=("$__reply_prefix$__word")
+    done
+  done
+  COMPREPLY=()
+  for __word in "\${__replies[@]}"; do
+    if [[ "\${__word:0:\${#__remove}}" == "$__remove" ]]; then
+      COMPREPLY+=("\${__word:\${#__remove}}")
+    fi
+  done
   if [[ $__file_mode == 1 && $(type -t compopt) == builtin ]]; then
     compopt -o filenames 2>/dev/null || true
   fi
