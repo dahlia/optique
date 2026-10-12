@@ -522,7 +522,7 @@ function* suggestOptionSync<T>(
   >,
   prefix: string,
 ): Generator<Suggestion> {
-  if (hidden) return;
+  if (hidden || context.optionsTerminated) return;
 
   // Check for --option=value format
   const equalsIndex = prefix.indexOf("=");
@@ -708,7 +708,7 @@ async function* suggestOptionAsync<T>(
   >,
   prefix: string,
 ): AsyncGenerator<Suggestion> {
-  if (hidden) return;
+  if (hidden || context.optionsTerminated) return;
 
   // Check for --option=value format
   const equalsIndex = prefix.indexOf("=");
@@ -1887,8 +1887,8 @@ export function flag(
         error: message`${eOptionNames(optionNames)}: ${state.error}`,
       };
     },
-    suggest(_context, prefix) {
-      if (isSuggestionHidden(options.hidden)) {
+    suggest(context, prefix) {
+      if (isSuggestionHidden(options.hidden) || context.optionsTerminated) {
         return [];
       }
       const suggestions: Suggestion[] = [];
