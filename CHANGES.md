@@ -19,6 +19,12 @@ To be released.
     a local directory receives a trailing slash instead of a space.
     [[#1030], [#1034]]
 
+ -  Fixed Nushell file completion leaving out symbolic links to files and
+    directories.  A link is now classified by its target, so a directory link
+    gets a trailing slash for navigation, while extension filters still match
+    the link's own name.  Broken links stay excluded when completion is
+    limited to files or directories.  [[#1042], [#1063]]
+
  -  Fixed fish file completion to suggest filenames that start with a dash,
     such as `-n`, `-e`, or `-s`, which were previously missing from the
     candidates.  Completing dash-prefixed paths no longer prints `basename`
@@ -27,7 +33,9 @@ To be released.
 [#1030]: https://github.com/dahlia/optique/issues/1030
 [#1034]: https://github.com/dahlia/optique/pull/1034
 [#1036]: https://github.com/dahlia/optique/issues/1036
+[#1042]: https://github.com/dahlia/optique/issues/1042
 [#1059]: https://github.com/dahlia/optique/pull/1059
+[#1063]: https://github.com/dahlia/optique/pull/1063
 
 
 Version 1.0.14

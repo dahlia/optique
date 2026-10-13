@@ -574,6 +574,66 @@ do { ${functionName} "${programName} " }
   }
 }
 
+function createNuSymlinkFixtures(workDir: string): void {
+  writeFileSync(join(workDir, "target.txt"), "");
+  writeFileSync(join(workDir, "target.md"), "");
+  mkdirSync(join(workDir, "targetdir"));
+  writeFileSync(join(workDir, "targetdir", "inner.txt"), "");
+  symlinkSync("target.txt", join(workDir, "link.txt"));
+  symlinkSync("target.md", join(workDir, "link.md"));
+  // Extensions are judged by the link's own name, not its target's:
+  symlinkSync("target.md", join(workDir, "linkmixed.txt"));
+  symlinkSync("target.txt", join(workDir, "linkmixed.md"));
+  symlinkSync("targetdir", join(workDir, "linkdir"));
+  symlinkSync("targetdir", join(workDir, "linkdir2"));
+  symlinkSync("linkdir", join(workDir, "linkchain"));
+  symlinkSync("missing.txt", join(workDir, "broken.txt"));
+  symlinkSync("loopb.txt", join(workDir, "loopa.txt"));
+  symlinkSync("loopa.txt", join(workDir, "loopb.txt"));
+  const hiddenDir = join(workDir, "hid");
+  mkdirSync(hiddenDir);
+  writeFileSync(join(hiddenDir, ".secret.txt"), "");
+  symlinkSync("../target.txt", join(hiddenDir, ".hidlink.txt"));
+  symlinkSync(".secret.txt", join(hiddenDir, "shown.txt"));
+}
+
+function runNuFileCompletion(
+  directive: string,
+  prefix: string,
+  workDir: string,
+  nuCwd?: string,
+): string[] {
+  const tempDir = mkdtempSync(join(tmpdir(), "nu-file-completion-"));
+
+  try {
+    writeFileSync(
+      join(tempDir, "linkapp"),
+      `#!/bin/bash\nprintf '%s\\n' '${directive}'\n`,
+      { mode: 0o755 },
+    );
+    const scriptPath = join(tempDir, "completion.nu");
+    writeFileSync(scriptPath, nu.generateScript("linkapp"));
+    const testScriptPath = join(tempDir, "test.nu");
+    writeFileSync(
+      testScriptPath,
+      `
+$env.PATH = ($env.PATH | prepend ${JSON.stringify(tempDir)})
+source ${JSON.stringify(scriptPath)}
+${nuCwd == null ? "" : `cd ${JSON.stringify(nuCwd)}`}
+print (nu-complete-linkapp ${
+        JSON.stringify(`linkapp ${prefix}`)
+      } | get value | to json -r)
+`,
+    );
+    const output = runCommand("nu", [testScriptPath], { cwd: workDir });
+    const values: unknown = JSON.parse(output);
+    ok(Array.isArray(values), `Unexpected Nushell output: ${output}`);
+    return values.map(String).sort();
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 describe("completion module", () => {
   describe("bash shell completion", () => {
     it("should have correct name", () => {
@@ -4672,7 +4732,7 @@ ${functionName}
       // Check that file completion parsing is included
       deepStrictEqual(script.includes("__FILE__:"), true);
       deepStrictEqual(script.includes("split row ':'"), true);
-      deepStrictEqual(script.includes("ls $ls_pattern"), true);
+      deepStrictEqual(script.includes("do $list_entries $ls_pattern"), true);
       deepStrictEqual(script.includes("if ($glob_base | is-empty)"), true);
     });
 
@@ -5108,6 +5168,253 @@ do { ${functionName} "extapp " }
         extBranch.includes("type == dir"),
         "nushell file extensions branch should include dir type for navigation.",
       );
+    });
+
+    describe("symlinks in actual nu", () => {
+      const skip = process.platform === "win32" || !isShellAvailable("nu");
+
+      function withFixtures(test: (workDir: string) => void): void {
+        const workDir = mkdtempSync(join(tmpdir(), "nu-symlink-work-"));
+        try {
+          createNuSymlinkFixtures(workDir);
+          test(workDir);
+        } finally {
+          rmSync(workDir, { recursive: true, force: true });
+        }
+      }
+
+      it("should complete symlinks by target type in file mode", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:file:.txt::0", "link", workDir),
+            [
+              "link.txt",
+              "linkchain/",
+              "linkdir/",
+              "linkdir2/",
+              "linkmixed.txt",
+            ],
+          );
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:file:::0", "link", workDir),
+            [
+              "link.md",
+              "link.txt",
+              "linkchain/",
+              "linkdir/",
+              "linkdir2/",
+              "linkmixed.md",
+              "linkmixed.txt",
+            ],
+          );
+        });
+      });
+
+      it("should complete directory symlinks in directory mode", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:directory:::0", "link", workDir),
+            ["linkchain/", "linkdir/", "linkdir2/"],
+          );
+        });
+      });
+
+      it("should complete symlinks by target type in any mode", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:any:::0", "link", workDir),
+            [
+              "link.md",
+              "link.txt",
+              "linkchain/",
+              "linkdir/",
+              "linkdir2/",
+              "linkmixed.md",
+              "linkmixed.txt",
+            ],
+          );
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:any:.txt::0", "link", workDir),
+            [
+              "link.txt",
+              "linkchain/",
+              "linkdir/",
+              "linkdir2/",
+              "linkmixed.txt",
+            ],
+          );
+        });
+      });
+
+      it("should exclude broken and looping symlinks when filtering", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          for (
+            const directive of [
+              "__FILE__:file:.txt::0",
+              "__FILE__:file:::0",
+              "__FILE__:directory:::0",
+              "__FILE__:any:.txt::0",
+            ]
+          ) {
+            for (const prefix of ["bro", "loop"]) {
+              deepStrictEqual(
+                runNuFileCompletion(directive, prefix, workDir),
+                [],
+                `${directive} with prefix ${prefix}`,
+              );
+            }
+          }
+          // Unfiltered any mode keeps listing every entry as before:
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:any:::0", "bro", workDir),
+            ["broken.txt"],
+          );
+        });
+      });
+
+      it("should list a directory symlink's contents for its exact name", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:file:.txt::0", "linkdir", workDir),
+            ["linkdir/inner.txt"],
+          );
+        });
+      });
+
+      it("should include symlinks in glob pattern completion", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          const completions = runNuFileCompletion(
+            "__FILE__:file:.txt:*.txt:0",
+            "",
+            workDir,
+          );
+          for (const expected of ["link.txt", "linkmixed.txt", "linkdir/"]) {
+            ok(
+              completions.includes(expected),
+              `Expected ${expected} in ${JSON.stringify(completions)}.`,
+            );
+          }
+          ok(
+            !completions.includes("broken.txt"),
+            `Unexpected broken.txt in ${JSON.stringify(completions)}.`,
+          );
+        });
+      });
+
+      it("should not expand a tilde at the start of a symlink name", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          symlinkSync("target.txt", join(workDir, "~draft.txt"));
+          // A broken link whose name would expand to the root user's home:
+          symlinkSync("missing", join(workDir, "~root"));
+          const files = runNuFileCompletion(
+            "__FILE__:file:.txt::0",
+            "",
+            workDir,
+          );
+          ok(
+            files.includes("~draft.txt"),
+            `Expected ~draft.txt in ${JSON.stringify(files)}.`,
+          );
+          const dirs = runNuFileCompletion(
+            "__FILE__:directory:::0",
+            "",
+            workDir,
+          );
+          ok(
+            !dirs.includes("~root/"),
+            `Unexpected ~root/ in ${JSON.stringify(dirs)}.`,
+          );
+        });
+      });
+
+      it("should resolve symlinks via .. from a symlinked directory", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          // Nushell's cd keeps the logical path, so .. leads back to workDir
+          // even though the physical parent of the link's target differs:
+          mkdirSync(join(workDir, "physical", "project"), { recursive: true });
+          symlinkSync(
+            join("physical", "project"),
+            join(workDir, "project"),
+          );
+          const nuCwd = join(workDir, "project");
+          deepStrictEqual(
+            runNuFileCompletion(
+              "__FILE__:directory:::0",
+              "../link",
+              workDir,
+              nuCwd,
+            ),
+            ["../linkchain/", "../linkdir/", "../linkdir2/"],
+          );
+          deepStrictEqual(
+            runNuFileCompletion(
+              "__FILE__:file:.txt::0",
+              "../link.",
+              workDir,
+              nuCwd,
+            ),
+            ["../link.txt"],
+          );
+          deepStrictEqual(
+            runNuFileCompletion(
+              "__FILE__:file:.txt::0",
+              "../linkdir",
+              workDir,
+              nuCwd,
+            ),
+            ["../linkdir/inner.txt"],
+          );
+        });
+      });
+
+      it("should judge symlink visibility by the link name", {
+        skip,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (skip) return;
+        withFixtures((workDir) => {
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:file:.txt::0", "hid/", workDir),
+            ["hid/shown.txt"],
+          );
+          deepStrictEqual(
+            runNuFileCompletion("__FILE__:file:.txt::1", "hid/", workDir),
+            ["hid/.hidlink.txt", "hid/.secret.txt", "hid/shown.txt"],
+          );
+        });
+      });
     });
   });
 

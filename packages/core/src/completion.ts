@@ -1108,8 +1108,10 @@ ${
 
       # If the glob base is a directory without a trailing slash (e.g., "src"),
       # append one so that ls enumerates its contents instead of matching
-      # siblings like "src-old"
-      let glob_base = if ($glob_base | is-not-empty) and ($glob_base | path type) == "dir" and (not ($glob_base | str ends-with "/")) {
+      # siblings like "src-old".  path expand follows symlinks, so that
+      # a symlink to a directory is treated the same way; --no-symlink first
+      # resolves .. against the logical $env.PWD as ls does
+      let glob_base = if ($glob_base | is-not-empty) and ($glob_base | path expand --no-symlink | path expand | path type) == "dir" and (not ($glob_base | str ends-with "/")) {
         $glob_base + "/"
       } else {
         $glob_base
@@ -1138,15 +1140,31 @@ ${
         null
       }
 
-      # Use ls -a to include hidden files when requested
+      # List entries matching a pattern, using ls -a to include hidden
+      # files when requested.  ls reports every symlink as type "symlink",
+      # so classify each one by its target's type instead (path expand
+      # follows symlinks); broken or looping symlinks stay "symlink".
+      # Join the name to $env.PWD first so that a leading ~ in an entry
+      # name is not expanded to a home directory, and resolve .. against
+      # the logical $env.PWD (--no-symlink) before following the symlink
+      let list_entries = {|pattern|
+        (if $hidden { ls -a $pattern } else { ls $pattern }) | each {|item|
+          if $item.type == symlink {
+            $item | update type ($env.PWD | path join $item.name | path expand --no-symlink | path expand | path type)
+          } else {
+            $item
+          }
+        }
+      }
+
       let items = try {
         match $type {
           "file" => {
             if ($extensions | is-empty) {
-              (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == file or type == dir
+              (do $list_entries $ls_pattern) | where type == file or type == dir
             } else {
               let ext_list = ($extensions | split row ',' | each {|e| $e | str replace -r '^\\.' '' })
-              let all_items = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern })
+              let all_items = (do $list_entries $ls_pattern)
               let dirs = $all_items | where type == dir
               let files = $all_items | where type == file | where {|f|
                 let ext = ($f.name | path parse | get extension)
@@ -1156,14 +1174,14 @@ ${
             }
           },
           "directory" => {
-            (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }) | where type == dir
+            (do $list_entries $ls_pattern) | where type == dir
           },
           "any" => {
             if ($extensions | is-empty) {
-              if $hidden { ls -a $ls_pattern } else { ls $ls_pattern }
+              do $list_entries $ls_pattern
             } else {
               let ext_list = ($extensions | split row ',' | each {|e| $e | str replace -r '^\\.' '' })
-              let all_items = (if $hidden { ls -a $ls_pattern } else { ls $ls_pattern })
+              let all_items = (do $list_entries $ls_pattern)
               let dirs = $all_items | where type == dir
               let files = $all_items | where type == file | where {|f|
                 let ext = ($f.name | path parse | get extension)
@@ -1182,7 +1200,7 @@ ${
       # even when the glob itself does not match directory names)
       let items = if ($glob_dir_pattern != null) and ($type != "directory") {
         let extra_dirs = try {
-          (if $hidden { ls -a $glob_dir_pattern } else { ls $glob_dir_pattern }) | where type == dir
+          (do $list_entries $glob_dir_pattern) | where type == dir
         } catch {
           []
         }
