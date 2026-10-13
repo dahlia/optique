@@ -990,6 +990,17 @@ complete -c ${programName} -f -a '(${functionName})'
 };
 
 /**
+ * Quotes a string as a Nushell string literal.  Nushell single-quoted strings
+ * have no escape sequences, so a value containing an apostrophe is written as
+ * a double-quoted string, in which only backslashes and double quotes need
+ * escaping.
+ */
+function quoteNuString(value: string): string {
+  if (!value.includes("'")) return `'${value}'`;
+  return `"${value.replace(/["\\]/g, "\\$&")}"`;
+}
+
+/**
  * The Nushell completion generator.
  * @since 0.6.0
  */
@@ -997,8 +1008,7 @@ export const nu: ShellCompletion = {
   name: "nu",
   generateScript(programName: string, args: readonly string[] = []): string {
     validateProgramName(programName);
-    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "''")}'`)
-      .join(" ");
+    const escapedArgs = args.map(quoteNuString).join(" ");
     // Replace spaces and special chars with hyphens for function name
     const safeName = programName.replace(/[^a-zA-Z0-9]+/g, "-");
     const functionName = `nu-complete-${safeName}`;
