@@ -177,7 +177,7 @@ function _${programName} () {
       if (( __i > 1 && !__space )) &&
           { [[ -n "$__word" && -z "\${__word//=/}" ]] ||
             [[ -n "$__previous" && -z "\${__previous//=/}" ]] ||
-            [[ "\${__words[__j-1]}" == -*=* ]] ||
+            [[ "\${__words[__j-1]}" == -* ]] ||
             [[ "$__word" == =* && "\${__words[__j-1]}" == -* ]]; }; then
         __words[__j-1]+="$__word"
       else
@@ -216,6 +216,8 @@ function _${programName} () {
               '$')
                 if [[ "\${__word:__k+1:1}" == "'" ]]; then
                   __join_quote=ansi; __ansi=""; ((++__k))
+                elif [[ "\${__word:__k+1:1}" == '"' ]]; then
+                  __join_quote='"'; ((++__k))
                 else __decoded+="$__char"; fi ;;
               "'"|'"') __join_quote="$__char" ;;
               *) __decoded+="$__char" ;;

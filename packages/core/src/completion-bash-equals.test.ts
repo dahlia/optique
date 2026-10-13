@@ -38,6 +38,7 @@ const prefixSensitiveFiles: ValueParser<"sync", string> = {
   },
 };
 const fields = {
+  scope: optional(option("--scope:name", choice(["dev"]))),
   sensitiveConfig: optional(option("--sensitive-config", prefixSensitiveFiles)),
   url: optional(option("--url", choice(["https://example.com"]))),
   email: optional(option("--email", choice(["me@example.com"]))),
@@ -201,6 +202,25 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (const input of ['eqapp --mode=$"de"', 'eqapp --mode=$"de']) {
+    it(`decodes locale quotes in ${input}`, { skip: !ptyAvailable }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(input, ["--mode=de"]);
+      assert.deepEqual(result.calls, [["--mode=de"]]);
+      assert.deepEqual(result.replies, ["dev"]);
+      assert.equal(
+        result.line,
+        input.endsWith('"') ? "eqapp --mode=dev " : 'eqapp --mode=$"dev" ',
+      );
+    });
+  }
+  it("reassembles word breaks in option names", { skip: !ptyAvailable }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp --scope:name=d", ["--scope:name=d"]);
+    assert.deepEqual(result.calls, [["--scope:name=d"]]);
+    assert.deepEqual(result.replies, ["dev"]);
+    assert.equal(result.line, "eqapp --scope:name=dev ");
+  });
   for (
     const input of [
       "eqapp --mode=$'de'",

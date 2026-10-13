@@ -5,8 +5,9 @@ links:
 ---
  -  Fixed Bash completion of values in `--option=value` form with the default
     or customized word-break settings, including file paths and values
-    containing `:` or `@`.  Completion uses the prefix before the cursor.
-    Quoted and escaped joined values, including Bash ANSI-C quotes, are
-    decoded without expanding shell substitutions.  File completion now
+    containing `:` or `@`, including option names with word-break characters.
+    Completion uses the prefix before the cursor.
+    Quoted and escaped joined values, including Bash ANSI-C and locale quotes,
+    are decoded without expanding shell substitutions.  File completion now
     preserves values containing `=` when choosing file types and extensions.
     [[#1031], [#1033]]
