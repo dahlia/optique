@@ -51,6 +51,14 @@ function encodePattern(pattern: string): string {
   return pattern.replace(/%/g, "%25").replace(/:/g, "%3A");
 }
 
+/** Escapes literal records that could otherwise be read as Bash directives. */
+function encodeBashLiteral(value: string): string {
+  const text = sanitizeForTransport(value);
+  return /^(?:__FILE__|__JOINED_FILE__|__LITERAL__):/.test(text)
+    ? `__LITERAL__:${text}`
+    : text;
+}
+
 function encodeExtensions(
   extensions: readonly string[] | undefined,
 ): string {
@@ -329,7 +337,7 @@ function _${programName} () {
   local __protocol_current="$__raw_current"
   (( __joined )) && __protocol_current="$current"
   local -a __lines=() __replies=()
-  local line __reply_prefix="" __file_current="$current"
+  local line __reply_prefix="" __file_current="$current" __literal=0
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -n "$line" ]] && __lines+=("$line")
   done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__protocol_current" 2>/dev/null)
@@ -337,7 +345,11 @@ function _${programName} () {
     COMPREPLY=()
     __reply_prefix=""
     __file_current="$current"
-    if [[ "$line" == __JOINED_FILE__:* ]]; then
+    __literal=0
+    if [[ "$line" == __LITERAL__:* ]]; then
+      line="\${line#__LITERAL__:}"
+      __literal=1
+    elif [[ "$line" == __JOINED_FILE__:* ]]; then
       line="\${line#__JOINED_FILE__:}"
       __reply_prefix="\${line%%:*}"
       __reply_prefix="\${__reply_prefix//%3A/:}"
@@ -353,7 +365,7 @@ function _${programName} () {
         __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
       fi
     fi
-    if [[ "$line" == __FILE__:* ]]; then
+    if [[ $__literal == 0 && "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
       extensions="\${extensions//,\\./,}"; extensions="\${extensions#.}"
@@ -661,7 +673,7 @@ fi
       const joined = getJoinedFileSuggestion(suggestion);
       if (joined !== undefined) {
         if (joined.literal && suggestion.kind === "literal") {
-          yield sanitizeForTransport(suggestion.text);
+          yield encodeBashLiteral(suggestion.text);
           yield "\n";
         }
         for (const [index, { prefix, file }] of joined.files.entries()) {
@@ -671,7 +683,7 @@ fi
           }::${file.includeHidden ? "1" : "0"}`;
         }
       } else if (suggestion.kind === "literal") {
-        yield sanitizeForTransport(suggestion.text);
+        yield encodeBashLiteral(suggestion.text);
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);

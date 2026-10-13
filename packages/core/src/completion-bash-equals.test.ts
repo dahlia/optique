@@ -58,6 +58,13 @@ const dotValues: ValueParser<"sync", string> = {
   },
 };
 const fields = {
+  markerJoined: optional(
+    option("--marker-joined", choice(["__JOINED_FILE__:foo"])),
+  ),
+  markerLiteral: optional(
+    option("--marker-literal", choice(["__LITERAL__:foo"])),
+  ),
+  markerFile: optional(option("--marker-file", choice(["__FILE__:foo"]))),
   hiddenUnion: optional(option("--hidden-union", {
     ...string(),
     *suggest() {
@@ -320,6 +327,20 @@ describe("joined Bash option completion", () => {
         assert.ok(result.replies.some((reply) => reply.endsWith("name")));
       },
     );
+  }
+  for (
+    const [marker, name] of [["__JOINED_FILE__", "--marker-joined"], [
+      "__LITERAL__",
+      "--marker-literal",
+    ], ["__FILE__", "--marker-file"]]
+  ) {
+    it(`keeps ${marker} literal values out of the file protocol`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(`eqapp ${name} `, [name, ""]);
+      assert.equal(result.line, `eqapp ${name} ${marker}:foo `);
+    });
   }
   for (const suffix of ["'", ""]) {
     it(`keeps a tilde quoted across an ANSI-C delimiter literal (${suffix})`, {

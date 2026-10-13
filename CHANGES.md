@@ -22,8 +22,8 @@ To be released.
     candidates, including dot-prefixed values, remain available alongside file
     suggestions when hidden files are excluded. Hidden candidates allowed by
     one file suggestion remain available alongside other file suggestions.
-    Quoted or escaped partial option names also complete correctly.
-    [[#1031], [#1033]]
+    Quoted or escaped partial option names and literal values resembling file
+    completion markers also complete correctly. [[#1031], [#1033]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed
