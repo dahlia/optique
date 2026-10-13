@@ -2715,6 +2715,7 @@ export function multiple<M extends Mode, TValue, TState>(
           "file",
           suggestion.type,
           suggestion.pattern ?? "",
+          suggestion.prefix ?? "",
           suggestion.includeHidden === true,
           suggestion.extensions == null
             ? ""

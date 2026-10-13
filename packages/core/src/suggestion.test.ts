@@ -1234,3 +1234,13 @@ describe("findSimilar compatibility", () => {
     );
   });
 });
+
+describe("file insertion prefix deduplication", () => {
+  it("keeps path matches with different insertion prefixes distinct", () => {
+    const suggestions: Suggestion[] = [
+      { kind: "file", type: "file", pattern: "out=b", prefix: "out=" },
+      { kind: "file", type: "file", pattern: "out=b", includeHidden: true },
+    ];
+    assert.deepEqual(deduplicateSuggestions(suggestions), suggestions);
+  });
+});

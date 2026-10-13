@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import process from "node:process";
 import {
@@ -178,6 +178,7 @@ function testInteractiveZshCompletion(
     }
   )[],
   options: {
+    readonly input?: string;
     readonly withInsecureFpath?: boolean;
     readonly setup?: string;
   } = {},
@@ -194,7 +195,7 @@ function testInteractiveZshCompletion(
     writeFileSync(
       cliPath,
       `#!/bin/bash
-printf '${directive}'
+printf '%b' '${directive.replaceAll("'", "'\\''")}'
 `,
       { mode: 0o755 },
     );
@@ -275,7 +276,7 @@ zpty child env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi
 zpty -w child ${JSON.stringify(`source ${JSON.stringify(initPath)}`)}
 sleep 0.5
 local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
-zpty -w -n child "extapp "
+zpty -w -n child ${JSON.stringify(options.input ?? "extapp ")}
 sleep 0.1
 zpty -w -n child $'\\t'
 sleep 0.1
@@ -5250,3 +5251,280 @@ do { ${functionName} "extapp " }
 });
 
 // cSpell: ignore CWORD COMPREPLY esac compinit
+
+describe("keyValue file completion", () => {
+  it("keeps legacy directives and encodes literal prefix metadata", () => {
+    for (const shell of [bash, zsh, fish, nu, pwsh]) {
+      const legacy: Suggestion = { kind: "file", type: "file", pattern: "b" };
+      const encoded = [...shell.encodeSuggestions([legacy])].join("");
+      ok(encoded.startsWith("__FILE__:file::b:0"));
+      ok(!encoded.startsWith("__FILE__:file::b:0:"));
+      const prefixed: Suggestion = {
+        kind: "file",
+        type: "file",
+        pattern: "a%3A:b",
+        prefix: "a%3A:",
+      };
+      ok(
+        [...shell.encodeSuggestions([prefixed])].join("").startsWith(
+          "__FILE__:file::a%253A%3Ab:0:a%253A%3A",
+        ),
+      );
+      for (const prefix of ["mismatch=", "a\t"]) {
+        const malformed: Suggestion = { ...legacy, prefix };
+        deepStrictEqual(
+          [...shell.encodeSuggestions([malformed])].join(""),
+          encoded,
+        );
+      }
+    }
+  });
+
+  for (const shell of [bash, fish, nu, pwsh]) {
+    for (
+      const [inputTemplate, expectedTemplate, type, extensions] of [
+        ["é🚀=b", "é🚀=bundle.txt", "file", undefined],
+        ["output=", "output=bundle.txt", "file", undefined],
+        ["output=b", "output=bundle.txt", "file", undefined],
+        ["[x]*%3A:b", "[x]*%3A:bundle.txt", "file", undefined],
+        ["outer=output=src/b", "outer=output=src/bundle.txt", "file", [".txt"]],
+        ["output=bu", "output=build/", "directory", undefined],
+        ["output=.b", "output=.bundle.txt", "file", undefined],
+        ["output=~/b", "output=~/bundle.txt", "file", undefined],
+      ] as const
+    ) {
+      const requiresHome = inputTemplate.includes("~/");
+      it(
+        `matches value paths and preserves keys in actual ${shell.name}: ${inputTemplate}`,
+        {
+          skip: process.platform === "win32" || !isShellAvailable(shell.name) ||
+            (requiresHome && process.env.HOME == null),
+        },
+        () => {
+          if (
+            process.platform === "win32" || !isShellAvailable(shell.name) ||
+            (requiresHome && process.env.HOME == null)
+          ) return;
+          const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-completion-"));
+          const homeDir = process.env.HOME == null
+            ? undefined
+            : mkdtempSync(join(process.env.HOME, ".optique-keyvalue-"));
+          if (homeDir != null) writeFileSync(join(homeDir, "bundle.txt"), "");
+          const input = homeDir == null ? inputTemplate : inputTemplate.replace(
+            "~/",
+            `~/${basename(homeDir)}/`,
+          );
+          const expected = homeDir == null
+            ? expectedTemplate
+            : expectedTemplate.replace("~/", `~/${basename(homeDir)}/`);
+          try {
+            mkdirSync(join(tempDir, "src"));
+            mkdirSync(join(tempDir, "build"));
+            writeFileSync(join(tempDir, "bundle.txt"), "");
+            writeFileSync(join(tempDir, "src", "bundle.txt"), "");
+            writeFileSync(join(tempDir, "src", "bundle.js"), "");
+            writeFileSync(join(tempDir, ".bundle.txt"), "");
+            const prefix = input.slice(
+              0,
+              input.lastIndexOf(input.includes(":") ? ":" : "=") + 1,
+            );
+            const suggestion: Suggestion = {
+              kind: "file",
+              type,
+              pattern: input,
+              prefix,
+              extensions,
+            };
+            const data = [...shell.encodeSuggestions([suggestion])].join("");
+            const cliPath = join(tempDir, "kvfixture");
+            writeFileSync(
+              cliPath,
+              `#!/bin/bash\nprintf '%s' '${
+                Buffer.from(data).toString("base64")
+              }' | base64 --decode; printf '\\n'\n`,
+              { mode: 0o755 },
+            );
+            const scriptPath = join(
+              tempDir,
+              `completion.${shell === pwsh ? "ps1" : shell.name}`,
+            );
+            writeFileSync(scriptPath, shell.generateScript("kvfixture"));
+            let output: string;
+            if (shell === bash) {
+              output = runCommand("bash", [
+                "-c",
+                `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture '${input}')\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
+              ], { cwd: tempDir });
+            } else if (shell === fish) {
+              output = runCommand("fish", [
+                "-c",
+                `set -x PATH '${tempDir}' $PATH\nsource '${scriptPath}'\ncomplete -C 'kvfixture ${input}'`,
+              ], { cwd: tempDir });
+            } else if (shell === nu) {
+              output = runCommand("nu", [
+                "--no-config-file",
+                "-c",
+                `$env.PATH = ($env.PATH | prepend '${tempDir}'); source '${scriptPath}'; nu-complete-kvfixture 'kvfixture ${input}' | get value | to json -r`,
+              ], { cwd: tempDir });
+            } else {
+              output = runCommand("pwsh", [
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                `$env:PATH = '${tempDir}:' + $env:PATH; . '${scriptPath}'; (TabExpansion2 -inputScript 'kvfixture ${input}' -cursorColumn ${
+                  "kvfixture ".length + input.length
+                }).CompletionMatches | ForEach-Object { $_.CompletionText }`,
+              ], { cwd: tempDir });
+            }
+            ok(
+              output.includes(expected),
+              `${shell.name}: ${input} expected ${expected}, got ${output}`,
+            );
+            if (extensions) ok(!output.includes("bundle.js"), output);
+            ok(!output.includes(`${prefix}${prefix}`), output);
+          } finally {
+            rmSync(tempDir, { recursive: true, force: true });
+            if (homeDir != null) {
+              rmSync(homeDir, { recursive: true, force: true });
+            }
+          }
+        },
+      );
+    }
+  }
+
+  it("preserves the key in actual Bash Readline with an unsplit word", {
+    skip: process.platform !== "linux" || !isShellAvailable("python3") ||
+      !isShellAvailable("bash"),
+  }, () => {
+    if (
+      process.platform !== "linux" || !isShellAvailable("python3") ||
+      !isShellAvailable("bash")
+    ) return;
+    const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-readline-"));
+    try {
+      writeFileSync(join(tempDir, "bundle.txt"), "");
+      writeFileSync(
+        join(tempDir, "completion.bash"),
+        bash.generateScript("kvfixture"),
+      );
+      writeFileSync(
+        join(tempDir, "kvfixture"),
+        "#!/bin/bash\n" +
+          'if [[ $# == 1 && "$1" == "output=b" ]]; then\n' +
+          "printf '__FILE__:file::output=b:0:output=\\n'\nfi\n",
+        { mode: 0o755 },
+      );
+      const driver = `
+import os, pathlib, pty, select, signal, sys, time
+root = pathlib.Path(sys.argv[1])
+snapshot = root / 'snapshot'
+snapshot.unlink(missing_ok=True)
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ['PS1'] = '__READY__> '
+    os.environ['INPUTRC'] = '/dev/null'
+    os.environ['TERM'] = 'xterm-256color'
+    os.execvp('bash', ['bash', '--noprofile', '--norc', '-i'])
+def read_until(marker):
+    output = bytearray()
+    end = time.monotonic() + 10
+    while time.monotonic() < end:
+        if select.select([fd], [], [], .05)[0]:
+            try: output.extend(os.read(fd, 65536))
+            except OSError: break
+            if marker in output: return
+    raise TimeoutError(f'No {marker!r} in terminal output: {bytes(output)!r}')
+try:
+    read_until(b'__READY__> ')
+    setup = f"export PATH='{root}':$PATH\\nsource '{root}/completion.bash'\\ncd '{root}'\\n"
+    if sys.argv[2] == 'unsplit':
+        setup += 'COMP_WORDBREAKS="'+ '$' + '{COMP_WORDBREAKS//=}"\\n'
+    setup += f"__capture() {{ printf '%s' \\"$READLINE_LINE\\" > '{snapshot}'; printf '\\\\n__CAPTURE_%s\\\\n' 'DONE__'; }}\\n"
+    setup += "bind -x '\\"\\\\C-o\\":__capture'\\n"
+    setup += "printf '\\\\n__SETUP_%s\\\\n' 'DONE__'\\n"
+    os.write(fd, setup.encode())
+    read_until(b'__SETUP_DONE__')
+    os.write(fd, b'kvfixture output=b\\t\\x0f')
+    read_until(b'__CAPTURE_DONE__')
+    print(snapshot.read_text())
+finally:
+    os.write(fd, b'\\x15exit\\n')
+    end = time.monotonic() + 3
+    while time.monotonic() < end:
+        if os.waitpid(pid, os.WNOHANG)[0]: break
+        time.sleep(.05)
+    else:
+        os.kill(pid, signal.SIGTERM)
+        os.waitpid(pid, 0)
+    os.close(fd)
+`;
+      for (const mode of ["default", "unsplit"]) {
+        const output = runCommand("python3", ["-c", driver, tempDir, mode]);
+        deepStrictEqual(
+          output.trim(),
+          mode === "unsplit"
+            ? "kvfixture output=bundle.txt"
+            : "kvfixture output=b",
+        );
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  for (const prefix of ["output=", "out:", "out%=", "out%3A:"]) {
+    it(`inserts ${prefix} through actual zsh ZLE completion`, {
+      skip: !isInteractiveZshCompletionAvailable(),
+    }, () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const directive = [...zsh.encodeSuggestions([{
+        kind: "file",
+        type: "file",
+        pattern: `${prefix}b`,
+        prefix,
+      }])].join("").replaceAll("\0", "\\0");
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        directive,
+        [{ path: "bundle.txt" }],
+        { input: `extapp ${prefix}b` },
+      );
+      ok(output.includes(`extapp ${prefix}bundle.txt`), output);
+    });
+  }
+
+  it("keeps inserted keys out of later Bash filesystem filters", {
+    skip: process.platform === "win32" || !isShellAvailable("bash"),
+  }, () => {
+    if (process.platform === "win32" || !isShellAvailable("bash")) return;
+    const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-bash-mixed-"));
+    try {
+      writeFileSync(join(tempDir, "bundle.txt"), "");
+      const suggestions: Suggestion[] = [
+        { kind: "file", type: "file", pattern: ".out=b", prefix: ".out=" },
+        { kind: "file", type: "file", pattern: "b" },
+      ];
+      const data = [...bash.encodeSuggestions(suggestions)].join("");
+      writeFileSync(
+        join(tempDir, "kvfixture"),
+        `#!/bin/bash\nprintf '%s' '${
+          Buffer.from(data).toString("base64")
+        }' | base64 --decode; printf '\\n'\n`,
+        { mode: 0o755 },
+      );
+      const scriptPath = join(tempDir, "completion.bash");
+      writeFileSync(scriptPath, bash.generateScript("kvfixture"));
+      const output = runCommand("bash", [
+        "-c",
+        `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture .out=b)\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
+      ], { cwd: tempDir });
+      deepStrictEqual(
+        output.trim().split("\n").sort(),
+        [".out=bundle.txt", "bundle.txt"].sort(),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});

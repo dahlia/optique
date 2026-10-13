@@ -105,6 +105,7 @@ export type Suggestion =
   | {
       readonly kind: "file";
       readonly pattern?: string;
+      readonly prefix?: string;
       readonly type: "file" | "directory" | "any";
       readonly extensions?: readonly string[];
       readonly includeHidden?: boolean;
@@ -441,6 +442,12 @@ When completion is enabled, the `run()` function automatically:
  -  Handles output formatting for each shell
  -  Exits with appropriate status codes
 
+File suggestions can include a literal `prefix`, such as `output=`, since
+version 1.1.13.  The `pattern` still contains the full suggestion.  Native
+completion excludes the prefix from filesystem matching and restores it when
+inserting a candidate.  Regenerate installed completion scripts after upgrading
+to use this behavior.
+
 ### Custom shell support
 
 By default, Optique provides completion for Bash, zsh, fish, PowerShell, and
@@ -481,6 +488,11 @@ run(parser, {
   },
 });
 ~~~~
+
+Custom adapters that handle file suggestions should honor `prefix`: when it
+literally leads both `pattern` and the current word, remove it from both before
+matching paths, then prepend it to inserted candidates.  Otherwise, ignore the
+prefix.  Treat it as text rather than a glob or regular expression.
 
 The custom shell completion will be merged with the default shells, making
 all shells available. You can also override default shells by using the same
