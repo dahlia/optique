@@ -476,6 +476,9 @@ function _${programName} () {
       case "/\${__glob_current%/}/" in
         */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
       esac
+      case "/\${__pattern_prefix%/}/" in
+        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
+      esac
       # Also check if the current prefix explicitly targets hidden entries
       # (e.g., user typed "." or ".e" to complete .env)
       local __prefix_targets_hidden=0
@@ -514,7 +517,7 @@ function _${programName} () {
             __d="\${__d%/}"
             __known=0
             for __candidate in "\${__candidates[@]}"; do
-              if [[ "$__candidate" == "$__d" ]]; then __known=1; break; fi
+              if [ "\${__candidate#./}" = "\${__d#./}" ]; then __known=1; break; fi
             done
             (( __known )) || __candidates+=("$__d")
           done
@@ -537,6 +540,8 @@ function _${programName} () {
           if [[ "\${__candidate#./}" == "\${__pattern_prefix#./}"* ]]; then
             if [[ "$__pattern_prefix" == ./* && "$__candidate" != ./* ]]; then
               __candidate="./$__candidate"
+            elif [[ "$__pattern_prefix" != ./* ]]; then
+              __candidate="\${__candidate#./}"
             fi
             __filtered_candidates+=("$__candidate")
           fi

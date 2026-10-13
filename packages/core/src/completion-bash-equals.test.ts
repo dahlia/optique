@@ -196,6 +196,32 @@ const withFixedPattern = object({
   config: optional(option("--config", "-config", fixedPatternFiles)),
   directory: optional(option("--directory", fixedDirectories)),
   hidden: optional(option("--hidden", fixedHiddenTomlFiles)),
+  prefixedPattern: optional(option("--prefixed-pattern", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "./src/*.toml",
+      };
+    },
+  })),
+  nestedPattern: optional(option("--nested-pattern", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "src/*/*.toml",
+      };
+    },
+  })),
+  rootPattern: optional(option("--root-pattern", {
+    ...string(),
+    *suggest() {
+      yield { kind: "file" as const, type: "file" as const, pattern: "*" };
+    },
+  })),
   casing: optional(option("--casing", choice(["dev", "Dev"]))),
   overlapping: optional(option("--overlapping", {
     ...string(),
@@ -382,6 +408,56 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("keeps the omission of ./ when a fixed pattern includes it", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --prefixed-pattern=src/ma",
+      ["--prefixed-pattern=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp --prefixed-pattern=src/main.toml ");
+  });
+  it("enumerates an explicitly typed hidden directory in a fixed glob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --nested-pattern=src/.hidden/ma",
+      ["--nested-pattern=src/.hidden/ma"],
+      "mkdir src/.hidden; touch src/.hidden/main.toml",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/.hidden/main.toml"]);
+    assert.equal(result.line, "eqapp --nested-pattern=src/.hidden/main.toml ");
+  });
+  it("does not repeat root-glob directories with a ./ spelling", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --root-pattern=",
+      ["--root-pattern="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(
+      result.replies.filter((reply) => reply.endsWith("/")).sort(),
+      ["dir=x/", "src/"],
+    );
+  });
   it("keeps distinct literals when deduplicating with nocasematch enabled", {
     skip: !ptyAvailable,
   }, () => {

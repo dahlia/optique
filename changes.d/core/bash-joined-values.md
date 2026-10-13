@@ -23,6 +23,7 @@ links:
     as literal text, retain wildcard filters as values are typed, and honor
     hidden-file settings without duplicate directory candidates, including on
     older Bash versions. Fixed-pattern completion also preserves a typed `./`
-    prefix, follows `nocaseglob` when narrowing candidates, and removes
+    prefix or its omission, completes explicitly typed hidden directories,
+    follows `nocaseglob` when narrowing candidates, and removes
     duplicate matches from overlapping patterns.
     [[#1031], [#1032], [#1033], [#1079]]
