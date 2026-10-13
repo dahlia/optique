@@ -2812,6 +2812,11 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         ['j"s', "js", "json "],
         ["j\\s", "js", "json "],
         ["'a\\b", "a\\b", "'a\\bc' "],
+        ['"a\\b', "a\\b", '"a\\\\bc" '],
+        ['"a\\b"', "a\\b", '"a\\\\bc"'],
+        ['"a\\$b', "a$b", '"a\\$bc" '],
+        ['"a\\\\b', "a\\b", '"a\\\\bc" '],
+        ['"a\\"b', 'a"b', '"a\\"bc" '],
         ["'a:b", "a:b", "'a:bc' "],
         ['\'a"b"', 'a"b"', "'a\"b\"c' "],
       ]
@@ -2840,6 +2845,28 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         deepStrictEqual(output, `extapp --format ${completed}`);
       });
     }
+
+    it("should match double-quoted Zsh file input in the completion backend", {
+      skip: !isInteractiveZshCompletionAvailable(),
+    }, (t) => {
+      if (!isInteractiveZshCompletionAvailable()) {
+        t.skip("interactive zsh completion not available");
+        return;
+      }
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [{ path: "a\\bc.txt" }],
+        {
+          input: 'extapp --format "a\\b',
+          backend:
+            `compgen -f -- "$2" | while IFS= read -r file; do printf '%s\\0\\0\\n' "$file"; done`,
+          expectedArgs: ["--format", "a\\b"],
+          captureBuffer: true,
+        },
+      );
+      deepStrictEqual(output, 'extapp --format "a\\\\bc.txt" ');
+    });
 
     it(
       "should dequote previous Zsh arguments and preserve quoted empty values",
@@ -10174,14 +10201,22 @@ printf '%s\\n' "\${COMPREPLY[@]}"
 `,
             ], { cwd: work });
           } else if (shell === zsh) {
-            // #1055 owns _describe's colon interpretation.  Verify the generated
-            // adapter's literal/file dispatch in real zsh without that later step.
+            // _describe receives escaped, colon-delimited fields.  Decode the
+            // values in its mock so this test checks literal/file dispatch.
             output = runCommand("zsh", [
               "-fc",
               `
 export PATH='${bin}':$PATH
 source '${scriptPath}'
-_describe() { print -rl -- "\${(@P)2}"; }
+_describe() {
+  setopt localoptions extendedglob
+  local -a match mbegin mend
+  local item value
+  for item in "\${(@P)2}"; do
+    value="\${(M)item##([^:\\\\]|\\\\?)##}"
+    print -r -- "\${value//\\\\(#b)(?)/\$match[1]}"
+  done
+}
 _directories() { print -r -- child/; }
 words=(markercli '${prefix}')
 CURRENT=2

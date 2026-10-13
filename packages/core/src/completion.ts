@@ -885,7 +885,14 @@ function ${functionName} () {
   if [[ -o complete_in_word ]]; then
     current="\$__logical_prefix"
   fi
-  if [[ "\$compstate[quote]" != "'" ]]; then
+  if [[ "\$compstate[quote]" == '\"' ]]; then
+    # Restore the omitted quoting context before removing shell escapes.
+    # In double quotes, a backslash before an ordinary character is literal.
+    current="\$QIPREFIX\$current\${QISUFFIX:-\$compstate[quote]}"
+    __logical_prefix="\$QIPREFIX\$__logical_prefix\$compstate[quote]"
+    current="\${(Q)current}"
+    __logical_prefix="\${(Q)__logical_prefix}"
+  elif [[ "\$compstate[quote]" != "'" ]]; then
     current="\${(Q)current}"
     __logical_prefix="\${(Q)__logical_prefix}"
   fi
