@@ -663,6 +663,29 @@ function ${functionName}
     set -l tokens (commandline -poc)
     set -l current (commandline -ct)
 
+    # commandline -poc decodes previous tokens, but commandline -ct returns
+    # the current token as typed.  Decode its quotes and escapes as well.
+    # Keep the token as typed if decoding fails or yields a newline or tab,
+    # which completion output cannot carry.
+    set -l __raw_current "$current"
+    set -l __decoded (string unescape -- "$current")
+    or begin
+        # string unescape rejects an unfinished trailing backslash.  fish
+        # keeps it literally inside single quotes, which also keep a " as
+        # is, and otherwise waits for the character it escapes.
+        set -l __prefix (string replace -r '\\\\\\\\$' '' -- "$current")
+        set -l __probe (string unescape -- "$__prefix\\"")
+        set -l __plain (string unescape -- "$__prefix")
+        if test "$__probe" = "$__plain\\""
+            set __decoded (string unescape -- "$current\\\\")
+        else
+            set __decoded (string unescape -- "$__prefix")
+        end
+    end
+    and test (count $__decoded) -eq 1
+    and not string match -qr '\\t' -- "$__decoded"
+    and set current "$__decoded"
+
     # Extract previous arguments (skip the command name)
     set -l prev
     set -l count (count $tokens)
@@ -686,6 +709,13 @@ ${
             set -l extensions $parts[3]
             set -l pattern (string replace -a '%25' '%' -- (string replace -a '%3A' ':' -- $parts[4]))
             set -l hidden $parts[5]
+
+            # path() echoes the current word as its pattern.  When that word
+            # was quoted or escaped, treat the echo as the typed word rather
+            # than as a pattern from the program.
+            if test "$current" != "$__raw_current"; and test "$pattern" = "$current"
+                set pattern ""
+            end
 
             # When a pattern is specified, use it as the glob base instead
             # of the current word.  If the user has already typed beyond the
@@ -722,13 +752,16 @@ ${
             end
 
             # Expand tilde prefix for globbing — fish does not expand ~
-            # inside variable substitutions, so replace it with $HOME
-            if string match -q '~/*' -- "$glob_base"
-                set __tilde_prefix "~"
-                set glob_base (string replace -r '^~' "$HOME" -- "$glob_base")
-            else if string match -q '~' -- "$glob_base"
-                set __tilde_prefix "~"
-                set glob_base "$HOME/"
+            # inside variable substitutions, so replace it with $HOME.  Like
+            # fish itself, keep a quoted or escaped tilde in the word literal.
+            if test $__from_pattern -eq 1; or string match -q '~*' -- "$__raw_current"
+                if string match -q '~/*' -- "$glob_base"
+                    set __tilde_prefix "~"
+                    set glob_base (string replace -r '^~' "$HOME" -- "$glob_base")
+                else if string match -q '~' -- "$glob_base"
+                    set __tilde_prefix "~"
+                    set glob_base "$HOME/"
+                end
             end
 
             # If the glob base is a directory without a trailing slash,

@@ -28,6 +28,11 @@ To be released.
  -  Fixed PowerShell file completion to respect case in extension filters,
     matching the path parser's case sensitivity.  [[#1044], [#1067]]
 
+ -  Fixed fish completion to decode quotes and backslash escapes in the word
+    being completed, so `--format "tw` or `--file two\ w` now offers the same
+    choices and file names as the unquoted word.  A quoted or escaped `~` now
+    stays a literal path, as in fish's own file completion.  [[#1035], [#1064]]
+
  -  Fixed fish file completion to suggest filenames that start with a dash,
     such as `-n`, `-e`, or `-s`, which were previously missing from the
     candidates.  Completing dash-prefixed paths no longer prints `basename`
@@ -35,11 +40,13 @@ To be released.
 
 [#1030]: https://github.com/dahlia/optique/issues/1030
 [#1034]: https://github.com/dahlia/optique/pull/1034
+[#1035]: https://github.com/dahlia/optique/issues/1035
 [#1036]: https://github.com/dahlia/optique/issues/1036
 [#1042]: https://github.com/dahlia/optique/issues/1042
 [#1044]: https://github.com/dahlia/optique/issues/1044
 [#1059]: https://github.com/dahlia/optique/pull/1059
 [#1063]: https://github.com/dahlia/optique/pull/1063
+[#1064]: https://github.com/dahlia/optique/pull/1064
 [#1067]: https://github.com/dahlia/optique/pull/1067
 
 
