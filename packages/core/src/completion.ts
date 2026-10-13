@@ -526,7 +526,8 @@ function _${programName} () {
         # enumerate there. Only descendants of matching pattern bases qualify.
         if [[ "$__pattern_prefix" == */* ]]; then
           local __typed_dir="\${__pattern_prefix%/*}" __base_dir __norm_base __norm_dir __base_prefix
-          if [[ -d "$__typed_dir" ]]; then
+          # Lexical ancestry cannot establish containment through parent steps.
+          if [[ -d "$__typed_dir" && "/$__typed_dir/" != */../* ]]; then
             __norm_dir="\${__typed_dir#./}"; __norm_dir="\${__norm_dir%/}"
             while IFS= read -r -d '' __base_dir; do
               [[ -d "$__base_dir" ]] || continue
@@ -589,10 +590,11 @@ function _${programName} () {
         if shopt -q nocaseglob; then shopt -s nocasematch; else shopt -u nocasematch; fi
         local -a __filtered_candidates=()
         for __candidate in "\${__candidates[@]}"; do
-          if [[ "\${__candidate#./}" == "\${__pattern_prefix#./}"* ]]; then
+          if [[ "$__candidate" == "$__pattern_prefix"* ||
+              "\${__candidate#./}" == "\${__pattern_prefix#./}"* ]]; then
             if [[ "$__pattern_prefix" == ./* && "$__candidate" != ./* ]]; then
               __candidate="./$__candidate"
-            elif [[ "$__pattern_prefix" != ./* ]]; then
+            elif [[ "$__pattern_prefix" != ./* && "$__pattern_prefix" != . ]]; then
               __candidate="\${__candidate#./}"
             fi
             __filtered_candidates+=("$__candidate")

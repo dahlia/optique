@@ -42,6 +42,8 @@ To be released.
     subsequent completions, including directory-only patterns and patterns
     rooted directly at `/`. Unquoted fixed wildcard patterns still expand when
     entered in full, while quoted or escaped wildcard prefixes remain literal.
+    A lone `.` prefix also completes `./` patterns, and navigation through `..`
+    no longer offers descendants outside matching pattern bases.
     [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell

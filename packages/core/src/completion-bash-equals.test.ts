@@ -576,6 +576,32 @@ describe("joined Bash option completion", () => {
       );
     });
   }
+  for (const directory of ["nested/../other", "nested..name/deeper"]) {
+    it(`limits fixed-pattern navigation through ${directory}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const prefix = `src/${directory}/ch`;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "mkdir -p src/other src/nested..name/deeper; touch src/other/child.toml src/nested..name/deeper/child.toml",
+        false,
+        false,
+        0,
+        true,
+        false,
+        false,
+        false,
+        0,
+        "src/nested*/*.toml",
+      );
+      assert.deepEqual(
+        result.replies.filter(Boolean),
+        directory.includes("../") ? [] : [`src/${directory}/child.toml`],
+      );
+    });
+  }
   it("navigates below wildcard directory components", {
     skip: !ptyAvailable,
   }, () => {
@@ -771,6 +797,23 @@ describe("joined Bash option completion", () => {
       assert.ok(!result.line.includes("foo1-b"));
     });
   }
+  it("preserves a lone dot prefix for a ./ fixed pattern", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --prefixed-pattern=.",
+      ["--prefixed-pattern=."],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.ok(result.replies.includes("./src/main.toml"));
+    assert.ok(result.replies.includes("./src/nested/"));
+    assert.equal(result.line, "eqapp --prefixed-pattern=./src/");
+  });
   it("does not add a pattern-supplied ./ to an empty value", {
     skip: !ptyAvailable,
   }, () => {
