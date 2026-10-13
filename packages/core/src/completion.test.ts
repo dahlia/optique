@@ -6160,7 +6160,7 @@ do { ${functionName} "extapp " }
     });
 
     it("should treat brackets in a typed path literally in nu", {
-      skip: process.platform === "win32",
+      skip: process.platform === "win32" || !isShellAvailable("nu"),
     }, (t) => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
@@ -6191,7 +6191,7 @@ do { ${functionName} "extapp " }
     });
 
     it("should treat brackets in a directory name literally in nu", {
-      skip: process.platform === "win32",
+      skip: process.platform === "win32" || !isShellAvailable("nu"),
     }, (t) => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform === "win32") return;
