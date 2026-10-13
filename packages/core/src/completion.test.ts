@@ -5281,107 +5281,116 @@ describe("keyValue file completion", () => {
   });
 
   for (const shell of [bash, fish, nu, pwsh]) {
-    it(`matches value paths and preserves keys in actual ${shell.name}`, {
-      skip: process.platform === "win32" || !isShellAvailable(shell.name),
-    }, () => {
-      if (process.platform === "win32" || !isShellAvailable(shell.name)) return;
-      const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-completion-"));
-      const homeDir = process.env.HOME == null
-        ? undefined
-        : mkdtempSync(join(process.env.HOME, ".optique-keyvalue-"));
-      if (homeDir != null) writeFileSync(join(homeDir, "bundle.txt"), "");
-      try {
-        mkdirSync(join(tempDir, "src"));
-        mkdirSync(join(tempDir, "build"));
-        writeFileSync(join(tempDir, "bundle.txt"), "");
-        writeFileSync(join(tempDir, "src", "bundle.txt"), "");
-        writeFileSync(join(tempDir, "src", "bundle.js"), "");
-        writeFileSync(join(tempDir, ".bundle.txt"), "");
-        for (
-          const [input, expected, type, extensions] of [
-            ["é🚀=b", "é🚀=bundle.txt", "file", undefined],
-            ["output=", "output=bundle.txt", "file", undefined],
-            ["output=b", "output=bundle.txt", "file", undefined],
-            ["[x]*%3A:b", "[x]*%3A:bundle.txt", "file", undefined],
-            ["outer=output=src/b", "outer=output=src/bundle.txt", "file", [
-              ".txt",
-            ]],
-            ["output=bu", "output=build/", "directory", undefined],
-            ["output=.b", "output=.bundle.txt", "file", undefined],
-            ...(homeDir == null ? [] : [
-              [
-                `output=~/${basename(homeDir)}/b`,
-                `output=~/${basename(homeDir)}/bundle.txt`,
-                "file",
-                undefined,
-              ] as const,
-            ]),
-          ] as const
-        ) {
-          const prefix = input.slice(
-            0,
-            input.lastIndexOf(input.includes(":") ? ":" : "=") + 1,
+    for (
+      const [inputTemplate, expectedTemplate, type, extensions] of [
+        ["é🚀=b", "é🚀=bundle.txt", "file", undefined],
+        ["output=", "output=bundle.txt", "file", undefined],
+        ["output=b", "output=bundle.txt", "file", undefined],
+        ["[x]*%3A:b", "[x]*%3A:bundle.txt", "file", undefined],
+        ["outer=output=src/b", "outer=output=src/bundle.txt", "file", [".txt"]],
+        ["output=bu", "output=build/", "directory", undefined],
+        ["output=.b", "output=.bundle.txt", "file", undefined],
+        ["output=~/b", "output=~/bundle.txt", "file", undefined],
+      ] as const
+    ) {
+      const requiresHome = inputTemplate.includes("~/");
+      it(
+        `matches value paths and preserves keys in actual ${shell.name}: ${inputTemplate}`,
+        {
+          skip: process.platform === "win32" || !isShellAvailable(shell.name) ||
+            (requiresHome && process.env.HOME == null),
+        },
+        () => {
+          if (
+            process.platform === "win32" || !isShellAvailable(shell.name) ||
+            (requiresHome && process.env.HOME == null)
+          ) return;
+          const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-completion-"));
+          const homeDir = process.env.HOME == null
+            ? undefined
+            : mkdtempSync(join(process.env.HOME, ".optique-keyvalue-"));
+          if (homeDir != null) writeFileSync(join(homeDir, "bundle.txt"), "");
+          const input = homeDir == null ? inputTemplate : inputTemplate.replace(
+            "~/",
+            `~/${basename(homeDir)}/`,
           );
-          const suggestion: Suggestion = {
-            kind: "file",
-            type,
-            pattern: input,
-            prefix,
-            extensions,
-          };
-          const data = [...shell.encodeSuggestions([suggestion])].join("");
-          const cliPath = join(tempDir, "kvfixture");
-          writeFileSync(
-            cliPath,
-            `#!/bin/bash\nprintf '%s' '${
-              Buffer.from(data).toString("base64")
-            }' | base64 --decode; printf '\\n'\n`,
-            { mode: 0o755 },
-          );
-          const scriptPath = join(
-            tempDir,
-            `completion.${shell === pwsh ? "ps1" : shell.name}`,
-          );
-          writeFileSync(scriptPath, shell.generateScript("kvfixture"));
-          let output: string;
-          if (shell === bash) {
-            output = runCommand("bash", [
-              "-c",
-              `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture '${input}')\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
-            ], { cwd: tempDir });
-          } else if (shell === fish) {
-            output = runCommand("fish", [
-              "-c",
-              `set -x PATH '${tempDir}' $PATH\nsource '${scriptPath}'\ncomplete -C 'kvfixture ${input}'`,
-            ], { cwd: tempDir });
-          } else if (shell === nu) {
-            output = runCommand("nu", [
-              "--no-config-file",
-              "-c",
-              `$env.PATH = ($env.PATH | prepend '${tempDir}'); source '${scriptPath}'; nu-complete-kvfixture 'kvfixture ${input}' | get value | to json -r`,
-            ], { cwd: tempDir });
-          } else {
-            output = runCommand("pwsh", [
-              "-NoProfile",
-              "-NonInteractive",
-              "-Command",
-              `$env:PATH = '${tempDir}:' + $env:PATH; . '${scriptPath}'; (TabExpansion2 -inputScript 'kvfixture ${input}' -cursorColumn ${
-                "kvfixture ".length + input.length
-              }).CompletionMatches | ForEach-Object { $_.CompletionText }`,
-            ], { cwd: tempDir });
+          const expected = homeDir == null
+            ? expectedTemplate
+            : expectedTemplate.replace("~/", `~/${basename(homeDir)}/`);
+          try {
+            mkdirSync(join(tempDir, "src"));
+            mkdirSync(join(tempDir, "build"));
+            writeFileSync(join(tempDir, "bundle.txt"), "");
+            writeFileSync(join(tempDir, "src", "bundle.txt"), "");
+            writeFileSync(join(tempDir, "src", "bundle.js"), "");
+            writeFileSync(join(tempDir, ".bundle.txt"), "");
+            const prefix = input.slice(
+              0,
+              input.lastIndexOf(input.includes(":") ? ":" : "=") + 1,
+            );
+            const suggestion: Suggestion = {
+              kind: "file",
+              type,
+              pattern: input,
+              prefix,
+              extensions,
+            };
+            const data = [...shell.encodeSuggestions([suggestion])].join("");
+            const cliPath = join(tempDir, "kvfixture");
+            writeFileSync(
+              cliPath,
+              `#!/bin/bash\nprintf '%s' '${
+                Buffer.from(data).toString("base64")
+              }' | base64 --decode; printf '\\n'\n`,
+              { mode: 0o755 },
+            );
+            const scriptPath = join(
+              tempDir,
+              `completion.${shell === pwsh ? "ps1" : shell.name}`,
+            );
+            writeFileSync(scriptPath, shell.generateScript("kvfixture"));
+            let output: string;
+            if (shell === bash) {
+              output = runCommand("bash", [
+                "-c",
+                `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture '${input}')\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
+              ], { cwd: tempDir });
+            } else if (shell === fish) {
+              output = runCommand("fish", [
+                "-c",
+                `set -x PATH '${tempDir}' $PATH\nsource '${scriptPath}'\ncomplete -C 'kvfixture ${input}'`,
+              ], { cwd: tempDir });
+            } else if (shell === nu) {
+              output = runCommand("nu", [
+                "--no-config-file",
+                "-c",
+                `$env.PATH = ($env.PATH | prepend '${tempDir}'); source '${scriptPath}'; nu-complete-kvfixture 'kvfixture ${input}' | get value | to json -r`,
+              ], { cwd: tempDir });
+            } else {
+              output = runCommand("pwsh", [
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                `$env:PATH = '${tempDir}:' + $env:PATH; . '${scriptPath}'; (TabExpansion2 -inputScript 'kvfixture ${input}' -cursorColumn ${
+                  "kvfixture ".length + input.length
+                }).CompletionMatches | ForEach-Object { $_.CompletionText }`,
+              ], { cwd: tempDir });
+            }
+            ok(
+              output.includes(expected),
+              `${shell.name}: ${input} expected ${expected}, got ${output}`,
+            );
+            if (extensions) ok(!output.includes("bundle.js"), output);
+            ok(!output.includes(`${prefix}${prefix}`), output);
+          } finally {
+            rmSync(tempDir, { recursive: true, force: true });
+            if (homeDir != null) {
+              rmSync(homeDir, { recursive: true, force: true });
+            }
           }
-          ok(
-            output.includes(expected),
-            `${shell.name}: ${input} expected ${expected}, got ${output}`,
-          );
-          if (extensions) ok(!output.includes("bundle.js"), output);
-          ok(!output.includes(`${prefix}${prefix}`), output);
-        }
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-        if (homeDir != null) rmSync(homeDir, { recursive: true, force: true });
-      }
-    });
+        },
+      );
+    }
   }
 
   it("preserves the key in actual Bash Readline with an unsplit word", {
