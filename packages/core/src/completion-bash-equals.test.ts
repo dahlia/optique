@@ -196,6 +196,22 @@ const withFixedPattern = object({
   config: optional(option("--config", "-config", fixedPatternFiles)),
   directory: optional(option("--directory", fixedDirectories)),
   hidden: optional(option("--hidden", fixedHiddenTomlFiles)),
+  casing: optional(option("--casing", choice(["dev", "Dev"]))),
+  overlapping: optional(option("--overlapping", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "src/*.toml",
+      };
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "src/main.*",
+      };
+    },
+  })),
 });
 const withFixedPatternAndSibling = merge(
   withFixedPattern,
@@ -334,8 +350,9 @@ ${bash.generateScript("eqapp")}
 ${setup}
 capture() {
   local saved_words="$(declare -p COMP_WORDS)" saved_breaks="$COMP_WORDBREAKS"
+  local saved_nocasematch="$(shopt -p nocasematch)" saved_nocaseglob="$(shopt -p nocaseglob)"
   _eqapp "$@"
-  [[ "$(declare -p COMP_WORDS)" == "$saved_words" && "$COMP_WORDBREAKS" == "$saved_breaks" ]] && printf unchanged > state
+  [[ "$(declare -p COMP_WORDS)" == "$saved_words" && "$COMP_WORDBREAKS" == "$saved_breaks" && "$(shopt -p nocasematch)" == "$saved_nocasematch" && "$(shopt -p nocaseglob)" == "$saved_nocaseglob" ]] && printf unchanged > state
   printf '%s\\n' "\${COMPREPLY[@]}" > replies
 }
 complete -F capture -- eqapp
@@ -365,6 +382,75 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("keeps distinct literals when deduplicating with nocasematch enabled", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --casing=",
+      ["--casing="],
+      "shopt -s nocasematch",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["dev", "Dev"]);
+  });
+  it("keeps the typed ./ prefix when narrowing a fixed glob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=./src/ma",
+      ["--config=./src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["./src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=./src/main.toml ");
+  });
+  it("deduplicates matches from overlapping fixed globs", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --overlapping=",
+      ["--overlapping="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/main.toml",
+      "src/main.txt",
+      "src/nested/",
+    ]);
+  });
+  for (const nocaseglob of [true, false]) {
+    it(`narrows fixed globs using nocaseglob=${nocaseglob}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        "eqapp --config=src/ma",
+        ["--config=src/ma"],
+        `mv src/main.toml src/Main.toml; shopt ${
+          nocaseglob ? "-s" : "-u"
+        } nocaseglob; shopt ${nocaseglob ? "-u" : "-s"} nocasematch`,
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(result.replies, nocaseglob ? ["src/Main.toml"] : [""]);
+    });
+  }
   it("includes explicitly typed hidden entries within a fixed glob", {
     skip: !ptyAvailable,
   }, () => {

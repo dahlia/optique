@@ -529,12 +529,19 @@ function _${programName} () {
       fi
 
       if [[ -n "$__pattern_prefix" ]]; then
+        local __nocasematch_was_set=0
+        shopt -q nocasematch && __nocasematch_was_set=1
+        if shopt -q nocaseglob; then shopt -s nocasematch; else shopt -u nocasematch; fi
         local -a __filtered_candidates=()
         for __candidate in "\${__candidates[@]}"; do
           if [[ "\${__candidate#./}" == "\${__pattern_prefix#./}"* ]]; then
+            if [[ "$__pattern_prefix" == ./* && "$__candidate" != ./* ]]; then
+              __candidate="./$__candidate"
+            fi
             __filtered_candidates+=("$__candidate")
           fi
         done
+        if (( __nocasematch_was_set )); then shopt -s nocasematch; else shopt -u nocasematch; fi
         __candidates=("\${__filtered_candidates[@]}")
       fi
 
@@ -693,9 +700,16 @@ function _${programName} () {
     done
   done
   COMPREPLY=()
+  local __reply __existing_reply __duplicate
   for __word in "\${__replies[@]}"; do
     if [[ "\${__word:0:\${#__remove}}" == "$__remove" ]]; then
-      COMPREPLY+=("\${__word:\${#__remove}}")
+      __reply="\${__word:\${#__remove}}"
+      __duplicate=0
+      for __existing_reply in "\${COMPREPLY[@]}"; do
+        # Deduplication is exact even when the caller enables nocasematch.
+        if [ "$__reply" = "$__existing_reply" ]; then __duplicate=1; break; fi
+      done
+      (( __duplicate )) || COMPREPLY+=("$__reply")
     fi
   done
   if [[ $__file_mode == 1 && $(type -t compopt) == builtin ]]; then

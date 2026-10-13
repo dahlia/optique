@@ -27,7 +27,10 @@ To be released.
     search patterns enumerate matching paths instead of inserting the pattern
     as literal text, retain wildcard filters as values are typed, and honor
     hidden-file settings without duplicate directory candidates, including on
-    older Bash versions. [[#1031], [#1032], [#1033], [#1079]]
+    older Bash versions. Fixed-pattern completion also preserves a typed `./`
+    prefix, follows `nocaseglob` when narrowing candidates, and removes
+    duplicate matches from overlapping patterns.
+    [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed
