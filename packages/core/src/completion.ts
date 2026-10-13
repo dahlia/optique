@@ -153,7 +153,7 @@ function _${programName} () {
   # adjacent fragments, including further word breaks inside a joined value,
   # leaving whitespace-separated arguments intact.
   local __raw_current="$current" __remove="" __word
-  if [[ \${COMP_LINE+x} && "$COMP_WORDBREAKS" == *=* ]]; then
+  if [[ \${COMP_LINE+x} ]]; then
     local -a __words=()
     local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
     for ((__i=0; __i<=COMP_CWORD; __i++)); do
@@ -192,6 +192,44 @@ function _${programName} () {
       else
         __remove="\${current:0:\${#current}-\${#__raw_current}}"
       fi
+      # Decode joined shell words without evaluating substitutions. Keep quote
+      # state across the reassembled fragments and decode the preserved prefix
+      # separately so trimming uses the same representation as suggestions.
+      __words[__j]="$__remove"
+      local __decoded __quote __char __next __k
+      for ((__i=1; __i<=__j; __i++)); do
+        __word="\${__words[__i]}"
+        [[ "$__word" == -*=* ]] || continue
+        __decoded=""; __quote=""
+        for ((__k=0; __k<\${#__word}; __k++)); do
+          __char="\${__word:__k:1}"
+          if [[ -z "$__quote" ]]; then
+            case "$__char" in
+              '\\') ((++__k)); __decoded+="\${__word:__k:1}" ;;
+              "'"|'"') __quote="$__char" ;;
+              *) __decoded+="$__char" ;;
+            esac
+          elif [[ "$__quote" == "'" ]]; then
+            if [[ "$__char" == "'" ]]; then __quote=""
+            else __decoded+="$__char"; fi
+          else
+            case "$__char" in
+              '"') __quote="" ;;
+              '\\')
+                __next="\${__word:__k+1:1}"
+                case "$__next" in
+                  '$'|'\`'|'"'|'\\') ((++__k)); __decoded+="$__next" ;;
+                  *) __decoded+="$__char" ;;
+                esac ;;
+              *) __decoded+="$__char" ;;
+            esac
+          fi
+        done
+        __words[__i]="$__decoded"
+      done
+      current="\${__words[__j-1]}"
+      prev=("\${__words[@]:1:__j-2}")
+      __remove="\${__words[__j]}"
     fi
   fi
 

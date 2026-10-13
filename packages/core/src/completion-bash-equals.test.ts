@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -191,6 +192,7 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
     const calls = readFileSync(join(dir, "protocol-args"), "utf8").trimEnd()
       .split("\n").map((record) => record.split("\0").slice(0, -1));
     assert.equal(readFileSync(join(dir, "state"), "utf8"), "unchanged");
+    assert.ok(!existsSync(join(dir, "marker")));
     return { line, replies: lines("replies"), calls };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -353,6 +355,126 @@ describe("joined Bash option completion", () => {
     assert.deepEqual(result.calls, [["--mode="]]);
     assert.deepEqual(result.replies, ["dev", "prod"]);
     assert.equal(result.line, "eqapp --mode=");
+  });
+  for (
+    const c of [
+      {
+        current: "--url=https://exa",
+        reply: "//example.com",
+        completed: "--url=https://example.com",
+      },
+      {
+        current: "--url=https:",
+        reply: "//example.com",
+        completed: "--url=https://example.com",
+      },
+      {
+        current: "--email=me@ex",
+        reply: "@example.com",
+        completed: "--email=me@example.com",
+      },
+    ]
+  ) {
+    it(`reassembles ${c.current} without an equals word break`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp ${c.current}`,
+        [c.current],
+        'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
+      );
+      assert.deepEqual(result.calls, [[c.current]]);
+      assert.deepEqual(result.replies, [c.reply]);
+      assert.equal(result.line, `eqapp ${c.completed} `);
+    });
+  }
+  for (
+    const c of [
+      {
+        input: 'eqapp --url="https://exa',
+        current: "--url=https://exa",
+        reply: "https://example.com",
+        line: 'eqapp --url="https://example.com" ',
+      },
+      {
+        input: "eqapp --url='https://exa",
+        current: "--url=https://exa",
+        reply: "https://example.com",
+        line: "eqapp --url='https://example.com' ",
+      },
+      {
+        input: String.raw`eqapp --url=https\://exa`,
+        current: "--url=https://exa",
+        reply: "https://example.com",
+        line: "eqapp --url=https://example.com ",
+      },
+      {
+        input: 'eqapp --url=https:"//exa',
+        current: "--url=https://exa",
+        reply: "//example.com",
+        line: 'eqapp --url=https:"//example.com" ',
+      },
+      {
+        input: String.raw`eqapp --url="https:\//exa`,
+        current: String.raw`--url=https:\//exa`,
+        reply: "",
+        line: String.raw`eqapp --url="https:\//exa`,
+      },
+    ]
+  ) {
+    it(
+      `dequotes joined protocol values in ${c.input}`,
+      { skip: !ptyAvailable },
+      () => {
+        if (!ptyAvailable) return;
+        const result = tab(c.input, [c.current]);
+        assert.deepEqual(result.calls, [[c.current]]);
+        assert.deepEqual(result.replies, [c.reply]);
+        assert.equal(result.line, c.line);
+      },
+    );
+  }
+  for (
+    const c of [
+      {
+        input: String.raw`eqapp --url="https://\$HOME`,
+        current: "--url=https://$HOME",
+      },
+      {
+        input: 'eqapp --url="https://$(touch marker)',
+        current: "--url=https://$(touch marker)",
+      },
+      {
+        input: 'eqapp --url="https://`touch marker`',
+        current: "--url=https://`touch marker`",
+      },
+      { input: "eqapp --url='https://a b", current: "--url=https://a b" },
+    ]
+  ) {
+    it(`decodes ${c.input} without expansion`, { skip: !ptyAvailable }, () => {
+      if (!ptyAvailable) return;
+      assert.deepEqual(tab(c.input, [c.current]).calls, [[c.current]]);
+    });
+  }
+  it("dequotes previous joined values", { skip: !ptyAvailable }, () => {
+    if (!ptyAvailable) return;
+    const args = ["--url=https://example.com", "--mode=de"];
+    const result = tab('eqapp --url="https://example.com" --mode=de', args);
+    assert.deepEqual(result.calls, [args]);
+    assert.equal(result.line, 'eqapp --url="https://example.com" --mode=dev ');
+  });
+  it("preserves whitespace without an equals word break", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const args = ["--url=https:", "//exa"];
+    const result = tab(
+      "eqapp --url=https: //exa",
+      args,
+      'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
+    );
+    assert.deepEqual(result.calls, [args]);
   });
   it("keeps the prefix when equals is not a word break", {
     skip: !ptyAvailable,
