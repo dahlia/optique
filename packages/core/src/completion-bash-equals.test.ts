@@ -221,6 +221,75 @@ describe("joined Bash option completion", () => {
     assert.deepEqual(result.replies, ["dev"]);
     assert.equal(result.line, "eqapp --scope:name=dev ");
   });
+  it("expands a value-relative tilde without an equals word break", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=~/name=f",
+      ["--config=~/name=f"],
+      'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"; export HOME="$PWD"',
+      false,
+      true,
+    );
+    assert.deepEqual(result.calls, [["--config=~/name=f"], [
+      "--config",
+      "~/name=f",
+    ]]);
+    assert.equal(result.line, "eqapp --config=~/name=foo.toml ");
+  });
+  for (const omitPattern of [false, true]) {
+    it(`keeps quoted joined tildes literal (patternless=${omitPattern})`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        'eqapp --config="~/name=f',
+        ["--config=~/name=f"],
+        'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"; export HOME="$PWD"; mkdir -p "~"; touch "~/name=foo.toml"',
+        false,
+        omitPattern,
+      );
+      assert.deepEqual(result.calls, [["--config=~/name=f"], [
+        "--config",
+        "~/name=f",
+      ]]);
+      assert.equal(result.line, 'eqapp --config="./~/name=foo.toml" ');
+    });
+  }
+  for (
+    const c of [
+      {
+        input: 'eqapp --config="./name=f',
+        line: 'eqapp --config="./name=foo.toml" ',
+      },
+      {
+        input: 'eqapp --config=./na"me=f',
+        line: 'eqapp --config=./na"me=foo.toml" ',
+      },
+      {
+        input: 'eqapp --config=$"./name=f',
+        line: 'eqapp --config=$"./name=foo.toml" ',
+      },
+    ]
+  ) {
+    it(`uses value-relative quote offsets in ${c.input}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        c.input,
+        ["--config=./name=f"],
+        'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
+      );
+      assert.deepEqual(result.calls, [["--config=./name=f"], [
+        "--config",
+        "./name=f",
+      ]]);
+      assert.equal(result.line, c.line);
+    });
+  }
+
   for (
     const input of [
       "eqapp --mode=$'de'",

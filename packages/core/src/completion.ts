@@ -203,11 +203,11 @@ function _${programName} () {
       # state across the reassembled fragments and decode the preserved prefix
       # separately so trimming uses the same representation as suggestions.
       __words[__j]="$__remove"
-      local __decoded __join_quote __char __next __k __ansi __part __digits __code
+      local __decoded __join_quote __char __next __k __ansi __part __digits __code __join_quote_offset
       for ((__i=1; __i<=__j; __i++)); do
         __word="\${__words[__i]}"
         [[ "$__word" == -*=* ]] || continue
-        __decoded=""; __join_quote=""
+        __decoded=""; __join_quote=""; __join_quote_offset=0
         for ((__k=0; __k<\${#__word}; __k++)); do
           __char="\${__word:__k:1}"
           if [[ -z "$__join_quote" ]]; then
@@ -215,11 +215,11 @@ function _${programName} () {
               '\\') ((++__k)); __decoded+="\${__word:__k:1}" ;;
               '$')
                 if [[ "\${__word:__k+1:1}" == "'" ]]; then
-                  __join_quote=ansi; __ansi=""; ((++__k))
+                  __join_quote=ansi; __join_quote_offset=\${#__decoded}; __ansi=""; ((++__k))
                 elif [[ "\${__word:__k+1:1}" == '"' ]]; then
-                  __join_quote='"'; ((++__k))
+                  __join_quote='"'; __join_quote_offset=\${#__decoded}; ((++__k))
                 else __decoded+="$__char"; fi ;;
-              "'"|'"') __join_quote="$__char" ;;
+              "'"|'"') __join_quote="$__char"; __join_quote_offset=\${#__decoded} ;;
               *) __decoded+="$__char" ;;
             esac
           elif [[ "$__join_quote" == ansi ]]; then
@@ -268,6 +268,11 @@ function _${programName} () {
           printf -v __part '%b' "$__ansi"
           __decoded+="$__part"
         fi
+        if (( __i == __j - 1 )); then
+          __quote="$__join_quote"
+          [[ "$__quote" == ansi ]] && __quote="'"
+          __quote_offset=$__join_quote_offset
+        fi
         __words[__i]="$__decoded"
       done
       if [[ "\${__words[__j-1]}" == -*=* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
@@ -313,6 +318,13 @@ function _${programName} () {
       __reply_prefix="$__option_prefix"
       __file_current="$__value"
     fi
+    local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset
+    if [[ -n "$__reply_prefix" ]]; then
+      __raw_file_current="\${__raw_file_current#"$__reply_prefix"}"
+      if (( __file_quote_offset >= \${#__reply_prefix} )); then
+        __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
+      fi
+    fi
     ((++__index))
     if (( \${#__value_files[@]} )) &&
         [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]]; then
@@ -327,7 +339,8 @@ function _${programName} () {
 
       # path() echoes the raw shell word as its pattern.  Once dequoted,
       # use the literal current-word prefix instead of the escaped pattern.
-      if [[ "$pattern" == "$__raw_current" && "$current" != "$__raw_current" ]]; then
+      if [[ ( "$pattern" == "$__raw_file_current" && "$__file_current" != "$__raw_file_current" ) ||
+            ( -n "$__reply_prefix" && "$pattern" == "$__file_current" ) ]]; then
         pattern=""
       fi
 
@@ -346,7 +359,7 @@ function _${programName} () {
 
       # Expand tilde prefix for file globbing
       local __glob_current="$__file_current" __tilde_prefix="" __tilde_expanded=""
-      if [[ "$__raw_current" == "~"* && "$__file_current" =~ $__tilde_pattern ]]; then
+      if [[ "$__raw_file_current" == "~"* && "$__file_current" =~ $__tilde_pattern ]]; then
         __tilde_prefix="\${BASH_REMATCH[1]}"
         eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
         if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
@@ -507,7 +520,7 @@ function _${programName} () {
 
       # Restore tilde prefix in completion results
       if [[ -n "$__tilde_prefix" &&
-            ( -z "$__quote" || $__quote_offset -gt 0 ) ]]; then
+            ( -z "$__quote" || $__file_quote_offset -gt 0 ) ]]; then
         local __i
         for __i in "\${!COMPREPLY[@]}"; do
           COMPREPLY[\$__i]="\${COMPREPLY[\$__i]/#\$__tilde_expanded/\$__tilde_prefix}"
@@ -524,7 +537,7 @@ function _${programName} () {
 
       # Readline appends directory separators when it receives the full path.
       # Midword quotes still need ours because replies omit the typed prefix.
-      if [[ -n "$__quote" && $__quote_offset -eq 0 ]]; then
+      if [[ -n "$__quote" && $__file_quote_offset -eq 0 ]]; then
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           COMPREPLY[__reply_index]="\${COMPREPLY[__reply_index]%/}"
@@ -533,8 +546,9 @@ function _${programName} () {
 
       # Readline replaces only the text after an open quote.  Remove the
       # already typed prefix so it is not inserted a second time.
-      if [[ -n "$__quote" && $__quote_offset -gt 0 ]]; then
-        local __quote_prefix="\${__file_current:0:__quote_offset}"
+      # Joined replies are trimmed once against __remove after restoring option=.
+      if [[ -n "$__quote" && $__file_quote_offset -gt 0 && -z "$__reply_prefix" ]]; then
+        local __quote_prefix="\${__file_current:0:__file_quote_offset}"
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           COMPREPLY[__reply_index]="\${COMPREPLY[__reply_index]#"$__quote_prefix"}"
@@ -543,7 +557,7 @@ function _${programName} () {
 
       # Readline expands a leading tilde in a returned filename even when the
       # user did not type one.  Keep such local paths explicitly relative.
-      if [[ "$__raw_current" != "~"* && -z "$__tilde_prefix" ]]; then
+      if [[ "$__raw_file_current" != "~"* && -z "$__tilde_prefix" ]]; then
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           if [[ "\${COMPREPLY[__reply_index]}" =~ $__tilde_glob_pattern ]]; then
