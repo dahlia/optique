@@ -31,7 +31,8 @@ links:
     partial or unrelated typed prefixes instead of replacing them with all
     matches. Large candidate sets remain responsive without changing suggestion
     order. Typed tilde or absolute path forms remain intact when fixed patterns
-    use a different spelling. Fixed Bash patterns treat brackets, backslashes,
+    use a different spelling. Bare unquoted `~` values also complete
+    home-relative patterns. Fixed Bash patterns treat brackets, backslashes,
     and extended-glob operators literally alongside `*`/`?` wildcards.
     Navigating into suggested directories retains fixed basename filters for
     subsequent completions, including directory-only patterns and patterns

@@ -155,7 +155,7 @@ function _${programName} () {
       esac
     fi
   done
-  local __tilde_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)$'
+  local __tilde_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local __tilde_glob_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
   # Bash splits unquoted '=' at its default word breaks. Reassemble only

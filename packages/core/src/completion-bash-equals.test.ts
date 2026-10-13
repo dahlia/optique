@@ -755,6 +755,53 @@ describe("joined Bash option completion", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+  for (const quoted of [false, true]) {
+    it(
+      `filters a fixed home-relative glob for a lone tilde (quoted=${quoted})`,
+      {
+        skip: !ptyAvailable,
+      },
+      (t) => {
+        if (!ptyAvailable) return;
+        const root = fileURLToPath(new URL("../../../tmp/", import.meta.url));
+        if (relative(homedir(), root).startsWith("..")) {
+          t.skip("The workspace is outside the home directory.");
+          return;
+        }
+        mkdirSync(root, { recursive: true });
+        const dir = mkdtempSync(join(root, "bash-lone-tilde-"));
+        try {
+          writeFileSync(join(dir, "main.toml"), "");
+          const base = `~/${relative(homedir(), dir)}`;
+          const input = `eqapp --config=${quoted ? "'~'" : "~"}`;
+          const result = tab(
+            input,
+            ["--config=~"],
+            "",
+            false,
+            false,
+            0,
+            false,
+            false,
+            false,
+            false,
+            0,
+            `${base}/*.toml`,
+          );
+          assert.deepEqual(
+            result.replies.filter(Boolean),
+            quoted ? [] : [`${base}/main.toml`],
+          );
+          assert.equal(
+            result.line,
+            quoted ? input : `eqapp --config=${base}/main.toml `,
+          );
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  }
   for (const patternUsesTilde of [false, true]) {
     it(
       `keeps typed tilde spelling with a fixed glob (patternUsesTilde=${patternUsesTilde})`,
