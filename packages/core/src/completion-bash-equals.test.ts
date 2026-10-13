@@ -9,10 +9,11 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, relative } from "node:path";
 import process from "node:process";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { bash } from "./completion.ts";
 import { merge, object } from "./constructs.ts";
 import { multiple, optional } from "./modifiers.ts";
@@ -313,6 +314,7 @@ function tab(
   literalCollision = false,
   directoryLiteralCollision = false,
   commandBudget = 0,
+  fixedGlobPattern?: string,
 ): {
   readonly line: string;
   readonly replies: readonly string[];
@@ -342,7 +344,23 @@ function tab(
       assert.ok(first !== undefined);
       const protocol = Array.from(
         bash.encodeSuggestions(
-          omitPattern
+          fixedGlobPattern !== undefined
+            ? suggest(
+              object({
+                config: option("--config", {
+                  ...string(),
+                  *suggest() {
+                    yield {
+                      kind: "file" as const,
+                      type: "file" as const,
+                      pattern: fixedGlobPattern,
+                    };
+                  },
+                }),
+              }),
+              [first, ...rest],
+            )
+            : omitPattern
             ? suggest(withoutPattern, [first, ...rest])
             : directoryLiteralCollision
             ? suggest(withDirectoryLiteralCollision, [first, ...rest])
@@ -418,6 +436,49 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (const patternUsesTilde of [false, true]) {
+    it(
+      `keeps typed tilde spelling with a fixed glob (patternUsesTilde=${patternUsesTilde})`,
+      {
+        skip: !ptyAvailable,
+      },
+      (t) => {
+        if (!ptyAvailable) return;
+        const root = fileURLToPath(new URL("../../../tmp/", import.meta.url));
+        const homeRelative = relative(homedir(), root);
+        if (homeRelative.startsWith("..")) {
+          t.skip("The workspace is outside the home directory.");
+          return;
+        }
+        mkdirSync(root, { recursive: true });
+        const dir = mkdtempSync(join(root, "bash-tilde-pattern-"));
+        try {
+          writeFileSync(join(dir, "main.toml"), "");
+          const tildeDir = `~/${relative(homedir(), dir)}`;
+          const typedDir = patternUsesTilde ? dir : tildeDir;
+          const patternDir = patternUsesTilde ? tildeDir : dir;
+          const result = tab(
+            `eqapp --config=${typedDir}/ma`,
+            [`--config=${typedDir}/ma`],
+            "",
+            false,
+            false,
+            0,
+            false,
+            false,
+            false,
+            false,
+            0,
+            `${patternDir}/*.toml`,
+          );
+          assert.deepEqual(result.replies, [`${typedDir}/main.toml`]);
+          assert.equal(result.line, `eqapp --config=${typedDir}/main.toml `);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  }
   it("does not add a pattern-supplied ./ to an empty value", {
     skip: !ptyAvailable,
   }, () => {

@@ -35,7 +35,8 @@ To be released.
     Wildcard directory components remain navigable, and completion filters even
     partial or unrelated typed prefixes instead of replacing them with all
     matches. Large candidate sets remain responsive without changing suggestion
-    order. [[#1031], [#1032], [#1033], [#1079]]
+    order. Typed tilde or absolute path forms remain intact when fixed patterns
+    use a different spelling. [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed

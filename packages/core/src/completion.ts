@@ -423,6 +423,7 @@ function _${programName} () {
       # pattern="src/" and current="src/ma"), preserve the typed suffix
       # for incremental filtering.
       local __from_pattern=0 __filter_pattern=0 __pattern_prefix=""
+      local __pattern_tilde_prefix="" __pattern_tilde_expanded=""
       if [[ -n "$pattern" ]]; then
         # Normalize leading ./ so that ./src/ma matches pattern src/
         local __norm_current="\${__file_current#./}"
@@ -447,6 +448,8 @@ function _${programName} () {
           if [[ "$__norm_pattern" == *[\*\?]* ]]; then
             __filter_pattern=1
             __pattern_prefix="$__glob_current"
+            __pattern_tilde_prefix="$__tilde_prefix"
+            __pattern_tilde_expanded="$__tilde_expanded"
           fi
           __from_pattern=1
           # Reset tilde state from the current-word expansion so that a
@@ -610,6 +613,10 @@ function _${programName} () {
       esac
 
       # Restore tilde prefix in completion results
+      if (( __filter_pattern )); then
+        __tilde_prefix="$__pattern_tilde_prefix"
+        __tilde_expanded="$__pattern_tilde_expanded"
+      fi
       if [[ -n "$__tilde_prefix" &&
             ( -z "$__quote" || $__file_quote_offset -gt 0 ) ]]; then
         local __i
