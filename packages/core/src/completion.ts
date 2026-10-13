@@ -989,6 +989,8 @@ function ${functionName} () {
             fi
           fi
         fi
+        local __saved_pattern_match="\$compstate[pattern_match]"
+        local __pattern_match_changed=0
         # path() echoes current as its pattern.  Keep zsh's escaped PREFIX
         # in that case instead of reinterpreting logical text as shell syntax.
         if [[ -n "\$pattern" && "\$pattern" != "\$current" && -z "\$__initial_file_pattern" ]]; then
@@ -1067,6 +1069,11 @@ function ${functionName} () {
             fi
           else
             local __native_pattern="\$pattern"
+            # Backend globs must match even without the caller's GLOB_COMPLETE.
+            if [[ -n "\$compstate[context]" && "\$pattern" == *[\\*\\?\\[]* ]]; then
+              compstate[pattern_match]='*'
+              __pattern_match_changed=1
+            fi
             if [[ "\$compstate[quote]" != "'" ]]; then
               # Native helpers expand substitutions, tilde names and executable
               # glob qualifiers.  Input-derived patterns must keep these literal.
@@ -1124,6 +1131,25 @@ function ${functionName} () {
                       ( "\$__backend_pattern" != '~'* ||
                         "\$__backend_tilde" != *[^[:alnum:]_.+-]* ) ]] &&
                    (( ! __unsafe_backend_qualifier )); then
+                  __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
+                elif [[ "\$__backend_pattern" != *'$('* &&
+                        "\$__backend_pattern" != *'\${'* &&
+                        "\$__backend_pattern" != *'$['* &&
+                        ( "\$pattern" != '~'* ||
+                          "\$__tilde_name" != *[^[:alnum:]_.+-]* ) ]] &&
+                     (( ! __unsafe_backend_qualifier )); then
+                  # Fixed patterns also need literal substitution markers,
+                  # without quoting their wildcards or safe qualifiers.
+                  local __dollar='\\\$'
+                  local __backtick='\\\`'
+                  if [[ -n "\$compstate[pattern_match]" ]]; then
+                    __dollar='[\$]'
+                    __backtick='[\`]'
+                  fi
+                  __backend_prefix="\${__backend_prefix//\\\$/\$__dollar}"
+                  __backend_prefix="\${__backend_prefix//\\\`/\$__backtick}"
+                  __backend_suffix="\${__backend_suffix//\\\$/\$__dollar}"
+                  __backend_suffix="\${__backend_suffix//\\\`/\$__backtick}"
                   __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
                 fi
               else
@@ -1256,6 +1282,9 @@ function ${functionName} () {
         # Restore PREFIX and glob_dots to their previous state
         PREFIX="\$__saved_prefix"
         if [[ "\$__was_extended_glob" == "1" ]]; then setopt extended_glob; else unsetopt extended_glob; fi
+        if (( __pattern_match_changed )); then
+          compstate[pattern_match]="\$__saved_pattern_match"
+        fi
         if [[ "\$__was_sh_glob" == "1" ]]; then setopt sh_glob; else unsetopt sh_glob; fi
         if [[ "\$__was_sh_word_split" == "1" ]]; then setopt sh_word_split; else unsetopt sh_word_split; fi
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
