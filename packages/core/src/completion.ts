@@ -962,17 +962,25 @@ function ${functionName} () {
         # Use zsh's native file completion
         case "\$type" in
           file)
-            if [[ -n "\$ext_pattern" ]]; then
-              # Route filtered files through zsh's standard files/directories
-              # tags so files-tag styles and tag-order still apply, while
-              # avoiding _files' all-files fallback for extension-filtered
-              # matches.
-              local file_pattern="\${ext_pattern}(#q-.)"
-              _wanted files expl file _path_files -g "\${file_pattern}"
-              _wanted directories expl directory _path_files -/
-            else
-              _files
-            fi
+            # Use the same regular-file filter with or without extensions,
+            # keeping symlinked files and directory navigation available.
+            local file_pattern="\${ext_pattern:-*}(#q-.)"
+            _tags files
+            while _tags; do
+              local file_matched=0
+              while _next_label files expl file; do
+                local -a file_ignore=() file_ignore_args=()
+                # Explicit globs bypass automatic fignore.  Apply it only
+                # when the tag has not supplied its own ignore patterns.
+                if [[ -z "\$ext_pattern" && -z "\$_comp_no_ignore" && -n "\$FIGNORE" ]] && (( \${#_comp_ignore[@]} == 0 )); then
+                  file_ignore=("?*\${^fignore[@]}")
+                  file_ignore_args=(-F file_ignore)
+                fi
+                _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}" && file_matched=1
+              done
+              (( file_matched )) && break
+            done
+            _wanted directories expl directory _path_files -/
             ;;
           directory)
             _directories

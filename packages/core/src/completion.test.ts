@@ -2825,11 +2825,11 @@ fi
       ok(script.includes('ext_pattern="*.(${extensions//,/|})"'));
       ok(script.includes('ext_pattern="*.$extensions"'));
       ok(
-        fileCaseBlock.includes('local file_pattern="${ext_pattern}(#q-.)"'),
+        fileCaseBlock.includes('local file_pattern="${ext_pattern:-*}(#q-.)"'),
       );
       ok(
         fileCaseBlock.includes(
-          '_wanted files expl file _path_files -g "${file_pattern}"',
+          '_path_files -g "${file_pattern}" "${expl[@]}" "${file_ignore_args[@]}"',
         ),
       );
       ok(
@@ -2844,7 +2844,7 @@ fi
     });
 
     it(
-      "should not forward stale expl arguments between _wanted zsh tags",
+      "should not forward stale expl arguments between zsh completion tags",
       (t) => {
         if (!isShellAvailable("zsh")) {
           t.skip("zsh not available");
@@ -2877,6 +2877,20 @@ printf '${directive}'
 export PATH="${tempDir}:$PATH"
 autoload -U compinit && compinit -D 2>/dev/null
 
+function _tags() {
+  if (( $# )); then
+    __tag_round=0
+    __label_round=0
+    return 0
+  fi
+  (( __tag_round++ == 0 ))
+}
+function _next_label() {
+  (( __label_round++ == 0 )) || return 1
+  eval "$2=(--tag files)"
+  _comp_ignore=()
+}
+
 function _wanted() {
   local tag="$1" expl_name="$2" descr="$3"
   shift 3
@@ -2886,6 +2900,7 @@ function _wanted() {
 }
 
 function _path_files() {
+  print -r -- "files:$#:_path_files $*"
   return 0
 }
 
@@ -2911,7 +2926,7 @@ _extapp 2>/dev/null
 
           ok(
             fileCall?.includes("_path_files -g *.json(#q-.)"),
-            `Expected files _wanted call to include filtered _path_files args, got: ${
+            `Expected files completion call to include filtered _path_files args, got: ${
               JSON.stringify(calls)
             }`,
           );
@@ -2996,6 +3011,20 @@ autoload -U compinit && compinit -D 2>/dev/null
 # the caller's option state.  SH_GLOB disables bare grouping, which would
 # otherwise break patterns like *.(json|yaml).
 setopt sh_glob
+
+function _tags() {
+  if (( $# )); then
+    __tag_round=0
+    __label_round=0
+    return 0
+  fi
+  (( __tag_round++ == 0 ))
+}
+function _next_label() {
+  (( __label_round++ == 0 )) || return 1
+  eval "$2=()"
+  _comp_ignore=()
+}
 
 function _wanted() {
   shift 3
@@ -3354,6 +3383,248 @@ _extapp 2>/dev/null
         ["foo\\:bar\0" + "1: real description\0"],
       );
     });
+
+    for (
+      const scenario of [
+        { name: "default options", extensions: undefined, setup: "" },
+        {
+          name: "empty extensions and bareglobqual unset",
+          extensions: [],
+          setup: "unsetopt bareglobqual",
+        },
+        {
+          name: "file-patterns forcing all-files",
+          extensions: undefined,
+          setup: "zstyle ':completion:*' file-patterns '*:all-files'",
+        },
+        {
+          name: "fignore",
+          extensions: undefined,
+          setup: "fignore=(.o)",
+          ignoresObject: true,
+        },
+        {
+          name: "ignored-patterns overriding fignore",
+          extensions: undefined,
+          setup:
+            "fignore=(.o)\nzstyle ':completion:*:files' ignored-patterns '*.skip'",
+          ignoresStyle: true,
+        },
+        {
+          name: "described tag labels overriding fignore",
+          extensions: undefined,
+          setup:
+            "fignore=(.o)\nzstyle ':completion:*' ignored-patterns '*.skip'\nzstyle ':completion:*' tag-order '*:custom:custom'",
+          ignoresStyle: true,
+        },
+        {
+          name: "hidden files requested",
+          extensions: undefined,
+          setup: "",
+          includeHidden: true,
+        },
+      ]
+    ) {
+      it(
+        `should restrict unfiltered file suggestions in actual zsh with ${scenario.name}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo"),
+          timeout: 10000,
+        },
+        () => {
+          if (
+            !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo")
+          ) return;
+
+          const directive = Array.from(zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: scenario.extensions,
+              includeHidden: scenario.includeHidden ?? false,
+            },
+          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            directive,
+            [
+              { path: "plain" },
+              { path: "file-alias", type: "symlink", target: "plain" },
+              { path: "named-pipe", type: "fifo" },
+              { path: "pipe-link", type: "symlink", target: "named-pipe" },
+              { path: "dangling", type: "symlink", target: "missing" },
+              { path: "subdir", type: "directory" },
+              { path: "alias-dir", type: "symlink", target: "subdir" },
+              { path: "obj.o" },
+              { path: "style.skip" },
+              { path: ".hidden" },
+              { path: ".hidden-pipe", type: "fifo" },
+            ],
+            { setup: scenario.setup },
+          );
+          for (
+            const candidate of ["plain", "file-alias", "subdir/", "alias-dir"]
+          ) {
+            ok(
+              output.includes(candidate),
+              `Expected ${candidate}, got:\n${output}`,
+            );
+          }
+          for (
+            const candidate of [
+              "named-pipe",
+              "pipe-link",
+              "dangling",
+              ".hidden-pipe",
+            ]
+          ) {
+            ok(
+              !output.includes(candidate),
+              `Unexpected ${candidate}, got:\n${output}`,
+            );
+          }
+          if (scenario.ignoresObject) {
+            ok(
+              !output.includes("obj.o"),
+              `fignore should hide obj.o, got:\n${output}`,
+            );
+          } else {
+            ok(output.includes("obj.o"), `Expected obj.o, got:\n${output}`);
+          }
+          if (scenario.ignoresStyle) {
+            ok(
+              !output.includes("style.skip"),
+              `ignored-patterns should hide style.skip, got:\n${output}`,
+            );
+          } else {
+            ok(
+              output.includes("style.skip"),
+              `Expected style.skip, got:\n${output}`,
+            );
+          }
+          if (scenario.includeHidden) {
+            ok(
+              output.includes(".hidden"),
+              `Expected hidden regular file, got:\n${output}`,
+            );
+          } else {
+            ok(
+              !output.includes(".hidden"),
+              `Hidden files should be omitted, got:\n${output}`,
+            );
+          }
+        },
+      );
+    }
+
+    it("should retain FIFOs in unrestricted file suggestions in actual zsh", {
+      skip: !isInteractiveZshCompletionAvailable() ||
+        !isShellAvailable("mkfifo"),
+      timeout: 10000,
+    }, () => {
+      if (
+        !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo")
+      ) return;
+      const directive = Array.from(zsh.encodeSuggestions([
+        { kind: "file", type: "any" },
+      ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        directive,
+        [{ path: "plain" }, { path: "named-pipe", type: "fifo" }, {
+          path: "subdir",
+          type: "directory",
+        }],
+      );
+      for (const candidate of ["plain", "named-pipe", "subdir/"]) {
+        ok(
+          output.includes(candidate),
+          `Expected ${candidate}, got:\n${output}`,
+        );
+      }
+    });
+
+    it(
+      "should apply fignore only to unfiltered zsh file suggestions when enabled",
+      {
+        skip: !isShellAvailable("zsh"),
+      },
+      () => {
+        if (!isShellAvailable("zsh")) return;
+        const tempDir = mkdtempSync(join(tmpdir(), "zsh-file-ignore-"));
+        try {
+          const cliPath = join(tempDir, "extapp");
+          for (
+            const scenario of [
+              { directive: "__FILE__:file:::0", noIgnore: "", expected: 1 },
+              {
+                directive: "__FILE__:file:::0",
+                noIgnore: "yes",
+                expected: 0,
+              },
+              {
+                directive: "__FILE__:file:txt::0",
+                noIgnore: "",
+                expected: 0,
+              },
+              {
+                directive: "__FILE__:file:::0\n__FILE__:file:txt::0",
+                noIgnore: "",
+                expected: 1,
+              },
+            ]
+          ) {
+            writeFileSync(
+              cliPath,
+              `#!/bin/sh\nprintf '%s\\n' '${scenario.directive}'\n`,
+              { mode: 0o755 },
+            );
+            const output = runCommand("zsh", [
+              "-fc",
+              `
+export PATH="${tempDir}:$PATH"
+autoload -U compinit && compinit -D
+fignore=(.o)
+_comp_no_ignore=${scenario.noIgnore}
+function _tags() {
+  if (( $# )); then
+    __tag_round=0
+    __label_round=0
+    return 0
+  fi
+  (( __tag_round++ == 0 ))
+}
+function _next_label() {
+  (( __label_round++ == 0 )) || return 1
+  eval "$2=()"
+  _comp_ignore=()
+}
+
+function _wanted() { shift 3; print -r -- "$*"; }
+function _path_files() { print -r -- "$*"; }
+source /dev/stdin <<'COMPLETION_SCRIPT'
+${zsh.generateScript("extapp")}
+COMPLETION_SCRIPT
+words=(extapp "")
+CURRENT=2
+_extapp
+`,
+            ], { cwd: tempDir });
+            deepStrictEqual(
+              output.split("\n").filter((line) =>
+                line.includes("-F file_ignore")
+              ).length,
+              scenario.expected,
+              output,
+            );
+          }
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should complete single-extension file suggestions in actual zsh", {
       skip: !isInteractiveZshCompletionAvailable(),
@@ -3981,19 +4252,37 @@ printf '__FILE__:file:::1\\0\\0\\n'
 
         const script = zsh.generateScript("hidden-cli");
 
-        // We can't easily test zsh's _files in a non-interactive context,
+        // Native completion helpers require an interactive completion context,
         // so extract and test the glob_dots logic directly.  The generated
         // function body contains a while-read loop that parses __FILE__
-        // directives.  We override _files/_directories with a function that
-        // globs the current directory to verify glob_dots is active.
+        // directives.  We override _wanted/_path_files with functions that
+        // glob the current directory to verify glob_dots is active.
         const testScript = `
 export PATH="${tempDir}:$PATH"
 autoload -U compinit && compinit -D 2>/dev/null
+unsetopt glob_dots
 
-# Override _files to manually list files using the current glob settings
-function _files() {
+# List regular files using the current glob settings
+function _tags() {
+  if (( $# )); then
+    __tag_round=0
+    __label_round=0
+    return 0
+  fi
+  (( __tag_round++ == 0 ))
+}
+function _next_label() {
+  (( __label_round++ == 0 )) || return 1
+  eval "$2=()"
+  _comp_ignore=()
+}
+
+function _wanted() { shift 3; "$@"; }
+function _path_files() {
+  [[ "$1" == "-/" ]] && return 0
+  setopt localoptions extendedglob
   local f
-  for f in ${tempDir}/*; do
+  for f in ${tempDir}/*(#q-.); do
     [[ -f "$f" ]] && echo "$f"
   done
 }
@@ -4006,12 +4295,14 @@ cd "${tempDir}"
 words=("hidden-cli" "")
 CURRENT=2
 _optique:hidden-cli 2>/dev/null
+print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
 `;
 
         const result = runCommand("zsh", ["-c", testScript], {
           cwd: tempDir,
         });
 
+        ok(result.includes("__GLOB_DOTS_AFTER:off"), result);
         const completions = result.trim().split("\n").filter((l) =>
           l.length > 0
         );
@@ -4050,10 +4341,28 @@ printf '__FILE__:file:::0\\0\\0\\n'
         const testScript = `
 export PATH="${tempDir}:$PATH"
 autoload -U compinit && compinit -D 2>/dev/null
+unsetopt glob_dots
 
-function _files() {
+function _tags() {
+  if (( $# )); then
+    __tag_round=0
+    __label_round=0
+    return 0
+  fi
+  (( __tag_round++ == 0 ))
+}
+function _next_label() {
+  (( __label_round++ == 0 )) || return 1
+  eval "$2=()"
+  _comp_ignore=()
+}
+
+function _wanted() { shift 3; "$@"; }
+function _path_files() {
+  [[ "$1" == "-/" ]] && return 0
+  setopt localoptions extendedglob
   local f
-  for f in ${tempDir}/*; do
+  for f in ${tempDir}/*(#q-.); do
     [[ -f "$f" ]] && echo "$f"
   done
 }
@@ -4066,12 +4375,14 @@ cd "${tempDir}"
 words=("nohidden-cli" "")
 CURRENT=2
 _optique:nohidden-cli 2>/dev/null
+print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
 `;
 
         const result = runCommand("zsh", ["-c", testScript], {
           cwd: tempDir,
         });
 
+        ok(result.includes("__GLOB_DOTS_AFTER:off"), result);
         const completions = result.trim().split("\n").filter((l) =>
           l.length > 0
         );
@@ -4113,7 +4424,7 @@ _optique:nohidden-cli 2>/dev/null
     });
 
     it(
-      "should use _path_files for extension-filtered zsh completion",
+      "should use _path_files for regular-file zsh completion",
       () => {
         const script = zsh.generateScript("filedir-cli");
 
@@ -4127,12 +4438,14 @@ _optique:nohidden-cli 2>/dev/null
           fileCase.indexOf("directory)"),
         );
         ok(
-          fileCaseBlock.includes('local file_pattern="${ext_pattern}(#q-.)"'),
+          fileCaseBlock.includes(
+            'local file_pattern="${ext_pattern:-*}(#q-.)"',
+          ),
           "zsh file) case should derive a #q-qualified regular-file pattern that preserves symlinked files.",
         );
         ok(
           fileCaseBlock.includes(
-            '_wanted files expl file _path_files -g "${file_pattern}"',
+            '_path_files -g "${file_pattern}" "${expl[@]}" "${file_ignore_args[@]}"',
           ),
           "zsh file) case should route filtered file completions through the standard files tag.",
         );
@@ -4147,7 +4460,7 @@ _optique:nohidden-cli 2>/dev/null
           "zsh file) case should not rely on _files -g for extension-filtered navigation.",
         );
         ok(
-          fileCaseBlock.includes("_wanted files expl file"),
+          fileCaseBlock.includes("_next_label files expl file"),
           "zsh file) case should use zsh's standard tag selection for filtered file completion.",
         );
       },
