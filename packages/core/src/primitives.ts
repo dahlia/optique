@@ -488,6 +488,19 @@ function* getSuggestionsWithDependency<T>(
   yield* valueParser.suggest(prefix);
 }
 
+/** Returns the joined prefix accepted by option parsing. */
+function joinedOptionPrefix(
+  names: readonly string[],
+  input: string,
+): string | undefined {
+  return names.filter((name) =>
+    name.startsWith("--") || name.startsWith("/") ||
+    (name.startsWith("-") && name.length > 2)
+  )
+    .map((name) => name + (name.startsWith("/") ? ":" : "="))
+    .find((prefix) => input.startsWith(prefix));
+}
+
 /**
  * Internal sync helper for option suggest functionality.
  * @internal
@@ -510,11 +523,11 @@ function* suggestOptionSync<T>(
     );
 
   // An expected value may itself contain '=' or resemble a joined option.
-  const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0 && !expectingValue) {
-    // Handle --option=value completion
-    const optionPart = prefix.slice(0, equalsIndex);
-    const valuePart = prefix.slice(equalsIndex + 1);
+  const joinedPrefix = joinedOptionPrefix(optionNames, prefix);
+  if (joinedPrefix !== undefined && !expectingValue) {
+    // Complete only joined forms accepted by the parser.
+    const optionPart = joinedPrefix.slice(0, -1);
+    const valuePart = prefix.slice(joinedPrefix.length);
 
     // Check if this option matches any of our option names
     if ((optionNames as readonly string[]).includes(optionPart)) {
@@ -525,20 +538,19 @@ function* suggestOptionSync<T>(
           context.dependencyRegistry,
           context.exec,
         );
-        // Prepend the option= part to each suggestion
+        // Restore the matched option prefix on each suggestion
         for (const suggestion of valueSuggestions) {
           if (suggestion.kind === "literal") {
             yield {
               kind: "literal",
-              text: `${optionPart}=${suggestion.text}`,
+              text: `${joinedPrefix}${suggestion.text}`,
               description: suggestion.description,
             };
           } else {
-            // For file suggestions, we can't easily combine with option= format
-            // so we fall back to literal suggestions
+            // File suggestions use a literal prefix fallback.
             yield {
               kind: "literal",
-              text: `${optionPart}=${suggestion.pattern || ""}`,
+              text: `${joinedPrefix}${suggestion.pattern ?? ""}`,
               description: suggestion.description,
             };
           }
@@ -550,7 +562,7 @@ function* suggestOptionSync<T>(
     if (
       !expectingValue &&
       (prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/"))
+        prefix.startsWith("/") || prefix.startsWith("+"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
@@ -584,7 +596,7 @@ function* suggestOptionSync<T>(
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
-          prefix.startsWith("/"))
+          prefix.startsWith("/") || prefix.startsWith("+"))
       ) {
         shouldSuggestValues = true;
       }
@@ -696,11 +708,11 @@ async function* suggestOptionAsync<T>(
     );
 
   // An expected value may itself contain '=' or resemble a joined option.
-  const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0 && !expectingValue) {
-    // Handle --option=value completion
-    const optionPart = prefix.slice(0, equalsIndex);
-    const valuePart = prefix.slice(equalsIndex + 1);
+  const joinedPrefix = joinedOptionPrefix(optionNames, prefix);
+  if (joinedPrefix !== undefined && !expectingValue) {
+    // Complete only joined forms accepted by the parser.
+    const optionPart = joinedPrefix.slice(0, -1);
+    const valuePart = prefix.slice(joinedPrefix.length);
 
     // Check if this option matches any of our option names
     if ((optionNames as readonly string[]).includes(optionPart)) {
@@ -711,19 +723,19 @@ async function* suggestOptionAsync<T>(
           context.dependencyRegistry,
           context.exec,
         );
-        // Prepend the option= part to each suggestion - handle both sync and async
+        // Restore the matched option prefix on each suggestion - handle both sync and async
         for await (const suggestion of valueSuggestions) {
           if (suggestion.kind === "literal") {
             yield {
               kind: "literal",
-              text: `${optionPart}=${suggestion.text}`,
+              text: `${joinedPrefix}${suggestion.text}`,
               description: suggestion.description,
             };
           } else {
-            // For file suggestions, we can't easily combine with option= format
+            // File suggestions use a literal prefix fallback
             yield {
               kind: "literal",
-              text: `${optionPart}=${suggestion.pattern || ""}`,
+              text: `${joinedPrefix}${suggestion.pattern ?? ""}`,
               description: suggestion.description,
             };
           }
@@ -735,7 +747,7 @@ async function* suggestOptionAsync<T>(
     if (
       !expectingValue &&
       (prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/"))
+        prefix.startsWith("/") || prefix.startsWith("+"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
@@ -769,7 +781,7 @@ async function* suggestOptionAsync<T>(
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
         !(prefix.startsWith("--") || prefix.startsWith("-") ||
-          prefix.startsWith("/"))
+          prefix.startsWith("/") || prefix.startsWith("+"))
       ) {
         shouldSuggestValues = true;
       }

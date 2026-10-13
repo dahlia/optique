@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { suggest, suggestAsync, type Suggestion } from "./parser.ts";
+import { parse, suggest, suggestAsync, type Suggestion } from "./parser.ts";
 import { option } from "./primitives.ts";
 import { choice, string, type ValueParser } from "./valueparser.ts";
 
@@ -59,3 +59,38 @@ describe("option value completion prefixes", () => {
     }]);
   });
 });
+
+for (const mode of ["sync", "async"] as const) {
+  it(`uses parser delimiters for ${mode} joined suggestions`, async () => {
+    const values = choice(["dev"]);
+    const parser = option(
+      "--mode",
+      "-mode",
+      "-m",
+      "/mode",
+      "+mode",
+      mode === "sync" ? values : {
+        ...values,
+        mode: "async" as const,
+        parse: (input: string) => Promise.resolve(values.parse(input)),
+        suggest: async function* (prefix: string) {
+          yield* values.suggest!(prefix);
+        },
+      },
+    );
+    for (const prefix of ["--mode=", "-mode=", "/mode:"]) {
+      const parsed = await parse(parser, [prefix + "dev"]);
+      assert.ok(parsed.success);
+      const actual = await suggest(parser, [prefix]);
+      assert.ok(
+        actual.some((s) => s.kind === "literal" && s.text === prefix + "dev"),
+      );
+    }
+    for (const prefix of ["/mode=", "+mode=", "-m="]) {
+      const actual = await suggest(parser, [prefix]);
+      assert.deepEqual(actual, []);
+      const parsed = await parse(parser, [prefix + "dev"]);
+      assert.ok(!parsed.success);
+    }
+  });
+}

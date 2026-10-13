@@ -158,11 +158,15 @@ function tab(
     mkdirSync(join(dir, "dir=x"));
     writeFileSync(join(dir, "dir=x", ".hidden.toml"), "");
     const current = args.at(-1) ?? "";
-    const retry = /^[-/+]/.test(current) && current.includes("=")
+    const delimiter = current.startsWith("/") ? ":" : "=";
+    const boundary = current.startsWith("/")
+      ? current.indexOf(":", current.startsWith("/scope:") ? 7 : 0)
+      : current.indexOf("=");
+    const retry = /^[-/]/.test(current) && boundary >= 0
       ? [
         ...args.slice(0, -1),
-        current.slice(0, current.indexOf("=")),
-        current.slice(current.indexOf("=") + 1),
+        current.slice(0, boundary),
+        current.slice(boundary + delimiter.length),
       ]
       : undefined;
     const requests = retry === undefined ? [args] : [args, retry];
@@ -229,6 +233,24 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it(
+    "keeps colons inside slash option file values",
+    { skip: !ptyAvailable },
+    () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        "eqapp /config:./dir:name=f",
+        ["/config:./dir:name=f"],
+        "touch dir:name=foo.toml",
+      );
+      assert.deepEqual(result.calls, [["/config:./dir:name=f"], [
+        "/config",
+        "./dir:name=f",
+      ]]);
+      assert.equal(result.line, "eqapp /config:./dir:name=foo.toml ");
+    },
+  );
+
   it("preserves dot literals while filtering hidden file candidates", {
     skip: !ptyAvailable,
   }, () => {
@@ -243,63 +265,63 @@ describe("joined Bash option completion", () => {
     assert.equal(result.line, "eqapp --dot=.env ");
   });
 
-  for (const prefix of ["/", "+"]) {
+  for (const prefix of ["/"]) {
     it(
       `completes a quoted ${prefix} option value`,
       { skip: !ptyAvailable },
       () => {
         if (!ptyAvailable) return;
-        const current = `${prefix}mode=de`;
-        const result = tab(`eqapp ${prefix}mode="de`, [current]);
+        const current = `${prefix}mode:de`;
+        const result = tab(`eqapp ${prefix}mode:"de`, [current]);
         assert.deepEqual(result.calls, [[current]]);
         assert.deepEqual(result.replies, ["dev"]);
-        assert.equal(result.line, `eqapp ${prefix}mode="dev" `);
+        assert.equal(result.line, `eqapp ${prefix}mode:"dev" `);
       },
     );
     it(`reassembles ${prefix} option names without an equals word break`, {
       skip: !ptyAvailable,
     }, () => {
       if (!ptyAvailable) return;
-      const current = `${prefix}scope:name=d`;
+      const current = `${prefix}scope:name:d`;
       const result = tab(
         `eqapp ${current}`,
         [current],
         'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
       );
       assert.deepEqual(result.calls, [[current]]);
-      assert.deepEqual(result.replies, ["name=dev"]);
-      assert.equal(result.line, `eqapp ${prefix}scope:name=dev `);
+      assert.deepEqual(result.replies, ["dev"]);
+      assert.equal(result.line, `eqapp ${prefix}scope:name:dev `);
     });
     it(
       `enumerates joined ${prefix} file values`,
       { skip: !ptyAvailable },
       () => {
         if (!ptyAvailable) return;
-        const current = `${prefix}config=./name=f`;
+        const current = `${prefix}config:./name=f`;
         const result = tab(`eqapp ${current}`, [current]);
         assert.deepEqual(result.calls, [[current], [
           `${prefix}config`,
           "./name=f",
         ]]);
         assert.deepEqual(result.replies, ["foo.toml"]);
-        assert.equal(result.line, `eqapp ${prefix}config=./name=foo.toml `);
+        assert.equal(result.line, `eqapp ${prefix}config:./name=foo.toml `);
       },
     );
     it(`expands a tilde after a split ${prefix} option name`, {
       skip: !ptyAvailable,
     }, () => {
       if (!ptyAvailable) return;
-      const current = `${prefix}scope:file=~/name=f`;
+      const current = `${prefix}scope:file:~/name=f`;
       const result = tab(
         `eqapp ${current}`,
         [current],
         'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"; export HOME="$PWD"',
       );
-      assert.deepEqual(result.calls, [[current], [
+      assert.deepEqual(result.calls, [[current], ["/scope", "file:~/name=f"], [
         `${prefix}scope:file`,
         "~/name=f",
       ]]);
-      assert.equal(result.line, `eqapp ${prefix}scope:file=~/name=foo.toml `);
+      assert.equal(result.line, `eqapp ${prefix}scope:file:~/name\\=foo.toml `);
     });
   }
 

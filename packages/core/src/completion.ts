@@ -208,7 +208,7 @@ function _${programName} () {
       local __decoded __join_quote __char __next __k __ansi __part __digits __code __join_quote_offset
       for ((__i=1; __i<=__j; __i++)); do
         __word="\${__words[__i]}"
-        [[ "$__word" == [-/+]*=* ]] || continue
+        [[ "$__word" == -*=* || "$__word" == /*:* ]] || continue
         __decoded=""; __join_quote=""; __join_quote_offset=0
         for ((__k=0; __k<\${#__word}; __k++)); do
           __char="\${__word:__k:1}"
@@ -277,7 +277,7 @@ function _${programName} () {
         fi
         __words[__i]="$__decoded"
       done
-      if [[ "\${__words[__j-1]}" == [-/+]*=* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
+      if [[ "\${__words[__j-1]}" == -*=* || "\${__words[__j-1]}" == /*:* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
         current="\${__words[__j-1]}"
         __joined=1
       else
@@ -297,22 +297,33 @@ function _${programName} () {
   (( __joined )) && __protocol_current="$current"
   local -a __lines=() __value_files=() __value_literals=() __replies=() __reply_files=()
   local __echo=0 __value="" __option_prefix="" line
+  local __delimiter='=' __probe __position
+  [[ "$current" == /* ]] && __delimiter=':'
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" ]] && continue
     __lines+=("$line")
-    [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]] && __echo=1
+    [[ "$line" == "$current" || "$line" == *"$__delimiter" ]] && __echo=1
   done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__protocol_current" 2>/dev/null)
-  if (( __echo )) && [[ "$current" == [-/+]*=* ]]; then
-    __option_prefix="\${current%%=*}="
-    __value="\${current#*=}"
-    # Preserve the full value prefix for prefix-dependent file suggestions.
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      if [[ "$line" == __FILE__:* ]]; then
-        __value_files+=("$line")
-      else
-        __value_literals+=("$__option_prefix$line")
-      fi
-    done < <(${programName} ${escapedArgs} "\${prev[@]}" "\${current%%=*}" "$__value" 2>/dev/null)
+  if (( __echo )) && [[ "$current" == -*=* || "$current" == /*:* ]]; then
+    # Slash option names and values may both contain colons. Probe candidate
+    # boundaries in parser order, retaining the first native file directive.
+    for ((__position=0; __position<\${#current}; __position++)); do
+      [[ "\${current:__position:1}" == "$__delimiter" ]] || continue
+      __probe="\${current:0:__position}"
+      __option_prefix="$__probe$__delimiter"
+      __value="\${current:__position+1}"
+      __value_literals=()
+      while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" ]] && continue
+        if [[ "$line" == __FILE__:* ]]; then
+          __value_files+=("$line")
+        else
+          __value_literals+=("$__option_prefix$line")
+        fi
+      done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__probe" "$__value" 2>/dev/null)
+      (( \${#__value_files[@]} )) && break
+      [[ "$__delimiter" == '=' ]] && break
+    done
   fi
 
   local __index=0 __reply_prefix="" __file_current="$current" __is_file=0
@@ -328,14 +339,14 @@ function _${programName} () {
     fi
     local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset
     if [[ -n "$__reply_prefix" ]]; then
-      __raw_file_current="\${__raw_joined_current#*=}"
+      __raw_file_current="\${__raw_joined_current:\${#__reply_prefix}}"
       if (( __file_quote_offset >= \${#__reply_prefix} )); then
         __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
       fi
     fi
     ((++__index))
     if (( \${#__value_files[@]} )) &&
-        [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]]; then
+        [[ "$line" == "$current" || "$line" == "$__option_prefix" ]]; then
       # Keep independently emitted literals, consuming one retry literal for
       # each matching first-pass line. Remaining echoes belong to file fallbacks.
       local __literal_index __literal_found=0
