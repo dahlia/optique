@@ -702,6 +702,59 @@ describe("joined Bash option completion", () => {
     );
     assert.deepEqual(result.replies.filter(Boolean), []);
   });
+  for (const prefix of ["src/nested/deeper/../ch", "src/nested/./ch"]) {
+    it(`normalizes navigation within the matched base at ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "mkdir src/nested/deeper; touch src/nested/child.toml src/nested/child.txt",
+        false,
+        false,
+        0,
+        true,
+        false,
+        false,
+        false,
+        0,
+        "src/nested*/*.toml",
+      );
+      assert.deepEqual(result.replies, [`${prefix}ild.toml`]);
+    });
+  }
+  it("navigates within a parent-relative pattern base", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const dir = mkdtempSync(join(tmpdir(), "optique-parent-pattern-"));
+    try {
+      mkdirSync(join(dir, "configs", "nested"), { recursive: true });
+      writeFileSync(join(dir, "configs", "nested", "child.toml"), "");
+      writeFileSync(join(dir, "configs", "nested", "child.txt"), "");
+      const base = `../${relative(tmpdir(), dir)}/configs`;
+      const prefix = `${base}/nested/ch`;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "",
+        false,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        0,
+        `${base}/*.toml`,
+      );
+      assert.deepEqual(result.replies, [`${base}/nested/child.toml`]);
+      assert.equal(result.line, `eqapp --config=${base}/nested/child.toml `);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   for (const patternUsesTilde of [false, true]) {
     it(
       `keeps typed tilde spelling with a fixed glob (patternUsesTilde=${patternUsesTilde})`,

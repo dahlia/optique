@@ -525,16 +525,14 @@ function _${programName} () {
         # Once an offered directory is entered, keep the basename filter but
         # enumerate there. Only descendants of matching pattern bases qualify.
         if [[ "$__pattern_prefix" == */* ]]; then
-          local __typed_dir="\${__pattern_prefix%/*}" __base_dir __norm_base __norm_dir __base_prefix
-          # Lexical ancestry cannot establish containment through parent steps.
-          if [[ -d "$__typed_dir" && "/$__typed_dir/" != */../* ]]; then
-            __norm_dir="\${__typed_dir#./}"; __norm_dir="\${__norm_dir%/}"
+          local __typed_dir="\${__pattern_prefix%/*}" __base_dir __norm_base __norm_dir
+          # Resolve directory ancestry in subshells, preserving the typed spelling
+          # for insertion. The trailing slash also preserves newline-ending names.
+          if __norm_dir=$(CDPATH= builtin cd -P -- "$__typed_dir" >/dev/null 2>&1 && printf '%s/' "\${PWD%/}"); then
             while IFS= read -r -d '' __base_dir; do
               [[ -d "$__base_dir" ]] || continue
-              __norm_base="\${__base_dir#./}"; __norm_base="\${__norm_base%/}"
-              __base_prefix="$__norm_base/"
-              if [[ "$__norm_base" == . && "$__norm_dir" != /* && "$__norm_dir" != . ]] ||
-                  [ "\${__norm_dir:0:\${#__base_prefix}}" = "$__base_prefix" ]; then
+              __norm_base=$(CDPATH= builtin cd -P -- "$__base_dir" >/dev/null 2>&1 && printf '%s/' "\${PWD%/}") || continue
+              if [ "\${__norm_dir:0:\${#__norm_base}}" = "$__norm_base" ]; then
                 __navigation_dir="$__typed_dir"
                 break
               fi
