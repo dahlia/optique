@@ -5,6 +5,30 @@ import { parse, suggest, suggestAsync, type Suggestion } from "./parser.ts";
 import { option } from "./primitives.ts";
 import { choice, string, type ValueParser } from "./valueparser.ts";
 
+for (const control of ["\n", "\r", "\t", "\0"]) {
+  it(`sanitizes ${JSON.stringify(control)} in joined fixed file patterns`, () => {
+    const files: ValueParser<"sync", string> = {
+      ...string(),
+      *suggest() {
+        yield {
+          kind: "file",
+          type: "file",
+          pattern: `src/${control}name:%*.toml`,
+        };
+      },
+    };
+    const result = suggest(option("--config", files), ["--config="]);
+    assert.equal(
+      Array.from(bash.encodeSuggestions(result)).join(""),
+      "__JOINED_FILE__:--config=:file::src/ name%3A%25*.toml:0",
+    );
+    assert.equal(
+      Array.from(zsh.encodeSuggestions(result)).join(""),
+      "--config=src/ name:%*.toml\0\0",
+    );
+  });
+}
+
 describe("option value completion prefixes", () => {
   for (const mode of ["sync", "async"] as const) {
     it(`passes equals-containing value prefixes and preserves metadata in ${mode} mode`, async () => {

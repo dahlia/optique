@@ -744,7 +744,7 @@ fi
           if (index > 0) yield "\n";
           yield `__JOINED_FILE__:${encodePattern(prefix)}:${file.type}:${
             encodeExtensions(file.extensions)
-          }:${encodePattern(file.pattern ?? "")}:${
+          }:${encodePattern(sanitizeForTransport(file.pattern ?? ""))}:${
             file.includeHidden ? "1" : "0"
           }`;
         }

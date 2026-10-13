@@ -30,7 +30,8 @@ To be released.
     older Bash versions. Fixed-pattern completion also preserves a typed `./`
     prefix or its omission, completes explicitly typed hidden directories,
     follows `nocaseglob` when narrowing candidates, and removes
-    duplicate matches from overlapping patterns.
+    duplicate matches from overlapping patterns. Control characters in joined
+    fixed patterns no longer split or corrupt completion records.
     [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
