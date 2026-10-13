@@ -814,6 +814,18 @@ describe("joined Bash option completion", () => {
     assert.ok(result.replies.includes("./src/nested/"));
     assert.equal(result.line, "eqapp --prefixed-pattern=./src/");
   });
+  it("preserves multiple candidates when sort is unavailable", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --mode=",
+      ["--mode="],
+      'PATH="$PWD"',
+    );
+    assert.deepEqual([...result.replies].sort(), ["dev", "prod"]);
+    assert.equal(result.line, "eqapp --mode=");
+  });
   it("does not add a pattern-supplied ./ to an empty value", {
     skip: !ptyAvailable,
   }, () => {

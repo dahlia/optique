@@ -768,7 +768,7 @@ function _${programName} () {
       COMPREPLY+=("\${__word:\${#__remove}}")
     fi
   done
-  if (( \${#COMPREPLY[@]} > 1 )); then
+  if (( \${#COMPREPLY[@]} > 1 )) && command -v sort >/dev/null 2>&1; then
     # Sort shell-escaped keys, not filenames: each key occupies one line even
     # when a candidate contains tabs or newlines. Keep the first occurrence's
     # index, then restore the original order without evaluating escaped data.

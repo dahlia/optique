@@ -44,6 +44,7 @@ To be released.
     entered in full, while quoted or escaped wildcard prefixes remain literal.
     A lone `.` prefix also completes `./` patterns, and navigation through `..`
     no longer offers descendants outside matching pattern bases.
+    Completion candidates remain available when `sort` is missing.
     [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
