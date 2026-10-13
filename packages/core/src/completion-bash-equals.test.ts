@@ -43,7 +43,15 @@ const scopeFiles: ValueParser<"sync", string> = {
     yield { kind: "file", type: "file" };
   },
 };
+const mixedValues: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest(prefix) {
+    yield { kind: "literal", text: prefix };
+    yield { kind: "file", type: "file", pattern: prefix };
+  },
+};
 const fields = {
+  mixed: optional(option("--mixed", mixedValues)),
   scopeFile: optional(option("--scope:file", scopeFiles)),
   scope: optional(option("--scope:name", choice(["dev"]))),
   sensitiveConfig: optional(option("--sensitive-config", prefixSensitiveFiles)),
@@ -209,6 +217,25 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("keeps an exact literal alongside matching native files", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp --mixed=./name=f", ["--mixed=./name=f"]);
+    assert.deepEqual(result.replies, ["f", "foo.toml"]);
+    assert.equal(result.line, "eqapp --mixed=./name=f");
+  });
+
+  it("retains an exact literal beside a file fallback with no matches", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp --mixed=known", ["--mixed=known"]);
+    assert.deepEqual(result.calls, [["--mixed=known"], ["--mixed", "known"]]);
+    assert.deepEqual(result.replies, ["known"]);
+    assert.equal(result.line, "eqapp --mixed=known ");
+  });
+
   for (const setup of ["", 'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"']) {
     it(`keeps the raw value after split option names (${setup})`, {
       skip: !ptyAvailable,

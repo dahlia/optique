@@ -295,7 +295,7 @@ function _${programName} () {
   # file directives without changing the protocol used by other shells.
   local __protocol_current="$__raw_current"
   (( __joined )) && __protocol_current="$current"
-  local -a __lines=() __value_files=() __replies=()
+  local -a __lines=() __value_files=() __value_literals=() __replies=()
   local __echo=0 __value="" __option_prefix="" line
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" ]] && continue
@@ -307,7 +307,11 @@ function _${programName} () {
     __value="\${current#*=}"
     # Preserve the full value prefix for prefix-dependent file suggestions.
     while IFS= read -r line || [[ -n "$line" ]]; do
-      [[ "$line" == __FILE__:* ]] && __value_files+=("$line")
+      if [[ "$line" == __FILE__:* ]]; then
+        __value_files+=("$line")
+      else
+        __value_literals+=("$__option_prefix$line")
+      fi
     done < <(${programName} ${escapedArgs} "\${prev[@]}" "\${current%%=*}" "$__value" 2>/dev/null)
   fi
 
@@ -330,7 +334,17 @@ function _${programName} () {
     ((++__index))
     if (( \${#__value_files[@]} )) &&
         [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]]; then
-      continue
+      # Keep independently emitted literals, consuming one retry literal for
+      # each matching first-pass line. Remaining echoes belong to file fallbacks.
+      local __literal_index __literal_found=0
+      for __literal_index in "\${!__value_literals[@]}"; do
+        if [[ "$line" == "\${__value_literals[__literal_index]}" ]]; then
+          unset "__value_literals[$__literal_index]"
+          __literal_found=1
+          break
+        fi
+      done
+      (( __literal_found )) || continue
     fi
     if [[ "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
