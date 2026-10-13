@@ -893,6 +893,65 @@ zpty -d child 2>/dev/null || true
     .map((args) => args.map((arg) => arg[1] ?? ""));
 }
 
+/**
+ * Runs the generated Nushell completer against a stub CLI that emits a
+ * `.txt` file suggestion with the given pattern, and returns the completion
+ * values (sorted) as they would be inserted, quoted where Nushell needs it.  The `argument` is the last token exactly as typed in
+ * Nushell, including any quotes, and must not contain single quotes.
+ */
+function testNuFileCompletion(
+  cwd: string,
+  pattern: string,
+  argument: string,
+): string[] {
+  const programName = "nu-file-cli";
+  const tempDir = mkdtempSync(join(tmpdir(), "nu-file-completion-"));
+
+  try {
+    const directive = Array.from(nu.encodeSuggestions([
+      {
+        kind: "file",
+        type: "file",
+        extensions: [".txt"],
+        pattern,
+        includeHidden: false,
+        description: message`File`,
+      },
+    ])).join("");
+    const directivePath = join(tempDir, "directive.txt");
+    writeFileSync(directivePath, `${directive}\n`);
+    writeFileSync(
+      join(tempDir, programName),
+      `#!/bin/bash\ncat '${directivePath}'\n`,
+      { mode: 0o755 },
+    );
+
+    const scriptPath = join(tempDir, "completion.nu");
+    writeFileSync(scriptPath, nu.generateScript(programName));
+
+    const context = `${programName} ${argument}`;
+    const testScriptPath = join(tempDir, "test.nu");
+    writeFileSync(
+      testScriptPath,
+      `
+$env.PATH = ($env.PATH | prepend '${tempDir}')
+source '${scriptPath}'
+print (nu-complete-${programName} '${context}' | to json -r)
+`,
+    );
+
+    const result = runCommand("nu", [testScriptPath], { cwd });
+    const json = result.trim().split("\n").findLast((line) =>
+      line.startsWith("[")
+    );
+    ok(json != null, `Expected JSON output from Nushell, got: ${result}`);
+    const items: readonly { readonly value: string }[] = JSON.parse(json);
+    return items.map((item) => item.value).sort();
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 describe("completion module", () => {
   describe("bash shell completion", () => {
     it("should have correct name", () => {
@@ -6095,6 +6154,72 @@ do { ${functionName} "extapp " }
         } finally {
           rmSync(nuTempDir, { recursive: true, force: true });
         }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should treat brackets in a typed path literally in nu", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "nu-literal-brackets-"));
+
+      try {
+        writeFileSync(join(tempDir, "report[1].txt"), "");
+        writeFileSync(join(tempDir, "report1.txt"), "");
+        writeFileSync(join(tempDir, "a[b.txt"), "");
+
+        deepStrictEqual(
+          testNuFileCompletion(tempDir, "report[1]", '"report[1]"'),
+          ["'report[1].txt'"],
+        );
+        // An unclosed bracket must not make the glob invalid:
+        deepStrictEqual(
+          testNuFileCompletion(tempDir, "a[", '"a["'),
+          ["'a[b.txt'"],
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should treat brackets in a directory name literally in nu", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "nu-literal-bracket-dir-"));
+
+      try {
+        mkdirSync(join(tempDir, "[draft]", "sub"), { recursive: true });
+        writeFileSync(join(tempDir, "[draft]", "notes.txt"), "");
+        // The completer keeps the typed directory prefix and appends only
+        // the matched basename, so the decoy needs a distinct basename to
+        // reveal a match inside "d/" via the [draft] character class:
+        mkdirSync(join(tempDir, "d"));
+        writeFileSync(join(tempDir, "d", "decoy.txt"), "");
+
+        deepStrictEqual(
+          testNuFileCompletion(tempDir, "[draft]", '"[draft]"'),
+          ["'[draft]/notes.txt'", "'[draft]/sub/'"],
+        );
+        // A program-supplied wildcard pattern under a bracketed directory:
+        deepStrictEqual(
+          testNuFileCompletion(tempDir, "[draft]/*.txt", ""),
+          ["'[draft]/notes.txt'", "'[draft]/sub/'"],
+        );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
