@@ -300,6 +300,43 @@ describe("joined Bash option completion", () => {
     assert.ok(result.replies.includes("visible.log"));
     assert.ok(!result.replies.includes(".hidden.log"));
   });
+  for (
+    const input of [
+      String.raw`eqapp --scope\:na`,
+      "eqapp --scope':'na",
+      String.raw`eqapp +scope\:na`,
+    ]
+  ) {
+    it(
+      `dequotes incomplete option names in ${input}`,
+      { skip: !ptyAvailable },
+      () => {
+        if (!ptyAvailable) return;
+        const optionPrefix = input.includes("+scope")
+          ? "+scope:na"
+          : "--scope:na";
+        const result = tab(input, [optionPrefix]);
+        assert.deepEqual(result.calls, [[optionPrefix]]);
+        assert.ok(result.replies.some((reply) => reply.endsWith("name")));
+      },
+    );
+  }
+  for (const suffix of ["'", ""]) {
+    it(`keeps a tilde quoted across an ANSI-C delimiter literal (${suffix})`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const input = `eqapp --config$'=~/name=l${suffix}`;
+      const result = tab(
+        input,
+        ["--config=~/name=l"],
+        String.raw`export HOME="$PWD"; mkdir '~'; touch '~/name=literal.toml'`,
+      );
+      assert.ok(result.replies.some((reply) => reply.endsWith("literal.toml")));
+      assert.deepEqual(result.calls, [["--config=~/name=l"]]);
+    });
+  }
+
   it("retains the originating slash option's file metadata", {
     skip: !ptyAvailable,
   }, () => {

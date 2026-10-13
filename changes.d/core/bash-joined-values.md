@@ -15,4 +15,5 @@ links:
     candidates, including dot-prefixed values, remain available alongside file
     suggestions when hidden files are excluded. Hidden candidates allowed by
     one file suggestion remain available alongside other file suggestions.
+    Quoted or escaped partial option names also complete correctly.
     [[#1031], [#1033]]

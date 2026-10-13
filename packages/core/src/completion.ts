@@ -240,7 +240,7 @@ function _${programName} () {
       local __decoded __join_quote __char __next __k __ansi __part __digits __code __join_quote_offset
       for ((__i=1; __i<=__j; __i++)); do
         __word="\${__words[__i]}"
-        [[ "$__word" == -*=* || "$__word" == /*:* ]] || continue
+        [[ "$__word" == [-/+]* ]] || continue
         __decoded=""; __join_quote=""; __join_quote_offset=0
         for ((__k=0; __k<\${#__word}; __k++)); do
           __char="\${__word:__k:1}"
