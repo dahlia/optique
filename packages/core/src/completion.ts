@@ -877,10 +877,17 @@ export const zsh: ShellCompletion = {
       ).join("");
     return `#compdef ${programName}
 function ${functionName} () {
-  local current="\$words[CURRENT]"
+  # Completion fields omit surrounding quotes, unlike words[CURRENT].
+  # Single-quoted fields are already literal; other fields retain escapes.
+  local current="\$IPREFIX\$PREFIX\$SUFFIX\$ISUFFIX"
+  local __logical_prefix="\$IPREFIX\$PREFIX"
   # Let zsh match the suffix when completing in the middle of a word.
   if [[ -o complete_in_word ]]; then
-    current="\$PREFIX"
+    current="\$__logical_prefix"
+  fi
+  if [[ "\$compstate[quote]" != "'" ]]; then
+    current="\${(Q)current}"
+    __logical_prefix="\${(Q)__logical_prefix}"
   fi
   local -a prev
   # Extract previous arguments, skipping empty ones
@@ -888,7 +895,7 @@ function ${functionName} () {
   local i
   for (( i=2; i < CURRENT; i++ )); do
     if [[ -n "\$words[i]" ]]; then
-      prev+=("\$words[i]")
+      prev+=("\${(Q)words[i]}")
     fi
   done
 
@@ -975,16 +982,18 @@ function ${functionName} () {
             fi
           fi
         fi
-        if [[ -n "\$pattern" && -z "\$__initial_file_pattern" ]]; then
+        # path() echoes current as its pattern.  Keep zsh's escaped PREFIX
+        # in that case instead of reinterpreting logical text as shell syntax.
+        if [[ -n "\$pattern" && "\$pattern" != "\$current" && -z "\$__initial_file_pattern" ]]; then
           # Normalize leading ./ so that ./src/ma matches pattern src/
-          local __norm_prefix="\${PREFIX#./}"
+          local __norm_prefix="\${__logical_prefix#./}"
           local __norm_pattern="\${pattern#./}"
           local __compare_pattern="\$__norm_pattern"
           if [[ "\$__compare_pattern" == *[\*\?]* ]]; then
             __compare_pattern="\${__compare_pattern%%[\*\?]*}"
             [[ "\$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
           fi
-          if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
+          if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$__logical_prefix" != "\$pattern" ]]; then
             # Keep the typed prefix, but retain a fixed file glob separately.
             if [[ "\$type" != "directory" && "\$__norm_pattern" == *[\*\?]* ]]; then
               __fixed_glob=1
@@ -1050,7 +1059,54 @@ function ${functionName} () {
               if [[ "\$__fixed_was_glob_dots" == "0" && "\${PREFIX##*/}" != .* ]]; then unsetopt glob_dots; fi
             fi
           else
-            PREFIX="\$pattern"
+            local __native_pattern="\$pattern"
+            if [[ "\$compstate[quote]" != "'" ]]; then
+              # Native helpers expand substitutions, tilde names and executable
+              # glob qualifiers.  Input-derived patterns must keep these literal.
+              # Ordinary fixed glob/tilde patterns retain their native behavior.
+              local __tilde_name="\${pattern#\\~}"
+              __tilde_name="\${__tilde_name%%/*}"
+              local -a match mbegin mend
+              local __code_qualifier=0
+              local __fixed_qualifier_base=""
+              if _have_glob_qual "\$pattern" complete; then
+                local __qualifier="\$match[5]"
+                # A numeric sense (+1) is not a function qualifier (+name).
+                # Accept only bounded attribute/sort syntax in this exception.
+                # Expand the pattern at runtime after unsetting SH_GLOB.
+                local __safe_qualifiers='([-/F.@=p*rwxAIERWXsStUG^MTNDn,]|[ugdl]<->|[amc]([Mwhmsd]|)([-+]|)<->|L([kKmMgGtTpP]|)([-+]|)<->|[oO][nLlamcdN])##'
+                if [[ "\$__qualifier" == \${~__safe_qualifiers} ]]; then
+                  __fixed_qualifier_base="\$match[2]"
+                elif [[ "\$__qualifier" == *[e+]* ]]; then
+                  __code_qualifier=1
+                fi
+              fi
+              if [[ "\$pattern" == *'$'* || "\$pattern" == *'\`'* ||
+                    ( "\$pattern" == '~'* && "\$__tilde_name" == *[^[:alnum:]_.+-]* ) ]] ||
+                 (( __code_qualifier )); then
+                __native_pattern="\${(q)pattern}"
+              else
+                # Quote a typed literal segment retained by a custom pattern.
+                # Keep the backend's own wildcard prefix/qualifier syntax.
+                local __input_part="\$current"
+                while [[ -n "\$__input_part" && "\$pattern" != *"\$__input_part"* ]]; do
+                  __input_part="\${__input_part[2,-1]}"
+                done
+                if [[ "\$__input_part" == *[\\(\\[\\#\\^\\|\\~\\<\\>\\*\\?]* &&
+                      "\$__input_part" != [\\(\\)\\[\\]\\#\\^\\|\\~\\<\\>\\*\\?]## ]]; then
+                  local __backend_prefix="\${pattern%%"\$__input_part"*}"
+                  local __backend_suffix="\${pattern#*"\$__input_part"}"
+                  # An overlap inside a harmless fixed qualifier is backend
+                  # syntax, rather than retained user text.
+                  if [[ "\$__input_part" != '('* ||
+                        "\$__backend_prefix" != "\$__fixed_qualifier_base" ||
+                        "\$__fixed_qualifier_base" != *[\\*\\?\\]] ]]; then
+                    __native_pattern="\$__backend_prefix\${(q)__input_part}\$__backend_suffix"
+                  fi
+                fi
+              fi
+            fi
+            PREFIX="\$__native_pattern"
           fi
         fi
 
@@ -1183,17 +1239,23 @@ function ${functionName} () {
     # Prepare completion with descriptions for _describe
     local -a matches
     local -i i
+    local __match
     for (( i=1; i <= \${#completions[@]}; i++ )); do
-      # _describe treats colons as separators and backslashes as escapes.
-      value="\${completions[i]//\\\\/\\\\\\\\}"
-      value="\${value//:/\\\\:}"
+      # _describe uses backslashes to escape its colon separator.
+      __match="\${completions[i]//\\\\/\\\\\\\\}"
+      __match="\${__match//:/\\\\:}"
       if [[ -n "\${descriptions[i]}" ]]; then
-        matches+=("\${value}:\${descriptions[i]}")
+        matches+=("\$__match:\${descriptions[i]}")
       else
-        matches+=("\${value}")
+        matches+=("\$__match")
       fi
     done
-    _describe 'commands' matches
+    if [[ -n "\$QISUFFIX" ]]; then
+      # A closing quote already exists; do not append a space inside it.
+      _describe 'commands' matches -S ''
+    else
+      _describe 'commands' matches
+    fi
   fi
 }
 
