@@ -221,7 +221,7 @@ function testInteractiveZshCompletion(
       cliPath,
       options.cliScript ?? (options.payload == null
         ? `#!/bin/bash
-printf '${directive}'
+printf '%b' '${directive.replaceAll("'", "'\\''")}'
 `
         : `#!/bin/bash
 cat ${JSON.stringify(payloadPath)}
@@ -2816,6 +2816,220 @@ fi
       ok(script.includes("if (( $+functions[compdef] )); then"));
       ok(script.includes("compdef _myapp myapp"));
     });
+
+    for (
+      const testCase of [
+        {
+          name: "directory glob",
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+            { path: "tmp/fixtures/sub", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "root glob",
+          pattern: "*.txt",
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "unmatched glob",
+          pattern: "*.txt",
+          files: [{ path: "b.json" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "glob with extensions",
+          pattern: "tmp/fixtures/*",
+          extensions: [".txt"],
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "disjoint glob and extensions",
+          pattern: "*.json",
+          extensions: [".txt"],
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "multiple extensions",
+          pattern: "*",
+          extensions: [".txt", ".md"],
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "globcomplete enabled",
+          pattern: "tmp/fixtures/*.txt",
+          setup: "setopt glob_complete",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "typed matching prefix",
+          pattern: "tmp/fixtures/*.txt",
+          input: "extapp --file tmp/fixtures/a",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "multiple matches",
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/c.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/",
+        },
+        {
+          name: "directory with spaces",
+          pattern: "my docs/*.txt",
+          files: [
+            { path: "my docs", type: "directory" as const },
+            { path: "my docs/a.txt" },
+          ],
+          expected: "extapp --file my\\ docs/a.txt ",
+        },
+        {
+          name: "directory with a glob operator",
+          pattern: "C#/*.txt",
+          files: [
+            { path: "C#", type: "directory" as const },
+            { path: "C#/a.txt" },
+          ],
+          expected: "extapp --file C\\#/a.txt ",
+        },
+        {
+          name: "directory with a quote",
+          pattern: "it's/*.txt",
+          files: [
+            { path: "it's", type: "directory" as const },
+            { path: "it's/a.txt" },
+          ],
+          expected: "extapp --file it\\'s/a.txt ",
+        },
+        {
+          name: "dot relative directory",
+          pattern: "./tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+          ],
+          expected: "extapp --file ./tmp/fixtures/a.txt ",
+        },
+        {
+          name: "files-tag ignored pattern",
+          pattern: "*.txt",
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          setup: "zstyle ':completion:*:files' ignored-patterns 'a.txt'",
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename glob operator",
+          pattern: "report(1)*.txt",
+          files: [{ path: "report1b.txt" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename token separator",
+          pattern: "a;*.txt",
+          files: [{ path: "zzz.txt" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename whitespace",
+          pattern: "my *.txt",
+          files: [{ path: "my a.txt" }, { path: "other.txt" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded directory wildcard",
+          pattern: "tmp/fix*/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "bracket directory globcomplete",
+          pattern: "tmp/[ab]/*.txt",
+          setup: "setopt glob_complete",
+          files: [
+            { path: "tmp/a", type: "directory" as const },
+            { path: "tmp/a/foo.txt" },
+          ],
+          expected: "extapp --file tmp/a/foo.txt ",
+        },
+        {
+          name: "grouped directory globcomplete",
+          pattern: "tmp/(a|b)/*.txt",
+          setup: "setopt glob_complete",
+          files: [
+            { path: "tmp/a", type: "directory" as const },
+            { path: "tmp/a/foo.txt" },
+          ],
+          expected: "extapp --file tmp/a/foo.txt ",
+        },
+        {
+          name: "no pattern",
+          files: [{ path: "a.txt" }],
+          expected: "extapp --file a.txt ",
+        },
+      ]
+    ) {
+      it(`should complete initial zsh file values: ${testCase.name}`, {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      }, (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+        const directive = Array.from(zsh.encodeSuggestions([{
+          kind: "file",
+          type: "file",
+          pattern: testCase.pattern,
+          extensions: testCase.extensions,
+        }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          testCase.files,
+          {
+            input: testCase.input ?? "extapp --file ",
+            captureBuffer: true,
+            setup: `unsetopt glob_complete
+zstyle ':completion:*' completer _complete
+${testCase.setup ?? ""}`,
+          },
+        );
+        ok(
+          !output.includes("b.json"),
+          `Nonmatching JSON file should not appear, got:\n${output}`,
+        );
+        deepStrictEqual(output, testCase.expected);
+      });
+    }
 
     it("should build #q-qualified extension globs in zsh", () => {
       const script = zsh.generateScript("myapp");
