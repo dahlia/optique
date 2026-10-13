@@ -39,6 +39,14 @@ To be released.
     pass fixed callback arguments containing apostrophes to the CLI intact.
     Previously, an argument such as `it's` arrived as `its`.  [[#1039], [#1057]]
 
+ -  Fixed Nushell completion to pass the command line to the CLI with the
+    same arguments Nushell itself would pass.  Empty quoted arguments such as
+    `""` are no longer dropped, so options after them complete again.
+    Escaped quotes in double-quoted strings, backtick strings, and raw strings
+    such as `r#'...'#` are now decoded instead of being split or merged with
+    later arguments, and a space typed inside an unfinished quoted value no
+    longer starts a new argument.  [[#1041], [#1065]]
+
  -  Fixed Nushell completion to quote suggested values and file names that
     contain spaces, quotes, or other characters Nushell would interpret, so
     each completed value stays a single argument with its original text.
@@ -78,6 +86,7 @@ To be released.
 [#1036]: https://github.com/dahlia/optique/issues/1036
 [#1038]: https://github.com/dahlia/optique/issues/1038
 [#1039]: https://github.com/dahlia/optique/issues/1039
+[#1041]: https://github.com/dahlia/optique/issues/1041
 [#1042]: https://github.com/dahlia/optique/issues/1042
 [#1043]: https://github.com/dahlia/optique/issues/1043
 [#1044]: https://github.com/dahlia/optique/issues/1044
@@ -85,6 +94,7 @@ To be released.
 [#1059]: https://github.com/dahlia/optique/pull/1059
 [#1063]: https://github.com/dahlia/optique/pull/1063
 [#1064]: https://github.com/dahlia/optique/pull/1064
+[#1065]: https://github.com/dahlia/optique/pull/1065
 [#1067]: https://github.com/dahlia/optique/pull/1067
 [#1069]: https://github.com/dahlia/optique/pull/1069
 [#1076]: https://github.com/dahlia/optique/pull/1076
