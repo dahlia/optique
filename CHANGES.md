@@ -105,6 +105,12 @@ To be released.
     producers/adapters must encode/decode the `__LITERAL__:` escape for values
     starting with `__FILE__:` or `__LITERAL__:`.
 
+ -  Fixed zsh/fish completion scripts for program names containing hyphens or
+    dots to keep their commands separate when installed together with scripts
+    for similarly named programs, such as `foo-bar`, `foo_bar`, and `foo.bar`.
+    Regenerate completion scripts for all affected programs after upgrading.
+    [[#1047], [#1071]]
+
 [#1030]: https://github.com/dahlia/optique/issues/1030
 [#1031]: https://github.com/dahlia/optique/issues/1031
 [#1033]: https://github.com/dahlia/optique/pull/1033
@@ -120,6 +126,7 @@ To be released.
 [#1043]: https://github.com/dahlia/optique/issues/1043
 [#1044]: https://github.com/dahlia/optique/issues/1044
 [#1045]: https://github.com/dahlia/optique/issues/1045
+[#1047]: https://github.com/dahlia/optique/issues/1047
 [#1051]: https://github.com/dahlia/optique/issues/1051
 [#1055]: https://github.com/dahlia/optique/issues/1055
 [#1057]: https://github.com/dahlia/optique/pull/1057
@@ -134,6 +141,7 @@ To be released.
 [#1067]: https://github.com/dahlia/optique/pull/1067
 [#1069]: https://github.com/dahlia/optique/pull/1069
 [#1070]: https://github.com/dahlia/optique/pull/1070
+[#1071]: https://github.com/dahlia/optique/pull/1071
 [#1076]: https://github.com/dahlia/optique/pull/1076
 
 
