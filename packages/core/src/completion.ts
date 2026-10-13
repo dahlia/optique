@@ -931,6 +931,9 @@ function ${functionName} () {
         unsetopt sh_glob
         local __was_extended_glob=0
         [[ -o extended_glob ]] && __was_extended_glob=1
+        local __was_sh_word_split=0
+        [[ -o sh_word_split ]] && __was_sh_word_split=1
+        unsetopt sh_word_split
 
         # Enable glob_dots when hidden files are requested so that
         # _files and _directories include dot-prefixed entries
@@ -985,13 +988,38 @@ function ${functionName} () {
             # Keep the typed prefix, but retain a fixed file glob separately.
             if [[ "\$type" != "directory" && "\$__norm_pattern" == *[\*\?]* ]]; then
               __fixed_glob=1
-              if [[ "\${PREFIX##*/}" == .* ]]; then setopt glob_dots; fi
+              local __fixed_was_glob_dots=0
+              [[ -o glob_dots ]] && __fixed_was_glob_dots=1
+              if [[ "\$PREFIX" == .* || "\$PREFIX" == */.* ]]; then setopt glob_dots; fi
               # Keep qualifiers in a string so sourcing also works with SH_GLOB.
               local __fixed_pattern="" __glob_char="" __glob_previous=""
               local __glob_escaped=0
+              local __glob_class=0 __glob_class_start=0 __glob_class_nested=""
               local -i __glob_index
               for (( __glob_index=1; __glob_index <= \${#pattern}; __glob_index++ )); do
                 __glob_char="\${pattern[__glob_index]}"
+                if [[ "\$__glob_class" == "1" ]]; then
+                  # Class members are already literal.  Preserve leading ]
+                  # and nested POSIX classes without adding backslashes.
+                  __fixed_pattern+="\$__glob_char"
+                  if [[ -n "\$__glob_class_nested" ]]; then
+                    if [[ "\$__glob_char" == "]" && "\$__glob_previous" == "\$__glob_class_nested" ]]; then
+                      __glob_class_nested=""
+                    fi
+                  elif [[ "\$__glob_char" == "[" && "\${pattern[__glob_index+1]}" == ":" ]]; then
+                    __glob_class_nested="\${pattern[__glob_index+1]}"
+                    __glob_class_start=0
+                  elif [[ "\$__glob_char" == "]" && "\$__glob_class_start" == "0" ]]; then
+                    __glob_class=0
+                  elif [[ "\$__glob_class_start" == "1" && ( "\$__glob_char" == "!" || "\$__glob_char" == "^" ) &&
+                          ( "\${pattern[__glob_index+1]}" != "]" || "\${pattern[__glob_index+2,-1]}" == *']'* ) ]]; then
+                    __glob_class_start=2
+                  else
+                    __glob_class_start=0
+                  fi
+                  __glob_previous="\$__glob_char"
+                  continue
+                fi
                 if [[ "\$__glob_escaped" == "1" ]]; then
                   __fixed_pattern+="\$__glob_char"
                   __glob_escaped=0
@@ -1001,8 +1029,11 @@ function ${functionName} () {
                 if [[ "\$__glob_char" == "\\\\" ]]; then
                   __fixed_pattern+="\$__glob_char"
                   __glob_escaped=1
+                elif [[ "\$__glob_char" == "[" ]]; then
+                  __fixed_pattern+="\$__glob_char"
+                  __glob_class=1
+                  __glob_class_start=1
                 elif [[ "\$__glob_char" == [#^~\\(\\)\\|\\<\\>] &&
-                        ! ( "\$__glob_char" == "^" && "\$__glob_previous" == "[" ) &&
                         ! ( "\$__glob_char" == "~" && "\$__glob_index" == "1" ) ]]; then
                   # Keep class negation and leading home expansion; escape
                   # extended-glob operators in literal pathname components.
@@ -1015,6 +1046,8 @@ function ${functionName} () {
               __fixed_pattern+="(#qN)"
               __fixed_matches=( \${~__fixed_pattern} )
               __fixed_matches=( "\${(@)__fixed_matches:a}" )
+              # Hidden parents widen fixed matches, not native child suggestions.
+              if [[ "\$__fixed_was_glob_dots" == "0" && "\${PREFIX##*/}" != .* ]]; then unsetopt glob_dots; fi
             fi
           else
             PREFIX="\$pattern"
@@ -1133,6 +1166,7 @@ function ${functionName} () {
         PREFIX="\$__saved_prefix"
         if [[ "\$__was_extended_glob" == "1" ]]; then setopt extended_glob; else unsetopt extended_glob; fi
         if [[ "\$__was_sh_glob" == "1" ]]; then setopt sh_glob; else unsetopt sh_glob; fi
+        if [[ "\$__was_sh_word_split" == "1" ]]; then setopt sh_word_split; else unsetopt sh_word_split; fi
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
         # Regular literal completion

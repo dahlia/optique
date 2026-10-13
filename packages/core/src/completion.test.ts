@@ -9733,6 +9733,9 @@ const fixedGlobFixtures: Parameters<typeof testInteractiveZshCompletion>[2] = [
   { path: "fixtures/results", type: "directory" },
   { path: "fixtures/other", type: "directory" },
   { path: "fixtures/.reports", type: "directory" },
+  { path: "fixtures/.reports/inner.txt" },
+  { path: "fixtures/.reports/inner.json" },
+  { path: "fixtures/.reports/.secret.txt" },
   { path: "fixtures/report.txt" },
   { path: "fixtures/report.json" },
   { path: "fixtures/report.text" },
@@ -9746,6 +9749,18 @@ const fixedGlobFixtures: Parameters<typeof testInteractiveZshCompletion>[2] = [
   { path: "report.txt" },
   { path: "report.json" },
   { path: "other.txt" },
+  { path: "a(.txt" },
+  { path: "a).txt" },
+  { path: "a\\.txt" },
+  { path: "a#.txt" },
+  { path: "a~.txt" },
+  { path: "a].txt" },
+  { path: "a!(1).txt" },
+  { path: "a.(1).txt" },
+  { path: "a[(1).txt" },
+  { path: "a.1.txt" },
+  { path: "a=(1).txt" },
+  { path: "a=1.txt" },
   { path: "reports", type: "directory" },
 ];
 
@@ -10071,3 +10086,195 @@ it("zsh fixed glob preserves quoted parenthesized directories", {
   ok(output.includes("a.cs"), `Expected quoted match:\n${output}`);
   ok(!output.includes("a.txt"), `Unexpected nonmatch:\n${output}`);
 });
+
+it("zsh fixed glob preserves whitespace with SH_WORD_SPLIT", {
+  skip: process.platform === "win32" || !isShellAvailable("zsh"),
+}, () => {
+  if (process.platform === "win32" || !isShellAvailable("zsh")) return;
+  const tempDir = mkdtempSync(join(tmpdir(), "zsh-fixed-glob-word-split-"));
+  try {
+    mkdirSync(join(tempDir, "P (1)"));
+    writeFileSync(join(tempDir, "P (1)/a.cs"), "");
+    writeFileSync(join(tempDir, "P (1)/a.txt"), "");
+    const directive = Array.from(zsh.encodeSuggestions([{
+      kind: "file",
+      type: "file",
+      pattern: "P (1)/*.cs",
+    }])).join("").replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+    writeFileSync(
+      join(tempDir, "extapp"),
+      `#!/bin/bash\nprintf '${directive}'\n`,
+      { mode: 0o755 },
+    );
+    const scriptPath = join(tempDir, "completion.zsh");
+    writeFileSync(scriptPath, zsh.generateScript("extapp"));
+    // _main_complete normally disables SH_WORD_SPLIT.  Call the generated
+    // function directly to exercise callers that retain this option, while
+    // the native expansion still runs in zsh rather than a string assertion.
+    const output = runCommand("zsh", [
+      "-fc",
+      `
+export PATH="${tempDir}:$PATH"
+compdef() { :; }
+source "${scriptPath}"
+_wanted() { print -rl -- "\${__fixed_matches[@]}"; }
+words=(extapp 'P (1)/a')
+CURRENT=2
+PREFIX='P (1)/a'
+setopt extended_glob sh_word_split sh_glob
+_extapp
+[[ -o sh_word_split && -o sh_glob ]] || exit 1
+`,
+    ], { cwd: tempDir });
+    ok(output.includes("a.cs"), `Expected quoted match:\n${output}`);
+    ok(!output.includes("a.txt"), `Unexpected nonmatch:\n${output}`);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+for (const pattern of ["*[()#~].txt", "*[]()#~].txt"]) {
+  it(`zsh fixed glob preserves literal metacharacters in classes: ${pattern}`, {
+    skip: process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable(),
+  }, () => {
+    if (
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable()
+    ) {
+      return;
+    }
+    const output = testFixedGlobPrefix("zsh", {
+      kind: "file",
+      type: "file",
+      pattern,
+    }, "a");
+    for (const name of ["a(.txt", "a).txt", "a#.txt", "a~.txt"]) {
+      const escapedName = name.replace(/([()#~])/g, "\\$1");
+      ok(
+        output.includes(escapedName),
+        `Expected class match ${name}:\n${output}`,
+      );
+    }
+    if (pattern.includes("[]")) {
+      ok(
+        output.includes("a\\].txt"),
+        `Expected leading closing bracket:\n${output}`,
+      );
+    }
+    ok(!output.includes("a\\\\.txt"), `Unexpected backslash match:\n${output}`);
+  });
+}
+
+it("zsh fixed glob matches explicitly typed hidden parents", {
+  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+}, () => {
+  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
+    return;
+  }
+  const output = testFixedGlobPrefix("zsh", {
+    kind: "file",
+    type: "file",
+    pattern: "fixtures/*/*.txt",
+  }, "fixtures/.reports/in");
+  ok(output.includes("inner.txt"), `Expected hidden-parent match:\n${output}`);
+  ok(!output.includes("inner.json"), `Unexpected extension:\n${output}`);
+});
+
+it("zsh fixed glob preserves a lone class negation character", {
+  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+}, () => {
+  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
+    return;
+  }
+  const output = testFixedGlobPrefix("zsh", {
+    kind: "file",
+    type: "file",
+    pattern: "*[!](1).txt",
+  }, "a!");
+  ok(
+    output.includes("a\\!\\(1\\).txt"),
+    `Expected literal-class match:\n${output}`,
+  );
+  ok(!output.includes("a\\\\.txt"), `Unexpected backslash match:\n${output}`);
+});
+
+for (
+  const scenario of [
+    {
+      pattern: "fixtures/*.txt",
+      prefix: "./fixtures/",
+      label: "relative parent",
+      include: "report.txt",
+      exclude: ".report.txt",
+      includeHidden: false,
+    },
+    {
+      pattern: "fixtures/.reports/*.txt",
+      prefix: "fixtures/.reports/",
+      label: "hidden parent",
+      include: "inner.txt",
+      exclude: ".secret.txt",
+      includeHidden: false,
+    },
+    {
+      pattern: "fixtures/.reports/*.txt",
+      prefix: "fixtures/.reports/",
+      label: "explicit hidden children",
+      include: ".secret.txt",
+      exclude: "inner.json",
+      includeHidden: true,
+    },
+  ]
+) {
+  it(`zsh fixed glob keeps hidden-child policy: ${scenario.label}`, {
+    skip: process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable(),
+  }, () => {
+    if (
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable()
+    ) {
+      return;
+    }
+    const output = testFixedGlobPrefix("zsh", {
+      kind: "file",
+      type: "file",
+      pattern: scenario.pattern,
+      includeHidden: scenario.includeHidden,
+    }, scenario.prefix);
+    ok(output.includes(scenario.include), `Expected visible match:\n${output}`);
+    ok(
+      !output.includes(scenario.exclude),
+      `Unexpected hidden child:\n${output}`,
+    );
+  });
+}
+
+for (const member of [".", "="]) {
+  it(`zsh fixed glob preserves literal bracket members: ${member}`, {
+    skip: process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable(),
+  }, () => {
+    if (
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable()
+    ) {
+      return;
+    }
+    const output = testFixedGlobPrefix("zsh", {
+      kind: "file",
+      type: "file",
+      pattern: `*[[${member}](1).txt`,
+    }, "a");
+    ok(
+      output.includes(`a${member}\\(1\\).txt`),
+      `Expected literal parentheses:\n${output}`,
+    );
+    ok(
+      output.includes("a\\[\\(1\\).txt"),
+      `Expected bracket member:\n${output}`,
+    );
+    ok(
+      !output.includes(`a${member}1.txt`),
+      `Unexpected glob group match:\n${output}`,
+    );
+  });
+}
