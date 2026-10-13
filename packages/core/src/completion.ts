@@ -1,3 +1,4 @@
+import { getJoinedFileSuggestion } from "./internal/joined-file-suggestion.ts";
 import { formatMessage } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
 
@@ -48,6 +49,14 @@ function validateProgramName(programName: string): void {
  */
 function encodePattern(pattern: string): string {
   return pattern.replace(/%/g, "%25").replace(/:/g, "%3A");
+}
+
+/** Escapes literal records that could otherwise be read as Bash directives. */
+function encodeBashLiteral(value: string): string {
+  const text = sanitizeForTransport(value);
+  return /^(?:__FILE__|__JOINED_FILE__|__LITERAL__):/.test(text)
+    ? `__LITERAL__:${text}`
+    : text;
 }
 
 function encodeExtensions(
@@ -149,8 +158,227 @@ function _${programName} () {
   local __tilde_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)$'
   local __tilde_glob_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
-  while IFS= read -r line; do
-    if [[ "$line" == __FILE__:* ]]; then
+  # Bash splits unquoted '=' at its default word breaks. Reassemble only
+  # adjacent fragments, including further word breaks inside a joined value,
+  # leaving whitespace-separated arguments intact.
+  local __plain_current="$current" __remove="" __word __joined=0
+  local __raw_joined_current="$__raw_current"
+  local -a __raw_offsets=() __raw_quotes=()
+  if [[ \${COMP_LINE+x} ]]; then
+    local -a __words=()
+    local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
+    local __shell_quote="" __shell_escape=0 __boundary=0 __previous_boundary=0 __scan __symbol __shell_dollar=0
+    # Reconstruct the prefix at the cursor, leaving any suffix to Readline.
+    if [[ \${COMP_POINT+x} ]]; then
+      __rest="\${COMP_LINE:0:COMP_POINT}"
+    fi
+    for ((__i=0; __i<=COMP_CWORD; __i++)); do
+      __word="\${COMP_WORDS[__i]}"
+      __space=0
+      while [[ "$__rest" == [[:space:]]* ]]; do
+        __space=1
+        __rest="\${__rest:1}"
+      done
+      if (( __i == COMP_CWORD && \${#__rest} < \${#__word} )); then
+        __word="\${__word:0:\${#__rest}}"
+      fi
+      if [[ "\${__rest:0:\${#__word}}" != "$__word" ]]; then
+        __valid=0
+        break
+      fi
+      # Quoted or escaped operators belong to words; bare operators separate
+      # shell syntax even when no whitespace surrounds a redirection.
+      __boundary=0
+      for ((__scan=0; __scan<\${#__word}; __scan++)); do
+        __symbol="\${__word:__scan:1}"
+        if (( __shell_escape )); then
+          __shell_escape=0
+        elif [[ "$__shell_quote" == ansi ]]; then
+          if [[ "$__symbol" == '\\' ]]; then __shell_escape=1
+          elif [[ "$__symbol" == "'" ]]; then __shell_quote=""; fi
+        elif [[ "$__shell_quote" == "'" ]]; then
+          [[ "$__symbol" == "'" ]] && __shell_quote=""
+        elif [[ "$__symbol" == '\\' ]]; then
+          __shell_escape=1
+        elif [[ -n "$__shell_quote" ]]; then
+          [[ "$__symbol" == "$__shell_quote" ]] && __shell_quote=""
+        else
+          case "$__symbol" in
+            "'")
+              if (( __shell_dollar )); then __shell_quote=ansi
+              else __shell_quote="'"; fi ;;
+            '"') __shell_quote='"' ;;
+            '$') __shell_dollar=1 ;;
+            '>'|'<'|'|'|'&'|';'|'('|')') __boundary=1 ;;
+          esac
+        fi
+        [[ "$__symbol" == '$' && -z "$__shell_quote" ]] || __shell_dollar=0
+      done
+      if (( __i > 1 && !__space && !__boundary && !__previous_boundary )) &&
+          { [[ -n "$__word" && -z "\${__word//=/}" ]] ||
+            [[ -n "$__previous" && -z "\${__previous//=/}" ]] ||
+            [[ "\${__words[__j-1]}" == [-/+]* ]] ||
+            [[ "$__word" == =* && "\${__words[__j-1]}" == [-/+]* ]]; }; then
+        __words[__j-1]+="$__word"
+      else
+        __words[__j]="$__word"
+        ((++__j))
+      fi
+      __rest="\${__rest:\${#__word}}"
+      __previous="$__word"
+      __previous_boundary=$__boundary
+    done
+    if (( __valid )); then
+      current="\${__words[__j-1]}"
+      __raw_joined_current="$current"
+      prev=("\${__words[@]:1:__j-2}")
+      # Bash passes the fragment Readline will replace as the second argument,
+      # which is empty when the cursor follows a word-break character.
+      if [[ \${2+x} ]]; then
+        __remove="\${current:0:\${#current}-\${#2}}"
+      elif [[ -n "$__raw_current" && -z "\${__raw_current//=/}" ]]; then
+        __remove="$current"
+      else
+        __remove="\${current:0:\${#current}-\${#__raw_current}}"
+      fi
+      # Decode joined shell words without evaluating substitutions. Keep quote
+      # state across the reassembled fragments and decode the preserved prefix
+      # separately so trimming uses the same representation as suggestions.
+      __words[__j]="$__remove"
+      local __decoded __decoded_option=0 __before_quote __join_quote __char __next __k __ansi __part __digits __code __join_quote_offset
+      for ((__i=1; __i<=__j; __i++)); do
+        __word="\${__words[__i]}"
+        __decoded=""; __join_quote=""; __join_quote_offset=0
+        for ((__k=0; __k<\${#__word}; __k++)); do
+          __char="\${__word:__k:1}"
+          __before_quote="$__join_quote"
+          if [[ -z "$__join_quote" ]]; then
+            case "$__char" in
+              '\\') ((++__k)); __decoded+="\${__word:__k:1}" ;;
+              '$')
+                if [[ "\${__word:__k+1:1}" == "'" ]]; then
+                  __join_quote=ansi; __join_quote_offset=\${#__decoded}; __ansi=""; ((++__k))
+                elif [[ "\${__word:__k+1:1}" == '"' ]]; then
+                  __join_quote='"'; __join_quote_offset=\${#__decoded}; ((++__k))
+                else __decoded+="$__char"; fi ;;
+              "'"|'"') __join_quote="$__char"; __join_quote_offset=\${#__decoded} ;;
+              *) __decoded+="$__char" ;;
+            esac
+          elif [[ "$__join_quote" == ansi ]]; then
+            if [[ "$__char" == "'" ]]; then
+              printf -v __part '%b' "$__ansi"
+              __decoded+="$__part"; __join_quote=""
+            elif [[ "$__char" == '\\' ]]; then
+              ((++__k)); __next="\${__word:__k:1}"
+              case "$__next" in
+                [0-7])
+                  __digits="$__next"
+                  while (( \${#__digits} < 3 )) && [[ "\${__word:__k+1:1}" == [0-7] ]]; do
+                    ((++__k)); __digits+="\${__word:__k:1}"
+                  done
+                  __ansi+='\\0'"$__digits" ;;
+                c)
+                  __next="\${__word:__k+1:1}"
+                  if [[ -n "$__next" && "$__next" != "'" ]]; then
+                    ((++__k)); printf -v __code '%d' "'$__next"
+                    if [[ "$__next" == '?' ]]; then __code=127
+                    else __code=$((__code & 31)); fi
+                    printf -v __part '\\\\%03o' "$__code"
+                    __ansi+="$__part"
+                  else __ansi+='\\\\c'; fi ;;
+                "'"|'"'|'?') __ansi+="$__next" ;;
+                *) __ansi+='\\'"$__next" ;;
+              esac
+            else __ansi+="$__char"; fi
+          elif [[ "$__join_quote" == "'" ]]; then
+            if [[ "$__char" == "'" ]]; then __join_quote=""
+            else __decoded+="$__char"; fi
+          else
+            case "$__char" in
+              '"') __join_quote="" ;;
+              '\\')
+                __next="\${__word:__k+1:1}"
+                case "$__next" in
+                  '$'|'\`'|'"'|'\\') ((++__k)); __decoded+="$__next" ;;
+                  *) __decoded+="$__char" ;;
+                esac ;;
+              *) __decoded+="$__char" ;;
+            esac
+          fi
+          if (( __i == __j - 1 )) &&
+              { [[ ! \${__raw_offsets[\${#__decoded}]+x} ]] ||
+                [[ -n "$__before_quote" && -z "$__join_quote" ]]; }; then
+            __raw_offsets[\${#__decoded}]=$((__k + 1))
+            __raw_quotes[\${#__decoded}]="$__join_quote"
+          fi
+        done
+        if [[ "$__join_quote" == ansi ]]; then
+          printf -v __part '%b' "$__ansi"
+          __decoded+="$__part"
+        fi
+        # Shell syntax may precede the option prefix. Decide from decoded text,
+        # retaining the existing native-file handling for non-option words.
+        if [[ "$__decoded" == [-/+]* ]] || (( __i == __j && __decoded_option )); then
+          if (( __i == __j - 1 )); then
+            __decoded_option=1
+            __quote="$__join_quote"
+            [[ "$__quote" == ansi ]] && __quote="'"
+            __quote_offset=$__join_quote_offset
+          fi
+          __words[__i]="$__decoded"
+        fi
+      done
+      if [[ "\${__words[__j-1]}" == -*=* || "\${__words[__j-1]}" == /*:* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
+        current="\${__words[__j-1]}"
+        __joined=1
+      else
+        current="$__plain_current"
+        __words[__j]=""
+      fi
+      prev=("\${__words[@]:1:__j-2}")
+      __remove="\${__words[__j]}"
+    fi
+  fi
+
+  # Joined file directives retain the exact option prefix and metadata chosen
+  # by the parser; do not infer option boundaries through speculative retries.
+  local __protocol_current="$__raw_current"
+  (( __joined )) && __protocol_current="$current"
+  local -a __lines=() __replies=()
+  local line __reply_prefix="" __file_current="$current" __literal=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] && __lines+=("$line")
+  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__protocol_current" 2>/dev/null)
+  for line in "\${__lines[@]}"; do
+    COMPREPLY=()
+    __reply_prefix=""
+    __file_current="$current"
+    __literal=0
+    if [[ "$line" == __LITERAL__:* ]]; then
+      line="\${line#__LITERAL__:}"
+      __literal=1
+    elif [[ "$line" == __JOINED_FILE__:* ]]; then
+      line="\${line#__JOINED_FILE__:}"
+      __reply_prefix="\${line%%:*}"
+      __reply_prefix="\${__reply_prefix//%3A/:}"
+      __reply_prefix="\${__reply_prefix//%25/%}"
+      line="__FILE__:\${line#*:}"
+      __file_current="\${current:\${#__reply_prefix}}"
+    fi
+    local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset __file_tilde_quoted=0
+    if [[ -n "$__reply_prefix" ]]; then
+      local __raw_offset="\${__raw_offsets[\${#__reply_prefix}]:-\${#__reply_prefix}}"
+      __raw_file_current="\${__raw_joined_current:__raw_offset}"
+      # Quoting may start before the option name and remain active at the
+      # delimiter. Keep that context when deciding whether tilde is literal.
+      if [[ -n "\${__raw_quotes[\${#__reply_prefix}]-}" ]]; then
+        __file_tilde_quoted=1
+      fi
+      if (( __file_quote_offset >= \${#__reply_prefix} )); then
+        __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
+      fi
+    fi
+    if [[ $__literal == 0 && "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
       extensions="\${extensions//,\\./,}"; extensions="\${extensions#.}"
@@ -159,7 +387,8 @@ function _${programName} () {
 
       # path() echoes the raw shell word as its pattern.  Once dequoted,
       # use the literal current-word prefix instead of the escaped pattern.
-      if [[ "$pattern" == "$__raw_current" && "$current" != "$__raw_current" ]]; then
+      if [[ ( "$pattern" == "$__raw_file_current" && "$__file_current" != "$__raw_file_current" ) ||
+            ( -n "$__reply_prefix" && "$pattern" == "$__file_current" ) ]]; then
         pattern=""
       fi
 
@@ -177,12 +406,12 @@ function _${programName} () {
       unset GLOBIGNORE
 
       # Expand tilde prefix for file globbing
-      local __glob_current="$current" __tilde_prefix="" __tilde_expanded=""
-      if [[ "$__raw_current" == "~"* && "$current" =~ $__tilde_pattern ]]; then
+      local __glob_current="$__file_current" __tilde_prefix="" __tilde_expanded=""
+      if [[ $__file_tilde_quoted == 0 && "$__raw_file_current" == "~"* && "$__file_current" =~ $__tilde_pattern ]]; then
         __tilde_prefix="\${BASH_REMATCH[1]}"
         eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
         if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
-          __glob_current="\${__tilde_expanded}\${current#\$__tilde_prefix}"
+          __glob_current="\${__tilde_expanded}\${__file_current#\$__tilde_prefix}"
         else
           __tilde_prefix=""
         fi
@@ -196,7 +425,7 @@ function _${programName} () {
       local __from_pattern=0
       if [[ -n "$pattern" ]]; then
         # Normalize leading ./ so that ./src/ma matches pattern src/
-        local __norm_current="\${current#./}"
+        local __norm_current="\${__file_current#./}"
         local __norm_pattern="\${pattern#./}"
         # For wildcard patterns, compare only the directory prefix before
         # any wildcards so that typing src/ma narrows src/*.ts correctly
@@ -205,7 +434,7 @@ function _${programName} () {
           __compare_pattern="\${__compare_pattern%%[\*\?]*}"
           [[ "$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
         fi
-        if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$current" != "$pattern" ]]; then
+        if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$__file_current" != "$pattern" ]]; then
           # User has typed beyond or an equivalent form of the pattern
           true
         else
@@ -339,7 +568,7 @@ function _${programName} () {
 
       # Restore tilde prefix in completion results
       if [[ -n "$__tilde_prefix" &&
-            ( -z "$__quote" || $__quote_offset -gt 0 ) ]]; then
+            ( -z "$__quote" || $__file_quote_offset -gt 0 ) ]]; then
         local __i
         for __i in "\${!COMPREPLY[@]}"; do
           COMPREPLY[\$__i]="\${COMPREPLY[\$__i]/#\$__tilde_expanded/\$__tilde_prefix}"
@@ -356,7 +585,7 @@ function _${programName} () {
 
       # Readline appends directory separators when it receives the full path.
       # Midword quotes still need ours because replies omit the typed prefix.
-      if [[ -n "$__quote" && $__quote_offset -eq 0 ]]; then
+      if [[ -n "$__quote" && $__file_quote_offset -eq 0 ]]; then
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           COMPREPLY[__reply_index]="\${COMPREPLY[__reply_index]%/}"
@@ -365,8 +594,9 @@ function _${programName} () {
 
       # Readline replaces only the text after an open quote.  Remove the
       # already typed prefix so it is not inserted a second time.
-      if [[ -n "$__quote" && $__quote_offset -gt 0 ]]; then
-        local __quote_prefix="\${current:0:__quote_offset}"
+      # Joined replies are trimmed once against __remove after restoring option=.
+      if [[ -n "$__quote" && $__file_quote_offset -gt 0 && -z "$__reply_prefix" ]]; then
+        local __quote_prefix="\${__file_current:0:__file_quote_offset}"
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           COMPREPLY[__reply_index]="\${COMPREPLY[__reply_index]#"$__quote_prefix"}"
@@ -375,7 +605,7 @@ function _${programName} () {
 
       # Readline expands a leading tilde in a returned filename even when the
       # user did not type one.  Keep such local paths explicitly relative.
-      if [[ "$__raw_current" != "~"* && -z "$__tilde_prefix" ]]; then
+      if [[ ( "$__raw_file_current" != "~"* || $__file_tilde_quoted == 1 ) && -z "$__tilde_prefix" ]]; then
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           if [[ "\${COMPREPLY[__reply_index]}" =~ $__tilde_glob_pattern ]]; then
@@ -412,27 +642,30 @@ function _${programName} () {
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" && "$__prefix_targets_hidden" == "0" ]]; then
         local filtered=()
-        local __name __filter_index __kept_before=0
-        __filter_index=0
+        local __name
         for item in "\${COMPREPLY[@]}"; do
           __name="\${item%/}"; __name="\${__name##*/}"
           if [[ "$__name" != .* ]]; then
             filtered+=("$item")
-            if [[ $__filter_index -lt $__reply_start ]]; then
-              __kept_before=$((__kept_before + 1))
-            fi
           fi
-          __filter_index=$((__filter_index + 1))
         done
         COMPREPLY=("\${filtered[@]}")
-        __reply_start=$__kept_before
       fi
       if [[ \${#COMPREPLY[@]} -gt $__reply_start ]]; then __file_mode=1; fi
     else
       # Regular literal completion
       COMPREPLY+=("$line")
     fi
-  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__raw_current" 2>/dev/null)
+    for __word in "\${COMPREPLY[@]}"; do
+      __replies+=("$__reply_prefix$__word")
+    done
+  done
+  COMPREPLY=()
+  for __word in "\${__replies[@]}"; do
+    if [[ "\${__word:0:\${#__remove}}" == "$__remove" ]]; then
+      COMPREPLY+=("\${__word:\${#__remove}}")
+    fi
+  done
   if [[ $__file_mode == 1 && $(type -t compopt) == builtin ]]; then
     compopt -o filenames 2>/dev/null || true
   fi
@@ -450,8 +683,20 @@ fi
     let i = 0;
     for (const suggestion of suggestions) {
       if (i > 0) yield "\n";
-      if (suggestion.kind === "literal") {
-        yield sanitizeForTransport(suggestion.text);
+      const joined = getJoinedFileSuggestion(suggestion);
+      if (joined !== undefined) {
+        if (joined.literal && suggestion.kind === "literal") {
+          yield encodeBashLiteral(suggestion.text);
+          yield "\n";
+        }
+        for (const [index, { prefix, file }] of joined.files.entries()) {
+          if (index > 0) yield "\n";
+          yield `__JOINED_FILE__:${encodePattern(prefix)}:${file.type}:${
+            encodeExtensions(file.extensions)
+          }::${file.includeHidden ? "1" : "0"}`;
+        }
+      } else if (suggestion.kind === "literal") {
+        yield encodeBashLiteral(suggestion.text);
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
