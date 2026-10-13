@@ -29,4 +29,5 @@ links:
     joined fixed patterns no longer split or corrupt completion records.
     Wildcard directory components remain navigable, and completion filters even
     partial or unrelated typed prefixes instead of replacing them with all
-    matches. [[#1031], [#1032], [#1033], [#1079]]
+    matches. Large candidate sets remain responsive without changing suggestion
+    order. [[#1031], [#1032], [#1033], [#1079]]

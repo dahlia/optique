@@ -513,16 +513,12 @@ function _${programName} () {
         if [[ "$type" != "directory" ]]; then
           local __glob_dir="\${__glob_current%/*}"
           [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
-          local __d __known
+          local __d
           local __directory_pattern="$__glob_dir/*/"
           while IFS= read -r -d '' __d; do
             [[ -d "$__d" ]] || continue
             __d="\${__d%/}"
-            __known=0
-            for __candidate in "\${__candidates[@]}"; do
-              if [ "\${__candidate#./}" = "\${__d#./}" ]; then __known=1; break; fi
-            done
-            (( __known )) || __candidates+=("$__d")
+            __candidates+=("$__d")
           done < <(IFS=; printf '%s\\0' $__directory_pattern)
         fi
       else
@@ -708,18 +704,36 @@ function _${programName} () {
     done
   done
   COMPREPLY=()
-  local __reply __existing_reply __duplicate
   for __word in "\${__replies[@]}"; do
     if [[ "\${__word:0:\${#__remove}}" == "$__remove" ]]; then
-      __reply="\${__word:\${#__remove}}"
-      __duplicate=0
-      for __existing_reply in "\${COMPREPLY[@]}"; do
-        # Deduplication is exact even when the caller enables nocasematch.
-        if [ "$__reply" = "$__existing_reply" ]; then __duplicate=1; break; fi
-      done
-      (( __duplicate )) || COMPREPLY+=("$__reply")
+      COMPREPLY+=("\${__word:\${#__remove}}")
     fi
   done
+  if (( \${#COMPREPLY[@]} > 1 )); then
+    # Sort shell-escaped keys, not filenames: each key occupies one line even
+    # when a candidate contains tabs or newlines. Keep the first occurrence's
+    # index, then restore the original order without evaluating escaped data.
+    # This works without associative arrays or NUL-aware sort on Bash 3.2.
+    local -a __unique_replies=()
+    local __index __key __last_key=""
+    while IFS= read -r __index; do
+      __unique_replies+=("\${COMPREPLY[__index]}")
+    done < <(
+      for ((__index=0; __index<\${#COMPREPLY[@]}; __index++)); do
+        printf '%q\\t%d\\n' "\${COMPREPLY[__index]}" "$__index"
+      done |
+        LC_ALL=C sort -t $'\\t' -k1,1 -k2,2n |
+        {
+          while IFS=$'\\t' read -r __key __index; do
+            if [ "$__key" != "$__last_key" ]; then
+              printf '%s\\n' "$__index"
+              __last_key="$__key"
+            fi
+          done
+        } | LC_ALL=C sort -n
+    )
+    COMPREPLY=("\${__unique_replies[@]}")
+  fi
   if [[ $__file_mode == 1 && $(type -t compopt) == builtin ]]; then
     compopt -o filenames 2>/dev/null || true
   fi

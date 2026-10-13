@@ -312,6 +312,7 @@ function tab(
   fixedPatternWithSibling = false,
   literalCollision = false,
   directoryLiteralCollision = false,
+  commandBudget = 0,
 ): {
   readonly line: string;
   readonly replies: readonly string[];
@@ -377,7 +378,16 @@ ${setup}
 capture() {
   local saved_words="$(declare -p COMP_WORDS)" saved_breaks="$COMP_WORDBREAKS"
   local saved_nocasematch="$(shopt -p nocasematch)" saved_nocaseglob="$(shopt -p nocaseglob)"
+  local completion_steps=0
+  if (( ${commandBudget} > 0 )); then
+    set -T
+    trap '((++completion_steps <= ${commandBudget})) || exit 83' DEBUG
+  fi
   _eqapp "$@"
+  if (( ${commandBudget} > 0 )); then
+    trap - DEBUG
+    set +T
+  fi
   [[ "$(declare -p COMP_WORDS)" == "$saved_words" && "$COMP_WORDBREAKS" == "$saved_breaks" && "$(shopt -p nocasematch)" == "$saved_nocasematch" && "$(shopt -p nocaseglob)" == "$saved_nocaseglob" ]] && printf unchanged > state
   printf '%s\\n' "\${COMPREPLY[@]}" > replies
 }
@@ -469,6 +479,87 @@ describe("joined Bash option completion", () => {
       result.line,
       "eqapp --nested-pattern=src/foo\\ space/nested\\ dir/",
     );
+  });
+  it("completes thousands of files within a linear shell-command budget", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=bulk/",
+      ["--config=bulk/"],
+      "mkdir bulk; for i in {0001..2000}; do touch bulk/file-$i.toml; done",
+      false,
+      false,
+      0,
+      false,
+      false,
+      false,
+      false,
+      100000,
+    );
+    assert.equal(result.replies.length, 2000);
+    assert.equal(result.line, "eqapp --config=bulk/file-");
+  });
+  it("completes thousands of root directories without quadratic rescans", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --root-pattern=",
+      ["--root-pattern="],
+      "for i in {0001..2000}; do mkdir folder-$i; done",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      120000,
+    );
+    assert.equal(
+      result.replies.filter((reply) => reply.endsWith("/")).length,
+      2002,
+    );
+    assert.equal(result.line, "eqapp --root-pattern=");
+  });
+  it("deduplicates control-bearing filenames without changing their order", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const dir = mkdtempSync(join(tmpdir(), "optique-bash-dedup-"));
+    try {
+      const names = ["z", "a", "A", "a\ttab", "a\nline", "$(touch marker)"];
+      for (const name of names) writeFileSync(join(dir, name), "");
+      const replies = execFileSync("bash", [
+        "--noprofile",
+        "--norc",
+        "-c",
+        `
+export LC_ALL=C
+${bash.generateScript("eqapp")}
+eqapp() {
+  printf '%s\\n' '__JOINED_FILE__:--config=:file:::0' '__JOINED_FILE__:--config=:file:::0'
+}
+COMP_WORDS=(eqapp --config=)
+COMP_CWORD=1
+COMP_LINE='eqapp --config='
+COMP_POINT=\${#COMP_LINE}
+COMP_WORDBREAKS=''
+shopt -s nocasematch
+_eqapp
+shopt -q nocasematch || exit 84
+printf '%s\\0' "\${COMPREPLY[@]}"
+`,
+      ], { cwd: dir, encoding: "utf8", timeout: 15000 }).split("\0").slice(
+        0,
+        -1,
+      );
+      assert.deepEqual(replies, names.sort().map((name) => `--config=${name}`));
+      assert.ok(!existsSync(join(dir, "marker")));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
   it("keeps the omission of ./ when a fixed pattern includes it", {
     skip: !ptyAvailable,
