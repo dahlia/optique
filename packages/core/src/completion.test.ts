@@ -4,6 +4,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -4608,8 +4609,73 @@ ${functionName}
     it("should escape single quotes in arguments", () => {
       const script = nu.generateScript("myapp", ["it's", "test"]);
 
-      // Nushell uses doubled single quotes for escaping
-      deepStrictEqual(script.includes("'it''s'"), true);
+      // Nushell single-quoted strings have no escapes, so an argument with
+      // an apostrophe has to be written as a double-quoted string instead:
+      ok(script.includes(`^myapp "it's" 'test' ...$final_args`));
+      ok(!script.includes("'it''s'"));
+    });
+
+    it("should escape double quotes and backslashes in arguments", () => {
+      const script = nu.generateScript("myapp", ['it\'s "quoted" C:\\path\\']);
+
+      ok(script.includes(`^myapp "it's \\"quoted\\" C:\\\\path\\\\"`));
+    });
+
+    it("should pass fixed arguments intact to the CLI with actual nu shell", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "nu-fixed-args-"));
+      try {
+        const argsPath = join(tempDir, "callback-args");
+        const cliPath = join(tempDir, "fixed-args-cli");
+        writeFileSync(
+          cliPath,
+          `#!/bin/sh
+printf '%s\\0' "$@" > '${argsPath}'
+printf 'alpha\\t\\n'
+`,
+          { mode: 0o755 },
+        );
+
+        const fixedArgs = [
+          "it's",
+          `say "hi" it's`,
+          "back\\slash's\\",
+          "$(not) it's ~ *",
+          "line\nbreak's",
+          "caf\u00e9's \u{1F600}",
+          "",
+          "plain",
+        ];
+        const scriptPath = join(tempDir, "completion.nu");
+        writeFileSync(
+          scriptPath,
+          nu.generateScript("fixed-args-cli", fixedArgs),
+        );
+        const testScriptPath = join(tempDir, "test.nu");
+        writeFileSync(
+          testScriptPath,
+          `
+$env.PATH = ($env.PATH | prepend "${tempDir}")
+source ${scriptPath}
+nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
+`,
+        );
+        runCommand("nu", [testScriptPath], { cwd: tempDir });
+
+        const output = readFileSync(argsPath, "utf8");
+        ok(output.endsWith("\0"));
+        deepStrictEqual(output.slice(0, -1).split("\0"), [...fixedArgs, "a"]);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
 
     it("should encode suggestions with tab-separated format", () => {
