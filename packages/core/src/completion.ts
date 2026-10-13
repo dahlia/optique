@@ -871,10 +871,13 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
     local -a matches
     local -i i
     for (( i=1; i <= \${#completions[@]}; i++ )); do
+      # _describe treats colons as separators and backslashes as escapes.
+      value="\${completions[i]//\\\\/\\\\\\\\}"
+      value="\${value//:/\\\\:}"
       if [[ -n "\${descriptions[i]}" ]]; then
-        matches+=("\${completions[i]}:\${descriptions[i]}")
+        matches+=("\${value}:\${descriptions[i]}")
       else
-        matches+=("\${completions[i]}")
+        matches+=("\${value}")
       fi
     done
     _describe 'commands' matches
