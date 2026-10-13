@@ -511,27 +511,60 @@ function _${programName} () {
             *) __pathname_glob+="$__glob_char" ;;
           esac
         done
+        local __glob_dir="\${__pathname_glob%/*}"
+        [[ "$__glob_dir" == "$__pathname_glob" ]] && __glob_dir="."
+        local __navigation_dir="" __basename_glob="\${__pathname_glob##*/}"
+        # Once an offered directory is entered, keep the basename filter but
+        # enumerate there. Only descendants of matching pattern bases qualify.
+        if [[ "$type" != "directory" && "$__pattern_prefix" == */* ]]; then
+          local __typed_dir="\${__pattern_prefix%/*}" __base_dir __norm_base __norm_dir __base_prefix
+          if [[ -d "$__typed_dir" ]]; then
+            __norm_dir="\${__typed_dir#./}"; __norm_dir="\${__norm_dir%/}"
+            while IFS= read -r -d '' __base_dir; do
+              [[ -d "$__base_dir" ]] || continue
+              __norm_base="\${__base_dir#./}"; __norm_base="\${__norm_base%/}"
+              __base_prefix="$__norm_base/"
+              if [[ "$__norm_base" == . && "$__norm_dir" != /* && "$__norm_dir" != . ]] ||
+                  [ "\${__norm_dir:0:\${#__base_prefix}}" = "$__base_prefix" ]; then
+                __navigation_dir="$__typed_dir"
+                break
+              fi
+            done < <(IFS=; printf '%s\\0' $__glob_dir)
+          fi
+        fi
         local __candidate
         while IFS= read -r -d '' __candidate; do
           if [[ -e "$__candidate" || -L "$__candidate" ]]; then
             [[ -d "$__candidate" ]] && __candidate="\${__candidate%/}"
             __candidates+=("$__candidate")
           fi
-        done < <(IFS=; printf '%s\\0' $__pathname_glob)
+        done < <(
+          IFS=
+          if [[ -n "$__navigation_dir" ]]; then
+            printf '%s\\0' "$__navigation_dir"/$__basename_glob
+          else
+            printf '%s\\0' $__pathname_glob
+          fi
+        )
         # For file/any modes, also include directories from the base
         # directory for navigation even when the glob itself does not
         # match directory names.  Skip this for directory mode so that
         # the pattern's basename filter is respected.
         if [[ "$type" != "directory" ]]; then
-          local __glob_dir="\${__pathname_glob%/*}"
-          [[ "$__glob_dir" == "$__pathname_glob" ]] && __glob_dir="."
           local __d
           local __directory_pattern="$__glob_dir/*/"
           while IFS= read -r -d '' __d; do
             [[ -d "$__d" ]] || continue
             __d="\${__d%/}"
             __candidates+=("$__d")
-          done < <(IFS=; printf '%s\\0' $__directory_pattern)
+          done < <(
+            IFS=
+            if [[ -n "$__navigation_dir" ]]; then
+              printf '%s\\0' "$__navigation_dir"/*/
+            else
+              printf '%s\\0' $__directory_pattern
+            fi
+          )
         fi
       else
         __candidates=("$__glob_current"*)

@@ -38,6 +38,8 @@ To be released.
     order. Typed tilde or absolute path forms remain intact when fixed patterns
     use a different spelling. Fixed Bash patterns treat brackets, backslashes,
     and extended-glob operators literally alongside `*`/`?` wildcards.
+    Navigating into suggested directories retains fixed basename filters for
+    subsequent completions.
     [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell

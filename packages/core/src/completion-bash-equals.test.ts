@@ -436,6 +436,137 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (
+    const prefix of [
+      "src/nested/",
+      "src/nested/ch",
+      "./src/nested/ch",
+      "src/nested/deeper/gr",
+    ]
+  ) {
+    it(`keeps the fixed basename filter after navigating to ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "touch src/nested/child.toml src/nested/child.txt; mkdir src/nested/deeper; touch src/nested/deeper/grandchild.toml src/nested/deeper/grandchild.txt",
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(
+        [...result.replies].sort(),
+        prefix.endsWith("/")
+          ? ["src/nested/child.toml", "src/nested/deeper/"]
+          : prefix.endsWith("gr")
+          ? ["src/nested/deeper/grandchild.toml"]
+          : [`${prefix.startsWith("./") ? "./" : ""}src/nested/child.toml`],
+      );
+    });
+  }
+  it("navigates below wildcard directory components", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --nested-pattern=src/foo/nested/ch",
+      ["--nested-pattern=src/foo/nested/ch"],
+      "mkdir -p src/foo/nested; touch src/foo/nested/child.toml src/foo/nested/child.txt",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/foo/nested/child.toml"]);
+    assert.equal(
+      result.line,
+      "eqapp --nested-pattern=src/foo/nested/child.toml ",
+    );
+  });
+  it("keeps wildcard characters literal in an entered directory", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/'child*[x]'/ch",
+      ["--config=src/child*[x]/ch"],
+      "mkdir 'src/child*[x]'; touch 'src/child*[x]/child.toml' 'src/child*[x]/child.txt'",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/child*[x]/child.toml"]);
+  });
+  it(
+    "navigates with a fixed basename pattern rooted at the current directory",
+    {
+      skip: !ptyAvailable,
+    },
+    () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        "eqapp --config=dir=x/ch",
+        ["--config=dir=x/ch"],
+        "touch dir=x/child.toml dir=x/child.txt",
+        false,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        0,
+        "*.toml",
+      );
+      assert.deepEqual(result.replies, ["x/child.toml"]);
+      assert.equal(result.line, "eqapp --config=dir=x/child.toml ");
+    },
+  );
+  it("does not navigate outside matching fixed-pattern directories", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/other/ch",
+      ["--config=src/other/ch"],
+      "mkdir src/other; touch src/other/child.toml",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      0,
+      "src/nested*/*.toml",
+    );
+    assert.deepEqual(result.replies.filter(Boolean), []);
+    assert.equal(result.line, "eqapp --config=src/other/ch");
+  });
+  it("ignores nocasematch when checking navigation ancestry", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/NESTED/deeper/ch",
+      ["--config=src/NESTED/deeper/ch"],
+      "shopt -s nocasematch; mkdir -p src/NESTED/deeper; touch src/NESTED/deeper/child.toml",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      0,
+      "src/nested*/*.toml",
+    );
+    assert.deepEqual(result.replies.filter(Boolean), []);
+  });
   for (const patternUsesTilde of [false, true]) {
     it(
       `keeps typed tilde spelling with a fixed glob (patternUsesTilde=${patternUsesTilde})`,
