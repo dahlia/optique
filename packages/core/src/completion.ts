@@ -761,8 +761,8 @@ ${
                 # dotfiles, so also scan .* when the filter targets them.
                 for __item in $__glob_dir/*
                     if test -e "$__item"
-                        set -l __bn (basename "$__item")
-                        if string match -q "$__glob_filter" -- "$__bn"
+                        set -l __bn (basename -- "$__item")
+                        if string match -q -- "$__glob_filter" "$__bn"
                             set -a __candidates "$__item"
                         end
                     end
@@ -770,11 +770,11 @@ ${
                 if string match -q '.*' -- "$__glob_filter"
                     for __item in $__glob_dir/.*
                         if test -e "$__item"
-                            set -l __bn (basename "$__item")
+                            set -l __bn (basename -- "$__item")
                             if test "$__bn" = "." -o "$__bn" = ".."
                                 continue
                             end
-                            if string match -q "$__glob_filter" -- "$__bn"
+                            if string match -q -- "$__glob_filter" "$__bn"
                                 set -a __candidates "$__item"
                             end
                         end
@@ -888,7 +888,7 @@ ${
             if test "$hidden" != "1" -a (string sub -l 1 -- $__glob_basename) != "."
                 set -l filtered
                 for item in $items
-                    set -l basename (basename $item)
+                    set -l basename (basename -- "$item")
                     if not string match -q '.*' -- $basename
                         set -a filtered $item
                     end
@@ -905,9 +905,10 @@ ${
                 set items $restored
             end
 
-            # Output file completions
+            # Output file completions.  Use printf rather than echo, which
+            # would take filenames like -n or -e as its own options.
             for item in $items
-                echo $item
+                printf '%s\\n' $item
             end
         else
             # Regular literal completion - split by tab
