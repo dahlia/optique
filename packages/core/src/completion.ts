@@ -295,7 +295,7 @@ function _${programName} () {
   # file directives without changing the protocol used by other shells.
   local __protocol_current="$__raw_current"
   (( __joined )) && __protocol_current="$current"
-  local -a __lines=() __value_files=() __value_literals=() __replies=()
+  local -a __lines=() __value_files=() __value_literals=() __replies=() __reply_files=()
   local __echo=0 __value="" __option_prefix="" line
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" ]] && continue
@@ -315,9 +315,11 @@ function _${programName} () {
     done < <(${programName} ${escapedArgs} "\${prev[@]}" "\${current%%=*}" "$__value" 2>/dev/null)
   fi
 
-  local __index=0 __reply_prefix="" __file_current="$current"
+  local __index=0 __reply_prefix="" __file_current="$current" __is_file=0
   for line in "\${__lines[@]}" "\${__value_files[@]}"; do
     COMPREPLY=()
+    __is_file=0
+    [[ "$line" == __FILE__:* ]] && __is_file=1
     __reply_prefix=""
     __file_current="$current"
     if (( __index >= \${#__lines[@]} )); then
@@ -623,14 +625,21 @@ function _${programName} () {
           __filter_index=$((__filter_index + 1))
         done
         COMPREPLY=("\${filtered[@]}")
-        # A later directive's hidden-file filter also applies to earlier replies.
+        # Later file directives may filter earlier files, but never literals.
         filtered=()
+        local __kept_files=()
+        __filter_index=0
         for item in "\${__replies[@]}"; do
           __name="\${item#"$__option_prefix"}"
           __name="\${__name%/}"; __name="\${__name##*/}"
-          [[ "$__name" != .* ]] && filtered+=("$item")
+          if [[ "\${__reply_files[__filter_index]}" != 1 || "$__name" != .* ]]; then
+            filtered+=("$item")
+            __kept_files+=("\${__reply_files[__filter_index]}")
+          fi
+          __filter_index=$((__filter_index + 1))
         done
         __replies=("\${filtered[@]}")
+        __reply_files=("\${__kept_files[@]}")
         __reply_start=$__kept_before
       fi
       if [[ \${#COMPREPLY[@]} -gt $__reply_start ]]; then __file_mode=1; fi
@@ -640,6 +649,7 @@ function _${programName} () {
     fi
     for __word in "\${COMPREPLY[@]}"; do
       __replies+=("$__reply_prefix$__word")
+      __reply_files+=("$__is_file")
     done
   done
   COMPREPLY=()

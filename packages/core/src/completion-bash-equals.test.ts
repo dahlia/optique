@@ -50,7 +50,15 @@ const mixedValues: ValueParser<"sync", string> = {
     yield { kind: "file", type: "file", pattern: prefix };
   },
 };
+const dotValues: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "literal", text: ".env" };
+    yield { kind: "file", type: "file", extensions: [".unmatched"] };
+  },
+};
 const fields = {
+  dot: optional(option("--dot", dotValues)),
   mixed: optional(option("--mixed", mixedValues)),
   scopeFile: optional(
     option("--scope:file", "/scope:file", "+scope:file", scopeFiles),
@@ -169,7 +177,7 @@ function tab(
             ? suggest(withPositionalFiles, [first, ...rest])
             : suggest(parser, [first, ...rest]),
         ),
-      ).map((chunk) => chunk + "\n").join("");
+      ).join("") + "\n";
       return `if [[ $# -eq ${request.length} ${
         request.map((arg, i) => `&& \${${i + 1}} == ${shellQuote(arg)}`).join(
           " ",
@@ -221,6 +229,20 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("preserves dot literals while filtering hidden file candidates", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --dot=",
+      ["--dot="],
+      "rm -- dir=x/.hidden.toml; rmdir dir=x; touch .env.unmatched",
+    );
+    assert.deepEqual(result.calls, [["--dot="], ["--dot", ""]]);
+    assert.deepEqual(result.replies, [".env"]);
+    assert.equal(result.line, "eqapp --dot=.env ");
+  });
+
   for (const prefix of ["/", "+"]) {
     it(
       `completes a quoted ${prefix} option value`,
