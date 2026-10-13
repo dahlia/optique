@@ -5225,6 +5225,12 @@ __globapp_complete
           deepStrictEqual(completeWithFish(f, "__FILE__:file::What?/:0"), [
             "What?/f1",
           ]);
+          // An unrelated typed word must not replace the fixed directory,
+          // just as it does not for a pattern such as src/.
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::What?/:0", "zz"),
+            ["What?/f1"],
+          );
         } finally {
           rmSync(f.root, { recursive: true, force: true });
         }

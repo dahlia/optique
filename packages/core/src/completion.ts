@@ -975,14 +975,11 @@ ${
                 set -l __norm_pattern (string replace -r '^\\./' '' -- "$pattern")
                 # For wildcard patterns, compare only the directory prefix.
                 # Use a regex: fish wildcards have no character classes.
+                # Only the basename can hold wildcards; a ? or * in a
+                # directory name such as What?/ is literal.
                 set -l __compare_pattern "$__norm_pattern"
-                if string match -qr '[*?]' -- "$__compare_pattern"
-                    set __compare_pattern (string replace -r '[*?].*' '' -- "$__compare_pattern")
-                    if string match -q '*/*' -- "$__compare_pattern"
-                        set __compare_pattern (string replace -r '/[^/]*$' '/' -- "$__compare_pattern")
-                    else
-                        set __compare_pattern ""
-                    end
+                if string match -qr '[*?][^/]*$' -- "$__compare_pattern"
+                    set __compare_pattern (string replace -r '[^/]*$' '' -- "$__compare_pattern")
                 end
                 set -l __cp_len (string length -- "$__compare_pattern")
                 set -l __nc_len (string length -- "$__norm_current")
