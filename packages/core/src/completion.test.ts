@@ -5317,7 +5317,7 @@ nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
       deepStrictEqual(script.includes("[context: string]"), true);
       deepStrictEqual(script.includes("$context | args-split"), true);
       // args-split itself marks a trailing unquoted space as a new argument:
-      ok(script.includes("$ends_with_delimiter"));
+      ok(script.includes("$trailing_space"));
     });
 
     it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {

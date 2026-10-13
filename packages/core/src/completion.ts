@@ -1258,66 +1258,149 @@ export const nu: ShellCompletion = {
     const safeName = programName.replace(/[^a-zA-Z0-9]+/g, "-");
     const functionName = `nu-complete-${safeName}`;
     return `
-# Helper to split args respecting quotes and whitespace
+# Helper to split a command line into the arguments Nushell would pass to
+# an external command.  Words are found the way Nushell's lexer finds them
+# (quotes and raw strings may contain whitespace), then each word is decoded
+# like an external argument.  A final empty argument is added when the line
+# ends in unquoted whitespace, for the word about to be completed.
 def args-split []: string -> list<string> {
-  let STATE_NORMAL = 0
-  let STATE_IN_SINGLE_QUOTE = 1
-  let STATE_IN_DOUBLE_QUOTE = 2
-  let STATE_ESCAPE = 3
   let WHITESPACES = [" " "\\t" "\\n" "\\r"]
+  let QUOTES = ["'" '"' "\`"]
 
-  mut state = $STATE_NORMAL
-  mut current_token = ""
-  mut result: list<string> = []
-  mut prev_state = $STATE_NORMAL
-  mut ends_with_delimiter = false
-
-  for char in ($in | split chars) {
-    $ends_with_delimiter = false
-    if $state == $STATE_ESCAPE {
-      $current_token = $current_token + $char
-      $state = $prev_state
-    } else if $char == '\\\\' {
-      $prev_state = $state
-      $state = $STATE_ESCAPE
-    } else if $state == $STATE_NORMAL {
-      if $char == "'" {
-        $state = $STATE_IN_SINGLE_QUOTE
-      } else if $char == '"' {
-        $state = $STATE_IN_DOUBLE_QUOTE
-      } else if ($char in $WHITESPACES) {
-        $ends_with_delimiter = true
-        if ($current_token | is-not-empty) {
-          $result = $result | append $current_token
-          $current_token = ""
+  # Decodes one word.  An unterminated word is the one still being typed,
+  # so its open quote is taken as if it were closed.
+  let decode = {|word: string, unterminated: bool|
+    let hashes = if ($word | str starts-with "r#") {
+      $word | str replace -r '(?s)^r(#+).*$' '$1'
+    } else {
+      ""
+    }
+    if ($hashes | is-not-empty) {
+      let prefix = "r" + $hashes + "'"
+      let suffix = "'" + $hashes
+      let size = ($hashes | str length)
+      if ($word | str starts-with $prefix) and ($word | str ends-with $suffix) and (($word | str length) >= ($size * 2 + 3)) {
+        $word | str replace $prefix "" | str replace -r ($suffix + '$') ""
+      } else if $unterminated and ($word | str starts-with $prefix) {
+        $word | str replace $prefix ""
+      } else {
+        $word
+      }
+    } else {
+      mut result = ""
+      mut quote = ""
+      mut quoted = ""
+      mut escaped = false
+      for char in ($word | split chars) {
+        if $quote == "" {
+          if ($char in $QUOTES) {
+            $quote = $char
+            $quoted = ""
+          } else {
+            $result = $result + $char
+          }
+        } else if $escaped {
+          $quoted = $quoted + $char
+          $escaped = false
+        } else if $char == $quote {
+          let body = $quoted
+          $result = $result + (if $quote == '"' {
+            try { '"' + $body + '"' | from nuon } catch { $body }
+          } else {
+            $body
+          })
+          $quote = ""
+        } else {
+          $quoted = $quoted + $char
+          $escaped = ($quote == '"' and $char == '\\')
         }
-      } else {
-        $current_token = $current_token + $char
       }
-    } else if $state == $STATE_IN_SINGLE_QUOTE {
-      if $char == "'" {
-        $state = $STATE_NORMAL
-      } else {
-        $current_token = $current_token + $char
+      if $quote != "" {
+        let body = $quoted
+        $result = $result + (if not $unterminated {
+          $quote + $body
+        } else if $quote == '"' {
+          try { '"' + $body + '"' | from nuon } catch { $body }
+        } else {
+          $body
+        })
       }
-    } else if $state == $STATE_IN_DOUBLE_QUOTE {
-      if $char == '"' {
-        $state = $STATE_NORMAL
-      } else {
-        $current_token = $current_token + $char
-      }
+      $result
     }
   }
-  # A quote left open at the end starts the argument being completed, even
-  # when nothing follows it yet
-  if ($current_token | is-not-empty) or ($state in [$STATE_IN_SINGLE_QUOTE $STATE_IN_DOUBLE_QUOTE]) {
-    $result = $result | append $current_token
+
+  mut words: list<string> = []
+  mut word = ""
+  mut in_word = false
+  mut quote = ""
+  mut escaped = false
+  mut raw_hashes = ""
+  mut raw_pending = ""
+  mut prev = ""
+  mut trailing_space = false
+
+  for char in ($in | split chars) {
+    $trailing_space = false
+    if $quote == "#" and $char != "#" and $char != "'" {
+      # Not a raw string after all; lex this character normally
+      $quote = ""
+    }
+    if $quote == "r" {
+      # Inside a raw string, which ends at ' followed by the same number of #
+      if ($raw_pending | is-not-empty) and $char == "#" {
+        $raw_pending = $raw_pending + $char
+      } else if $char == "'" {
+        $raw_pending = $char
+      } else {
+        $raw_pending = ""
+      }
+      if $raw_pending == ("'" + $raw_hashes) {
+        $quote = ""
+        $raw_pending = ""
+      }
+      $word = $word + $char
+    } else if $quote == "#" {
+      # Between r# and the opening ' of a raw string
+      $word = $word + $char
+      if $char == "#" {
+        $raw_hashes = $raw_hashes + $char
+      } else {
+        $quote = "r"
+      }
+    } else if $quote != "" {
+      $word = $word + $char
+      if $escaped {
+        $escaped = false
+      } else if $char == $quote {
+        $quote = ""
+      } else {
+        $escaped = ($quote == '"' and $char == '\\')
+      }
+    } else if ($char in $WHITESPACES) {
+      if $in_word {
+        $words = $words | append (do $decode $word false)
+        $word = ""
+        $in_word = false
+      }
+      $trailing_space = true
+    } else {
+      if ($char in $QUOTES) {
+        $quote = $char
+      } else if $char == "#" and $prev == "r" {
+        $quote = "#"
+        $raw_hashes = "#"
+      }
+      $word = $word + $char
+      $in_word = true
+    }
+    $prev = $char
   }
-  # Whitespace outside quotes at the end starts a new, still empty argument
-  if $ends_with_delimiter {
-    $result = $result | append ''
+  if $in_word {
+    $words = $words | append (do $decode $word ($quote != ""))
+  } else if $trailing_space {
+    $words = $words | append ""
   }
-  $result
+  $words
 }
 
 # Helper to tell whether Nushell would not read a value back verbatim as a
@@ -1356,7 +1439,8 @@ def quote-arg []: string -> string {
 
 # Completion command that calls back to the CLI
 export def "${functionName}" [context: string] {
-  # Split context into tokens, handling quotes properly
+  # Split context into the arguments Nushell would pass, including an empty
+  # one for a new word when the context ends in unquoted whitespace
   let tokens = $context | args-split
 
   # Remove the command name (first token) to get arguments
