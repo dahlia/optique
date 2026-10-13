@@ -504,9 +504,14 @@ function* suggestOptionSync<T>(
 ): Generator<Suggestion> {
   if (hidden || context.optionsTerminated) return;
 
-  // Check for --option=value format
+  const expectingValue = context.buffer.length > 0 &&
+    (optionNames as readonly string[]).includes(
+      context.buffer[context.buffer.length - 1],
+    );
+
+  // An expected value may itself contain '=' or resemble a joined option.
   const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0) {
+  if (equalsIndex >= 0 && !expectingValue) {
     // Handle --option=value completion
     const optionPart = prefix.slice(0, equalsIndex);
     const valuePart = prefix.slice(equalsIndex + 1);
@@ -541,11 +546,6 @@ function* suggestOptionSync<T>(
       }
     }
   } else {
-    const expectingValue = context.buffer.length > 0 &&
-      (optionNames as readonly string[]).includes(
-        context.buffer[context.buffer.length - 1],
-      );
-
     // If the prefix looks like an option prefix, suggest matching option names
     if (
       !expectingValue &&
@@ -690,9 +690,14 @@ async function* suggestOptionAsync<T>(
 ): AsyncGenerator<Suggestion> {
   if (hidden || context.optionsTerminated) return;
 
-  // Check for --option=value format
+  const expectingValue = context.buffer.length > 0 &&
+    (optionNames as readonly string[]).includes(
+      context.buffer[context.buffer.length - 1],
+    );
+
+  // An expected value may itself contain '=' or resemble a joined option.
   const equalsIndex = prefix.indexOf("=");
-  if (equalsIndex >= 0) {
+  if (equalsIndex >= 0 && !expectingValue) {
     // Handle --option=value completion
     const optionPart = prefix.slice(0, equalsIndex);
     const valuePart = prefix.slice(equalsIndex + 1);
@@ -726,11 +731,6 @@ async function* suggestOptionAsync<T>(
       }
     }
   } else {
-    const expectingValue = context.buffer.length > 0 &&
-      (optionNames as readonly string[]).includes(
-        context.buffer[context.buffer.length - 1],
-      );
-
     // If the prefix looks like an option prefix, suggest matching option names
     if (
       !expectingValue &&

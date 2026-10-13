@@ -25,7 +25,19 @@ const files: ValueParser<"sync", string> = {
     yield { kind: "file", type: "file", pattern: prefix };
   },
 };
+const prefixSensitiveFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest(prefix) {
+    yield {
+      kind: "file",
+      type: prefix.includes("=") ? "file" : "directory",
+      pattern: prefix,
+      extensions: prefix.includes("=") ? [".toml"] : [".log"],
+    };
+  },
+};
 const fields = {
+  sensitiveConfig: optional(option("--sensitive-config", prefixSensitiveFiles)),
   url: optional(option("--url", choice(["https://example.com"]))),
   email: optional(option("--email", choice(["me@example.com"]))),
   tag: optional(option("--tag", choice([":example", "@example"]))),
@@ -120,7 +132,7 @@ function tab(
       ? [
         ...args.slice(0, -1),
         current.slice(0, current.indexOf("=")),
-        current.slice(current.indexOf("=") + 1).split("=")[0],
+        current.slice(current.indexOf("=") + 1),
       ]
       : undefined;
     const requests = retry === undefined ? [args] : [args, retry];
@@ -186,6 +198,20 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("preserves prefix-dependent file metadata through the retry", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp --sensitive-config=name=fo", [
+      "--sensitive-config=name=fo",
+    ]);
+    assert.deepEqual(result.calls, [["--sensitive-config=name=fo"], [
+      "--sensitive-config",
+      "name=fo",
+    ]]);
+    assert.deepEqual(result.replies, ["foo.toml"]);
+    assert.equal(result.line, "eqapp --sensitive-config=name=foo.toml ");
+  });
   it(
     "stops reassembling joined values at whitespace",
     { skip: !ptyAvailable },
@@ -275,7 +301,7 @@ describe("joined Bash option completion", () => {
     ]);
     assert.deepEqual(result.calls, [
       ["--label", "--", "--config=./name=f"],
-      ["--label", "--", "--config", "./name"],
+      ["--label", "--", "--config", "./name=f"],
     ]);
     assert.deepEqual(result.replies, ["foo.toml"]);
     assert.equal(result.line, "eqapp --label -- --config=./name=foo.toml ");

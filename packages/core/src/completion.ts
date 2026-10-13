@@ -209,11 +209,10 @@ function _${programName} () {
   if (( __echo )) && [[ "$current" == -*=* ]]; then
     __option_prefix="\${current%%=*}="
     __value="\${current#*=}"
-    # The split protocol also treats '=' inside a value as option syntax.
-    # Ask with the prefix before it, but glob against the complete value.
+    # Preserve the full value prefix for prefix-dependent file suggestions.
     while IFS= read -r line || [[ -n "$line" ]]; do
       [[ "$line" == __FILE__:* ]] && __value_files+=("$line")
-    done < <(${programName} ${escapedArgs} "\${prev[@]}" "\${current%%=*}" "\${__value%%=*}" 2>/dev/null)
+    done < <(${programName} ${escapedArgs} "\${prev[@]}" "\${current%%=*}" "$__value" 2>/dev/null)
   fi
 
   local __index=0 __reply_prefix="" __file_current="$current"

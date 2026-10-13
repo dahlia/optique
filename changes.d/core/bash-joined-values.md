@@ -5,4 +5,5 @@ links:
 ---
  -  Fixed Bash completion of values in `--option=value` form with the default
     word-break settings, including file paths and values containing `:` or
-    `@`.  [[#1031], [#1033]]
+    `@`.  File completion now preserves values containing `=` when choosing
+    file types and extensions.  [[#1031], [#1033]]
