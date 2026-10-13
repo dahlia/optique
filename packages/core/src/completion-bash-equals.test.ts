@@ -52,18 +52,22 @@ const mixedValues: ValueParser<"sync", string> = {
 };
 const fields = {
   mixed: optional(option("--mixed", mixedValues)),
-  scopeFile: optional(option("--scope:file", scopeFiles)),
-  scope: optional(option("--scope:name", choice(["dev"]))),
+  scopeFile: optional(
+    option("--scope:file", "/scope:file", "+scope:file", scopeFiles),
+  ),
+  scope: optional(
+    option("--scope:name", "/scope:name", "+scope:name", choice(["dev"])),
+  ),
   sensitiveConfig: optional(option("--sensitive-config", prefixSensitiveFiles)),
   url: optional(option("--url", choice(["https://example.com"]))),
   email: optional(option("--email", choice(["me@example.com"]))),
   tag: optional(option("--tag", choice([":example", "@example"]))),
   label: optional(option("--label", string())),
-  mode: optional(option("--mode", choice(["dev", "prod"]))),
+  mode: optional(option("--mode", "/mode", "+mode", choice(["dev", "prod"]))),
   transport: optional(
     option("--mail-transport", choice(["resend", "a=resend", "=resend"])),
   ),
-  config: optional(option("--config", files)),
+  config: optional(option("--config", "/config", "+config", files)),
   region: optional(option("--region", choice(["remote", "relay"]))),
   verbose: option("--verbose"),
 };
@@ -146,7 +150,7 @@ function tab(
     mkdirSync(join(dir, "dir=x"));
     writeFileSync(join(dir, "dir=x", ".hidden.toml"), "");
     const current = args.at(-1) ?? "";
-    const retry = current.startsWith("--") && current.includes("=")
+    const retry = /^[-/+]/.test(current) && current.includes("=")
       ? [
         ...args.slice(0, -1),
         current.slice(0, current.indexOf("=")),
@@ -217,6 +221,66 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (const prefix of ["/", "+"]) {
+    it(
+      `completes a quoted ${prefix} option value`,
+      { skip: !ptyAvailable },
+      () => {
+        if (!ptyAvailable) return;
+        const current = `${prefix}mode=de`;
+        const result = tab(`eqapp ${prefix}mode="de`, [current]);
+        assert.deepEqual(result.calls, [[current]]);
+        assert.deepEqual(result.replies, ["dev"]);
+        assert.equal(result.line, `eqapp ${prefix}mode="dev" `);
+      },
+    );
+    it(`reassembles ${prefix} option names without an equals word break`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const current = `${prefix}scope:name=d`;
+      const result = tab(
+        `eqapp ${current}`,
+        [current],
+        'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
+      );
+      assert.deepEqual(result.calls, [[current]]);
+      assert.deepEqual(result.replies, ["name=dev"]);
+      assert.equal(result.line, `eqapp ${prefix}scope:name=dev `);
+    });
+    it(
+      `enumerates joined ${prefix} file values`,
+      { skip: !ptyAvailable },
+      () => {
+        if (!ptyAvailable) return;
+        const current = `${prefix}config=./name=f`;
+        const result = tab(`eqapp ${current}`, [current]);
+        assert.deepEqual(result.calls, [[current], [
+          `${prefix}config`,
+          "./name=f",
+        ]]);
+        assert.deepEqual(result.replies, ["foo.toml"]);
+        assert.equal(result.line, `eqapp ${prefix}config=./name=foo.toml `);
+      },
+    );
+    it(`expands a tilde after a split ${prefix} option name`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const current = `${prefix}scope:file=~/name=f`;
+      const result = tab(
+        `eqapp ${current}`,
+        [current],
+        'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"; export HOME="$PWD"',
+      );
+      assert.deepEqual(result.calls, [[current], [
+        `${prefix}scope:file`,
+        "~/name=f",
+      ]]);
+      assert.equal(result.line, `eqapp ${prefix}scope:file=~/name=foo.toml `);
+    });
+  }
+
   it("keeps an exact literal alongside matching native files", {
     skip: !ptyAvailable,
   }, () => {

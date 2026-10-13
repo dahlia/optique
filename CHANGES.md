@@ -10,13 +10,14 @@ To be released.
 
 ### @optique/core
 
- -  Fixed Bash completion of `--option=value` with default or customized
-    word-break settings, including `:`/`@` in values or option names.
-    Completion respects the cursor position and decodes quoted or escaped
-    values without executing shell substitutions.  File values preserve
-    their full prefix, filtering metadata, unquoted tilde expansion after
-    split option names, and quoted path prefixes.  Exact literal candidates
-    remain available alongside file suggestions.  [[#1031], [#1033]]
+ -  Fixed Bash completion of joined option values with `-`, `/`, or `+`
+    prefixes and default or customized word-break settings, including `:`/`@`
+    in values or option names. Completion respects the cursor position and
+    decodes quoted or escaped values without executing shell substitutions.
+    File values preserve their full prefix, filtering metadata, unquoted tilde
+    expansion after split option names, and quoted path prefixes.  Exact
+    literal candidates remain available alongside file suggestions.
+    [[#1031], [#1033]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed

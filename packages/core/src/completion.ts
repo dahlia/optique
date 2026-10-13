@@ -178,8 +178,8 @@ function _${programName} () {
       if (( __i > 1 && !__space )) &&
           { [[ -n "$__word" && -z "\${__word//=/}" ]] ||
             [[ -n "$__previous" && -z "\${__previous//=/}" ]] ||
-            [[ "\${__words[__j-1]}" == -* ]] ||
-            [[ "$__word" == =* && "\${__words[__j-1]}" == -* ]]; }; then
+            [[ "\${__words[__j-1]}" == [-/+]* ]] ||
+            [[ "$__word" == =* && "\${__words[__j-1]}" == [-/+]* ]]; }; then
         __words[__j-1]+="$__word"
       else
         __words[__j]="$__word"
@@ -208,7 +208,7 @@ function _${programName} () {
       local __decoded __join_quote __char __next __k __ansi __part __digits __code __join_quote_offset
       for ((__i=1; __i<=__j; __i++)); do
         __word="\${__words[__i]}"
-        [[ "$__word" == -*=* ]] || continue
+        [[ "$__word" == [-/+]*=* ]] || continue
         __decoded=""; __join_quote=""; __join_quote_offset=0
         for ((__k=0; __k<\${#__word}; __k++)); do
           __char="\${__word:__k:1}"
@@ -277,7 +277,7 @@ function _${programName} () {
         fi
         __words[__i]="$__decoded"
       done
-      if [[ "\${__words[__j-1]}" == -*=* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
+      if [[ "\${__words[__j-1]}" == [-/+]*=* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
         current="\${__words[__j-1]}"
         __joined=1
       else
@@ -302,7 +302,7 @@ function _${programName} () {
     __lines+=("$line")
     [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]] && __echo=1
   done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__protocol_current" 2>/dev/null)
-  if (( __echo )) && [[ "$current" == -*=* ]]; then
+  if (( __echo )) && [[ "$current" == [-/+]*=* ]]; then
     __option_prefix="\${current%%=*}="
     __value="\${current#*=}"
     # Preserve the full value prefix for prefix-dependent file suggestions.
