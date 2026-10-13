@@ -207,7 +207,7 @@ describe("fish completion of quoted and escaped current tokens", () => {
 
   // These decode to characters that completion output cannot carry, so the
   // token stays as typed.
-  for (const input of ["a\\nb", "a\\tb"]) {
+  for (const input of ["a\\nb", "two\\n", "a\\tb"]) {
     it(`keeps ${input} as typed`, { skip: !fishAvailable }, () => {
       if (!fishAvailable) return;
       const result = completeInFish(`probecli --format ${input}`);
