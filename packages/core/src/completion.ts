@@ -965,7 +965,10 @@ function ${functionName} () {
             # Use the same regular-file filter with or without extensions,
             # keeping symlinked files and directory navigation available.
             local file_pattern="\${ext_pattern:-*}(#q-.)"
-            _tags files
+            local file_subtree_pattern="**/*(#q/N)"
+            local -a file_subtree=() file_recursive_patterns=()
+            local file_recursive_pattern file_directory file_prefix
+            _tags files directories
             while _tags; do
               local file_matched=0
               while _next_label files expl file; do
@@ -976,11 +979,33 @@ function ${functionName} () {
                   file_ignore=("?*\${^fignore[@]}")
                   file_ignore_args=(-F file_ignore)
                 fi
-                _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}" && file_matched=1
+                if _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}"; then
+                  file_matched=1
+                elif [[ -z "\$ext_pattern" && "\$PREFIX\$SUFFIX" != */* ]] &&
+                     zstyle -a ":completion:\${curcontext}:files" recursive-files file_recursive_patterns; then
+                  # Match _files' recursive fallback, retaining the same
+                  # file filter and tag-specific ignore options.
+                  for file_recursive_pattern in "\${file_recursive_patterns[@]}"; do
+                    if [[ "\$PWD/" = \${~file_recursive_pattern} ]]; then
+                      if (( \${#file_subtree[@]} == 0 )); then
+                        file_subtree=(\${~file_subtree_pattern})
+                      fi
+                      for file_directory in "\${file_subtree[@]}"; do
+                        file_prefix="\$PREFIX"
+                        PREFIX="\$file_directory/\$PREFIX"
+                        _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}" && file_matched=1
+                        PREFIX="\$file_prefix"
+                      done
+                      break
+                    fi
+                  done
+                fi
+              done
+              while _next_label directories expl directory; do
+                _path_files -/ "\${expl[@]}" && file_matched=1
               done
               (( file_matched )) && break
             done
-            _wanted directories expl directory _path_files -/
             ;;
           directory)
             _directories

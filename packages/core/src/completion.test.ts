@@ -199,6 +199,7 @@ function testInteractiveZshCompletion(
       readonly programName: string;
       readonly script: string;
     }[];
+    readonly currentWord?: string;
   } = {},
 ): string {
   const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-integration-"));
@@ -338,7 +339,7 @@ sleep 0.5
 local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
 ${
       (options.programNames ?? ["extapp"]).map((programName) => `
-zpty -w -n child ${JSON.stringify(options.input ?? `${programName} `)}
+zpty -w -n child ${JSON.stringify(options.input ?? `${programName} ${options.currentWord ?? ""}`)}
 sleep 0.1
 for (( i=0; i < ${options.moveLeft ?? 0}; i++ )); do
   zpty -w -n child $'\\x02'
@@ -2880,27 +2881,25 @@ autoload -U compinit && compinit -D 2>/dev/null
 function _tags() {
   if (( $# )); then
     __tag_round=0
-    __label_round=0
+    __file_label_round=0
+    __directory_label_round=0
     return 0
   fi
   (( __tag_round++ == 0 ))
 }
 function _next_label() {
-  (( __label_round++ == 0 )) || return 1
-  eval "$2=(--tag files)"
+  if [[ "$1" == files ]]; then
+    (( __file_label_round++ == 0 )) || return 1
+  else
+    (( __directory_label_round++ == 0 )) || return 1
+  fi
+  __current_tag="$1"
+  eval "$2=(--tag $1)"
   _comp_ignore=()
 }
 
-function _wanted() {
-  local tag="$1" expl_name="$2" descr="$3"
-  shift 3
-  print -r -- "$tag:$#:$*"
-  eval "$expl_name=(--tag $tag)"
-  return 0
-}
-
 function _path_files() {
-  print -r -- "files:$#:_path_files $*"
+  print -r -- "$__current_tag:$#:_path_files $*"
   return 0
 }
 
@@ -2932,19 +2931,19 @@ _extapp 2>/dev/null
           );
           ok(
             directoryCall?.includes("_path_files -/"),
-            `Expected directories _wanted call to include directory navigation args, got: ${
+            `Expected directories completion call to include directory navigation args, got: ${
               JSON.stringify(calls)
             }`,
           );
           ok(
-            directoryCall?.startsWith("directories:2:"),
-            `directories _wanted call should not receive stale expl arguments from files, got: ${
+            directoryCall?.startsWith("directories:3:"),
+            `directories completion call should receive only its own tag arguments, got: ${
               JSON.stringify(calls)
             }`,
           );
           ok(
             !directoryCall?.includes("--tag files"),
-            `directories _wanted call should not inherit the files tag's expl array, got: ${
+            `directories completion call should not inherit the files tag's expl array, got: ${
               JSON.stringify(calls)
             }`,
           );
@@ -3015,13 +3014,18 @@ setopt sh_glob
 function _tags() {
   if (( $# )); then
     __tag_round=0
-    __label_round=0
+    __file_label_round=0
+    __directory_label_round=0
     return 0
   fi
   (( __tag_round++ == 0 ))
 }
 function _next_label() {
-  (( __label_round++ == 0 )) || return 1
+  if [[ "$1" == files ]]; then
+    (( __file_label_round++ == 0 )) || return 1
+  else
+    (( __directory_label_round++ == 0 )) || return 1
+  fi
   eval "$2=()"
   _comp_ignore=()
 }
@@ -3519,6 +3523,111 @@ _extapp 2>/dev/null
       );
     }
 
+    for (const extensions of [undefined, ["txt"]]) {
+      for (
+        const scenario of [
+          { first: "directories", second: "files", withDirectory: true },
+          { first: "directories", second: "files", withDirectory: false },
+          { first: "files", second: "directories", withDirectory: true },
+        ]
+      ) {
+        it(
+          `should honor ordered zsh tag fallback with ${scenario.first} first, directories ${scenario.withDirectory}, extensions ${extensions}`,
+          { skip: !isInteractiveZshCompletionAvailable(), timeout: 10000 },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type: "file", extensions },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [
+                { path: "regular.txt" },
+                ...(scenario.withDirectory
+                  ? [{ path: "navigation", type: "directory" as const }]
+                  : []),
+              ],
+              {
+                setup:
+                  `zstyle ':completion:*' tag-order '${scenario.first}' '${scenario.second}'`,
+              },
+            );
+            if (scenario.first === "directories" && scenario.withDirectory) {
+              ok(output.includes("navigation/"), output);
+              ok(!output.includes("regular.txt"), output);
+            } else {
+              ok(output.includes("regular.txt"), output);
+              ok(!output.includes("navigation"), output);
+            }
+          },
+        );
+      }
+    }
+
+    for (
+      const scenario of [
+        { name: "unfiltered", extensions: undefined, recursive: "*" },
+        { name: "empty extensions", extensions: [], recursive: "*" },
+        {
+          name: "ineligible current directory",
+          extensions: undefined,
+          recursive: "/not-the-current-directory/",
+        },
+      ]
+    ) {
+      it(
+        `should preserve recursive-files for ${scenario.name} zsh paths`,
+        {
+          skip: !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo"),
+          timeout: 10000,
+        },
+        () => {
+          if (
+            !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo")
+          ) return;
+          const directive = Array.from(zsh.encodeSuggestions([
+            { kind: "file", type: "file", extensions: scenario.extensions },
+          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            directive,
+            [
+              { path: "nested", type: "directory" },
+              { path: "nested/target.txt" },
+              {
+                path: "nested/target-link",
+                type: "symlink",
+                target: "target.txt",
+              },
+              { path: "nested/target-pipe", type: "fifo" },
+              {
+                path: "nested/target-pipe-link",
+                type: "symlink",
+                target: "target-pipe",
+              },
+            ],
+            {
+              currentWord: "target",
+              setup:
+                `zstyle ':completion:*:files' recursive-files '${scenario.recursive}'`,
+            },
+          );
+          if (scenario.recursive === "*") {
+            ok(output.includes("extapp nested/target"), output);
+            ok(output.includes("target.txt"), output);
+            ok(output.includes("target-link"), output);
+          } else {
+            ok(!output.includes("target.txt"), output);
+            ok(!output.includes("target-link"), output);
+          }
+          ok(!output.includes("target-pipe"), output);
+        },
+      );
+    }
+
     it("should retain FIFOs in unrestricted file suggestions in actual zsh", {
       skip: !isInteractiveZshCompletionAvailable() ||
         !isShellAvailable("mkfifo"),
@@ -3591,13 +3700,18 @@ _comp_no_ignore=${scenario.noIgnore}
 function _tags() {
   if (( $# )); then
     __tag_round=0
-    __label_round=0
+    __file_label_round=0
+    __directory_label_round=0
     return 0
   fi
   (( __tag_round++ == 0 ))
 }
 function _next_label() {
-  (( __label_round++ == 0 )) || return 1
+  if [[ "$1" == files ]]; then
+    (( __file_label_round++ == 0 )) || return 1
+  else
+    (( __directory_label_round++ == 0 )) || return 1
+  fi
   eval "$2=()"
   _comp_ignore=()
 }
@@ -4266,13 +4380,18 @@ unsetopt glob_dots
 function _tags() {
   if (( $# )); then
     __tag_round=0
-    __label_round=0
+    __file_label_round=0
+    __directory_label_round=0
     return 0
   fi
   (( __tag_round++ == 0 ))
 }
 function _next_label() {
-  (( __label_round++ == 0 )) || return 1
+  if [[ "$1" == files ]]; then
+    (( __file_label_round++ == 0 )) || return 1
+  else
+    (( __directory_label_round++ == 0 )) || return 1
+  fi
   eval "$2=()"
   _comp_ignore=()
 }
@@ -4346,13 +4465,18 @@ unsetopt glob_dots
 function _tags() {
   if (( $# )); then
     __tag_round=0
-    __label_round=0
+    __file_label_round=0
+    __directory_label_round=0
     return 0
   fi
   (( __tag_round++ == 0 ))
 }
 function _next_label() {
-  (( __label_round++ == 0 )) || return 1
+  if [[ "$1" == files ]]; then
+    (( __file_label_round++ == 0 )) || return 1
+  else
+    (( __directory_label_round++ == 0 )) || return 1
+  fi
   eval "$2=()"
   _comp_ignore=()
 }
@@ -4451,7 +4575,7 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
         );
         ok(
           fileCaseBlock.includes(
-            "_wanted directories expl directory _path_files -/",
+            "_next_label directories expl directory",
           ),
           "zsh file) case should add directory navigation via the directories tag.",
         );
