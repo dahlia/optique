@@ -1844,6 +1844,15 @@ export const pwsh: ShellCompletion = {
 Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
     param(\$wordToComplete, \$commandAst, \$cursorPosition)
 
+    # CompletionText is shell syntax; display labels remain unquoted.
+    \$quoteArgument = {
+        param([string]\$value)
+        if (\$value -cmatch '\\A[a-zA-Z0-9_./:\\\\-]+\\z' -and \$value -cnotmatch '\\A-(?!-).*[.:]' -and \$value -cnotmatch '\\A-?(?:[0-9]|\\.[0-9])') {
+            return \$value
+        }
+        return "'" + [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent(\$value) + "'"
+    }
+
     # Extract arguments from AST (handles quoted strings properly)
     \$arguments = @()
     \$commandElements = \$commandAst.CommandElements
@@ -1891,7 +1900,7 @@ Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
         } elseif (\$quoteType -eq 'DoubleQuoted') {
             '"' + (\$text -replace '[\\x60\$"\\u201c-\\u201e]', '\`\$0') + '"'
         } else {
-            \$text
+            & \$quoteArgument \$text
         }
     }
 
@@ -2052,8 +2061,20 @@ ${
                     \$replacementText = if (\$null -ne \$quoteType -and -not \$prefixFromInput -and \$homePattern) {
                         if (\$_.PSIsContainer) { \$_.FullName + '/' } else { \$_.FullName }
                     } else { \$completionText }
+                    # Quoting suppresses native tilde expansion.  Keep safe
+                    # ~/ paths bare; otherwise use the enumerated full path.
+                    \$insertionText = if (\$null -ne \$quoteType) {
+                        & \$quoteCompletion \$replacementText
+                    } elseif (\$completionText -cmatch '\\A~/[a-zA-Z0-9_./:\\\\-]*\\z') {
+                        \$completionText
+                    } else {
+                        \$argumentText = if (\$completionText.StartsWith('~/') -or \$completionText.StartsWith('~\\')) {
+                            if (\$_.PSIsContainer) { \$_.FullName + '/' } else { \$_.FullName }
+                        } else { \$completionText }
+                        & \$quoteArgument \$argumentText
+                    }
                     [System.Management.Automation.CompletionResult]::new(
-                        (& \$quoteCompletion \$replacementText),
+                        \$insertionText,
                         \$completionText,
                         'ParameterValue',
                         \$itemType

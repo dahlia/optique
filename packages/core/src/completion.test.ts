@@ -4121,6 +4121,255 @@ ConvertTo-Json -InputObject $records -Depth 5 -Compress
       deepStrictEqual(script.includes("'it''s'"), true);
     });
 
+    function completeAndExecute(
+      tempDir: string,
+      suggestions: readonly Suggestion[],
+      lines: readonly string[],
+    ): readonly {
+      readonly label: string;
+      readonly tooltip: string;
+      readonly insertion: string;
+      readonly line: string;
+      readonly parseErrors: number;
+      readonly commands: number;
+      readonly elements: number;
+      readonly argv: readonly string[];
+    }[] {
+      writeFileSync(
+        join(tempDir, "quoted-cli"),
+        `#!/bin/sh
+if [ "$1" = completion ]; then
+  cat "\${0%/*}/suggestions.txt"
+else
+  printf '%s\\n' "$#" "$@"
+fi
+`,
+        { mode: 0o755 },
+      );
+      writeFileSync(
+        join(tempDir, "suggestions.txt"),
+        Array.from(pwsh.encodeSuggestions(suggestions)).join(""),
+      );
+      writeFileSync(
+        join(tempDir, "completion.ps1"),
+        pwsh.generateScript("quoted-cli", ["completion"]),
+      );
+      writeFileSync(join(tempDir, "lines.json"), JSON.stringify(lines));
+      const testScript = join(tempDir, "test.ps1");
+      writeFileSync(
+        testScript,
+        `$ErrorActionPreference = 'Stop'
+$PSNativeCommandArgumentPassing = 'Standard'
+$provider = Get-PSProvider FileSystem
+$provider.Home = Join-Path $PSScriptRoot 'home'
+$env:PATH = $PSScriptRoot + [IO.Path]::PathSeparator + $env:PATH
+. (Join-Path $PSScriptRoot 'completion.ps1')
+$lines = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'lines.json') | ConvertFrom-Json
+$results = @(foreach ($line in $lines) {
+  $r = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)
+  foreach ($m in $r.CompletionMatches) {
+    $completed = $line.Substring(0, $r.ReplacementIndex) + $m.CompletionText + $line.Substring($r.ReplacementIndex + $r.ReplacementLength)
+    $tokens = $null; $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($completed, [ref]$tokens, [ref]$errors)
+    $commands = @($ast.FindAll({param($n) $n -is [System.Management.Automation.Language.CommandAst]}, $true))
+    $elements = if ($commands.Count -eq 1) { $commands[0].CommandElements.Count } else { 0 }
+    $argv = @()
+    if ($errors.Count -eq 0 -and $commands.Count -eq 1 -and $elements -eq 3) {
+      try { $argv = @(Invoke-Expression $completed) } catch { $argv = @('execution failed') }
+    }
+    [pscustomobject]@{
+      label = $m.ListItemText; tooltip = $m.ToolTip; insertion = $m.CompletionText; line = $line
+      parseErrors = $errors.Count; commands = $commands.Count; elements = $elements; argv = $argv
+    }
+  }
+})
+ConvertTo-Json -InputObject $results -Depth 5 -Compress
+`,
+      );
+      return JSON.parse(runCommand(
+        "pwsh",
+        ["-NoProfile", "-NonInteractive", "-File", testScript],
+        { cwd: tempDir },
+      ));
+    }
+
+    it("should insert literal completions as single native arguments", {
+      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+      timeout: 20000,
+    }, () => {
+      if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+      const tempDir = mkdtempSync(join(tmpdir(), "pwsh-literal-insertion-"));
+      try {
+        const values = [
+          "3.141592653589793",
+          "0.30000000000000004",
+          "1700000000.123456",
+          "-1e20",
+          ".30000000000000004",
+          "hello fallback",
+          "hello world",
+          "hello'world",
+          'hello"world',
+          "hello;world",
+          "hello‘world",
+          "hello’world",
+          "hello‚world",
+          "hello‛world",
+          "hello$HOME",
+          "hello$(1+1)",
+          "hello`world",
+          "hello&world",
+          "hello|world",
+          "hello>world",
+          "hello<world",
+          "hello(world)",
+          "hello{world}",
+          "hello[world]",
+          "@hello",
+          "#hello",
+          "hello,world",
+          "hello=world",
+          "hello*world",
+          "hello?world",
+          "~",
+          "~/hello",
+          "-hello.world",
+          "-a:",
+          "--hello.world",
+          "Khello",
+          "–hello.world",
+          "hello“world",
+          "hello”world",
+          "hello‶world",
+          "--verbose",
+          "sub-command",
+          "nested/plain.txt",
+          "C:\\plain\\file.txt",
+        ];
+        const results = completeAndExecute(
+          tempDir,
+          values.map((value) => ({
+            kind: "literal",
+            text: value,
+            description: value === "hello fallback"
+              ? undefined
+              : message`Readable hint`,
+          })),
+          ["quoted-cli --pick "],
+        );
+        deepStrictEqual(results.length, values.length);
+        for (const value of values) {
+          const result = results.find((r) => r.label === value);
+          ok(result, `Missing completion for ${JSON.stringify(value)}.`);
+          deepStrictEqual(result.parseErrors, 0, value);
+          deepStrictEqual(result.commands, 1, value);
+          deepStrictEqual(result.elements, 3, value);
+          deepStrictEqual(result.argv, ["2", "--pick", value], value);
+          deepStrictEqual(
+            result.tooltip,
+            value === "hello fallback" ? value : "Readable hint",
+          );
+          if (
+            [
+              "--hello.world",
+              "--verbose",
+              "sub-command",
+              "nested/plain.txt",
+              "C:\\plain\\file.txt",
+            ].includes(value)
+          ) {
+            deepStrictEqual(result.insertion, value);
+          }
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it(
+      "should insert file and directory completions as single native arguments",
+      {
+        skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+        timeout: 20000,
+      },
+      () => {
+        if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+        const tempDir = mkdtempSync(join(tmpdir(), "pwsh-file-insertion-"));
+        try {
+          const files = [
+            "a space.txt",
+            "a'quote.txt",
+            'a"quote.txt',
+            "a;semi.txt",
+            "a’quote.txt",
+            "a$(1+1).txt",
+            "a`tick.txt",
+            "a&pipe.txt",
+            "a[bracket].txt",
+            "a_plain.txt",
+          ];
+          const names = [...files, "a dir/"];
+          for (const parent of [tempDir, join(tempDir, "home")]) {
+            mkdirSync(parent, { recursive: true });
+            for (const file of files) writeFileSync(join(parent, file), "");
+            mkdirSync(join(parent, "a dir"));
+          }
+          writeFileSync(join(tempDir, "3.141592653589793"), "");
+          const prefixes = ["", "home/", "~/", "~\\"];
+          const lines = prefixes.map((prefix) =>
+            `quoted-cli --file ${prefix}a`
+          );
+          const results = completeAndExecute(
+            tempDir,
+            [{ kind: "file", type: "file" }],
+            lines,
+          );
+          for (const [index, prefix] of prefixes.entries()) {
+            const matches = results.filter((r) => r.line === lines[index]);
+            deepStrictEqual(matches.length, names.length, prefix);
+            for (const name of names) {
+              const result = matches.find((r) => r.label === prefix + name);
+              ok(result, `Missing completion for ${prefix + name}.`);
+              const expected = prefix.startsWith("~")
+                ? join(tempDir, "home", name.replace(/\/$/, "")) +
+                  (name.endsWith("/") ? "/" : "")
+                : prefix + name;
+              deepStrictEqual(result.parseErrors, 0, result.label);
+              deepStrictEqual(result.commands, 1, result.label);
+              deepStrictEqual(result.elements, 3, result.label);
+              deepStrictEqual(
+                result.argv,
+                ["2", "--file", expected],
+                result.label,
+              );
+              deepStrictEqual(
+                result.tooltip,
+                name.endsWith("/") ? "Directory" : "File",
+              );
+              if (name === "a_plain.txt" && prefix !== "~\\") {
+                deepStrictEqual(result.insertion, prefix + name);
+              }
+              if (name.endsWith("/")) ok(result.insertion.endsWith("/'"));
+            }
+          }
+          const numeric = completeAndExecute(
+            tempDir,
+            [{ kind: "file", type: "file" }],
+            ["quoted-cli --file 3"],
+          );
+          deepStrictEqual(numeric.length, 1);
+          deepStrictEqual(numeric[0].label, "3.141592653589793");
+          deepStrictEqual(numeric[0].argv, [
+            "2",
+            "--file",
+            "3.141592653589793",
+          ]);
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
     it("should encode suggestions with tab-separated format", () => {
       const suggestions: Suggestion[] = [
         { kind: "literal", text: "--verbose" },
