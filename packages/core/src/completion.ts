@@ -1270,8 +1270,10 @@ def args-split []: string -> list<string> {
   mut current_token = ""
   mut result: list<string> = []
   mut prev_state = $STATE_NORMAL
+  mut ends_with_delimiter = false
 
   for char in ($in | split chars) {
+    $ends_with_delimiter = false
     if $state == $STATE_ESCAPE {
       $current_token = $current_token + $char
       $state = $prev_state
@@ -1284,6 +1286,7 @@ def args-split []: string -> list<string> {
       } else if $char == '"' {
         $state = $STATE_IN_DOUBLE_QUOTE
       } else if ($char in $WHITESPACES) {
+        $ends_with_delimiter = true
         if ($current_token | is-not-empty) {
           $result = $result | append $current_token
           $current_token = ""
@@ -1305,10 +1308,50 @@ def args-split []: string -> list<string> {
       }
     }
   }
-  if ($current_token | is-not-empty) {
+  # A quote left open at the end starts the argument being completed, even
+  # when nothing follows it yet
+  if ($current_token | is-not-empty) or ($state in [$STATE_IN_SINGLE_QUOTE $STATE_IN_DOUBLE_QUOTE]) {
     $result = $result | append $current_token
   }
+  # Whitespace outside quotes at the end starts a new, still empty argument
+  if $ends_with_delimiter {
+    $result = $result | append ''
+  }
   $result
+}
+
+# Helper to tell whether Nushell would not read a value back verbatim as a
+# single argument.  A leading ! is included because the line editor expands
+# history (e.g., !!) there.  With --allow-expansion, a leading tilde and n-dot
+# path segments (e.g., ...) are allowed to expand.
+def needs-quote [--allow-expansion]: string -> bool {
+  let value = $in
+  let special = ["'" '"' '\`' "#" "(" ")" "[" "]" "{" "}" "|" ";" "&" "$" "*" "?" "<" ">"]
+  (
+    ($value =~ '\\s')
+    or ($special | any {|c| $value | str contains $c })
+    or ($value =~ '^(\\+\\+|[-+*/])?=$')
+    or ($value | str starts-with '!')
+    or ((not $allow_expansion) and (
+      ($value | str starts-with '~')
+      or ($value | split row -r '[/\\\\]' | any {|s| $s =~ '^\\.{3,}$' })
+    ))
+  )
+}
+
+# Helper to quote a value so that Nushell reads it back verbatim as a
+# single argument.  The line editor expands history at a ! that follows
+# whitespace even inside quotes, so such a ! is put between two quoted parts,
+# right after a quote, where it is left alone.
+def quote-arg []: string -> string {
+  let value = $in
+  if ($value | is-empty) or not ($value | needs-quote) {
+    $value
+  } else if ($value | str contains "'") {
+    '"' + ($value | str replace -a '\\' '\\\\' | str replace -a '"' '\\"' | str replace -ar '(\\s)!' '\${1}"!"') + '"'
+  } else {
+    "'" + ($value | str replace -ar '(\\s)!' "\${1}'!'") + "'"
+  }
 }
 
 # Completion command that calls back to the CLI
@@ -1323,18 +1366,11 @@ export def "${functionName}" [context: string] {
     []
   }
 
-  # If context ends with whitespace, add empty string to represent the new argument
-  let args_with_empty = if ($context | str ends-with ' ') {
-    $args | append ''
-  } else {
-    $args
-  }
-
   # Ensure at least one argument (empty string) to get completions not script
-  let final_args = if ($args_with_empty | is-empty) {
+  let final_args = if ($args | is-empty) {
     ['']
   } else {
-    $args_with_empty
+    $args
   }
 
   let output = try {
@@ -1520,19 +1556,45 @@ ${
         if ($parsed.parent | is-empty) { "" } else if ($parsed.parent | str ends-with "/") { $parsed.parent } else { $parsed.parent + "/" }
       }
 
-      # Format file completions
+      # Format file completions, quoting names that Nushell would not read
+      # back as a single argument
       $filtered | each {|item|
-        let name = if $item.type == dir {
-          $dir_prefix + ($item.name | path basename) + "/"
+        let base = if $item.type == dir {
+          ($item.name | path basename) + "/"
         } else {
-          $dir_prefix + ($item.name | path basename)
+          $item.name | path basename
         }
-        { value: $name }
+        let name = $dir_prefix + $base
+        # Nushell expands a leading tilde even in a file name, but not after ./
+        let spelled = if ($dir_prefix | is-empty) and ($base | str starts-with '~') {
+          './' + $base
+        } else {
+          $name
+        }
+        # A tilde or n-dot prefix typed by the user is meant to be expanded
+        # by Nushell, which quoting would prevent, so expand such a prefix
+        # here when the value has to be quoted
+        let literal_ndots = ($base | str replace -r '[/\\\\]$' '') =~ '^\\.{3,}$'
+        let expandable = ($dir_prefix | str starts-with '~') or ($dir_prefix | split row -r '[/\\\\]' | any {|s| $s =~ '^\\.{3,}$' })
+        let value = if not ($literal_ndots or ($spelled | needs-quote --allow-expansion)) {
+          $spelled
+        } else if $expandable {
+          let expanded_prefix = ($dir_prefix | path expand --no-symlink)
+          let expanded_prefix = if ($expanded_prefix | str ends-with "/") { $expanded_prefix } else { $expanded_prefix + "/" }
+          ($expanded_prefix + $base) | quote-arg
+        } else {
+          $spelled | quote-arg
+        }
+        if $value == $name {
+          { value: $value }
+        } else {
+          { value: $value, display_override: $name }
+        }
       }
     } else {
       # Regular literal completion - split by tab
       let parts = ($line | split row "\t")
-      if ($parts | length) >= 2 {
+      let record = if ($parts | length) >= 2 {
         # value\\tdescription format
         { value: ($parts | get 0), description: ($parts | get 1) }
       } else if ($parts | length) == 1 and ($parts | get 0 | is-not-empty) {
@@ -1540,6 +1602,18 @@ ${
         { value: ($parts | get 0) }
       } else {
         null
+      }
+      # Quote values that Nushell would not read back as a single argument,
+      # while the menu keeps showing them as they are
+      if $record == null {
+        null
+      } else {
+        let value = ($record.value | quote-arg)
+        if $value == $record.value {
+          $record
+        } else {
+          $record | upsert value $value | insert display_override $record.value
+        }
       }
     }
   } | flatten | compact
