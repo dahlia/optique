@@ -868,6 +868,13 @@ export const zsh: ShellCompletion = {
     const functionName = /[.-]/.test(programName)
       ? `_optique:${programName}`
       : `_${programName}`;
+    // Keep the private glob predicate distinct from primary completion names
+    // and from predicates for other accepted program names.
+    const fixedGlobFunction = "__optique-fixed-glob-" +
+      Array.from(
+        programName,
+        (character) => character.charCodeAt(0).toString(16).padStart(2, "0"),
+      ).join("");
     return `#compdef ${programName}
 function ${functionName} () {
   local current="\$words[CURRENT]"
@@ -936,6 +943,8 @@ function ${functionName} () {
         # current word.  If the user has already typed beyond the pattern,
         # keep PREFIX unchanged for incremental narrowing.
         local __saved_prefix="\$PREFIX"
+        local __fixed_glob=0
+        local -a __fixed_matches
         local __initial_file_pattern="" __initial_directory="" __initial_leaf=""
         if [[ ( "\$type" == "file" || "\$type" == "any" || "\$type" == "directory" ) &&
               -z "\$current\$PREFIX\$SUFFIX" &&
@@ -973,8 +982,40 @@ function ${functionName} () {
             [[ "\$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
           fi
           if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
-            # User typed an equivalent or extended form — keep PREFIX
-            true
+            # Keep the typed prefix, but retain a fixed file glob separately.
+            if [[ "\$type" != "directory" && "\$__norm_pattern" == *[\*\?]* ]]; then
+              __fixed_glob=1
+              if [[ "\${PREFIX##*/}" == .* ]]; then setopt glob_dots; fi
+              # Keep qualifiers in a string so sourcing also works with SH_GLOB.
+              local __fixed_pattern="" __glob_char="" __glob_previous=""
+              local __glob_escaped=0
+              local -i __glob_index
+              for (( __glob_index=1; __glob_index <= \${#pattern}; __glob_index++ )); do
+                __glob_char="\${pattern[__glob_index]}"
+                if [[ "\$__glob_escaped" == "1" ]]; then
+                  __fixed_pattern+="\$__glob_char"
+                  __glob_escaped=0
+                  __glob_previous=""
+                  continue
+                fi
+                if [[ "\$__glob_char" == "\\\\" ]]; then
+                  __fixed_pattern+="\$__glob_char"
+                  __glob_escaped=1
+                elif [[ "\$__glob_char" == [#^~\\(\\)\\|\\<\\>] &&
+                        ! ( "\$__glob_char" == "^" && "\$__glob_previous" == "[" ) &&
+                        ! ( "\$__glob_char" == "~" && "\$__glob_index" == "1" ) ]]; then
+                  # Keep class negation and leading home expansion; escape
+                  # extended-glob operators in literal pathname components.
+                  __fixed_pattern+="\\\\\$__glob_char"
+                else
+                  __fixed_pattern+="\$__glob_char"
+                fi
+                __glob_previous="\$__glob_char"
+              done
+              __fixed_pattern+="(#qN)"
+              __fixed_matches=( \${~__fixed_pattern} )
+              __fixed_matches=( "\${(@)__fixed_matches:a}" )
+            fi
           else
             PREFIX="\$pattern"
           fi
@@ -998,6 +1039,9 @@ function ${functionName} () {
               # Regular-file suggestions retain symlinked files; initial
               # any globs use a non-directory qualifier instead.
               local file_pattern="\${ext_pattern:-*}(#q-.)"
+              if [[ "\$__fixed_glob" == "1" ]]; then
+                file_pattern="\${ext_pattern:-*}(#q-.e:${fixedGlobFunction}:)"
+              fi
               if [[ -n "\$__initial_file_pattern" ]]; then
                 local __file_qualifier="-."
                 [[ "\$type" == "any" ]] && __file_qualifier="^-/"
@@ -1064,8 +1108,12 @@ function ${functionName} () {
                 done
                 (( file_matched )) && break
               done
-            elif [[ -n "\$ext_pattern" ]]; then
+            elif [[ -n "\$ext_pattern" || "\$__fixed_glob" == "1" ]]; then
               local file_pattern="\${ext_pattern}(#q^-/)"
+              if [[ "\$__fixed_glob" == "1" ]]; then
+                # Put the predicate before ^, which negates later qualifiers.
+                file_pattern="\${ext_pattern:-*}(#qe:${fixedGlobFunction}:^-/)"
+              fi
               _wanted files expl file _path_files -g "\${file_pattern}"
               _wanted directories expl directory _path_files -/
             else
@@ -1113,6 +1161,11 @@ function ${functionName} () {
     done
     _describe 'commands' matches
   fi
+}
+
+function ${fixedGlobFunction} () {
+  local __fixed_candidate="\${REPLY:a}"
+  (( \${__fixed_matches[(Ie)\$__fixed_candidate]} ))
 }
 
 if (( $+functions[compdef] )); then
@@ -1782,12 +1835,12 @@ ${
       # prefix for incremental narrowing.  Normalize path separators
       # before comparing so that Windows backslashes match forward slashes
       # in the transported pattern.
+      let is_win = (($nu.os-info.name | str downcase) == "windows")
       let glob_base = if ($pattern | is-not-empty) {
         # Normalize separators and leading ./; downcase only on Windows
         # where filesystems are typically case-insensitive
         let norm_prefix_raw = ($prefix | str replace -a '\\' '/' | str replace -r '^\\./' '')
         let norm_pattern_raw = ($pattern | str replace -a '\\' '/' | str replace -r '^\\./' '')
-        let is_win = (($nu.os-info.name | str downcase) == "windows")
         let norm_prefix = (if $is_win { $norm_prefix_raw | str downcase } else { $norm_prefix_raw })
         let norm_pattern = (if $is_win { $norm_pattern_raw | str downcase } else { $norm_pattern_raw })
         # For wildcard patterns, compare only the directory prefix
@@ -1805,6 +1858,21 @@ ${
       } else {
         $prefix
       }
+
+      # Intersect fixed glob matches with the narrowed prefix candidates.
+      # Directory-only suggestions retain their existing navigation behavior.
+      let narrow_fixed_glob = ($type != "directory") and ($pattern =~ '[*?]') and ($prefix != $pattern) and ($glob_base == $prefix)
+      let fixed_matches = if $narrow_fixed_glob {
+        try {
+          let fixed_pattern = ($pattern | into glob)
+          let include_hidden = $hidden or ($prefix | path basename | str starts-with '.')
+          let matches = if $include_hidden { ls -a --directory $fixed_pattern } else { ls --directory $fixed_pattern }
+          $matches | each {|item|
+            let name = ($env.PWD | path join $item.name | path expand --no-symlink)
+            if $is_win { $name | str downcase } else { $name }
+          }
+        } catch { [] }
+      } else { [] }
 
       # If the glob base is a directory without a trailing slash (e.g., "src"),
       # append one so that ls enumerates its contents instead of matching
@@ -1927,6 +1995,17 @@ ${
           not ($basename | str starts-with '.')
         }
       }
+
+      let filtered = if $narrow_fixed_glob {
+        $filtered | where {|item|
+          # Any-mode listings already include directory symlinks; keep them
+          # navigable without changing their existing completion rendering.
+          let navigation_dir = ($item.type == dir) or ($item.type == symlink and (try { ($item.name | path expand | path type) == "dir" } catch { false }))
+          let name = ($env.PWD | path join $item.name | path expand --no-symlink)
+          let normalized_name = if $is_win { $name | str downcase } else { $name }
+          $navigation_dir or ($normalized_name in $fixed_matches)
+        }
+      } else { $filtered }
 
       # Extract directory prefix to preserve in completion text
       let dir_prefix = if ($glob_base | is-empty) {
@@ -2219,6 +2298,9 @@ ${
                 \$prefixFromInput = \$valuePrefix -and \$prefix -ceq \$valuePrefix
                 \$lookupPrefix = if (\$prefixFromInput -and \$null -ne \$quoteType -and \$prefix.StartsWith('~')) { './' + \$prefix } else { \$prefix }
 
+                # Detect narrowing before directory normalization changes prefix.
+                \$narrowFixedGlob = \$type -ne 'directory' -and \$pattern -match '[\*\?]' -and \$prefix -ceq \$wordToComplete -and \$pattern -cne \$wordToComplete
+
                 # If prefix is a directory without trailing slash, append
                 # one so Get-ChildItem lists its contents
                 if (\$prefix -and (Test-Path -Path \$lookupPrefix -PathType Container) -and -not \$prefix.EndsWith('/') -and -not \$prefix.EndsWith('\\')) {
@@ -2229,6 +2311,14 @@ ${
                 # Build the glob path — when the prefix contains wildcard
                 # characters, use it as-is; otherwise append *
                 \$globPath = if (\$lookupPrefix -match '[\*\?]') { \$lookupPrefix } else { "\${lookupPrefix}*" }
+
+                # Keep the original native glob as an independent file filter
+                # when the current word narrows its candidates.
+                \$fixedMatches = @()
+                if (\$narrowFixedGlob) {
+                    \$fixedMatches = @(Get-Item @forceParam -Path \$pattern -ErrorAction SilentlyContinue |
+                        Select-Object -ExpandProperty FullName)
+                }
 
                 # Get file system items based on type
                 \$items = @()
@@ -2280,6 +2370,14 @@ ${
                 # Filter hidden files unless requested or the prefix targets dotfiles
                 if (-not \$hidden -and -not (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) {
                     \$items = \$items | Where-Object { -not \$_.Attributes.HasFlag([System.IO.FileAttributes]::Hidden) }
+                }
+
+                if (\$narrowFixedGlob) {
+                    \$items = \$items | Where-Object {
+                        if (\$_.PSIsContainer) { \$true }
+                        elseif (\$IsWindows) { \$fixedMatches -contains \$_.FullName }
+                        else { \$fixedMatches -ccontains \$_.FullName }
+                    }
                 }
 
                 # Extract directory prefix to preserve in completion text

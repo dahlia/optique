@@ -201,6 +201,8 @@ function testInteractiveZshCompletion(
     }[];
     readonly currentWord?: string;
     readonly afterCompletion?: string;
+    readonly prefix?: string;
+    readonly absolutePrefix?: boolean;
   } = {},
 ): string {
   const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-integration-"));
@@ -342,7 +344,11 @@ ${
       (options.programNames ?? ["extapp"]).map((programName) => `
 zpty -w -n child ${
         JSON.stringify(
-          options.input ?? `${programName} ${options.currentWord ?? ""}`,
+          options.input ?? `${programName} ${
+            options.absolutePrefix
+              ? join(workDir, options.prefix ?? options.currentWord ?? "")
+              : options.prefix ?? options.currentWord ?? ""
+          }`,
         )
       }
 sleep 0.1
@@ -9708,4 +9714,360 @@ exit
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+const fixedGlobFixtures: Parameters<typeof testInteractiveZshCompletion>[2] = [
+  { path: "P (1)", type: "directory" },
+  { path: "P (1)/a.cs" },
+  { path: "P (1)/a.txt" },
+  { path: "~", type: "directory" },
+  { path: "~/report.txt" },
+  { path: "~/report.json" },
+  { path: "~/reports", type: "directory" },
+  { path: "C#", type: "directory" },
+  { path: "C#/Program.cs" },
+  { path: "C#/Program.txt" },
+  { path: "fixtures", type: "directory" },
+  { path: "fixtures/reports", type: "directory" },
+  { path: "fixtures/reports/inside", type: "directory" },
+  { path: "fixtures/results", type: "directory" },
+  { path: "fixtures/other", type: "directory" },
+  { path: "fixtures/.reports", type: "directory" },
+  { path: "fixtures/report.txt" },
+  { path: "fixtures/report.json" },
+  { path: "fixtures/report.text" },
+  { path: "fixtures/other.txt" },
+  { path: "fixtures/.report.txt" },
+  { path: "fixtures/.report.json" },
+  { path: "fixtures/reports/inner.txt" },
+  { path: "fixtures/reports/inner.json" },
+  { path: "fixtures/relink", type: "symlink", target: "reports" },
+  { path: "~report.txt" },
+  { path: "report.txt" },
+  { path: "report.json" },
+  { path: "other.txt" },
+  { path: "reports", type: "directory" },
+];
+
+function testFixedGlobPrefix(
+  shellName: "nu" | "pwsh" | "zsh",
+  suggestion: Extract<Suggestion, { readonly kind: "file" }>,
+  prefix: string,
+  absolutePrefix = false,
+): string {
+  const shell = { nu, pwsh, zsh }[shellName];
+  const directive = Array.from(shell.encodeSuggestions([suggestion])).join("");
+  if (shellName === "zsh") {
+    return testInteractiveZshCompletion(
+      shell.generateScript("extapp"),
+      directive.replaceAll("\\", "\\\\").replaceAll("\0", "\\0"),
+      fixedGlobFixtures,
+      { prefix, absolutePrefix },
+    );
+  }
+
+  const tempDir = mkdtempSync(join(tmpdir(), "fixed-glob-prefix-"));
+  try {
+    for (const entry of fixedGlobFixtures) {
+      const path = join(tempDir, entry.path);
+      if (entry.type === "directory") {
+        mkdirSync(path, { recursive: true });
+      } else if (entry.type === "symlink") {
+        symlinkSync(entry.target, path);
+      } else {
+        writeFileSync(path, "");
+      }
+    }
+    writeFileSync(
+      join(tempDir, "extapp"),
+      `#!/bin/bash\nprintf '%s\\n' '${directive.replaceAll("'", "'\\''")}'\n`,
+      { mode: 0o755 },
+    );
+    const current = absolutePrefix ? join(tempDir, prefix) : prefix;
+    const completionPath = join(
+      tempDir,
+      shellName === "nu" ? "completion.nu" : "completion.ps1",
+    );
+    writeFileSync(completionPath, shell.generateScript("extapp"));
+    const scriptPath = join(
+      tempDir,
+      shellName === "nu" ? "test.nu" : "test.ps1",
+    );
+    if (shellName === "nu") {
+      writeFileSync(
+        scriptPath,
+        `$env.PATH = ($env.PATH | prepend '${tempDir}')\n` +
+          `source '${completionPath}'\n` +
+          `nu-complete-extapp 'extapp ${current}' | each {|c| $c.value} | to json\n`,
+      );
+    } else {
+      writeFileSync(
+        scriptPath,
+        `$env:PATH = '${tempDir}:' + $env:PATH\n` +
+          `. '${completionPath}'\n` +
+          `$line = 'extapp ${current}'\n` +
+          `$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)\n` +
+          `$values = @($result.CompletionMatches | ForEach-Object { $_.CompletionText })\n` +
+          `ConvertTo-Json -Compress -InputObject $values\n`,
+      );
+    }
+    const output = runCommand(
+      shellName,
+      shellName === "nu"
+        ? [scriptPath]
+        : ["-NoProfile", "-NonInteractive", "-File", scriptPath],
+      { cwd: tempDir },
+    );
+    const values: unknown = JSON.parse(output);
+    ok(Array.isArray(values), `Expected completion array: ${output}`);
+    return values.map((value: unknown) => {
+      ok(typeof value === "string", `Expected completion text: ${output}`);
+      return value;
+    }).join("\n");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+describe("fixed glob prefix completion", () => {
+  const cases: readonly {
+    readonly name: string;
+    readonly pattern: string;
+    readonly prefix: string;
+    readonly type?: "file" | "any" | "directory";
+    readonly extensions?: readonly string[];
+    readonly absolutePrefix?: boolean;
+    readonly include: readonly string[];
+    readonly exclude: readonly string[];
+  }[] = [
+    {
+      name: "narrowed file glob",
+      pattern: "fixtures/*.txt",
+      prefix: "fixtures/re",
+      include: ["report.txt", "reports/", "results/"],
+      exclude: ["report.json", "report.text", "other.txt", "other/"],
+    },
+    {
+      name: "any-mode navigation including directory links",
+      pattern: "fixtures/*.txt",
+      prefix: "fixtures/re",
+      type: "any",
+      include: ["report.txt", "reports/", "relink"],
+      exclude: ["report.json", "report.text", "other.txt"],
+    },
+    {
+      name: "directory-equal prefix",
+      pattern: "fixtures/*.txt",
+      prefix: "fixtures/",
+      include: ["report.txt", "other.txt", "reports/"],
+      exclude: ["report.json", "report.text", ".report.txt"],
+    },
+    {
+      name: "bare glob",
+      pattern: "*.txt",
+      prefix: "re",
+      include: ["report.txt", "reports/"],
+      exclude: ["report.json", "other.txt"],
+    },
+    {
+      name: "absolute prefix for bare glob",
+      pattern: "*.txt",
+      prefix: "re",
+      absolutePrefix: true,
+      include: ["report.txt", "reports/"],
+      exclude: ["report.json", "other.txt"],
+    },
+    {
+      name: "leading ./ prefix",
+      pattern: "fixtures/*.txt",
+      prefix: "./fixtures/re",
+      include: ["report.txt", "reports/"],
+      exclude: ["report.json", "other.txt"],
+    },
+    {
+      name: "question-mark glob",
+      pattern: "fixtures/r?port.txt",
+      prefix: "fixtures/re",
+      include: ["report.txt", "reports/"],
+      exclude: ["report.json", "report.text"],
+    },
+    {
+      name: "extension intersection",
+      pattern: "fixtures/*.t*",
+      prefix: "fixtures/re",
+      extensions: ["text"],
+      include: ["report.text", "reports/"],
+      exclude: ["report.txt", "report.json"],
+    },
+    {
+      name: "glob in a directory segment",
+      pattern: "fixtures/*/inner.txt",
+      prefix: "fixtures/reports/in",
+      include: ["inner.txt", "inside/"],
+      exclude: ["inner.json"],
+    },
+    {
+      name: "descendant navigation without matching files",
+      pattern: "fixtures/*.txt",
+      prefix: "fixtures/reports/in",
+      include: ["inside/"],
+      exclude: ["inner.txt", "inner.json"],
+    },
+    {
+      name: "dot-prefixed input",
+      pattern: "fixtures/*.txt",
+      prefix: "fixtures/.re",
+      include: [".report.txt", ".reports/"],
+      exclude: [".report.json"],
+    },
+    {
+      name: "literal directory pattern control",
+      pattern: "fixtures/",
+      prefix: "fixtures/re",
+      include: ["report.txt", "report.json", "reports/"],
+      exclude: ["other.txt"],
+    },
+    {
+      name: "echoed prefix control",
+      pattern: "fixtures/re",
+      prefix: "fixtures/re",
+      include: ["report.txt", "report.json", "reports/"],
+      exclude: ["other.txt"],
+    },
+    {
+      name: "directory-only behavior control",
+      pattern: "fixtures/reports*",
+      prefix: "fixtures/re",
+      type: "directory",
+      include: ["reports/", "results/"],
+      exclude: ["report.txt", "report.json"],
+    },
+  ];
+  for (const shell of ["nu", "pwsh", "zsh"] as const) {
+    const available = process.platform !== "win32" &&
+      (shell === "zsh"
+        ? isInteractiveZshCompletionAvailable()
+        : isShellAvailable(shell));
+    for (const scenario of cases) {
+      it(`${shell}: ${scenario.name}`, { skip: !available }, () => {
+        // Bun ignores skip, so keep the early return as well.
+        if (!available) return;
+        const output = testFixedGlobPrefix(
+          shell,
+          {
+            kind: "file",
+            type: scenario.type ?? "file",
+            pattern: scenario.pattern,
+            extensions: scenario.extensions,
+          },
+          scenario.prefix,
+          scenario.absolutePrefix,
+        );
+        for (const value of scenario.include) {
+          ok(output.includes(value), `Expected ${value}:\n${output}`);
+        }
+        for (const value of scenario.exclude) {
+          ok(!output.includes(value), `Unexpected ${value}:\n${output}`);
+        }
+      });
+    }
+  }
+});
+
+it("PowerShell fixed glob after directory normalization", {
+  skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+}, () => {
+  if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+  const output = testFixedGlobPrefix("pwsh", {
+    kind: "file",
+    type: "file",
+    pattern: "fixtures/*.txt",
+  }, "fixtures/reports");
+  ok(output.includes("inside/"), `Expected navigation directory:\n${output}`);
+  ok(!output.includes("inner.txt"), `Unexpected descendant file:\n${output}`);
+  ok(!output.includes("inner.json"), `Unexpected descendant file:\n${output}`);
+});
+
+it("zsh fixed glob retains literal hash in directories", {
+  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+}, () => {
+  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
+    return;
+  }
+  const output = testFixedGlobPrefix("zsh", {
+    kind: "file",
+    type: "file",
+    pattern: "C#/*.cs",
+  }, "C#/P");
+  ok(output.includes("Program.cs"), `Expected fixed-glob match:\n${output}`);
+  ok(
+    !output.includes("Program.txt"),
+    `Unexpected nonmatching file:\n${output}`,
+  );
+});
+
+it("Nu fixed glob preserves literal tilde filenames", {
+  skip: process.platform === "win32" || !isShellAvailable("nu"),
+}, () => {
+  if (process.platform === "win32" || !isShellAvailable("nu")) return;
+  const output = testFixedGlobPrefix("nu", {
+    kind: "file",
+    type: "file",
+    pattern: "*.txt",
+  }, "re");
+  ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
+  ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
+});
+
+it("Nu fixed glob preserves literal tilde directories", {
+  skip: process.platform === "win32" || !isShellAvailable("nu"),
+}, () => {
+  if (process.platform === "win32" || !isShellAvailable("nu")) return;
+  const output = testFixedGlobPrefix(
+    "nu",
+    {
+      kind: "file",
+      type: "file",
+      pattern: "*/*.txt",
+    },
+    "~/re",
+    true,
+  );
+  ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
+  ok(output.includes("reports/"), `Expected navigation directory:\n${output}`);
+  ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
+});
+
+it("zsh fixed glob preserves negated character classes", {
+  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+}, () => {
+  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
+    return;
+  }
+  const output = testFixedGlobPrefix("zsh", {
+    kind: "file",
+    type: "file",
+    pattern: "fixtures/[^o]*.txt",
+  }, "fixtures/re");
+  ok(output.includes("report.txt"), `Expected negated-class match:\n${output}`);
+  ok(
+    !output.includes("other.txt"),
+    `Unexpected negated-class match:\n${output}`,
+  );
+  ok(!output.includes("report.json"), `Unexpected extension:\n${output}`);
+});
+
+it("zsh fixed glob preserves quoted parenthesized directories", {
+  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+}, () => {
+  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
+    return;
+  }
+  const output = testFixedGlobPrefix("zsh", {
+    kind: "file",
+    type: "file",
+    pattern: "P (1)/*.cs",
+  }, "'P (1)/a");
+  ok(output.includes("a.cs"), `Expected quoted match:\n${output}`);
+  ok(!output.includes("a.txt"), `Unexpected nonmatch:\n${output}`);
 });
