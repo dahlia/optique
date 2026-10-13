@@ -498,24 +498,33 @@ function _${programName} () {
       # NUL records preserve spaces and newlines without requiring mapfile.
       # Shell expansion respects dotglob on older Bash versions as well.
       # Otherwise append * to treat it as a prefix.
-      # Note: [ is NOT treated as a glob indicator because it commonly
-      # appears in literal filenames like [draft] or foo[1].txt.
+      # Only * and ? are wildcard syntax; escape brackets, backslashes, and
+      # extended-glob operators so other pattern characters stay literal.
       local -a __candidates=()
       if [[ "$__from_pattern" == "1" && "$__glob_current" == *[\*\?]* ]]; then
+        local __pathname_glob="" __glob_char __glob_index
+        for ((__glob_index=0; __glob_index<\${#__glob_current}; __glob_index++)); do
+          __glob_char="\${__glob_current:__glob_index:1}"
+          case "$__glob_char" in
+            '['|']'|'\\'|'('|')'|'|'|'+'|'@'|'!')
+              __pathname_glob+="\\\\$__glob_char" ;;
+            *) __pathname_glob+="$__glob_char" ;;
+          esac
+        done
         local __candidate
         while IFS= read -r -d '' __candidate; do
           if [[ -e "$__candidate" || -L "$__candidate" ]]; then
             [[ -d "$__candidate" ]] && __candidate="\${__candidate%/}"
             __candidates+=("$__candidate")
           fi
-        done < <(IFS=; printf '%s\\0' $__glob_current)
+        done < <(IFS=; printf '%s\\0' $__pathname_glob)
         # For file/any modes, also include directories from the base
         # directory for navigation even when the glob itself does not
         # match directory names.  Skip this for directory mode so that
         # the pattern's basename filter is respected.
         if [[ "$type" != "directory" ]]; then
-          local __glob_dir="\${__glob_current%/*}"
-          [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
+          local __glob_dir="\${__pathname_glob%/*}"
+          [[ "$__glob_dir" == "$__pathname_glob" ]] && __glob_dir="."
           local __d
           local __directory_pattern="$__glob_dir/*/"
           while IFS= read -r -d '' __d; do

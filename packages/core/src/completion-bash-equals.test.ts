@@ -479,6 +479,58 @@ describe("joined Bash option completion", () => {
       },
     );
   }
+  for (
+    const { pattern, prefix, setup, reply } of [
+      {
+        pattern: "src/foo[1]*.toml",
+        prefix: "src/foo",
+        setup: "touch 'src/foo[1]-a.toml' src/foo1-b.toml",
+        reply: "src/foo[1]-a.toml",
+      },
+      {
+        pattern: "src/foo\\*.toml",
+        prefix: "src/foo",
+        setup: "touch 'src/foo\\name.toml' src/fooname.toml",
+        reply: "src/foo\\name.toml",
+      },
+      {
+        pattern: "src/@(foo|bar)*.toml",
+        prefix: "src/@",
+        setup: "shopt -s extglob; touch 'src/@(foo|bar)-a.toml' src/foo-b.toml",
+        // Readline replaces the part after its @ word break.
+        reply: "@(foo|bar)-a.toml",
+      },
+      {
+        pattern: "src/foo[1]*/file?.toml",
+        prefix: "src/foo",
+        setup: "mkdir -p 'src/foo[1]-a/nested' src/foo1-b/nested",
+        reply: "src/foo[1]-a/nested/",
+      },
+    ]
+  ) {
+    it(`keeps unsupported glob syntax literal in ${pattern}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        setup,
+        false,
+        false,
+        0,
+        true,
+        false,
+        false,
+        false,
+        0,
+        pattern,
+      );
+      assert.deepEqual(result.replies, [reply]);
+      assert.ok(result.line.startsWith("eqapp --config=src/"));
+      assert.ok(!result.line.includes("foo1-b"));
+    });
+  }
   it("does not add a pattern-supplied ./ to an empty value", {
     skip: !ptyAvailable,
   }, () => {

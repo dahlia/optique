@@ -31,4 +31,6 @@ links:
     partial or unrelated typed prefixes instead of replacing them with all
     matches. Large candidate sets remain responsive without changing suggestion
     order. Typed tilde or absolute path forms remain intact when fixed patterns
-    use a different spelling. [[#1031], [#1032], [#1033], [#1079]]
+    use a different spelling. Fixed Bash patterns treat brackets, backslashes,
+    and extended-glob operators literally alongside `*`/`?` wildcards.
+    [[#1031], [#1032], [#1033], [#1079]]
