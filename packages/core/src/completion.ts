@@ -744,6 +744,10 @@ export const zsh: ShellCompletion = {
     return `#compdef ${programName}
 function ${functionName} () {
   local current="\$words[CURRENT]"
+  # Let zsh match the suffix when completing in the middle of a word.
+  if [[ -o complete_in_word ]]; then
+    current="\$PREFIX"
+  fi
   local -a prev
   # Extract previous arguments, skipping empty ones
   prev=()

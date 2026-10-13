@@ -81,6 +81,10 @@ To be released.
     backslashes, including URL choices.  Regenerate and reload existing Zsh
     completion scripts to apply the fix.  [[#1055], [#1058]]
 
+ -  Fixed Zsh literal completion with `COMPLETE_IN_WORD` enabled to complete
+    values in the middle of a word, matching the text before and after the
+    cursor.  [[#1052], [#1072]]
+
  -  Fixed fish completion to decode quotes and backslash escapes in the word
     being completed, so `--format "tw` or `--file two\ w` now offers the same
     choices and file names as the unquoted word.  A quoted or escaped `~` now
@@ -128,6 +132,7 @@ To be released.
 [#1045]: https://github.com/dahlia/optique/issues/1045
 [#1047]: https://github.com/dahlia/optique/issues/1047
 [#1051]: https://github.com/dahlia/optique/issues/1051
+[#1052]: https://github.com/dahlia/optique/issues/1052
 [#1055]: https://github.com/dahlia/optique/issues/1055
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1058]: https://github.com/dahlia/optique/pull/1058
@@ -142,6 +147,7 @@ To be released.
 [#1069]: https://github.com/dahlia/optique/pull/1069
 [#1070]: https://github.com/dahlia/optique/pull/1070
 [#1071]: https://github.com/dahlia/optique/pull/1071
+[#1072]: https://github.com/dahlia/optique/pull/1072
 [#1076]: https://github.com/dahlia/optique/pull/1076
 
 
