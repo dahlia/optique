@@ -294,6 +294,64 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (
+    const word of [
+      "'--mode'=de",
+      '"--mode=de',
+      "'--mode=de'",
+      String.raw`\--mode=de`,
+      "$'--mode'=de",
+    ]
+  ) {
+    it(`decodes an option prefix beginning inside ${word}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(`eqapp ${word}`, ["--mode=de"]);
+      assert.deepEqual(result.calls, [["--mode=de"]]);
+      assert.ok(result.replies.some((reply) => reply.endsWith("dev")));
+      const argv = execFileSync("bash", [
+        "--noprofile",
+        "--norc",
+        "-c",
+        `set -- ${result.line}; printf '%s\\0' "$@"`,
+      ], { encoding: "utf8" }).split("\0").slice(0, -1);
+      assert.deepEqual(argv, ["eqapp", "--mode=dev"]);
+    });
+  }
+
+  for (const word of ["'--config=~/name=l'", '"--config=~/name=l']) {
+    it(`retains quoted tilde policy for a fully quoted ${word}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp ${word}`,
+        ["--config=~/name=l"],
+        String.raw`export HOME="$PWD"; mkdir '~'; touch '~/name=literal.toml'`,
+      );
+      assert.ok(result.replies.some((reply) => reply.endsWith("literal.toml")));
+      const argv = execFileSync("bash", [
+        "--noprofile",
+        "--norc",
+        "-c",
+        `set -- ${result.line}; printf '%s\\0' "$@"`,
+      ], { encoding: "utf8" }).split("\0").slice(0, -1);
+      assert.deepEqual(argv, ["eqapp", "--config=./~/name=literal.toml"]);
+    });
+  }
+  it("expands an unquoted tilde after a quoted delimiter", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config'='~/name=f",
+      ["--config=~/name=f"],
+      'export HOME="$PWD"',
+    );
+    assert.ok(result.replies.some((reply) => reply.endsWith("foo.toml")));
+  });
+
   it("preserves earlier hidden candidates from their own file directive", {
     skip: !ptyAvailable,
   }, () => {

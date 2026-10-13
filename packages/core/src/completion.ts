@@ -163,7 +163,7 @@ function _${programName} () {
   # leaving whitespace-separated arguments intact.
   local __plain_current="$current" __remove="" __word __joined=0
   local __raw_joined_current="$__raw_current"
-  local -a __raw_offsets=()
+  local -a __raw_offsets=() __raw_quotes=()
   if [[ \${COMP_LINE+x} ]]; then
     local -a __words=()
     local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
@@ -245,13 +245,13 @@ function _${programName} () {
       # state across the reassembled fragments and decode the preserved prefix
       # separately so trimming uses the same representation as suggestions.
       __words[__j]="$__remove"
-      local __decoded __join_quote __char __next __k __ansi __part __digits __code __join_quote_offset
+      local __decoded __decoded_option=0 __before_quote __join_quote __char __next __k __ansi __part __digits __code __join_quote_offset
       for ((__i=1; __i<=__j; __i++)); do
         __word="\${__words[__i]}"
-        [[ "$__word" == [-/+]* ]] || continue
         __decoded=""; __join_quote=""; __join_quote_offset=0
         for ((__k=0; __k<\${#__word}; __k++)); do
           __char="\${__word:__k:1}"
+          __before_quote="$__join_quote"
           if [[ -z "$__join_quote" ]]; then
             case "$__char" in
               '\\') ((++__k)); __decoded+="\${__word:__k:1}" ;;
@@ -305,20 +305,28 @@ function _${programName} () {
               *) __decoded+="$__char" ;;
             esac
           fi
-          if (( __i == __j - 1 )) && [[ ! \${__raw_offsets[\${#__decoded}]+x} ]]; then
+          if (( __i == __j - 1 )) &&
+              { [[ ! \${__raw_offsets[\${#__decoded}]+x} ]] ||
+                [[ -n "$__before_quote" && -z "$__join_quote" ]]; }; then
             __raw_offsets[\${#__decoded}]=$((__k + 1))
+            __raw_quotes[\${#__decoded}]="$__join_quote"
           fi
         done
         if [[ "$__join_quote" == ansi ]]; then
           printf -v __part '%b' "$__ansi"
           __decoded+="$__part"
         fi
-        if (( __i == __j - 1 )); then
-          __quote="$__join_quote"
-          [[ "$__quote" == ansi ]] && __quote="'"
-          __quote_offset=$__join_quote_offset
+        # Shell syntax may precede the option prefix. Decide from decoded text,
+        # retaining the existing native-file handling for non-option words.
+        if [[ "$__decoded" == [-/+]* ]] || (( __i == __j && __decoded_option )); then
+          if (( __i == __j - 1 )); then
+            __decoded_option=1
+            __quote="$__join_quote"
+            [[ "$__quote" == ansi ]] && __quote="'"
+            __quote_offset=$__join_quote_offset
+          fi
+          __words[__i]="$__decoded"
         fi
-        __words[__i]="$__decoded"
       done
       if [[ "\${__words[__j-1]}" == -*=* || "\${__words[__j-1]}" == /*:* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
         current="\${__words[__j-1]}"
@@ -357,10 +365,15 @@ function _${programName} () {
       line="__FILE__:\${line#*:}"
       __file_current="\${current:\${#__reply_prefix}}"
     fi
-    local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset
+    local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset __file_tilde_quoted=0
     if [[ -n "$__reply_prefix" ]]; then
       local __raw_offset="\${__raw_offsets[\${#__reply_prefix}]:-\${#__reply_prefix}}"
       __raw_file_current="\${__raw_joined_current:__raw_offset}"
+      # Quoting may start before the option name and remain active at the
+      # delimiter. Keep that context when deciding whether tilde is literal.
+      if [[ -n "\${__raw_quotes[\${#__reply_prefix}]-}" ]]; then
+        __file_tilde_quoted=1
+      fi
       if (( __file_quote_offset >= \${#__reply_prefix} )); then
         __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
       fi
@@ -394,7 +407,7 @@ function _${programName} () {
 
       # Expand tilde prefix for file globbing
       local __glob_current="$__file_current" __tilde_prefix="" __tilde_expanded=""
-      if [[ "$__raw_file_current" == "~"* && "$__file_current" =~ $__tilde_pattern ]]; then
+      if [[ $__file_tilde_quoted == 0 && "$__raw_file_current" == "~"* && "$__file_current" =~ $__tilde_pattern ]]; then
         __tilde_prefix="\${BASH_REMATCH[1]}"
         eval "__tilde_expanded=\$__tilde_prefix" 2>/dev/null || true
         if [[ -n "$__tilde_expanded" && "$__tilde_expanded" != "$__tilde_prefix" ]]; then
@@ -592,7 +605,7 @@ function _${programName} () {
 
       # Readline expands a leading tilde in a returned filename even when the
       # user did not type one.  Keep such local paths explicitly relative.
-      if [[ "$__raw_file_current" != "~"* && -z "$__tilde_prefix" ]]; then
+      if [[ ( "$__raw_file_current" != "~"* || $__file_tilde_quoted == 1 ) && -z "$__tilde_prefix" ]]; then
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           if [[ "\${COMPREPLY[__reply_index]}" =~ $__tilde_glob_pattern ]]; then
