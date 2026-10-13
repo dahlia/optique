@@ -3184,6 +3184,103 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       });
     }
 
+    for (
+      const [typed, filename, completed] of [
+        ["@\\$x", "a$x", "a\\$x "],
+        ["@\\`x\\`", "a`x`", "a\\`x\\` "],
+        ["@\\`touch\\ MARK\\`", "a`touch MARK`", "a\\`touch\\ MARK\\` "],
+        [
+          "@\\$(touch\\ MARK)",
+          "a$(touch MARK)",
+          "a\\$\\(touch\\ MARK\\) ",
+        ],
+        [
+          "@a\\(e\\!touch\\ MARK\\!\\)",
+          "za(e!touch MARK!)b",
+          "za\\(e\\!touch\\ MARK\\!\\)b ",
+        ],
+        ["@\\#", "a#b", "a\\#b "],
+        ["@\\[", "a[b", "a\\[b "],
+        ["@\\?", "a?b", "a\\?b "],
+        ["@\\*", "a*b", "a\\*b "],
+      ]
+    ) {
+      it(
+        `should preserve backend wildcards around literal Zsh input ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "src", type: "directory" }, { path: `src/${filename}` }],
+            {
+              setup: "setopt globcomplete extendedglob",
+              input: `extapp --format ${typed}`,
+              backend: fileCompletionBackend.replace(
+                'pattern="${2#@}"',
+                'pattern="src/*${2#@}*"',
+              ).replace(":file:txt:", ":file::"),
+              captureBuffer: true,
+              absentFiles: ["MARK"],
+            },
+          );
+          deepStrictEqual(output, `extapp --format src/${completed}`);
+        },
+      );
+    }
+
+    it("should preserve backend Zsh qualifiers around literal dollar input", {
+      skip: !isInteractiveZshCompletionAvailable(),
+    }, (t) => {
+      if (!isInteractiveZshCompletionAvailable()) {
+        t.skip("interactive zsh completion not available");
+        return;
+      }
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [{ path: "src", type: "directory" }, { path: "src/a$x" }],
+        {
+          setup: "setopt globcomplete; touch -t 202001010000 work/src/a\\$x",
+          input: "extapp --format @\\$x",
+          backend: fileCompletionBackend.replace(
+            'pattern="${2#@}"',
+            'pattern="src/*${2#@}*(m+1)"',
+          ).replace(":file:txt:", ":file::"),
+          captureBuffer: true,
+        },
+      );
+      deepStrictEqual(output, "extapp --format src/a\\$x ");
+    });
+
+    it("should preserve safe Zsh qualifiers with EXTENDED_GLOB unset", {
+      skip: !isInteractiveZshCompletionAvailable(),
+    }, (t) => {
+      if (!isInteractiveZshCompletionAvailable()) {
+        t.skip("interactive zsh completion not available");
+        return;
+      }
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [{ path: "file.txt" }],
+        {
+          setup:
+            "setopt globcomplete; unsetopt extendedglob; touch -t 202001010000 work/file.txt",
+          input: "extapp --format ",
+          backend: "printf '__FILE__:file::*(m+1):0\\0\\0\\n'",
+          captureBuffer: true,
+        },
+      );
+      deepStrictEqual(output, "extapp --format file.txt ");
+    });
+
     for (const pattern of ["*.txt", "*.(txt|md)", "~+/", "*(-.)", "*(m+1)"]) {
       it(`should preserve fixed Zsh pattern ${pattern}`, {
         skip: !isInteractiveZshCompletionAvailable(),
