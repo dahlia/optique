@@ -1837,17 +1837,51 @@ Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
     # Extract arguments from AST (handles quoted strings properly)
     \$arguments = @()
     \$commandElements = \$commandAst.CommandElements
+    \$valuePrefix = \$wordToComplete
+    \$quoteType = \$null
 
     # Keep only complete arguments before the cursor.  The current word
     # (including a token ending exactly at the cursor) is appended below.
     for (\$i = 1; \$i -lt \$commandElements.Count; \$i++) {
         \$element = \$commandElements[\$i]
-        if (\$element.Extent.EndOffset -ge \$cursorPosition) { break }
+        if (\$element.Extent.EndOffset -ge \$cursorPosition) {
+            # wordToComplete has synthesized delimiters and decoded escapes.
+            # Only the AST retains the literal value and original quote type.
+            if (\$element -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+                \$element.Extent.EndOffset -eq \$cursorPosition) {
+                if (\$element.StringConstantType -in @('SingleQuoted', 'DoubleQuoted')) {
+                    \$valuePrefix = \$element.Value
+                    \$quoteType = \$element.StringConstantType
+                } elseif (\$element.Extent.Text -match "^[^=]+=['\\u2018-\\u201b]") {
+                    # Joined values are BareWord constants despite their quotes.
+                    # Quote the entire replacement to keep it one argument.
+                    \$valuePrefix = \$element.Value
+                    \$quoteType = 'SingleQuoted'
+                } elseif (\$element.Extent.Text -match '^[^=]+=["\\u201c-\\u201e]') {
+                    \$valuePrefix = \$element.Value
+                    \$quoteType = 'DoubleQuoted'
+                }
+            }
+            break
+        }
 
         if (\$element -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
             \$arguments += \$element.Value
         } else {
             \$arguments += \$element.Extent.Text
+        }
+    }
+
+    # CompletionText replaces the whole token, including its opening quote.
+    # Escape literals without evaluating variables or expressions.
+    \$quoteCompletion = {
+        param(\$text)
+        if (\$quoteType -eq 'SingleQuoted') {
+            "'" + (\$text -replace "['\\u2018-\\u201b]", '\$0\$0') + "'"
+        } elseif (\$quoteType -eq 'DoubleQuoted') {
+            '"' + (\$text -replace '[\\x60\$"\\u201c-\\u201e]', '\`\$0') + '"'
+        } else {
+            \$text
         }
     }
 
@@ -1859,17 +1893,20 @@ ${
 `
         : ""
     }    \$completionArgs += \$arguments
-    \$completionArgs += \$wordToComplete
 
     # Call completion command and capture output
     try {
-        \$output = & ${programName} \$completionArgs 2>\$null
+        # Quote the prefix separately: array arguments expand a literal tilde
+        # when passed to native programs on Unix.
+        \$output = & ${programName} \$completionArgs "\$valuePrefix" 2>\$null
         if (-not \$output) { return }
 
         # Parse tab-separated output and create CompletionResult objects
         \$output -split "\`n" | ForEach-Object {
             \$literal = \$_.StartsWith('__LITERAL__:', [System.StringComparison]::Ordinal)
-            \$line = \$_.Trim()
+            # Quoted values preserve whitespace; only remove the CR of CRLF.
+            # Keep the existing trimming for unquoted completions.
+            \$line = if (\$null -ne \$quoteType) { \$_.TrimEnd([char]13) } else { \$_.Trim() }
             if (-not \$line) { return }
             if (\$literal) { \$line = \$line.Substring(12) }
 
@@ -1889,7 +1926,7 @@ ${
                 # comparing so that Windows backslashes match forward slashes
                 # in the transported pattern.
                 \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') -replace '^\\./','' } else { '' }
-                \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') -replace '^\\./','' } else { '' }
+                \$normalizedWord = if (\$valuePrefix) { \$valuePrefix.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$comparison = if (\$IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
                 # For wildcard patterns, compare only the directory prefix
                 \$comparePattern = \$normalizedPattern
@@ -1901,12 +1938,25 @@ ${
                         \$comparePattern = ''
                     }
                 }
-                \$prefix = if ((\$comparePattern -or \$normalizedWord) -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$wordToComplete -ne \$pattern) {
-                    \$wordToComplete
+                # A quoted home-pattern directory inserts an absolute path.
+                # Compare subsequent input against the same expanded prefix.
+                # Detect home syntax before removing ./, which can target a
+                # literal local tilde directory rather than the home directory.
+                \$homePattern = \$pattern -and (\$pattern -eq '~' -or \$pattern.Replace('\\', '/').StartsWith('~/'))
+                if (\$homePattern) {
+                    # Preserve the home root when the pattern is exactly ~.
+                    \$expandedPattern = if (\$comparePattern -eq '~') { \$HOME } else { \$HOME.Replace('\\', '/').TrimEnd('/') + \$comparePattern.Substring(1) }
+                    \$expandedPattern = [IO.Path]::GetFullPath(\$expandedPattern).Replace('\\', '/')
+                    if (\$normalizedWord.StartsWith(\$expandedPattern, \$comparison)) {
+                        \$comparePattern = \$expandedPattern
+                    }
+                }
+                \$prefix = if ((\$comparePattern -or \$normalizedWord) -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$valuePrefix -ne \$pattern) {
+                    \$valuePrefix
                 } elseif (\$pattern) {
                     \$pattern
-                } elseif (\$wordToComplete) {
-                    \$wordToComplete
+                } elseif (\$valuePrefix) {
+                    \$valuePrefix
                 } else { '' }
 
                 # Use -Force to include hidden files when requested, or when
@@ -1914,15 +1964,22 @@ ${
                 \$prefixBasename = if (\$prefix) { Split-Path -Leaf \$prefix } else { '' }
                 \$forceParam = if (\$hidden -or (\$prefixBasename -and \$prefixBasename.StartsWith('.'))) { @{Force = \$true} } else { @{} }
 
+                # A quoted tilde is literal when passed to a native command.
+                # Prevent PowerShell's file provider from expanding it to home.
+                # Parser-provided home patterns still need home expansion.
+                \$prefixFromInput = \$valuePrefix -and \$prefix -ceq \$valuePrefix
+                \$lookupPrefix = if (\$prefixFromInput -and \$null -ne \$quoteType -and \$prefix.StartsWith('~')) { './' + \$prefix } else { \$prefix }
+
                 # If prefix is a directory without trailing slash, append
                 # one so Get-ChildItem lists its contents
-                if (\$prefix -and (Test-Path -Path \$prefix -PathType Container) -and -not \$prefix.EndsWith('/') -and -not \$prefix.EndsWith('\\')) {
+                if (\$prefix -and (Test-Path -Path \$lookupPrefix -PathType Container) -and -not \$prefix.EndsWith('/') -and -not \$prefix.EndsWith('\\')) {
                     \$prefix = \$prefix + '/'
+                    \$lookupPrefix = \$lookupPrefix + '/'
                 }
 
                 # Build the glob path — when the prefix contains wildcard
                 # characters, use it as-is; otherwise append *
-                \$globPath = if (\$prefix -match '[\*\?]') { \$prefix } else { "\${prefix}*" }
+                \$globPath = if (\$lookupPrefix -match '[\*\?]') { \$lookupPrefix } else { "\${lookupPrefix}*" }
 
                 # Get file system items based on type
                 \$items = @()
@@ -1959,7 +2016,7 @@ ${
                 # For file/any modes with glob patterns, also add directories
                 # from the base directory for navigation
                 if (\$prefix -match '[\*\?]' -and \$type -ne 'directory') {
-                    \$globDir = Split-Path -Parent \$prefix
+                    \$globDir = Split-Path -Parent \$lookupPrefix
                     if (-not \$globDir) { \$globDir = '.' }
                     \$extraDirs = Get-ChildItem @forceParam -Directory -Path "\$globDir/*" -ErrorAction SilentlyContinue
                     if (\$extraDirs) { \$items = @(\$items) + @(\$extraDirs) | Select-Object -Unique }
@@ -1980,8 +2037,13 @@ ${
                 \$items | ForEach-Object {
                     \$completionText = if (\$_.PSIsContainer) { "\$dirPrefix\$(\$_.Name)/" } else { "\$dirPrefix\$(\$_.Name)" }
                     \$itemType = if (\$_.PSIsContainer) { 'Directory' } else { 'File' }
+                    # Quoting disables native tilde expansion.  A home pattern
+                    # supplied by the parser must insert the discovered path.
+                    \$replacementText = if (\$null -ne \$quoteType -and -not \$prefixFromInput -and \$homePattern) {
+                        if (\$_.PSIsContainer) { \$_.FullName + '/' } else { \$_.FullName }
+                    } else { \$completionText }
                     [System.Management.Automation.CompletionResult]::new(
-                        \$completionText,
+                        (& \$quoteCompletion \$replacementText),
                         \$completionText,
                         'ParameterValue',
                         \$itemType
@@ -1991,11 +2053,14 @@ ${
                 # Parse literal completion: text\\tlistItemText\\tdescription
                 \$parts = \$line -split "\`t", 3
                 \$completionText = \$parts[0]
+                # Empty display text is invalid for CompletionResult.  Keep
+                # ignoring empty suggestions without dropping later records.
+                if (-not \$completionText) { return }
                 \$listItemText = if (\$parts.Length -gt 1 -and \$parts[1]) { \$parts[1] } else { \$completionText }
                 \$toolTip = if (\$parts.Length -gt 2 -and \$parts[2]) { \$parts[2] } else { \$completionText }
 
                 [System.Management.Automation.CompletionResult]::new(
-                    \$completionText,
+                    (& \$quoteCompletion \$completionText),
                     \$listItemText,
                     'ParameterValue',
                     \$toolTip

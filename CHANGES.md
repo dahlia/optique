@@ -66,6 +66,10 @@ To be released.
     instead of matching *report1.txt* as if `[1]` were a glob character class.
     [[#1040], [#1060]]
 
+ -  Fixed PowerShell completion for quoted literal values and file paths,
+    including unfinished quotes and joined option values, so suggestions
+    remain literal arguments when inserted.  [[#1045], [#1070]]
+
  -  Fixed PowerShell completion to ignore arguments after the cursor when
     completing an earlier argument, keeping later arguments intact.
     [[#1043], [#1069]]
@@ -115,6 +119,7 @@ To be released.
 [#1042]: https://github.com/dahlia/optique/issues/1042
 [#1043]: https://github.com/dahlia/optique/issues/1043
 [#1044]: https://github.com/dahlia/optique/issues/1044
+[#1045]: https://github.com/dahlia/optique/issues/1045
 [#1051]: https://github.com/dahlia/optique/issues/1051
 [#1055]: https://github.com/dahlia/optique/issues/1055
 [#1057]: https://github.com/dahlia/optique/pull/1057
@@ -128,6 +133,7 @@ To be released.
 [#1066]: https://github.com/dahlia/optique/pull/1066
 [#1067]: https://github.com/dahlia/optique/pull/1067
 [#1069]: https://github.com/dahlia/optique/pull/1069
+[#1070]: https://github.com/dahlia/optique/pull/1070
 [#1076]: https://github.com/dahlia/optique/pull/1076
 
 
