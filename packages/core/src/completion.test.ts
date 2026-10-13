@@ -6937,3 +6937,242 @@ do { ${functionName} "extapp " }
 });
 
 // cSpell: ignore CWORD COMPREPLY esac compinit
+
+describe("reserved literal transport markers", () => {
+  const shells = [bash, zsh, fish, pwsh, nu];
+  const values = [
+    "__FILE__:directory:::0",
+    "__FILE__:x",
+    "__FILE__:",
+    "__LITERAL__:",
+    "__LITERAL__:__FILE__:directory:::0",
+    "__LITERAL__:__LITERAL__:x",
+    "__file__:directory:::0",
+    "__joined_file__:x:directory:::0",
+    "__literal__:x",
+    " __FILE__:directory:::0",
+    "__FILE__",
+    "ordinary",
+  ];
+
+  for (const shell of shells) {
+    it(`should escape reserved literal markers for ${shell.name}`, () => {
+      for (const value of [...values, "__FILE__:\t\n\r\0"]) {
+        const sanitized = value.replace(/[\t\n\r\0]/g, " ");
+        const escaped = sanitized.startsWith("__FILE__:") ||
+            sanitized.startsWith("__LITERAL__:")
+          ? `__LITERAL__:${sanitized}`
+          : sanitized;
+        const encoded = Array.from(shell.encodeSuggestions([{
+          kind: "literal",
+          text: value,
+          description: message`Literal description`,
+        }])).join("");
+        const expected = shell === bash
+          ? escaped
+          : shell === zsh
+          ? `${escaped}\0Literal description\0`
+          : shell === pwsh
+          ? `${escaped}\t${sanitized}\tLiteral description`
+          : `${escaped}\tLiteral description`;
+        deepStrictEqual(encoded, expected);
+      }
+      // Genuine directives keep their wire representation.
+      const encoded = Array.from(shell.encodeSuggestions([{
+        kind: "file",
+        type: "directory",
+      }])).join("");
+      const directive = "__FILE__:directory:::0";
+      deepStrictEqual(
+        encoded,
+        shell === bash
+          ? directive
+          : shell === zsh
+          ? `${directive}\0\0`
+          : shell === pwsh
+          ? `${directive}\t[file]\t`
+          : `${directive}\t`,
+      );
+    });
+
+    const available = process.platform !== "win32" &&
+      isShellAvailable(shell.name);
+    it(`should round-trip reserved literal markers in ${shell.name}`, {
+      skip: !available,
+      timeout: 15000,
+    }, () => {
+      if (!available) return;
+      const dir = mkdtempSync(join(tmpdir(), "optique-literal-markers-"));
+      try {
+        const bin = join(dir, "bin");
+        const work = join(dir, "work");
+        mkdirSync(bin);
+        mkdirSync(work);
+        mkdirSync(join(work, "child"));
+        const suggestions: Suggestion[] = [
+          ...values.slice(0, 6).map((value): Suggestion => ({
+            kind: "literal",
+            text: value,
+            description: message`Literal description`,
+          })),
+          // Check that the escaped flag is reset for a following directive.
+          { kind: "file", type: "directory" },
+          ...values.slice(6).map((value): Suggestion => ({
+            kind: "literal",
+            text: value,
+            description: message`Literal description`,
+          })),
+        ];
+        const records = join(bin, "records");
+        writeFileSync(
+          records,
+          // zsh's default stdout writer adds a newline after each chunk.
+          Array.from(shell.encodeSuggestions(suggestions)).join(
+            shell === zsh ? "\n" : "",
+          ) + "\n",
+        );
+        const prefixRecords = join(bin, "prefix-records");
+        writeFileSync(
+          prefixRecords,
+          Array.from(shell.encodeSuggestions([suggestions[0]])).join("") + "\n",
+        );
+        writeFileSync(
+          join(bin, "markercli"),
+          `#!/bin/sh
+current=''
+for current do :; done
+if [ -n "$current" ]; then cat '${prefixRecords}'; else cat '${records}'; fi
+`,
+          { mode: 0o755 },
+        );
+        const scriptPath = join(
+          bin,
+          shell === pwsh ? "completion.ps1" : "completion",
+        );
+        writeFileSync(scriptPath, shell.generateScript("markercli"));
+        for (const prefix of ["", "__"]) {
+          let output: string;
+          if (shell === bash) {
+            output = runCommand("bash", [
+              "-c",
+              `
+export PATH='${bin}':$PATH
+source '${scriptPath}'
+shopt -s nocasematch
+COMP_WORDS=(markercli '${prefix}')
+COMP_CWORD=1
+_markercli
+printf '%s\\n' "\${COMPREPLY[@]}"
+`,
+            ], { cwd: work });
+          } else if (shell === zsh) {
+            // #1055 owns _describe's colon interpretation.  Verify the generated
+            // adapter's literal/file dispatch in real zsh without that later step.
+            output = runCommand("zsh", [
+              "-fc",
+              `
+export PATH='${bin}':$PATH
+source '${scriptPath}'
+_describe() { print -rl -- "\${(@P)2}"; }
+_directories() { print -r -- child/; }
+words=(markercli '${prefix}')
+CURRENT=2
+PREFIX='${prefix}'
+_markercli
+`,
+            ], { cwd: work });
+          } else if (shell === fish) {
+            output = runCommand("fish", [
+              "-c",
+              `
+set -x PATH '${bin}' $PATH
+source '${scriptPath}'
+complete -C 'markercli ${prefix}'
+`,
+            ], { cwd: work });
+          } else if (shell === pwsh) {
+            output = runCommand("pwsh", [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              `$env:PATH = '${bin}:' + $env:PATH
+. '${scriptPath}'
+[System.Management.Automation.CommandCompletion]::CompleteInput('markercli ${prefix}', ${
+                10 + prefix.length
+              }, $null).CompletionMatches | ForEach-Object { $_.CompletionText }
+`,
+            ], { cwd: work });
+          } else {
+            output = runCommand("nu", [
+              "-c",
+              `
+$env.PATH = ($env.PATH | prepend '${bin}')
+source '${scriptPath}'
+do $env.config.completions.external.completer ['markercli' '${prefix}'] | get value | str join (char newline)
+`,
+            ], { cwd: work });
+          }
+          const actual = output.trimEnd().split(/\r?\n/).map((line) => {
+            if (shell === zsh) {
+              return line.endsWith(":Literal description")
+                ? line.slice(0, -":Literal description".length)
+                : line;
+            }
+            return line.split("\t")[0];
+          });
+          const expected = (prefix === "" ? [...values, "child/"] : [values[0]])
+            .map((value) =>
+              shell === pwsh
+                ? value.trim()
+                : shell === nu && value.startsWith(" ")
+                ? `'${value}'`
+                : value
+            );
+          deepStrictEqual(actual.sort(), expected.sort());
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  const bashAvailable = process.platform !== "win32" &&
+    isShellAvailable("bash");
+  it("should insert a reserved literal marker through Bash Readline", {
+    skip: !bashAvailable,
+    timeout: 15000,
+  }, () => {
+    if (!bashAvailable) return;
+    const dir = mkdtempSync(join(tmpdir(), "optique-marker-readline-"));
+    try {
+      const script = join(dir, "completion.bash");
+      const literal = "__FILE__:directory:::0";
+      writeFileSync(script, bash.generateScript("markercli", ["complete"]));
+      const encoded = Array.from(bash.encodeSuggestions([{
+        kind: "literal",
+        text: literal,
+      }])).join("");
+      for (const prefix of ["", "__FI"]) {
+        const output = runCommand("bash", [
+          "--noprofile",
+          "--norc",
+          "-i",
+        ], {
+          cwd: dir,
+          input: `PS1= PS2=
+set +o history
+bind 'set enable-bracketed-paste off' 2>/dev/null
+bind '"\\C-i": complete'
+markercli() { if [ "$1" = complete ]; then printf '%s\\n' '${encoded}'; else printf '%s\\0' "$@"; fi; }
+source '${script}'
+markercli --value ${prefix}\t
+exit
+`,
+        });
+        deepStrictEqual(output.split("\0"), ["--value", literal, ""]);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
