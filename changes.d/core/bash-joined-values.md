@@ -6,7 +6,7 @@ links:
  -  Fixed Bash completion of joined option values with `=` for long `-`
     options or `:` for `/` options and default or customized word-break
     settings, including `:`/`@` in values or option names. Completion respects
-    the cursor position and decodes
+    the cursor position, stops at unquoted shell operators, and decodes
     quoted or escaped values without executing shell substitutions. File values
     preserve their full prefix, filtering metadata, unquoted tilde expansion
     after split option names, and quoted path prefixes.  Exact literal

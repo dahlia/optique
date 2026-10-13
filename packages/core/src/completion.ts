@@ -157,6 +157,7 @@ function _${programName} () {
   if [[ \${COMP_LINE+x} ]]; then
     local -a __words=()
     local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
+    local __shell_quote="" __shell_escape=0 __boundary=0 __previous_boundary=0 __scan __symbol
     # Reconstruct the prefix at the cursor, leaving any suffix to Readline.
     if [[ \${COMP_POINT+x} ]]; then
       __rest="\${COMP_LINE:0:COMP_POINT}"
@@ -175,7 +176,27 @@ function _${programName} () {
         __valid=0
         break
       fi
-      if (( __i > 1 && !__space )) &&
+      # Quoted or escaped operators belong to words; bare operators separate
+      # shell syntax even when no whitespace surrounds a redirection.
+      __boundary=0
+      for ((__scan=0; __scan<\${#__word}; __scan++)); do
+        __symbol="\${__word:__scan:1}"
+        if (( __shell_escape )); then
+          __shell_escape=0
+        elif [[ "$__shell_quote" == "'" ]]; then
+          [[ "$__symbol" == "'" ]] && __shell_quote=""
+        elif [[ "$__symbol" == '\\' ]]; then
+          __shell_escape=1
+        elif [[ -n "$__shell_quote" ]]; then
+          [[ "$__symbol" == "$__shell_quote" ]] && __shell_quote=""
+        else
+          case "$__symbol" in
+            "'"|'"') __shell_quote="$__symbol" ;;
+            '>'|'<'|'|'|'&'|';'|'('|')') __boundary=1 ;;
+          esac
+        fi
+      done
+      if (( __i > 1 && !__space && !__boundary && !__previous_boundary )) &&
           { [[ -n "$__word" && -z "\${__word//=/}" ]] ||
             [[ -n "$__previous" && -z "\${__previous//=/}" ]] ||
             [[ "\${__words[__j-1]}" == [-/+]* ]] ||
@@ -187,6 +208,7 @@ function _${programName} () {
       fi
       __rest="\${__rest:\${#__word}}"
       __previous="$__word"
+      __previous_boundary=$__boundary
     done
     if (( __valid )); then
       current="\${__words[__j-1]}"

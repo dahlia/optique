@@ -58,6 +58,9 @@ const dotValues: ValueParser<"sync", string> = {
   },
 };
 const fields = {
+  redirect: optional(
+    option("--redirect", choice(["dev>output", "dev<output"])),
+  ),
   dot: optional(option("--dot", dotValues)),
   mixed: optional(option("--mixed", mixedValues)),
   scopeFile: optional(
@@ -233,6 +236,48 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (const operator of [">", "<", ">>", "2>"]) {
+    it(
+      `stops joined reconstruction at ${operator}`,
+      { skip: !ptyAvailable },
+      () => {
+        if (!ptyAvailable) return;
+        const result = tab(`eqapp --redirect=dev${operator}ou`, [
+          `--redirect=dev${operator}ou`,
+        ]);
+        assert.ok(
+          !result.calls.some((args) =>
+            args.includes(`--redirect=dev${operator}ou`)
+          ),
+        );
+        assert.ok(!result.replies.includes("output"));
+        assert.equal(result.line, `eqapp --redirect=dev${operator}ou`);
+      },
+    );
+  }
+  it("preserves quoted redirection characters in a joined value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab('eqapp --redirect="dev>ou', ["--redirect=dev>ou"]);
+    assert.deepEqual(result.calls, [["--redirect=dev>ou"]]);
+    assert.equal(result.line, 'eqapp --redirect="dev>output" ');
+  });
+
+  it("preserves escaped redirection characters in a joined value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(String.raw`eqapp --redirect=dev\>ou`, [
+      "--redirect=dev>ou",
+    ]);
+    assert.deepEqual(result.calls, [["--redirect=dev>ou"]]);
+    assert.ok(
+      result.replies.includes("dev>output") ||
+        result.replies.includes("output"),
+    );
+  });
+
   it(
     "keeps colons inside slash option file values",
     { skip: !ptyAvailable },
