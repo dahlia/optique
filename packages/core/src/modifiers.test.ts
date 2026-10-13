@@ -6869,6 +6869,29 @@ describe("branch coverage: modifiers edge cases", () => {
     return state;
   }
 
+  it("multiple: keeps distinct file insertion prefixes", () => {
+    const suggestions: readonly Suggestion[] = [
+      { kind: "file", type: "file", pattern: "out=b", prefix: "out=" },
+      { kind: "file", type: "file", pattern: "out=b" },
+    ];
+    const value: ValueParser<"sync", string> = {
+      mode: "sync",
+      metavar: "FILE",
+      placeholder: "",
+      parse: (input) => ({ success: true, value: input }),
+      format: (input) => input,
+      suggest: () => suggestions,
+    };
+    const parser = multiple(argument(value));
+    const context = {
+      buffer: [],
+      state: parser.initialState,
+      optionsTerminated: false,
+      usage: parser.usage,
+    };
+    assert.deepEqual([...parser.suggest(context, "")], suggestions);
+  });
+
   it("multiple: suggest passes through non-literal suggestions", () => {
     const fileValueParser: ValueParser<"sync", string> = {
       mode: "sync",

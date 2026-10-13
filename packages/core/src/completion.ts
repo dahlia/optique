@@ -50,6 +50,18 @@ function encodePattern(pattern: string): string {
   return pattern.replace(/%/g, "%25").replace(/:/g, "%3A");
 }
 
+/** Encodes optional literal insertion metadata without changing old directives. */
+function encodeFilePrefix(
+  suggestion: Extract<Suggestion, { kind: "file" }>,
+): string {
+  const prefix = suggestion.prefix ?? "";
+  if (
+    prefix === "" || !(suggestion.pattern ?? "").startsWith(prefix) ||
+    sanitizeForTransport(prefix) !== prefix
+  ) return "";
+  return `:${encodePattern(prefix)}`;
+}
+
 function encodeExtensions(
   extensions: readonly string[] | undefined,
 ): string {
@@ -112,12 +124,31 @@ function _${programName} () {
   COMPREPLY=()
   local current="\${COMP_WORDS[COMP_CWORD]}"
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
+  local __prefix_aware=0
   while IFS= read -r line; do
     if [[ "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
-      IFS=':' read -r _ type extensions pattern hidden <<< "$line"
+      local insertion_prefix
+      IFS=':' read -r _ type extensions pattern hidden insertion_prefix <<< "$line"
       extensions="\${extensions//,\\./,}"; extensions="\${extensions#.}"
       pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
+
+      insertion_prefix="\${insertion_prefix//%3A/:}"; insertion_prefix="\${insertion_prefix//%25/%}"
+      local __saved_current="$current"
+      local -a __saved_reply=()
+      if [[ -n "$insertion_prefix" && "$pattern" == "$insertion_prefix"* && "$current" == "$insertion_prefix"* ]]; then
+        pattern="\${pattern#"$insertion_prefix"}"
+        current="\${current#"$insertion_prefix"}"
+        __prefix_aware=1
+      else
+        insertion_prefix=""
+      fi
+      # Inserted keys are not filesystem paths.  Once present, keep earlier
+      # replies out of later file filters; retain legacy-only aggregation.
+      if [[ "$__prefix_aware" == "1" ]]; then
+        __saved_reply=("\${COMPREPLY[@]}")
+        COMPREPLY=()
+      fi
 
       # Save and adjust glob/shell options for safe file completion
       local __dotglob_was_set=0 __failglob_was_set=0 __noglob_was_set=0
@@ -317,6 +348,16 @@ function _${programName} () {
         done
         COMPREPLY=("\${filtered[@]}")
       fi
+      if [[ -n "$insertion_prefix" ]]; then
+        local __prefix_index
+        for __prefix_index in "\${!COMPREPLY[@]}"; do
+          COMPREPLY[$__prefix_index]="$insertion_prefix\${COMPREPLY[$__prefix_index]}"
+        done
+      fi
+      if [[ "$__prefix_aware" == "1" ]]; then
+        COMPREPLY=("\${__saved_reply[@]}" "\${COMPREPLY[@]}")
+      fi
+      current="$__saved_current"
     else
       # Regular literal completion
       COMPREPLY+=("$line")
@@ -338,7 +379,9 @@ complete -F _${programName} -- ${programName}
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
+          encodeFilePrefix(suggestion)
+        }`;
       }
       i++;
     }
@@ -390,9 +433,20 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
 
       if [[ "\$value" == __FILE__:* ]]; then
         # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
-        local type extensions pattern hidden
-        IFS=':' read -r _ type extensions pattern hidden <<< "\$value"
-        pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
+        local type extensions pattern hidden insertion_prefix
+        IFS=':' read -r _ type extensions pattern hidden insertion_prefix <<< "\$value"
+        local __decoded_pattern="\$pattern"
+        __decoded_pattern="\${__decoded_pattern//\\%3A/:}"; __decoded_pattern="\${__decoded_pattern//\\%25/%}"
+        insertion_prefix="\${insertion_prefix//\\%3A/:}"; insertion_prefix="\${insertion_prefix//\\%25/%}"
+        local __saved_prefix="\$PREFIX" __saved_iprefix="\$IPREFIX"
+        if [[ -n "\$insertion_prefix" && "\$__decoded_pattern" == "\$insertion_prefix"* && "\$PREFIX" == "\$insertion_prefix"* ]]; then
+          pattern="\${__decoded_pattern#"\$insertion_prefix"}"
+          PREFIX="\${PREFIX#"\$insertion_prefix"}"
+          IPREFIX="\$IPREFIX\$insertion_prefix"
+        else
+          # Preserve legacy decoding for directives without active metadata.
+          pattern="\${pattern//%3A/:}"; pattern="\${pattern//%25/%}"
+        fi
         has_file_completion=1
 
         # Native completion helpers expect normal zsh glob grouping even if
@@ -411,7 +465,6 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
         # _directories enumerate the pattern's directory instead of the
         # current word.  If the user has already typed beyond the pattern,
         # keep PREFIX unchanged for incremental narrowing.
-        local __saved_prefix="\$PREFIX"
         if [[ -n "\$pattern" ]]; then
           # Normalize leading ./ so that ./src/ma matches pattern src/
           local __norm_prefix="\${PREFIX#./}"
@@ -468,6 +521,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
 
         # Restore PREFIX and glob_dots to their previous state
         PREFIX="\$__saved_prefix"
+        IPREFIX="\$__saved_iprefix"
         if [[ "\$__was_sh_glob" == "1" ]]; then setopt sh_glob; else unsetopt sh_glob; fi
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
@@ -520,7 +574,9 @@ fi
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\0${description}\0`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
+          encodeFilePrefix(suggestion)
+        }\0${description}\0`;
       }
     }
   },
@@ -567,6 +623,21 @@ ${
             set -l extensions $parts[3]
             set -l pattern (string replace -a '%25' '%' -- (string replace -a '%3A' ':' -- $parts[4]))
             set -l hidden $parts[5]
+            set -l insertion_prefix ""
+            if test (count $parts) -ge 6
+                set insertion_prefix (string replace -a '%25' '%' -- (string replace -a '%3A' ':' -- $parts[6]))
+            end
+            set -l saved_current "$current"
+            set -l prefix_length (string length -- "$insertion_prefix")
+            if test $prefix_length -gt 0
+                and test (string sub -l $prefix_length -- "$pattern") = "$insertion_prefix"
+                and test (string sub -l $prefix_length -- "$current") = "$insertion_prefix"
+                set -l start (math $prefix_length + 1)
+                set pattern (string sub -s $start -- "$pattern")
+                set current (string sub -s $start -- "$current")
+            else
+                set insertion_prefix ""
+            end
 
             # When a pattern is specified, use it as the glob base instead
             # of the current word.  If the user has already typed beyond the
@@ -788,8 +859,9 @@ ${
 
             # Output file completions
             for item in $items
-                echo $item
+                echo "$insertion_prefix$item"
             end
+            set current "$saved_current"
         else
             # Regular literal completion - split by tab
             set -l parts (string split \\t -- $line)
@@ -829,7 +901,9 @@ complete -c ${programName} -f -a '(${functionName})'
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
+          encodeFilePrefix(suggestion)
+        }\t${description}`;
       }
       i++;
     }
@@ -949,12 +1023,21 @@ ${
       let pattern = ($parts | get 3 | str replace -a '%3A' ':' | str replace -a '%25' '%')
       let hidden = ($parts | get 4) == '1'
 
+      let insertion_prefix = if ($parts | length) > 5 {
+        $parts | get 5 | str replace -a '%3A' ':' | str replace -a '%25' '%'
+      } else { "" }
+
       # Extract prefix from the last argument if it exists
       let prefix = if ($final_args | length) > 0 {
         $final_args | last
       } else {
         ""
       }
+
+      let insertion_prefix = if ($insertion_prefix | is-not-empty) and ($pattern | str starts-with $insertion_prefix) and ($prefix | str starts-with $insertion_prefix) { $insertion_prefix } else { "" }
+      let prefix_length = ($insertion_prefix | str length)
+      let pattern = if $prefix_length > 0 { $pattern | str substring $prefix_length.. } else { $pattern }
+      let prefix = if $prefix_length > 0 { $prefix | str substring $prefix_length.. } else { $prefix }
 
       # When a pattern is specified, use it as the glob base instead of
       # the user-typed prefix.  If the user has already typed beyond the
@@ -1101,7 +1184,7 @@ ${
         } else {
           $dir_prefix + ($item.name | path basename)
         }
-        { value: $name }
+        { value: ($insertion_prefix + $name) }
       }
     } else {
       # Regular literal completion - split by tab
@@ -1168,7 +1251,9 @@ ${functionName}-external
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t${description}`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
+          encodeFilePrefix(suggestion)
+        }\t${description}`;
       }
       i++;
     }
@@ -1241,11 +1326,17 @@ ${
             if (\$line -match '^__FILE__:') {
                 # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
                 \$directive = (\$line -split "\`t")[0]
-                \$parts = \$directive -split ':', 5
+                \$parts = \$directive -split ':', 6
                 \$type = \$parts[1]
                 \$extensions = \$parts[2]
                 \$pattern = \$parts[3] -replace '%3A', ':' -replace '%25', '%'
                 \$hidden = \$parts[4] -eq '1'
+                \$insertionPrefix = if (\$parts.Length -gt 5) { \$parts[5] -replace '%3A', ':' -replace '%25', '%' } else { '' }
+                \$matchingWord = \$wordToComplete
+                if (\$insertionPrefix -and \$pattern.StartsWith(\$insertionPrefix, [System.StringComparison]::Ordinal) -and \$matchingWord.StartsWith(\$insertionPrefix, [System.StringComparison]::Ordinal)) {
+                    \$pattern = \$pattern.Substring(\$insertionPrefix.Length)
+                    \$matchingWord = \$matchingWord.Substring(\$insertionPrefix.Length)
+                } else { \$insertionPrefix = '' }
 
                 # When a pattern is specified, use it as the file matching
                 # prefix instead of the current word.  If the user has
@@ -1254,7 +1345,7 @@ ${
                 # comparing so that Windows backslashes match forward slashes
                 # in the transported pattern.
                 \$normalizedPattern = if (\$pattern) { \$pattern.Replace('\\', '/') -replace '^\\./','' } else { '' }
-                \$normalizedWord = if (\$wordToComplete) { \$wordToComplete.Replace('\\', '/') -replace '^\\./','' } else { '' }
+                \$normalizedWord = if (\$matchingWord) { \$matchingWord.Replace('\\', '/') -replace '^\\./','' } else { '' }
                 \$comparison = if (\$IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
                 # For wildcard patterns, compare only the directory prefix
                 \$comparePattern = \$normalizedPattern
@@ -1266,12 +1357,12 @@ ${
                         \$comparePattern = ''
                     }
                 }
-                \$prefix = if ((\$comparePattern -or \$normalizedWord) -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$wordToComplete -ne \$pattern) {
-                    \$wordToComplete
+                \$prefix = if ((\$comparePattern -or \$normalizedWord) -and \$normalizedWord -and \$normalizedWord.StartsWith(\$comparePattern, \$comparison) -and \$normalizedWord.Length -ge \$comparePattern.Length -and \$matchingWord -ne \$pattern) {
+                    \$matchingWord
                 } elseif (\$pattern) {
                     \$pattern
-                } elseif (\$wordToComplete) {
-                    \$wordToComplete
+                } elseif (\$matchingWord) {
+                    \$matchingWord
                 } else { '' }
 
                 # Use -Force to include hidden files when requested, or when
@@ -1346,7 +1437,7 @@ ${
                     \$completionText = if (\$_.PSIsContainer) { "\$dirPrefix\$(\$_.Name)/" } else { "\$dirPrefix\$(\$_.Name)" }
                     \$itemType = if (\$_.PSIsContainer) { 'Directory' } else { 'File' }
                     [System.Management.Automation.CompletionResult]::new(
-                        \$completionText,
+                        (\$insertionPrefix + \$completionText),
                         \$completionText,
                         'ParameterValue',
                         \$itemType
@@ -1396,7 +1487,9 @@ ${
             formatMessage(suggestion.description, { colors: false }),
           );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}\t[file]\t${description}`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
+          encodeFilePrefix(suggestion)
+        }\t[file]\t${description}`;
       }
       i++;
     }

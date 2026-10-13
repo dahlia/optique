@@ -763,6 +763,14 @@ export type Suggestion =
      */
     readonly pattern?: string;
     /**
+     * Literal text at the start of `pattern` that is preserved on insertion
+     * but excluded from native filesystem matching, such as `output=`.
+     * Shell adapters ignore it if it does not lead both the pattern and
+     * the current word.  Regenerate installed scripts to use this field.
+     * @since 1.1.13
+     */
+    readonly prefix?: string;
+    /**
      * The type of file system entries to complete.
      */
     readonly type: "file" | "directory" | "any";

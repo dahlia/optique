@@ -19467,8 +19467,34 @@ describe("keyValue", () => {
       const suggestions = [...parser.suggest?.("out=src/") ?? []];
 
       assert.deepEqual(suggestions, [
-        { kind: "file", type: "file", pattern: "out=src/" },
+        { kind: "file", type: "file", pattern: "out=src/", prefix: "out=" },
       ]);
+    });
+
+    it("should accumulate nested file insertion prefixes", () => {
+      const value: ValueParser<"sync", string> = {
+        mode: "sync",
+        metavar: "PATH",
+        placeholder: "",
+        parse: (input) => ({ success: true, value: input }),
+        format: (input) => input,
+        *suggest(prefix) {
+          yield {
+            kind: "file",
+            type: "directory",
+            pattern: prefix,
+            includeHidden: true,
+          };
+        },
+      };
+      const parser = keyValue({ separator: ":", value: keyValue({ value }) });
+      assert.deepEqual([...parser.suggest?.("group:out=src/") ?? []], [{
+        kind: "file",
+        type: "directory",
+        pattern: "group:out=src/",
+        prefix: "group:out=",
+        includeHidden: true,
+      }]);
     });
 
     it("should preserve file suggestions with non-parseable patterns", () => {
@@ -19500,6 +19526,7 @@ describe("keyValue", () => {
           type: "file",
           extensions: [".json"],
           pattern: "out=src/",
+          prefix: "out=",
         },
       ]);
     });
