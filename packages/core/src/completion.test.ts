@@ -55,6 +55,7 @@ function runCommand(
     readonly cwd?: string;
     readonly input?: string;
     readonly stdio?: "pipe" | "ignore";
+    readonly timeout?: number;
   } = {},
 ): string {
   try {
@@ -63,6 +64,7 @@ function runCommand(
       cwd: options.cwd,
       input: options.input,
       stdio: options.stdio,
+      timeout: options.timeout,
     }) ?? "";
   } catch (error) {
     const stdout = getStdoutFromExecError(error);
@@ -3658,6 +3660,94 @@ printf '__FILE__:file:.json,.yaml::0\\n'
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
+
+    for (const type of ["file", "any"] as const) {
+      for (const extension of ["txt", "TXT"]) {
+        for (const dotPrefix of [false, true]) {
+          it(
+            `should respect extension case in pwsh ${type} completions (${
+              dotPrefix ? "." : ""
+            }${extension})`,
+            {
+              skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+              timeout: 10000,
+            },
+            () => {
+              // Bun ignores the skip option, so guard the POSIX fixture as well.
+              if (
+                process.platform === "win32" || !isShellAvailable("pwsh")
+              ) return;
+
+              const tempDir = mkdtempSync(
+                join(tmpdir(), "pwsh-extension-case-"),
+              );
+              try {
+                const directive = dotPrefix
+                  // Compatibility transport also accepts dot-prefixed extensions.
+                  ? `__FILE__:${type}:.${extension},.json:case:0`
+                  : Array.from(pwsh.encodeSuggestions([{
+                    kind: "file",
+                    type,
+                    extensions: [`.${extension}`, ".json"],
+                    pattern: "case",
+                    includeHidden: false,
+                  }])).join("");
+                writeFileSync(
+                  join(tempDir, "casecli"),
+                  `#!/bin/bash\nprintf '%s\\n' '${directive}'\n`,
+                  { mode: 0o755 },
+                );
+                const fixtureDir = join(tempDir, "files");
+                mkdirSync(fixtureDir);
+                // Distinct stems also work on case-insensitive filesystems.
+                for (
+                  const file of [
+                    "case-lower.txt",
+                    "case-upper.TXT",
+                    "case-mixed.Txt",
+                    "case-data.json",
+                    "case-shout.JSON",
+                    "case-notes.md",
+                  ]
+                ) {
+                  writeFileSync(join(fixtureDir, file), "");
+                }
+                mkdirSync(join(fixtureDir, "case-dir"));
+                const scriptPath = join(tempDir, "completion.ps1");
+                writeFileSync(scriptPath, pwsh.generateScript("casecli"));
+                const quote = (value: string) =>
+                  `'${value.replaceAll("'", "''")}'`;
+                const result = runCommand("pwsh", [
+                  "-NoProfile",
+                  "-NonInteractive",
+                  "-Command",
+                  `$env:PATH = ${
+                    quote(tempDir)
+                  } + [IO.Path]::PathSeparator + $env:PATH; ` +
+                  `. ${quote(scriptPath)}; ` +
+                  `$line = 'casecli case'; ` +
+                  `$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null); ` +
+                  `$result.CompletionMatches | ForEach-Object { $_.CompletionText }`,
+                ], { cwd: fixtureDir, timeout: 10000 });
+                const completions = result.split(/\r?\n/).map((line) =>
+                  line.trim()
+                ).filter(Boolean);
+                deepStrictEqual(
+                  completions.sort(),
+                  [
+                    "case-dir/",
+                    "case-data.json",
+                    extension === "txt" ? "case-lower.txt" : "case-upper.TXT",
+                  ].sort(),
+                );
+              } finally {
+                rmSync(tempDir, { recursive: true, force: true });
+              }
+            },
+          );
+        }
+      }
+    }
 
     it("should include directories for navigation in file type completion", () => {
       const script = pwsh.generateScript("filedir-cli");

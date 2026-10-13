@@ -1436,7 +1436,7 @@ ${
                             \$extList = (\$extensions -split ',') -replace '^\\.',''
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
-                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -in \$extList)
+                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -cin \$extList)
                                 }
                         } else {
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
@@ -1451,7 +1451,7 @@ ${
                             \$extList = (\$extensions -split ',') -replace '^\\.',''
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
-                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -in \$extList)
+                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -cin \$extList)
                                 }
                         } else {
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
