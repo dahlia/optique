@@ -153,6 +153,7 @@ function _${programName} () {
   # adjacent fragments, including further word breaks inside a joined value,
   # leaving whitespace-separated arguments intact.
   local __plain_current="$current" __remove="" __word __joined=0
+  local __raw_joined_current="$__raw_current"
   if [[ \${COMP_LINE+x} ]]; then
     local -a __words=()
     local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
@@ -189,6 +190,7 @@ function _${programName} () {
     done
     if (( __valid )); then
       current="\${__words[__j-1]}"
+      __raw_joined_current="$current"
       prev=("\${__words[@]:1:__j-2}")
       # Bash passes the fragment Readline will replace as the second argument,
       # which is empty when the cursor follows a word-break character.
@@ -320,7 +322,7 @@ function _${programName} () {
     fi
     local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset
     if [[ -n "$__reply_prefix" ]]; then
-      __raw_file_current="\${__raw_file_current#"$__reply_prefix"}"
+      __raw_file_current="\${__raw_joined_current#*=}"
       if (( __file_quote_offset >= \${#__reply_prefix} )); then
         __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
       fi

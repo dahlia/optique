@@ -37,7 +37,14 @@ const prefixSensitiveFiles: ValueParser<"sync", string> = {
     };
   },
 };
+const scopeFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "file", type: "file" };
+  },
+};
 const fields = {
+  scopeFile: optional(option("--scope:file", scopeFiles)),
   scope: optional(option("--scope:name", choice(["dev"]))),
   sensitiveConfig: optional(option("--sensitive-config", prefixSensitiveFiles)),
   url: optional(option("--url", choice(["https://example.com"]))),
@@ -202,6 +209,22 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (const setup of ["", 'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"']) {
+    it(`keeps the raw value after split option names (${setup})`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab("eqapp --scope:file=~/name=f", [
+        "--scope:file=~/name=f",
+      ], `${setup}\nexport HOME="$PWD"`);
+      assert.deepEqual(result.calls, [["--scope:file=~/name=f"], [
+        "--scope:file",
+        "~/name=f",
+      ]]);
+      assert.equal(result.line, "eqapp --scope:file=~/name=foo.toml ");
+    });
+  }
+
   for (const input of ['eqapp --mode=$"de"', 'eqapp --mode=$"de']) {
     it(`decodes locale quotes in ${input}`, { skip: !ptyAvailable }, () => {
       if (!ptyAvailable) return;
