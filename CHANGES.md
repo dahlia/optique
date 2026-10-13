@@ -28,11 +28,13 @@ To be released.
     as literal text, retain wildcard filters as values are typed, and honor
     hidden-file settings without duplicate directory candidates, including on
     older Bash versions. Fixed-pattern completion also preserves a typed `./`
-    prefix or its omission, completes explicitly typed hidden directories,
-    follows `nocaseglob` when narrowing candidates, and removes
-    duplicate matches from overlapping patterns. Control characters in joined
-    fixed patterns no longer split or corrupt completion records.
-    [[#1031], [#1032], [#1033], [#1079]]
+    prefix or its omission even for empty values, completes explicitly typed
+    hidden directories, follows `nocaseglob` when narrowing candidates, and
+    removes duplicate matches from overlapping patterns. Control characters in
+    joined fixed patterns no longer split or corrupt completion records.
+    Wildcard directory components remain navigable, and completion filters even
+    partial or unrelated typed prefixes instead of replacing them with all
+    matches. [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed

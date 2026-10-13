@@ -422,7 +422,7 @@ function _${programName} () {
       # However, if the user has already typed beyond the pattern (e.g.,
       # pattern="src/" and current="src/ma"), preserve the typed suffix
       # for incremental filtering.
-      local __from_pattern=0 __pattern_prefix=""
+      local __from_pattern=0 __filter_pattern=0 __pattern_prefix=""
       if [[ -n "$pattern" ]]; then
         # Normalize leading ./ so that ./src/ma matches pattern src/
         local __norm_current="\${__file_current#./}"
@@ -444,7 +444,10 @@ function _${programName} () {
         else
           # Wildcards keep their file filter while the typed prefix narrows
           # the resulting paths. Save the expanded prefix before using pattern.
-          if (( __extends_pattern )); then __pattern_prefix="$__glob_current"; fi
+          if [[ "$__norm_pattern" == *[\*\?]* ]]; then
+            __filter_pattern=1
+            __pattern_prefix="$__glob_current"
+          fi
           __from_pattern=1
           # Reset tilde state from the current-word expansion so that a
           # non-tilde pattern is not rewritten through stale tilde state
@@ -473,12 +476,11 @@ function _${programName} () {
       # This runs after tilde expansion so that paths like ~/.config/ are
       # checked against the expanded path, not the literal ~ string.
       local __inside_hidden_path=0
-      case "/\${__glob_current%/}/" in
-        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
-      esac
-      case "/\${__pattern_prefix%/}/" in
-        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
-      esac
+      local __hidden_directory_pattern='/[.]([^./][^/]*|[.][^/]+)/'
+      if [[ "/\${__glob_current%/}/" =~ $__hidden_directory_pattern ||
+            "/\${__pattern_prefix%/}/" =~ $__hidden_directory_pattern ]]; then
+        __inside_hidden_path=1
+      fi
       # Also check if the current prefix explicitly targets hidden entries
       # (e.g., user typed "." or ".e" to complete .env)
       local __prefix_targets_hidden=0
@@ -512,7 +514,8 @@ function _${programName} () {
           local __glob_dir="\${__glob_current%/*}"
           [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
           local __d __known
-          for __d in "$__glob_dir"/*/; do
+          local __directory_pattern="$__glob_dir/*/"
+          while IFS= read -r -d '' __d; do
             [[ -d "$__d" ]] || continue
             __d="\${__d%/}"
             __known=0
@@ -520,7 +523,7 @@ function _${programName} () {
               if [ "\${__candidate#./}" = "\${__d#./}" ]; then __known=1; break; fi
             done
             (( __known )) || __candidates+=("$__d")
-          done
+          done < <(IFS=; printf '%s\\0' $__directory_pattern)
         fi
       else
         __candidates=("$__glob_current"*)
@@ -531,7 +534,7 @@ function _${programName} () {
         fi
       fi
 
-      if [[ -n "$__pattern_prefix" ]]; then
+      if (( __filter_pattern )); then
         local __nocasematch_was_set=0
         shopt -q nocasematch && __nocasematch_was_set=1
         if shopt -q nocaseglob; then shopt -s nocasematch; else shopt -u nocasematch; fi

@@ -408,6 +408,68 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("does not add a pattern-supplied ./ to an empty value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --prefixed-pattern=",
+      ["--prefixed-pattern="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/main.toml",
+      "src/nested/",
+    ]);
+    assert.equal(result.line, "eqapp --prefixed-pattern=src/");
+  });
+  for (const prefix of ["s", "foo"]) {
+    it(`filters a fixed glob for the nonextending prefix ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "",
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(
+        result.replies.filter(Boolean).sort(),
+        prefix === "s" ? ["src/main.toml", "src/nested/"] : [],
+      );
+      assert.equal(
+        result.line,
+        `eqapp --config=${prefix === "s" ? "src/" : prefix}`,
+      );
+    });
+  }
+  it("expands wildcard directory components for navigation", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --nested-pattern=src/f",
+      ["--nested-pattern=src/f"],
+      "mkdir -p 'src/foo space/nested dir'",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/foo space/nested dir/"]);
+    assert.equal(
+      result.line,
+      "eqapp --nested-pattern=src/foo\\ space/nested\\ dir/",
+    );
+  });
   it("keeps the omission of ./ when a fixed pattern includes it", {
     skip: !ptyAvailable,
   }, () => {
