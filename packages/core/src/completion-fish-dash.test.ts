@@ -160,7 +160,7 @@ describe("fish completion with dash-prefixed filenames", { skip }, () => {
       "__FILE__:file::-x[?]*:0",
       ["-x[?]a.txt", "b.txt"],
       "",
-      ["./-x[?]a.txt"],
+      ["-x[?]a.txt"],
     );
   });
 

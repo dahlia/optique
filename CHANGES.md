@@ -65,6 +65,12 @@ To be released.
     choices and file names as the unquoted word.  A quoted or escaped `~` now
     stays a literal path, as in fish's own file completion.  [[#1035], [#1064]]
 
+ -  Fixed fish completion to offer files matching a file suggestion's wildcard
+    pattern, such as `*.txt`, `file?.txt`, or `src/*.txt`.  These patterns
+    previously produced no candidates.  Hidden entries are now included for
+    such patterns when `includeHidden` is enabled, and a pattern under `/`
+    now lists the root directory.  [[#1037], [#1062]]
+
  -  Fixed fish file completion to suggest filenames that start with a dash,
     such as `-n`, `-e`, or `-s`, which were previously missing from the
     candidates.  Completing dash-prefixed paths no longer prints `basename`
@@ -76,6 +82,7 @@ To be released.
 [#1034]: https://github.com/dahlia/optique/pull/1034
 [#1035]: https://github.com/dahlia/optique/issues/1035
 [#1036]: https://github.com/dahlia/optique/issues/1036
+[#1037]: https://github.com/dahlia/optique/issues/1037
 [#1038]: https://github.com/dahlia/optique/issues/1038
 [#1039]: https://github.com/dahlia/optique/issues/1039
 [#1042]: https://github.com/dahlia/optique/issues/1042
@@ -83,6 +90,7 @@ To be released.
 [#1044]: https://github.com/dahlia/optique/issues/1044
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1059]: https://github.com/dahlia/optique/pull/1059
+[#1062]: https://github.com/dahlia/optique/pull/1062
 [#1063]: https://github.com/dahlia/optique/pull/1063
 [#1064]: https://github.com/dahlia/optique/pull/1064
 [#1067]: https://github.com/dahlia/optique/pull/1067
