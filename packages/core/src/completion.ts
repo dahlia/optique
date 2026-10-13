@@ -735,8 +735,14 @@ export const zsh: ShellCompletion = {
     validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
       .join(" ");
+    // Keep existing plain-name helpers available to aliases.  Names with
+    // punctuation need a separate namespace: a colon cannot occur in another
+    // valid program's _<program> autoload function name.
+    const functionName = /[.-]/.test(programName)
+      ? `_optique:${programName}`
+      : `_${programName}`;
     return `#compdef ${programName}
-function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
+function ${functionName} () {
   local current="\$words[CURRENT]"
   local -a prev
   # Extract previous arguments, skipping empty ones
@@ -885,7 +891,7 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
 }
 
 if (( $+functions[compdef] )); then
-  compdef _${programName.replace(/[^a-zA-Z0-9]/g, "_")} ${programName}
+  compdef ${functionName} ${programName}
 fi
     `;
   },
@@ -924,9 +930,7 @@ export const fish: ShellCompletion = {
     validateProgramName(programName);
     const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "\\'")}'`)
       .join(" ");
-    const functionName = `__${
-      programName.replace(/[^a-zA-Z0-9]/g, "_")
-    }_complete`;
+    const functionName = `__${programName}_complete`;
     return `
 function ${functionName}
     set -l tokens (commandline -poc)

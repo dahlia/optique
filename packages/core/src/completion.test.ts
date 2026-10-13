@@ -189,6 +189,12 @@ function testInteractiveZshCompletion(
     readonly payload?: string;
     readonly input?: string;
     readonly captureBuffer?: boolean;
+    readonly programNames?: readonly string[];
+    readonly autoload?: boolean;
+    readonly additionalScripts?: readonly {
+      readonly programName: string;
+      readonly script: string;
+    }[];
   } = {},
 ): string {
   const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-integration-"));
@@ -196,7 +202,8 @@ function testInteractiveZshCompletion(
   try {
     const binDir = join(tempDir, "bin");
     const workDir = join(tempDir, "work");
-    mkdirSync(binDir);
+    mkdirSync(binDir, { mode: 0o700 });
+    chmodSync(binDir, 0o700);
     mkdirSync(workDir);
 
     const cliPath = join(binDir, "extapp");
@@ -229,8 +236,19 @@ cat ${JSON.stringify(payloadPath)}
       }
     }
 
-    const scriptPath = join(binDir, ".completion.zsh");
+    const scriptPath = join(
+      binDir,
+      options.autoload
+        ? `_${options.programNames?.[0] ?? "extapp"}`
+        : ".completion.zsh",
+    );
     writeFileSync(scriptPath, script);
+    for (const additional of options.additionalScripts ?? []) {
+      writeFileSync(
+        join(binDir, `_${additional.programName}`),
+        additional.script,
+      );
+    }
 
     const startMarker = "\x1eOPTIQUE_ZSH_COMPLETION_START\x1e";
     const endMarker = "\x1eOPTIQUE_ZSH_COMPLETION_END\x1e";
@@ -244,6 +262,15 @@ cat ${JSON.stringify(payloadPath)}
       chmodSync(insecureFpathDir, 0o777);
     }
     const init = `PS1='PROMPT> '
+bindkey -e
+function __optique_capture_completion() {
+  zle -I
+  print -r -- "__OPTIQUE_ZSH_BUFFER__\${BUFFER}__OPTIQUE_ZSH_BUFFER_END__"
+  zle reset-prompt
+}
+zle -N __optique_capture_completion
+bindkey '^X' __optique_capture_completion
+${options.autoload ? `fpath=(${JSON.stringify(binDir)} $fpath)` : ""}
 unsetopt zle_bracketed_paste 2>/dev/null || true
 ${
       options.withInsecureFpath === true
@@ -268,7 +295,7 @@ bindkey '^X' __optique_capture_buffer`
         : ""
     }
 export PATH=${JSON.stringify(binDir)}:$PATH
-source ${JSON.stringify(scriptPath)}
+${options.autoload ? "" : `source ${JSON.stringify(scriptPath)}`}
 cd ${JSON.stringify(workDir)}
 print -r -- ${JSON.stringify(initReadyMarker)}
 print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_START\\x1e\\n'
@@ -305,19 +332,23 @@ zpty child env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi
 zpty -w child ${JSON.stringify(`source ${JSON.stringify(initPath)}`)}
 sleep 0.5
 local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
-zpty -w -n child ${JSON.stringify(options.input ?? "extapp ")}
+${
+      (options.programNames ?? ["extapp"]).map((programName) => `
+zpty -w -n child ${JSON.stringify(options.input ?? `${programName} `)}
 sleep 0.1
 zpty -w -n child $'\\t'
 sleep 0.1
 ${
-      options.captureBuffer === true
-        ? `zpty -w -n child $'\\x18'
+        options.captureBuffer === true
+          ? `zpty -w -n child $'\\x18'
 __output+="$(__optique_drain_zpty ${JSON.stringify(bufferEndMarker)})"`
-        : `
-zpty -w -n child $'\\t'
-sleep 0.8
-__output+="$(__optique_drain_zpty "" 20)"
-`
+          : `zpty -w -n child $'\\t'
+sleep 0.1
+zpty -w -n child $'\\x18'
+__output+="$(__optique_drain_zpty "__OPTIQUE_ZSH_BUFFER_END__")"`
+      }
+zpty -w -n child $'\\x15'
+`).join("\n")
     }
 __output+=$'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
 print -rn -- "$__output"
@@ -452,7 +483,7 @@ CURRENT=2
 
 # Capture completion output
 {
-  _${programName.replace(/[^a-zA-Z0-9]/g, "_")}
+  ${/[.-]/.test(programName) ? `_optique:${programName}` : `_${programName}`}
 } 2>/dev/null || true
 `;
 
@@ -996,6 +1027,159 @@ print (nu-complete-${programName} '${context}' | to json -r)
     rmSync(tempDir, { recursive: true, force: true });
   }
 }
+
+describe("completion function name collisions", () => {
+  const programs = ["foo-bar", "foo_bar", "foo.bar", "foo-bar.js"];
+  const literals = ["first", "second", "third", "fourth"];
+
+  for (const shell of [zsh, fish]) {
+    it(`${shell.name} keeps distinct valid program names separate`, () => {
+      const names = [
+        ...programs,
+        "foo__bar",
+        "foo--bar",
+        "foo..bar",
+        "foo_2dbar",
+        "_foo-bar",
+        "0foo-bar",
+        "Foo-bar",
+      ];
+      const helpers = names.map((name) => {
+        const script = shell.generateScript(name);
+        const helper = script.match(/^function (\S+)/m)?.[1];
+        ok(helper, `${shell.name} omitted the helper for ${name}`);
+        if (shell === zsh) {
+          ok(script.includes(`compdef ${helper} ${name}`));
+        } else {
+          ok(script.includes(`complete -c ${name} -f -a '(${helper})'`));
+        }
+        return helper;
+      });
+      deepStrictEqual(new Set(helpers).size, names.length);
+    });
+  }
+
+  it("zsh preserves existing plain-name helpers and avoids autoload names", () => {
+    for (const name of ["myapp", "foo_bar", "_foo", "0foo"]) {
+      ok(zsh.generateScript(name).includes(`function _${name} ()`));
+    }
+    for (const name of ["foo-bar", "foo.bar", "path-files", "git-add"]) {
+      const script = zsh.generateScript(name);
+      const helper = script.match(/^function (\S+)/m)?.[1];
+      ok(helper);
+      ok(
+        helper.includes(":"),
+        `Helper can overlap an autoload name: ${helper}`,
+      );
+    }
+  });
+
+  for (const reversed of [false, true]) {
+    const order = reversed ? [...programs].reverse() : programs;
+    for (const autoload of [false, true]) {
+      it(
+        `fish retains each command with ${
+          autoload ? "lazy loading" : "sourcing"
+        }, ${reversed ? "reverse" : "forward"} order`,
+        {
+          skip: !isShellAvailable("fish"),
+        },
+        () => {
+          if (!isShellAvailable("fish")) return;
+          const tempDir = mkdtempSync(join(tmpdir(), "fish-name-collisions-"));
+          try {
+            for (const name of programs) {
+              writeFileSync(
+                join(tempDir, `${name}.fish`),
+                fish.generateScript(name),
+              );
+            }
+            const definitions = programs.map((name, index) => `
+function ${name}
+  if test (count $argv) -eq 1
+    printf '${literals[index]}\\t${literals[index]}\\n'
+  end
+end
+`).join("\n");
+            const loading = autoload
+              ? `set fish_complete_path '${tempDir}' $fish_complete_path`
+              : order.map((name) => `source '${join(tempDir, `${name}.fish`)}'`)
+                .join("\n");
+            const requests = [...order, ...order];
+            const output = runCommand("fish", [
+              "--no-config",
+              "-c",
+              `${definitions}\n${loading}\n${
+                requests.map((name) => `complete -C '${name} '`).join("\n")
+              }`,
+            ]);
+            deepStrictEqual(
+              output.trim().split("\n"),
+              requests.map((name) => {
+                const literal = literals[programs.indexOf(name)];
+                return `${literal}\t${literal}`;
+              }),
+            );
+          } finally {
+            rmSync(tempDir, { recursive: true, force: true });
+          }
+        },
+      );
+
+      it(
+        `zsh retains each command with ${
+          autoload ? "autoloading" : "sourcing"
+        }, ${reversed ? "reverse" : "forward"} order`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: 20_000,
+        },
+        () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          const setup = programs.map((name, index) => `
+function ${name}() {
+  if (( $# == 1 )); then
+    printf '${literals[index]}\\0${literals[index]}\\0'
+  fi
+}
+`).join("\n");
+          const requests = [...order, ...order];
+          const output = testInteractiveZshCompletion(
+            autoload
+              ? zsh.generateScript(order[0])
+              : order.map((name) => zsh.generateScript(name)).join("\n"),
+            "",
+            [],
+            {
+              setup,
+              programNames: requests,
+              autoload,
+              additionalScripts: autoload
+                ? order.slice(1).map((programName) => ({
+                  programName,
+                  script: zsh.generateScript(programName),
+                }))
+                : [],
+            },
+          );
+          const buffers = Array.from(
+            output.matchAll(
+              /__OPTIQUE_ZSH_BUFFER__(.*?)__OPTIQUE_ZSH_BUFFER_END__/g,
+            ),
+            (match) => match[1].trim(),
+          );
+          deepStrictEqual(
+            buffers,
+            requests.map((name) =>
+              `${name} ${literals[programs.indexOf(name)]}`
+            ),
+            output,
+          );
+        },
+      );
+    }
+  }
+});
 
 describe("completion module", () => {
   describe("bash shell completion", () => {
@@ -3563,7 +3747,7 @@ COMPLETION_SCRIPT
 cd "${tempDir}"
 words=("hidden-cli" "")
 CURRENT=2
-_hidden_cli 2>/dev/null
+_optique:hidden-cli 2>/dev/null
 `;
 
         const result = runCommand("zsh", ["-c", testScript], {
@@ -3623,7 +3807,7 @@ COMPLETION_SCRIPT
 cd "${tempDir}"
 words=("nohidden-cli" "")
 CURRENT=2
-_nohidden_cli 2>/dev/null
+_optique:nohidden-cli 2>/dev/null
 `;
 
         const result = runCommand("zsh", ["-c", testScript], {
@@ -4758,11 +4942,11 @@ printf '__FILE__:file:.json,.yaml::0\\n'
       ]);
     });
 
-    it("should sanitize program names with special characters", () => {
+    it("should preserve punctuation in program names", () => {
       const script = fish.generateScript("my-app.js");
 
-      // Function name should have special characters replaced
-      deepStrictEqual(script.includes("function __my_app_js_complete"), true);
+      // Keep distinct program names from sharing the same helper.
+      ok(script.includes("function __my-app.js_complete"));
     });
 
     it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
