@@ -23,6 +23,14 @@ To be released.
     pass fixed callback arguments containing apostrophes to the CLI intact.
     Previously, an argument such as `it's` arrived as `its`.  [[#1039], [#1057]]
 
+ -  Fixed Nushell completion to quote suggested values and file names that
+    contain spaces, quotes, or other characters Nushell would interpret, so
+    each completed value stays a single argument with its original text.
+    The completion menu still shows the values unquoted.  [[#1038], [#1076]]
+
+    Because quotes keep Nushell from expanding `~`, a quoted path typed
+    under the home directory is inserted with the home directory spelled out.
+
  -  Fixed Nushell file completion leaving out symbolic links to files and
     directories.  A link is now classified by its target, so a directory link
     gets a trailing slash for navigation, while extension filters still match
@@ -50,6 +58,7 @@ To be released.
 [#1034]: https://github.com/dahlia/optique/pull/1034
 [#1035]: https://github.com/dahlia/optique/issues/1035
 [#1036]: https://github.com/dahlia/optique/issues/1036
+[#1038]: https://github.com/dahlia/optique/issues/1038
 [#1039]: https://github.com/dahlia/optique/issues/1039
 [#1042]: https://github.com/dahlia/optique/issues/1042
 [#1043]: https://github.com/dahlia/optique/issues/1043
@@ -60,6 +69,7 @@ To be released.
 [#1064]: https://github.com/dahlia/optique/pull/1064
 [#1067]: https://github.com/dahlia/optique/pull/1067
 [#1069]: https://github.com/dahlia/optique/pull/1069
+[#1076]: https://github.com/dahlia/optique/pull/1076
 
 
 Version 1.0.14

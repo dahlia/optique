@@ -57,6 +57,7 @@ function runCommand(
     readonly cwd?: string;
     readonly input?: string;
     readonly stdio?: "pipe" | "ignore";
+    readonly env?: Readonly<Record<string, string>>;
     readonly timeout?: number;
   } = {},
 ): string {
@@ -66,6 +67,7 @@ function runCommand(
       cwd: options.cwd,
       input: options.input,
       stdio: options.stdio,
+      env: options.env == null ? undefined : { ...process.env, ...options.env },
       timeout: options.timeout,
     }) ?? "";
   } catch (error) {
@@ -636,6 +638,259 @@ print (nu-complete-linkapp ${
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+}
+
+interface NuCompletionRecord {
+  readonly value: string;
+  readonly display_override?: string;
+  readonly description?: string;
+}
+
+interface NuQuotingFixture {
+  readonly tempDir: string;
+  readonly binDir: string;
+  readonly workDir: string;
+  readonly programName: string;
+  readonly scriptPath: string;
+}
+
+// A fake CLI for Nushell quoting tests.  When the generated completer calls
+// it with the "__complete" prefix, it emits a native file completion
+// directive after --file (including hidden files after --any-file), and
+// otherwise the lines of suggestions.txt
+// (value, optionally followed by a tab and a description) that start with
+// the current prefix, and counts the call in completions.log.  When run
+// normally, it prints its argv so that tests can see what Nushell passed
+// to it.
+const nuQuotingCli = `#!/bin/bash
+if [[ "$1" == "__complete" ]]; then
+  shift
+  prefix=""
+  previous=""
+  if (( $# >= 1 )); then prefix="\${@: -1}"; fi
+  if (( $# >= 2 )); then previous="\${@: -2:1}"; fi
+  if [[ "$previous" == "--file" ]]; then
+    printf '__FILE__:file:::0\\n'
+  elif [[ "$previous" == "--any-file" ]]; then
+    printf '__FILE__:file:::1\\n'
+  else
+    while IFS= read -r line; do
+      if [[ "$line" == "$prefix"* ]]; then printf '%s\\n' "$line"; fi
+    done < "$(dirname "$0")/suggestions.txt"
+  fi
+  printf 'x' >> "$(dirname "$0")/completions.log"
+  exit 0
+fi
+printf 'ARGV:'
+printf '<%s>' "$@"
+printf ':END\\n'
+`;
+
+// A fake CLI that suggests the arguments it received, so tests can see how
+// the generated completer tokenized the command line.
+const nuArgsEchoCli = `#!/bin/bash
+shift
+printf 'ARGS'
+printf '<%s>' "$@"
+printf '\\n'
+`;
+
+function createNuQuotingFixture(
+  cli: string,
+  suggestions: readonly string[] = [],
+): NuQuotingFixture {
+  const tempDir = mkdtempSync(join(tmpdir(), "nu-quoting-"));
+  const binDir = join(tempDir, "bin");
+  const workDir = join(tempDir, "work");
+  mkdirSync(binDir);
+  mkdirSync(workDir);
+  const programName = "quotecli";
+  writeFileSync(join(binDir, programName), cli, { mode: 0o755 });
+  writeFileSync(
+    join(binDir, "suggestions.txt"),
+    suggestions.map((suggestion) => `${suggestion}\n`).join(""),
+  );
+  writeFileSync(join(binDir, "completions.log"), "");
+  writeFileSync(
+    join(binDir, "argv-printer"),
+    `#!/bin/bash\nprintf '%s\\0' "$@"\n`,
+    { mode: 0o755 },
+  );
+  const scriptPath = join(binDir, "completion.nu");
+  writeFileSync(scriptPath, nu.generateScript(programName, ["__complete"]));
+  return { tempDir, binDir, workDir, programName, scriptPath };
+}
+
+function runNuCompleter(
+  fixture: NuQuotingFixture,
+  context: string,
+  env?: Readonly<Record<string, string>>,
+): readonly NuCompletionRecord[] {
+  // Pass the context through a file to avoid quoting it as Nushell source.
+  const contextPath = join(fixture.tempDir, "context.txt");
+  writeFileSync(contextPath, context);
+  const testScriptPath = join(fixture.tempDir, "test.nu");
+  writeFileSync(
+    testScriptPath,
+    `$env.PATH = ($env.PATH | prepend ${JSON.stringify(fixture.binDir)})
+source ${JSON.stringify(fixture.scriptPath)}
+nu-complete-${fixture.programName} (open --raw ${
+      JSON.stringify(contextPath)
+    }) | to json --raw
+`,
+  );
+  const output = runCommand("nu", ["--no-config-file", testScriptPath], {
+    cwd: fixture.workDir,
+    env,
+  });
+  return JSON.parse(output.trim());
+}
+
+// Parses the given words as arguments to an external command with
+// Nushell's own parser and returns the argv the command received.
+function parseNuExternalArguments(
+  fixture: NuQuotingFixture,
+  words: readonly string[],
+  env?: Readonly<Record<string, string>>,
+): readonly string[] {
+  const printer = JSON.stringify(join(fixture.binDir, "argv-printer"));
+  const output = runCommand(
+    "nu",
+    ["--no-config-file", "-c", `^${printer} ${words.join(" ")}`],
+    { cwd: fixture.workDir, env },
+  );
+  return output.split("\0").slice(0, -1);
+}
+
+function quoteForZsh(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function isInteractiveNuCompletionAvailable(): boolean {
+  if (process.platform === "win32") return false;
+  return isShellAvailable("nu") && isInteractiveZshCompletionAvailable();
+}
+
+// Drives an interactive Nushell session through zsh's zpty.  Each
+// interaction is a sequence of keystroke chunks (e.g., a command line
+// followed by a Tab); after a Tab, the driver waits until the fake CLI has
+// been called for completion and Nushell has redrawn the line.  Enter is
+// then pressed and the argv that the fake CLI received is collected.
+function testInteractiveNuCompletion(
+  fixture: NuQuotingFixture,
+  interactions: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+  const binDir = JSON.stringify(fixture.binDir);
+  const scriptPath = JSON.stringify(fixture.scriptPath);
+  // The readiness marker is built by concatenation so that the echoed
+  // command line does not contain it:
+  const init = `$env.PATH = ($env.PATH | prepend ${binDir}); ` +
+    `source ${scriptPath}; print ("OPTIQUE_NU_" + "READY")`;
+  const typeInteractions = interactions.map((chunks) =>
+    chunks.map((chunk) =>
+      chunk === "\t"
+        ? `
+__optique_before="$(__optique_completion_count)"
+zpty -w -n child $'\\t'
+__optique_wait_completion "$__optique_before"
+`
+        : `
+zpty -w -n child ${quoteForZsh(chunk)}
+__optique_drain_nu "" 20 >/dev/null
+`
+    ).join("") + `
+zpty -w -n child $'\\r'
+__output+="$(__optique_drain_nu ':END' 400)"
+__optique_drain_nu "" 10 >/dev/null
+`
+  ).join("");
+  const driver = `
+zmodload zsh/zpty
+
+# Reads the child's output until the sentinel appears or it stays idle.
+# Reedline asks for the cursor position (ESC [ 6 n) and waits for the
+# answer, so reply as a terminal would.
+function __optique_drain_nu() {
+  local sentinel="$1"
+  local max_idle="\${2:-80}"
+  local buffer=""
+  local chunk=""
+  local idle=0
+  local answered=0
+  local requests=0
+  local rest=""
+
+  while (( idle < max_idle )); do
+    if zpty -r -t child chunk; then
+      buffer+="\${chunk}"
+      # Count requests in the whole buffer so that one split across reads
+      # is still answered, and answer each request only once:
+      rest="\${buffer//$'\\e[6n'/}"
+      requests=$(( (\${#buffer} - \${#rest}) / 4 ))
+      while (( answered < requests )); do
+        zpty -w -n child $'\\e[1;1R'
+        (( answered++ ))
+      done
+      if [[ -n "\${sentinel}" && "\${buffer}" == *"\${sentinel}"* ]]; then
+        break
+      fi
+      idle=0
+    else
+      sleep 0.05
+      (( idle++ ))
+    fi
+  done
+
+  print -rn -- "\${buffer}"
+}
+
+function __optique_completion_count() {
+  local log="$(<${JSON.stringify(join(fixture.binDir, "completions.log"))})"
+  print -rn -- "\${#log}"
+}
+
+# Waits until a Tab has had an effect (a completion call or a redraw), and
+# then until Nushell stays quiet without calling the fake CLI again.
+function __optique_wait_completion() {
+  local before="$1"
+  local count=0
+  local output=""
+  local seen=0
+  local waited=0
+  while (( waited < 60 )); do
+    count="$(__optique_completion_count)"
+    output="$(__optique_drain_nu "" 40)"
+    if [[ -n "\${output}" ]] || (( count > before )); then
+      seen=1
+    fi
+    if (( seen )) && [[ -z "\${output}" ]] &&
+        (( $(__optique_completion_count) == count )); then
+      break
+    fi
+    (( waited++ ))
+  done
+}
+
+zpty child env TERM=xterm-256color \\
+  XDG_CONFIG_HOME=${JSON.stringify(join(fixture.tempDir, "config"))} \\
+  XDG_DATA_HOME=${JSON.stringify(join(fixture.tempDir, "data"))} \\
+  zsh -fc 'stty rows 50 cols 200; exec nu --no-config-file'
+__optique_drain_nu $'\\e[6n' 200 >/dev/null
+zpty -w child ${quoteForZsh(init)}
+__optique_drain_nu "OPTIQUE_NU_READY" 200 >/dev/null
+local __output=""
+${typeInteractions}
+print -rn -- "$__output"
+zpty -d child 2>/dev/null || true
+`;
+
+  const output = runCommand("zsh", ["-fc", driver], {
+    cwd: fixture.workDir,
+    timeout: 300_000,
+  });
+  return [...normalizeTerminalOutput(output).matchAll(/ARGV:(.*?):END/g)]
+    .map((match) => [...(match[1] ?? "").matchAll(/<([^<>]*)>/g)])
+    .map((args) => args.map((arg) => arg[1] ?? ""));
 }
 
 describe("completion module", () => {
@@ -5061,7 +5316,8 @@ nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
       // Check that context is properly parsed
       deepStrictEqual(script.includes("[context: string]"), true);
       deepStrictEqual(script.includes("$context | args-split"), true);
-      deepStrictEqual(script.includes("str ends-with ' '"), true);
+      // args-split itself marks a trailing unquoted space as a new argument:
+      ok(script.includes("$ends_with_delimiter"));
     });
 
     it("should strip tab-delimited metadata before parsing __FILE__ directive", () => {
@@ -5658,9 +5914,11 @@ do { ${functionName} "extapp " }
             "",
             workDir,
           );
+          // The name is inserted as ./~draft.txt so that Nushell does not
+          // expand the tilde when running the command either:
           ok(
-            files.includes("~draft.txt"),
-            `Expected ~draft.txt in ${JSON.stringify(files)}.`,
+            files.includes("./~draft.txt"),
+            `Expected ./~draft.txt in ${JSON.stringify(files)}.`,
           );
           const dirs = runNuFileCompletion(
             "__FILE__:directory:::0",
@@ -5668,7 +5926,7 @@ do { ${functionName} "extapp " }
             workDir,
           );
           ok(
-            !dirs.includes("~root/"),
+            !dirs.includes("~root/") && !dirs.includes("./~root/"),
             `Unexpected ~root/ in ${JSON.stringify(dirs)}.`,
           );
         });
@@ -5735,6 +5993,428 @@ do { ${functionName} "extapp " }
         });
       });
     });
+
+    it(
+      "should quote literal suggestions that need quoting",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
+
+        const quoted: readonly (readonly [string, string])[] = [
+          ["a b", "'a b'"],
+          ["it's", `"it's"`],
+          ['say "hi"', `'say "hi"'`],
+          [`it's \\ "q"`, `"it's \\\\ \\"q\\""`],
+          ["$HOME", "'$HOME'"],
+          ["~tilde", "'~tilde'"],
+          ["*.md", "'*.md'"],
+          ["...", "'...'"],
+          ["=", "'='"],
+          ["&&", "'&&'"],
+          ["#hash", "'#hash'"],
+          ["e>", "'e>'"],
+          ["x)y", "'x)y'"],
+          ["a|b", "'a|b'"],
+          ["[x]", "'[x]'"],
+          // The line editor expands history (!!) at a word-initial ! and at
+          // a ! after whitespace, even inside quotes:
+          ["!!x", "'!!x'"],
+          ["m !!", "'m '!'!'"],
+          ["it's !b", `"it's "!"b"`],
+        ];
+        const unquoted = [
+          "--verbose",
+          "plain",
+          "a=b",
+          "back\\slash",
+          "C:\\foo",
+          "-x",
+          "1.5",
+          "한글",
+        ];
+        const fixture = createNuQuotingFixture(nuQuotingCli, [
+          "a b\tSpaced value",
+          ...quoted.slice(1).map(([raw]) => raw),
+          "plain\tPlain value",
+          ...unquoted.filter((raw) => raw !== "plain"),
+        ]);
+        try {
+          // A file that an unquoted *.md would expand to:
+          writeFileSync(join(fixture.workDir, "x.md"), "");
+          const records = runNuCompleter(
+            fixture,
+            `${fixture.programName} --value `,
+          );
+
+          deepStrictEqual(
+            records.map((record) => [record.value, record.display_override]),
+            [
+              ...quoted.map(([raw, value]) => [value, raw]),
+              ["plain", undefined],
+              ...unquoted
+                .filter((raw) => raw !== "plain")
+                .map((raw) => [raw, undefined]),
+            ],
+          );
+          deepStrictEqual(records[0]?.description, "Spaced value");
+          deepStrictEqual(records[quoted.length]?.description, "Plain value");
+          // Nushell's own parser must read every inserted value back as
+          // exactly one argument with the original text:
+          deepStrictEqual(
+            parseNuExternalArguments(
+              fixture,
+              records.map((record) => record.value),
+            ),
+            records.map((record) => record.display_override ?? record.value),
+          );
+        } finally {
+          rmSync(fixture.tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "should quote file suggestions that need quoting",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
+
+        const fixture = createNuQuotingFixture(nuQuotingCli);
+        try {
+          writeFileSync(join(fixture.workDir, "sp ace.txt"), "");
+          writeFileSync(join(fixture.workDir, "it's.txt"), "");
+          writeFileSync(join(fixture.workDir, "~foo.txt"), "");
+          writeFileSync(join(fixture.workDir, "plain.txt"), "");
+          mkdirSync(join(fixture.workDir, "my dir"));
+          writeFileSync(join(fixture.workDir, "my dir", "inner.txt"), "");
+          mkdirSync(join(fixture.workDir, "~dir"));
+          writeFileSync(join(fixture.workDir, "~dir", "inner.txt"), "");
+
+          const records = runNuCompleter(
+            fixture,
+            `${fixture.programName} --file `,
+          );
+          const byDisplay = new Map(
+            records.map((record) => [
+              record.display_override ?? record.value,
+              record,
+            ]),
+          );
+          deepStrictEqual(byDisplay.get("sp ace.txt")?.value, "'sp ace.txt'");
+          deepStrictEqual(byDisplay.get("it's.txt")?.value, `"it's.txt"`);
+          // Nushell would expand a leading tilde even in a file name, so
+          // the name is spelled relative to the current directory:
+          deepStrictEqual(byDisplay.get("~foo.txt")?.value, "./~foo.txt");
+          deepStrictEqual(byDisplay.get("~dir/")?.value, "./~dir/");
+          deepStrictEqual(byDisplay.get("my dir/")?.value, "'my dir/'");
+          deepStrictEqual(byDisplay.get("plain.txt"), { value: "plain.txt" });
+          deepStrictEqual(
+            [
+              ...parseNuExternalArguments(
+                fixture,
+                records.map((record) => record.value),
+              ),
+            ].sort(),
+            [
+              "./~dir/",
+              "./~foo.txt",
+              "it's.txt",
+              "my dir/",
+              "plain.txt",
+              "sp ace.txt",
+            ],
+          );
+
+          // Completing inside a quoted directory keeps the result quoted:
+          deepStrictEqual(
+            runNuCompleter(fixture, `${fixture.programName} --file 'my dir/'`),
+            [{
+              value: "'my dir/inner.txt'",
+              display_override: "my dir/inner.txt",
+            }],
+          );
+          // Completing inside ./~dir/ lists that directory, not a home
+          // directory:
+          deepStrictEqual(
+            runNuCompleter(fixture, `${fixture.programName} --file ./~dir/`),
+            [{ value: "./~dir/inner.txt" }],
+          );
+
+          // A name made only of dots would be expanded (... is ../..):
+          mkdirSync(join(fixture.workDir, "..."));
+          deepStrictEqual(
+            runNuCompleter(fixture, `${fixture.programName} --any-file `)
+              .filter((record) => record.display_override === ".../"),
+            [{ value: "'.../'", display_override: ".../" }],
+          );
+          deepStrictEqual(
+            parseNuExternalArguments(fixture, ["'.../'"]),
+            [".../"],
+          );
+        } finally {
+          rmSync(fixture.tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "should quote home and n-dot paths without losing expansion",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
+
+        const fixture = createNuQuotingFixture(nuQuotingCli);
+        try {
+          const home = join(fixture.tempDir, "home");
+          mkdirSync(join(home, "My Docs"), { recursive: true });
+          mkdirSync(join(home, "plain"));
+          const env = { HOME: home };
+
+          // Quoting would suppress tilde expansion, so the quoted value
+          // carries the expanded home directory instead:
+          deepStrictEqual(
+            runNuCompleter(fixture, `${fixture.programName} --file ~/My`, env),
+            [{ value: `'${home}/My Docs/'`, display_override: "~/My Docs/" }],
+          );
+          // A value that needs no quoting keeps the tilde as typed:
+          deepStrictEqual(
+            runNuCompleter(fixture, `${fixture.programName} --file ~/pl`, env),
+            [{ value: "~/plain/" }],
+          );
+          deepStrictEqual(
+            parseNuExternalArguments(fixture, ["~/plain/"], env),
+            [`${home}/plain/`],
+          );
+          // The decision is made on the text that is inserted, so a typed
+          // prefix containing a space is never inserted unquoted:
+          deepStrictEqual(
+            runNuCompleter(
+              fixture,
+              `${fixture.programName} --file '~/My Docs/../pl'`,
+              env,
+            ),
+            [{
+              value: `${home}/plain/`,
+              display_override: "~/My Docs/../plain/",
+            }],
+          );
+
+          // The same applies to Nushell's n-dot expansion (... is ../..):
+          const nested = join(fixture.workDir, "a", "b");
+          mkdirSync(nested, { recursive: true });
+          mkdirSync(join(fixture.workDir, "My Docs"));
+          const contextPath = join(fixture.tempDir, "nested-context.txt");
+          writeFileSync(contextPath, `${fixture.programName} --file .../My`);
+          const output = runCommand("nu", [
+            "--no-config-file",
+            "-c",
+            `$env.PATH = ($env.PATH | prepend ${
+              JSON.stringify(fixture.binDir)
+            }); source ${JSON.stringify(fixture.scriptPath)}; ` +
+            `nu-complete-${fixture.programName} (open --raw ${
+              JSON.stringify(contextPath)
+            }) | to json --raw`,
+          ], { cwd: nested });
+          deepStrictEqual(JSON.parse(output.trim()), [{
+            value: `'${fixture.workDir}/My Docs/'`,
+            display_override: ".../My Docs/",
+          }]);
+        } finally {
+          rmSync(fixture.tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it("should not start a new argument at a space inside an open quote", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const fixture = createNuQuotingFixture(nuArgsEchoCli);
+      try {
+        const cases: readonly (readonly [string, string])[] = [
+          // A space inside an unterminated quote does not start a new
+          // argument (e.g., after Nushell inserted the common prefix 'a ):
+          [" --value 'a ", "ARGS<--value><a >"],
+          [` --value "it's `, "ARGS<--value><it's >"],
+          // When the quoted values share no character but the quote, the
+          // inserted common prefix is a bare quote, which still starts the
+          // value being completed:
+          [" --value '", "ARGS<--value><>"],
+          [` --value "`, "ARGS<--value><>"],
+        ];
+        for (const [rest, expected] of cases) {
+          const context = `${fixture.programName}${rest}`;
+          deepStrictEqual(
+            runNuCompleter(fixture, context).map((record) =>
+              record.display_override ?? record.value
+            ),
+            [expected],
+            `Context: ${JSON.stringify(context)}`,
+          );
+        }
+      } finally {
+        rmSync(fixture.tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should keep tokenizing plain arguments as before", {
+      skip: process.platform === "win32",
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const fixture = createNuQuotingFixture(nuArgsEchoCli);
+      try {
+        const cases: readonly (readonly [string, string])[] = [
+          ["", "ARGS<>"],
+          [" ", "ARGS<>"],
+          [" --value ", "ARGS<--value><>"],
+          [" --value a", "ARGS<--value><a>"],
+          [" --value 'a b' ", "ARGS<--value><a b><>"],
+          [" --value a\\b ", "ARGS<--value><a\\b><>"],
+          [" --value 'C:\\foo\\", "ARGS<--value><C:\\foo\\>"],
+        ];
+        for (const [rest, expected] of cases) {
+          const context = `${fixture.programName}${rest}`;
+          deepStrictEqual(
+            runNuCompleter(fixture, context).map((record) =>
+              record.display_override ?? record.value
+            ),
+            [expected],
+            `Context: ${JSON.stringify(context)}`,
+          );
+        }
+      } finally {
+        rmSync(fixture.tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should insert quoted suggestions in an interactive Nushell session", {
+      skip: !isInteractiveNuCompletionAvailable(),
+      timeout: 300_000,
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (!isInteractiveNuCompletionAvailable()) {
+        t.skip("interactive nu completion testing not available");
+        return;
+      }
+
+      const fixture = createNuQuotingFixture(nuQuotingCli, [
+        "a b",
+        "it's",
+        "q'r\\s",
+        "!!x",
+        "m !!",
+        "zz",
+      ]);
+      try {
+        writeFileSync(join(fixture.workDir, "sp ace.txt"), "");
+        // The earlier commands also give !! a history entry to expand to:
+        const argvs = testInteractiveNuCompletion(fixture, [
+          [`${fixture.programName} --value a`, "\t"],
+          [`${fixture.programName} --value it`, "\t"],
+          [`${fixture.programName} --value q`, "\t"],
+          [`${fixture.programName} --file sp`, "\t"],
+          [`${fixture.programName} --value !`, "\t"],
+          [`${fixture.programName} --value m`, "\t"],
+        ]);
+        deepStrictEqual(argvs, [
+          ["--value", "a b"],
+          ["--value", "it's"],
+          ["--value", "q'r\\s"],
+          ["--file", "sp ace.txt"],
+          ["--value", "!!x"],
+          ["--value", "m !!"],
+        ]);
+      } finally {
+        rmSync(fixture.tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it(
+      "should complete again after a quoted common prefix",
+      {
+        skip: !isInteractiveNuCompletionAvailable(),
+        timeout: 300_000,
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (!isInteractiveNuCompletionAvailable()) {
+          t.skip("interactive nu completion testing not available");
+          return;
+        }
+
+        const fixture = createNuQuotingFixture(nuQuotingCli, [
+          "a b",
+          "a c",
+          "q !a",
+          "q !b",
+        ]);
+        try {
+          writeFileSync(join(fixture.workDir, "x a"), "");
+          writeFileSync(join(fixture.workDir, "x b"), "");
+          // The first Tab inserts the common prefix of the quoted values
+          // (e.g., 'a followed by a space, 'q '!, or just '); the second Tab must
+          // offer the candidates again, and Enter accepts the selected one:
+          const cases: readonly (readonly [string, readonly string[]])[] = [
+            ["--value a", ["a b", "a c"]],
+            ["--file x", ["x a", "x b"]],
+            ["--value q", ["q !a", "q !b"]],
+            // Only the opening quote is common to all quoted values here:
+            ["--value ", ["a b", "a c", "q !a", "q !b"]],
+          ];
+          const argvs = testInteractiveNuCompletion(
+            fixture,
+            cases.map(([input]) => [
+              `${fixture.programName} ${input}`,
+              "\t",
+              "\t",
+              "\r",
+            ]),
+          );
+          deepStrictEqual(argvs.length, cases.length, JSON.stringify(argvs));
+          cases.forEach(([input, candidates], index) => {
+            const argv = argvs[index] ?? [];
+            deepStrictEqual(argv.length, 2, JSON.stringify(argvs));
+            deepStrictEqual(argv[0], input.split(" ")[0]);
+            ok(candidates.includes(argv[1] ?? ""), JSON.stringify(argvs));
+          });
+        } finally {
+          rmSync(fixture.tempDir, { recursive: true, force: true });
+        }
+      },
+    );
   });
 
   describe("ShellCompletion interface", () => {
