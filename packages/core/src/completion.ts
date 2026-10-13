@@ -1000,6 +1000,7 @@ function ${functionName} () {
                 __initial_file_patterns=("\${__initial_file_pattern}(#q-.)")
               fi
               _wanted files expl file _path_files -g "\${(j: :)__initial_file_patterns}"
+              _wanted directories expl directory _path_files -/
             else
               # Use the same regular-file filter with or without extensions,
               # keeping symlinked files and directory navigation available.

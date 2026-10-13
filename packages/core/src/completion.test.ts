@@ -2828,7 +2828,48 @@ fi
             { path: "tmp/fixtures/b.json" },
             { path: "tmp/fixtures/sub", type: "directory" as const },
           ],
-          expected: "extapp --file tmp/fixtures/a.txt ",
+          expected: "extapp --file tmp/fixtures/",
+        },
+        {
+          name: "directory navigation without matching files",
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/b.json" },
+            { path: "tmp/fixtures/sub", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/fixtures/sub/",
+        },
+        {
+          name: "directory navigation with disjoint extensions",
+          pattern: "tmp/fixtures/*.json",
+          extensions: [".txt"],
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+            { path: "tmp/fixtures/sub", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/fixtures/sub/",
+        },
+        {
+          name: "root directory navigation",
+          pattern: "*.txt",
+          files: [
+            { path: "b.json" },
+            { path: "sub", type: "directory" as const },
+          ],
+          expected: "extapp --file sub/",
+        },
+        {
+          name: "directories-tag ignored pattern",
+          pattern: "*.txt",
+          files: [
+            { path: "a.txt" },
+            { path: "sub", type: "directory" as const },
+          ],
+          setup: "zstyle ':completion:*:directories' ignored-patterns 'sub'",
+          expected: "extapp --file a.txt ",
         },
         {
           name: "root glob",

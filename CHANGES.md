@@ -119,6 +119,10 @@ To be released.
     no longer control suggestions without an extension filter.  The
     `list-dirs-first` style still lists directories before regular files.
 
+ -  Fixed Zsh completion to offer initial matches for relative file globs such
+    as `tmp/fixtures/*.txt` when the current value is empty.  File extension
+    filters still apply to these matches.  [[#1054], [#1075]]
+
  -  Fixed Zsh completion to preserve literal values containing colons or
     backslashes, including URL choices.  Regenerate and reload existing Zsh
     completion scripts to apply the fix.  [[#1055], [#1058]]
@@ -179,6 +183,7 @@ To be released.
 [#1051]: https://github.com/dahlia/optique/issues/1051
 [#1052]: https://github.com/dahlia/optique/issues/1052
 [#1053]: https://github.com/dahlia/optique/issues/1053
+[#1054]: https://github.com/dahlia/optique/issues/1054
 [#1055]: https://github.com/dahlia/optique/issues/1055
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1058]: https://github.com/dahlia/optique/pull/1058
@@ -197,6 +202,7 @@ To be released.
 [#1071]: https://github.com/dahlia/optique/pull/1071
 [#1072]: https://github.com/dahlia/optique/pull/1072
 [#1073]: https://github.com/dahlia/optique/pull/1073
+[#1075]: https://github.com/dahlia/optique/pull/1075
 [#1076]: https://github.com/dahlia/optique/pull/1076
 [#1079]: https://github.com/dahlia/optique/pull/1079
 
