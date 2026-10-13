@@ -200,6 +200,7 @@ function testInteractiveZshCompletion(
       readonly script: string;
     }[];
     readonly currentWord?: string;
+    readonly afterCompletion?: string;
   } = {},
 ): string {
   const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-integration-"));
@@ -339,7 +340,11 @@ sleep 0.5
 local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
 ${
       (options.programNames ?? ["extapp"]).map((programName) => `
-zpty -w -n child ${JSON.stringify(options.input ?? `${programName} ${options.currentWord ?? ""}`)}
+zpty -w -n child ${
+        JSON.stringify(
+          options.input ?? `${programName} ${options.currentWord ?? ""}`,
+        )
+      }
 sleep 0.1
 for (( i=0; i < ${options.moveLeft ?? 0}; i++ )); do
   zpty -w -n child $'\\x02'
@@ -362,6 +367,15 @@ __output+="$(__optique_drain_zpty "__OPTIQUE_ZSH_BUFFER_END__")"`
       }
 zpty -w -n child $'\\x15'
 `).join("\n")
+    }
+${
+      options.afterCompletion == null ? "" : `
+zpty -w -n child $'\\x03'
+sleep 0.1
+zpty -w child '${options.afterCompletion.replaceAll("'", "'\\''")}'
+sleep 0.1
+__output+="$(__optique_drain_zpty "" 20)"
+`
     }
 __output+=$'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
 print -rn -- "$__output"
@@ -3519,6 +3533,83 @@ _extapp 2>/dev/null
               `Hidden files should be omitted, got:\n${output}`,
             );
           }
+        },
+      );
+    }
+
+    for (const extensions of [undefined, ["txt"]]) {
+      for (
+        const global of [
+          {
+            setup: "typeset -g expl=user-sentinel",
+            expected: "user-sentinel:scalar",
+          },
+          {
+            setup: "typeset -ga expl=(user-alpha user-beta)",
+            expected: "user-alpha,user-beta:array",
+          },
+        ]
+      ) {
+        it(
+          `should preserve global expl ${global.expected} in zsh with extensions ${extensions}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type: "file", extensions },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [{ path: "first.txt" }, { path: "second.txt" }],
+              {
+                setup: global.setup,
+                afterCompletion:
+                  'print -r -- "__GLOBAL_EXPL:${(j:,:)expl}:${parameters[expl]}"',
+              },
+            );
+            ok(output.includes(`__GLOBAL_EXPL:${global.expected}`), output);
+          },
+        );
+      }
+    }
+
+    for (const extensions of [undefined, []]) {
+      it(
+        `should list directories first for unfiltered zsh paths with extensions ${extensions}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo"),
+          timeout: 10000,
+        },
+        () => {
+          if (
+            !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo")
+          ) return;
+          const directive = Array.from(zsh.encodeSuggestions([
+            { kind: "file", type: "file", extensions },
+          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            directive,
+            [{ path: "aaa.txt" }, { path: "zzz", type: "directory" }, {
+              path: "pipe",
+              type: "fifo",
+            }],
+            {
+              setup:
+                "zstyle ':completion:*' group-name ''; zstyle ':completion:*' list-dirs-first true",
+            },
+          );
+          const directoryIndex = output.indexOf("zzz/");
+          const fileIndex = output.indexOf("aaa.txt");
+          ok(directoryIndex >= 0 && fileIndex >= 0, output);
+          ok(directoryIndex < fileIndex, output);
+          ok(!output.includes("pipe"), output);
         },
       );
     }

@@ -10,4 +10,5 @@ links:
 
     File suggestions now consistently use the `files`/`directories` completion
     tags.  The `file-patterns` style and `globbed-files`/`all-files` tag styles
-    no longer control suggestions without an extension filter.
+    no longer control suggestions without an extension filter.  The
+    `list-dirs-first` style still lists directories before regular files.

@@ -109,6 +109,16 @@ To be released.
  -  Fixed PowerShell file completion to respect case in extension filters,
     matching the path parser's case sensitivity.  [[#1044], [#1067]]
 
+ -  Fixed Zsh completion for regular-file suggestions, including
+    `path({ type: "file" })`, to exclude named pipes and other non-regular paths
+    even without an extension filter.  Symlinks to regular files and directory
+    navigation remain available.  [[#1053], [#1073]]
+
+    File suggestions now consistently use the `files`/`directories` completion
+    tags.  The `file-patterns` style and `globbed-files`/`all-files` tag styles
+    no longer control suggestions without an extension filter.  The
+    `list-dirs-first` style still lists directories before regular files.
+
  -  Fixed Zsh completion to preserve literal values containing colons or
     backslashes, including URL choices.  Regenerate and reload existing Zsh
     completion scripts to apply the fix.  [[#1055], [#1058]]
@@ -168,6 +178,7 @@ To be released.
 [#1048]: https://github.com/dahlia/optique/issues/1048
 [#1051]: https://github.com/dahlia/optique/issues/1051
 [#1052]: https://github.com/dahlia/optique/issues/1052
+[#1053]: https://github.com/dahlia/optique/issues/1053
 [#1055]: https://github.com/dahlia/optique/issues/1055
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1058]: https://github.com/dahlia/optique/pull/1058
@@ -185,6 +196,7 @@ To be released.
 [#1070]: https://github.com/dahlia/optique/pull/1070
 [#1071]: https://github.com/dahlia/optique/pull/1071
 [#1072]: https://github.com/dahlia/optique/pull/1072
+[#1073]: https://github.com/dahlia/optique/pull/1073
 [#1076]: https://github.com/dahlia/optique/pull/1076
 [#1079]: https://github.com/dahlia/optique/pull/1079
 
