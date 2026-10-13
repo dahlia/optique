@@ -422,7 +422,7 @@ function _${programName} () {
       # However, if the user has already typed beyond the pattern (e.g.,
       # pattern="src/" and current="src/ma"), preserve the typed suffix
       # for incremental filtering.
-      local __from_pattern=0
+      local __from_pattern=0 __pattern_prefix=""
       if [[ -n "$pattern" ]]; then
         # Normalize leading ./ so that ./src/ma matches pattern src/
         local __norm_current="\${__file_current#./}"
@@ -434,10 +434,17 @@ function _${programName} () {
           __compare_pattern="\${__compare_pattern%%[\*\?]*}"
           [[ "$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
         fi
+        local __extends_pattern=0
         if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$__file_current" != "$pattern" ]]; then
+          __extends_pattern=1
+        fi
+        if (( __extends_pattern )) && [[ "$__norm_pattern" != *[\*\?]* ]]; then
           # User has typed beyond or an equivalent form of the pattern
           true
         else
+          # Wildcards keep their file filter while the typed prefix narrows
+          # the resulting paths. Save the expanded prefix before using pattern.
+          if (( __extends_pattern )); then __pattern_prefix="$__glob_current"; fi
           __from_pattern=1
           # Reset tilde state from the current-word expansion so that a
           # non-tilde pattern is not rewritten through stale tilde state
@@ -473,18 +480,27 @@ function _${programName} () {
       # (e.g., user typed "." or ".e" to complete .env)
       local __prefix_targets_hidden=0
       local __prefix_base="\${__glob_current##*/}"
+      if [[ -n "$__pattern_prefix" ]]; then __prefix_base="\${__pattern_prefix##*/}"; fi
       [[ "$__prefix_base" == .* ]] && __prefix_targets_hidden=1
       if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" || "$__prefix_targets_hidden" == "1" ]]; then shopt -s dotglob; fi
 
       # Pre-expand file candidates.  When the glob base came from the
       # program's pattern and contains wildcard characters (* or ?),
-      # use it as-is via compgen -G (safe — no command substitution).
+      # expand it as data with shell globbing. Empty IFS avoids splitting paths;
+      # NUL records preserve spaces and newlines without requiring mapfile.
+      # Shell expansion respects dotglob on older Bash versions as well.
       # Otherwise append * to treat it as a prefix.
       # Note: [ is NOT treated as a glob indicator because it commonly
       # appears in literal filenames like [draft] or foo[1].txt.
       local -a __candidates=()
       if [[ "$__from_pattern" == "1" && "$__glob_current" == *[\*\?]* ]]; then
-        mapfile -t __candidates < <(compgen -G "$__glob_current" 2>/dev/null)
+        local __candidate
+        while IFS= read -r -d '' __candidate; do
+          if [[ -e "$__candidate" || -L "$__candidate" ]]; then
+            [[ -d "$__candidate" ]] && __candidate="\${__candidate%/}"
+            __candidates+=("$__candidate")
+          fi
+        done < <(IFS=; printf '%s\\0' $__glob_current)
         # For file/any modes, also include directories from the base
         # directory for navigation even when the glob itself does not
         # match directory names.  Skip this for directory mode so that
@@ -492,9 +508,15 @@ function _${programName} () {
         if [[ "$type" != "directory" ]]; then
           local __glob_dir="\${__glob_current%/*}"
           [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
-          local __d
+          local __d __known
           for __d in "$__glob_dir"/*/; do
-            [[ -d "$__d" ]] && __candidates+=("\${__d%/}")
+            [[ -d "$__d" ]] || continue
+            __d="\${__d%/}"
+            __known=0
+            for __candidate in "\${__candidates[@]}"; do
+              if [[ "$__candidate" == "$__d" ]]; then __known=1; break; fi
+            done
+            (( __known )) || __candidates+=("$__d")
           done
         fi
       else
@@ -504,6 +526,16 @@ function _${programName} () {
         if [[ \${#__candidates[@]} -eq 1 && ! -e "\${__candidates[0]}" && ! -L "\${__candidates[0]}" ]]; then
           __candidates=()
         fi
+      fi
+
+      if [[ -n "$__pattern_prefix" ]]; then
+        local -a __filtered_candidates=()
+        for __candidate in "\${__candidates[@]}"; do
+          if [[ "\${__candidate#./}" == "\${__pattern_prefix#./}"* ]]; then
+            __filtered_candidates+=("$__candidate")
+          fi
+        done
+        __candidates=("\${__filtered_candidates[@]}")
       fi
 
       # Generate file completions based on type

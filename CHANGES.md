@@ -25,7 +25,9 @@ To be released.
     partial option names, and literal values resembling file
     completion markers also complete correctly. File suggestions with fixed
     search patterns enumerate matching paths instead of inserting the pattern
-    as literal text. [[#1031], [#1032], [#1033], [#1079]]
+    as literal text, retain wildcard filters as values are typed, and honor
+    hidden-file settings without duplicate directory candidates, including on
+    older Bash versions. [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed

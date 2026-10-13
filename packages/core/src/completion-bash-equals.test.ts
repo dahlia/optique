@@ -285,6 +285,7 @@ function tab(
     if (fixedPattern || fixedPatternWithSibling) {
       mkdirSync(join(dir, "src"));
       writeFileSync(join(dir, "src", "main.toml"), "");
+      writeFileSync(join(dir, "src", "main.txt"), "");
       writeFileSync(join(dir, "src", ".hidden.toml"), "");
       mkdirSync(join(dir, "src", "nested"));
     }
@@ -364,6 +365,70 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("includes explicitly typed hidden entries within a fixed glob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/.h",
+      ["--config=src/.h"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/.hidden.toml"]);
+  });
+  it("enumerates fixed globs without mapfile", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=",
+      ["--config="],
+      "enable -n mapfile 2>/dev/null || true",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml", "src/nested/"]);
+  });
+  it("includes hidden fixed-glob matches without duplicate directories", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --hidden=",
+      ["--hidden="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/.hidden.toml",
+      "src/main.toml",
+      "src/nested/",
+    ]);
+  });
+  it("includes hidden fixed-glob matches when compgen ignores dotglob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --hidden=",
+      ["--hidden="],
+      'compgen() { ( shopt -u dotglob; builtin compgen "$@" ); }',
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.ok(result.replies.includes("src/.hidden.toml"));
+  });
   it("enumerates a fixed file pattern for a joined value", {
     skip: !ptyAvailable,
   }, () => {
