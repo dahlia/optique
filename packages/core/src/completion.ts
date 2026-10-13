@@ -328,8 +328,8 @@ function _${programName} () {
   # by the parser; do not infer option boundaries through speculative retries.
   local __protocol_current="$__raw_current"
   (( __joined )) && __protocol_current="$current"
-  local -a __lines=() __replies=() __reply_files=() __reply_prefixes=()
-  local line __reply_prefix="" __file_current="$current" __is_file=0
+  local -a __lines=() __replies=()
+  local line __reply_prefix="" __file_current="$current"
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -n "$line" ]] && __lines+=("$line")
   done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__protocol_current" 2>/dev/null)
@@ -345,8 +345,6 @@ function _${programName} () {
       line="__FILE__:\${line#*:}"
       __file_current="\${current:\${#__reply_prefix}}"
     fi
-    __is_file=0
-    [[ "$line" == __FILE__:* ]] && __is_file=1
     local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset
     if [[ -n "$__reply_prefix" ]]; then
       local __raw_offset="\${__raw_offsets[\${#__reply_prefix}]:-\${#__reply_prefix}}"
@@ -619,37 +617,14 @@ function _${programName} () {
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" && "$__prefix_targets_hidden" == "0" ]]; then
         local filtered=()
-        local __name __filter_index __kept_before=0
-        __filter_index=0
+        local __name
         for item in "\${COMPREPLY[@]}"; do
           __name="\${item%/}"; __name="\${__name##*/}"
           if [[ "$__name" != .* ]]; then
             filtered+=("$item")
-            if [[ $__filter_index -lt $__reply_start ]]; then
-              __kept_before=$((__kept_before + 1))
-            fi
           fi
-          __filter_index=$((__filter_index + 1))
         done
         COMPREPLY=("\${filtered[@]}")
-        # Later file directives may filter earlier files, but never literals.
-        filtered=()
-        local __kept_files=() __kept_prefixes=()
-        __filter_index=0
-        for item in "\${__replies[@]}"; do
-          __name="\${item#"\${__reply_prefixes[__filter_index]}"}"
-          __name="\${__name%/}"; __name="\${__name##*/}"
-          if [[ "\${__reply_files[__filter_index]}" != 1 || "$__name" != .* ]]; then
-            filtered+=("$item")
-            __kept_files+=("\${__reply_files[__filter_index]}")
-            __kept_prefixes+=("\${__reply_prefixes[__filter_index]}")
-          fi
-          __filter_index=$((__filter_index + 1))
-        done
-        __replies=("\${filtered[@]}")
-        __reply_files=("\${__kept_files[@]}")
-        __reply_prefixes=("\${__kept_prefixes[@]}")
-        __reply_start=$__kept_before
       fi
       if [[ \${#COMPREPLY[@]} -gt $__reply_start ]]; then __file_mode=1; fi
     else
@@ -658,8 +633,6 @@ function _${programName} () {
     fi
     for __word in "\${COMPREPLY[@]}"; do
       __replies+=("$__reply_prefix$__word")
-      __reply_files+=("$__is_file")
-      __reply_prefixes+=("$__reply_prefix")
     done
   done
   COMPREPLY=()

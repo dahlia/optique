@@ -20,7 +20,9 @@ To be released.
     expansion after quoted or split option names, and quoted path prefixes.
     Exact literal
     candidates, including dot-prefixed values, remain available alongside file
-    suggestions when hidden files are excluded. [[#1031], [#1033]]
+    suggestions when hidden files are excluded. Hidden candidates allowed by
+    one file suggestion remain available alongside other file suggestions.
+    [[#1031], [#1033]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell
     metacharacters, preserving them as literal arguments when the completed

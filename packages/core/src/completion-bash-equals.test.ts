@@ -58,6 +58,23 @@ const dotValues: ValueParser<"sync", string> = {
   },
 };
 const fields = {
+  hiddenUnion: optional(option("--hidden-union", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        extensions: [".toml"],
+        includeHidden: true,
+      };
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        extensions: [".log"],
+        includeHidden: false,
+      };
+    },
+  })),
   control: optional(option("--control", choice([String.raw`\c-tail`]))),
   ansiRedirect: optional(option("--ansi-redirect", choice(["dev'>output"]))),
   reverse: optional(
@@ -270,6 +287,19 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("preserves earlier hidden candidates from their own file directive", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --hidden-union=",
+      ["--hidden-union="],
+      "touch .hidden.toml .hidden.log visible.log",
+    );
+    assert.ok(result.replies.includes(".hidden.toml"));
+    assert.ok(result.replies.includes("visible.log"));
+    assert.ok(!result.replies.includes(".hidden.log"));
+  });
   it("retains the originating slash option's file metadata", {
     skip: !ptyAvailable,
   }, () => {

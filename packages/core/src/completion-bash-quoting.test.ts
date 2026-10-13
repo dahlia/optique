@@ -260,12 +260,12 @@ describe("Bash Readline file completion quoting", () => {
     ok(!result.marker);
   });
 
-  it("escapes candidates after earlier replies are filtered out", {
+  it("escapes candidates from a later file directive", {
     skip: !bashAvailable,
   }, () => {
     if (!bashAvailable) return;
     const file = "name$(touch marker).toml";
-    const result = completeAndExecute('probecli "./\t', [
+    const result = completeAndExecute('probecli "./name\t', [
       ".a.hidden",
       file,
     ], {
