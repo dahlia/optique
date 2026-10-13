@@ -26,6 +26,9 @@ const files: ValueParser<"sync", string> = {
   },
 };
 const fields = {
+  url: optional(option("--url", choice(["https://example.com"]))),
+  email: optional(option("--email", choice(["me@example.com"]))),
+  tag: optional(option("--tag", choice([":example", "@example"]))),
   label: optional(option("--label", string())),
   mode: optional(option("--mode", choice(["dev", "prod"]))),
   transport: optional(
@@ -183,6 +186,66 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it(
+    "stops reassembling joined values at whitespace",
+    { skip: !ptyAvailable },
+    () => {
+      if (!ptyAvailable) return;
+      const result = tab("eqapp --url=https: //exa", ["--url=https:", "//exa"]);
+      assert.deepEqual(result.calls, [["--url=https:", "//exa"]]);
+    },
+  );
+  for (
+    const c of [
+      {
+        current: "--url=https://exa",
+        reply: "//example.com",
+        completed: "--url=https://example.com",
+      },
+      {
+        current: "--url=https:",
+        reply: "//example.com",
+        completed: "--url=https://example.com",
+      },
+      {
+        current: "--email=me@ex",
+        reply: "@example.com",
+        completed: "--email=me@example.com",
+      },
+      { current: "--tag=:ex", reply: "example", completed: "--tag=:example" },
+      { current: "--tag=:", reply: "example", completed: "--tag=:example" },
+      { current: "--tag=@ex", reply: "@example", completed: "--tag=@example" },
+    ]
+  ) {
+    it(`reassembles all joined fragments in ${c.current}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(`eqapp ${c.current}`, [c.current]);
+      assert.deepEqual(result.calls, [[c.current]]);
+      assert.deepEqual(result.replies, [c.reply]);
+      assert.equal(result.line, `eqapp ${c.completed} `);
+    });
+  }
+  it(
+    "reassembles breaks in previous joined arguments",
+    { skip: !ptyAvailable },
+    () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        "eqapp --url=https://example.com --mail-transport=re",
+        ["--url=https://example.com", "--mail-transport=re"],
+      );
+      assert.deepEqual(result.calls, [[
+        "--url=https://example.com",
+        "--mail-transport=re",
+      ]]);
+      assert.equal(
+        result.line,
+        "eqapp --url=https://example.com --mail-transport=resend ",
+      );
+    },
+  );
   it("completes file suggestions without a pattern", {
     skip: !ptyAvailable,
   }, () => {

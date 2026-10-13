@@ -150,7 +150,8 @@ function _${programName} () {
   local __tilde_glob_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
   # Bash splits unquoted '=' at its default word breaks. Reassemble only
-  # adjacent fragments, leaving whitespace-separated arguments intact.
+  # adjacent fragments, including further word breaks inside a joined value,
+  # leaving whitespace-separated arguments intact.
   local __raw_current="$current" __remove="" __word
   if [[ \${COMP_LINE+x} && "$COMP_WORDBREAKS" == *=* ]]; then
     local -a __words=()
@@ -168,7 +169,9 @@ function _${programName} () {
       fi
       if (( __i > 1 && !__space )) &&
           { [[ -n "$__word" && -z "\${__word//=/}" ]] ||
-            [[ -n "$__previous" && -z "\${__previous//=/}" ]]; }; then
+            [[ -n "$__previous" && -z "\${__previous//=/}" ]] ||
+            [[ "\${__words[__j-1]}" == -*=* ]] ||
+            [[ "$__word" == =* && "\${__words[__j-1]}" == -* ]]; }; then
         __words[__j-1]+="$__word"
       else
         __words[__j]="$__word"
@@ -180,7 +183,11 @@ function _${programName} () {
     if (( __valid )); then
       current="\${__words[__j-1]}"
       prev=("\${__words[@]:1:__j-2}")
-      if [[ -n "$__raw_current" && -z "\${__raw_current//=/}" ]]; then
+      # Bash passes the fragment Readline will replace as the second argument,
+      # which is empty when the cursor follows a word-break character.
+      if [[ \${2+x} ]]; then
+        __remove="\${current:0:\${#current}-\${#2}}"
+      elif [[ -n "$__raw_current" && -z "\${__raw_current//=/}" ]]; then
         __remove="$current"
       else
         __remove="\${current:0:\${#current}-\${#__raw_current}}"
