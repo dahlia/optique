@@ -49,6 +49,7 @@ function completeAndExecute(
   options: {
     readonly errexit?: boolean;
     readonly omitHomeEntry?: boolean;
+    readonly preserveReplyIndex?: boolean;
     readonly suggestions?: string;
     readonly withoutCompopt?: boolean;
   } = {},
@@ -89,8 +90,14 @@ bind '"\\C-i": complete'
 probecli() { if [[ "$1" == complete ]]; then ${transport}; else printf '%s\\0' "$@"; fi; }
 ${options.withoutCompopt ? "enable -n compopt 2>/dev/null || :" : ""}
 source ${shellQuote(scriptPath)} || exit 1
+${options.preserveReplyIndex ? "__reply_index=sentinel" : ""}
 ${options.errexit ? "set -e" : ""}
 ${input}
+${
+      options.preserveReplyIndex
+        ? '[[ "$__reply_index" == sentinel ]] || exit 1'
+        : ""
+    }
 exit
 `;
     const stdout = execFileSync("bash", ["--noprofile", "--norc", "-i"], {
@@ -328,6 +335,31 @@ describe("Bash Readline file completion quoting", () => {
     deepStrictEqual(result.args, [`${result.home}/cfg/a\`b\`.toml`]);
   });
 
+  it("preserves the shell's reply index for a quoted tilde pattern", {
+    skip: !bashAvailable,
+  }, () => {
+    if (!bashAvailable) return;
+    const result = completeAndExecute('probecli "\t', [
+      "home/cfg/result.toml",
+    ], {
+      suggestions: "__FILE__:file::~/cfg/:0\n",
+      preserveReplyIndex: true,
+    });
+    deepStrictEqual(result.args, [`${result.home}/cfg/result.toml`]);
+  });
+
+  for (const quote of ["'", '"']) {
+    it(`uses one directory separator after an opening ${quote} quote`, {
+      skip: !bashAvailable,
+    }, () => {
+      if (!bashAvailable) return;
+      const result = completeAndExecute(`probecli ${quote}./dir\tchild\t`, [
+        "dir with spaces/child.toml",
+      ]);
+      deepStrictEqual(result.args, ["./dir with spaces/child.toml"]);
+    });
+  }
+
   it("keeps a quoted tilde literal", { skip: !bashAvailable }, () => {
     if (!bashAvailable) return;
     const result = completeAndExecute("probecli '~/lit\t", [
@@ -382,4 +414,18 @@ describe("Bash Readline file completion quoting", () => {
     deepStrictEqual(result.args, [`./${file}`]);
     ok(!result.marker);
   });
+
+  it(
+    "keeps a literal candidate separate when a file directive has no matches",
+    {
+      skip: !compoptAvailable,
+    },
+    () => {
+      if (!compoptAvailable) return;
+      const result = completeAndExecute("probecli bu\tx", ["build/"], {
+        suggestions: "build\n__FILE__:file::missing/:0\n",
+      });
+      deepStrictEqual(result.args, ["build", "x"]);
+    },
+  );
 });

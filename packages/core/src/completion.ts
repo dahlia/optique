@@ -112,6 +112,10 @@ function _${programName} () {
   COMPREPLY=()
   local __raw_current="\${COMP_WORDS[COMP_CWORD]}"
   local current="" __quote="" __char __next __index __quote_offset=0
+  local __file_mode=0
+  if [[ $(type -t compopt) == builtin ]]; then
+    compopt +o filenames 2>/dev/null || true
+  fi
   # Dequote the shell word without evaluating filename contents.  Readline
   # returns escaped words after Tab, and users may start with an open quote.
   for ((__index=0; __index<\${#__raw_current}; __index++)); do
@@ -147,10 +151,6 @@ function _${programName} () {
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
   while IFS= read -r line; do
     if [[ "$line" == __FILE__:* ]]; then
-      # Let Readline quote filenames and keep directory paths open.
-      if [[ $(type -t compopt) == builtin ]]; then
-        compopt -o filenames 2>/dev/null || true
-      fi
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
       extensions="\${extensions//,\\./,}"; extensions="\${extensions#.}"
@@ -354,6 +354,15 @@ function _${programName} () {
       if [[ "$__failglob_was_set" == "1" ]]; then shopt -s failglob; fi
       if [[ "$__noglob_was_set" == "1" ]]; then set -f; fi
 
+      # Readline appends directory separators when it receives the full path.
+      # Midword quotes still need ours because replies omit the typed prefix.
+      if [[ -n "$__quote" && $__quote_offset -eq 0 ]]; then
+        local __reply_index
+        for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
+          COMPREPLY[__reply_index]="\${COMPREPLY[__reply_index]%/}"
+        done
+      fi
+
       # Readline replaces only the text after an open quote.  Remove the
       # already typed prefix so it is not inserted a second time.
       if [[ -n "$__quote" && $__quote_offset -gt 0 ]]; then
@@ -375,10 +384,13 @@ function _${programName} () {
         done
       fi
 
-      # Readline does not escape substitutions inside an already open double
-      # quote.  Quote the two characters it leaves special in that context.
-      if [[ "$__quote" == '"' && $(type -t compopt) == builtin ]]; then
-        local __escaped_reply __escape_index
+      # Bash 5.3 leaves substitutions unescaped inside an open double quote.
+      # Earlier versions already escape them during filename processing.
+      if [[ "$__quote" == '"' &&
+            ( \${BASH_VERSINFO[0]} -gt 5 ||
+              ( \${BASH_VERSINFO[0]} -eq 5 && \${BASH_VERSINFO[1]} -ge 3 ) ) &&
+            $(type -t compopt) == builtin ]]; then
+        local __escaped_reply __escape_index __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           __escaped_reply=""
           for ((__escape_index=0; __escape_index<\${#COMPREPLY[__reply_index]}; __escape_index++)); do
@@ -400,19 +412,30 @@ function _${programName} () {
       # Filter out hidden files unless requested
       if [[ "$hidden" != "1" && "$__inside_hidden_path" == "0" && "$__prefix_targets_hidden" == "0" ]]; then
         local filtered=()
-        local __name
+        local __name __filter_index __kept_before=0
+        __filter_index=0
         for item in "\${COMPREPLY[@]}"; do
           __name="\${item%/}"; __name="\${__name##*/}"
-          [[ "$__name" != .* ]] && filtered+=("$item")
+          if [[ "$__name" != .* ]]; then
+            filtered+=("$item")
+            if [[ $__filter_index -lt $__reply_start ]]; then
+              __kept_before=$((__kept_before + 1))
+            fi
+          fi
+          __filter_index=$((__filter_index + 1))
         done
         COMPREPLY=("\${filtered[@]}")
+        __reply_start=$__kept_before
       fi
-
+      if [[ \${#COMPREPLY[@]} -gt $__reply_start ]]; then __file_mode=1; fi
     else
       # Regular literal completion
       COMPREPLY+=("$line")
     fi
   done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__raw_current" 2>/dev/null)
+  if [[ $__file_mode == 1 && $(type -t compopt) == builtin ]]; then
+    compopt -o filenames 2>/dev/null || true
+  fi
 }
 
 # Bash 3.2 has no compopt: use filename quoting for all candidates there.
