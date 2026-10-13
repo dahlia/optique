@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import process from "node:process";
@@ -3192,6 +3193,168 @@ _nohidden_cli 2>/dev/null
         // For pwsh, we verify that the completion script can be loaded
         // and executed without errors (similar to zsh test approach)
         deepStrictEqual(result.includes("success"), true);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should use only arguments before the PowerShell cursor", {
+      skip: process.platform === "win32" || !isShellAvailable("pwsh") ||
+        !isShellAvailable("bash"),
+      timeout: 10000,
+    }, () => {
+      // Bun ignores skip, so check the prerequisites here as well.
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("pwsh") || !isShellAvailable("bash")) return;
+
+      const cases = [
+        {
+          before: "cursor-cli --pick al",
+          after: "",
+          args: ["--pick", "al"],
+          replacementLength: 2,
+        },
+        {
+          before: "cursor-cli --pick al",
+          after: " --other xyz",
+          args: ["--pick", "al"],
+          replacementLength: 2,
+        },
+        {
+          before: "cursor-cli --pick al",
+          after: "pha --other xyz",
+          args: ["--pick", "alpha"],
+          replacementLength: 5,
+        },
+        {
+          before: "cursor-cli --pick ",
+          after: " --other xyz",
+          args: ["--pick", ""],
+          replacementLength: 0,
+        },
+        {
+          before: "cursor-cli --pick ",
+          after: "alpha --other xyz",
+          args: ["--pick", ""],
+          replacementLength: 0,
+        },
+        {
+          before: "cursor-cli --other 'some value' --pick al",
+          after: "",
+          args: ["--other", "some value", "--pick", "al"],
+          replacementLength: 2,
+        },
+        {
+          before: "cursor-cli --pick al",
+          after: " --other al",
+          args: ["--pick", "al"],
+          replacementLength: 2,
+        },
+        {
+          before: "cursor-cli --other '' ",
+          after: "",
+          args: ["--other", "", ""],
+          replacementLength: 0,
+        },
+        {
+          before: "cursor-cli --pick ",
+          after: "",
+          args: ["--pick", ""],
+          replacementLength: 0,
+        },
+        {
+          before: "Write-Output done; cursor-cli --pick al",
+          after: " --other xyz",
+          args: ["--pick", "al"],
+          replacementLength: 2,
+        },
+        {
+          before: "Write-Output done\ncursor-cli --pick al",
+          after: " --other xyz",
+          args: ["--pick", "al"],
+          replacementLength: 2,
+        },
+      ];
+
+      // Keep executable fixtures in the checkout's ignored tmp/ directory.
+      const scratchRoot = fileURLToPath(
+        new URL("../../../tmp/", import.meta.url),
+      );
+      mkdirSync(scratchRoot, { recursive: true });
+      const tempDir = mkdtempSync(join(scratchRoot, "pwsh-cursor-"));
+      try {
+        writeFileSync(
+          join(tempDir, "cursor-cli"),
+          `#!/usr/bin/env bash
+printf '%s\\0' "$@" > "$OPTIQUE_CURSOR_CAPTURE"
+printf 'alpha\\nalpine\\n'
+`,
+          { mode: 0o755 },
+        );
+        writeFileSync(
+          join(tempDir, "completion.ps1"),
+          pwsh.generateScript("cursor-cli", ["completion", "pwsh"]),
+        );
+        writeFileSync(join(tempDir, "cases.json"), JSON.stringify(cases));
+        const testScriptPath = join(tempDir, "test.ps1");
+        writeFileSync(
+          testScriptPath,
+          `$ErrorActionPreference = 'Stop'
+$PSNativeCommandArgumentPassing = 'Standard'
+$env:PATH = $PSScriptRoot + [IO.Path]::PathSeparator + $env:PATH
+$env:OPTIQUE_CURSOR_CAPTURE = Join-Path $PSScriptRoot 'argv.bin'
+. (Join-Path $PSScriptRoot 'completion.ps1')
+$cases = Get-Content -Raw (Join-Path $PSScriptRoot 'cases.json') | ConvertFrom-Json
+$records = @()
+foreach ($case in $cases) {
+    Remove-Item $env:OPTIQUE_CURSOR_CAPTURE -Force -ErrorAction SilentlyContinue
+    $line = $case.before + $case.after
+    $result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $case.before.Length, $null)
+    if (-not (Test-Path $env:OPTIQUE_CURSOR_CAPTURE)) { throw 'Completer did not invoke the CLI.' }
+    $records += [pscustomobject]@{
+        Captured = Get-Content -Raw $env:OPTIQUE_CURSOR_CAPTURE
+        Matches = @($result.CompletionMatches | ForEach-Object CompletionText)
+        Index = $result.ReplacementIndex
+        Length = $result.ReplacementLength
+        Lines = @($result.CompletionMatches | ForEach-Object {
+            $line.Substring(0, $result.ReplacementIndex) + $_.CompletionText + $line.Substring($result.ReplacementIndex + $result.ReplacementLength)
+        })
+    }
+}
+ConvertTo-Json -InputObject $records -Depth 5 -Compress
+`,
+        );
+        const results: readonly {
+          readonly Captured: string;
+          readonly Matches: readonly string[];
+          readonly Index: number;
+          readonly Length: number;
+          readonly Lines: readonly string[];
+        }[] = JSON.parse(runCommand(
+          "pwsh",
+          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+          { cwd: tempDir },
+        ));
+
+        deepStrictEqual(
+          results.map((result) => result.Captured.split("\0").slice(0, -1)),
+          cases.map((testCase) => ["completion", "pwsh", ...testCase.args]),
+        );
+        deepStrictEqual(results.length, cases.length);
+        for (let i = 0; i < cases.length; i++) {
+          const testCase = cases[i];
+          const result = results[i];
+          deepStrictEqual(result.Matches, ["alpha", "alpine"]);
+          deepStrictEqual(result.Length, testCase.replacementLength);
+          deepStrictEqual(
+            result.Index,
+            testCase.before.length - (testCase.replacementLength === 0 ? 0 : 2),
+          );
+        }
+        deepStrictEqual(results[1].Lines, [
+          "cursor-cli --pick alpha --other xyz",
+          "cursor-cli --pick alpine --other xyz",
+        ]);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }

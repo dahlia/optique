@@ -1364,23 +1364,11 @@ Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
     \$arguments = @()
     \$commandElements = \$commandAst.CommandElements
 
-    # Determine the range of elements to extract
-    # Exclude the last element if it matches wordToComplete (partial input case)
-    \$maxIndex = \$commandElements.Count - 1
-    if (\$commandElements.Count -gt 1) {
-        \$lastElement = \$commandElements[\$commandElements.Count - 1]
-        \$lastText = if (\$lastElement -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
-            \$lastElement.Value
-        } else {
-            \$lastElement.Extent.Text
-        }
-        if (\$lastText -eq \$wordToComplete) {
-            \$maxIndex = \$commandElements.Count - 2
-        }
-    }
-
-    for (\$i = 1; \$i -le \$maxIndex; \$i++) {
+    # Keep only complete arguments before the cursor.  The current word
+    # (including a token ending exactly at the cursor) is appended below.
+    for (\$i = 1; \$i -lt \$commandElements.Count; \$i++) {
         \$element = \$commandElements[\$i]
+        if (\$element.Extent.EndOffset -ge \$cursorPosition) { break }
 
         if (\$element -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
             \$arguments += \$element.Value
