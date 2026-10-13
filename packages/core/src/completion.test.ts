@@ -6215,10 +6215,34 @@ do { ${functionName} "extapp " }
           testNuFileCompletion(tempDir, "[draft]", '"[draft]"'),
           ["'[draft]/notes.txt'", "'[draft]/sub/'"],
         );
-        // A program-supplied wildcard pattern under a bracketed directory:
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("should keep bracket classes in supplied wildcard patterns in nu", {
+      skip: process.platform === "win32" || !isShellAvailable("nu"),
+    }, (t) => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
+      if (!isShellAvailable("nu")) {
+        t.skip("nu not available");
+        return;
+      }
+
+      const tempDir = mkdtempSync(join(tmpdir(), "nu-bracket-class-"));
+
+      try {
+        writeFileSync(join(tempDir, "a1.txt"), "");
+        writeFileSync(join(tempDir, "b1.txt"), "");
+        writeFileSync(join(tempDir, "c1.txt"), "");
+        writeFileSync(join(tempDir, "[ab]1.txt"), "");
+
+        // A pattern with * or ? is a glob, as in the other shells, so its
+        // [ab] stays a character class:
         deepStrictEqual(
-          testNuFileCompletion(tempDir, "[draft]/*.txt", ""),
-          ["'[draft]/notes.txt'", "'[draft]/sub/'"],
+          testNuFileCompletion(tempDir, "[ab]*.txt", ""),
+          ["a1.txt", "b1.txt"],
         );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });

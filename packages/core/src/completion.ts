@@ -1555,20 +1555,21 @@ ${
       # When the glob base contains wildcard characters, use it as-is;
       # otherwise append * to treat it as a prefix.
       # Note: into glob is required so that ls expands wildcards from a variable.
-      # Brackets are wrapped as [[] and []] so that literal path text like
-      # "report[1]" is not parsed as a glob character class.
+      # A literal prefix has its brackets wrapped as [[] and []] so that path
+      # text like "report[1]" is not parsed as a glob character class; a
+      # wildcard pattern is a glob as a whole, so its brackets stay classes.
       let has_glob = ($glob_base =~ '[*?]')
-      let glob_base_escaped = ($glob_base | str replace -a -r '([\\[\\]])' '[$1]')
       let ls_pattern = if ($glob_base | is-empty) {
         "."
       } else if $has_glob {
-        ($glob_base_escaped | into glob)
+        ($glob_base | into glob)
       } else {
-        ($glob_base_escaped + "*" | into glob)
+        (($glob_base | str replace -a -r '([\\[\\]])' '[$1]') + "*" | into glob)
       }
 
       # When using a glob pattern, also compute a directory listing pattern
-      # so that file/any modes can include directories for navigation
+      # so that file/any modes can include directories for navigation; its
+      # directory part is a literal path
       let glob_dir_pattern = if $has_glob {
         let dir_part = ($glob_base | path dirname)
         let dir = if ($dir_part | is-empty) or ($dir_part == $glob_base) { "." } else { $dir_part }
