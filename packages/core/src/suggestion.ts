@@ -1,3 +1,4 @@
+import { mergeJoinedFileSuggestions } from "./internal/joined-file-suggestion.ts";
 import type { Message, MessageTerm } from "./message.ts";
 import { message, optionName, text } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
@@ -392,6 +393,8 @@ export function deduplicateSuggestions(
     if (existing == null) {
       entries.set(key, suggestion);
       order.push(key);
+    } else if (suggestion.kind === "literal" && existing.kind === "literal") {
+      mergeJoinedFileSuggestions(existing, suggestion);
     } else if (
       suggestion.kind === "file" &&
       existing.kind === "file" &&

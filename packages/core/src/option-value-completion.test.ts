@@ -1,3 +1,4 @@
+import { bash, zsh } from "./completion.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { parse, suggest, suggestAsync, type Suggestion } from "./parser.ts";
@@ -92,5 +93,52 @@ for (const mode of ["sync", "async"] as const) {
       const parsed = await parse(parser, [prefix + "dev"]);
       assert.ok(!parsed.success);
     }
+  });
+}
+
+for (const mode of ["sync", "async"] as const) {
+  it(`preserves joined file origins in ${mode} mode without changing other shells`, async () => {
+    const sync: ValueParser<"sync", string> = {
+      ...string(),
+      *suggest(prefix) {
+        yield {
+          kind: "file",
+          type: "file",
+          pattern: prefix,
+          extensions: [".toml"],
+          includeHidden: true,
+        };
+      },
+    };
+    const async: ValueParser<"async", string> = {
+      ...sync,
+      mode: "async",
+      parse(input) {
+        return Promise.resolve(sync.parse(input));
+      },
+      async *suggest(prefix) {
+        yield* sync.suggest!(prefix);
+      },
+    };
+    const parser = option(
+      "/scope:file",
+      "/scope",
+      mode === "sync" ? sync : async,
+    );
+    const input = "/scope:file:name=f";
+    const result = await suggest(parser, [input]);
+    assert.deepEqual(result, [{
+      kind: "literal",
+      text: input,
+      description: undefined,
+    }]);
+    assert.equal(
+      Array.from(bash.encodeSuggestions(result)).join(""),
+      "__JOINED_FILE__:/scope%3Afile%3A:file:toml::1",
+    );
+    assert.equal(
+      Array.from(zsh.encodeSuggestions(result)).join(""),
+      input + "\0\0",
+    );
   });
 }

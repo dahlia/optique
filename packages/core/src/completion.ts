@@ -1,3 +1,4 @@
+import { getJoinedFileSuggestion } from "./internal/joined-file-suggestion.ts";
 import { formatMessage } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
 
@@ -154,6 +155,7 @@ function _${programName} () {
   # leaving whitespace-separated arguments intact.
   local __plain_current="$current" __remove="" __word __joined=0
   local __raw_joined_current="$__raw_current"
+  local -a __raw_offsets=()
   if [[ \${COMP_LINE+x} ]]; then
     local -a __words=()
     local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
@@ -287,6 +289,9 @@ function _${programName} () {
               *) __decoded+="$__char" ;;
             esac
           fi
+          if (( __i == __j - 1 )) && [[ ! \${__raw_offsets[\${#__decoded}]+x} ]]; then
+            __raw_offsets[\${#__decoded}]=$((__k + 1))
+          fi
         done
         if [[ "$__join_quote" == ansi ]]; then
           printf -v __part '%b' "$__ansi"
@@ -311,75 +316,36 @@ function _${programName} () {
     fi
   fi
 
-  # Keep the joined request for literal suggestions. Core represents joined
-  # file suggestions as an echo of the prefix (or just option= when no
-  # pattern is provided); probe those cases for native
-  # file directives without changing the protocol used by other shells.
+  # Joined file directives retain the exact option prefix and metadata chosen
+  # by the parser; do not infer option boundaries through speculative retries.
   local __protocol_current="$__raw_current"
   (( __joined )) && __protocol_current="$current"
-  local -a __lines=() __value_files=() __value_literals=() __replies=() __reply_files=()
-  local __echo=0 __value="" __option_prefix="" line
-  local __delimiter='=' __probe __position
-  [[ "$current" == /* ]] && __delimiter=':'
+  local -a __lines=() __replies=() __reply_files=() __reply_prefixes=()
+  local line __reply_prefix="" __file_current="$current" __is_file=0
   while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -z "$line" ]] && continue
-    __lines+=("$line")
-    [[ "$line" == "$current" || "$line" == *"$__delimiter" ]] && __echo=1
+    [[ -n "$line" ]] && __lines+=("$line")
   done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__protocol_current" 2>/dev/null)
-  if (( __echo )) && [[ "$current" == -*=* || "$current" == /*:* ]]; then
-    # Slash option names and values may both contain colons. Probe candidate
-    # boundaries in parser order, retaining the first native file directive.
-    for ((__position=0; __position<\${#current}; __position++)); do
-      [[ "\${current:__position:1}" == "$__delimiter" ]] || continue
-      __probe="\${current:0:__position}"
-      __option_prefix="$__probe$__delimiter"
-      __value="\${current:__position+1}"
-      __value_literals=()
-      while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ -z "$line" ]] && continue
-        if [[ "$line" == __FILE__:* ]]; then
-          __value_files+=("$line")
-        else
-          __value_literals+=("$__option_prefix$line")
-        fi
-      done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__probe" "$__value" 2>/dev/null)
-      (( \${#__value_files[@]} )) && break
-      [[ "$__delimiter" == '=' ]] && break
-    done
-  fi
-
-  local __index=0 __reply_prefix="" __file_current="$current" __is_file=0
-  for line in "\${__lines[@]}" "\${__value_files[@]}"; do
+  for line in "\${__lines[@]}"; do
     COMPREPLY=()
-    __is_file=0
-    [[ "$line" == __FILE__:* ]] && __is_file=1
     __reply_prefix=""
     __file_current="$current"
-    if (( __index >= \${#__lines[@]} )); then
-      __reply_prefix="$__option_prefix"
-      __file_current="$__value"
+    if [[ "$line" == __JOINED_FILE__:* ]]; then
+      line="\${line#__JOINED_FILE__:}"
+      __reply_prefix="\${line%%:*}"
+      __reply_prefix="\${__reply_prefix//%3A/:}"
+      __reply_prefix="\${__reply_prefix//%25/%}"
+      line="__FILE__:\${line#*:}"
+      __file_current="\${current:\${#__reply_prefix}}"
     fi
+    __is_file=0
+    [[ "$line" == __FILE__:* ]] && __is_file=1
     local __raw_file_current="$__raw_current" __file_quote_offset=$__quote_offset
     if [[ -n "$__reply_prefix" ]]; then
-      __raw_file_current="\${__raw_joined_current:\${#__reply_prefix}}"
+      local __raw_offset="\${__raw_offsets[\${#__reply_prefix}]:-\${#__reply_prefix}}"
+      __raw_file_current="\${__raw_joined_current:__raw_offset}"
       if (( __file_quote_offset >= \${#__reply_prefix} )); then
         __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
       fi
-    fi
-    ((++__index))
-    if (( \${#__value_files[@]} )) &&
-        [[ "$line" == "$current" || "$line" == "$__option_prefix" ]]; then
-      # Keep independently emitted literals, consuming one retry literal for
-      # each matching first-pass line. Remaining echoes belong to file fallbacks.
-      local __literal_index __literal_found=0
-      for __literal_index in "\${!__value_literals[@]}"; do
-        if [[ "$line" == "\${__value_literals[__literal_index]}" ]]; then
-          unset "__value_literals[$__literal_index]"
-          __literal_found=1
-          break
-        fi
-      done
-      (( __literal_found )) || continue
     fi
     if [[ "$line" == __FILE__:* ]]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
@@ -660,19 +626,21 @@ function _${programName} () {
         COMPREPLY=("\${filtered[@]}")
         # Later file directives may filter earlier files, but never literals.
         filtered=()
-        local __kept_files=()
+        local __kept_files=() __kept_prefixes=()
         __filter_index=0
         for item in "\${__replies[@]}"; do
-          __name="\${item#"$__option_prefix"}"
+          __name="\${item#"\${__reply_prefixes[__filter_index]}"}"
           __name="\${__name%/}"; __name="\${__name##*/}"
           if [[ "\${__reply_files[__filter_index]}" != 1 || "$__name" != .* ]]; then
             filtered+=("$item")
             __kept_files+=("\${__reply_files[__filter_index]}")
+            __kept_prefixes+=("\${__reply_prefixes[__filter_index]}")
           fi
           __filter_index=$((__filter_index + 1))
         done
         __replies=("\${filtered[@]}")
         __reply_files=("\${__kept_files[@]}")
+        __reply_prefixes=("\${__kept_prefixes[@]}")
         __reply_start=$__kept_before
       fi
       if [[ \${#COMPREPLY[@]} -gt $__reply_start ]]; then __file_mode=1; fi
@@ -683,6 +651,7 @@ function _${programName} () {
     for __word in "\${COMPREPLY[@]}"; do
       __replies+=("$__reply_prefix$__word")
       __reply_files+=("$__is_file")
+      __reply_prefixes+=("$__reply_prefix")
     done
   done
   COMPREPLY=()
@@ -708,7 +677,19 @@ fi
     let i = 0;
     for (const suggestion of suggestions) {
       if (i > 0) yield "\n";
-      if (suggestion.kind === "literal") {
+      const joined = getJoinedFileSuggestion(suggestion);
+      if (joined !== undefined) {
+        if (joined.literal && suggestion.kind === "literal") {
+          yield sanitizeForTransport(suggestion.text);
+          yield "\n";
+        }
+        for (const [index, { prefix, file }] of joined.files.entries()) {
+          if (index > 0) yield "\n";
+          yield `__JOINED_FILE__:${encodePattern(prefix)}:${file.type}:${
+            encodeExtensions(file.extensions)
+          }::${file.includeHidden ? "1" : "0"}`;
+        }
+      } else if (suggestion.kind === "literal") {
         yield sanitizeForTransport(suggestion.text);
       } else {
         // Emit special marker for native file completion

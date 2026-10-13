@@ -15,7 +15,7 @@ import process from "node:process";
 import { describe, it } from "node:test";
 import { bash } from "./completion.ts";
 import { object } from "./constructs.ts";
-import { optional } from "./modifiers.ts";
+import { multiple, optional } from "./modifiers.ts";
 import { suggest } from "./parser.ts";
 import { argument, option } from "./primitives.ts";
 import { choice, string, type ValueParser } from "./valueparser.ts";
@@ -58,6 +58,50 @@ const dotValues: ValueParser<"sync", string> = {
   },
 };
 const fields = {
+  reverse: optional(
+    option("/reverse", "/reverse:file", {
+      ...string(),
+      *suggest(prefix) {
+        yield {
+          kind: "file" as const,
+          type: prefix.startsWith("file:")
+            ? "directory" as const
+            : "file" as const,
+          pattern: prefix,
+        };
+      },
+    }),
+  ),
+  repeatMixed: optional(multiple(option("--repeat-mixed", mixedValues))),
+  multiFiles: optional(option("--multi-files", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        extensions: [".toml"],
+      };
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        extensions: [".log"],
+      };
+    },
+  })),
+  overlap: optional(
+    option("/overlap:file", "/overlap", {
+      ...string(),
+      *suggest(prefix) {
+        yield {
+          kind: "file" as const,
+          type: prefix.startsWith("file:")
+            ? "directory" as const
+            : "file" as const,
+          pattern: prefix,
+        };
+      },
+    }),
+  ),
   redirect: optional(
     option("--redirect", choice(["dev>output", "dev<output"])),
   ),
@@ -160,19 +204,7 @@ function tab(
     writeFileSync(join(dir, "=leading.toml"), "");
     mkdirSync(join(dir, "dir=x"));
     writeFileSync(join(dir, "dir=x", ".hidden.toml"), "");
-    const current = args.at(-1) ?? "";
-    const delimiter = current.startsWith("/") ? ":" : "=";
-    const boundary = current.startsWith("/")
-      ? current.indexOf(":", current.startsWith("/scope:") ? 7 : 0)
-      : current.indexOf("=");
-    const retry = /^[-/]/.test(current) && boundary >= 0
-      ? [
-        ...args.slice(0, -1),
-        current.slice(0, boundary),
-        current.slice(boundary + delimiter.length),
-      ]
-      : undefined;
-    const requests = retry === undefined ? [args] : [args, retry];
+    const requests = [args];
     const branches = requests.map((request) => {
       const [first, ...rest] = request;
       assert.ok(first !== undefined);
@@ -236,6 +268,68 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  it("retains the originating slash option's file metadata", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp /overlap:file:name=f", ["/overlap:file:name=f"]);
+    assert.ok(result.replies.includes("foo.toml"));
+    assert.equal(result.line, "eqapp /overlap:file:name=foo.toml ");
+  });
+  it("preserves slash option order when the shorter name comes first", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp /reverse:file:name=f",
+      ["/reverse:file:name=f"],
+      "mkdir file:name=folder",
+    );
+    assert.deepEqual(result.calls, [["/reverse:file:name=f"]]);
+    assert.deepEqual(result.replies, ["folder/"]);
+    assert.equal(result.line, "eqapp /reverse:file:name=folder/ ");
+  });
+  it("retains native file metadata through repeated-value deduplication", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp --repeat-mixed=./name=f", [
+      "--repeat-mixed=./name=f",
+    ]);
+    assert.deepEqual(result.replies, ["f", "foo.toml"]);
+  });
+  it("retains distinct metadata for identical joined file fallbacks", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --multi-files=./name",
+      ["--multi-files=./name"],
+      "touch name.log",
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "./name with spaces.toml",
+      "./name.log",
+      "./name=foo.toml",
+    ]);
+  });
+  for (const name of ["--scope':'file", String.raw`--scope\:file`]) {
+    it(
+      `uses raw delimiter offsets after ${name}`,
+      { skip: !ptyAvailable },
+      () => {
+        if (!ptyAvailable) return;
+        const result = tab(
+          `eqapp ${name}=~/name=f`,
+          ["--scope:file=~/name=f"],
+          'export HOME="$PWD"',
+        );
+        assert.ok(result.replies.includes("foo.toml"));
+        assert.equal(result.line, `eqapp ${name}=~/name=foo.toml `);
+      },
+    );
+  }
+
   for (const operator of [">", "<", ">>", "2>"]) {
     it(
       `stops joined reconstruction at ${operator}`,
@@ -288,10 +382,7 @@ describe("joined Bash option completion", () => {
         ["/config:./dir:name=f"],
         "touch dir:name=foo.toml",
       );
-      assert.deepEqual(result.calls, [["/config:./dir:name=f"], [
-        "/config",
-        "./dir:name=f",
-      ]]);
+      assert.deepEqual(result.calls, [["/config:./dir:name=f"]]);
       assert.equal(result.line, "eqapp /config:./dir:name=foo.toml ");
     },
   );
@@ -305,7 +396,7 @@ describe("joined Bash option completion", () => {
       ["--dot="],
       "rm -- dir=x/.hidden.toml; rmdir dir=x; touch .env.unmatched",
     );
-    assert.deepEqual(result.calls, [["--dot="], ["--dot", ""]]);
+    assert.deepEqual(result.calls, [["--dot="]]);
     assert.deepEqual(result.replies, [".env"]);
     assert.equal(result.line, "eqapp --dot=.env ");
   });
@@ -344,10 +435,7 @@ describe("joined Bash option completion", () => {
         if (!ptyAvailable) return;
         const current = `${prefix}config:./name=f`;
         const result = tab(`eqapp ${current}`, [current]);
-        assert.deepEqual(result.calls, [[current], [
-          `${prefix}config`,
-          "./name=f",
-        ]]);
+        assert.deepEqual(result.calls, [[current]]);
         assert.deepEqual(result.replies, ["foo.toml"]);
         assert.equal(result.line, `eqapp ${prefix}config:./name=foo.toml `);
       },
@@ -362,10 +450,7 @@ describe("joined Bash option completion", () => {
         [current],
         'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"; export HOME="$PWD"',
       );
-      assert.deepEqual(result.calls, [[current], ["/scope", "file:~/name=f"], [
-        `${prefix}scope:file`,
-        "~/name=f",
-      ]]);
+      assert.deepEqual(result.calls, [[current]]);
       assert.equal(result.line, `eqapp ${prefix}scope:file:~/name\\=foo.toml `);
     });
   }
@@ -384,7 +469,7 @@ describe("joined Bash option completion", () => {
   }, () => {
     if (!ptyAvailable) return;
     const result = tab("eqapp --mixed=known", ["--mixed=known"]);
-    assert.deepEqual(result.calls, [["--mixed=known"], ["--mixed", "known"]]);
+    assert.deepEqual(result.calls, [["--mixed=known"]]);
     assert.deepEqual(result.replies, ["known"]);
     assert.equal(result.line, "eqapp --mixed=known ");
   });
@@ -397,10 +482,7 @@ describe("joined Bash option completion", () => {
       const result = tab("eqapp --scope:file=~/name=f", [
         "--scope:file=~/name=f",
       ], `${setup}\nexport HOME="$PWD"`);
-      assert.deepEqual(result.calls, [["--scope:file=~/name=f"], [
-        "--scope:file",
-        "~/name=f",
-      ]]);
+      assert.deepEqual(result.calls, [["--scope:file=~/name=f"]]);
       assert.equal(result.line, "eqapp --scope:file=~/name=foo.toml ");
     });
   }
@@ -435,10 +517,7 @@ describe("joined Bash option completion", () => {
       false,
       true,
     );
-    assert.deepEqual(result.calls, [["--config=~/name=f"], [
-      "--config",
-      "~/name=f",
-    ]]);
+    assert.deepEqual(result.calls, [["--config=~/name=f"]]);
     assert.equal(result.line, "eqapp --config=~/name=foo.toml ");
   });
   for (const omitPattern of [false, true]) {
@@ -453,10 +532,7 @@ describe("joined Bash option completion", () => {
         false,
         omitPattern,
       );
-      assert.deepEqual(result.calls, [["--config=~/name=f"], [
-        "--config",
-        "~/name=f",
-      ]]);
+      assert.deepEqual(result.calls, [["--config=~/name=f"]]);
       assert.equal(result.line, 'eqapp --config="./~/name=foo.toml" ');
     });
   }
@@ -485,10 +561,7 @@ describe("joined Bash option completion", () => {
         ["--config=./name=f"],
         'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
       );
-      assert.deepEqual(result.calls, [["--config=./name=f"], [
-        "--config",
-        "./name=f",
-      ]]);
+      assert.deepEqual(result.calls, [["--config=./name=f"]]);
       assert.equal(result.line, c.line);
     });
   }
@@ -570,17 +643,14 @@ describe("joined Bash option completion", () => {
     assert.equal(result.line, "eqapp --mode=devx");
   });
 
-  it("preserves prefix-dependent file metadata through the retry", {
+  it("preserves prefix-dependent file metadata", {
     skip: !ptyAvailable,
   }, () => {
     if (!ptyAvailable) return;
     const result = tab("eqapp --sensitive-config=name=fo", [
       "--sensitive-config=name=fo",
     ]);
-    assert.deepEqual(result.calls, [["--sensitive-config=name=fo"], [
-      "--sensitive-config",
-      "name=fo",
-    ]]);
+    assert.deepEqual(result.calls, [["--sensitive-config=name=fo"]]);
     assert.deepEqual(result.replies, ["foo.toml"]);
     assert.equal(result.line, "eqapp --sensitive-config=name=foo.toml ");
   });
@@ -655,7 +725,7 @@ describe("joined Bash option completion", () => {
       false,
       true,
     );
-    assert.deepEqual(result.calls, [["--config=./na"], ["--config", "./na"]]);
+    assert.deepEqual(result.calls, [["--config=./na"]]);
     assert.deepEqual([...result.replies].sort(), [
       "./name with spaces.toml",
       "./name=foo.toml",
@@ -671,10 +741,7 @@ describe("joined Bash option completion", () => {
       "--",
       "--config=./name=f",
     ]);
-    assert.deepEqual(result.calls, [
-      ["--label", "--", "--config=./name=f"],
-      ["--label", "--", "--config", "./name=f"],
-    ]);
+    assert.deepEqual(result.calls, [["--label", "--", "--config=./name=f"]]);
     assert.deepEqual(result.replies, ["foo.toml"]);
     assert.equal(result.line, "eqapp --label -- --config=./name=foo.toml ");
   });
@@ -864,10 +931,7 @@ describe("joined Bash option completion", () => {
     () => {
       if (!ptyAvailable) return;
       const result = tab("eqapp --config=./name", ["--config=./name"]);
-      assert.deepEqual(result.calls, [["--config=./name"], [
-        "--config",
-        "./name",
-      ]]);
+      assert.deepEqual(result.calls, [["--config=./name"]]);
       assert.deepEqual([...result.replies].sort(), [
         "./name with spaces.toml",
         "./name=foo.toml",
@@ -884,16 +948,16 @@ describe("joined Bash option completion", () => {
     assert.deepEqual(result.replies, ["remote", "relay"]);
     assert.equal(result.line, "eqapp --region=re");
   });
-  it("keeps completed literals when the retry has no file directive", {
+  it("keeps completed literals without probing them as files", {
     skip: !ptyAvailable,
   }, () => {
     if (!ptyAvailable) return;
     const result = tab("eqapp --mode=dev", ["--mode=dev"]);
-    assert.deepEqual(result.calls, [["--mode=dev"], ["--mode", "dev"]]);
+    assert.deepEqual(result.calls, [["--mode=dev"]]);
     assert.deepEqual(result.replies, ["dev"]);
     assert.equal(result.line, "eqapp --mode=dev ");
   });
-  it("does not retry a joined flag", { skip: !ptyAvailable }, () => {
+  it("does not treat a joined flag as a file", { skip: !ptyAvailable }, () => {
     if (!ptyAvailable) return;
     const result = tab("eqapp --verbose=", ["--verbose="]);
     assert.deepEqual(result.calls, [["--verbose="]]);

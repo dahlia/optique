@@ -1,3 +1,4 @@
+import { joinedFileSuggestion } from "./internal/joined-file-suggestion.ts";
 import {
   getCommandDocMetadata,
   withCommandDocMetadata,
@@ -548,11 +549,7 @@ function* suggestOptionSync<T>(
             };
           } else {
             // File suggestions use a literal prefix fallback.
-            yield {
-              kind: "literal",
-              text: `${joinedPrefix}${suggestion.pattern ?? ""}`,
-              description: suggestion.description,
-            };
+            yield joinedFileSuggestion(joinedPrefix, suggestion, valuePart);
           }
         }
       }
@@ -733,11 +730,7 @@ async function* suggestOptionAsync<T>(
             };
           } else {
             // File suggestions use a literal prefix fallback
-            yield {
-              kind: "literal",
-              text: `${joinedPrefix}${suggestion.pattern ?? ""}`,
-              description: suggestion.description,
-            };
+            yield joinedFileSuggestion(joinedPrefix, suggestion, valuePart);
           }
         }
       }

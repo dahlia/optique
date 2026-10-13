@@ -15,8 +15,10 @@ To be released.
     settings, including `:`/`@` in values or option names. Completion respects
     the cursor position, stops at unquoted shell operators, and decodes
     quoted or escaped values without executing shell substitutions. File values
-    preserve their full prefix, filtering metadata, unquoted tilde expansion
-    after split option names, and quoted path prefixes.  Exact literal
+    preserve their full
+    prefix and filtering metadata when option names overlap, unquoted tilde
+    expansion after quoted or split option names, and quoted path prefixes.
+    Exact literal
     candidates, including dot-prefixed values, remain available alongside file
     suggestions when hidden files are excluded. [[#1031], [#1033]]
 
