@@ -7,8 +7,8 @@ links:
     options or `:` for `/` options and default or customized word-break
     settings, including `:`/`@` in values or option names. Completion respects
     the cursor position, stops at unquoted shell operators, and decodes
-    quoted or escaped values without executing shell substitutions. File values
-    preserve their full
+    quoted or escaped values, including incomplete ANSI-C control escapes,
+    without executing shell substitutions. File values preserve their full
     prefix and filtering metadata when option names overlap, unquoted tilde
     expansion after quoted or split option names, and quoted path prefixes.
     Exact literal

@@ -159,7 +159,7 @@ function _${programName} () {
   if [[ \${COMP_LINE+x} ]]; then
     local -a __words=()
     local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
-    local __shell_quote="" __shell_escape=0 __boundary=0 __previous_boundary=0 __scan __symbol
+    local __shell_quote="" __shell_escape=0 __boundary=0 __previous_boundary=0 __scan __symbol __shell_dollar=0
     # Reconstruct the prefix at the cursor, leaving any suffix to Readline.
     if [[ \${COMP_POINT+x} ]]; then
       __rest="\${COMP_LINE:0:COMP_POINT}"
@@ -185,6 +185,9 @@ function _${programName} () {
         __symbol="\${__word:__scan:1}"
         if (( __shell_escape )); then
           __shell_escape=0
+        elif [[ "$__shell_quote" == ansi ]]; then
+          if [[ "$__symbol" == '\\' ]]; then __shell_escape=1
+          elif [[ "$__symbol" == "'" ]]; then __shell_quote=""; fi
         elif [[ "$__shell_quote" == "'" ]]; then
           [[ "$__symbol" == "'" ]] && __shell_quote=""
         elif [[ "$__symbol" == '\\' ]]; then
@@ -193,10 +196,15 @@ function _${programName} () {
           [[ "$__symbol" == "$__shell_quote" ]] && __shell_quote=""
         else
           case "$__symbol" in
-            "'"|'"') __shell_quote="$__symbol" ;;
+            "'")
+              if (( __shell_dollar )); then __shell_quote=ansi
+              else __shell_quote="'"; fi ;;
+            '"') __shell_quote='"' ;;
+            '$') __shell_dollar=1 ;;
             '>'|'<'|'|'|'&'|';'|'('|')') __boundary=1 ;;
           esac
         fi
+        [[ "$__symbol" == '$' && -z "$__shell_quote" ]] || __shell_dollar=0
       done
       if (( __i > 1 && !__space && !__boundary && !__previous_boundary )) &&
           { [[ -n "$__word" && -z "\${__word//=/}" ]] ||
@@ -263,7 +271,7 @@ function _${programName} () {
                   __ansi+='\\0'"$__digits" ;;
                 c)
                   __next="\${__word:__k+1:1}"
-                  if [[ -n "$__next" ]]; then
+                  if [[ -n "$__next" && "$__next" != "'" ]]; then
                     ((++__k)); printf -v __code '%d' "'$__next"
                     if [[ "$__next" == '?' ]]; then __code=127
                     else __code=$((__code & 31)); fi

@@ -58,6 +58,8 @@ const dotValues: ValueParser<"sync", string> = {
   },
 };
 const fields = {
+  control: optional(option("--control", choice([String.raw`\c-tail`]))),
+  ansiRedirect: optional(option("--ansi-redirect", choice(["dev'>output"]))),
   reverse: optional(
     option("/reverse", "/reverse:file", {
       ...string(),
@@ -312,6 +314,26 @@ describe("joined Bash option completion", () => {
       "./name.log",
       "./name=foo.toml",
     ]);
+  });
+  it("preserves a closed incomplete ANSI-C control escape", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(String.raw`eqapp --control=$'\c'`, [
+      String.raw`--control=\c`,
+    ]);
+    assert.deepEqual(result.calls, [[String.raw`--control=\c`]]);
+    assert.ok(result.replies.some((reply) => reply.includes("-tail")));
+  });
+  it("honors escaped quotes before operators inside ANSI-C values", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(String.raw`eqapp --ansi-redirect=$'dev\'>ou`, [
+      "--ansi-redirect=dev'>ou",
+    ]);
+    assert.deepEqual(result.calls, [["--ansi-redirect=dev'>ou"]]);
+    assert.ok(result.replies.some((reply) => reply.endsWith("output")));
   });
   for (const name of ["--scope':'file", String.raw`--scope\:file`]) {
     it(
