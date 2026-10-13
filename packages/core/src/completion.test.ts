@@ -186,6 +186,9 @@ function testInteractiveZshCompletion(
   options: {
     readonly withInsecureFpath?: boolean;
     readonly setup?: string;
+    readonly payload?: string;
+    readonly input?: string;
+    readonly captureBuffer?: boolean;
   } = {},
 ): string {
   const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-integration-"));
@@ -197,10 +200,18 @@ function testInteractiveZshCompletion(
     mkdirSync(workDir);
 
     const cliPath = join(binDir, "extapp");
+    const payloadPath = join(binDir, ".suggestions");
+    if (options.payload != null) {
+      writeFileSync(payloadPath, options.payload);
+    }
     writeFileSync(
       cliPath,
-      `#!/bin/bash
+      options.payload == null
+        ? `#!/bin/bash
 printf '${directive}'
+`
+        : `#!/bin/bash
+cat ${JSON.stringify(payloadPath)}
 `,
       { mode: 0o755 },
     );
@@ -224,6 +235,8 @@ printf '${directive}'
     const startMarker = "\x1eOPTIQUE_ZSH_COMPLETION_START\x1e";
     const endMarker = "\x1eOPTIQUE_ZSH_COMPLETION_END\x1e";
     const initReadyMarker = "__OPTIQUE_ZSH_INIT_READY__";
+    const bufferStartMarker = "__OPTIQUE_ZSH_BUFFER_START__";
+    const bufferEndMarker = "__OPTIQUE_ZSH_BUFFER_END__";
     const initPath = join(binDir, ".session.init");
     const insecureFpathDir = join(tempDir, "insecure-fpath");
     if (options.withInsecureFpath === true) {
@@ -243,6 +256,17 @@ setopt auto_list list_ambiguous
 unsetopt list_beep
 LISTMAX=0
 ${options.setup ?? ""}
+${
+      options.captureBuffer === true
+        ? `function __optique_capture_buffer() {
+  print -r -- ${JSON.stringify(bufferStartMarker)}
+  print -r -- "$BUFFER"
+  print -r -- ${JSON.stringify(bufferEndMarker)}
+}
+zle -N __optique_capture_buffer
+bindkey '^X' __optique_capture_buffer`
+        : ""
+    }
 export PATH=${JSON.stringify(binDir)}:$PATH
 source ${JSON.stringify(scriptPath)}
 cd ${JSON.stringify(workDir)}
@@ -281,13 +305,20 @@ zpty child env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi
 zpty -w child ${JSON.stringify(`source ${JSON.stringify(initPath)}`)}
 sleep 0.5
 local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
-zpty -w -n child "extapp "
+zpty -w -n child ${JSON.stringify(options.input ?? "extapp ")}
 sleep 0.1
 zpty -w -n child $'\\t'
 sleep 0.1
+${
+      options.captureBuffer === true
+        ? `zpty -w -n child $'\\x18'
+__output+="$(__optique_drain_zpty ${JSON.stringify(bufferEndMarker)})"`
+        : `
 zpty -w -n child $'\\t'
 sleep 0.8
 __output+="$(__optique_drain_zpty "" 20)"
+`
+    }
 __output+=$'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
 print -rn -- "$__output"
 zpty -d child 2>/dev/null || true
@@ -309,9 +340,23 @@ zpty -d child 2>/dev/null || true
       }`,
     );
 
-    return normalizeTerminalOutput(
+    const output = normalizeTerminalOutput(
       rawOutput.slice(startIndex + startMarker.length, endIndex),
     );
+    if (options.captureBuffer === true) {
+      const bufferStart = output.indexOf(bufferStartMarker);
+      const bufferEnd = output.indexOf(
+        bufferEndMarker,
+        bufferStart + bufferStartMarker.length,
+      );
+      ok(
+        bufferStart >= 0 && bufferEnd >= 0,
+        `Missing ZLE buffer markers in output:\n${output}`,
+      );
+      return output.slice(bufferStart + bufferStartMarker.length, bufferEnd)
+        .replace(/^\n+/, "").replace(/\n+$/, "");
+    }
+    return output;
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2665,6 +2710,207 @@ _extapp 2>/dev/null
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
+    });
+
+    const literalCases: readonly {
+      readonly name: string;
+      readonly value: string;
+      readonly prefix: string;
+      readonly expected: string;
+      readonly description?: string;
+    }[] = [
+      {
+        name: "colon without description",
+        value: "foo:bar",
+        prefix: "f",
+        expected: "extapp foo:bar ",
+      },
+      {
+        name: "colon with description",
+        value: "foo:bar",
+        prefix: "f",
+        description: "1: real description",
+        expected: "extapp foo:bar ",
+      },
+      {
+        name: "backslash before colon",
+        value: "foo\\:bar",
+        prefix: "f",
+        expected: "extapp foo\\\\:bar ",
+      },
+      {
+        name: "trailing backslash with description",
+        value: "C:\\",
+        prefix: "C",
+        description: "drive",
+        expected: "extapp C:\\\\ ",
+      },
+      {
+        name: "URL with multiple colons and percent encoding",
+        value: "https://example.test:8443/a%20b",
+        prefix: "https://exa",
+        expected: "extapp https://example.test:8443/a%20b ",
+      },
+      {
+        name: "prefix past a colon",
+        value: "foo:bar",
+        prefix: "foo:b",
+        expected: "extapp foo:bar ",
+      },
+      {
+        name: "leading colon",
+        value: ":foo",
+        prefix: ":",
+        expected: "extapp :foo ",
+      },
+      {
+        name: "trailing colon",
+        value: "foo:",
+        prefix: "f",
+        expected: "extapp foo: ",
+      },
+      {
+        name: "adjacent colons",
+        value: "foo::bar",
+        prefix: "f",
+        expected: "extapp foo::bar ",
+      },
+      {
+        name: "reserved file marker with colons",
+        value: "__FILE__:directory:::0",
+        prefix: "__FI",
+        description: "literal file marker",
+        expected: "extapp __FILE__:directory:::0 ",
+      },
+      {
+        name: "backslash without colon",
+        value: "foo\\bar",
+        prefix: "f",
+        expected: "extapp foo\\\\bar ",
+      },
+      {
+        name: "single quote",
+        value: "foo'bar",
+        prefix: "f",
+        expected: "extapp foo\\'bar ",
+      },
+      {
+        name: "plain value control",
+        value: "plain",
+        prefix: "p",
+        expected: "extapp plain ",
+      },
+      {
+        name: "space value control",
+        value: "foo bar",
+        prefix: "f",
+        expected: "extapp foo\\ bar ",
+      },
+    ];
+
+    for (
+      const style of [
+        { name: "default", setup: "" },
+        {
+          name: "ungrouped",
+          setup: "zstyle ':completion:*' list-grouped no",
+        },
+        {
+          name: "nonverbose",
+          setup: "zstyle ':completion:*' verbose no",
+        },
+      ]
+    ) {
+      const cases = style.name === "default"
+        ? literalCases
+        : literalCases.slice(0, 4);
+      for (const scenario of cases) {
+        it(
+          `should insert literal ${scenario.name} in actual zsh (${style.name})`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          (t) => {
+            if (!isInteractiveZshCompletionAvailable()) {
+              t.skip("interactive zsh completion not available");
+              return;
+            }
+            const payload = Array.from(zsh.encodeSuggestions([{
+              kind: "literal",
+              text: scenario.value,
+              description: scenario.description == null
+                ? undefined
+                : [text(scenario.description)],
+            }])).map((record) => `${record}\n`).join("");
+            const buffer = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              "",
+              [],
+              {
+                payload,
+                input: `extapp ${scenario.prefix}`,
+                captureBuffer: true,
+                setup: `COLUMNS=120\n${style.setup}`,
+              },
+            );
+            deepStrictEqual(buffer, scenario.expected);
+          },
+        );
+      }
+
+      it(
+        `should list full colon values with descriptions in actual zsh (${style.name})`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: 10000,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const payload = Array.from(zsh.encodeSuggestions([
+            { kind: "literal", text: "foo:bar" },
+            {
+              kind: "literal",
+              text: "foo:baz",
+              description: message`real description`,
+            },
+            {
+              kind: "literal",
+              text: "foo:bat",
+              description: message`real description`,
+            },
+          ])).map((record) => `${record}\n`).join("");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [],
+            { payload, setup: `COLUMNS=120\n${style.setup}` },
+          );
+          ok(output.includes("foo:bar"), output);
+          ok(output.includes("foo:baz"), output);
+          ok(output.includes("foo:bat"), output);
+          ok(!output.includes("-- bar"), output);
+          if (style.name === "nonverbose") {
+            ok(!output.includes("real description"), output);
+          } else {
+            ok(output.includes("real description"), output);
+          }
+        },
+      );
+    }
+
+    it("should keep colons and backslashes unchanged in zsh transport", () => {
+      deepStrictEqual(
+        Array.from(zsh.encodeSuggestions([{
+          kind: "literal",
+          text: "foo\\:bar",
+          description: message`1: real description`,
+        }])),
+        ["foo\\:bar\0" + "1: real description\0"],
+      );
     });
 
     it("should complete single-extension file suggestions in actual zsh", {
@@ -7263,9 +7509,10 @@ do $env.config.completions.external.completer ['markercli' '${prefix}'] | get va
           }
           const actual = output.trimEnd().split(/\r?\n/).map((line) => {
             if (shell === zsh) {
-              return line.endsWith(":Literal description")
+              const value = line.endsWith(":Literal description")
                 ? line.slice(0, -":Literal description".length)
                 : line;
+              return value.replace(/\\([\\:])/g, "$1");
             }
             return line.split("\t")[0];
           });

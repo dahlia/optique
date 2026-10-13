@@ -73,6 +73,10 @@ To be released.
  -  Fixed PowerShell file completion to respect case in extension filters,
     matching the path parser's case sensitivity.  [[#1044], [#1067]]
 
+ -  Fixed Zsh completion to preserve literal values containing colons or
+    backslashes, including URL choices.  Regenerate and reload existing Zsh
+    completion scripts to apply the fix.  [[#1055], [#1058]]
+
  -  Fixed fish completion to decode quotes and backslash escapes in the word
     being completed, so `--format "tw` or `--file two\ w` now offers the same
     choices and file names as the unquoted word.  A quoted or escaped `~` now
@@ -112,7 +116,9 @@ To be released.
 [#1043]: https://github.com/dahlia/optique/issues/1043
 [#1044]: https://github.com/dahlia/optique/issues/1044
 [#1051]: https://github.com/dahlia/optique/issues/1051
+[#1055]: https://github.com/dahlia/optique/issues/1055
 [#1057]: https://github.com/dahlia/optique/pull/1057
+[#1058]: https://github.com/dahlia/optique/pull/1058
 [#1059]: https://github.com/dahlia/optique/pull/1059
 [#1060]: https://github.com/dahlia/optique/pull/1060
 [#1062]: https://github.com/dahlia/optique/pull/1062
