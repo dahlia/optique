@@ -61,6 +61,11 @@ To be released.
     the link's own name.  Broken links stay excluded when completion is
     limited to files or directories.  [[#1042], [#1063]]
 
+ -  Fixed Nushell file completion to treat square brackets in a typed path as
+    literal characters.  Completing `report[1]` now suggests *report\[1\].txt*
+    instead of matching *report1.txt* as if `[1]` were a glob character class.
+    [[#1040], [#1060]]
+
  -  Fixed PowerShell completion to ignore arguments after the cursor when
     completing an earlier argument, keeping later arguments intact.
     [[#1043], [#1069]]
@@ -101,6 +106,7 @@ To be released.
 [#1037]: https://github.com/dahlia/optique/issues/1037
 [#1038]: https://github.com/dahlia/optique/issues/1038
 [#1039]: https://github.com/dahlia/optique/issues/1039
+[#1040]: https://github.com/dahlia/optique/issues/1040
 [#1041]: https://github.com/dahlia/optique/issues/1041
 [#1042]: https://github.com/dahlia/optique/issues/1042
 [#1043]: https://github.com/dahlia/optique/issues/1043
@@ -108,6 +114,7 @@ To be released.
 [#1051]: https://github.com/dahlia/optique/issues/1051
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1059]: https://github.com/dahlia/optique/pull/1059
+[#1060]: https://github.com/dahlia/optique/pull/1060
 [#1062]: https://github.com/dahlia/optique/pull/1062
 [#1063]: https://github.com/dahlia/optique/pull/1063
 [#1064]: https://github.com/dahlia/optique/pull/1064
