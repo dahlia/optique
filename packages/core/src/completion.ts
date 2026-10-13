@@ -79,6 +79,21 @@ function sanitizeForTransport(text: string): string {
 }
 
 /**
+ * Escapes literal values that would otherwise be interpreted as transport
+ * directives.  Escape the escape prefix itself so decoding is unambiguous.
+ * @param text The literal suggestion text.
+ * @returns The sanitized and, if necessary, escaped literal text.
+ * @internal
+ */
+function encodeLiteral(text: string): string {
+  const sanitized = sanitizeForTransport(text);
+  return sanitized.startsWith("__FILE__:") ||
+      sanitized.startsWith("__LITERAL__:")
+    ? `__LITERAL__:${sanitized}`
+    : sanitized;
+}
+
+/**
  * A shell completion generator.
  * @since 0.6.0
  */
@@ -354,10 +369,11 @@ function _${programName} () {
     __reply_prefix=""
     __file_current="$current"
     __literal=0
-    if [[ "$line" == __LITERAL__:* ]]; then
+    # Protocol tags are case-sensitive even when nocasematch is enabled.
+    if [ "\${line:0:12}" = '__LITERAL__:' ]; then
       line="\${line#__LITERAL__:}"
       __literal=1
-    elif [[ "$line" == __JOINED_FILE__:* ]]; then
+    elif [ "\${line:0:16}" = '__JOINED_FILE__:' ]; then
       line="\${line#__JOINED_FILE__:}"
       __reply_prefix="\${line%%:*}"
       __reply_prefix="\${__reply_prefix//%3A/:}"
@@ -378,7 +394,7 @@ function _${programName} () {
         __file_quote_offset=$((__file_quote_offset - \${#__reply_prefix}))
       fi
     fi
-    if [[ $__literal == 0 && "$line" == __FILE__:* ]]; then
+    if [ "$__literal" = 0 ] && [ "\${line:0:9}" = '__FILE__:' ]; then
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       IFS=':' read -r _ type extensions pattern hidden <<< "$line"
       extensions="\${extensions//,\\./,}"; extensions="\${extensions#.}"
@@ -752,7 +768,12 @@ function _${programName.replace(/[^a-zA-Z0-9]/g, "_")} () {
       desc=\${line#*\$'\\0'}
       desc=\${desc%%\$'\\0'*}
 
-      if [[ "\$value" == __FILE__:* ]]; then
+      local __literal=0
+      if [[ "\$value" == __LITERAL__:* ]]; then
+        value="\${value#__LITERAL__:}"
+        __literal=1
+      fi
+      if [[ \$__literal == 0 && "\$value" == __FILE__:* ]]; then
         # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
         local type extensions pattern hidden
         IFS=':' read -r _ type extensions pattern hidden <<< "\$value"
@@ -873,7 +894,7 @@ fi
           : sanitizeForTransport(
             formatMessage(suggestion.description, { colors: false }),
           );
-        yield `${sanitizeForTransport(suggestion.text)}\0${description}\0`;
+        yield `${encodeLiteral(suggestion.text)}\0${description}\0`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
@@ -946,7 +967,12 @@ ${
     }
     # Process each line of output
     for line in $output
-        if string match -q '__FILE__:*' -- $line
+        set -l literal 0
+        if string match -q '__LITERAL__:*' -- $line
+            set line (string sub -s 13 -- $line)
+            set literal 1
+        end
+        if test $literal -eq 0; and string match -q '__FILE__:*' -- $line
             # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
             set -l directive (string split \\t -- $line)[1]
             set -l parts (string split ':' -- $directive)
@@ -1242,7 +1268,7 @@ complete -c ${programName} -f -a '(${functionName})'
             formatMessage(suggestion.description, { colors: false }),
           );
         // Format: value\tdescription
-        yield `${sanitizeForTransport(suggestion.text)}\t${description}`;
+        yield `${encodeLiteral(suggestion.text)}\t${description}`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
@@ -1493,8 +1519,10 @@ ${
   }
 
   # Process each line of output
-  $output | lines | each {|line|
-    if ($line | str starts-with '__FILE__:') {
+  $output | lines | each {|raw_line|
+    let literal = ($raw_line | str starts-with '__LITERAL__:')
+    let line = if $literal { $raw_line | str substring 12.. } else { $raw_line }
+    if (not $literal) and ($line | str starts-with '__FILE__:') {
       # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
       let directive = ($line | split row "\t" | first)
       let parts = ($directive | split row ':')
@@ -1767,7 +1795,7 @@ ${functionName}-external
             formatMessage(suggestion.description, { colors: false }),
           );
         // Format: value\tdescription
-        yield `${sanitizeForTransport(suggestion.text)}\t${description}`;
+        yield `${encodeLiteral(suggestion.text)}\t${description}`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
@@ -1833,10 +1861,12 @@ ${
 
         # Parse tab-separated output and create CompletionResult objects
         \$output -split "\`n" | ForEach-Object {
+            \$literal = \$_.StartsWith('__LITERAL__:', [System.StringComparison]::Ordinal)
             \$line = \$_.Trim()
             if (-not \$line) { return }
+            if (\$literal) { \$line = \$line.Substring(12) }
 
-            if (\$line -match '^__FILE__:') {
+            if (-not \$literal -and \$_.StartsWith('__FILE__:', [System.StringComparison]::Ordinal)) {
                 # Parse file completion directive: __FILE__:type:extensions:pattern:hidden
                 \$directive = (\$line -split "\`t")[0]
                 \$parts = \$directive -split ':', 5
@@ -1983,7 +2013,7 @@ ${
           );
         // Format: text\tlistItemText\tdescription
         const text = sanitizeForTransport(suggestion.text);
-        yield `${text}\t${text}\t${description}`;
+        yield `${encodeLiteral(suggestion.text)}\t${text}\t${description}`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);

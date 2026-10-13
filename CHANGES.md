@@ -84,6 +84,14 @@ To be released.
     candidates.  Completing dash-prefixed paths no longer prints `basename`
     errors to the terminal either.  [[#1036], [#1059]]
 
+ -  Fixed shell completion values starting with `__FILE__:` being interpreted
+    as file completion requests instead of literal suggestions.
+    [[#1051], [#1066]]
+
+    Regenerate saved completion scripts after upgrading.  Custom completion
+    producers/adapters must encode/decode the `__LITERAL__:` escape for values
+    starting with `__FILE__:` or `__LITERAL__:`.
+
 [#1030]: https://github.com/dahlia/optique/issues/1030
 [#1031]: https://github.com/dahlia/optique/issues/1031
 [#1033]: https://github.com/dahlia/optique/pull/1033
@@ -97,12 +105,14 @@ To be released.
 [#1042]: https://github.com/dahlia/optique/issues/1042
 [#1043]: https://github.com/dahlia/optique/issues/1043
 [#1044]: https://github.com/dahlia/optique/issues/1044
+[#1051]: https://github.com/dahlia/optique/issues/1051
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1059]: https://github.com/dahlia/optique/pull/1059
 [#1062]: https://github.com/dahlia/optique/pull/1062
 [#1063]: https://github.com/dahlia/optique/pull/1063
 [#1064]: https://github.com/dahlia/optique/pull/1064
 [#1065]: https://github.com/dahlia/optique/pull/1065
+[#1066]: https://github.com/dahlia/optique/pull/1066
 [#1067]: https://github.com/dahlia/optique/pull/1067
 [#1069]: https://github.com/dahlia/optique/pull/1069
 [#1076]: https://github.com/dahlia/optique/pull/1076
