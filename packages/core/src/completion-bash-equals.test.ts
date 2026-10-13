@@ -102,7 +102,7 @@ def until(pattern):
     raise RuntimeError('Bash PTY did not reach expected marker: ' + repr(output))
 try:
     until(rb'__READY__> ')
-    os.write(fd, sys.argv[2].encode() + b'\t\x18\x12')
+    os.write(fd, sys.argv[2].encode() + b'\x1b[D' * int(sys.argv[3]) + b'\t\x18\x12')
     match = until(rb'__LINE__(.*?)\r?\n')
     print(json.dumps(match.group(1).decode()))
 finally:
@@ -116,6 +116,7 @@ function tab(
   setup = "",
   positional = false,
   omitPattern = false,
+  cursorLeft = 0,
 ): {
   readonly line: string;
   readonly replies: readonly string[];
@@ -181,7 +182,7 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
     const line: unknown = JSON.parse(
       execFileSync(
         "python3",
-        ["-c", ptyDriver, join(dir, "init.bash"), input],
+        ["-c", ptyDriver, join(dir, "init.bash"), input, String(cursorLeft)],
         { cwd: dir, encoding: "utf8", timeout: 15000 },
       ),
     );
@@ -200,6 +201,83 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (
+    const input of [
+      "eqapp --mode=$'de'",
+      String.raw`eqapp --mode=$'d\145'`,
+      "eqapp --mode=$'de",
+    ]
+  ) {
+    it(`decodes ANSI-C quoting in ${input}`, { skip: !ptyAvailable }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(input, ["--mode=de"]);
+      assert.deepEqual(result.calls, [["--mode=de"]]);
+      assert.deepEqual(result.replies, ["dev"]);
+      assert.equal(
+        result.line,
+        input.endsWith("'") ? "eqapp --mode=dev " : "eqapp --mode=$'dev' ",
+      );
+    });
+  }
+  for (
+    const c of [
+      {
+        input: String.raw`eqapp --url=$'https://\x65xa'`,
+        current: "--url=https://exa",
+      },
+      { input: String.raw`eqapp --url=$'a\cAb'`, current: "--url=a\x01b" },
+      { input: String.raw`eqapp --url=$'a\q'`, current: String.raw`--url=a\q` },
+      { input: String.raw`eqapp --url=$'a\0b'c`, current: "--url=ac" },
+      { input: String.raw`eqapp --url=$'a\'b'`, current: "--url=a'b" },
+      {
+        input: "eqapp --url=$'$(touch marker)'",
+        current: "--url=$(touch marker)",
+      },
+    ]
+  ) {
+    it(`decodes ANSI-C escapes without evaluation in ${c.input}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      assert.deepEqual(tab(c.input, [c.current]).calls[0], [c.current]);
+    });
+  }
+  it("uses COMP_POINT after a non-ASCII argument", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const args = ["--label=한글", "--mode=d"];
+    const result = tab(
+      "eqapp --label=한글 --mode=dx",
+      args,
+      "",
+      false,
+      false,
+      1,
+    );
+    assert.deepEqual(result.calls, [args]);
+    assert.deepEqual(result.replies, ["dev"]);
+    assert.equal(result.line, "eqapp --label=한글 --mode=devx");
+  });
+  it("completes at the cursor before a joined value suffix", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp --mode=dev", ["--mode="], "", false, false, 3);
+    assert.deepEqual(result.calls, [["--mode="]]);
+    assert.deepEqual(result.replies, ["dev", "prod"]);
+    assert.equal(result.line, "eqapp --mode=dev");
+  });
+  it("uses the current joined prefix before the cursor", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab("eqapp --mode=dx", ["--mode=d"], "", false, false, 1);
+    assert.deepEqual(result.calls, [["--mode=d"]]);
+    assert.deepEqual(result.replies, ["dev"]);
+    assert.equal(result.line, "eqapp --mode=devx");
+  });
+
   it("preserves prefix-dependent file metadata through the retry", {
     skip: !ptyAvailable,
   }, () => {

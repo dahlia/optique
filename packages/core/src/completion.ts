@@ -152,10 +152,14 @@ function _${programName} () {
   # Bash splits unquoted '=' at its default word breaks. Reassemble only
   # adjacent fragments, including further word breaks inside a joined value,
   # leaving whitespace-separated arguments intact.
-  local __raw_current="$current" __remove="" __word
+  local __plain_current="$current" __remove="" __word __joined=0
   if [[ \${COMP_LINE+x} ]]; then
     local -a __words=()
     local __rest="$COMP_LINE" __previous="" __space __valid=1 __i __j=0
+    # Reconstruct the prefix at the cursor, leaving any suffix to Readline.
+    if [[ \${COMP_POINT+x} ]]; then
+      __rest="\${COMP_LINE:0:COMP_POINT}"
+    fi
     for ((__i=0; __i<=COMP_CWORD; __i++)); do
       __word="\${COMP_WORDS[__i]}"
       __space=0
@@ -163,6 +167,9 @@ function _${programName} () {
         __space=1
         __rest="\${__rest:1}"
       done
+      if (( __i == COMP_CWORD && \${#__rest} < \${#__word} )); then
+        __word="\${__word:0:\${#__rest}}"
+      fi
       if [[ "\${__rest:0:\${#__word}}" != "$__word" ]]; then
         __valid=0
         break
@@ -196,25 +203,55 @@ function _${programName} () {
       # state across the reassembled fragments and decode the preserved prefix
       # separately so trimming uses the same representation as suggestions.
       __words[__j]="$__remove"
-      local __decoded __quote __char __next __k
+      local __decoded __join_quote __char __next __k __ansi __part __digits __code
       for ((__i=1; __i<=__j; __i++)); do
         __word="\${__words[__i]}"
         [[ "$__word" == -*=* ]] || continue
-        __decoded=""; __quote=""
+        __decoded=""; __join_quote=""
         for ((__k=0; __k<\${#__word}; __k++)); do
           __char="\${__word:__k:1}"
-          if [[ -z "$__quote" ]]; then
+          if [[ -z "$__join_quote" ]]; then
             case "$__char" in
               '\\') ((++__k)); __decoded+="\${__word:__k:1}" ;;
-              "'"|'"') __quote="$__char" ;;
+              '$')
+                if [[ "\${__word:__k+1:1}" == "'" ]]; then
+                  __join_quote=ansi; __ansi=""; ((++__k))
+                else __decoded+="$__char"; fi ;;
+              "'"|'"') __join_quote="$__char" ;;
               *) __decoded+="$__char" ;;
             esac
-          elif [[ "$__quote" == "'" ]]; then
-            if [[ "$__char" == "'" ]]; then __quote=""
+          elif [[ "$__join_quote" == ansi ]]; then
+            if [[ "$__char" == "'" ]]; then
+              printf -v __part '%b' "$__ansi"
+              __decoded+="$__part"; __join_quote=""
+            elif [[ "$__char" == '\\' ]]; then
+              ((++__k)); __next="\${__word:__k:1}"
+              case "$__next" in
+                [0-7])
+                  __digits="$__next"
+                  while (( \${#__digits} < 3 )) && [[ "\${__word:__k+1:1}" == [0-7] ]]; do
+                    ((++__k)); __digits+="\${__word:__k:1}"
+                  done
+                  __ansi+='\\0'"$__digits" ;;
+                c)
+                  __next="\${__word:__k+1:1}"
+                  if [[ -n "$__next" ]]; then
+                    ((++__k)); printf -v __code '%d' "'$__next"
+                    if [[ "$__next" == '?' ]]; then __code=127
+                    else __code=$((__code & 31)); fi
+                    printf -v __part '\\\\%03o' "$__code"
+                    __ansi+="$__part"
+                  else __ansi+='\\\\c'; fi ;;
+                "'"|'"'|'?') __ansi+="$__next" ;;
+                *) __ansi+='\\'"$__next" ;;
+              esac
+            else __ansi+="$__char"; fi
+          elif [[ "$__join_quote" == "'" ]]; then
+            if [[ "$__char" == "'" ]]; then __join_quote=""
             else __decoded+="$__char"; fi
           else
             case "$__char" in
-              '"') __quote="" ;;
+              '"') __join_quote="" ;;
               '\\')
                 __next="\${__word:__k+1:1}"
                 case "$__next" in
@@ -225,9 +262,19 @@ function _${programName} () {
             esac
           fi
         done
+        if [[ "$__join_quote" == ansi ]]; then
+          printf -v __part '%b' "$__ansi"
+          __decoded+="$__part"
+        fi
         __words[__i]="$__decoded"
       done
-      current="\${__words[__j-1]}"
+      if [[ "\${__words[__j-1]}" == -*=* || "\${__words[__j-1]}" != "$__raw_current" ]]; then
+        current="\${__words[__j-1]}"
+        __joined=1
+      else
+        current="$__plain_current"
+        __words[__j]=""
+      fi
       prev=("\${__words[@]:1:__j-2}")
       __remove="\${__words[__j]}"
     fi
@@ -237,13 +284,15 @@ function _${programName} () {
   # file suggestions as an echo of the prefix (or just option= when no
   # pattern is provided); probe those cases for native
   # file directives without changing the protocol used by other shells.
+  local __protocol_current="$__raw_current"
+  (( __joined )) && __protocol_current="$current"
   local -a __lines=() __value_files=() __replies=()
   local __echo=0 __value="" __option_prefix="" line
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" ]] && continue
     __lines+=("$line")
     [[ "$line" == "$current" || "$line" == "\${current%%=*}=" ]] && __echo=1
-  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$current" 2>/dev/null)
+  done < <(${programName} ${escapedArgs} "\${prev[@]}" "$__protocol_current" 2>/dev/null)
   if (( __echo )) && [[ "$current" == -*=* ]]; then
     __option_prefix="\${current%%=*}="
     __value="\${current#*=}"
@@ -483,7 +532,7 @@ function _${programName} () {
       # Readline replaces only the text after an open quote.  Remove the
       # already typed prefix so it is not inserted a second time.
       if [[ -n "$__quote" && $__quote_offset -gt 0 ]]; then
-        local __quote_prefix="\${current:0:__quote_offset}"
+        local __quote_prefix="\${__file_current:0:__quote_offset}"
         local __reply_index
         for ((__reply_index=__reply_start; __reply_index<\${#COMPREPLY[@]}; __reply_index++)); do
           COMPREPLY[__reply_index]="\${COMPREPLY[__reply_index]#"$__quote_prefix"}"
@@ -542,6 +591,14 @@ function _${programName} () {
           __filter_index=$((__filter_index + 1))
         done
         COMPREPLY=("\${filtered[@]}")
+        # A later directive's hidden-file filter also applies to earlier replies.
+        filtered=()
+        for item in "\${__replies[@]}"; do
+          __name="\${item#"$__option_prefix"}"
+          __name="\${__name%/}"; __name="\${__name##*/}"
+          [[ "$__name" != .* ]] && filtered+=("$item")
+        done
+        __replies=("\${filtered[@]}")
         __reply_start=$__kept_before
       fi
       if [[ \${#COMPREPLY[@]} -gt $__reply_start ]]; then __file_mode=1; fi
