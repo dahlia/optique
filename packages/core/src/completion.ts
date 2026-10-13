@@ -511,12 +511,14 @@ function _${programName} () {
             *) __pathname_glob+="$__glob_char" ;;
           esac
         done
+        [[ "$type" == "directory" ]] && __pathname_glob="\${__pathname_glob%/}"
         local __glob_dir="\${__pathname_glob%/*}"
         [[ "$__glob_dir" == "$__pathname_glob" ]] && __glob_dir="."
+        [[ -z "$__glob_dir" ]] && __glob_dir="/"
         local __navigation_dir="" __basename_glob="\${__pathname_glob##*/}"
         # Once an offered directory is entered, keep the basename filter but
         # enumerate there. Only descendants of matching pattern bases qualify.
-        if [[ "$type" != "directory" && "$__pattern_prefix" == */* ]]; then
+        if [[ "$__pattern_prefix" == */* ]]; then
           local __typed_dir="\${__pattern_prefix%/*}" __base_dir __norm_base __norm_dir __base_prefix
           if [[ -d "$__typed_dir" ]]; then
             __norm_dir="\${__typed_dir#./}"; __norm_dir="\${__norm_dir%/}"
@@ -552,7 +554,7 @@ function _${programName} () {
         # the pattern's basename filter is respected.
         if [[ "$type" != "directory" ]]; then
           local __d
-          local __directory_pattern="$__glob_dir/*/"
+          local __directory_pattern="\${__glob_dir%/}/*/"
           while IFS= read -r -d '' __d; do
             [[ -d "$__d" ]] || continue
             __d="\${__d%/}"

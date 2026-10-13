@@ -39,7 +39,8 @@ To be released.
     use a different spelling. Fixed Bash patterns treat brackets, backslashes,
     and extended-glob operators literally alongside `*`/`?` wildcards.
     Navigating into suggested directories retains fixed basename filters for
-    subsequent completions.
+    subsequent completions, including directory-only patterns and patterns
+    rooted directly at `/`.
     [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell

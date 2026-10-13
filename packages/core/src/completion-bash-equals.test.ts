@@ -315,6 +315,7 @@ function tab(
   directoryLiteralCollision = false,
   commandBudget = 0,
   fixedGlobPattern?: string,
+  fixedGlobType: "file" | "directory" = "file",
 ): {
   readonly line: string;
   readonly replies: readonly string[];
@@ -352,7 +353,7 @@ function tab(
                   *suggest() {
                     yield {
                       kind: "file" as const,
-                      type: "file" as const,
+                      type: fixedGlobType,
                       pattern: fixedGlobPattern,
                     };
                   },
@@ -436,6 +437,73 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (const prefix of ["src/nested/", "src/nested/de"]) {
+    it(`navigates a fixed directory-only pattern at ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --directory=${prefix}`,
+        [`--directory=${prefix}`],
+        "mkdir src/nested/deeper; touch src/nested/file.toml",
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(result.replies, ["src/nested/deeper/"]);
+      assert.equal(result.line, "eqapp --directory=src/nested/deeper/");
+    });
+  }
+  it("navigates a fixed glob rooted directly at /", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const dir = mkdtempSync(join(tmpdir(), "optique-root-glob-"));
+    try {
+      writeFileSync(join(dir, "child.toml"), "");
+      writeFileSync(join(dir, "child.txt"), "");
+      const result = tab(
+        `eqapp --config=${dir}/ch`,
+        [`--config=${dir}/ch`],
+        "",
+        false,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        0,
+        "/*.toml",
+      );
+      assert.deepEqual(result.replies, [`${dir}/child.toml`]);
+      assert.equal(result.line, `eqapp --config=${dir}/child.toml `);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it("navigates a directory-only glob ending in a slash", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/nested/de",
+      ["--config=src/nested/de"],
+      "mkdir src/nested/deeper; touch src/nested/file.toml",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      0,
+      "src/*/",
+      "directory",
+    );
+    assert.deepEqual(result.replies, ["src/nested/deeper/"]);
+  });
   for (
     const prefix of [
       "src/nested/",
