@@ -29,6 +29,10 @@ To be released.
     the link's own name.  Broken links stay excluded when completion is
     limited to files or directories.  [[#1042], [#1063]]
 
+ -  Fixed PowerShell completion to ignore arguments after the cursor when
+    completing an earlier argument, keeping later arguments intact.
+    [[#1043], [#1069]]
+
  -  Fixed PowerShell file completion to respect case in extension filters,
     matching the path parser's case sensitivity.  [[#1044], [#1067]]
 
@@ -48,12 +52,14 @@ To be released.
 [#1036]: https://github.com/dahlia/optique/issues/1036
 [#1039]: https://github.com/dahlia/optique/issues/1039
 [#1042]: https://github.com/dahlia/optique/issues/1042
+[#1043]: https://github.com/dahlia/optique/issues/1043
 [#1044]: https://github.com/dahlia/optique/issues/1044
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1059]: https://github.com/dahlia/optique/pull/1059
 [#1063]: https://github.com/dahlia/optique/pull/1063
 [#1064]: https://github.com/dahlia/optique/pull/1064
 [#1067]: https://github.com/dahlia/optique/pull/1067
+[#1069]: https://github.com/dahlia/optique/pull/1069
 
 
 Version 1.0.14
