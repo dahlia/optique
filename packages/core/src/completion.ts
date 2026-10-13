@@ -973,15 +973,13 @@ ${
                 # Normalize leading ./ so that ./src/ma matches pattern src/
                 set -l __norm_current (string replace -r '^\\./' '' -- "$current")
                 set -l __norm_pattern (string replace -r '^\\./' '' -- "$pattern")
-                # For wildcard patterns, compare only the directory prefix
+                # For wildcard patterns, compare only the directory prefix.
+                # Use a regex: fish wildcards have no character classes.
+                # Only the basename can hold wildcards; a ? or * in a
+                # directory name such as What?/ is literal.
                 set -l __compare_pattern "$__norm_pattern"
-                if string match -q '*[*?]*' -- "$__compare_pattern"
-                    set __compare_pattern (string replace -r '[*?].*' '' -- "$__compare_pattern")
-                    if string match -q '*/*' -- "$__compare_pattern"
-                        set __compare_pattern (string replace -r '/[^/]*$' '/' -- "$__compare_pattern")
-                    else
-                        set __compare_pattern ""
-                    end
+                if string match -qr '[*?][^/]*$' -- "$__compare_pattern"
+                    set __compare_pattern (string replace -r '[^/]*$' '' -- "$__compare_pattern")
                 end
                 set -l __cp_len (string length -- "$__compare_pattern")
                 set -l __nc_len (string length -- "$__norm_current")
@@ -1016,54 +1014,82 @@ ${
             end
 
             # Pre-expand file candidates.  When the glob base came from
-            # the program's pattern and contains * or ?, use it as the
-            # complete glob expression.  Otherwise append * as a prefix.
+            # the program's pattern and its basename contains * or ?, use
+            # it as the complete glob expression.  Otherwise append * as a
+            # prefix, so a literal ? in a directory name such as What?/
+            # still lists that directory.  A pattern equal to the current
+            # word is the typed text echoed back (as path() does), so its
+            # ? and * are literal characters, not wildcards.
             # Note: [ is NOT treated as a glob because it commonly
             # appears in literal filenames like [draft] or foo[1].txt.
             set -l __has_glob 0
             if test $__from_pattern -eq 1
-                and string match -q '*[*?]*' -- "$glob_base"
+                and string match -qr '[*?][^/]*$' -- "$glob_base"
+                and test "$pattern" != "$current"
                 set __has_glob 1
             end
             set -l __candidates
             if test $__has_glob -eq 1
                 # Safe glob expansion without eval: split the pattern into
-                # directory and filter parts, list the directory, then use
-                # string match for wildcard filtering
-                set -l __glob_dir (string replace -r '/[^/]*$' '' -- "$glob_base")
-                set -l __glob_filter (string replace -r '.*/' '' -- "$glob_base")
-                if test -z "$__glob_dir"; or test "$__glob_dir" = "$glob_base"
-                    set __glob_dir "."
+                # a directory prefix and a basename filter, list the
+                # directory, then match basenames against a regex built
+                # from the filter.  The prefix keeps one empty element for
+                # bare patterns so that $__glob_prefix* still expands.
+                set -l __glob_prefix ""
+                if string match -q '*/*' -- "$glob_base"
+                    set __glob_prefix (string replace -r '[^/]*$' '' -- "$glob_base")
                 end
-                # Match files by the glob filter.  Fish's * does not match
-                # dotfiles, so also scan .* when the filter targets them.
-                for __item in $__glob_dir/*
-                    if test -e "$__item"
-                        set -l __bn (basename -- "$__item")
-                        if string match -q -- "$__glob_filter" "$__bn"
-                            set -a __candidates "$__item"
-                        end
+                set -l __glob_filter (string replace -r '.*/' '' -- "$glob_base")
+                # Translate the filter into an anchored regex: * and ? are
+                # wildcards and every other character is literal.  Fish's
+                # own wildcards cannot be used here because ? is literal
+                # when the qmark-noglob feature is enabled (fish 4 default).
+                set -l __glob_regex '^'
+                for __ch in (string split '' -- "$__glob_filter")
+                    if test "$__ch" = '*'
+                        set __glob_regex "$__glob_regex.*"
+                    else if test "$__ch" = '?'
+                        set __glob_regex "$__glob_regex."
+                    else
+                        set __glob_regex "$__glob_regex"(string escape --style=regex -- "$__ch")
                     end
                 end
-                if string match -q '.*' -- "$__glob_filter"
-                    for __item in $__glob_dir/.*
-                        if test -e "$__item"
-                            set -l __bn (basename -- "$__item")
-                            if test "$__bn" = "." -o "$__bn" = ".."
-                                continue
-                            end
-                            if string match -q -- "$__glob_filter" "$__bn"
-                                set -a __candidates "$__item"
-                            end
+                set __glob_regex "$__glob_regex"'$'
+                # Match files by the glob filter.  Fish's * does not match
+                # dotfiles, so also scan .* when the filter targets them or
+                # hidden files are requested.
+                set -l __entries $__glob_prefix*
+                if test "$hidden" = "1"; or string match -q '.*' -- "$__glob_filter"
+                    set -a __entries $__glob_prefix.*
+                end
+                for __item in $__entries
+                    if test -e "$__item"
+                        set -l __bn (string replace -r '.*/' '' -- "$__item")
+                        if contains -- "$__bn" . ..
+                            continue
+                        end
+                        if string match -qr -- "$__glob_regex" "$__bn"
+                            set -a __candidates "$__item"
                         end
                     end
                 end
                 # For file/any modes, also include directories for navigation.
                 # Skip for directory mode so the pattern filter is respected.
+                # Directories the filter already matched are not repeated.
                 if test "$type" != "directory"
-                    for __item in $__glob_dir/*/
+                    set -l __nav_dirs $__glob_prefix*/
+                    if test "$hidden" = "1"
+                        set -a __nav_dirs $__glob_prefix.*/
+                    end
+                    for __item in $__nav_dirs
+                        set __item (string replace -r '/$' '' -- "$__item")
+                        set -l __bn (string replace -r '.*/' '' -- "$__item")
+                        if contains -- "$__bn" . ..
+                            continue
+                        end
                         if test -d "$__item"
-                            set -a __candidates (string replace -r '/$' '' -- "$__item")
+                            and not string match -qr -- "$__glob_regex" "$__bn"
+                            set -a __candidates "$__item"
                         end
                     end
                 end

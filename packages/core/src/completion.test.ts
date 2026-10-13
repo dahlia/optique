@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import process from "node:process";
 import {
   bash,
@@ -4959,6 +4959,387 @@ ${functionName}
         fileCaseBlock.includes("test -d"),
         "fish file case should include directory check for navigation.",
       );
+    });
+
+    describe("wildcard file patterns", () => {
+      const fishUnavailable = !isShellAvailable("fish");
+
+      interface FishGlobFixture {
+        readonly root: string;
+        readonly fixture: string;
+      }
+
+      function createFixture(prefix: string): FishGlobFixture {
+        const root = mkdtempSync(join(tmpdir(), prefix));
+        const fixture = join(root, "fixture");
+        mkdirSync(join(root, "bin"));
+        mkdirSync(fixture);
+        return { root, fixture };
+      }
+
+      function touch(dir: string, ...names: readonly string[]): void {
+        for (const name of names) {
+          if (name.endsWith("/")) {
+            mkdirSync(join(dir, name), { recursive: true });
+          } else {
+            mkdirSync(dirname(join(dir, name)), { recursive: true });
+            writeFileSync(join(dir, name), "");
+          }
+        }
+      }
+
+      // Runs the generated fish completion function for a CLI stub that
+      // emits a single file directive.  The stub and scripts live outside
+      // the fixture directory so they never appear among the candidates.
+      function completeWithFish(
+        { root, fixture }: FishGlobFixture,
+        directive: string,
+        current = "",
+      ): readonly string[] {
+        const bin = join(root, "bin");
+        writeFileSync(
+          join(bin, "globapp"),
+          `#!/bin/sh\nprintf '%s\\t\\n' '${directive}'\n`,
+          { mode: 0o755 },
+        );
+        const scriptPath = join(bin, "completion.fish");
+        writeFileSync(scriptPath, fish.generateScript("globapp"));
+        const testScriptPath = join(bin, "test.fish");
+        writeFileSync(
+          testScriptPath,
+          `
+set -x PATH "${bin}" $PATH
+source "${scriptPath}"
+cd "${fixture}"
+
+function commandline
+    switch $argv[1]
+        case '-poc'
+            echo "globapp"
+        case '-ct'
+            echo '${current}'
+    end
+end
+
+__globapp_complete
+`,
+        );
+        const result = spawnSync("fish", ["--no-config", testScriptPath], {
+          cwd: fixture,
+          encoding: "utf8",
+        });
+        deepStrictEqual(result.stderr, "");
+        deepStrictEqual(result.status, 0);
+        return result.stdout.split("\n").filter((l) => l.length > 0).sort();
+      }
+
+      it("should match files against a basename wildcard", {
+        skip: fishUnavailable,
+      }, () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-star-");
+        try {
+          touch(
+            f.fixture,
+            "hello.txt",
+            "notes.txt",
+            "other.json",
+            ".secret.txt",
+            "src/",
+          );
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:0"), [
+            "hello.txt",
+            "notes.txt",
+            "src/",
+          ]);
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should match a single character for ? in a wildcard", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-qmark-");
+        try {
+          touch(
+            f.fixture,
+            "file1.txt",
+            "file12.txt",
+            "fileAB.txt",
+            "file?.txt.bak",
+            "dir/",
+          );
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::file?.txt:0"), [
+            "dir/",
+            "file1.txt",
+          ]);
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should keep the directory prefix of a wildcard pattern", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-dir-");
+        try {
+          touch(f.fixture, "top.txt", "src/a.txt", "src/b.json", "src/sub/");
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::src/*.txt:0"), [
+            "src/a.txt",
+            "src/sub/",
+          ]);
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::./src/*.txt:0"),
+            ["./src/a.txt", "./src/sub/"],
+          );
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should treat other characters in a wildcard literally", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-literal-");
+        try {
+          touch(
+            f.fixture,
+            "[draft] notes.txt",
+            "d notes.txt",
+            "a+(b)1.txt",
+            "aa(b)1.txt",
+            "a+b1.txt",
+            "back\\slash.txt",
+            "backxslash.txt",
+          );
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::[draft] *.txt:0"),
+            ["[draft] notes.txt"],
+          );
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::a+(b)*.txt:0"), [
+            "a+(b)1.txt",
+          ]);
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::back\\sl*.txt:0"),
+            ["back\\slash.txt"],
+          );
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should include hidden entries for a wildcard when requested", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-hidden-");
+        try {
+          touch(
+            f.fixture,
+            "hello.txt",
+            ".secret.txt",
+            ".env",
+            ".eslintrc",
+            ".cache/",
+            "src/",
+          );
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:1"), [
+            ".cache/",
+            ".secret.txt",
+            "hello.txt",
+            "src/",
+          ]);
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:0"), [
+            "hello.txt",
+            "src/",
+          ]);
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::.e*:0"), [
+            ".env",
+            ".eslintrc",
+            "src/",
+          ]);
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::.e?v:0"), [
+            ".env",
+            "src/",
+          ]);
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should apply extension filters and directory type to wildcards", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-filter-");
+        try {
+          touch(f.fixture, "a.json", "b.txt", "src/", "share/", "lib/");
+          deepStrictEqual(completeWithFish(f, "__FILE__:file:json:*:0"), [
+            "a.json",
+            "lib/",
+            "share/",
+            "src/",
+          ]);
+          deepStrictEqual(completeWithFish(f, "__FILE__:directory::s*:0"), [
+            "share/",
+            "src/",
+          ]);
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should list each matching directory once", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-dedupe-");
+        try {
+          touch(f.fixture, "a.txt", "src/", ".cache/");
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::*:1"), [
+            ".cache/",
+            "a.txt",
+            "src/",
+          ]);
+          deepStrictEqual(completeWithFish(f, "__FILE__:any::*:0"), [
+            "a.txt",
+            "src/",
+          ]);
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should not treat ? in a directory name as a wildcard", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-dirname-");
+        try {
+          touch(f.fixture, "What?/f1", "Whatx/f2");
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::What?/:0"), [
+            "What?/f1",
+          ]);
+          // An unrelated typed word must not replace the fixed directory,
+          // just as it does not for a pattern such as src/.
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::What?/:0", "zz"),
+            ["What?/f1"],
+          );
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should treat ? and * in the typed word as literal prefixes", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-typed-");
+        try {
+          // path() echoes the typed word as its pattern, so a pattern equal
+          // to the current word is a literal prefix, not a wildcard.
+          touch(
+            f.fixture,
+            "What?.txt",
+            "Whatx",
+            "src/a?b.txt",
+            "src/axb.txt",
+            "star*x.txt",
+            "starzz.txt",
+          );
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::What?:0", "What?"),
+            ["What?.txt"],
+          );
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::src/a?:0", "src/a?"),
+            ["src/a?b.txt"],
+          );
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::star*:0", "star*"),
+            ["star*x.txt"],
+          );
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should return nothing when a wildcard matches nothing", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-none-");
+        try {
+          touch(f.fixture, "a.txt", "b.json");
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.none:0"), []);
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should keep the typed word for non-wildcard and ./ prefixes", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-control-");
+        try {
+          touch(f.fixture, "src/main.ts", "src/model.ts", "src/util.ts");
+          deepStrictEqual(completeWithFish(f, "__FILE__:file::src/:0"), [
+            "src/main.ts",
+            "src/model.ts",
+            "src/util.ts",
+          ]);
+          deepStrictEqual(
+            completeWithFish(f, "__FILE__:file::src/:0", "./src/m"),
+            ["./src/main.ts", "./src/model.ts"],
+          );
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should enumerate the root directory for a /-rooted wildcard", {
+        skip: fishUnavailable,
+      }, () => {
+        if (fishUnavailable) return;
+        const f = createFixture("fish-glob-root-");
+        try {
+          const completions = completeWithFish(
+            f,
+            "__FILE__:directory::/*:0",
+          );
+          ok(completions.length > 0);
+          ok(completions.every((c) => c.startsWith("/") && c.endsWith("/")));
+        } finally {
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
+
+      it("should restore the tilde prefix for a wildcard", {
+        skip: fishUnavailable || process.env.HOME == null,
+      }, () => {
+        const home = process.env.HOME;
+        if (fishUnavailable || home == null) return;
+        const f = createFixture("fish-glob-tilde-");
+        const homeDir = mkdtempSync(join(home, ".optique-fish-glob-"));
+        try {
+          touch(homeDir, "x.txt", "y.json");
+          const tildeDir = "~" + homeDir.slice(home.length);
+          deepStrictEqual(
+            completeWithFish(f, `__FILE__:file::${tildeDir}/*.txt:0`),
+            [`${tildeDir}/x.txt`],
+          );
+        } finally {
+          rmSync(homeDir, { recursive: true, force: true });
+          rmSync(f.root, { recursive: true, force: true });
+        }
+      });
     });
   });
 
