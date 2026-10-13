@@ -893,6 +893,12 @@ function ${functionName} () {
 if (( $+functions[compdef] )); then
   compdef ${functionName} ${programName}
 fi
+
+# An autoloaded file runs as a function body.  Dispatch its initial request;
+# sourcing the file only defines and registers the completion helper.
+if [[ \$ZSH_EVAL_CONTEXT == *:loadautofunc || \$ZSH_EVAL_CONTEXT == *:shfunc ]]; then
+  ${functionName} "\$@"
+fi
     `;
   },
   *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {

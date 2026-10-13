@@ -191,6 +191,7 @@ function testInteractiveZshCompletion(
     readonly captureBuffer?: boolean;
     readonly programNames?: readonly string[];
     readonly autoload?: boolean;
+    readonly tabPresses?: 1 | 2;
     readonly additionalScripts?: readonly {
       readonly programName: string;
       readonly script: string;
@@ -342,8 +343,9 @@ ${
         options.captureBuffer === true
           ? `zpty -w -n child $'\\x18'
 __output+="$(__optique_drain_zpty ${JSON.stringify(bufferEndMarker)})"`
-          : `zpty -w -n child $'\\t'
-sleep 0.1
+          : `${
+            options.tabPresses === 1 ? "" : "zpty -w -n child $'\\t'\nsleep 0.1"
+          }
 zpty -w -n child $'\\x18'
 __output+="$(__optique_drain_zpty "__OPTIQUE_ZSH_BUFFER_END__")"`
       }
@@ -1154,6 +1156,7 @@ function ${name}() {
               setup,
               programNames: requests,
               autoload,
+              tabPresses: 1,
               additionalScripts: autoload
                 ? order.slice(1).map((programName) => ({
                   programName,
