@@ -33,7 +33,9 @@ export function joinedFileSuggestion(
   joinedFiles.set(literal, {
     files: [{
       prefix,
-      file: file.pattern === value ? { ...file, pattern: undefined } : file,
+      file: file.pattern === value && !/[?*]/.test(value)
+        ? { ...file, pattern: undefined }
+        : file,
     }],
     literal: false,
   });

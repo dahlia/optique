@@ -387,8 +387,9 @@ function _${programName} () {
 
       # path() echoes the raw shell word as its pattern.  Once dequoted,
       # use the literal current-word prefix instead of the escaped pattern.
-      if [[ ( "$pattern" == "$__raw_file_current" && "$__file_current" != "$__raw_file_current" ) ||
-            ( -n "$__reply_prefix" && "$pattern" == "$__file_current" ) ]]; then
+      if [[ "$pattern" == "$__raw_file_current" && "$__file_current" != "$__raw_file_current" ]] ||
+          { [[ -n "$__reply_prefix" ]] && [ "$pattern" = "$__file_current" ] &&
+            { [[ "$pattern" != *[\*\?]* ]] || [ "$__raw_file_current" != "$__file_current" ]; }; }; then
         pattern=""
       fi
 
@@ -448,6 +449,11 @@ function _${programName} () {
           if [[ "$__norm_pattern" == *[\*\?]* ]]; then
             __filter_pattern=1
             __pattern_prefix="$__glob_current"
+            # An unquoted value equal to its wildcard is a complete search
+            # pattern, not a literal filename prefix to filter against.
+            if [ "$__file_current" = "$pattern" ] && [ "$__raw_file_current" = "$__file_current" ]; then
+              __pattern_prefix=""
+            fi
             __pattern_tilde_prefix="$__tilde_prefix"
             __pattern_tilde_expanded="$__tilde_expanded"
           fi

@@ -505,6 +505,47 @@ describe("joined Bash option completion", () => {
     assert.deepEqual(result.replies, ["src/nested/deeper/"]);
   });
   for (
+    const input of [
+      "eqapp --config=src/literal\\*",
+      "eqapp --config=src/'literal*'",
+      "eqapp --config=src/literal\\?",
+      "eqapp --config=src/'literal?'",
+    ]
+  ) {
+    it(`keeps echoed quoted or escaped wildcards literal in ${input}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const wildcard = input.includes("?") ? "?" : "*";
+      const result = tab(
+        input,
+        [`--config=src/literal${wildcard}`],
+        `mkdir src; touch 'src/literal${wildcard}one.toml' src/literal-other.toml`,
+      );
+      assert.deepEqual(result.replies, [`src/literal${wildcard}one.toml`]);
+      assert.ok(!result.line.includes("literal-other"));
+    });
+  }
+  it("expands a fixed wildcard that equals the typed value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/*.toml",
+      ["--config=src/*.toml"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/main.toml",
+      "src/nested/",
+    ]);
+    assert.equal(result.line, "eqapp --config=src/");
+  });
+  for (
     const prefix of [
       "src/nested/",
       "src/nested/ch",

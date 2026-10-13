@@ -40,7 +40,8 @@ To be released.
     and extended-glob operators literally alongside `*`/`?` wildcards.
     Navigating into suggested directories retains fixed basename filters for
     subsequent completions, including directory-only patterns and patterns
-    rooted directly at `/`.
+    rooted directly at `/`. Unquoted fixed wildcard patterns still expand when
+    entered in full, while quoted or escaped wildcard prefixes remain literal.
     [[#1031], [#1032], [#1033], [#1079]]
 
  -  Fixed Bash file completion to quote filenames containing spaces or shell

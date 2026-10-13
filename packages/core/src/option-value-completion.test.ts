@@ -5,6 +5,26 @@ import { parse, suggest, suggestAsync, type Suggestion } from "./parser.ts";
 import { option } from "./primitives.ts";
 import { choice, string, type ValueParser } from "./valueparser.ts";
 
+for (const pattern of ["src/*.toml", "src/file?.toml"]) {
+  it(`retains a fixed wildcard equal to its typed value (${pattern})`, () => {
+    const files: ValueParser<"sync", string> = {
+      ...string(),
+      *suggest() {
+        yield { kind: "file", type: "file", pattern };
+      },
+    };
+    const result = suggest(option("--config", files), [`--config=${pattern}`]);
+    assert.equal(
+      Array.from(bash.encodeSuggestions(result)).join(""),
+      `__JOINED_FILE__:--config=:file::${pattern}:0`,
+    );
+    assert.equal(
+      Array.from(zsh.encodeSuggestions(result)).join(""),
+      `--config=${pattern}\0\0`,
+    );
+  });
+}
+
 for (const control of ["\n", "\r", "\t", "\0"]) {
   it(`sanitizes ${JSON.stringify(control)} in joined fixed file patterns`, () => {
     const files: ValueParser<"sync", string> = {
