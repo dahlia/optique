@@ -1866,8 +1866,11 @@ Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
         if (\$element.Extent.EndOffset -ge \$cursorPosition) {
             # wordToComplete has synthesized delimiters and decoded escapes.
             # Only the AST retains the literal value and original quote type.
+            # PSReadLine leaves the cursor before a directory's closing quote.
             if (\$element -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
-                \$element.Extent.EndOffset -eq \$cursorPosition) {
+                (\$element.Extent.EndOffset -eq \$cursorPosition -or
+                 (\$element.Extent.EndOffset -eq (\$cursorPosition + 1) -and
+                  \$element.StringConstantType -in @('SingleQuoted', 'DoubleQuoted')))) {
                 if (\$element.StringConstantType -in @('SingleQuoted', 'DoubleQuoted')) {
                     \$valuePrefix = \$element.Value
                     \$quoteType = \$element.StringConstantType
@@ -2056,27 +2059,32 @@ ${
                 \$items | ForEach-Object {
                     \$completionText = if (\$_.PSIsContainer) { "\$dirPrefix\$(\$_.Name)/" } else { "\$dirPrefix\$(\$_.Name)" }
                     \$itemType = if (\$_.PSIsContainer) { 'Directory' } else { 'File' }
+                    \$resultType = if (\$_.PSIsContainer) { 'ProviderContainer' } else { 'ParameterValue' }
+                    # PSReadLine recognizes the platform separator for containers.
+                    # Keep the display label's existing slash convention.
+                    \$directorySuffix = [IO.Path]::DirectorySeparatorChar
+                    \$pathText = if (\$_.PSIsContainer) { "\$dirPrefix\$(\$_.Name)\$directorySuffix" } else { \$completionText }
                     # Quoting disables native tilde expansion.  A home pattern
                     # supplied by the parser must insert the discovered path.
                     \$replacementText = if (\$null -ne \$quoteType -and -not \$prefixFromInput -and \$homePattern) {
-                        if (\$_.PSIsContainer) { \$_.FullName + '/' } else { \$_.FullName }
-                    } else { \$completionText }
+                        if (\$_.PSIsContainer) { \$_.FullName + \$directorySuffix } else { \$_.FullName }
+                    } else { \$pathText }
                     # Quoting suppresses native tilde expansion.  Keep safe
                     # ~/ paths bare; otherwise use the enumerated full path.
                     \$insertionText = if (\$null -ne \$quoteType) {
                         & \$quoteCompletion \$replacementText
                     } elseif (\$completionText -cmatch '\\A~/[a-zA-Z0-9_./:\\\\-]*\\z') {
-                        \$completionText
+                        \$pathText
                     } else {
                         \$argumentText = if (\$completionText.StartsWith('~/') -or \$completionText.StartsWith('~\\')) {
-                            if (\$_.PSIsContainer) { \$_.FullName + '/' } else { \$_.FullName }
-                        } else { \$completionText }
+                            if (\$_.PSIsContainer) { \$_.FullName + \$directorySuffix } else { \$_.FullName }
+                        } else { \$pathText }
                         & \$quoteArgument \$argumentText
                     }
                     [System.Management.Automation.CompletionResult]::new(
                         \$insertionText,
                         \$completionText,
-                        'ParameterValue',
+                        \$resultType,
                         \$itemType
                     )
                 }

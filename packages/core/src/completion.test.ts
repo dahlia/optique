@@ -4133,8 +4133,12 @@ ConvertTo-Json -InputObject $records -Depth 5 -Compress
       tempDir: string,
       suggestions: readonly Suggestion[],
       lines: readonly string[],
+      cursors?: readonly number[],
+      directorySeparator?: "/" | "\\",
     ): readonly {
       readonly label: string;
+      readonly prefix: string;
+      readonly resultType: string;
       readonly tooltip: string;
       readonly insertion: string;
       readonly line: string;
@@ -4147,6 +4151,7 @@ ConvertTo-Json -InputObject $records -Depth 5 -Compress
         join(tempDir, "quoted-cli"),
         `#!/bin/sh
 if [ "$1" = completion ]; then
+  printf '%s\\0' "$@" > "\${0%/*}/completion-argv.bin"
   cat "\${0%/*}/suggestions.txt"
 else
   printf '%s\\n' "$#" "$@"
@@ -4160,9 +4165,20 @@ fi
       );
       writeFileSync(
         join(tempDir, "completion.ps1"),
-        pwsh.generateScript("quoted-cli", ["completion"]),
+        directorySeparator == null
+          ? pwsh.generateScript("quoted-cli", ["completion"])
+          : pwsh.generateScript("quoted-cli", ["completion"]).replaceAll(
+            "[IO.Path]::DirectorySeparatorChar",
+            `[char]${directorySeparator.charCodeAt(0)}`,
+          ),
       );
-      writeFileSync(join(tempDir, "lines.json"), JSON.stringify(lines));
+      writeFileSync(
+        join(tempDir, "lines.json"),
+        JSON.stringify(lines.map((line, index) => ({
+          line,
+          cursor: cursors?.[index] ?? line.length,
+        }))),
+      );
       const testScript = join(tempDir, "test.ps1");
       writeFileSync(
         testScript,
@@ -4173,8 +4189,11 @@ $provider.Home = Join-Path $PSScriptRoot 'home'
 $env:PATH = $PSScriptRoot + [IO.Path]::PathSeparator + $env:PATH
 . (Join-Path $PSScriptRoot 'completion.ps1')
 $lines = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'lines.json') | ConvertFrom-Json
-$results = @(foreach ($line in $lines) {
-  $r = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)
+$results = @(foreach ($entry in $lines) {
+  $line = $entry.line
+  $r = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $entry.cursor, $null)
+  $captured = (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'completion-argv.bin')).Split([char]0)
+  $prefix = $captured[$captured.Length - 2]
   foreach ($m in $r.CompletionMatches) {
     $completed = $line.Substring(0, $r.ReplacementIndex) + $m.CompletionText + $line.Substring($r.ReplacementIndex + $r.ReplacementLength)
     $tokens = $null; $errors = $null
@@ -4186,7 +4205,7 @@ $results = @(foreach ($line in $lines) {
       try { $argv = @(Invoke-Expression $completed) } catch { $argv = @('execution failed') }
     }
     [pscustomobject]@{
-      label = $m.ListItemText; tooltip = $m.ToolTip; insertion = $m.CompletionText; line = $line
+      label = $m.ListItemText; prefix = $prefix; resultType = $m.ResultType.ToString(); tooltip = $m.ToolTip; insertion = $m.CompletionText; line = $line
       parseErrors = $errors.Count; commands = $commands.Count; elements = $elements; argv = $argv
     }
   }
@@ -4377,6 +4396,231 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
         }
       },
     );
+
+    for (
+      const { directory, input, separator } of [
+        { directory: "a dir", input: "a" },
+        { directory: "a' dir", input: "a" },
+        { directory: "a$ dir", input: "a" },
+        { directory: "a dir", input: '"a' },
+      ].flatMap((entry) =>
+        (["/", "\\"] as const).map((separator) => ({ ...entry, separator }))
+      )
+    ) {
+      it(
+        "should continue into " + JSON.stringify(directory) +
+          " after completing " + JSON.stringify(input) + " with " +
+          JSON.stringify(separator) + " separators",
+        {
+          skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+          timeout: 20000,
+        },
+        () => {
+          if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+          const tempDir = createInsertionTempDir("pwsh-directory-navigation-");
+          try {
+            const child = directory + "/child one.txt";
+            mkdirSync(join(tempDir, directory));
+            writeFileSync(join(tempDir, child), "");
+            const suggestions: readonly Suggestion[] = [{
+              kind: "file",
+              type: "any",
+            }];
+            const first = completeAndExecute(
+              tempDir,
+              suggestions,
+              ["quoted-cli --file " + input],
+              undefined,
+              separator,
+            );
+            const parent = first.find((result) =>
+              result.label === directory + "/"
+            );
+            ok(parent, "Missing directory completion.");
+            deepStrictEqual(parent.argv, [
+              "2",
+              "--file",
+              directory + separator,
+            ]);
+            deepStrictEqual(parent.resultType, "ProviderContainer");
+
+            // PSReadLine places the cursor before a directory's closing quote.
+            const line = "quoted-cli --file " +
+              parent.insertion.slice(0, -1) + "ch" +
+              parent.insertion.slice(-1);
+
+            const continued = completeAndExecute(
+              tempDir,
+              suggestions,
+              [line],
+              [line.length - 1],
+              separator,
+            );
+            deepStrictEqual(continued.length, 1);
+            const insertedChild = directory + separator + "child one.txt";
+            deepStrictEqual(continued[0].prefix, directory + separator + "ch");
+            deepStrictEqual(continued[0].label, insertedChild);
+            deepStrictEqual(continued[0].parseErrors, 0);
+            deepStrictEqual(continued[0].commands, 1);
+            deepStrictEqual(continued[0].elements, 3);
+            deepStrictEqual(continued[0].argv, ["2", "--file", insertedChild]);
+            ok(continued[0].insertion.startsWith(
+              input.startsWith('"') ? '"' : "'",
+            ));
+          } finally {
+            rmSync(tempDir, { recursive: true, force: true });
+          }
+        },
+      );
+    }
+
+    for (const separator of ["/", "\\"] as const) {
+      // Backslash cases simulate Windows formatting on Linux, not Windows execution.
+      it(
+        "should complete a quoted directory and its child through PSReadLine with " +
+          JSON.stringify(separator) + " separators",
+        {
+          skip: process.platform === "win32" || !isShellAvailable("pwsh") ||
+            !isShellAvailable("python3"),
+          timeout: 30000,
+        },
+        () => {
+          if (
+            process.platform === "win32" || !isShellAvailable("pwsh") ||
+            !isShellAvailable("python3")
+          ) return;
+          const tempDir = createInsertionTempDir("pwsh-directory-pty-");
+          try {
+            mkdirSync(join(tempDir, "a dir"));
+            writeFileSync(join(tempDir, "a dir", "child one.txt"), "");
+            completeAndExecute(
+              tempDir,
+              [{ kind: "file", type: "any" }],
+              [
+                "quoted-cli --file a",
+              ],
+              undefined,
+              separator,
+            );
+            const init = join(tempDir, "interactive.ps1");
+            writeFileSync(
+              init,
+              `$ErrorActionPreference = 'Stop'
+$env:PATH = $PSScriptRoot + [IO.Path]::PathSeparator + $env:PATH
+. (Join-Path $PSScriptRoot 'completion.ps1')
+Import-Module PSReadLine
+Set-PSReadLineOption -HistorySaveStyle SaveNothing -PredictionSource None
+${
+                separator === "\\"
+                  ? `
+Set-PSReadLineKeyHandler -Key Tab -ScriptBlock {
+  param($key, $arg)
+  $type = [Microsoft.PowerShell.PSConsoleReadLine]
+  $flags = [Reflection.BindingFlags]'NonPublic,Static,Instance'
+  $instance = $type.GetField('_singleton', $flags).GetValue($null)
+  $type.GetField('_directorySeparator', $flags).SetValue($instance, [string][char]92)
+  [Microsoft.PowerShell.PSConsoleReadLine]::TabCompleteNext($key, $arg)
+}
+`
+                  : "Set-PSReadLineKeyHandler -Key Tab -Function TabCompleteNext"
+              }
+$global:capturePath = Join-Path $PSScriptRoot 'buffer.jsonl'
+Set-PSReadLineKeyHandler -Chord Ctrl+g -ScriptBlock {
+  $line = $null; $cursor = 0
+  [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+  [pscustomobject]@{ line = $line; cursor = $cursor } |
+    ConvertTo-Json -Compress | Add-Content -LiteralPath $global:capturePath
+}
+function global:prompt { '__READY__> ' }
+`,
+            );
+            // Drive the real line editor, including its directory cursor adjustment.
+            const driver = String.raw`
+import json, os, pty, select, signal, sys, time
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ['TERM'] = 'xterm-256color'
+    os.execvp('pwsh', ['pwsh', '-NoLogo', '-NoProfile', '-NoExit', '-File', sys.argv[1]])
+output = b''
+def pump():
+    global output
+    if select.select([fd], [], [], 0.1)[0]:
+        try:
+            chunk = os.read(fd, 65536)
+        except OSError:
+            return
+        output += chunk
+        for _ in range(chunk.count(b'\x1b[6n')):
+            os.write(fd, b'\x1b[1;1R')
+def until(check):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        pump()
+        if check():
+            return
+    raise RuntimeError('PowerShell PTY did not reach expected state: ' + repr(output))
+def captured(count):
+    try:
+        with open(sys.argv[2]) as stream:
+            return len(stream.readlines()) >= count
+    except FileNotFoundError:
+        return False
+try:
+    until(lambda: b'__READY__>' in output)
+    os.write(fd, b'quoted-cli --file a\t\x07')
+    until(lambda: captured(1))
+    os.write(fd, b'ch\t\x07')
+    until(lambda: captured(2))
+    with open(sys.argv[2]) as stream:
+        print(json.dumps([json.loads(line) for line in stream]))
+finally:
+    os.kill(pid, signal.SIGKILL)
+    os.close(fd)
+    os.waitpid(pid, 0)
+`;
+            const buffers: readonly {
+              readonly line: string;
+              readonly cursor: number;
+            }[] = JSON.parse(runCommand("python3", [
+              "-c",
+              driver,
+              init,
+              join(tempDir, "buffer.jsonl"),
+            ], { cwd: tempDir, timeout: 25000 }));
+            deepStrictEqual(buffers.length, 2);
+            deepStrictEqual(
+              buffers[0].line,
+              "quoted-cli --file 'a dir" + separator + "'",
+            );
+            deepStrictEqual(buffers[0].cursor, buffers[0].line.length - 1);
+            deepStrictEqual(
+              buffers[1].line,
+              "quoted-cli --file 'a dir" + separator + "child one.txt'",
+            );
+            const prefix = readFileSync(
+              join(tempDir, "completion-argv.bin"),
+              "utf8",
+            )
+              .split("\0").at(-2);
+            deepStrictEqual(prefix, "a dir" + separator + "ch");
+            const executed = runCommand("pwsh", [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "$env:PATH = $PWD.Path + [IO.Path]::PathSeparator + $env:PATH; " +
+              buffers[1].line,
+            ], { cwd: tempDir });
+            deepStrictEqual(executed.trimEnd().split(/\r?\n/), [
+              "2",
+              "--file",
+              "a dir" + separator + "child one.txt",
+            ]);
+          } finally {
+            rmSync(tempDir, { recursive: true, force: true });
+          }
+        },
+      );
+    }
 
     it("should encode suggestions with tab-separated format", () => {
       const suggestions: Suggestion[] = [
