@@ -3275,12 +3275,10 @@ ${testCase.setup ?? ""}`,
         script.indexOf("esac"),
       );
       const fileCaseBlock = fileCase.substring(
-        fileCase.indexOf("file)"),
+        fileCase.indexOf("file|any)"),
         fileCase.indexOf("directory)"),
       );
-      const anyCaseBlock = fileCase.substring(
-        fileCase.indexOf("any)"),
-      );
+      const anyCaseBlock = fileCaseBlock;
 
       // A single extension must avoid grouped-glob syntax because *.(json)
       // does not work in zsh completion, while multiple extensions still
@@ -3984,6 +3982,223 @@ _extapp 2>/dev/null
               `Hidden files should be omitted, got:\n${output}`,
             );
           }
+        },
+      );
+    }
+
+    for (const type of ["file", "any", "directory"] as const) {
+      for (
+        const global of [
+          { setup: "unset expl", expected: ":unset" },
+          {
+            setup: "typeset -g expl=user-sentinel",
+            expected: "user-sentinel:scalar",
+          },
+          {
+            setup: "typeset -ga expl=(user-alpha user-beta)",
+            expected: "user-alpha,user-beta:array",
+          },
+        ]
+      ) {
+        it(
+          `should preserve globals in initial zsh native ${type} completion: ${global.expected}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type, pattern: "*.txt" },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [{
+                path: "first.txt",
+                type: type === "directory" ? "directory" : "file",
+              }, {
+                path: "second.txt",
+                type: type === "directory" ? "directory" : "file",
+              }],
+              {
+                setup: global.setup,
+                afterCompletion:
+                  'print -r -- "__GLOBAL_EXPL:${(j:,:)expl}:${parameters[expl]-unset}"',
+              },
+            );
+            ok(
+              output.includes("first.txt") && output.includes("second.txt"),
+              output,
+            );
+            ok(output.includes(`__GLOBAL_EXPL:${global.expected}`), output);
+          },
+        );
+      }
+    }
+
+    for (const type of ["file", "any"] as const) {
+      for (
+        const scenario of [
+          { first: "directories", second: "files", withDirectory: true },
+          { first: "directories", second: "files", withDirectory: false },
+          { first: "files", second: "directories", withDirectory: true },
+        ]
+      ) {
+        it(
+          `should honor ordered tags in initial zsh native ${type} completion: ${scenario.first}, directories ${scenario.withDirectory}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type, pattern: "*.txt", extensions: ["txt"] },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [
+                { path: "regular.txt" },
+                ...(scenario.withDirectory
+                  ? [{ path: "navigation", type: "directory" as const }]
+                  : []),
+              ],
+              {
+                setup:
+                  `zstyle ':completion:*' tag-order '${scenario.first}' '${scenario.second}'`,
+              },
+            );
+            if (scenario.first === "directories" && scenario.withDirectory) {
+              ok(output.includes("navigation/"), output);
+              ok(!output.includes("regular.txt"), output);
+            } else {
+              ok(output.includes("regular.txt"), output);
+              ok(!output.includes("navigation"), output);
+            }
+          },
+        );
+      }
+      for (const extensions of [undefined, ["txt"]]) {
+        it(
+          `should list directories first in initial zsh native ${type} completion with extensions ${extensions}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type, pattern: "*.txt", extensions },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [{ path: "aaa.txt" }, { path: "zzz", type: "directory" }],
+              {
+                setup:
+                  "zstyle ':completion:*' group-name ''; zstyle ':completion:*' list-dirs-first true",
+              },
+            );
+            const directoryIndex = output.indexOf("zzz/");
+            const fileIndex = output.indexOf("aaa.txt");
+            ok(directoryIndex >= 0 && fileIndex >= 0, output);
+            ok(directoryIndex < fileIndex, output);
+          },
+        );
+      }
+    }
+
+    for (
+      const scenario of [
+        {
+          name: "enabled",
+          pattern: "target*.txt",
+          recursive: "*",
+          expected: true,
+        },
+        {
+          name: "extension filter",
+          pattern: "target*",
+          extensions: ["txt"],
+          recursive: "*",
+          expected: true,
+        },
+        {
+          name: "disjoint extension filter",
+          pattern: "target*.json",
+          extensions: ["txt"],
+          recursive: "*",
+          expected: false,
+        },
+        {
+          name: "disabled",
+          pattern: "target*.txt",
+          recursive: "",
+          expected: false,
+        },
+        {
+          name: "ineligible directory",
+          pattern: "target*.txt",
+          recursive: "/not-current/",
+          expected: false,
+        },
+        {
+          name: "explicit directory",
+          pattern: "nested/target*.txt",
+          recursive: "*",
+          expected: true,
+        },
+      ]
+    ) {
+      it(
+        `should preserve recursive-files in initial zsh native completion: ${scenario.name}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo"),
+          timeout: 10000,
+        },
+        () => {
+          if (
+            !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo")
+          ) return;
+          const directive = Array.from(zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              pattern: scenario.pattern,
+              extensions: scenario.extensions,
+            },
+          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            directive,
+            [
+              { path: "nested", type: "directory" },
+              { path: "nested/target.txt" },
+              { path: "nested/target.json" },
+              { path: "nested/other.txt" },
+              { path: "nested/target-pipe.txt", type: "fifo" },
+            ],
+            {
+              captureBuffer: true,
+              setup: `zstyle ':completion:*' tag-order 'files' 'directories'\n${
+                scenario.recursive === ""
+                  ? ""
+                  : `zstyle ':completion:*:files' recursive-files '${scenario.recursive}'`
+              }`,
+            },
+          );
+          if (scenario.expected) {
+            ok(output.includes("extapp nested/target.txt"), output);
+          } else {
+            ok(!output.includes("target.txt"), output);
+          }
+          ok(!output.includes("target.json"), output);
+          ok(!output.includes("other.txt"), output);
+          ok(!output.includes("target-pipe.txt"), output);
         },
       );
     }
@@ -5100,7 +5315,7 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
           script.indexOf("esac"),
         );
         const fileCaseBlock = fileCase.substring(
-          fileCase.indexOf("file)"),
+          fileCase.indexOf("file|any)"),
           fileCase.indexOf("directory)"),
         );
         ok(
