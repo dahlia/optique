@@ -89,6 +89,10 @@ To be released.
     instead of matching *report1.txt* as if `[1]` were a glob character class.
     [[#1040], [#1060]]
 
+ -  Fixed Nushell, zsh, and PowerShell file completion to retain fixed glob
+    filters while narrowing a path prefix.  Directories remain available for
+    navigation.  [[#1049], [#1077]]
+
  -  Fixed PowerShell and Nushell file completion to match compound extensions
     such as `.tar.gz`, while keeping directories available for navigation.
     [[#1048], [#1061]]
@@ -187,6 +191,7 @@ To be released.
 [#1046]: https://github.com/dahlia/optique/issues/1046
 [#1047]: https://github.com/dahlia/optique/issues/1047
 [#1048]: https://github.com/dahlia/optique/issues/1048
+[#1049]: https://github.com/dahlia/optique/issues/1049
 [#1051]: https://github.com/dahlia/optique/issues/1051
 [#1052]: https://github.com/dahlia/optique/issues/1052
 [#1053]: https://github.com/dahlia/optique/issues/1053
@@ -211,6 +216,7 @@ To be released.
 [#1073]: https://github.com/dahlia/optique/pull/1073
 [#1075]: https://github.com/dahlia/optique/pull/1075
 [#1076]: https://github.com/dahlia/optique/pull/1076
+[#1077]: https://github.com/dahlia/optique/pull/1077
 [#1079]: https://github.com/dahlia/optique/pull/1079
 
 
