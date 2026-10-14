@@ -1194,6 +1194,163 @@ function ${name}() {
   }
 });
 
+describe("compound extensions", () => {
+  for (const shell of [pwsh, nu]) {
+    for (const type of ["file", "any"] as const) {
+      it(
+        `should filter compound extensions in actual ${shell.name} ${type} completion`,
+        {
+          skip: process.platform === "win32" || !isShellAvailable(shell.name),
+          timeout: 30000,
+        },
+        () => {
+          // Bun ignores the skip option, so it also needs an early return.
+          if (
+            process.platform === "win32" || !isShellAvailable(shell.name)
+          ) return;
+
+          const scratchRoot = fileURLToPath(
+            new URL("../../../tmp/", import.meta.url),
+          );
+          mkdirSync(scratchRoot, { recursive: true });
+          const tempDir = mkdtempSync(
+            join(scratchRoot, "compound-completion-"),
+          );
+          try {
+            const files = [
+              "bundle.tar.gz",
+              "bundle.TAR.GZ",
+              "bundle.txt",
+              "bundle.gz",
+              "bundle.tarXgz",
+              "bundle.tar.gz.bak",
+              "bundletar.gz",
+              "bundle.json",
+              "bundle.tar[1].gz",
+              "bundle.tar1.gz",
+              "alpha.tar.gz",
+            ];
+            for (const file of files) writeFileSync(join(tempDir, file), "");
+            mkdirSync(join(tempDir, "bdir"));
+            mkdirSync(join(tempDir, "adir"));
+
+            const programName = "compound-extapp";
+            const scriptPath = join(
+              tempDir,
+              `completion.${shell === pwsh ? "ps1" : "nu"}`,
+            );
+            writeFileSync(scriptPath, shell.generateScript(programName));
+            const testPath = join(
+              tempDir,
+              `test.${shell === pwsh ? "ps1" : "nu"}`,
+            );
+            const testScript = shell === pwsh
+              ? `$env:PATH = '${tempDir}' + [IO.Path]::PathSeparator + $env:PATH
+. '${scriptPath}'
+$line = '${programName} --archive __PREFIX__'
+$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)
+ConvertTo-Json -Compress -InputObject @($result.CompletionMatches | ForEach-Object { $_.CompletionText })
+`
+              : `$env.PATH = ($env.PATH | prepend '${tempDir}')
+source '${scriptPath}'
+nu-complete-${programName} '${programName} --archive __PREFIX__' | get value | to json --raw
+`;
+            writeFileSync(testPath, testScript);
+
+            const complete = (
+              extensions: readonly string[],
+              rawDots = false,
+              prefix = "b",
+            ): string[] => {
+              writeFileSync(
+                testPath,
+                testScript.replaceAll("__PREFIX__", prefix),
+              );
+              let directive = Array.from(shell.encodeSuggestions([{
+                kind: "file",
+                type,
+                extensions,
+                pattern: prefix,
+              }])).join("");
+              if (rawDots) {
+                directive = directive.replace(
+                  `:${
+                    extensions.map((ext) => ext.replace(/^\./, "")).join(",")
+                  }:`,
+                  `:${extensions.join(",")}:`,
+                );
+              }
+              writeFileSync(
+                join(tempDir, programName),
+                `#!/bin/sh\nprintf '%s\\n' '${directive}'\n`,
+                { mode: 0o755 },
+              );
+              const output = runCommand(
+                shell.name,
+                shell === pwsh
+                  ? ["-NoProfile", "-NonInteractive", "-File", testPath]
+                  : ["--no-config-file", testPath],
+                { cwd: tempDir },
+              );
+              const values: unknown = JSON.parse(output);
+              ok(Array.isArray(values));
+              ok(values.every((value: unknown) => typeof value === "string"));
+              return values.sort();
+            };
+
+            const archives = ["bundle.tar.gz"];
+            for (const rawDots of [false, true]) {
+              deepStrictEqual(
+                complete([".tar.gz"], rawDots),
+                ["bdir/", ...archives].sort(),
+              );
+              deepStrictEqual(
+                complete([".TAR.GZ"], rawDots),
+                ["bdir/", "bundle.TAR.GZ"].sort(),
+              );
+              deepStrictEqual(
+                complete([".tar.gz", ".json"], rawDots),
+                ["bdir/", "bundle.json", ...archives].sort(),
+              );
+              deepStrictEqual(
+                complete([".tar[1].gz"], rawDots),
+                [
+                  "bdir/",
+                  shell === nu ? "'bundle.tar[1].gz'" : "bundle.tar[1].gz",
+                ].sort(),
+              );
+            }
+            for (
+              const file of [
+                "inner.tar.gz",
+                "inner.txt",
+                "inner.gz",
+                "x.tar.gz",
+              ]
+            ) {
+              writeFileSync(join(tempDir, "bdir", file), "");
+            }
+            mkdirSync(join(tempDir, "bdir", "sub"));
+            deepStrictEqual(
+              complete([".tar.gz"], false, "bdir/"),
+              ["bdir/inner.tar.gz", "bdir/sub/", "bdir/x.tar.gz"],
+            );
+            deepStrictEqual(
+              complete([".tar.gz"], false, "bdir/i"),
+              ["bdir/inner.tar.gz"],
+            );
+            // With no matching directory, exercise PowerShell's fallback path.
+            rmSync(join(tempDir, "bdir"), { recursive: true });
+            deepStrictEqual(complete(["tar.gz"]), archives.sort());
+          } finally {
+            rmSync(tempDir, { recursive: true, force: true });
+          }
+        },
+      );
+    }
+  }
+});
+
 describe("completion module", () => {
   describe("bash shell completion", () => {
     it("should have correct name", () => {

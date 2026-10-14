@@ -1650,8 +1650,9 @@ ${
               let all_items = (do $list_entries $ls_pattern)
               let dirs = $all_items | where type == dir
               let files = $all_items | where type == file | where {|f|
-                let ext = ($f.name | path parse | get extension)
-                $ext in $ext_list
+                $ext_list | any {|ext|
+                  $f.name | path basename | str ends-with ('.' + $ext)
+                }
               }
               $dirs | append $files
             }
@@ -1667,8 +1668,9 @@ ${
               let all_items = (do $list_entries $ls_pattern)
               let dirs = $all_items | where type == dir
               let files = $all_items | where type == file | where {|f|
-                let ext = ($f.name | path parse | get extension)
-                $ext in $ext_list
+                $ext_list | any {|ext|
+                  $f.name | path basename | str ends-with ('.' + $ext)
+                }
               }
               $dirs | append $files
             }
@@ -2004,7 +2006,10 @@ ${
                             \$extList = (\$extensions -split ',') -replace '^\\.',''
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
-                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -cin \$extList)
+                                    \$fileName = \$_.Name
+                                    \$_.PSIsContainer -or (@(\$extList | Where-Object {
+                                        \$fileName.EndsWith('.' + \$_, [System.StringComparison]::Ordinal)
+                                    }).Count -gt 0)
                                 }
                         } else {
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
@@ -2019,7 +2024,10 @@ ${
                             \$extList = (\$extensions -split ',') -replace '^\\.',''
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue |
                                 Where-Object {
-                                    \$_.PSIsContainer -or ((\$_.Extension -replace '^\\.','' ) -cin \$extList)
+                                    \$fileName = \$_.Name
+                                    \$_.PSIsContainer -or (@(\$extList | Where-Object {
+                                        \$fileName.EndsWith('.' + \$_, [System.StringComparison]::Ordinal)
+                                    }).Count -gt 0)
                                 }
                         } else {
                             \$items = Get-ChildItem @forceParam -Path \$globPath -ErrorAction SilentlyContinue
