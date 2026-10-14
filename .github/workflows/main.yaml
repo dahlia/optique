@@ -28,7 +28,7 @@ jobs:
 
   test-deno:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
     - run: |
@@ -54,7 +54,7 @@ jobs:
 
   test-node:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
     - run: |
@@ -71,7 +71,7 @@ jobs:
 
   test-bun:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
     - run: |

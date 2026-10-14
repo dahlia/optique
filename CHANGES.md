@@ -123,6 +123,11 @@ To be released.
     no longer control suggestions without an extension filter.  The
     `list-dirs-first` style still lists directories before regular files.
 
+ -  Fixed Zsh completion to match option values inside single/double quotes,
+    including values with literal backslashes and file paths with spaces,
+    while preserving their quoting context and backend file-pattern globs.
+    [[#1056], [#1078]]
+
  -  Fixed Zsh completion to offer initial matches for relative file globs such
     as _tmp/fixtures/\*.txt_ when the current value is empty.  This also
     applies to suggestions with `type: "any"`, which can match FIFOs.  File
@@ -197,6 +202,7 @@ To be released.
 [#1053]: https://github.com/dahlia/optique/issues/1053
 [#1054]: https://github.com/dahlia/optique/issues/1054
 [#1055]: https://github.com/dahlia/optique/issues/1055
+[#1056]: https://github.com/dahlia/optique/issues/1056
 [#1057]: https://github.com/dahlia/optique/pull/1057
 [#1058]: https://github.com/dahlia/optique/pull/1058
 [#1059]: https://github.com/dahlia/optique/pull/1059
@@ -217,6 +223,7 @@ To be released.
 [#1075]: https://github.com/dahlia/optique/pull/1075
 [#1076]: https://github.com/dahlia/optique/pull/1076
 [#1077]: https://github.com/dahlia/optique/pull/1077
+[#1078]: https://github.com/dahlia/optique/pull/1078
 [#1079]: https://github.com/dahlia/optique/pull/1079
 
 

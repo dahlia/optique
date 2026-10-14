@@ -877,10 +877,24 @@ export const zsh: ShellCompletion = {
       ).join("");
     return `#compdef ${programName}
 function ${functionName} () {
-  local current="\$words[CURRENT]"
+  # Completion fields omit surrounding quotes, unlike words[CURRENT].
+  # Single-quoted fields are already literal; other fields retain escapes.
+  local current="\$IPREFIX\$PREFIX\$SUFFIX\$ISUFFIX"
+  local __logical_prefix="\$IPREFIX\$PREFIX"
   # Let zsh match the suffix when completing in the middle of a word.
   if [[ -o complete_in_word ]]; then
-    current="\$PREFIX"
+    current="\$__logical_prefix"
+  fi
+  if [[ "\$compstate[quote]" == '\"' ]]; then
+    # Restore the omitted quoting context before removing shell escapes.
+    # In double quotes, a backslash before an ordinary character is literal.
+    current="\$QIPREFIX\$current\${QISUFFIX:-\$compstate[quote]}"
+    __logical_prefix="\$QIPREFIX\$__logical_prefix\$compstate[quote]"
+    current="\${(Q)current}"
+    __logical_prefix="\${(Q)__logical_prefix}"
+  elif [[ "\$compstate[quote]" != "'" ]]; then
+    current="\${(Q)current}"
+    __logical_prefix="\${(Q)__logical_prefix}"
   fi
   local -a prev
   # Extract previous arguments, skipping empty ones
@@ -888,7 +902,7 @@ function ${functionName} () {
   local i
   for (( i=2; i < CURRENT; i++ )); do
     if [[ -n "\$words[i]" ]]; then
-      prev+=("\$words[i]")
+      prev+=("\${(Q)words[i]}")
     fi
   done
 
@@ -975,16 +989,20 @@ function ${functionName} () {
             fi
           fi
         fi
-        if [[ -n "\$pattern" && -z "\$__initial_file_pattern" ]]; then
+        local __saved_pattern_match="\$compstate[pattern_match]"
+        local __pattern_match_changed=0
+        # path() echoes current as its pattern.  Keep zsh's escaped PREFIX
+        # in that case instead of reinterpreting logical text as shell syntax.
+        if [[ -n "\$pattern" && "\$pattern" != "\$current" && -z "\$__initial_file_pattern" ]]; then
           # Normalize leading ./ so that ./src/ma matches pattern src/
-          local __norm_prefix="\${PREFIX#./}"
+          local __norm_prefix="\${__logical_prefix#./}"
           local __norm_pattern="\${pattern#./}"
           local __compare_pattern="\$__norm_pattern"
           if [[ "\$__compare_pattern" == *[\*\?]* ]]; then
             __compare_pattern="\${__compare_pattern%%[\*\?]*}"
             [[ "\$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
           fi
-          if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$PREFIX" != "\$pattern" ]]; then
+          if [[ ( -n "\$__compare_pattern" || -n "\$__norm_prefix" ) && \${#__norm_prefix} -ge \${#__compare_pattern} && "\${__norm_prefix[1,\${#__compare_pattern}]}" == "\$__compare_pattern" && "\$__logical_prefix" != "\$pattern" ]]; then
             # Keep the typed prefix, but retain a fixed file glob separately.
             if [[ "\$type" != "directory" && "\$__norm_pattern" == *[\*\?]* ]]; then
               __fixed_glob=1
@@ -1050,7 +1068,243 @@ function ${functionName} () {
               if [[ "\$__fixed_was_glob_dots" == "0" && "\${PREFIX##*/}" != .* ]]; then unsetopt glob_dots; fi
             fi
           else
-            PREFIX="\$pattern"
+            local __native_pattern="\$pattern"
+            # Initial globs use the conservative native filters above.
+            # Retained input and protected markers still need pattern matching.
+            if [[ -n "\$compstate[context]" && "\$pattern" == *[\\*\\?\\[]* &&
+                  ( -n "\$current" || "\$pattern" == *'$'* || "\$pattern" == *'\`'* ) ]]; then
+              compstate[pattern_match]='*'
+              __pattern_match_changed=1
+            fi
+            # Native helpers expand substitutions, tilde names and executable
+            # glob qualifiers.  Input-derived patterns must keep these literal.
+            # Ordinary fixed glob/tilde patterns retain their native behavior.
+            local __tilde_name="\${pattern#\\~}"
+            __tilde_name="\${__tilde_name%%/*}"
+            local -a match mbegin mend
+            local __code_qualifier=0
+            local __fixed_qualifier_base=""
+            local __safe_qualifiers='([-/F.@=p*rwxAIERWXsStUG^MTNDn,]|[ugdl]<->|[amc]([Mwhmsd]|)([-+]|)<->|L([kKmMgGtTpP]|)([-+]|)<->|[oO][nLlamcdN])##'
+            local __qualifier_pattern="\$pattern" __qualifier
+            while _have_glob_qual "\$__qualifier_pattern" complete; do
+              __qualifier="\${match[5]#\\#q}"
+              __qualifier_pattern="\$match[2]"
+              # A numeric sense (+1) is not a function qualifier (+name).
+              # Accept only bounded attribute/sort syntax in this exception.
+              # Expand the pattern at runtime after unsetting SH_GLOB.
+              if [[ "\$__qualifier" == \${~__safe_qualifiers} ]]; then
+                __fixed_qualifier_base="\$__qualifier_pattern"
+              elif [[ "\$__qualifier" == *[e+]* ]]; then
+                __code_qualifier=1
+              fi
+            done
+            # Partial overlaps with complete backend classes/groups remain
+            # syntax. A complete input-provided expression can be literal.
+            local -a __syntax_starts=() __syntax_ends=() __group_stack=()
+            local -i __scan_index __class_begin=0 __member_begin=0
+            local __scan_char __nested_class=""
+            for (( __scan_index=1; __scan_index <= \${#pattern}; __scan_index++ )); do
+              __scan_char="\${pattern[__scan_index]}"
+              if [[ "\$__scan_char" == '\\' ]]; then
+                (( __scan_index++ ))
+              elif (( __class_begin )); then
+                if [[ "\$__scan_char" == '[' && "\${pattern[__scan_index+1]}" == [:.=] ]]; then
+                  __nested_class="\${pattern[__scan_index+1]}"
+                elif [[ -n "\$__nested_class" && "\$__scan_char" == "\$__nested_class" && "\${pattern[__scan_index+1]}" == ']' ]]; then
+                  (( __scan_index++ ))
+                  __nested_class=""
+                elif [[ -z "\$__nested_class" && "\$__scan_char" == ']' ]] && (( __scan_index > __member_begin )); then
+                  __syntax_starts+=("\$__class_begin")
+                  __syntax_ends+=("\$__scan_index")
+                  __class_begin=0
+                elif (( __scan_index == __member_begin )) &&
+                     [[ "\$__scan_char" == '!' || "\$__scan_char" == '^' ]] &&
+                     [[ "\${pattern[__scan_index+1]}" != ']' || "\${pattern[__scan_index+2,-1]}" == *']'* ]]; then
+                  (( __member_begin++ ))
+                fi
+              elif [[ "\$__scan_char" == '[' ]]; then
+                __class_begin=\$__scan_index
+                __member_begin=\$(( __scan_index + 1 ))
+              elif [[ "\$__scan_char" == '(' ]]; then
+                __group_stack+=("\$__scan_index")
+              elif [[ "\$__scan_char" == ')' ]] && (( \${#__group_stack} )); then
+                __syntax_starts+=("\${__group_stack[-1]}")
+                __syntax_ends+=("\$__scan_index")
+                __group_stack[-1]=()
+              fi
+            done
+            # Search retained input only where it cannot split fixed syntax.
+            local __input_part="\$current"
+            local __backend_prefix="\$pattern" __backend_suffix=""
+            local __search_pattern __candidate_prefix
+            local -i __search_offset __overlap_start __overlap_end __range_index __syntax_overlap
+            local -i __fixed_tilde_end=0
+            local __tilde_expression='([+-]|[+-]<->|[[:alnum:]_.-]#)'
+            if [[ "\$pattern" == '~'* &&
+                  "\$__tilde_name" == \${~__tilde_expression} ]]; then
+              __fixed_tilde_end=\$(( \${#__tilde_name} + 1 ))
+            fi
+            while [[ -n "\$__input_part" ]]; do
+              __search_pattern="\$pattern"
+              __search_offset=0
+              while [[ "\$__search_pattern" == *"\$__input_part"* ]]; do
+                __candidate_prefix="\${__search_pattern%%"\$__input_part"*}"
+                __overlap_start=\$(( __search_offset + \${#__candidate_prefix} + 1 ))
+                __overlap_end=\$(( __overlap_start + \${#__input_part} - 1 ))
+                __syntax_overlap=0
+                # Leading home/directory-stack/named-directory syntax belongs
+                # to the fixed pattern, even when the input overlaps it.
+                if (( __fixed_tilde_end && __overlap_start <= __fixed_tilde_end )); then
+                  __syntax_overlap=1
+                fi
+                for (( __range_index=1; __range_index <= \${#__syntax_starts}; __range_index++ )); do
+                  if (( __overlap_start <= __syntax_ends[__range_index] &&
+                        __overlap_end >= __syntax_starts[__range_index] &&
+                        ( __overlap_start > __syntax_starts[__range_index] ||
+                          __overlap_end < __syntax_ends[__range_index] ) )); then
+                    __syntax_overlap=1
+                    break
+                  fi
+                done
+                # Every position in a recognized fixed attribute qualifier
+                # is backend syntax, including its closing parenthesis.
+                if [[ "\$__fixed_qualifier_base" == *[\\*\\?\\]] ]] &&
+                   (( __overlap_end > \${#__fixed_qualifier_base} )); then
+                  __syntax_overlap=1
+                fi
+                if (( ! __syntax_overlap )); then
+                  if (( __overlap_start == 1 )); then
+                    __backend_prefix=""
+                  else
+                    __backend_prefix="\${pattern[1,__overlap_start-1]}"
+                  fi
+                  __backend_suffix="\${pattern[__overlap_end+1,-1]}"
+                  break 2
+                fi
+                __search_offset=\$__overlap_start
+                __search_pattern="\${pattern[__overlap_start+1,-1]}"
+              done
+              __input_part="\${__input_part[2,-1]}"
+            done
+            local __quoted_input="\${(q)__input_part}"
+            # Pattern matching removes quoting differently from normal
+            # completion.  Character classes keep these characters literal.
+            if [[ -n "\$compstate[pattern_match]" ]]; then
+              __quoted_input="\${(b)__input_part}"
+              __quoted_input="\${__quoted_input//\\\$/[\\\$]}"
+              __quoted_input="\${__quoted_input//\\\`/[\\\`]}"
+            fi
+            if [[ "\$pattern" == *'$'* || "\$pattern" == *'\`'* ||
+                  ( "\$pattern" == '~'* && "\$__tilde_name" == *[^[:alnum:]_.+-]* ) ]] ||
+               (( __code_qualifier )); then
+              __native_pattern="\${(q)pattern}"
+              local __backend_pattern="\$__backend_prefix\$__backend_suffix"
+              local __backend_tilde="\${__backend_pattern#\\~}"
+              __backend_tilde="\${__backend_tilde%%/*}"
+              local __unsafe_backend_qualifier=0
+              __qualifier_pattern="\$__backend_pattern"
+              while _have_glob_qual "\$__qualifier_pattern" complete; do
+                __qualifier="\${match[5]#\\#q}"
+                __qualifier_pattern="\$match[2]"
+                if [[ "\$__qualifier" != \${~__safe_qualifiers} ]]; then
+                  __unsafe_backend_qualifier=1
+                fi
+              done
+              # Retain trusted wildcards and safe attribute qualifiers when
+              # all executable syntax belongs to the quoted input.
+              if [[ -n "\$__input_part" &&
+                    "\$__backend_pattern" != *'$'* &&
+                    "\$__backend_pattern" != *'\`'* &&
+                    ( "\$__backend_pattern" != '~'* ||
+                      "\$__backend_tilde" != *[^[:alnum:]_.+-]* ) ]] &&
+                 (( ! __unsafe_backend_qualifier )); then
+                __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
+              elif [[ "\$__backend_pattern" != *'$('* &&
+                      "\$__backend_pattern" != *'\${'* &&
+                      "\$__backend_pattern" != *'$['* &&
+                      ( "\$pattern" != '~'* ||
+                        "\$__tilde_name" != *[^[:alnum:]_.+-]* ) ]] &&
+                   (( ! __unsafe_backend_qualifier )); then
+                # Fixed patterns also need literal substitution markers,
+                # without quoting their wildcards or safe qualifiers.
+                local __dollar='\\\$'
+                local __backtick='\\\`'
+                if [[ -n "\$compstate[pattern_match]" ]]; then
+                  __dollar='[\$]'
+                  __backtick='[\`]'
+                fi
+                # Existing glob classes already protect their markers.
+                local -a __backend_parts=()
+                local __part __escaped __char __class_kind
+                local -i __index __in_class __class_start
+                for __part in "\$__backend_prefix" "\$__backend_suffix"; do
+                  __escaped=""
+                  __in_class=0
+                  __class_kind=""
+                  for (( __index=1; __index <= \${#__part}; __index++ )); do
+                    __char="\${__part[__index]}"
+                    if [[ "\$__char" == '\\' ]]; then
+                      __escaped+="\$__char\${__part[__index+1]}"
+                      (( __index++ ))
+                      continue
+                    elif (( __in_class )); then
+                      if [[ "\$__char" == '[' && "\${__part[__index+1]}" == [:.=] ]]; then
+                        __class_kind="\${__part[__index+1]}"
+                      elif [[ -n "\$__class_kind" && "\$__char" == "\$__class_kind" && "\${__part[__index+1]}" == ']' ]]; then
+                        __escaped+="\$__char]"
+                        (( __index++ ))
+                        __class_kind=""
+                        continue
+                      elif [[ -z "\$__class_kind" && "\$__char" == ']' ]] && (( __index > __class_start )); then
+                        __in_class=0
+                      elif (( __index == __class_start )) && [[ "\$__char" == '!' || "\$__char" == '^' ]]; then
+                        (( __class_start++ ))
+                      fi
+                    elif [[ "\$__char" == '[' ]]; then
+                      __in_class=1
+                      __class_start=$(( __index + 1 ))
+                    elif [[ "\$__char" == '$' ]]; then
+                      __char="\$__dollar"
+                    elif [[ "\$__char" == '\`' ]]; then
+                      __char="\$__backtick"
+                    fi
+                    __escaped+="\$__char"
+                  done
+                  __backend_parts+=("\$__escaped")
+                done
+                __backend_prefix="\${__backend_parts[1]}"
+                __backend_suffix="\${__backend_parts[2]}"
+                __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
+              fi
+            else
+              # Quote retained metacharacters, including segments made only
+              # of them.  Wildcard-only overlap remains backend syntax.
+              if [[ "\$__input_part" == *[\\\\\\(\\)\\[\\#\\^\\|\\~\\<\\>\\*\\?]* &&
+                    "\$__input_part" != [\\*\\?]## ]]; then
+                __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
+              fi
+            fi
+            PREFIX="\$__native_pattern"
+            # Match simple fixed tilde globs through native -g filters. The
+            # pattern matcher otherwise treats the leading ~ as glob syntax,
+            # even after _path_files has expanded it for filesystem lookup.
+            if (( __fixed_tilde_end )) && [[ -z "\$__input_part" &&
+                  "\$__native_pattern" == "\$pattern" && "\$pattern" == */* ]]; then
+              __initial_directory="\${pattern%/*}/"
+              __initial_leaf="\${pattern##*/}"
+              if [[ "\$__initial_leaf" == *[\*\?]* &&
+                    "\$__initial_directory" != *[\*\?]* &&
+                    "\$__initial_directory" != *["[]()"]* &&
+                    "\$__initial_leaf" != *["[]()#~^|<>;&"]* &&
+                    "\$__initial_leaf" != *'\\'* &&
+                    "\$__initial_leaf" != *[[:space:]]* &&
+                    "\$__initial_leaf" != *"'"* && "\$__initial_leaf" != *'"'* ]]; then
+                __initial_file_pattern="\$__initial_leaf"
+                PREFIX="\$__initial_directory"
+                compstate[pattern_match]=""
+                __pattern_match_changed=1
+              fi
+            fi
           fi
         fi
 
@@ -1090,6 +1344,21 @@ function ${functionName} () {
                 fi
                 file_pattern="\${(j: :)__initial_file_patterns}"
               fi
+              local file_pattern_prefix="\$PREFIX"
+              local -a match mbegin mend
+              # Native qualifier copying concatenates flags with the explicit
+              # regular-file group.  Keep backend attributes in their own group.
+              if [[ -n "\$compstate[pattern_match]" && -z "\$SUFFIX" ]]; then
+                local file_qualifier file_qualifiers=""
+                while _have_glob_qual "\$file_pattern_prefix" complete; do
+                  file_qualifier="\${match[5]#\\#q}"
+                  file_pattern_prefix="\$match[2]"
+                  file_qualifiers="(#q\$file_qualifier)\$file_qualifiers"
+                done
+                if [[ -n "\$file_qualifiers" ]]; then
+                  file_pattern+="\$file_qualifiers"
+                fi
+              fi
               local file_subtree_pattern="**/*(#q/N)"
               local -a file_subtree=() file_recursive_patterns=()
               local -a file_tags=(files directories)
@@ -1103,10 +1372,17 @@ function ${functionName} () {
                 local file_matched=0
                 for file_tag in "\${file_tags[@]}"; do
                   if [[ "\$file_tag" == directories ]]; then
+                    local file_tag_prefix="\$PREFIX"
+                    PREFIX="\$file_pattern_prefix"
                     while _next_label directories expl directory; do
+                      # File qualifiers constrain final results, not the
+                      # directories needed to navigate to those results.
                       _path_files -/ "\${expl[@]}" && file_matched=1
                     done
+                    PREFIX="\$file_tag_prefix"
                   else
+                    local file_tag_prefix="\$PREFIX"
+                    PREFIX="\$file_pattern_prefix"
                     while _next_label files expl file; do
                       local -a file_ignore=() file_ignore_args=()
                       # Explicit globs bypass automatic fignore.  Apply it only
@@ -1137,6 +1413,7 @@ function ${functionName} () {
                         done
                       fi
                     done
+                    PREFIX="\$file_tag_prefix"
                   fi
                 done
                 (( file_matched )) && break
@@ -1165,6 +1442,9 @@ function ${functionName} () {
         # Restore PREFIX and glob_dots to their previous state
         PREFIX="\$__saved_prefix"
         if [[ "\$__was_extended_glob" == "1" ]]; then setopt extended_glob; else unsetopt extended_glob; fi
+        if (( __pattern_match_changed )); then
+          compstate[pattern_match]="\$__saved_pattern_match"
+        fi
         if [[ "\$__was_sh_glob" == "1" ]]; then setopt sh_glob; else unsetopt sh_glob; fi
         if [[ "\$__was_sh_word_split" == "1" ]]; then setopt sh_word_split; else unsetopt sh_word_split; fi
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
@@ -1183,17 +1463,23 @@ function ${functionName} () {
     # Prepare completion with descriptions for _describe
     local -a matches
     local -i i
+    local __match
     for (( i=1; i <= \${#completions[@]}; i++ )); do
-      # _describe treats colons as separators and backslashes as escapes.
-      value="\${completions[i]//\\\\/\\\\\\\\}"
-      value="\${value//:/\\\\:}"
+      # _describe uses backslashes to escape its colon separator.
+      __match="\${completions[i]//\\\\/\\\\\\\\}"
+      __match="\${__match//:/\\\\:}"
       if [[ -n "\${descriptions[i]}" ]]; then
-        matches+=("\${value}:\${descriptions[i]}")
+        matches+=("\$__match:\${descriptions[i]}")
       else
-        matches+=("\${value}")
+        matches+=("\$__match")
       fi
     done
-    _describe 'commands' matches
+    if [[ -n "\$QISUFFIX" ]]; then
+      # A closing quote already exists; do not append a space inside it.
+      _describe 'commands' matches -S ''
+    else
+      _describe 'commands' matches
+    fi
   fi
 }
 
