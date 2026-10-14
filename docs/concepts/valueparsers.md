@@ -216,15 +216,15 @@ separator.  File value suggestions retain the full `pattern` and identify the
 key/separator in `prefix`, so native completion can match only the value path.
 Regenerate installed completion scripts after upgrading to version 1.1.13.
 
-Bash splits words at `=` by default before invoking completion.  Completing a
-`keyValue()` token in Bash requires removing its separator from
-`COMP_WORDBREAKS`:
+Bash splits words at `=` by default before invoking completion, and Optique's
+Bash completion script rejoins those fragments, so the default separator works
+without extra setup.  A custom separator containing other word-break
+characters, such as `:`, must be removed from `COMP_WORDBREAKS` so completion
+receives the `keyValue()` token as one word:
 
 ~~~~ bash
-COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"
+COMP_WORDBREAKS="${COMP_WORDBREAKS//:}"
 ~~~~
-
-For a custom separator, remove its word-break characters too.
 
 Shell escaping and quote handling happen before Optique receives arguments.
 For example, a shell may pass `--set name="hello world"` to Optique as one

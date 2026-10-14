@@ -145,7 +145,7 @@ describe("Parser suggest() methods", () => {
       ]);
     });
 
-    it("should suggest -option=value format for short options", () => {
+    it("should not suggest an equals delimiter for short options", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
       const context: ParserContext<typeof parser.initialState> = {
         buffer: [],
@@ -155,11 +155,7 @@ describe("Parser suggest() methods", () => {
       };
 
       const result = Array.from(parser.suggest(context, "-f=y"));
-      deepStrictEqual(result, [{
-        kind: "literal",
-        text: "-f=yaml",
-        description: undefined,
-      }]);
+      deepStrictEqual(result, []);
     });
 
     it("should return empty for unmatched option in --option=value format", () => {
