@@ -469,12 +469,18 @@ export function prefixSuggestion(
   head: string,
   suggestion: Suggestion,
 ): Suggestion {
+  if (suggestion.kind === "file") {
+    // Keep native file completion; shells match the path after the option
+    // and restore it as a literal insertion prefix.
+    return {
+      ...suggestion,
+      pattern: head + (suggestion.pattern ?? ""),
+      prefix: head + (suggestion.prefix ?? ""),
+    };
+  }
   return {
     kind: "literal",
-    text: head +
-      (suggestion.kind === "literal"
-        ? suggestion.text
-        : suggestion.pattern ?? ""),
+    text: head + suggestion.text,
     ...(suggestion.description != null
       ? { description: suggestion.description }
       : {}),

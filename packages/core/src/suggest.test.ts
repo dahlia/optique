@@ -124,6 +124,12 @@ describe("suggest function", () => {
       }]);
     });
 
+    it("should not suggest an equals delimiter for short options", () => {
+      const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
+      const result = suggestSync(parser, ["-f=y"]);
+      deepStrictEqual(result, []);
+    });
+
     it("should return empty for --option=value when option doesn't match", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
       const result = suggestSync(parser, ["--output=json"]);

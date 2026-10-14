@@ -1,3 +1,4 @@
+import { mergeJoinedFileSuggestions } from "./internal/joined-file-suggestion.ts";
 import {
   combinedOptionScope,
   repeatedOptionScope,
@@ -3199,6 +3200,7 @@ export function multiple<M extends Mode, TValue, TState>(
           "file",
           suggestion.type,
           suggestion.pattern ?? "",
+          suggestion.prefix ?? "",
           suggestion.includeHidden === true,
           suggestion.extensions == null
             ? ""
@@ -3211,13 +3213,17 @@ export function multiple<M extends Mode, TValue, TState>(
         parser.mode,
         function* () {
           const selectedValues = collectSelectedValuesSync();
-          const emitted = new Set<string>();
+          const emitted = new Map<string, Suggestion>();
           const yieldUnique = function* (suggestions: Iterable<Suggestion>) {
             for (const s of suggestions) {
               const key = suggestionKey(s);
-              if (shouldInclude(selectedValues, s) && !emitted.has(key)) {
-                emitted.add(key);
+              if (!shouldInclude(selectedValues, s)) continue;
+              const existing = emitted.get(key);
+              if (existing === undefined) {
+                emitted.set(key, s);
                 yield s;
+              } else {
+                mergeJoinedFileSuggestions(existing, s);
               }
             }
           };
@@ -3252,15 +3258,19 @@ export function multiple<M extends Mode, TValue, TState>(
         },
         async function* () {
           const selectedValues = await collectSelectedValuesAsync();
-          const emitted = new Set<string>();
+          const emitted = new Map<string, Suggestion>();
           const yieldUnique = async function* (
             suggestions: AsyncIterable<Suggestion>,
           ) {
             for await (const s of suggestions) {
               const key = suggestionKey(s);
-              if (shouldInclude(selectedValues, s) && !emitted.has(key)) {
-                emitted.add(key);
+              if (!shouldInclude(selectedValues, s)) continue;
+              const existing = emitted.get(key);
+              if (existing === undefined) {
+                emitted.set(key, s);
                 yield s;
+              } else {
+                mergeJoinedFileSuggestions(existing, s);
               }
             }
           };

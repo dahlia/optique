@@ -1034,8 +1034,8 @@ describe("attached short option completion", () => {
         yield { kind: "file", type: "any", pattern: "*.txt" };
       },
     };
-    assert.deepEqual(texts(suggestSync(option("-f", file), ["-fa"])), [
-      "-f*.txt",
+    assert.deepEqual(suggestSync(option("-f", file), ["-fa"]), [
+      { kind: "file", type: "any", pattern: "-f*.txt", prefix: "-f" },
     ]);
   });
 });

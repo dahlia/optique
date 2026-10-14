@@ -234,10 +234,10 @@ give `-p` the value `"ortXYZ"`.
 
 Value completion also accepts attached forms, such as `-fj`/`-xfj` for a
 `-f` option whose choices include `"json"`. Prefixes that could still name a
-longer option complete that name first. Native file completion cannot carry
-an option prefix in the current suggestion format, so attached forms use
-literal pattern suggestions, as equals-separated forms do. Use a separate
-value token for native file completion.
+longer option complete that name first. File values in attached forms keep
+native file completion: the option part, such as `-f` in `-fsrc/main.ts`,
+becomes the file suggestion's literal `prefix`, so shells match only the path
+and restore the option when inserting a candidate.
 
 ### Option ordering
 
