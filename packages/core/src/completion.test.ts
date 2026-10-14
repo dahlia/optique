@@ -3460,6 +3460,26 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       );
     }
 
+    it("should quote a retained closing Zsh parenthesis between wildcards", {
+      skip: !isInteractiveZshCompletionAvailable(),
+    }, () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [
+          { path: "src", type: "directory" },
+          { path: "src/xa)b" },
+        ],
+        {
+          input: "extapp --format @a\\)",
+          backend: "printf '__FILE__:file::src/*a)*:0\\0\\0\\n'",
+          captureBuffer: true,
+        },
+      );
+      deepStrictEqual(output, "extapp --format src/xa\\)b ");
+    });
+
     it("should combine negated Zsh attributes with the regular-file filter", {
       skip: !isInteractiveZshCompletionAvailable(),
     }, () => {

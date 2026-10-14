@@ -1191,7 +1191,7 @@ function ${functionName} () {
             else
               # Quote retained metacharacters, including segments made only
               # of them.  Wildcard-only overlap remains backend syntax.
-              if [[ "\$__input_part" == *[\\\\\\(\\[\\#\\^\\|\\~\\<\\>\\*\\?]* &&
+              if [[ "\$__input_part" == *[\\\\\\(\\)\\[\\#\\^\\|\\~\\<\\>\\*\\?]* &&
                     "\$__input_part" != [\\*\\?]## ]]; then
                 # An overlap inside a harmless fixed qualifier is backend
                 # syntax, rather than retained user text.
