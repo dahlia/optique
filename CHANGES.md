@@ -124,8 +124,9 @@ To be released.
     `list-dirs-first` style still lists directories before regular files.
 
  -  Fixed Zsh completion to match option values inside single/double quotes,
-    including file paths containing spaces, while preserving their quoting
-    context.  [[#1056], [#1078]]
+    including values with literal backslashes and file paths with spaces,
+    while preserving their quoting context and backend file-pattern globs.
+    [[#1056], [#1078]]
 
  -  Fixed Zsh completion to offer initial matches for relative file globs such
     as _tmp/fixtures/\*.txt_ when the current value is empty.  This also

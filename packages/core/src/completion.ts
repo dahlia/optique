@@ -1074,96 +1074,94 @@ function ${functionName} () {
               compstate[pattern_match]='*'
               __pattern_match_changed=1
             fi
-            if [[ "\$compstate[quote]" != "'" ]]; then
-              # Native helpers expand substitutions, tilde names and executable
-              # glob qualifiers.  Input-derived patterns must keep these literal.
-              # Ordinary fixed glob/tilde patterns retain their native behavior.
-              local __tilde_name="\${pattern#\\~}"
-              __tilde_name="\${__tilde_name%%/*}"
-              local -a match mbegin mend
-              local __code_qualifier=0
-              local __fixed_qualifier_base=""
-              local __safe_qualifiers='([-/F.@=p*rwxAIERWXsStUG^MTNDn,]|[ugdl]<->|[amc]([Mwhmsd]|)([-+]|)<->|L([kKmMgGtTpP]|)([-+]|)<->|[oO][nLlamcdN])##'
-              if _have_glob_qual "\$pattern" complete; then
-                local __qualifier="\$match[5]"
-                # A numeric sense (+1) is not a function qualifier (+name).
-                # Accept only bounded attribute/sort syntax in this exception.
-                # Expand the pattern at runtime after unsetting SH_GLOB.
-                if [[ "\$__qualifier" == \${~__safe_qualifiers} ]]; then
-                  __fixed_qualifier_base="\$match[2]"
-                elif [[ "\$__qualifier" == *[e+]* ]]; then
-                  __code_qualifier=1
-                fi
+            # Native helpers expand substitutions, tilde names and executable
+            # glob qualifiers.  Input-derived patterns must keep these literal.
+            # Ordinary fixed glob/tilde patterns retain their native behavior.
+            local __tilde_name="\${pattern#\\~}"
+            __tilde_name="\${__tilde_name%%/*}"
+            local -a match mbegin mend
+            local __code_qualifier=0
+            local __fixed_qualifier_base=""
+            local __safe_qualifiers='([-/F.@=p*rwxAIERWXsStUG^MTNDn,]|[ugdl]<->|[amc]([Mwhmsd]|)([-+]|)<->|L([kKmMgGtTpP]|)([-+]|)<->|[oO][nLlamcdN])##'
+            if _have_glob_qual "\$pattern" complete; then
+              local __qualifier="\$match[5]"
+              # A numeric sense (+1) is not a function qualifier (+name).
+              # Accept only bounded attribute/sort syntax in this exception.
+              # Expand the pattern at runtime after unsetting SH_GLOB.
+              if [[ "\$__qualifier" == \${~__safe_qualifiers} ]]; then
+                __fixed_qualifier_base="\$match[2]"
+              elif [[ "\$__qualifier" == *[e+]* ]]; then
+                __code_qualifier=1
               fi
-              # Find literal input retained by a custom pattern before
-              # deciding whether its backend wildcards need protection.
-              local __input_part="\$current"
-              while [[ -n "\$__input_part" && "\$pattern" != *"\$__input_part"* ]]; do
-                __input_part="\${__input_part[2,-1]}"
-              done
-              local __backend_prefix="\${pattern%%"\$__input_part"*}"
-              local __backend_suffix="\${pattern#*"\$__input_part"}"
-              local __quoted_input="\${(q)__input_part}"
-              # Pattern matching removes quoting differently from normal
-              # completion.  Character classes keep these characters literal.
-              if [[ -n "\$compstate[pattern_match]" ]]; then
-                __quoted_input="\${(b)__input_part}"
-                __quoted_input="\${__quoted_input//\\\$/[\\\$]}"
-                __quoted_input="\${__quoted_input//\\\`/[\\\`]}"
+            fi
+            # Find literal input retained by a custom pattern before
+            # deciding whether its backend wildcards need protection.
+            local __input_part="\$current"
+            while [[ -n "\$__input_part" && "\$pattern" != *"\$__input_part"* ]]; do
+              __input_part="\${__input_part[2,-1]}"
+            done
+            local __backend_prefix="\${pattern%%"\$__input_part"*}"
+            local __backend_suffix="\${pattern#*"\$__input_part"}"
+            local __quoted_input="\${(q)__input_part}"
+            # Pattern matching removes quoting differently from normal
+            # completion.  Character classes keep these characters literal.
+            if [[ -n "\$compstate[pattern_match]" ]]; then
+              __quoted_input="\${(b)__input_part}"
+              __quoted_input="\${__quoted_input//\\\$/[\\\$]}"
+              __quoted_input="\${__quoted_input//\\\`/[\\\`]}"
+            fi
+            if [[ "\$pattern" == *'$'* || "\$pattern" == *'\`'* ||
+                  ( "\$pattern" == '~'* && "\$__tilde_name" == *[^[:alnum:]_.+-]* ) ]] ||
+               (( __code_qualifier )); then
+              __native_pattern="\${(q)pattern}"
+              local __backend_pattern="\$__backend_prefix\$__backend_suffix"
+              local __backend_tilde="\${__backend_pattern#\\~}"
+              __backend_tilde="\${__backend_tilde%%/*}"
+              local __unsafe_backend_qualifier=0
+              if _have_glob_qual "\$__backend_pattern" complete &&
+                 [[ "\$match[5]" != \${~__safe_qualifiers} ]]; then
+                __unsafe_backend_qualifier=1
               fi
-              if [[ "\$pattern" == *'$'* || "\$pattern" == *'\`'* ||
-                    ( "\$pattern" == '~'* && "\$__tilde_name" == *[^[:alnum:]_.+-]* ) ]] ||
-                 (( __code_qualifier )); then
-                __native_pattern="\${(q)pattern}"
-                local __backend_pattern="\$__backend_prefix\$__backend_suffix"
-                local __backend_tilde="\${__backend_pattern#\\~}"
-                __backend_tilde="\${__backend_tilde%%/*}"
-                local __unsafe_backend_qualifier=0
-                if _have_glob_qual "\$__backend_pattern" complete &&
-                   [[ "\$match[5]" != \${~__safe_qualifiers} ]]; then
-                  __unsafe_backend_qualifier=1
-                fi
-                # Retain trusted wildcards and safe attribute qualifiers when
-                # all executable syntax belongs to the quoted input.
-                if [[ -n "\$__input_part" &&
-                      "\$__backend_pattern" != *'$'* &&
-                      "\$__backend_pattern" != *'\`'* &&
-                      ( "\$__backend_pattern" != '~'* ||
-                        "\$__backend_tilde" != *[^[:alnum:]_.+-]* ) ]] &&
+              # Retain trusted wildcards and safe attribute qualifiers when
+              # all executable syntax belongs to the quoted input.
+              if [[ -n "\$__input_part" &&
+                    "\$__backend_pattern" != *'$'* &&
+                    "\$__backend_pattern" != *'\`'* &&
+                    ( "\$__backend_pattern" != '~'* ||
+                      "\$__backend_tilde" != *[^[:alnum:]_.+-]* ) ]] &&
+                 (( ! __unsafe_backend_qualifier )); then
+                __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
+              elif [[ "\$__backend_pattern" != *'$('* &&
+                      "\$__backend_pattern" != *'\${'* &&
+                      "\$__backend_pattern" != *'$['* &&
+                      ( "\$pattern" != '~'* ||
+                        "\$__tilde_name" != *[^[:alnum:]_.+-]* ) ]] &&
                    (( ! __unsafe_backend_qualifier )); then
-                  __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
-                elif [[ "\$__backend_pattern" != *'$('* &&
-                        "\$__backend_pattern" != *'\${'* &&
-                        "\$__backend_pattern" != *'$['* &&
-                        ( "\$pattern" != '~'* ||
-                          "\$__tilde_name" != *[^[:alnum:]_.+-]* ) ]] &&
-                     (( ! __unsafe_backend_qualifier )); then
-                  # Fixed patterns also need literal substitution markers,
-                  # without quoting their wildcards or safe qualifiers.
-                  local __dollar='\\\$'
-                  local __backtick='\\\`'
-                  if [[ -n "\$compstate[pattern_match]" ]]; then
-                    __dollar='[\$]'
-                    __backtick='[\`]'
-                  fi
-                  __backend_prefix="\${__backend_prefix//\\\$/\$__dollar}"
-                  __backend_prefix="\${__backend_prefix//\\\`/\$__backtick}"
-                  __backend_suffix="\${__backend_suffix//\\\$/\$__dollar}"
-                  __backend_suffix="\${__backend_suffix//\\\`/\$__backtick}"
-                  __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
+                # Fixed patterns also need literal substitution markers,
+                # without quoting their wildcards or safe qualifiers.
+                local __dollar='\\\$'
+                local __backtick='\\\`'
+                if [[ -n "\$compstate[pattern_match]" ]]; then
+                  __dollar='[\$]'
+                  __backtick='[\`]'
                 fi
-              else
-                # Quote retained metacharacters, including segments made only
-                # of them.  Wildcard-only overlap remains backend syntax.
-                if [[ "\$__input_part" == *[\\(\\[\\#\\^\\|\\~\\<\\>\\*\\?]* &&
-                      "\$__input_part" != [\\*\\?]## ]]; then
-                  # An overlap inside a harmless fixed qualifier is backend
-                  # syntax, rather than retained user text.
-                  if [[ "\$__input_part" != '('* ||
-                        "\$__backend_prefix" != "\$__fixed_qualifier_base" ||
-                        "\$__fixed_qualifier_base" != *[\\*\\?\\]] ]]; then
-                    __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
-                  fi
+                __backend_prefix="\${__backend_prefix//\\\$/\$__dollar}"
+                __backend_prefix="\${__backend_prefix//\\\`/\$__backtick}"
+                __backend_suffix="\${__backend_suffix//\\\$/\$__dollar}"
+                __backend_suffix="\${__backend_suffix//\\\`/\$__backtick}"
+                __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
+              fi
+            else
+              # Quote retained metacharacters, including segments made only
+              # of them.  Wildcard-only overlap remains backend syntax.
+              if [[ "\$__input_part" == *[\\\\\\(\\[\\#\\^\\|\\~\\<\\>\\*\\?]* &&
+                    "\$__input_part" != [\\*\\?]## ]]; then
+                # An overlap inside a harmless fixed qualifier is backend
+                # syntax, rather than retained user text.
+                if [[ "\$__input_part" != '('* ||
+                      "\$__backend_prefix" != "\$__fixed_qualifier_base" ||
+                      "\$__fixed_qualifier_base" != *[\\*\\?\\]] ]]; then
+                  __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
                 fi
               fi
             fi

@@ -3050,6 +3050,81 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       });
     }
 
+    for (const qualifier of ["+mark", "e!touch MARK!", "#qe!touch MARK!"]) {
+      it(
+        `should sanitize single-quoted transformed Zsh qualifier ${qualifier}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const filename = `a(${qualifier})`;
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "src", type: "directory" }, { path: `src/x${filename}` }, {
+              path: "src/xa",
+            }],
+            {
+              setup: "setopt globcomplete extendedglob; mark() { touch MARK; }",
+              input: `extapp --format '@${filename}`,
+              backend: fileCompletionBackend.replace(
+                'pattern="${2#@}"',
+                'pattern="src/*${2#@}"',
+              ).replace(":file:txt:", ":file::"),
+              captureBuffer: true,
+              expectedArgs: ["--format", `@${filename}`],
+              absentFiles: ["MARK"],
+            },
+          );
+          deepStrictEqual(output, `extapp --format 'src/x${filename}' `);
+        },
+      );
+    }
+
+    for (
+      const [typed, completed] of [
+        ["@a\\\\b", "src/xa\\\\b.txt "],
+        ['"@a\\b', '"src/xa\\\\b.txt" '],
+      ]
+    ) {
+      it(
+        `should retain backslashes in transformed Zsh file patterns ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "src", type: "directory" }, { path: "src/xa\\b.txt" }, {
+              path: "src/xab.txt",
+            }],
+            {
+              setup:
+                'setopt globcomplete extendedglob; autoload -Uz +X _files; functions[_optique_native_files]=$functions[_files]; _files() { [[ "$PREFIX" == \'src/*a\\\\b*\' ]] || touch MARK; _optique_native_files "$@"; }',
+              input: `extapp --format ${typed}`,
+              backend: fileCompletionBackend.replace(
+                'pattern="${2#@}"',
+                'pattern="src/*${2#@}*"',
+              ).replace(":file:txt:", ":file::"),
+              captureBuffer: true,
+              expectedArgs: ["--format", "@a\\b"],
+              absentFiles: ["MARK"],
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
+    }
+
     for (
       const [typed, setup] of [["@x\\(b", ""], [
         "@x\\(b\\)",
