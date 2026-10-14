@@ -2159,7 +2159,11 @@ function prefixKeyValueSuggestion(
   const textValue = suggestionTextValue(suggestion);
   const text = `${prefix}${textValue}${suffix}`;
   if (suggestion.kind === "file" && suffix === "") {
-    return { ...suggestion, pattern: text };
+    return {
+      ...suggestion,
+      pattern: text,
+      prefix: `${prefix}${suggestion.prefix ?? ""}`,
+    };
   }
   return suggestion.description == null
     ? { kind: "literal", text }

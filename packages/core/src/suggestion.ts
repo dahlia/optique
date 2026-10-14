@@ -1,3 +1,4 @@
+import { mergeJoinedFileSuggestions } from "./internal/joined-file-suggestion.ts";
 import type { Message, MessageTerm } from "./message.ts";
 import { lineBreak, message, optionName, text, value } from "./message.ts";
 import type { Suggestion } from "./parser.ts";
@@ -525,7 +526,7 @@ export function appendValueHint(
  *
  * For literal suggestions, the text itself is used as the key.
  * For file suggestions, a composite key is created from the type,
- * extensions, and pattern.
+ * extensions, pattern, and insertion prefix.
  *
  * @param suggestion The suggestion to create a key for
  * @returns A string key that uniquely identifies this suggestion
@@ -533,13 +534,18 @@ export function appendValueHint(
  */
 function getSuggestionKey(suggestion: Suggestion): string {
   if (suggestion.kind === "literal") {
-    return suggestion.text;
+    return `literal:${suggestion.text}`;
   }
   // File suggestion: create a composite key (excludes includeHidden,
   // which is merged separately in deduplicateSuggestions)
-  return `__FILE__:${suggestion.type}:${
-    suggestion.extensions?.toSorted().join(",") ?? ""
-  }:${suggestion.pattern ?? ""}`;
+  return `file:${
+    JSON.stringify([
+      suggestion.type,
+      suggestion.extensions?.toSorted().join(",") ?? "",
+      suggestion.pattern ?? "",
+      suggestion.prefix ?? "",
+    ])
+  }`;
 }
 
 /**
@@ -547,7 +553,7 @@ function getSuggestionKey(suggestion: Suggestion): string {
  *
  * Suggestions are considered duplicates if they have the same key:
  * - Literal suggestions: same text
- * - File suggestions: same type, extensions, and pattern
+ * - File suggestions: same type, extensions, pattern, and insertion prefix
  *
  * The first occurrence of each unique suggestion is kept.  For file
  * suggestions, `includeHidden` is merged across duplicates: if any
@@ -582,6 +588,8 @@ export function deduplicateSuggestions(
     if (existing == null) {
       entries.set(key, suggestion);
       order.push(key);
+    } else if (suggestion.kind === "literal" && existing.kind === "literal") {
+      mergeJoinedFileSuggestions(existing, suggestion);
     } else if (
       suggestion.kind === "file" &&
       existing.kind === "file" &&

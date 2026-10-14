@@ -2075,9 +2075,14 @@ function analyzeNoMatchContext(
  * construction. This is a programmer error, not a user error.
  */
 export class DuplicateOptionError extends Error {
+  /** The option name shared by multiple fields. */
+  readonly optionName: string;
+  /** The fields declaring the option. */
+  readonly sources: readonly (string | symbol)[];
+
   constructor(
-    public readonly optionName: string,
-    public readonly sources: readonly (string | symbol)[],
+    optionName: string,
+    sources: readonly (string | symbol)[],
   ) {
     const sourceNames = sources.map((s) =>
       typeof s === "symbol" ? s.description ?? s.toString() : s
@@ -2088,6 +2093,8 @@ export class DuplicateOptionError extends Error {
         `parser combinator.`,
     );
     this.name = "DuplicateOptionError";
+    this.optionName = optionName;
+    this.sources = sources;
   }
 }
 
@@ -2096,9 +2103,12 @@ export class DuplicateOptionError extends Error {
  * during parser construction. This is a programmer error, not a user error.
  */
 class DuplicateCommandNameError extends TypeError {
+  readonly commandName: string;
+  readonly sources: readonly (string | symbol)[];
+
   constructor(
-    public readonly commandName: string,
-    public readonly sources: readonly (string | symbol)[],
+    commandName: string,
+    sources: readonly (string | symbol)[],
   ) {
     const sourceNames = sources.map((s) =>
       typeof s === "symbol" ? s.description ?? s.toString() : s
@@ -2108,6 +2118,8 @@ class DuplicateCommandNameError extends TypeError {
         `${sourceNames.join(", ")}. Each command name or alias must be ` +
         `unique within active parser alternatives.`,
     );
+    this.commandName = commandName;
+    this.sources = sources;
   }
 }
 
