@@ -1111,7 +1111,7 @@ function ${functionName} () {
                       local -a file_ignore=() file_ignore_args=()
                       # Explicit globs bypass automatic fignore.  Apply it only
                       # when the tag has not supplied its own ignore patterns.
-                      if [[ -z "\$__initial_file_pattern" && -z "\$ext_pattern" && -z "\$_comp_no_ignore" && -n "\$FIGNORE" ]] && (( \${#_comp_ignore[@]} == 0 )); then
+                      if [[ -z "\$__initial_file_pattern" && -z "\$ext_pattern" && ( "\$__fixed_glob" != "1" || "\$pattern" == "*" ) && -z "\$_comp_no_ignore" && -n "\$FIGNORE" ]] && (( \${#_comp_ignore[@]} == 0 )); then
                         file_ignore=("?*\${^fignore[@]}")
                         file_ignore_args=(-F file_ignore)
                       fi

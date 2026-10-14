@@ -10449,3 +10449,81 @@ it("zsh fixed glob retains regular files and ordered tag fallback", {
     }
   }
 });
+
+describe("zsh fixed glob fignore", () => {
+  for (
+    const scenario of [
+      {
+        name: "fixed glob bypasses automatic suffix ignores",
+        pattern: "*.txt",
+        extensions: undefined,
+        setup: "fignore=(.txt)",
+        include: ["report.txt", "result.skip.txt", "reports/"],
+        exclude: ["report.json"],
+      },
+      {
+        name: "extension filtering bypasses automatic suffix ignores",
+        pattern: "*.txt",
+        extensions: ["txt"],
+        setup: "fignore=(.txt)",
+        include: ["report.txt", "result.skip.txt", "reports/"],
+        exclude: ["report.json"],
+      },
+      {
+        name: "fixed glob retains explicit tag ignore patterns",
+        pattern: "*.txt",
+        extensions: undefined,
+        setup:
+          "fignore=(.txt)\nzstyle ':completion:*:files' ignored-patterns '*skip*'",
+        include: ["report.txt", "reports/"],
+        exclude: ["report.json", "result.skip.txt"],
+      },
+      {
+        name: "bare star retains automatic suffix ignores",
+        pattern: "*",
+        extensions: undefined,
+        setup: "fignore=(.txt)",
+        include: ["report.json", "reports/"],
+        exclude: ["report.txt", "result.skip.txt"],
+      },
+      {
+        name: "unfiltered prefix retains automatic suffix ignores",
+        pattern: "re",
+        extensions: undefined,
+        setup: "fignore=(.txt)",
+        include: ["report.json", "reports/"],
+        exclude: ["report.txt", "result.skip.txt"],
+      },
+    ]
+  ) {
+    it(scenario.name, {
+      skip: !isInteractiveZshCompletionAvailable(),
+      timeout: 10000,
+    }, () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const directive = Array.from(zsh.encodeSuggestions([{
+        kind: "file",
+        type: "file",
+        pattern: scenario.pattern,
+        extensions: scenario.extensions,
+      }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        directive,
+        [
+          { path: "report.txt" },
+          { path: "result.skip.txt" },
+          { path: "report.json" },
+          { path: "reports", type: "directory" },
+        ],
+        { prefix: "re", setup: scenario.setup },
+      );
+      for (const candidate of scenario.include) {
+        ok(output.includes(candidate), `Expected ${candidate}:\n${output}`);
+      }
+      for (const candidate of scenario.exclude) {
+        ok(!output.includes(candidate), `Unexpected ${candidate}:\n${output}`);
+      }
+    });
+  }
+});
