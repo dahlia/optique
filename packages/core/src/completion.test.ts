@@ -2820,6 +2820,70 @@ fi
     for (
       const testCase of [
         {
+          name: "any entry directory glob",
+          type: "any" as const,
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "any entry with a punctuated program name",
+          programName: "audit-cli",
+          type: "any" as const,
+          pattern: "tmp/fixtures/*.txt",
+          input: "audit-cli --file ",
+          setup: 'audit-cli() { extapp "$@"; }',
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "audit-cli --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "any entry FIFO glob",
+          type: "any" as const,
+          pattern: "*.txt",
+          files: [
+            { path: "a.txt", type: "fifo" as const },
+            { path: "b.json" },
+          ],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "any entry FIFO glob with extensions",
+          type: "any" as const,
+          pattern: "*",
+          extensions: [".txt"],
+          files: [
+            { path: "a.txt", type: "fifo" as const },
+            { path: "b.json" },
+          ],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "any entry disjoint glob and extensions",
+          type: "any" as const,
+          pattern: "*.json",
+          extensions: [".txt"],
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "any entry directory navigation",
+          type: "any" as const,
+          pattern: "*.txt",
+          files: [
+            { path: "b.json" },
+            { path: "sub", type: "directory" as const },
+          ],
+          expected: "extapp --file sub/",
+        },
+        {
           name: "directory glob",
           pattern: "tmp/fixtures/*.txt",
           files: [
@@ -3039,18 +3103,28 @@ fi
       ]
     ) {
       it(`should complete initial zsh file values: ${testCase.name}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
+        skip: !isInteractiveZshCompletionAvailable() ||
+          (testCase.files.some((file) =>
+            "type" in file && file.type === "fifo"
+          ) &&
+            !isShellAvailable("mkfifo")),
         timeout: 10000,
       }, () => {
         if (!isInteractiveZshCompletionAvailable()) return;
+        if (
+          testCase.files.some((file) =>
+            "type" in file && file.type === "fifo"
+          ) &&
+          !isShellAvailable("mkfifo")
+        ) return;
         const directive = Array.from(zsh.encodeSuggestions([{
           kind: "file",
-          type: "file",
+          type: testCase.type ?? "file",
           pattern: testCase.pattern,
           extensions: testCase.extensions,
         }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
         const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
+          zsh.generateScript(testCase.programName ?? "extapp"),
           directive,
           testCase.files,
           {

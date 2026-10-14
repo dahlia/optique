@@ -937,7 +937,7 @@ function ${functionName} () {
         # keep PREFIX unchanged for incremental narrowing.
         local __saved_prefix="\$PREFIX"
         local __initial_file_pattern="" __initial_directory="" __initial_leaf=""
-        if [[ "\$type" == "file" && -z "\$current\$PREFIX\$SUFFIX" &&
+        if [[ ( "\$type" == "file" || "\$type" == "any" ) && -z "\$current\$PREFIX\$SUFFIX" &&
               -z "\${compstate[pattern_match]}" &&
               "\$pattern" != /* && "\$pattern" != "~"* ]]; then
           if [[ "\$pattern" == */* ]]; then
@@ -1062,7 +1062,20 @@ function ${functionName} () {
             _directories
             ;;
           any)
-            if [[ -n "\$ext_pattern" ]]; then
+            if [[ -n "\$__initial_file_pattern" ]]; then
+              local -a __initial_file_patterns=()
+              if [[ -n "\$extensions" ]]; then
+                setopt extended_glob
+                local __initial_extension
+                for __initial_extension in "\${(@s:,:)extensions}"; do
+                  __initial_file_patterns+=("(\${__initial_file_pattern}~^*.\${__initial_extension})(#q^-/)")
+                done
+              else
+                __initial_file_patterns=("\${__initial_file_pattern}(#q^-/)")
+              fi
+              _wanted files expl file _path_files -g "\${(j: :)__initial_file_patterns}"
+              _wanted directories expl directory _path_files -/
+            elif [[ -n "\$ext_pattern" ]]; then
               local file_pattern="\${ext_pattern}(#q^-/)"
               _wanted files expl file _path_files -g "\${file_pattern}"
               _wanted directories expl directory _path_files -/

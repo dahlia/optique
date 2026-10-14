@@ -121,7 +121,8 @@ To be released.
 
  -  Fixed Zsh completion to offer initial matches for relative file globs such
     as `tmp/fixtures/*.txt` when the current value is empty.  File extension
-    filters still apply to these matches.  [[#1054], [#1075]]
+    filters still apply to these matches, and subdirectories remain available
+    for navigation.  [[#1054], [#1075]]
 
  -  Fixed Zsh completion to preserve literal values containing colons or
     backslashes, including URL choices.  Regenerate and reload existing Zsh
