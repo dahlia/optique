@@ -4121,6 +4121,14 @@ ConvertTo-Json -InputObject $records -Depth 5 -Compress
       deepStrictEqual(script.includes("'it''s'"), true);
     });
 
+    function createInsertionTempDir(prefix: string): string {
+      const scratchRoot = fileURLToPath(
+        new URL("../../../tmp/", import.meta.url),
+      );
+      mkdirSync(scratchRoot, { recursive: true });
+      return mkdtempSync(join(scratchRoot, prefix));
+    }
+
     function completeAndExecute(
       tempDir: string,
       suggestions: readonly Suggestion[],
@@ -4198,7 +4206,7 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
       timeout: 20000,
     }, () => {
       if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
-      const tempDir = mkdtempSync(join(tmpdir(), "pwsh-literal-insertion-"));
+      const tempDir = createInsertionTempDir("pwsh-literal-insertion-");
       try {
         const values = [
           "3.141592653589793",
@@ -4294,7 +4302,7 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
       },
       () => {
         if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
-        const tempDir = mkdtempSync(join(tmpdir(), "pwsh-file-insertion-"));
+        const tempDir = createInsertionTempDir("pwsh-file-insertion-");
         try {
           const files = [
             "a space.txt",
