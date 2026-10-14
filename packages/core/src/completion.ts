@@ -2333,7 +2333,7 @@ ${
                 \$lookupPrefix = if (\$prefixFromInput -and \$null -ne \$quoteType -and \$prefix.StartsWith('~')) { './' + \$prefix } else { \$prefix }
 
                 # Detect narrowing before directory normalization changes prefix.
-                \$narrowFixedGlob = \$type -ne 'directory' -and \$pattern -match '[\*\?]' -and \$prefix -ceq \$wordToComplete -and \$pattern -cne \$wordToComplete
+                \$narrowFixedGlob = \$type -ne 'directory' -and \$pattern -match '[\*\?]' -and \$prefix -ceq \$valuePrefix -and \$pattern -cne \$valuePrefix
 
                 # If prefix is a directory without trailing slash, append
                 # one so Get-ChildItem lists its contents
@@ -2350,7 +2350,9 @@ ${
                 # when the current word narrows its candidates.
                 \$fixedMatches = @()
                 if (\$narrowFixedGlob) {
-                    \$fixedMatches = @(Get-Item @forceParam -Path \$pattern -ErrorAction SilentlyContinue |
+                    # Include hidden parents here; candidate enumeration still
+                    # controls which hidden children can be suggested.
+                    \$fixedMatches = @(Get-Item -Force -Path \$pattern -ErrorAction SilentlyContinue |
                         Select-Object -ExpandProperty FullName)
                 }
 

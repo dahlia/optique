@@ -263,6 +263,7 @@ cat ${JSON.stringify(payloadPath)}
     const initReadyMarker = "__OPTIQUE_ZSH_INIT_READY__";
     const bufferStartMarker = "__OPTIQUE_ZSH_BUFFER_START__";
     const bufferEndMarker = "__OPTIQUE_ZSH_BUFFER_END__";
+    const afterCompletionMarker = "__OPTIQUE_ZSH_AFTER_COMPLETION_DONE__";
     const initPath = join(binDir, ".session.init");
     const insecureFpathDir = join(tempDir, "insecure-fpath");
     if (options.withInsecureFpath === true) {
@@ -301,6 +302,18 @@ ${
 zle -N __optique_capture_buffer
 bindkey '^X' __optique_capture_buffer`
         : ""
+    }
+${
+      options.afterCompletion == null
+        ? ""
+        : `function __optique_after_completion() {
+  zle -I
+  ${options.afterCompletion}
+  print -r -- ${JSON.stringify(afterCompletionMarker)}
+  zle reset-prompt
+}
+zle -N __optique_after_completion
+bindkey '^Y' __optique_after_completion`
     }
 export PATH=${JSON.stringify(binDir)}:$PATH
 ${options.autoload ? "" : `source ${JSON.stringify(scriptPath)}`}
@@ -376,11 +389,8 @@ zpty -w -n child $'\\x15'
     }
 ${
       options.afterCompletion == null ? "" : `
-zpty -w -n child $'\\x03'
-sleep 0.1
-zpty -w child '${options.afterCompletion.replaceAll("'", "'\\''")}'
-sleep 0.1
-__output+="$(__optique_drain_zpty "" 20)"
+zpty -w -n child $'\\x19'
+__output+="$(__optique_drain_zpty ${JSON.stringify(afterCompletionMarker)})"
 `
     }
 __output+=$'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
@@ -9744,6 +9754,7 @@ const fixedGlobFixtures: Parameters<typeof testInteractiveZshCompletion>[2] = [
   { path: "fixtures/.report.json" },
   { path: "fixtures/reports/inner.txt" },
   { path: "fixtures/reports/inner.json" },
+  { path: "fixtures/reports/.secret.txt" },
   { path: "fixtures/relink", type: "symlink", target: "reports" },
   { path: "~report.txt" },
   { path: "report.txt" },
@@ -9820,7 +9831,7 @@ function testFixedGlobPrefix(
         scriptPath,
         `$env:PATH = '${tempDir}:' + $env:PATH\n` +
           `. '${completionPath}'\n` +
-          `$line = 'extapp ${current}'\n` +
+          `$line = 'extapp ${current.replaceAll("'", "''")}'\n` +
           `$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)\n` +
           `$values = @($result.CompletionMatches | ForEach-Object { $_.CompletionText })\n` +
           `ConvertTo-Json -Compress -InputObject $values\n`,
@@ -10117,7 +10128,7 @@ it("zsh fixed glob preserves whitespace with SH_WORD_SPLIT", {
 export PATH="${tempDir}:$PATH"
 compdef() { :; }
 source "${scriptPath}"
-_wanted() { print -rl -- "\${__fixed_matches[@]}"; }
+_tags() { print -rl -- "\${__fixed_matches[@]}"; return 1; }
 words=(extapp 'P (1)/a')
 CURRENT=2
 PREFIX='P (1)/a'
@@ -10278,3 +10289,163 @@ for (const member of [".", "="]) {
     );
   });
 }
+
+for (
+  const scenario of [
+    {
+      name: "typed hidden parent",
+      prefix: "fixtures/.reports/in",
+      hidden: false,
+      include: ["inner.txt"],
+      exclude: ["inner.json", ".secret.txt"],
+    },
+    {
+      name: "relative typed hidden parent",
+      prefix: "./fixtures/.reports/in",
+      hidden: false,
+      include: ["inner.txt"],
+      exclude: ["inner.json"],
+    },
+    {
+      name: "hidden parent without hidden children",
+      prefix: "fixtures/.reports/",
+      hidden: false,
+      include: ["inner.txt"],
+      exclude: ["inner.json", ".secret.txt"],
+    },
+    {
+      name: "explicit hidden child",
+      prefix: "fixtures/.reports/.s",
+      hidden: false,
+      include: [".secret.txt"],
+      exclude: ["inner.txt"],
+    },
+    {
+      name: "included hidden children",
+      prefix: "fixtures/.reports/",
+      hidden: true,
+      include: ["inner.txt", ".secret.txt"],
+      exclude: ["inner.json"],
+    },
+  ]
+) {
+  it(`Nu fixed glob ${scenario.name}`, {
+    skip: process.platform === "win32" || !isShellAvailable("nu"),
+  }, () => {
+    if (process.platform === "win32" || !isShellAvailable("nu")) return;
+    const output = testFixedGlobPrefix("nu", {
+      kind: "file",
+      type: "file",
+      pattern: "fixtures/*/*.txt",
+      includeHidden: scenario.hidden,
+    }, scenario.prefix);
+    for (const value of scenario.include) {
+      ok(output.includes(value), `Expected ${value}:\n${output}`);
+    }
+    for (const value of scenario.exclude) {
+      ok(!output.includes(value), `Unexpected ${value}:\n${output}`);
+    }
+  });
+}
+
+for (
+  const prefix of [
+    "'fixtures/re",
+    '"fixtures/re',
+    "'fixtures/re'",
+    '"fixtures/re"',
+  ]
+) {
+  it(`PowerShell fixed glob with quoted prefix ${prefix}`, {
+    skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+  }, () => {
+    if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+    const output = testFixedGlobPrefix("pwsh", {
+      kind: "file",
+      type: "file",
+      pattern: "fixtures/*.txt",
+    }, prefix);
+    ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
+    ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
+  });
+}
+
+for (const includeHidden of [false, true]) {
+  it(
+    `PowerShell fixed glob in a hidden parent (includeHidden: ${includeHidden})`,
+    {
+      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+    },
+    () => {
+      if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+      for (const prefix of ["fixtures/.reports/in", "fixtures/reports/"]) {
+        const output = testFixedGlobPrefix("pwsh", {
+          kind: "file",
+          type: "file",
+          pattern: "fixtures/*/*.txt",
+          extensions: ["txt"],
+          includeHidden,
+        }, prefix);
+        ok(output.includes("inner.txt"), `Expected fixed match:\n${output}`);
+        ok(!output.includes("inner.json"), `Unexpected nonmatch:\n${output}`);
+        if (prefix.endsWith("/")) {
+          if (includeHidden) {
+            ok(
+              output.includes(".secret.txt"),
+              `Expected hidden child:\n${output}`,
+            );
+          } else {ok(
+              !output.includes(".secret.txt"),
+              `Unexpected hidden child:\n${output}`,
+            );}
+        }
+      }
+    },
+  );
+}
+
+it("zsh fixed glob retains regular files and ordered tag fallback", {
+  skip: !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo"),
+  timeout: 10000,
+}, () => {
+  if (!isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo")) {
+    return;
+  }
+  const directive = Array.from(zsh.encodeSuggestions([{
+    kind: "file",
+    type: "file",
+    pattern: "*.txt",
+  }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+  for (const firstTag of [undefined, "files", "directories"]) {
+    const output = testInteractiveZshCompletion(
+      zsh.generateScript("extapp"),
+      directive,
+      [
+        { path: "report.txt" },
+        { path: "report.json" },
+        { path: "report-link.txt", type: "symlink", target: "report.txt" },
+        { path: "report-pipe.txt", type: "fifo" },
+        { path: "reports", type: "directory" },
+      ],
+      {
+        prefix: "re",
+        setup: firstTag == null
+          ? ""
+          : `zstyle ':completion:*' tag-order '${firstTag}' '${
+            firstTag === "files" ? "directories" : "files"
+          }'`,
+      },
+    );
+    ok(!output.includes("report.json"), output);
+    ok(!output.includes("report-pipe.txt"), output);
+    if (firstTag === "directories") {
+      ok(output.includes("reports/"), output);
+      ok(!output.includes("report.txt"), output);
+    } else {
+      ok(output.includes("report.txt"), output);
+      ok(output.includes("report-link.txt"), output);
+      if (firstTag == null) ok(output.includes("reports/"), output);
+      else ok(!output.includes("reports/"), output);
+    }
+  }
+});
