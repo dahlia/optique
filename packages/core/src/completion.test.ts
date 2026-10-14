@@ -2946,6 +2946,76 @@ fi
       );
     }
 
+    for (
+      const pattern of [
+        "src/*(#qm+1)",
+        "src/*(#q.)(#qm+1)",
+        "src/*(#qm+1)(#q.)",
+      ]
+    ) {
+      it(`should preserve normalized chained Zsh qualifiers ${pattern}`, {
+        skip: !isInteractiveZshCompletionAvailable(),
+      }, () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [{ path: "src", type: "directory" }, { path: "src/old.txt" }, {
+            path: "src/fresh.txt",
+          }],
+          {
+            input: "extapp --format x\\)",
+            backend:
+              `touch -t 200001010000 src/old.txt\nprintf '%s\\0\\0\\n' '__FILE__:file::${pattern}:0'`,
+            expectedArgs: ["--format", "x)"],
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(output, "extapp --format src/old.txt ");
+      });
+    }
+
+    for (const type of ["file", "any", "directory"]) {
+      for (
+        const qualifiers of [
+          "(#qe:touch MARK:)(#qm+1)",
+          "(#q+mark)(#q.)(#qm+1)",
+          "(#qe!touch MARK!)(#q.)",
+          "(#qm+1)(#qe!touch MARK!)",
+        ]
+      ) {
+        it(
+          `should block chained executable Zsh qualifiers ${type}: ${qualifiers}`,
+          { skip: !isInteractiveZshCompletionAvailable() },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              "",
+              [{ path: "src", type: "directory" }, {
+                path: "src/old",
+                ...(type === "directory" ? { type: "directory" as const } : {}),
+              }],
+              {
+                setup: `setopt globcomplete extendedglob; ${
+                  type === "file" ? "" : "unsetopt bareglobqual; "
+                }mark() { touch MARK; }`,
+                input: "extapp --format ",
+                backend:
+                  `touch -t 200001010000 src/old\nprintf '%s\\0\\0\\n' '__FILE__:${type}::src/*${
+                    qualifiers.replaceAll(":", "%3A")
+                  }:0'`,
+                expectedArgs: ["--format", ""],
+                captureBuffer: true,
+                absentFiles: ["MARK"],
+              },
+            );
+            deepStrictEqual(output, "extapp --format ");
+          },
+        );
+      }
+    }
+
     const fileCompletionBackend = `pattern="\${2#@}"
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"

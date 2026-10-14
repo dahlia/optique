@@ -1085,17 +1085,19 @@ function ${functionName} () {
             local __code_qualifier=0
             local __fixed_qualifier_base=""
             local __safe_qualifiers='([-/F.@=p*rwxAIERWXsStUG^MTNDn,]|[ugdl]<->|[amc]([Mwhmsd]|)([-+]|)<->|L([kKmMgGtTpP]|)([-+]|)<->|[oO][nLlamcdN])##'
-            if _have_glob_qual "\$pattern" complete; then
-              local __qualifier="\$match[5]"
+            local __qualifier_pattern="\$pattern" __qualifier
+            while _have_glob_qual "\$__qualifier_pattern" complete; do
+              __qualifier="\${match[5]#\\#q}"
+              __qualifier_pattern="\$match[2]"
               # A numeric sense (+1) is not a function qualifier (+name).
               # Accept only bounded attribute/sort syntax in this exception.
               # Expand the pattern at runtime after unsetting SH_GLOB.
               if [[ "\$__qualifier" == \${~__safe_qualifiers} ]]; then
-                __fixed_qualifier_base="\$match[2]"
+                __fixed_qualifier_base="\$__qualifier_pattern"
               elif [[ "\$__qualifier" == *[e+]* ]]; then
                 __code_qualifier=1
               fi
-            fi
+            done
             # Partial overlaps with complete backend classes/groups remain
             # syntax. A complete input-provided expression can be literal.
             local -a __syntax_starts=() __syntax_ends=() __group_stack=()
@@ -1189,10 +1191,14 @@ function ${functionName} () {
               local __backend_tilde="\${__backend_pattern#\\~}"
               __backend_tilde="\${__backend_tilde%%/*}"
               local __unsafe_backend_qualifier=0
-              if _have_glob_qual "\$__backend_pattern" complete &&
-                 [[ "\$match[5]" != \${~__safe_qualifiers} ]]; then
-                __unsafe_backend_qualifier=1
-              fi
+              __qualifier_pattern="\$__backend_pattern"
+              while _have_glob_qual "\$__qualifier_pattern" complete; do
+                __qualifier="\${match[5]#\\#q}"
+                __qualifier_pattern="\$match[2]"
+                if [[ "\$__qualifier" != \${~__safe_qualifiers} ]]; then
+                  __unsafe_backend_qualifier=1
+                fi
+              done
               # Retain trusted wildcards and safe attribute qualifiers when
               # all executable syntax belongs to the quoted input.
               if [[ -n "\$__input_part" &&
@@ -1312,12 +1318,17 @@ function ${functionName} () {
               local -a match mbegin mend
               # Native qualifier copying concatenates flags with the explicit
               # regular-file group.  Keep backend attributes in their own group.
-              if [[ -n "\$compstate[pattern_match]" && -z "\$SUFFIX" ]] &&
-                 _have_glob_qual "\$PREFIX" complete; then
-                local file_qualifier="\${match[5]#\\#q}"
-                file_pattern_prefix="\$match[2]"
-                file_pattern+="(#q\$file_qualifier)"
-                file_directory_pattern="*(#q-/)(#q\$file_qualifier)"
+              if [[ -n "\$compstate[pattern_match]" && -z "\$SUFFIX" ]]; then
+                local file_qualifier file_qualifiers=""
+                while _have_glob_qual "\$file_pattern_prefix" complete; do
+                  file_qualifier="\${match[5]#\\#q}"
+                  file_pattern_prefix="\$match[2]"
+                  file_qualifiers="(#q\$file_qualifier)\$file_qualifiers"
+                done
+                if [[ -n "\$file_qualifiers" ]]; then
+                  file_pattern+="\$file_qualifiers"
+                  file_directory_pattern="*(#q-/)\$file_qualifiers"
+                fi
               fi
               local file_subtree_pattern="**/*(#q/N)"
               local -a file_subtree=() file_recursive_patterns=()
