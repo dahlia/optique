@@ -1331,7 +1331,7 @@ nu-complete-${programName} '${programName} --archive __PREFIX__' | get value | t
                 complete([".tar[1].gz"], rawDots),
                 [
                   "bdir/",
-                  shell === nu ? "'bundle.tar[1].gz'" : "bundle.tar[1].gz",
+                  "'bundle.tar[1].gz'",
                 ].sort(),
               );
             }
