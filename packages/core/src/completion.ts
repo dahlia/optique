@@ -950,6 +950,8 @@ function ${functionName} () {
           if [[ "\$__initial_leaf" == *[\*\?]* &&
                 "\$__initial_directory" != *[\*\?]* &&
                 "\$__initial_directory" != *["[]()"]* &&
+                "\$__initial_leaf" != *["[]"]* &&
+                "\$__initial_leaf" != *'\\'* &&
                 "\$__initial_leaf" != *[[:space:]]* &&
                 "\$__initial_leaf" != *["#~^()|<>;&"]* &&
                 "\$__initial_leaf" != *"'"* && "\$__initial_leaf" != *'"'* ]]; then

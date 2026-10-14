@@ -3114,6 +3114,66 @@ fi
           expected: "extapp --file ",
         },
         {
+          name: "excluded filename brackets (file)",
+          type: "file" as const,
+          pattern: "foo[1]*.txt",
+          files: [
+            { path: "foo[1]-a.txt" },
+            { path: "foo1-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename backslash (file)",
+          type: "file" as const,
+          pattern: "foo\\name*.txt",
+          files: [
+            { path: "foo\\name-a.txt" },
+            { path: "fooname-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename brackets (any)",
+          type: "any" as const,
+          pattern: "foo[1]*.txt",
+          files: [
+            { path: "foo[1]-a.txt" },
+            { path: "foo1-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename backslash (any)",
+          type: "any" as const,
+          pattern: "foo\\name*.txt",
+          files: [
+            { path: "foo\\name-a.txt" },
+            { path: "fooname-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename brackets (directory)",
+          type: "directory" as const,
+          pattern: "foo[1]*.txt",
+          files: [
+            { path: "foo[1]-a.txt", type: "directory" as const },
+            { path: "foo1-b.txt", type: "directory" as const },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename backslash (directory)",
+          type: "directory" as const,
+          pattern: "foo\\name*.txt",
+          files: [
+            { path: "foo\\name-a.txt", type: "directory" as const },
+            { path: "fooname-b.txt", type: "directory" as const },
+          ],
+          expected: "extapp --file ",
+        },
+        {
           name: "excluded filename glob operator",
           pattern: "report(1)*.txt",
           files: [{ path: "report1b.txt" }],
