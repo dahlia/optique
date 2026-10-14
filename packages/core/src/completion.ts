@@ -1345,7 +1345,6 @@ function ${functionName} () {
                 file_pattern="\${(j: :)__initial_file_patterns}"
               fi
               local file_pattern_prefix="\$PREFIX"
-              local file_directory_pattern=""
               local -a match mbegin mend
               # Native qualifier copying concatenates flags with the explicit
               # regular-file group.  Keep backend attributes in their own group.
@@ -1358,7 +1357,6 @@ function ${functionName} () {
                 done
                 if [[ -n "\$file_qualifiers" ]]; then
                   file_pattern+="\$file_qualifiers"
-                  file_directory_pattern="*(#q-/)\$file_qualifiers"
                 fi
               fi
               local file_subtree_pattern="**/*(#q/N)"
@@ -1377,11 +1375,9 @@ function ${functionName} () {
                     local file_tag_prefix="\$PREFIX"
                     PREFIX="\$file_pattern_prefix"
                     while _next_label directories expl directory; do
-                      if [[ -n "\$file_directory_pattern" ]]; then
-                        _path_files -g "\$file_directory_pattern" "\${expl[@]}" && file_matched=1
-                      else
-                        _path_files -/ "\${expl[@]}" && file_matched=1
-                      fi
+                      # File qualifiers constrain final results, not the
+                      # directories needed to navigate to those results.
+                      _path_files -/ "\${expl[@]}" && file_matched=1
                     done
                     PREFIX="\$file_tag_prefix"
                   else

@@ -3047,6 +3047,48 @@ fi
       );
     }
 
+    for (const qualifiers of ["(-.)", "(#q-.)", "(#q-.)(#qm+1)"]) {
+      for (const firstTag of ["directories", "files"]) {
+        it(
+          `should retain Zsh directory navigation with file qualifiers ${qualifiers}: ${firstTag}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              "",
+              [
+                { path: "src", type: "directory" },
+                { path: "src/reports", type: "directory" },
+                { path: "src/old.txt" },
+                { path: "src/fresh.json" },
+                { path: "src/report-pipe.txt", type: "fifo" },
+              ],
+              {
+                setup:
+                  `setopt globcomplete extendedglob; zstyle ':completion:*' tag-order '${firstTag}' '${
+                    firstTag === "files" ? "directories" : "files"
+                  }'`,
+                input: "extapp --format @",
+                backend:
+                  `touch -t 200001010000 src/old.txt\nprintf '%s\\0\\0\\n' '__FILE__:file:txt:src/*${qualifiers}:0'`,
+                expectedArgs: ["--format", "@"],
+                captureBuffer: true,
+              },
+            );
+            deepStrictEqual(
+              output,
+              `extapp --format src/${
+                firstTag === "directories" ? "reports/" : "old.txt "
+              }`,
+            );
+          },
+        );
+      }
+    }
+
     const fileCompletionBackend = `pattern="\${2#@}"
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"
