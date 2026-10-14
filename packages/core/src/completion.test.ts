@@ -2797,6 +2797,48 @@ fi
       });
     }
 
+    for (const quote of ["'", '"']) {
+      for (const closed of [false, true]) {
+        it(`should retain joined Zsh quote prefix ${quote} closed=${closed}`, {
+          skip: !isInteractiveZshCompletionAvailable(),
+        }, () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [],
+            {
+              setup: "setopt complete_in_word",
+              input: `extapp --format=${quote}j${closed ? quote : ""}`,
+              backend:
+                `[[ "$1" == --format=j ]] && printf '%s\\0\\0\\n' --format=json`,
+              expectedArgs: ["--format=j"],
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, "extapp --format=json ");
+        });
+      }
+      it(`should retain mixed Zsh quote prefix ${quote}`, {
+        skip: !isInteractiveZshCompletionAvailable(),
+      }, () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [],
+          {
+            input: `extapp --format j${quote}s`,
+            backend:
+              `[[ "$1" == --format && "$2" == js ]] && printf '%s\\0\\0\\n' json`,
+            expectedArgs: ["--format", "js"],
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(output, "extapp --format json ");
+      });
+    }
+
     const fileCompletionBackend = `pattern="\${2#@}"
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"
