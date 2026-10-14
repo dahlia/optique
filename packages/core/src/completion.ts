@@ -937,7 +937,8 @@ function ${functionName} () {
         # keep PREFIX unchanged for incremental narrowing.
         local __saved_prefix="\$PREFIX"
         local __initial_file_pattern="" __initial_directory="" __initial_leaf=""
-        if [[ ( "\$type" == "file" || "\$type" == "any" ) && -z "\$current\$PREFIX\$SUFFIX" &&
+        if [[ ( "\$type" == "file" || "\$type" == "any" || "\$type" == "directory" ) &&
+              -z "\$current\$PREFIX\$SUFFIX" &&
               -z "\${compstate[pattern_match]}" &&
               "\$pattern" != /* && "\$pattern" != "~"* ]]; then
           if [[ "\$pattern" == */* ]]; then
@@ -1059,7 +1060,12 @@ function ${functionName} () {
             fi
             ;;
           directory)
-            _directories
+            if [[ -n "\$__initial_file_pattern" ]]; then
+              # -/ would add every directory alongside the filtered glob.
+              _wanted directories expl directory _path_files -g "\${__initial_file_pattern}(#q-/)"
+            else
+              _directories
+            fi
             ;;
           any)
             if [[ -n "\$__initial_file_pattern" ]]; then

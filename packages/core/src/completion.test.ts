@@ -2820,6 +2820,71 @@ fi
     for (
       const testCase of [
         {
+          name: "directory-only relative glob",
+          type: "directory" as const,
+          pattern: "tmp/foo*",
+          files: [
+            { path: "tmp/foobar", type: "directory" as const },
+            { path: "tmp/other", type: "directory" as const },
+            { path: "tmp/foofile" },
+          ],
+          expected: "extapp --file tmp/foobar/",
+        },
+        {
+          name: "directory-only root glob",
+          type: "directory" as const,
+          pattern: "foo?",
+          files: [
+            { path: "foo1", type: "directory" as const },
+            { path: "other", type: "directory" as const },
+            { path: "foo2" },
+          ],
+          expected: "extapp --file foo1/",
+        },
+        {
+          name: "directory-only unmatched glob",
+          type: "directory" as const,
+          pattern: "tmp/foo*",
+          files: [
+            { path: "tmp/other", type: "directory" as const },
+            { path: "tmp/foofile" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "directory-only glob ignores file extensions",
+          type: "directory" as const,
+          pattern: "tmp/foo*",
+          extensions: [".txt"],
+          files: [
+            { path: "tmp/foobar", type: "directory" as const },
+            { path: "tmp/other", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/foobar/",
+        },
+        {
+          name: "directory-only directories-tag ignored pattern",
+          type: "directory" as const,
+          pattern: "foo*",
+          files: [
+            { path: "foobar", type: "directory" as const },
+            { path: "foobaz", type: "directory" as const },
+            { path: "other", type: "directory" as const },
+          ],
+          setup: "zstyle ':completion:*:directories' ignored-patterns 'foobaz'",
+          expected: "extapp --file foobar/",
+        },
+        {
+          name: "directory-only glob in a directory with spaces",
+          type: "directory" as const,
+          pattern: "my docs/foo*",
+          files: [
+            { path: "my docs/foobar", type: "directory" as const },
+            { path: "my docs/other", type: "directory" as const },
+          ],
+          expected: "extapp --file my\\ docs/foobar/",
+        },
+        {
           name: "any entry directory glob",
           type: "any" as const,
           pattern: "tmp/fixtures/*.txt",
