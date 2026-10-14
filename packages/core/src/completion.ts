@@ -1069,8 +1069,10 @@ function ${functionName} () {
             fi
           else
             local __native_pattern="\$pattern"
-            # Backend globs must match even without the caller's GLOB_COMPLETE.
-            if [[ -n "\$compstate[context]" && "\$pattern" == *[\\*\\?\\[]* ]]; then
+            # Initial globs use the conservative native filters above.
+            # Retained input and protected markers still need pattern matching.
+            if [[ -n "\$compstate[context]" && "\$pattern" == *[\\*\\?\\[]* &&
+                  ( -n "\$current" || "\$pattern" == *'$'* || "\$pattern" == *'\`'* ) ]]; then
               compstate[pattern_match]='*'
               __pattern_match_changed=1
             fi
