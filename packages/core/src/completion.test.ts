@@ -2868,6 +2868,51 @@ fi
       });
     }
 
+    for (
+      const [typed, pattern, file, completed, oldFile] of [
+        ["\\$", "src/*[$]x", "src/a$x", "src/a\\$x ", false],
+        ["\\`", "src/*[`]x", "src/a`x", "src/a\\`x ", false],
+        ["\\[", "src/*[ab]x", "src/aax", "src/aax ", false],
+        ["@\\[a\\]", "src/*[a]*", "src/x[a]y.txt", "src/x\\[a\\]y.txt ", false],
+        ["\\[", "src/*[ab]x[", "src/aax[", "src/aax\\[ ", false],
+        ["x\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
+        ["x1\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
+        ["x+1\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
+      ] as const
+    ) {
+      it(
+        `should preserve fixed Zsh syntax overlapping input ${typed}: ${pattern}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+        },
+        () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          const encodedPattern = pattern.replaceAll("%", "%25").replaceAll(
+            ":",
+            "%3A",
+          );
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [
+              { path: "src", type: "directory" },
+              { path: file },
+              ...(oldFile ? [{ path: "src/fresh.txt" }] : []),
+            ],
+            {
+              input: `extapp --format ${typed}`,
+              backend:
+                `${oldFile ? "touch -t 200001010000 src/old.txt\n" : ""}` +
+                `printf '%s\\0\\0\\n' '__FILE__:file::${encodedPattern}:0'`,
+              expectedArgs: ["--format", typed.replaceAll("\\", "")],
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
+    }
+
     const fileCompletionBackend = `pattern="\${2#@}"
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"

@@ -1096,14 +1096,77 @@ function ${functionName} () {
                 __code_qualifier=1
               fi
             fi
-            # Find literal input retained by a custom pattern before
-            # deciding whether its backend wildcards need protection.
+            # Partial overlaps with complete backend classes remain syntax.
+            # A complete input-provided class can still be literal text.
+            local -a __class_starts=() __class_ends=()
+            local -i __scan_index __class_begin=0 __member_begin=0
+            local __scan_char __nested_class=""
+            for (( __scan_index=1; __scan_index <= \${#pattern}; __scan_index++ )); do
+              __scan_char="\${pattern[__scan_index]}"
+              if [[ "\$__scan_char" == '\\' ]]; then
+                (( __scan_index++ ))
+              elif (( __class_begin )); then
+                if [[ "\$__scan_char" == '[' && "\${pattern[__scan_index+1]}" == [:.=] ]]; then
+                  __nested_class="\${pattern[__scan_index+1]}"
+                elif [[ -n "\$__nested_class" && "\$__scan_char" == "\$__nested_class" && "\${pattern[__scan_index+1]}" == ']' ]]; then
+                  (( __scan_index++ ))
+                  __nested_class=""
+                elif [[ -z "\$__nested_class" && "\$__scan_char" == ']' ]] && (( __scan_index > __member_begin )); then
+                  __class_starts+=("\$__class_begin")
+                  __class_ends+=("\$__scan_index")
+                  __class_begin=0
+                elif (( __scan_index == __member_begin )) &&
+                     [[ "\$__scan_char" == '!' || "\$__scan_char" == '^' ]] &&
+                     [[ "\${pattern[__scan_index+1]}" != ']' || "\${pattern[__scan_index+2,-1]}" == *']'* ]]; then
+                  (( __member_begin++ ))
+                fi
+              elif [[ "\$__scan_char" == '[' ]]; then
+                __class_begin=\$__scan_index
+                __member_begin=\$(( __scan_index + 1 ))
+              fi
+            done
+            # Search retained input only where it cannot split fixed syntax.
             local __input_part="\$current"
-            while [[ -n "\$__input_part" && "\$pattern" != *"\$__input_part"* ]]; do
+            local __backend_prefix="\$pattern" __backend_suffix=""
+            local __search_pattern __candidate_prefix
+            local -i __search_offset __overlap_start __overlap_end __range_index __syntax_overlap
+            while [[ -n "\$__input_part" ]]; do
+              __search_pattern="\$pattern"
+              __search_offset=0
+              while [[ "\$__search_pattern" == *"\$__input_part"* ]]; do
+                __candidate_prefix="\${__search_pattern%%"\$__input_part"*}"
+                __overlap_start=\$(( __search_offset + \${#__candidate_prefix} + 1 ))
+                __overlap_end=\$(( __overlap_start + \${#__input_part} - 1 ))
+                __syntax_overlap=0
+                for (( __range_index=1; __range_index <= \${#__class_starts}; __range_index++ )); do
+                  if (( __overlap_start <= __class_ends[__range_index] &&
+                        __overlap_end >= __class_starts[__range_index] &&
+                        ( __overlap_start > __class_starts[__range_index] ||
+                          __overlap_end < __class_ends[__range_index] ) )); then
+                    __syntax_overlap=1
+                    break
+                  fi
+                done
+                # Every position in a recognized fixed attribute qualifier
+                # is backend syntax, including its closing parenthesis.
+                if [[ "\$__fixed_qualifier_base" == *[\\*\\?\\]] ]] &&
+                   (( __overlap_end > \${#__fixed_qualifier_base} )); then
+                  __syntax_overlap=1
+                fi
+                if (( ! __syntax_overlap )); then
+                  if (( __overlap_start == 1 )); then
+                    __backend_prefix=""
+                  else
+                    __backend_prefix="\${pattern[1,__overlap_start-1]}"
+                  fi
+                  __backend_suffix="\${pattern[__overlap_end+1,-1]}"
+                  break 2
+                fi
+                __search_offset=\$__overlap_start
+                __search_pattern="\${pattern[__overlap_start+1,-1]}"
+              done
               __input_part="\${__input_part[2,-1]}"
             done
-            local __backend_prefix="\${pattern%%"\$__input_part"*}"
-            local __backend_suffix="\${pattern#*"\$__input_part"}"
             local __quoted_input="\${(q)__input_part}"
             # Pattern matching removes quoting differently from normal
             # completion.  Character classes keep these characters literal.
@@ -1195,13 +1258,7 @@ function ${functionName} () {
               # of them.  Wildcard-only overlap remains backend syntax.
               if [[ "\$__input_part" == *[\\\\\\(\\)\\[\\#\\^\\|\\~\\<\\>\\*\\?]* &&
                     "\$__input_part" != [\\*\\?]## ]]; then
-                # An overlap inside a harmless fixed qualifier is backend
-                # syntax, rather than retained user text.
-                if [[ "\$__input_part" != '('* ||
-                      "\$__backend_prefix" != "\$__fixed_qualifier_base" ||
-                      "\$__fixed_qualifier_base" != *[\\*\\?\\]] ]]; then
-                  __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
-                fi
+                __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
               fi
             fi
             PREFIX="\$__native_pattern"
