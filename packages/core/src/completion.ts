@@ -170,7 +170,7 @@ function _${programName} () {
       esac
     fi
   done
-  local __tilde_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)$'
+  local __tilde_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local __tilde_glob_pattern='^(~[a-zA-Z0-9_.+-]*)(/.*)?$'
   local prev=("\${COMP_WORDS[@]:1:COMP_CWORD-1}")
   # Bash splits unquoted '=' at its default word breaks. Reassemble only
@@ -403,8 +403,9 @@ function _${programName} () {
 
       # path() echoes the raw shell word as its pattern.  Once dequoted,
       # use the literal current-word prefix instead of the escaped pattern.
-      if [[ ( "$pattern" == "$__raw_file_current" && "$__file_current" != "$__raw_file_current" ) ||
-            ( -n "$__reply_prefix" && "$pattern" == "$__file_current" ) ]]; then
+      if [[ "$pattern" == "$__raw_file_current" && "$__file_current" != "$__raw_file_current" ]] ||
+          { [[ -n "$__reply_prefix" ]] && [ "$pattern" = "$__file_current" ] &&
+            { [[ "$pattern" != *[\*\?]* ]] || [ "$__raw_file_current" != "$__file_current" ]; }; }; then
         pattern=""
       fi
 
@@ -438,7 +439,8 @@ function _${programName} () {
       # However, if the user has already typed beyond the pattern (e.g.,
       # pattern="src/" and current="src/ma"), preserve the typed suffix
       # for incremental filtering.
-      local __from_pattern=0
+      local __from_pattern=0 __filter_pattern=0 __pattern_prefix=""
+      local __pattern_tilde_prefix="" __pattern_tilde_expanded=""
       if [[ -n "$pattern" ]]; then
         # Normalize leading ./ so that ./src/ma matches pattern src/
         local __norm_current="\${__file_current#./}"
@@ -450,10 +452,27 @@ function _${programName} () {
           __compare_pattern="\${__compare_pattern%%[\*\?]*}"
           [[ "$__compare_pattern" == */* ]] && __compare_pattern="\${__compare_pattern%/*}/" || __compare_pattern=""
         fi
+        local __extends_pattern=0
         if [[ ( -n "$__compare_pattern" || -n "$__norm_current" ) && \${#__norm_current} -ge \${#__compare_pattern} && "\${__norm_current:0:\${#__compare_pattern}}" == "$__compare_pattern" && "$__file_current" != "$pattern" ]]; then
+          __extends_pattern=1
+        fi
+        if (( __extends_pattern )) && [[ "$__norm_pattern" != *[\*\?]* ]]; then
           # User has typed beyond or an equivalent form of the pattern
           true
         else
+          # Wildcards keep their file filter while the typed prefix narrows
+          # the resulting paths. Save the expanded prefix before using pattern.
+          if [[ "$__norm_pattern" == *[\*\?]* ]]; then
+            __filter_pattern=1
+            __pattern_prefix="$__glob_current"
+            # An unquoted value equal to its wildcard is a complete search
+            # pattern, not a literal filename prefix to filter against.
+            if [ "$__file_current" = "$pattern" ] && [ "$__raw_file_current" = "$__file_current" ]; then
+              __pattern_prefix=""
+            fi
+            __pattern_tilde_prefix="$__tilde_prefix"
+            __pattern_tilde_expanded="$__tilde_expanded"
+          fi
           __from_pattern=1
           # Reset tilde state from the current-word expansion so that a
           # non-tilde pattern is not rewritten through stale tilde state
@@ -482,36 +501,93 @@ function _${programName} () {
       # This runs after tilde expansion so that paths like ~/.config/ are
       # checked against the expanded path, not the literal ~ string.
       local __inside_hidden_path=0
-      case "/\${__glob_current%/}/" in
-        */.[!.]*/*|*/..?*/*) __inside_hidden_path=1 ;;
-      esac
+      local __hidden_directory_pattern='/[.]([^./][^/]*|[.][^/]+)/'
+      if [[ "/\${__glob_current%/}/" =~ $__hidden_directory_pattern ||
+            "/\${__pattern_prefix%/}/" =~ $__hidden_directory_pattern ]]; then
+        __inside_hidden_path=1
+      fi
       # Also check if the current prefix explicitly targets hidden entries
       # (e.g., user typed "." or ".e" to complete .env)
       local __prefix_targets_hidden=0
       local __prefix_base="\${__glob_current##*/}"
+      if [[ -n "$__pattern_prefix" ]]; then __prefix_base="\${__pattern_prefix##*/}"; fi
       [[ "$__prefix_base" == .* ]] && __prefix_targets_hidden=1
       if [[ "$hidden" == "1" || "$__inside_hidden_path" == "1" || "$__prefix_targets_hidden" == "1" ]]; then shopt -s dotglob; fi
 
       # Pre-expand file candidates.  When the glob base came from the
       # program's pattern and contains wildcard characters (* or ?),
-      # use it as-is via compgen -G (safe — no command substitution).
+      # expand it as data with shell globbing. Empty IFS avoids splitting paths;
+      # NUL records preserve spaces and newlines without requiring mapfile.
+      # Shell expansion respects dotglob on older Bash versions as well.
       # Otherwise append * to treat it as a prefix.
-      # Note: [ is NOT treated as a glob indicator because it commonly
-      # appears in literal filenames like [draft] or foo[1].txt.
+      # Only * and ? are wildcard syntax; escape brackets, backslashes, and
+      # extended-glob operators so other pattern characters stay literal.
       local -a __candidates=()
       if [[ "$__from_pattern" == "1" && "$__glob_current" == *[\*\?]* ]]; then
-        mapfile -t __candidates < <(compgen -G "$__glob_current" 2>/dev/null)
+        local __pathname_glob="" __glob_char __glob_index
+        for ((__glob_index=0; __glob_index<\${#__glob_current}; __glob_index++)); do
+          __glob_char="\${__glob_current:__glob_index:1}"
+          case "$__glob_char" in
+            '['|']'|'\\'|'('|')'|'|'|'+'|'@'|'!')
+              __pathname_glob+="\\\\$__glob_char" ;;
+            *) __pathname_glob+="$__glob_char" ;;
+          esac
+        done
+        [[ "$type" == "directory" ]] && __pathname_glob="\${__pathname_glob%/}"
+        local __glob_dir="\${__pathname_glob%/*}"
+        [[ "$__glob_dir" == "$__pathname_glob" ]] && __glob_dir="."
+        [[ -z "$__glob_dir" ]] && __glob_dir="/"
+        local __navigation_dir="" __basename_glob="\${__pathname_glob##*/}"
+        # Once an offered directory is entered, keep the basename filter but
+        # enumerate there. Only descendants of matching pattern bases qualify.
+        if [[ "$__pattern_prefix" == */* ]]; then
+          local __typed_dir="\${__pattern_prefix%/*}" __base_dir __norm_base __norm_dir
+          # Resolve directory ancestry in subshells, preserving the typed spelling
+          # for insertion. The trailing slash also preserves newline-ending names.
+          if __norm_dir=$(CDPATH= builtin cd -P -- "$__typed_dir" >/dev/null 2>&1 && printf '%s/' "\${PWD%/}"); then
+            while IFS= read -r -d '' __base_dir; do
+              [[ -d "$__base_dir" ]] || continue
+              __norm_base=$(CDPATH= builtin cd -P -- "$__base_dir" >/dev/null 2>&1 && printf '%s/' "\${PWD%/}") || continue
+              if [ "\${__norm_dir:0:\${#__norm_base}}" = "$__norm_base" ]; then
+                __navigation_dir="$__typed_dir"
+                break
+              fi
+            done < <(IFS=; printf '%s\\0' $__glob_dir)
+          fi
+        fi
+        local __candidate
+        while IFS= read -r -d '' __candidate; do
+          if [[ -e "$__candidate" || -L "$__candidate" ]]; then
+            [[ -d "$__candidate" ]] && __candidate="\${__candidate%/}"
+            __candidates+=("$__candidate")
+          fi
+        done < <(
+          IFS=
+          if [[ -n "$__navigation_dir" ]]; then
+            printf '%s\\0' "$__navigation_dir"/$__basename_glob
+          else
+            printf '%s\\0' $__pathname_glob
+          fi
+        )
         # For file/any modes, also include directories from the base
         # directory for navigation even when the glob itself does not
         # match directory names.  Skip this for directory mode so that
         # the pattern's basename filter is respected.
         if [[ "$type" != "directory" ]]; then
-          local __glob_dir="\${__glob_current%/*}"
-          [[ "$__glob_dir" == "$__glob_current" ]] && __glob_dir="."
           local __d
-          for __d in "$__glob_dir"/*/; do
-            [[ -d "$__d" ]] && __candidates+=("\${__d%/}")
-          done
+          local __directory_pattern="\${__glob_dir%/}/*/"
+          while IFS= read -r -d '' __d; do
+            [[ -d "$__d" ]] || continue
+            __d="\${__d%/}"
+            __candidates+=("$__d")
+          done < <(
+            IFS=
+            if [[ -n "$__navigation_dir" ]]; then
+              printf '%s\\0' "$__navigation_dir"/*/
+            else
+              printf '%s\\0' $__directory_pattern
+            fi
+          )
         fi
       else
         __candidates=("$__glob_current"*)
@@ -520,6 +596,26 @@ function _${programName} () {
         if [[ \${#__candidates[@]} -eq 1 && ! -e "\${__candidates[0]}" && ! -L "\${__candidates[0]}" ]]; then
           __candidates=()
         fi
+      fi
+
+      if (( __filter_pattern )); then
+        local __nocasematch_was_set=0
+        shopt -q nocasematch && __nocasematch_was_set=1
+        if shopt -q nocaseglob; then shopt -s nocasematch; else shopt -u nocasematch; fi
+        local -a __filtered_candidates=()
+        for __candidate in "\${__candidates[@]}"; do
+          if [[ "$__candidate" == "$__pattern_prefix"* ||
+              "\${__candidate#./}" == "\${__pattern_prefix#./}"* ]]; then
+            if [[ "$__pattern_prefix" == ./* && "$__candidate" != ./* ]]; then
+              __candidate="./$__candidate"
+            elif [[ "$__pattern_prefix" != ./* && "$__pattern_prefix" != . ]]; then
+              __candidate="\${__candidate#./}"
+            fi
+            __filtered_candidates+=("$__candidate")
+          fi
+        done
+        if (( __nocasematch_was_set )); then shopt -s nocasematch; else shopt -u nocasematch; fi
+        __candidates=("\${__filtered_candidates[@]}")
       fi
 
       # Generate file completions based on type
@@ -583,6 +679,10 @@ function _${programName} () {
       esac
 
       # Restore tilde prefix in completion results
+      if (( __filter_pattern )); then
+        __tilde_prefix="$__pattern_tilde_prefix"
+        __tilde_expanded="$__pattern_tilde_expanded"
+      fi
       if [[ -n "$__tilde_prefix" &&
             ( -z "$__quote" || $__file_quote_offset -gt 0 ) ]]; then
         local __i
@@ -682,6 +782,31 @@ function _${programName} () {
       COMPREPLY+=("\${__word:\${#__remove}}")
     fi
   done
+  if (( \${#COMPREPLY[@]} > 1 )) && command -v sort >/dev/null 2>&1; then
+    # Sort shell-escaped keys, not filenames: each key occupies one line even
+    # when a candidate contains tabs or newlines. Keep the first occurrence's
+    # index, then restore the original order without evaluating escaped data.
+    # This works without associative arrays or NUL-aware sort on Bash 3.2.
+    local -a __unique_replies=()
+    local __index __key __last_key=""
+    while IFS= read -r __index; do
+      __unique_replies+=("\${COMPREPLY[__index]}")
+    done < <(
+      for ((__index=0; __index<\${#COMPREPLY[@]}; __index++)); do
+        printf '%q\\t%d\\n' "\${COMPREPLY[__index]}" "$__index"
+      done |
+        LC_ALL=C sort -t $'\\t' -k1,1 -k2,2n |
+        {
+          while IFS=$'\\t' read -r __key __index; do
+            if [ "$__key" != "$__last_key" ]; then
+              printf '%s\\n' "$__index"
+              __last_key="$__key"
+            fi
+          done
+        } | LC_ALL=C sort -n
+    )
+    COMPREPLY=("\${__unique_replies[@]}")
+  fi
   if [[ $__file_mode == 1 && $(type -t compopt) == builtin ]]; then
     compopt -o filenames 2>/dev/null || true
   fi
@@ -709,7 +834,9 @@ fi
           if (index > 0) yield "\n";
           yield `__JOINED_FILE__:${encodePattern(prefix)}:${file.type}:${
             encodeExtensions(file.extensions)
-          }::${file.includeHidden ? "1" : "0"}`;
+          }:${encodePattern(sanitizeForTransport(file.pattern ?? ""))}:${
+            file.includeHidden ? "1" : "0"
+          }`;
         }
       } else if (suggestion.kind === "literal") {
         yield encodeBashLiteral(suggestion.text);

@@ -1,7 +1,9 @@
 ---
 links:
   '#1031': https://github.com/dahlia/optique/issues/1031
+  '#1032': https://github.com/dahlia/optique/issues/1032
   '#1033': https://github.com/dahlia/optique/pull/1033
+  '#1079': https://github.com/dahlia/optique/pull/1079
 ---
  -  Fixed Bash completion of joined option values with `=` for long `-`
     options or `:` for `/` options and default or customized word-break
@@ -11,10 +13,33 @@ links:
     without executing shell substitutions. File values preserve their full
     prefix and filtering metadata when option names overlap, unquoted tilde
     expansion after quoted or split option names, and quoted path prefixes.
-    Exact literal
-    candidates, including dot-prefixed values, remain available alongside file
-    suggestions when hidden files are excluded. Hidden candidates allowed by
-    one file suggestion remain available alongside other file suggestions.
-    Option names quoted or escaped from their first character, partial option
-    names, and literal values resembling file
-    completion markers also complete correctly. [[#1031], [#1033]]
+    Exact literal candidates, including dot-prefixed values, remain available
+    alongside file suggestions when hidden files are excluded. Hidden candidates
+    allowed by one file suggestion remain available alongside other file
+    suggestions. Option names quoted or escaped from their first character,
+    partial option names, and literal values resembling file
+    completion markers also complete correctly. File suggestions with fixed
+    search patterns enumerate matching paths instead of inserting the pattern
+    as literal text, retain wildcard filters as values are typed, and honor
+    hidden-file settings without duplicate directory candidates, including on
+    older Bash versions. Fixed-pattern completion also preserves a typed `./`
+    prefix or its omission even for empty values, completes explicitly typed
+    hidden directories, follows `nocaseglob` when narrowing candidates, and
+    removes duplicate matches from overlapping patterns. Control characters in
+    joined fixed patterns no longer split or corrupt completion records.
+    Wildcard directory components remain navigable, and completion filters even
+    partial or unrelated typed prefixes instead of replacing them with all
+    matches. Large candidate sets remain responsive without changing suggestion
+    order. Typed tilde or absolute path forms remain intact when fixed patterns
+    use a different spelling. Bare unquoted `~` values also complete
+    home-relative patterns. Fixed Bash patterns treat brackets, backslashes,
+    and extended-glob operators literally alongside `*`/`?` wildcards.
+    Navigating into suggested directories retains fixed basename filters for
+    subsequent completions, including directory-only patterns and patterns
+    rooted directly at `/`. Unquoted fixed wildcard patterns still expand when
+    entered in full, while quoted or escaped wildcard prefixes remain literal.
+    A lone `.` prefix also completes `./` patterns, and navigation through `..`
+    no longer offers descendants outside matching pattern bases while allowing
+    parent-relative patterns and navigation that stays within their bases.
+    Completion candidates remain available when `sort` is missing.
+    [[#1031], [#1032], [#1033], [#1079]]

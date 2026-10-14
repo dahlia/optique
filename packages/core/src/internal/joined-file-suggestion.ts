@@ -30,10 +30,15 @@ export function joinedFileSuggestion(
     text: prefix + (file.pattern ?? ""),
     description: file.description,
   };
-  // Fixed custom patterns have their own completion semantics and stay literal.
-  if (file.pattern === undefined || file.pattern === value) {
-    joinedFiles.set(literal, { files: [{ prefix, file }], literal: false });
-  }
+  joinedFiles.set(literal, {
+    files: [{
+      prefix,
+      file: file.pattern === value && !/[?*]/.test(value)
+        ? { ...file, pattern: undefined }
+        : file,
+    }],
+    literal: false,
+  });
   return literal;
 }
 

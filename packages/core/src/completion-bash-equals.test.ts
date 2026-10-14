@@ -9,12 +9,13 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, relative } from "node:path";
 import process from "node:process";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { bash } from "./completion.ts";
-import { object } from "./constructs.ts";
+import { merge, object } from "./constructs.ts";
 import { multiple, optional } from "./modifiers.ts";
 import { suggest } from "./parser.ts";
 import { argument, option } from "./primitives.ts";
@@ -167,6 +168,96 @@ const withoutPattern = object({
   ...fields,
   config: optional(option("--config", patternlessFiles)),
 });
+const fixedPatternFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "file", type: "file", pattern: "src/*.toml" };
+  },
+};
+const fixedDirectories: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "file", type: "directory", pattern: "src/*" };
+  },
+};
+const fixedHiddenTomlFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield {
+      kind: "file",
+      type: "file",
+      pattern: "src/*",
+      extensions: [".toml"],
+      includeHidden: true,
+    };
+  },
+};
+const withFixedPattern = object({
+  ...fields,
+  config: optional(option("--config", "-config", fixedPatternFiles)),
+  directory: optional(option("--directory", fixedDirectories)),
+  hidden: optional(option("--hidden", fixedHiddenTomlFiles)),
+  prefixedPattern: optional(option("--prefixed-pattern", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "./src/*.toml",
+      };
+    },
+  })),
+  nestedPattern: optional(option("--nested-pattern", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "src/*/*.toml",
+      };
+    },
+  })),
+  rootPattern: optional(option("--root-pattern", {
+    ...string(),
+    *suggest() {
+      yield { kind: "file" as const, type: "file" as const, pattern: "*" };
+    },
+  })),
+  casing: optional(option("--casing", choice(["dev", "Dev"]))),
+  overlapping: optional(option("--overlapping", {
+    ...string(),
+    *suggest() {
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "src/*.toml",
+      };
+      yield {
+        kind: "file" as const,
+        type: "file" as const,
+        pattern: "src/main.*",
+      };
+    },
+  })),
+});
+const withFixedPatternAndSibling = merge(
+  withFixedPattern,
+  object({ positional: optional(argument(files)) }),
+);
+const literalCollisionFiles: ValueParser<"sync", string> = {
+  ...string(),
+  *suggest() {
+    yield { kind: "file", type: "file", pattern: "json" };
+  },
+};
+const withLiteralCollision = merge(
+  object({ format: optional(option("--format", choice(["json", "yaml"]))) }),
+  object({ positional: optional(argument(literalCollisionFiles)) }),
+);
+const withDirectoryLiteralCollision = merge(
+  object({ out: optional(option("--out", files)) }),
+  object({ positional: optional(argument(choice(["build", "test"]))) }),
+);
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
@@ -218,6 +309,13 @@ function tab(
   positional = false,
   omitPattern = false,
   cursorLeft = 0,
+  fixedPattern = false,
+  fixedPatternWithSibling = false,
+  literalCollision = false,
+  directoryLiteralCollision = false,
+  commandBudget = 0,
+  fixedGlobPattern?: string,
+  fixedGlobType: "file" | "directory" = "file",
 ): {
   readonly line: string;
   readonly replies: readonly string[];
@@ -230,14 +328,49 @@ function tab(
     writeFileSync(join(dir, "=leading.toml"), "");
     mkdirSync(join(dir, "dir=x"));
     writeFileSync(join(dir, "dir=x", ".hidden.toml"), "");
+    if (fixedPattern || fixedPatternWithSibling) {
+      mkdirSync(join(dir, "src"));
+      writeFileSync(join(dir, "src", "main.toml"), "");
+      writeFileSync(join(dir, "src", "main.txt"), "");
+      writeFileSync(join(dir, "src", ".hidden.toml"), "");
+      mkdirSync(join(dir, "src", "nested"));
+    }
+    if (directoryLiteralCollision) {
+      mkdirSync(join(dir, "build"));
+      writeFileSync(join(dir, "build", "a.txt"), "");
+    }
     const requests = [args];
     const branches = requests.map((request) => {
       const [first, ...rest] = request;
       assert.ok(first !== undefined);
       const protocol = Array.from(
         bash.encodeSuggestions(
-          omitPattern
+          fixedGlobPattern !== undefined
+            ? suggest(
+              object({
+                config: option("--config", {
+                  ...string(),
+                  *suggest() {
+                    yield {
+                      kind: "file" as const,
+                      type: fixedGlobType,
+                      pattern: fixedGlobPattern,
+                    };
+                  },
+                }),
+              }),
+              [first, ...rest],
+            )
+            : omitPattern
             ? suggest(withoutPattern, [first, ...rest])
+            : directoryLiteralCollision
+            ? suggest(withDirectoryLiteralCollision, [first, ...rest])
+            : literalCollision
+            ? suggest(withLiteralCollision, [first, ...rest])
+            : fixedPatternWithSibling
+            ? suggest(withFixedPatternAndSibling, [first, ...rest])
+            : fixedPattern
+            ? suggest(withFixedPattern, [first, ...rest])
             : positional
             ? suggest(withPositionalFiles, [first, ...rest])
             : suggest(parser, [first, ...rest]),
@@ -263,8 +396,18 @@ ${bash.generateScript("eqapp")}
 ${setup}
 capture() {
   local saved_words="$(declare -p COMP_WORDS)" saved_breaks="$COMP_WORDBREAKS"
+  local saved_nocasematch="$(shopt -p nocasematch)" saved_nocaseglob="$(shopt -p nocaseglob)"
+  local completion_steps=0
+  if (( ${commandBudget} > 0 )); then
+    set -T
+    trap '((++completion_steps <= ${commandBudget})) || exit 83' DEBUG
+  fi
   _eqapp "$@"
-  [[ "$(declare -p COMP_WORDS)" == "$saved_words" && "$COMP_WORDBREAKS" == "$saved_breaks" ]] && printf unchanged > state
+  if (( ${commandBudget} > 0 )); then
+    trap - DEBUG
+    set +T
+  fi
+  [[ "$(declare -p COMP_WORDS)" == "$saved_words" && "$COMP_WORDBREAKS" == "$saved_breaks" && "$(shopt -p nocasematch)" == "$saved_nocasematch" && "$(shopt -p nocaseglob)" == "$saved_nocaseglob" ]] && printf unchanged > state
   printf '%s\\n' "\${COMPREPLY[@]}" > replies
 }
 complete -F capture -- eqapp
@@ -294,6 +437,996 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
 }
 
 describe("joined Bash option completion", () => {
+  for (const prefix of ["src/nested/", "src/nested/de"]) {
+    it(`navigates a fixed directory-only pattern at ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --directory=${prefix}`,
+        [`--directory=${prefix}`],
+        "mkdir src/nested/deeper; touch src/nested/file.toml",
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(result.replies, ["src/nested/deeper/"]);
+      assert.equal(result.line, "eqapp --directory=src/nested/deeper/");
+    });
+  }
+  it("navigates a fixed glob rooted directly at /", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const dir = mkdtempSync(join(tmpdir(), "optique-root-glob-"));
+    try {
+      writeFileSync(join(dir, "child.toml"), "");
+      writeFileSync(join(dir, "child.txt"), "");
+      const result = tab(
+        `eqapp --config=${dir}/ch`,
+        [`--config=${dir}/ch`],
+        "",
+        false,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        0,
+        "/*.toml",
+      );
+      assert.deepEqual(result.replies, [`${dir}/child.toml`]);
+      assert.equal(result.line, `eqapp --config=${dir}/child.toml `);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it("navigates a directory-only glob ending in a slash", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/nested/de",
+      ["--config=src/nested/de"],
+      "mkdir src/nested/deeper; touch src/nested/file.toml",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      0,
+      "src/*/",
+      "directory",
+    );
+    assert.deepEqual(result.replies, ["src/nested/deeper/"]);
+  });
+  for (
+    const input of [
+      "eqapp --config=src/literal\\*",
+      "eqapp --config=src/'literal*'",
+      "eqapp --config=src/literal\\?",
+      "eqapp --config=src/'literal?'",
+    ]
+  ) {
+    it(`keeps echoed quoted or escaped wildcards literal in ${input}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const wildcard = input.includes("?") ? "?" : "*";
+      const result = tab(
+        input,
+        [`--config=src/literal${wildcard}`],
+        `mkdir src; touch 'src/literal${wildcard}one.toml' src/literal-other.toml`,
+      );
+      assert.deepEqual(result.replies, [`src/literal${wildcard}one.toml`]);
+      assert.ok(!result.line.includes("literal-other"));
+    });
+  }
+  it("expands a fixed wildcard that equals the typed value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/*.toml",
+      ["--config=src/*.toml"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/main.toml",
+      "src/nested/",
+    ]);
+    assert.equal(result.line, "eqapp --config=src/");
+  });
+  for (
+    const prefix of [
+      "src/nested/",
+      "src/nested/ch",
+      "./src/nested/ch",
+      "src/nested/deeper/gr",
+    ]
+  ) {
+    it(`keeps the fixed basename filter after navigating to ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "touch src/nested/child.toml src/nested/child.txt; mkdir src/nested/deeper; touch src/nested/deeper/grandchild.toml src/nested/deeper/grandchild.txt",
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(
+        [...result.replies].sort(),
+        prefix.endsWith("/")
+          ? ["src/nested/child.toml", "src/nested/deeper/"]
+          : prefix.endsWith("gr")
+          ? ["src/nested/deeper/grandchild.toml"]
+          : [`${prefix.startsWith("./") ? "./" : ""}src/nested/child.toml`],
+      );
+    });
+  }
+  for (const directory of ["nested/../other", "nested..name/deeper"]) {
+    it(`limits fixed-pattern navigation through ${directory}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const prefix = `src/${directory}/ch`;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "mkdir -p src/other src/nested..name/deeper; touch src/other/child.toml src/nested..name/deeper/child.toml",
+        false,
+        false,
+        0,
+        true,
+        false,
+        false,
+        false,
+        0,
+        "src/nested*/*.toml",
+      );
+      assert.deepEqual(
+        result.replies.filter(Boolean),
+        directory.includes("../") ? [] : [`src/${directory}/child.toml`],
+      );
+    });
+  }
+  it("navigates below wildcard directory components", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --nested-pattern=src/foo/nested/ch",
+      ["--nested-pattern=src/foo/nested/ch"],
+      "mkdir -p src/foo/nested; touch src/foo/nested/child.toml src/foo/nested/child.txt",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/foo/nested/child.toml"]);
+    assert.equal(
+      result.line,
+      "eqapp --nested-pattern=src/foo/nested/child.toml ",
+    );
+  });
+  it("keeps wildcard characters literal in an entered directory", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/'child*[x]'/ch",
+      ["--config=src/child*[x]/ch"],
+      "mkdir 'src/child*[x]'; touch 'src/child*[x]/child.toml' 'src/child*[x]/child.txt'",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/child*[x]/child.toml"]);
+  });
+  it(
+    "navigates with a fixed basename pattern rooted at the current directory",
+    {
+      skip: !ptyAvailable,
+    },
+    () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        "eqapp --config=dir=x/ch",
+        ["--config=dir=x/ch"],
+        "touch dir=x/child.toml dir=x/child.txt",
+        false,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        0,
+        "*.toml",
+      );
+      assert.deepEqual(result.replies, ["x/child.toml"]);
+      assert.equal(result.line, "eqapp --config=dir=x/child.toml ");
+    },
+  );
+  it("does not navigate outside matching fixed-pattern directories", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/other/ch",
+      ["--config=src/other/ch"],
+      "mkdir src/other; touch src/other/child.toml",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      0,
+      "src/nested*/*.toml",
+    );
+    assert.deepEqual(result.replies.filter(Boolean), []);
+    assert.equal(result.line, "eqapp --config=src/other/ch");
+  });
+  it("ignores nocasematch when checking navigation ancestry", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/NESTED/deeper/ch",
+      ["--config=src/NESTED/deeper/ch"],
+      "shopt -s nocasematch; mkdir -p src/NESTED/deeper; touch src/NESTED/deeper/child.toml",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      0,
+      "src/nested*/*.toml",
+    );
+    assert.deepEqual(result.replies.filter(Boolean), []);
+  });
+  for (const prefix of ["src/nested/deeper/../ch", "src/nested/./ch"]) {
+    it(`normalizes navigation within the matched base at ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "mkdir src/nested/deeper; touch src/nested/child.toml src/nested/child.txt",
+        false,
+        false,
+        0,
+        true,
+        false,
+        false,
+        false,
+        0,
+        "src/nested*/*.toml",
+      );
+      assert.deepEqual(result.replies, [`${prefix}ild.toml`]);
+    });
+  }
+  it("navigates within a parent-relative pattern base", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const dir = mkdtempSync(join(tmpdir(), "optique-parent-pattern-"));
+    try {
+      mkdirSync(join(dir, "configs", "nested"), { recursive: true });
+      writeFileSync(join(dir, "configs", "nested", "child.toml"), "");
+      writeFileSync(join(dir, "configs", "nested", "child.txt"), "");
+      const base = `../${relative(tmpdir(), dir)}/configs`;
+      const prefix = `${base}/nested/ch`;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "",
+        false,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        0,
+        `${base}/*.toml`,
+      );
+      assert.deepEqual(result.replies, [`${base}/nested/child.toml`]);
+      assert.equal(result.line, `eqapp --config=${base}/nested/child.toml `);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  for (const quoted of [false, true]) {
+    it(
+      `filters a fixed home-relative glob for a lone tilde (quoted=${quoted})`,
+      {
+        skip: !ptyAvailable,
+      },
+      (t) => {
+        if (!ptyAvailable) return;
+        const root = fileURLToPath(new URL("../../../tmp/", import.meta.url));
+        if (relative(homedir(), root).startsWith("..")) {
+          t.skip("The workspace is outside the home directory.");
+          return;
+        }
+        mkdirSync(root, { recursive: true });
+        const dir = mkdtempSync(join(root, "bash-lone-tilde-"));
+        try {
+          writeFileSync(join(dir, "main.toml"), "");
+          const base = `~/${relative(homedir(), dir)}`;
+          const input = `eqapp --config=${quoted ? "'~'" : "~"}`;
+          const result = tab(
+            input,
+            ["--config=~"],
+            "",
+            false,
+            false,
+            0,
+            false,
+            false,
+            false,
+            false,
+            0,
+            `${base}/*.toml`,
+          );
+          assert.deepEqual(
+            result.replies.filter(Boolean),
+            quoted ? [] : [`${base}/main.toml`],
+          );
+          assert.equal(
+            result.line,
+            quoted ? input : `eqapp --config=${base}/main.toml `,
+          );
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  }
+  for (const patternUsesTilde of [false, true]) {
+    it(
+      `keeps typed tilde spelling with a fixed glob (patternUsesTilde=${patternUsesTilde})`,
+      {
+        skip: !ptyAvailable,
+      },
+      (t) => {
+        if (!ptyAvailable) return;
+        const root = fileURLToPath(new URL("../../../tmp/", import.meta.url));
+        const homeRelative = relative(homedir(), root);
+        if (homeRelative.startsWith("..")) {
+          t.skip("The workspace is outside the home directory.");
+          return;
+        }
+        mkdirSync(root, { recursive: true });
+        const dir = mkdtempSync(join(root, "bash-tilde-pattern-"));
+        try {
+          writeFileSync(join(dir, "main.toml"), "");
+          const tildeDir = `~/${relative(homedir(), dir)}`;
+          const typedDir = patternUsesTilde ? dir : tildeDir;
+          const patternDir = patternUsesTilde ? tildeDir : dir;
+          const result = tab(
+            `eqapp --config=${typedDir}/ma`,
+            [`--config=${typedDir}/ma`],
+            "",
+            false,
+            false,
+            0,
+            false,
+            false,
+            false,
+            false,
+            0,
+            `${patternDir}/*.toml`,
+          );
+          assert.deepEqual(result.replies, [`${typedDir}/main.toml`]);
+          assert.equal(result.line, `eqapp --config=${typedDir}/main.toml `);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  }
+  for (
+    const { pattern, prefix, setup, reply } of [
+      {
+        pattern: "src/foo[1]*.toml",
+        prefix: "src/foo",
+        setup: "touch 'src/foo[1]-a.toml' src/foo1-b.toml",
+        reply: "src/foo[1]-a.toml",
+      },
+      {
+        pattern: "src/foo\\*.toml",
+        prefix: "src/foo",
+        setup: "touch 'src/foo\\name.toml' src/fooname.toml",
+        reply: "src/foo\\name.toml",
+      },
+      {
+        pattern: "src/@(foo|bar)*.toml",
+        prefix: "src/@",
+        setup: "shopt -s extglob; touch 'src/@(foo|bar)-a.toml' src/foo-b.toml",
+        // Readline replaces the part after its @ word break.
+        reply: "@(foo|bar)-a.toml",
+      },
+      {
+        pattern: "src/foo[1]*/file?.toml",
+        prefix: "src/foo",
+        setup: "mkdir -p 'src/foo[1]-a/nested' src/foo1-b/nested",
+        reply: "src/foo[1]-a/nested/",
+      },
+    ]
+  ) {
+    it(`keeps unsupported glob syntax literal in ${pattern}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        setup,
+        false,
+        false,
+        0,
+        true,
+        false,
+        false,
+        false,
+        0,
+        pattern,
+      );
+      assert.deepEqual(result.replies, [reply]);
+      assert.ok(result.line.startsWith("eqapp --config=src/"));
+      assert.ok(!result.line.includes("foo1-b"));
+    });
+  }
+  it("preserves a lone dot prefix for a ./ fixed pattern", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --prefixed-pattern=.",
+      ["--prefixed-pattern=."],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.ok(result.replies.includes("./src/main.toml"));
+    assert.ok(result.replies.includes("./src/nested/"));
+    assert.equal(result.line, "eqapp --prefixed-pattern=./src/");
+  });
+  it("preserves multiple candidates when sort is unavailable", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --mode=",
+      ["--mode="],
+      'PATH="$PWD"',
+    );
+    assert.deepEqual([...result.replies].sort(), ["dev", "prod"]);
+    assert.equal(result.line, "eqapp --mode=");
+  });
+  it("does not add a pattern-supplied ./ to an empty value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --prefixed-pattern=",
+      ["--prefixed-pattern="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/main.toml",
+      "src/nested/",
+    ]);
+    assert.equal(result.line, "eqapp --prefixed-pattern=src/");
+  });
+  for (const prefix of ["s", "foo"]) {
+    it(`filters a fixed glob for the nonextending prefix ${prefix}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        `eqapp --config=${prefix}`,
+        [`--config=${prefix}`],
+        "",
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(
+        result.replies.filter(Boolean).sort(),
+        prefix === "s" ? ["src/main.toml", "src/nested/"] : [],
+      );
+      assert.equal(
+        result.line,
+        `eqapp --config=${prefix === "s" ? "src/" : prefix}`,
+      );
+    });
+  }
+  it("expands wildcard directory components for navigation", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --nested-pattern=src/f",
+      ["--nested-pattern=src/f"],
+      "mkdir -p 'src/foo space/nested dir'",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/foo space/nested dir/"]);
+    assert.equal(
+      result.line,
+      "eqapp --nested-pattern=src/foo\\ space/nested\\ dir/",
+    );
+  });
+  it("completes thousands of files within a linear shell-command budget", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=bulk/",
+      ["--config=bulk/"],
+      "mkdir bulk; for i in {0001..2000}; do touch bulk/file-$i.toml; done",
+      false,
+      false,
+      0,
+      false,
+      false,
+      false,
+      false,
+      100000,
+    );
+    assert.equal(result.replies.length, 2000);
+    assert.equal(result.line, "eqapp --config=bulk/file-");
+  });
+  it("completes thousands of root directories without quadratic rescans", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --root-pattern=",
+      ["--root-pattern="],
+      "for i in {0001..2000}; do mkdir folder-$i; done",
+      false,
+      false,
+      0,
+      true,
+      false,
+      false,
+      false,
+      120000,
+    );
+    assert.equal(
+      result.replies.filter((reply) => reply.endsWith("/")).length,
+      2002,
+    );
+    assert.equal(result.line, "eqapp --root-pattern=");
+  });
+  it("deduplicates control-bearing filenames without changing their order", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const dir = mkdtempSync(join(tmpdir(), "optique-bash-dedup-"));
+    try {
+      const names = ["z", "a", "A", "a\ttab", "a\nline", "$(touch marker)"];
+      for (const name of names) writeFileSync(join(dir, name), "");
+      const replies = execFileSync("bash", [
+        "--noprofile",
+        "--norc",
+        "-c",
+        `
+export LC_ALL=C
+${bash.generateScript("eqapp")}
+eqapp() {
+  printf '%s\\n' '__JOINED_FILE__:--config=:file:::0' '__JOINED_FILE__:--config=:file:::0'
+}
+COMP_WORDS=(eqapp --config=)
+COMP_CWORD=1
+COMP_LINE='eqapp --config='
+COMP_POINT=\${#COMP_LINE}
+COMP_WORDBREAKS=''
+shopt -s nocasematch
+_eqapp
+shopt -q nocasematch || exit 84
+printf '%s\\0' "\${COMPREPLY[@]}"
+`,
+      ], { cwd: dir, encoding: "utf8", timeout: 15000 }).split("\0").slice(
+        0,
+        -1,
+      );
+      assert.deepEqual(replies, names.sort().map((name) => `--config=${name}`));
+      assert.ok(!existsSync(join(dir, "marker")));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it("keeps the omission of ./ when a fixed pattern includes it", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --prefixed-pattern=src/ma",
+      ["--prefixed-pattern=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp --prefixed-pattern=src/main.toml ");
+  });
+  it("enumerates an explicitly typed hidden directory in a fixed glob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --nested-pattern=src/.hidden/ma",
+      ["--nested-pattern=src/.hidden/ma"],
+      "mkdir src/.hidden; touch src/.hidden/main.toml",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/.hidden/main.toml"]);
+    assert.equal(result.line, "eqapp --nested-pattern=src/.hidden/main.toml ");
+  });
+  it("does not repeat root-glob directories with a ./ spelling", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --root-pattern=",
+      ["--root-pattern="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(
+      result.replies.filter((reply) => reply.endsWith("/")).sort(),
+      ["dir=x/", "src/"],
+    );
+  });
+  it("keeps distinct literals when deduplicating with nocasematch enabled", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --casing=",
+      ["--casing="],
+      "shopt -s nocasematch",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["dev", "Dev"]);
+  });
+  it("keeps the typed ./ prefix when narrowing a fixed glob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=./src/ma",
+      ["--config=./src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["./src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=./src/main.toml ");
+  });
+  it("deduplicates matches from overlapping fixed globs", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --overlapping=",
+      ["--overlapping="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/main.toml",
+      "src/main.txt",
+      "src/nested/",
+    ]);
+  });
+  for (const nocaseglob of [true, false]) {
+    it(`narrows fixed globs using nocaseglob=${nocaseglob}`, {
+      skip: !ptyAvailable,
+    }, () => {
+      if (!ptyAvailable) return;
+      const result = tab(
+        "eqapp --config=src/ma",
+        ["--config=src/ma"],
+        `mv src/main.toml src/Main.toml; shopt ${
+          nocaseglob ? "-s" : "-u"
+        } nocaseglob; shopt ${nocaseglob ? "-u" : "-s"} nocasematch`,
+        false,
+        false,
+        0,
+        true,
+      );
+      assert.deepEqual(result.replies, nocaseglob ? ["src/Main.toml"] : [""]);
+    });
+  }
+  it("includes explicitly typed hidden entries within a fixed glob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/.h",
+      ["--config=src/.h"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/.hidden.toml"]);
+  });
+  it("enumerates fixed globs without mapfile", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=",
+      ["--config="],
+      "enable -n mapfile 2>/dev/null || true",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml", "src/nested/"]);
+  });
+  it("includes hidden fixed-glob matches without duplicate directories", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --hidden=",
+      ["--hidden="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual([...result.replies].sort(), [
+      "src/.hidden.toml",
+      "src/main.toml",
+      "src/nested/",
+    ]);
+  });
+  it("includes hidden fixed-glob matches when compgen ignores dotglob", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --hidden=",
+      ["--hidden="],
+      'compgen() { ( shopt -u dotglob; builtin compgen "$@" ); }',
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.ok(result.replies.includes("src/.hidden.toml"));
+  });
+  it("enumerates a fixed file pattern for a joined value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/ma",
+      ["--config=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.calls, [
+      ["--config=src/ma"],
+    ]);
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=src/main.toml ");
+  });
+  it("enumerates a fixed pattern through a single-dash long option alias", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp -config=src/ma",
+      ["-config=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.calls, [["-config=src/ma"]]);
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp -config=src/main.toml ");
+  });
+  it("enumerates a fixed pattern for an empty joined value", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=",
+      ["--config="],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml", "src/nested/"]);
+    assert.equal(result.line, "eqapp --config=src/");
+  });
+  it("preserves a fixed pattern when equals is not a word break", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --config=src/ma",
+      ["--config=src/ma"],
+      'COMP_WORDBREAKS="${COMP_WORDBREAKS//=}"',
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["--config=src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=src/main.toml ");
+  });
+  it("preserves fixed directory suggestion metadata", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --directory=src/ne",
+      ["--directory=src/ne"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/nested/"]);
+    assert.equal(result.line, "eqapp --directory=src/nested/");
+  });
+  it("preserves fixed extension and hidden-file metadata", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const result = tab(
+      "eqapp --hidden=src/.h",
+      ["--hidden=src/.h"],
+      "",
+      false,
+      false,
+      0,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/.hidden.toml"]);
+    assert.equal(result.line, "eqapp --hidden=src/.hidden.toml ");
+  });
+  it("does not accept an unrelated sibling file directive", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    const retrySuggestions = Array.from(
+      suggest(withFixedPatternAndSibling, ["--config", "src/ma"]),
+    );
+    assert.deepEqual(retrySuggestions, [
+      { kind: "file", type: "file", pattern: "src/*.toml" },
+      { kind: "file", type: "file", pattern: "src/ma" },
+    ]);
+    const result = tab(
+      "eqapp --config=src/ma",
+      ["--config=src/ma"],
+      "",
+      false,
+      false,
+      0,
+      false,
+      true,
+    );
+    assert.deepEqual(result.replies, ["src/main.toml"]);
+    assert.equal(result.line, "eqapp --config=src/main.toml ");
+  });
+  it("preserves a literal that collides with a sibling file pattern", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    assert.deepEqual(
+      Array.from(suggest(withLiteralCollision, ["--format", "j"])),
+      [
+        { kind: "literal", text: "json" },
+        { kind: "file", type: "file", pattern: "json" },
+      ],
+    );
+    const result = tab(
+      "eqapp --format=j",
+      ["--format=j"],
+      "",
+      false,
+      false,
+      0,
+      false,
+      false,
+      true,
+    );
+    assert.deepEqual(result.replies, ["json"]);
+    assert.equal(result.line, "eqapp --format=json ");
+  });
+  it("keeps files when a sibling literal matches their pattern", {
+    skip: !ptyAvailable,
+  }, () => {
+    if (!ptyAvailable) return;
+    assert.deepEqual(
+      Array.from(suggest(withDirectoryLiteralCollision, ["--out", "build"])),
+      [
+        { kind: "file", type: "file", pattern: "build" },
+        { kind: "literal", text: "build" },
+      ],
+    );
+    const result = tab(
+      "eqapp --out=build",
+      ["--out=build"],
+      "",
+      false,
+      false,
+      0,
+      false,
+      false,
+      false,
+      true,
+    );
+    assert.deepEqual(result.replies, ["build/"]);
+    assert.equal(result.line, "eqapp --out=build/");
+  });
   for (
     const word of [
       "'--mode'=de",
