@@ -3016,6 +3016,37 @@ fi
       }
     }
 
+    for (
+      const [tilde, typed] of [["~+", "x~+"], ["~0", "x~0"], [
+        "~audit",
+        "x~audit",
+      ], ["~+", "\\~+"]]
+    ) {
+      it(
+        `should preserve a fixed Zsh tilde prefix overlapping input ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+        },
+        () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "file.txt" }],
+            {
+              setup:
+                'setopt globcomplete extendedglob; hash -d audit="$PWD/work"',
+              input: `extapp --format ${typed}`,
+              backend: `printf '%s\\0\\0\\n' '__FILE__:file::${tilde}/*:0'`,
+              expectedArgs: ["--format", typed.replaceAll("\\", "")],
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${tilde}/file.txt `);
+        },
+      );
+    }
+
     const fileCompletionBackend = `pattern="\${2#@}"
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"

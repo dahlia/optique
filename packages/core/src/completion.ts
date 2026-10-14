@@ -1138,6 +1138,12 @@ function ${functionName} () {
             local __backend_prefix="\$pattern" __backend_suffix=""
             local __search_pattern __candidate_prefix
             local -i __search_offset __overlap_start __overlap_end __range_index __syntax_overlap
+            local -i __fixed_tilde_end=0
+            local __tilde_expression='([+-]|[+-]<->|[[:alnum:]_.-]#)'
+            if [[ "\$pattern" == '~'* &&
+                  "\$__tilde_name" == \${~__tilde_expression} ]]; then
+              __fixed_tilde_end=\$(( \${#__tilde_name} + 1 ))
+            fi
             while [[ -n "\$__input_part" ]]; do
               __search_pattern="\$pattern"
               __search_offset=0
@@ -1146,6 +1152,11 @@ function ${functionName} () {
                 __overlap_start=\$(( __search_offset + \${#__candidate_prefix} + 1 ))
                 __overlap_end=\$(( __overlap_start + \${#__input_part} - 1 ))
                 __syntax_overlap=0
+                # Leading home/directory-stack/named-directory syntax belongs
+                # to the fixed pattern, even when the input overlaps it.
+                if (( __fixed_tilde_end && __overlap_start <= __fixed_tilde_end )); then
+                  __syntax_overlap=1
+                fi
                 for (( __range_index=1; __range_index <= \${#__syntax_starts}; __range_index++ )); do
                   if (( __overlap_start <= __syntax_ends[__range_index] &&
                         __overlap_end >= __syntax_starts[__range_index] &&
@@ -1274,6 +1285,26 @@ function ${functionName} () {
               fi
             fi
             PREFIX="\$__native_pattern"
+            # Match simple fixed tilde globs through native -g filters. The
+            # pattern matcher otherwise treats the leading ~ as glob syntax,
+            # even after _path_files has expanded it for filesystem lookup.
+            if (( __fixed_tilde_end )) && [[ -z "\$__input_part" &&
+                  "\$__native_pattern" == "\$pattern" && "\$pattern" == */* ]]; then
+              __initial_directory="\${pattern%/*}/"
+              __initial_leaf="\${pattern##*/}"
+              if [[ "\$__initial_leaf" == *[\*\?]* &&
+                    "\$__initial_directory" != *[\*\?]* &&
+                    "\$__initial_directory" != *["[]()"]* &&
+                    "\$__initial_leaf" != *["[]()#~^|<>;&"]* &&
+                    "\$__initial_leaf" != *'\\'* &&
+                    "\$__initial_leaf" != *[[:space:]]* &&
+                    "\$__initial_leaf" != *"'"* && "\$__initial_leaf" != *'"'* ]]; then
+                __initial_file_pattern="\$__initial_leaf"
+                PREFIX="\$__initial_directory"
+                compstate[pattern_match]=""
+                __pattern_match_changed=1
+              fi
+            fi
           fi
         fi
 
