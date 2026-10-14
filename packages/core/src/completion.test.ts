@@ -2913,6 +2913,39 @@ fi
       );
     }
 
+    for (
+      const [typed, pattern, file, completed] of [
+        ["x\\)", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
+        ["x\\|", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
+        ["x\\(", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
+        ["xmd\\)", "src/*.(txt|(md|rst))", "src/a.txt", "src/a.txt "],
+        ["@\\(a\\|b\\)", "src/*(a|b)*", "src/x(a|b)y", "src/x\\(a\\|b\\)y "],
+        ["x\\)", "src/*.(txt|md))", "src/a.txt)", "src/a.txt\\) "],
+      ] as const
+    ) {
+      it(
+        `should preserve fixed Zsh glob groups overlapping input ${typed}: ${pattern}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+        },
+        () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "src", type: "directory" }, { path: file }],
+            {
+              input: `extapp --format ${typed}`,
+              backend: `printf '%s\\0\\0\\n' '__FILE__:file::${pattern}:0'`,
+              expectedArgs: ["--format", typed.replaceAll("\\", "")],
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
+    }
+
     const fileCompletionBackend = `pattern="\${2#@}"
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"

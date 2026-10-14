@@ -1096,9 +1096,9 @@ function ${functionName} () {
                 __code_qualifier=1
               fi
             fi
-            # Partial overlaps with complete backend classes remain syntax.
-            # A complete input-provided class can still be literal text.
-            local -a __class_starts=() __class_ends=()
+            # Partial overlaps with complete backend classes/groups remain
+            # syntax. A complete input-provided expression can be literal.
+            local -a __syntax_starts=() __syntax_ends=() __group_stack=()
             local -i __scan_index __class_begin=0 __member_begin=0
             local __scan_char __nested_class=""
             for (( __scan_index=1; __scan_index <= \${#pattern}; __scan_index++ )); do
@@ -1112,8 +1112,8 @@ function ${functionName} () {
                   (( __scan_index++ ))
                   __nested_class=""
                 elif [[ -z "\$__nested_class" && "\$__scan_char" == ']' ]] && (( __scan_index > __member_begin )); then
-                  __class_starts+=("\$__class_begin")
-                  __class_ends+=("\$__scan_index")
+                  __syntax_starts+=("\$__class_begin")
+                  __syntax_ends+=("\$__scan_index")
                   __class_begin=0
                 elif (( __scan_index == __member_begin )) &&
                      [[ "\$__scan_char" == '!' || "\$__scan_char" == '^' ]] &&
@@ -1123,6 +1123,12 @@ function ${functionName} () {
               elif [[ "\$__scan_char" == '[' ]]; then
                 __class_begin=\$__scan_index
                 __member_begin=\$(( __scan_index + 1 ))
+              elif [[ "\$__scan_char" == '(' ]]; then
+                __group_stack+=("\$__scan_index")
+              elif [[ "\$__scan_char" == ')' ]] && (( \${#__group_stack} )); then
+                __syntax_starts+=("\${__group_stack[-1]}")
+                __syntax_ends+=("\$__scan_index")
+                __group_stack[-1]=()
               fi
             done
             # Search retained input only where it cannot split fixed syntax.
@@ -1138,11 +1144,11 @@ function ${functionName} () {
                 __overlap_start=\$(( __search_offset + \${#__candidate_prefix} + 1 ))
                 __overlap_end=\$(( __overlap_start + \${#__input_part} - 1 ))
                 __syntax_overlap=0
-                for (( __range_index=1; __range_index <= \${#__class_starts}; __range_index++ )); do
-                  if (( __overlap_start <= __class_ends[__range_index] &&
-                        __overlap_end >= __class_starts[__range_index] &&
-                        ( __overlap_start > __class_starts[__range_index] ||
-                          __overlap_end < __class_ends[__range_index] ) )); then
+                for (( __range_index=1; __range_index <= \${#__syntax_starts}; __range_index++ )); do
+                  if (( __overlap_start <= __syntax_ends[__range_index] &&
+                        __overlap_end >= __syntax_starts[__range_index] &&
+                        ( __overlap_start > __syntax_starts[__range_index] ||
+                          __overlap_end < __syntax_ends[__range_index] ) )); then
                     __syntax_overlap=1
                     break
                   fi
