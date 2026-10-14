@@ -2839,6 +2839,35 @@ fi
       });
     }
 
+    for (
+      const [pattern, file, completed] of [
+        ["src/*[$]x", "src/a$x", "src/a\\$x "],
+        ["src/*[`]x", "src/a`x", "src/a\\`x "],
+        ["src/*[q$]x", "src/a$x", "src/a\\$x "],
+        ["src/*[q`]x", "src/a`x", "src/a\\`x "],
+      ]
+    ) {
+      it(`should preserve protected Zsh marker classes ${pattern}`, {
+        skip: !isInteractiveZshCompletionAvailable(),
+      }, () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [
+            { path: "src", type: "directory" },
+            { path: file },
+          ],
+          {
+            input: "extapp --format ",
+            backend: `printf '%s\\0\\0\\n' '__FILE__:file::${pattern}:0'`,
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(output, `extapp --format ${completed}`);
+      });
+    }
+
     const fileCompletionBackend = `pattern="\${2#@}"
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"

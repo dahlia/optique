@@ -1145,10 +1145,47 @@ function ${functionName} () {
                   __dollar='[\$]'
                   __backtick='[\`]'
                 fi
-                __backend_prefix="\${__backend_prefix//\\\$/\$__dollar}"
-                __backend_prefix="\${__backend_prefix//\\\`/\$__backtick}"
-                __backend_suffix="\${__backend_suffix//\\\$/\$__dollar}"
-                __backend_suffix="\${__backend_suffix//\\\`/\$__backtick}"
+                # Existing glob classes already protect their markers.
+                local -a __backend_parts=()
+                local __part __escaped __char __class_kind
+                local -i __index __in_class __class_start
+                for __part in "\$__backend_prefix" "\$__backend_suffix"; do
+                  __escaped=""
+                  __in_class=0
+                  __class_kind=""
+                  for (( __index=1; __index <= \${#__part}; __index++ )); do
+                    __char="\${__part[__index]}"
+                    if [[ "\$__char" == '\\' ]]; then
+                      __escaped+="\$__char\${__part[__index+1]}"
+                      (( __index++ ))
+                      continue
+                    elif (( __in_class )); then
+                      if [[ "\$__char" == '[' && "\${__part[__index+1]}" == [:.=] ]]; then
+                        __class_kind="\${__part[__index+1]}"
+                      elif [[ -n "\$__class_kind" && "\$__char" == "\$__class_kind" && "\${__part[__index+1]}" == ']' ]]; then
+                        __escaped+="\$__char]"
+                        (( __index++ ))
+                        __class_kind=""
+                        continue
+                      elif [[ -z "\$__class_kind" && "\$__char" == ']' ]] && (( __index > __class_start )); then
+                        __in_class=0
+                      elif (( __index == __class_start )) && [[ "\$__char" == '!' || "\$__char" == '^' ]]; then
+                        (( __class_start++ ))
+                      fi
+                    elif [[ "\$__char" == '[' ]]; then
+                      __in_class=1
+                      __class_start=$(( __index + 1 ))
+                    elif [[ "\$__char" == '$' ]]; then
+                      __char="\$__dollar"
+                    elif [[ "\$__char" == '\`' ]]; then
+                      __char="\$__backtick"
+                    fi
+                    __escaped+="\$__char"
+                  done
+                  __backend_parts+=("\$__escaped")
+                done
+                __backend_prefix="\${__backend_parts[1]}"
+                __backend_suffix="\${__backend_parts[2]}"
                 __native_pattern="\$__backend_prefix\$__quoted_input\$__backend_suffix"
               fi
             else
