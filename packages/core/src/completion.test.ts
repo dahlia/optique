@@ -3041,11 +3041,8 @@ fi
       it(`should complete initial zsh file values: ${testCase.name}`, {
         skip: !isInteractiveZshCompletionAvailable(),
         timeout: 10000,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
+      }, () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
         const directive = Array.from(zsh.encodeSuggestions([{
           kind: "file",
           type: "file",
