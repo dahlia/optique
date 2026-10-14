@@ -187,7 +187,10 @@ function testInteractiveZshCompletion(
     readonly withInsecureFpath?: boolean;
     readonly setup?: string;
     readonly payload?: string;
+    readonly cliScript?: string;
     readonly input?: string;
+    readonly moveLeft?: number;
+    readonly tabCount?: number;
     readonly captureBuffer?: boolean;
     readonly programNames?: readonly string[];
     readonly autoload?: boolean;
@@ -214,13 +217,13 @@ function testInteractiveZshCompletion(
     }
     writeFileSync(
       cliPath,
-      options.payload == null
+      options.cliScript ?? (options.payload == null
         ? `#!/bin/bash
 printf '${directive}'
 `
         : `#!/bin/bash
 cat ${JSON.stringify(payloadPath)}
-`,
+`),
       { mode: 0o755 },
     );
 
@@ -337,14 +340,21 @@ ${
       (options.programNames ?? ["extapp"]).map((programName) => `
 zpty -w -n child ${JSON.stringify(options.input ?? `${programName} `)}
 sleep 0.1
-zpty -w -n child $'\\t'
-sleep 0.1
+for (( i=0; i < ${options.moveLeft ?? 0}; i++ )); do
+  zpty -w -n child $'\\x02'
+done
+for (( i=0; i < ${options.tabCount ?? 1}; i++ )); do
+  zpty -w -n child $'\\t'
+  sleep 0.1
+done
 ${
         options.captureBuffer === true
           ? `zpty -w -n child $'\\x18'
 __output+="$(__optique_drain_zpty ${JSON.stringify(bufferEndMarker)})"`
           : `${
-            options.tabPresses === 1 ? "" : "zpty -w -n child $'\\t'\nsleep 0.1"
+            options.tabCount != null || options.tabPresses === 1
+              ? ""
+              : "zpty -w -n child $'\\t'\nsleep 0.1"
           }
 zpty -w -n child $'\\x18'
 __output+="$(__optique_drain_zpty "__OPTIQUE_ZSH_BUFFER_END__")"`
@@ -2513,6 +2523,94 @@ fi
   });
 
   describe("zsh shell completion", () => {
+    for (
+      const testCase of [
+        {
+          name: "complete a literal in the middle of a word",
+          input: "extapp --format jn",
+          moveLeft: 1,
+          enabled: true,
+          expected: "extapp --format json ",
+        },
+        {
+          name: "complete an ordinary literal prefix",
+          input: "extapp --format j",
+          moveLeft: 0,
+          enabled: true,
+          expected: "extapp --format json ",
+        },
+        {
+          name: "reject an incompatible literal suffix",
+          input: "extapp --format jx",
+          moveLeft: 1,
+          enabled: true,
+          expected: "extapp --format jx",
+        },
+        {
+          name: "complete a literal with an empty prefix",
+          input: "extapp --format son",
+          moveLeft: 3,
+          enabled: true,
+          expected: "extapp --format json ",
+        },
+        {
+          name: "complete an opening-quoted literal",
+          input: "extapp --format 'jn",
+          moveLeft: 1,
+          enabled: true,
+          expected: "extapp --format 'json' ",
+        },
+        {
+          name: "preserve whole-word matching when disabled",
+          input: "extapp --format jn",
+          moveLeft: 1,
+          enabled: false,
+          expected: "extapp --format jn",
+        },
+        {
+          // Protect the option-off extraction path, rather than requiring
+          // this existing quoting limitation in future quoting fixes.
+          name: "preserve raw quoted words when disabled",
+          input: "extapp --format 'j",
+          moveLeft: 0,
+          enabled: false,
+          expected: "extapp --format 'j",
+        },
+      ]
+    ) {
+      it(`should ${testCase.name} with COMPLETE_IN_WORD`, {
+        skip: !isInteractiveZshCompletionAvailable(),
+      }, (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+
+        const buffer = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [],
+          {
+            setup: `${
+              testCase.enabled ? "setopt" : "unsetopt"
+            } complete_in_word`,
+            // Like choice(["json"]), the backend filters by the supplied
+            // prefix. Also require the previous option argument to survive.
+            cliScript: `#!/bin/bash
+if [[ $# == 2 && "$1" == --format && json == "$2"* ]]; then
+  printf 'json\\0\\0\\n'
+fi
+`,
+            input: testCase.input,
+            moveLeft: testCase.moveLeft,
+            tabCount: 1,
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(buffer, testCase.expected);
+      });
+    }
+
     it("should have correct name", () => {
       deepStrictEqual(zsh.name, "zsh");
     });
