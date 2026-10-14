@@ -1242,6 +1242,18 @@ function ${functionName} () {
                 fi
                 file_pattern="\${(j: :)__initial_file_patterns}"
               fi
+              local file_pattern_prefix="\$PREFIX"
+              local file_directory_pattern=""
+              local -a match mbegin mend
+              # Native qualifier copying concatenates flags with the explicit
+              # regular-file group.  Keep backend attributes in their own group.
+              if [[ -n "\$compstate[pattern_match]" && -z "\$SUFFIX" ]] &&
+                 _have_glob_qual "\$PREFIX" complete; then
+                local file_qualifier="\${match[5]#\\#q}"
+                file_pattern_prefix="\$match[2]"
+                file_pattern+="(#q\$file_qualifier)"
+                file_directory_pattern="*(#q-/)(#q\$file_qualifier)"
+              fi
               local file_subtree_pattern="**/*(#q/N)"
               local -a file_subtree=() file_recursive_patterns=()
               local -a file_tags=(files directories)
@@ -1255,10 +1267,19 @@ function ${functionName} () {
                 local file_matched=0
                 for file_tag in "\${file_tags[@]}"; do
                   if [[ "\$file_tag" == directories ]]; then
+                    local file_tag_prefix="\$PREFIX"
+                    PREFIX="\$file_pattern_prefix"
                     while _next_label directories expl directory; do
-                      _path_files -/ "\${expl[@]}" && file_matched=1
+                      if [[ -n "\$file_directory_pattern" ]]; then
+                        _path_files -g "\$file_directory_pattern" "\${expl[@]}" && file_matched=1
+                      else
+                        _path_files -/ "\${expl[@]}" && file_matched=1
+                      fi
                     done
+                    PREFIX="\$file_tag_prefix"
                   else
+                    local file_tag_prefix="\$PREFIX"
+                    PREFIX="\$file_pattern_prefix"
                     while _next_label files expl file; do
                       local -a file_ignore=() file_ignore_args=()
                       # Explicit globs bypass automatic fignore.  Apply it only
@@ -1289,6 +1310,7 @@ function ${functionName} () {
                         done
                       fi
                     done
+                    PREFIX="\$file_tag_prefix"
                   fi
                 done
                 (( file_matched )) && break

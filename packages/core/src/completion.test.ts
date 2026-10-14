@@ -3180,7 +3180,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
             }],
             {
               setup:
-                'setopt globcomplete extendedglob; autoload -Uz +X _files; functions[_optique_native_files]=$functions[_files]; _files() { [[ "$PREFIX" == \'src/*a\\\\b*\' ]] || touch MARK; _optique_native_files "$@"; }',
+                'setopt globcomplete extendedglob; autoload -Uz +X _path_files; functions[_optique_native_files]=$functions[_path_files]; _path_files() { touch PREFIXCHECK; [[ "$PREFIX" == \'src/*a\\\\b*\' ]] || touch MARK; _optique_native_files "$@"; }',
               input: `extapp --format ${typed}`,
               backend: fileCompletionBackend.replace(
                 'pattern="${2#@}"',
@@ -3188,6 +3188,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
               ).replace(":file:txt:", ":file::"),
               captureBuffer: true,
               expectedArgs: ["--format", "@a\\b"],
+              afterCompletion: "[[ -f PREFIXCHECK ]] || touch MARK",
               absentFiles: ["MARK"],
             },
           );
@@ -3458,6 +3459,30 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         },
       );
     }
+
+    it("should combine negated Zsh attributes with the regular-file filter", {
+      skip: !isInteractiveZshCompletionAvailable(),
+    }, () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [
+          { path: "src", type: "directory" },
+          { path: "src/fresh.txt" },
+          { path: "src/stale.txt" },
+          { path: "src/pipe", type: "fifo" },
+        ],
+        {
+          setup:
+            "setopt globcomplete; touch -t 202001010000 work/src/stale.txt",
+          input: "extapp --format ",
+          backend: "printf '__FILE__:file::src/*(^m+1):0\\0\\0\\n'",
+          captureBuffer: true,
+        },
+      );
+      deepStrictEqual(output, "extapp --format src/fresh.txt ");
+    });
 
     it("should preserve backend Zsh qualifiers around literal dollar input", {
       skip: !isInteractiveZshCompletionAvailable(),
