@@ -221,7 +221,7 @@ function testInteractiveZshCompletion(
       cliPath,
       options.cliScript ?? (options.payload == null
         ? `#!/bin/bash
-printf '${directive}'
+printf '%b' '${directive.replaceAll("'", "'\\''")}'
 `
         : `#!/bin/bash
 cat ${JSON.stringify(payloadPath)}
@@ -2817,6 +2817,457 @@ fi
       ok(script.includes("compdef _myapp myapp"));
     });
 
+    for (
+      const testCase of [
+        {
+          name: "directory-only relative glob",
+          type: "directory" as const,
+          pattern: "tmp/foo*",
+          files: [
+            { path: "tmp/foobar", type: "directory" as const },
+            { path: "tmp/other", type: "directory" as const },
+            { path: "tmp/foofile" },
+          ],
+          expected: "extapp --file tmp/foobar/",
+        },
+        {
+          name: "directory-only root glob",
+          type: "directory" as const,
+          pattern: "foo?",
+          files: [
+            { path: "foo1", type: "directory" as const },
+            { path: "other", type: "directory" as const },
+            { path: "foo2" },
+          ],
+          expected: "extapp --file foo1/",
+        },
+        {
+          name: "directory-only unmatched glob",
+          type: "directory" as const,
+          pattern: "tmp/foo*",
+          files: [
+            { path: "tmp/other", type: "directory" as const },
+            { path: "tmp/foofile" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "directory-only glob ignores file extensions",
+          type: "directory" as const,
+          pattern: "tmp/foo*",
+          extensions: [".txt"],
+          files: [
+            { path: "tmp/foobar", type: "directory" as const },
+            { path: "tmp/other", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/foobar/",
+        },
+        {
+          name: "directory-only directories-tag ignored pattern",
+          type: "directory" as const,
+          pattern: "foo*",
+          files: [
+            { path: "foobar", type: "directory" as const },
+            { path: "foobaz", type: "directory" as const },
+            { path: "other", type: "directory" as const },
+          ],
+          setup: "zstyle ':completion:*:directories' ignored-patterns 'foobaz'",
+          expected: "extapp --file foobar/",
+        },
+        {
+          name: "directory-only glob in a directory with spaces",
+          type: "directory" as const,
+          pattern: "my docs/foo*",
+          files: [
+            { path: "my docs/foobar", type: "directory" as const },
+            { path: "my docs/other", type: "directory" as const },
+          ],
+          expected: "extapp --file my\\ docs/foobar/",
+        },
+        {
+          name: "any entry directory glob",
+          type: "any" as const,
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "any entry with a punctuated program name",
+          programName: "audit-cli",
+          type: "any" as const,
+          pattern: "tmp/fixtures/*.txt",
+          input: "audit-cli --file ",
+          setup: 'audit-cli() { extapp "$@"; }',
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "audit-cli --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "any entry FIFO glob",
+          type: "any" as const,
+          pattern: "*.txt",
+          files: [
+            { path: "a.txt", type: "fifo" as const },
+            { path: "b.json" },
+          ],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "any entry FIFO glob with extensions",
+          type: "any" as const,
+          pattern: "*",
+          extensions: [".txt"],
+          files: [
+            { path: "a.txt", type: "fifo" as const },
+            { path: "b.json" },
+          ],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "any entry disjoint glob and extensions",
+          type: "any" as const,
+          pattern: "*.json",
+          extensions: [".txt"],
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "any entry directory navigation",
+          type: "any" as const,
+          pattern: "*.txt",
+          files: [
+            { path: "b.json" },
+            { path: "sub", type: "directory" as const },
+          ],
+          expected: "extapp --file sub/",
+        },
+        {
+          name: "directory glob",
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+            { path: "tmp/fixtures/sub", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/fixtures/",
+        },
+        {
+          name: "directory navigation without matching files",
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/b.json" },
+            { path: "tmp/fixtures/sub", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/fixtures/sub/",
+        },
+        {
+          name: "directory navigation with disjoint extensions",
+          pattern: "tmp/fixtures/*.json",
+          extensions: [".txt"],
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+            { path: "tmp/fixtures/sub", type: "directory" as const },
+          ],
+          expected: "extapp --file tmp/fixtures/sub/",
+        },
+        {
+          name: "root directory navigation",
+          pattern: "*.txt",
+          files: [
+            { path: "b.json" },
+            { path: "sub", type: "directory" as const },
+          ],
+          expected: "extapp --file sub/",
+        },
+        {
+          name: "directories-tag ignored pattern",
+          pattern: "*.txt",
+          files: [
+            { path: "a.txt" },
+            { path: "sub", type: "directory" as const },
+          ],
+          setup: "zstyle ':completion:*:directories' ignored-patterns 'sub'",
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "root glob",
+          pattern: "*.txt",
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "unmatched glob",
+          pattern: "*.txt",
+          files: [{ path: "b.json" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "glob with extensions",
+          pattern: "tmp/fixtures/*",
+          extensions: [".txt"],
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "disjoint glob and extensions",
+          pattern: "*.json",
+          extensions: [".txt"],
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "multiple extensions",
+          pattern: "*",
+          extensions: [".txt", ".md"],
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          expected: "extapp --file a.txt ",
+        },
+        {
+          name: "globcomplete enabled",
+          pattern: "tmp/fixtures/*.txt",
+          setup: "setopt glob_complete",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "typed matching prefix",
+          pattern: "tmp/fixtures/*.txt",
+          input: "extapp --file tmp/fixtures/a",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/a.txt ",
+        },
+        {
+          name: "multiple matches",
+          pattern: "tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+            { path: "tmp/fixtures/c.txt" },
+            { path: "tmp/fixtures/b.json" },
+          ],
+          expected: "extapp --file tmp/fixtures/",
+        },
+        {
+          name: "directory with spaces",
+          pattern: "my docs/*.txt",
+          files: [
+            { path: "my docs", type: "directory" as const },
+            { path: "my docs/a.txt" },
+          ],
+          expected: "extapp --file my\\ docs/a.txt ",
+        },
+        {
+          name: "directory with a glob operator",
+          pattern: "C#/*.txt",
+          files: [
+            { path: "C#", type: "directory" as const },
+            { path: "C#/a.txt" },
+          ],
+          expected: "extapp --file C\\#/a.txt ",
+        },
+        {
+          name: "directory with a quote",
+          pattern: "it's/*.txt",
+          files: [
+            { path: "it's", type: "directory" as const },
+            { path: "it's/a.txt" },
+          ],
+          expected: "extapp --file it\\'s/a.txt ",
+        },
+        {
+          name: "dot relative directory",
+          pattern: "./tmp/fixtures/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+          ],
+          expected: "extapp --file ./tmp/fixtures/a.txt ",
+        },
+        {
+          name: "files-tag ignored pattern",
+          pattern: "*.txt",
+          files: [{ path: "a.txt" }, { path: "b.json" }],
+          setup: "zstyle ':completion:*:files' ignored-patterns 'a.txt'",
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename brackets (file)",
+          type: "file" as const,
+          pattern: "foo[1]*.txt",
+          files: [
+            { path: "foo[1]-a.txt" },
+            { path: "foo1-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename backslash (file)",
+          type: "file" as const,
+          pattern: "foo\\name*.txt",
+          files: [
+            { path: "foo\\name-a.txt" },
+            { path: "fooname-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename brackets (any)",
+          type: "any" as const,
+          pattern: "foo[1]*.txt",
+          files: [
+            { path: "foo[1]-a.txt" },
+            { path: "foo1-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename backslash (any)",
+          type: "any" as const,
+          pattern: "foo\\name*.txt",
+          files: [
+            { path: "foo\\name-a.txt" },
+            { path: "fooname-b.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename brackets (directory)",
+          type: "directory" as const,
+          pattern: "foo[1]*.txt",
+          files: [
+            { path: "foo[1]-a.txt", type: "directory" as const },
+            { path: "foo1-b.txt", type: "directory" as const },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename backslash (directory)",
+          type: "directory" as const,
+          pattern: "foo\\name*.txt",
+          files: [
+            { path: "foo\\name-a.txt", type: "directory" as const },
+            { path: "fooname-b.txt", type: "directory" as const },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename glob operator",
+          pattern: "report(1)*.txt",
+          files: [{ path: "report1b.txt" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename token separator",
+          pattern: "a;*.txt",
+          files: [{ path: "zzz.txt" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded filename whitespace",
+          pattern: "my *.txt",
+          files: [{ path: "my a.txt" }, { path: "other.txt" }],
+          expected: "extapp --file ",
+        },
+        {
+          name: "excluded directory wildcard",
+          pattern: "tmp/fix*/*.txt",
+          files: [
+            { path: "tmp/fixtures", type: "directory" as const },
+            { path: "tmp/fixtures/a.txt" },
+          ],
+          expected: "extapp --file ",
+        },
+        {
+          name: "bracket directory globcomplete",
+          pattern: "tmp/[ab]/*.txt",
+          setup: "setopt glob_complete",
+          files: [
+            { path: "tmp/a", type: "directory" as const },
+            { path: "tmp/a/foo.txt" },
+          ],
+          expected: "extapp --file tmp/a/foo.txt ",
+        },
+        {
+          name: "grouped directory globcomplete",
+          pattern: "tmp/(a|b)/*.txt",
+          setup: "setopt glob_complete",
+          files: [
+            { path: "tmp/a", type: "directory" as const },
+            { path: "tmp/a/foo.txt" },
+          ],
+          expected: "extapp --file tmp/a/foo.txt ",
+        },
+        {
+          name: "no pattern",
+          files: [{ path: "a.txt" }],
+          expected: "extapp --file a.txt ",
+        },
+      ]
+    ) {
+      it(`should complete initial zsh file values: ${testCase.name}`, {
+        skip: !isInteractiveZshCompletionAvailable() ||
+          (testCase.files.some((file) =>
+            "type" in file && file.type === "fifo"
+          ) &&
+            !isShellAvailable("mkfifo")),
+        timeout: 10000,
+      }, () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        if (
+          testCase.files.some((file) =>
+            "type" in file && file.type === "fifo"
+          ) &&
+          !isShellAvailable("mkfifo")
+        ) return;
+        const directive = Array.from(zsh.encodeSuggestions([{
+          kind: "file",
+          type: testCase.type ?? "file",
+          pattern: testCase.pattern,
+          extensions: testCase.extensions,
+        }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript(testCase.programName ?? "extapp"),
+          directive,
+          testCase.files,
+          {
+            input: testCase.input ?? "extapp --file ",
+            captureBuffer: true,
+            setup: `unsetopt glob_complete
+zstyle ':completion:*' completer _complete
+${testCase.setup ?? ""}`,
+          },
+        );
+        ok(
+          !output.includes("b.json"),
+          `Nonmatching JSON file should not appear, got:\n${output}`,
+        );
+        deepStrictEqual(output, testCase.expected);
+      });
+    }
+
     it("should build #q-qualified extension globs in zsh", () => {
       const script = zsh.generateScript("myapp");
       const fileCase = script.substring(
@@ -2824,12 +3275,10 @@ fi
         script.indexOf("esac"),
       );
       const fileCaseBlock = fileCase.substring(
-        fileCase.indexOf("file)"),
+        fileCase.indexOf("file|any)"),
         fileCase.indexOf("directory)"),
       );
-      const anyCaseBlock = fileCase.substring(
-        fileCase.indexOf("any)"),
-      );
+      const anyCaseBlock = fileCaseBlock;
 
       // A single extension must avoid grouped-glob syntax because *.(json)
       // does not work in zsh completion, while multiple extensions still
@@ -3533,6 +3982,223 @@ _extapp 2>/dev/null
               `Hidden files should be omitted, got:\n${output}`,
             );
           }
+        },
+      );
+    }
+
+    for (const type of ["file", "any", "directory"] as const) {
+      for (
+        const global of [
+          { setup: "unset expl", expected: ":unset" },
+          {
+            setup: "typeset -g expl=user-sentinel",
+            expected: "user-sentinel:scalar",
+          },
+          {
+            setup: "typeset -ga expl=(user-alpha user-beta)",
+            expected: "user-alpha,user-beta:array",
+          },
+        ]
+      ) {
+        it(
+          `should preserve globals in initial zsh native ${type} completion: ${global.expected}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type, pattern: "*.txt" },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [{
+                path: "first.txt",
+                type: type === "directory" ? "directory" : "file",
+              }, {
+                path: "second.txt",
+                type: type === "directory" ? "directory" : "file",
+              }],
+              {
+                setup: global.setup,
+                afterCompletion:
+                  'print -r -- "__GLOBAL_EXPL:${(j:,:)expl}:${parameters[expl]-unset}"',
+              },
+            );
+            ok(
+              output.includes("first.txt") && output.includes("second.txt"),
+              output,
+            );
+            ok(output.includes(`__GLOBAL_EXPL:${global.expected}`), output);
+          },
+        );
+      }
+    }
+
+    for (const type of ["file", "any"] as const) {
+      for (
+        const scenario of [
+          { first: "directories", second: "files", withDirectory: true },
+          { first: "directories", second: "files", withDirectory: false },
+          { first: "files", second: "directories", withDirectory: true },
+        ]
+      ) {
+        it(
+          `should honor ordered tags in initial zsh native ${type} completion: ${scenario.first}, directories ${scenario.withDirectory}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type, pattern: "*.txt", extensions: ["txt"] },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [
+                { path: "regular.txt" },
+                ...(scenario.withDirectory
+                  ? [{ path: "navigation", type: "directory" as const }]
+                  : []),
+              ],
+              {
+                setup:
+                  `zstyle ':completion:*' tag-order '${scenario.first}' '${scenario.second}'`,
+              },
+            );
+            if (scenario.first === "directories" && scenario.withDirectory) {
+              ok(output.includes("navigation/"), output);
+              ok(!output.includes("regular.txt"), output);
+            } else {
+              ok(output.includes("regular.txt"), output);
+              ok(!output.includes("navigation"), output);
+            }
+          },
+        );
+      }
+      for (const extensions of [undefined, ["txt"]]) {
+        it(
+          `should list directories first in initial zsh native ${type} completion with extensions ${extensions}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: 10000,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const directive = Array.from(zsh.encodeSuggestions([
+              { kind: "file", type, pattern: "*.txt", extensions },
+            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              directive,
+              [{ path: "aaa.txt" }, { path: "zzz", type: "directory" }],
+              {
+                setup:
+                  "zstyle ':completion:*' group-name ''; zstyle ':completion:*' list-dirs-first true",
+              },
+            );
+            const directoryIndex = output.indexOf("zzz/");
+            const fileIndex = output.indexOf("aaa.txt");
+            ok(directoryIndex >= 0 && fileIndex >= 0, output);
+            ok(directoryIndex < fileIndex, output);
+          },
+        );
+      }
+    }
+
+    for (
+      const scenario of [
+        {
+          name: "enabled",
+          pattern: "target*.txt",
+          recursive: "*",
+          expected: true,
+        },
+        {
+          name: "extension filter",
+          pattern: "target*",
+          extensions: ["txt"],
+          recursive: "*",
+          expected: true,
+        },
+        {
+          name: "disjoint extension filter",
+          pattern: "target*.json",
+          extensions: ["txt"],
+          recursive: "*",
+          expected: false,
+        },
+        {
+          name: "disabled",
+          pattern: "target*.txt",
+          recursive: "",
+          expected: false,
+        },
+        {
+          name: "ineligible directory",
+          pattern: "target*.txt",
+          recursive: "/not-current/",
+          expected: false,
+        },
+        {
+          name: "explicit directory",
+          pattern: "nested/target*.txt",
+          recursive: "*",
+          expected: true,
+        },
+      ]
+    ) {
+      it(
+        `should preserve recursive-files in initial zsh native completion: ${scenario.name}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo"),
+          timeout: 10000,
+        },
+        () => {
+          if (
+            !isInteractiveZshCompletionAvailable() ||
+            !isShellAvailable("mkfifo")
+          ) return;
+          const directive = Array.from(zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              pattern: scenario.pattern,
+              extensions: scenario.extensions,
+            },
+          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            directive,
+            [
+              { path: "nested", type: "directory" },
+              { path: "nested/target.txt" },
+              { path: "nested/target.json" },
+              { path: "nested/other.txt" },
+              { path: "nested/target-pipe.txt", type: "fifo" },
+            ],
+            {
+              captureBuffer: true,
+              setup: `zstyle ':completion:*' tag-order 'files' 'directories'\n${
+                scenario.recursive === ""
+                  ? ""
+                  : `zstyle ':completion:*:files' recursive-files '${scenario.recursive}'`
+              }`,
+            },
+          );
+          if (scenario.expected) {
+            ok(output.includes("extapp nested/target.txt"), output);
+          } else {
+            ok(!output.includes("target.txt"), output);
+          }
+          ok(!output.includes("target.json"), output);
+          ok(!output.includes("other.txt"), output);
+          ok(!output.includes("target-pipe.txt"), output);
         },
       );
     }
@@ -4649,7 +5315,7 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
           script.indexOf("esac"),
         );
         const fileCaseBlock = fileCase.substring(
-          fileCase.indexOf("file)"),
+          fileCase.indexOf("file|any)"),
           fileCase.indexOf("directory)"),
         );
         ok(

@@ -922,6 +922,8 @@ function ${functionName} () {
         local __was_sh_glob=0
         [[ -o sh_glob ]] && __was_sh_glob=1
         unsetopt sh_glob
+        local __was_extended_glob=0
+        [[ -o extended_glob ]] && __was_extended_glob=1
 
         # Enable glob_dots when hidden files are requested so that
         # _files and _directories include dot-prefixed entries
@@ -934,7 +936,34 @@ function ${functionName} () {
         # current word.  If the user has already typed beyond the pattern,
         # keep PREFIX unchanged for incremental narrowing.
         local __saved_prefix="\$PREFIX"
-        if [[ -n "\$pattern" ]]; then
+        local __initial_file_pattern="" __initial_directory="" __initial_leaf=""
+        if [[ ( "\$type" == "file" || "\$type" == "any" || "\$type" == "directory" ) &&
+              -z "\$current\$PREFIX\$SUFFIX" &&
+              -z "\${compstate[pattern_match]}" &&
+              "\$pattern" != /* && "\$pattern" != "~"* ]]; then
+          if [[ "\$pattern" == */* ]]; then
+            __initial_directory="\${pattern%/*}/"
+          fi
+          __initial_leaf="\${pattern##*/}"
+          # Native -g filters are split as shell words and use extended glob
+          # syntax. Keep unsupported filename forms on the existing path.
+          if [[ "\$__initial_leaf" == *[\*\?]* &&
+                "\$__initial_directory" != *[\*\?]* &&
+                "\$__initial_directory" != *["[]()"]* &&
+                "\$__initial_leaf" != *["[]"]* &&
+                "\$__initial_leaf" != *'\\'* &&
+                "\$__initial_leaf" != *[[:space:]]* &&
+                "\$__initial_leaf" != *["#~^()|<>;&"]* &&
+                "\$__initial_leaf" != *"'"* && "\$__initial_leaf" != *'"'* ]]; then
+            __initial_file_pattern="\$__initial_leaf"
+            # Only the literal directory belongs in PREFIX. Quote it so
+            # spaces and shell metacharacters remain literal path text.
+            if [[ -n "\$__initial_directory" ]]; then
+              PREFIX="\${(q)__initial_directory}"
+            fi
+          fi
+        fi
+        if [[ -n "\$pattern" && -z "\$__initial_file_pattern" ]]; then
           # Normalize leading ./ so that ./src/ma matches pattern src/
           local __norm_prefix="\${PREFIX#./}"
           local __norm_pattern="\${pattern#./}"
@@ -959,69 +988,83 @@ function ${functionName} () {
             ext_pattern="*.\$extensions"
           fi
         fi
+        # _wanted/_next_label write to the named explanation parameter.
+        # Keep it local for every file directive, including directory/any.
+        local -a expl=()
         # Use zsh's native file completion
         case "\$type" in
-          file)
-            # Use the same regular-file filter with or without extensions,
-            # keeping symlinked files and directory navigation available.
-            local file_pattern="\${ext_pattern:-*}(#q-.)"
-            local file_subtree_pattern="**/*(#q/N)"
-            local -a expl=() file_subtree=() file_recursive_patterns=()
-            local -a file_tags=(files directories)
-            local file_recursive_pattern file_directory file_prefix file_tag
-            if [[ -z "\$ext_pattern" ]] &&
-               zstyle -t ":completion:\${curcontext}:" list-dirs-first; then
-              file_tags=(directories files)
-            fi
-            _tags "\${file_tags[@]}"
-            while _tags; do
-              local file_matched=0
-              for file_tag in "\${file_tags[@]}"; do
-                if [[ "\$file_tag" == directories ]]; then
-                  while _next_label directories expl directory; do
-                    _path_files -/ "\${expl[@]}" && file_matched=1
+          file|any)
+            if [[ "\$type" == "file" || -n "\$__initial_file_pattern" ]]; then
+              # Regular-file suggestions retain symlinked files; initial
+              # any globs use a non-directory qualifier instead.
+              local file_pattern="\${ext_pattern:-*}(#q-.)"
+              if [[ -n "\$__initial_file_pattern" ]]; then
+                local __file_qualifier="-."
+                [[ "\$type" == "any" ]] && __file_qualifier="^-/"
+                local -a __initial_file_patterns=()
+                if [[ -n "\$extensions" ]]; then
+                  setopt extended_glob
+                  local __initial_extension
+                  for __initial_extension in "\${(@s:,:)extensions}"; do
+                    __initial_file_patterns+=("(\${__initial_file_pattern}~^*.\${__initial_extension})(#q\${__file_qualifier})")
                   done
                 else
-                  while _next_label files expl file; do
-                    local -a file_ignore=() file_ignore_args=()
-                    # Explicit globs bypass automatic fignore.  Apply it only
-                    # when the tag has not supplied its own ignore patterns.
-                    if [[ -z "\$ext_pattern" && -z "\$_comp_no_ignore" && -n "\$FIGNORE" ]] && (( \${#_comp_ignore[@]} == 0 )); then
-                      file_ignore=("?*\${^fignore[@]}")
-                      file_ignore_args=(-F file_ignore)
-                    fi
-                    if _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}"; then
-                      file_matched=1
-                    elif [[ -z "\$ext_pattern" && "\$PREFIX\$SUFFIX" != */* ]] &&
-                         zstyle -a ":completion:\${curcontext}:files" recursive-files file_recursive_patterns; then
-                      # Match _files' recursive fallback, retaining the same
-                      # file filter and tag-specific ignore options.
-                      for file_recursive_pattern in "\${file_recursive_patterns[@]}"; do
-                        if [[ "\$PWD/" = \${~file_recursive_pattern} ]]; then
-                          if (( \${#file_subtree[@]} == 0 )); then
-                            file_subtree=(\${~file_subtree_pattern})
-                          fi
-                          for file_directory in "\${file_subtree[@]}"; do
-                            file_prefix="\$PREFIX"
-                            PREFIX="\$file_directory/\$PREFIX"
-                            _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}" && file_matched=1
-                            PREFIX="\$file_prefix"
-                          done
-                          break
-                        fi
-                      done
-                    fi
-                  done
+                  __initial_file_patterns=("\${__initial_file_pattern}(#q\${__file_qualifier})")
                 fi
+                file_pattern="\${(j: :)__initial_file_patterns}"
+              fi
+              local file_subtree_pattern="**/*(#q/N)"
+              local -a file_subtree=() file_recursive_patterns=()
+              local -a file_tags=(files directories)
+              local file_recursive_pattern file_directory file_prefix file_tag
+              if [[ -n "\$__initial_file_pattern" || -z "\$ext_pattern" ]] &&
+                 zstyle -t ":completion:\${curcontext}:" list-dirs-first; then
+                file_tags=(directories files)
+              fi
+              _tags "\${file_tags[@]}"
+              while _tags; do
+                local file_matched=0
+                for file_tag in "\${file_tags[@]}"; do
+                  if [[ "\$file_tag" == directories ]]; then
+                    while _next_label directories expl directory; do
+                      _path_files -/ "\${expl[@]}" && file_matched=1
+                    done
+                  else
+                    while _next_label files expl file; do
+                      local -a file_ignore=() file_ignore_args=()
+                      # Explicit globs bypass automatic fignore.  Apply it only
+                      # when the tag has not supplied its own ignore patterns.
+                      if [[ -z "\$__initial_file_pattern" && -z "\$ext_pattern" && -z "\$_comp_no_ignore" && -n "\$FIGNORE" ]] && (( \${#_comp_ignore[@]} == 0 )); then
+                        file_ignore=("?*\${^fignore[@]}")
+                        file_ignore_args=(-F file_ignore)
+                      fi
+                      if _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}"; then
+                        file_matched=1
+                      elif [[ ( -n "\$__initial_file_pattern" || -z "\$ext_pattern" ) && "\$PREFIX\$SUFFIX" != */* ]] &&
+                           zstyle -a ":completion:\${curcontext}:files" recursive-files file_recursive_patterns; then
+                        # Match _files' recursive fallback, retaining the same
+                        # file filter and tag-specific ignore options.
+                        for file_recursive_pattern in "\${file_recursive_patterns[@]}"; do
+                          if [[ "\$PWD/" = \${~file_recursive_pattern} ]]; then
+                            if (( \${#file_subtree[@]} == 0 )); then
+                              file_subtree=(\${~file_subtree_pattern})
+                            fi
+                            for file_directory in "\${file_subtree[@]}"; do
+                              file_prefix="\$PREFIX"
+                              PREFIX="\$file_directory/\$PREFIX"
+                              _path_files -g "\${file_pattern}" "\${expl[@]}" "\${file_ignore_args[@]}" && file_matched=1
+                              PREFIX="\$file_prefix"
+                            done
+                            break
+                          fi
+                        done
+                      fi
+                    done
+                  fi
+                done
+                (( file_matched )) && break
               done
-              (( file_matched )) && break
-            done
-            ;;
-          directory)
-            _directories
-            ;;
-          any)
-            if [[ -n "\$ext_pattern" ]]; then
+            elif [[ -n "\$ext_pattern" ]]; then
               local file_pattern="\${ext_pattern}(#q^-/)"
               _wanted files expl file _path_files -g "\${file_pattern}"
               _wanted directories expl directory _path_files -/
@@ -1029,10 +1072,18 @@ function ${functionName} () {
               _files
             fi
             ;;
+          directory)
+            if [[ -n "\$__initial_file_pattern" ]]; then
+              # -/ would add every directory alongside the filtered glob.
+              _wanted directories expl directory _path_files -g "\${__initial_file_pattern}(#q-/)"
+            else
+              _directories
+            fi
+            ;;
         esac
-
         # Restore PREFIX and glob_dots to their previous state
         PREFIX="\$__saved_prefix"
+        if [[ "\$__was_extended_glob" == "1" ]]; then setopt extended_glob; else unsetopt extended_glob; fi
         if [[ "\$__was_sh_glob" == "1" ]]; then setopt sh_glob; else unsetopt sh_glob; fi
         if [[ "\$__was_glob_dots" == "1" ]]; then setopt glob_dots; else unsetopt glob_dots; fi
       else
