@@ -1,3 +1,4 @@
+import { captureDocValue } from "./internal/doc-metadata.ts";
 import {
   cloneMessage,
   lineBreak,
@@ -646,7 +647,7 @@ export function choice<const T extends string | number>(
       Object.is(v, -0) ? "-0" : String(v)
     );
     const frozenNumberChoices = Object.freeze(numberChoices) as readonly T[];
-    return {
+    return captureDocValue({
       mode: "sync",
       metavar,
       placeholder: choices[0],
@@ -754,7 +755,12 @@ export function choice<const T extends string | number>(
           )
           .map((valueStr) => ({ kind: "literal" as const, text: valueStr }));
       },
-    };
+    }, {
+      kind: "number",
+      choices: numberChoices,
+      preserveNegativeZero: true,
+      canFormatDefault: true,
+    });
   }
 
   // String choice implementation—deduplicate identical values
@@ -856,7 +862,7 @@ export function choice<const T extends string | number>(
         maxSuggestions: stringSuggest.maxSuggestions,
       }
       : stringSuggest;
-  return {
+  return captureDocValue({
     mode: "sync",
     metavar,
     placeholder: choices[0],
@@ -901,7 +907,11 @@ export function choice<const T extends string | number>(
         )
         .map((value) => ({ kind: "literal" as const, text: value }));
     },
-  };
+  }, {
+    kind: "string",
+    choices: stringChoices,
+    canFormatDefault: customKey === undefined && !caseInsensitive,
+  });
 }
 
 /**
@@ -1590,7 +1600,7 @@ export function string(
   const patternSource = options.pattern?.source ?? null;
   const patternFlags = options.pattern?.flags ?? null;
   const patternMismatch = options.errors?.patternMismatch;
-  return {
+  return captureDocValue({
     mode: "sync",
     metavar,
     placeholder: options.placeholder ?? "",
@@ -1617,7 +1627,7 @@ export function string(
     format(value: string): string {
       return value;
     },
-  };
+  }, { kind: "string" });
 }
 
 /**
@@ -2662,7 +2672,7 @@ export function integer(
   if (options?.type === "bigint") {
     const metavar = options.metavar ?? "INTEGER";
     ensureNonEmptyString(metavar);
-    return {
+    return captureDocValue({
       mode: "sync",
       metavar,
       placeholder: options?.placeholder ??
@@ -2711,7 +2721,7 @@ export function integer(
       format(value: bigint): string {
         return value.toString();
       },
-    };
+    }, { kind: "bigint" });
   }
   const metavar = options?.metavar ?? "INTEGER";
   ensureNonEmptyString(metavar);
@@ -2752,7 +2762,7 @@ export function integer(
         }, but got ${input}. Use type: "bigint" for large values.`,
     };
   }
-  return {
+  return captureDocValue({
     mode: "sync",
     metavar,
     placeholder: options?.placeholder ??
@@ -2806,7 +2816,7 @@ export function integer(
     format(value: number): string {
       return value.toString();
     },
-  };
+  }, { kind: "number" });
 }
 
 /**

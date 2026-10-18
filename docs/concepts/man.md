@@ -15,6 +15,9 @@ help that users can access with the `man` command. Optique can generate
 man pages directly from your parser definitions, ensuring documentation
 stays synchronized with your CLI's actual behavior.
 
+For one file covering a CLI and its subcommands, see
+[Markdown command references](./markdown-reference.md).
+
 The *@optique/man* package generates man pages in the standard man(7) roff
 format, compatible with `groff`, `mandoc`, and other man page processors.
 

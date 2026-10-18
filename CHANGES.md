@@ -38,6 +38,11 @@ To be released.
     names, and dash-prefixed command names no longer block attached values.
     Unicode short-option names work in attached forms and bundles too.
     [[#965], [#981]]
+ -  Added `collectDocPages()` in `@optique/core/doc-pages` to collect command
+    documentation from supported built-in definitions without parsing or
+    evaluating runtime callbacks. Unsupported scopes are reported explicitly,
+    with strict failure and authored page/subtree replacements.
+    [[#1025], [#1095]]
  -  Added `completion.errors` to the Core runners to customize messages for
     missing or unsupported completion shells.  `unsupportedShell` also accepts
     a callback receiving the requested shell name and available shell names.
@@ -136,8 +141,10 @@ To be released.
 [#1017]: https://github.com/dahlia/optique/pull/1017
 [#1020]: https://github.com/dahlia/optique/issues/1020
 [#1023]: https://github.com/dahlia/optique/pull/1023
+[#1025]: https://github.com/dahlia/optique/issues/1025
 [#1086]: https://github.com/dahlia/optique/issues/1086
 [#1093]: https://github.com/dahlia/optique/pull/1093
+[#1095]: https://github.com/dahlia/optique/pull/1095
 
 ### @optique/run
 
@@ -269,6 +276,10 @@ To be released.
     fallback section in inline mode. Manual environment sections still take
     precedence, including empty sections that suppress automatic output.
     [[#985], [#987]]
+ -  Added `formatCommandReference()` in `@optique/man/markdown` to produce one
+    linked Markdown reference from canonical command pages, with explicit
+    coverage, aliases, visibility, and escaped documentation text.
+    [[#1025], [#1095]]
  -  Added opt-in environment binding annotations and generated `ENVIRONMENT`
     sections to man pages, including `--show-environment` in the generator
     CLI.  Explicit `environment` sections retain priority over generated

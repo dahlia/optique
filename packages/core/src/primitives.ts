@@ -1,3 +1,4 @@
+import { captureDocParser } from "./internal/doc-metadata.ts";
 import { joinedFileSuggestion } from "./internal/joined-file-suggestion.ts";
 import {
   defineBareCommandDocPolicy,
@@ -1718,12 +1719,21 @@ export function option<M extends Mode, T>(
   // At runtime, the isAsync flag ensures correct behavior:
   // - When M = "sync": parse() returns ParserResult directly
   // - When M = "async": parse() returns Promise<ParserResult>
-  return fluent(
-    result as unknown as Parser<
-      M,
-      T | boolean,
-      ValueParserResult<T | boolean> | undefined
-    >,
+  return captureDocParser(
+    fluent(
+      result as unknown as Parser<
+        M,
+        T | boolean,
+        ValueParserResult<T | boolean> | undefined
+      >,
+    ),
+    {
+      kind: "leaf",
+      description: options.description,
+      valueParser,
+      choicesRequested: valueParser != null,
+      boolean: valueParser == null,
+    },
   );
 }
 
@@ -2084,7 +2094,11 @@ export function flag(
     writable: false,
   });
   defineEmptyInputFacts(result, failingStepFacts(false));
-  return fluent(result);
+  return captureDocParser(fluent(result), {
+    kind: "leaf",
+    description: options.description,
+    boolean: true,
+  });
 }
 
 /**
@@ -2962,8 +2976,16 @@ export function argument<M extends Mode, T>(
   }
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
-  return fluent(
-    result as unknown as Parser<M, T, ValueParserResult<T> | undefined>,
+  return captureDocParser(
+    fluent(
+      result as unknown as Parser<M, T, ValueParserResult<T> | undefined>,
+    ),
+    {
+      kind: "leaf",
+      description: options.description,
+      valueParser,
+      choicesRequested: true,
+    },
   );
 }
 
@@ -3926,7 +3948,20 @@ export function command<M extends Mode, T, TState>(
     },
   );
   defineEmptyInputFacts(scoped, failingStepFacts(false));
-  return fluent(scoped);
+  return captureDocParser(fluent(scoped), {
+    kind: "command",
+    name,
+    aliases,
+    hiddenAliases,
+    showAliases,
+    showUsage,
+    hidden: options.hidden,
+    brief: options.brief,
+    description: options.description,
+    footer: options.footer,
+    usageLine: options.usageLine,
+    children: [parser],
+  });
 }
 
 /**
