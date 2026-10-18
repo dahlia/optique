@@ -7,6 +7,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import manifest from "../package.json" with { type: "json" };
+import { isPathWithin } from "./paths.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const stage = resolve(root, "dist/package");
@@ -53,7 +54,7 @@ const inputRoots = [
 for (const input of inputs) {
   const actual = await realpath(resolve(root, input));
   assert.ok(
-    inputRoots.some((directory) => actual.startsWith(`${directory}/`)),
+    inputRoots.some((directory) => isPathWithin(directory, actual)),
     `Unexpected bundle input: ${actual}`,
   );
 }
