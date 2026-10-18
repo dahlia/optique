@@ -1,0 +1,161 @@
+[
+  {
+    "id": "version",
+    "args": [
+      "--version"
+    ],
+    "stdin": "",
+    "stdout": "1.4.0\n",
+    "stderr": "",
+    "exitCode": 0
+  },
+  {
+    "id": "count-file",
+    "args": [
+      "count",
+      "notes.txt"
+    ],
+    "stdin": "",
+    "stdout": "{\"lines\":2}\n",
+    "stderr": "",
+    "exitCode": 0,
+    "parsed": {
+      "action": "count",
+      "input": "notes.txt"
+    }
+  },
+  {
+    "id": "save-stdin",
+    "args": [
+      "save",
+      "-",
+      "--output",
+      "saved.txt"
+    ],
+    "stdin": "alpha\nbeta\n",
+    "stdout": "Saved 11 bytes.\n",
+    "stderr": "",
+    "exitCode": 0,
+    "parsed": {
+      "action": "save",
+      "input": "-",
+      "output": "saved.txt"
+    },
+    "redirect": "notes.txt",
+    "output": "saved.txt"
+  },
+  {
+    "id": "count-stdin",
+    "args": [
+      "count",
+      "-"
+    ],
+    "stdin": "alpha\nbeta\n",
+    "stdout": "{\"lines\":2}\n",
+    "stderr": "",
+    "exitCode": 0,
+    "parsed": {
+      "action": "count",
+      "input": "-"
+    },
+    "redirect": "notes.txt"
+  },
+  {
+    "id": "save-file",
+    "args": [
+      "save",
+      "notes.txt",
+      "--output",
+      "copy.txt"
+    ],
+    "stdin": "",
+    "stdout": "Saved 11 bytes.\n",
+    "stderr": "",
+    "exitCode": 0,
+    "parsed": {
+      "action": "save",
+      "input": "notes.txt",
+      "output": "copy.txt"
+    },
+    "output": "copy.txt"
+  },
+  {
+    "id": "save-dash",
+    "args": [
+      "save",
+      "notes.txt",
+      "--output",
+      "-"
+    ],
+    "stdin": "",
+    "stdout": "Saved 11 bytes.\n",
+    "stderr": "",
+    "exitCode": 0,
+    "parsed": {
+      "action": "save",
+      "input": "notes.txt",
+      "output": "-"
+    },
+    "output": "-"
+  },
+  {
+    "id": "invalid",
+    "args": [
+      "count",
+      "--bad",
+      "notes.txt"
+    ],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "Error: Unexpected option or subcommand: `--bad`.\n",
+    "exitCode": 1
+  },
+  {
+    "id": "recovery",
+    "args": [
+      "count",
+      "notes.txt"
+    ],
+    "stdin": "",
+    "stdout": "{\"lines\":2}\n",
+    "stderr": "",
+    "exitCode": 0,
+    "parsed": {
+      "action": "count",
+      "input": "notes.txt"
+    }
+  },
+  {
+    "id": "missing-input",
+    "args": [
+      "count",
+      "missing.txt"
+    ],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "skill-notes: File operation failed.\n",
+    "exitCode": 1,
+    "parsed": {
+      "action": "count",
+      "input": "missing.txt"
+    }
+  },
+  {
+    "id": "existing-output",
+    "args": [
+      "save",
+      "notes.txt",
+      "--output",
+      "notes.txt"
+    ],
+    "stdin": "",
+    "stdout": "",
+    "stderr": "skill-notes: Destination already exists.\n",
+    "exitCode": 1,
+    "parsed": {
+      "action": "save",
+      "input": "notes.txt",
+      "output": "notes.txt"
+    }
+  }
+]

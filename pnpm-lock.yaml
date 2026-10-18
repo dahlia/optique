@@ -197,6 +197,21 @@ importers:
         specifier: 'catalog:'
         version: 5.8.3
 
+  examples/skill-pilot:
+    devDependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../../packages/core
+      '@optique/run':
+        specifier: 'workspace:'
+        version: link:../../packages/run
+      '@optique/testing':
+        specifier: 'workspace:'
+        version: link:../../packages/testing
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+
   packages/clack:
     dependencies:
       '@clack/prompts':

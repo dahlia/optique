@@ -149,3 +149,13 @@ run = [
   'deno coverage coverage/raw --lcov --include="packages/" --output=coverage/lcov.info',
   'deno coverage coverage/raw --include="packages/"',
 ]
+
+[tasks."skill-pilot:build"]
+description = "Build the consumer skill fixture and its workspace dependencies"
+depends = ["build"]
+run = 'pnpm --dir examples/skill-pilot build'
+
+[tasks."skill-pilot:smoke"]
+description = "Install the packed consumer skill fixture offline and check its workflows"
+depends = ["skill-pilot:build"]
+run = "node examples/skill-pilot/smoke.ts"
