@@ -86,6 +86,23 @@ it("reports parse and missing-file errors without ANSI or stack traces", () =>
     }
   }));
 
+it("escapes terminal controls in filesystem error messages", () =>
+  fixture(async (cwd) => {
+    const cli = createCliRunner({ entrypoint, runtimeArgs, env, cwd });
+    const result = await cli.invoke(
+      "file",
+      "info",
+      "missing\x1b[31m\x1b]0;title\x07\b\t\r\n\x7f\x85.txt",
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /^file-inspect: .*missing/);
+    assert.ok(result.stderr.endsWith("\n"));
+    // Only the final diagnostic newline may contain a control character.
+    // deno-lint-ignore no-control-regex
+    assert.doesNotMatch(result.stderr.slice(0, -1), /[\x00-\x1f\x7f-\x9f]/);
+  }));
+
 it("consumes explicit stdin and terminates after EOF", () =>
   fixture(async (cwd) => {
     const cli = createCliRunner({ entrypoint, runtimeArgs, env, cwd });
