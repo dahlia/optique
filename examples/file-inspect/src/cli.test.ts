@@ -103,6 +103,22 @@ it("escapes terminal controls in filesystem error messages", () =>
     assert.doesNotMatch(result.stderr.slice(0, -1), /[\x00-\x1f\x7f-\x9f]/);
   }));
 
+it("escapes Unicode format characters in filesystem errors", () =>
+  fixture(async (cwd) => {
+    const cli = createCliRunner({ entrypoint, runtimeArgs, env, cwd });
+    const result = await cli.invoke(
+      "file",
+      "info",
+      "missing\u202e\u2066\u{e0001}.txt",
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout, "");
+    assert.doesNotMatch(result.stderr, /\p{Cf}/u);
+    assert.ok(result.stderr.includes("\\u202e"));
+    assert.ok(result.stderr.includes("\\u2066"));
+    assert.ok(result.stderr.includes("\\udb40\\udc01"));
+  }));
+
 it("consumes explicit stdin and terminates after EOF", () =>
   fixture(async (cwd) => {
     const cli = createCliRunner({ entrypoint, runtimeArgs, env, cwd });
