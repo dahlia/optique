@@ -172,6 +172,28 @@ importers:
         specifier: 'catalog:'
         version: 4.1.12
 
+  examples/file-inspect:
+    dependencies:
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:../../packages/core
+      '@optique/discover':
+        specifier: 'workspace:'
+        version: link:../../packages/discover
+      '@optique/run':
+        specifier: 'workspace:'
+        version: link:../../packages/run
+    devDependencies:
+      '@optique/testing':
+        specifier: 'workspace:'
+        version: link:../../packages/testing
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+
   examples/gitique:
     dependencies:
       '@optique/core':

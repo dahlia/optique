@@ -164,6 +164,9 @@ To be released.
 
 ### @optique/discover
 
+ -  Added a tested file inspection CLI recipe, with source execution, offline
+    npm installation, Bash completion, and a standalone executable for the
+    build host. [[#1088], [#1094]]
  -  Added `completion.errors` to `runProgram()` for customizing missing or
     unsupported completion shell messages.  [[#967], [#982]]
  -  Added `errorUsage: "command"` support to `runProgram()` to show the matched
@@ -191,6 +194,8 @@ To be released.
 
 [#1026]: https://github.com/dahlia/optique/issues/1026
 [#1027]: https://github.com/dahlia/optique/pull/1027
+[#1088]: https://github.com/dahlia/optique/issues/1088
+[#1094]: https://github.com/dahlia/optique/pull/1094
 
 ### @optique/config
 
