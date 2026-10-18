@@ -190,11 +190,11 @@ mise exec -- file-inspect completion bash > tmp/completions/file-inspect.bash
 source tmp/completions/file-inspect.bash
 ~~~~
 
-Typing `file-inspect file ` then Tab suggests `info` and `lines`. CI sources
-the script in `bash --norc --noprofile` with a temporary home directory and the
-installed command on `PATH`, sets `COMP_WORDS`/`COMP_CWORD`, and calls the
-registered completion function to assert those suggestions. It never edits a
-shell profile. Remove the completion with:
+Type `file-inspect file`, add a space, then press Tab to see `info` and `lines`.
+CI sources the script in `bash --norc --noprofile` with a temporary home
+directory and the installed command on `PATH`, sets `COMP_WORDS`/`COMP_CWORD`,
+and calls the registered completion function to assert those suggestions. It
+never edits a shell profile. Remove the completion with:
 
 ~~~~ bash
 complete -r file-inspect
