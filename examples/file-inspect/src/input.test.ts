@@ -3,7 +3,13 @@ import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import { constants } from "node:fs";
 import process from "node:process";
-import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
+import {
+  type FileHandle,
+  mkdtemp,
+  open,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -65,6 +71,43 @@ it("opens files lazily, releases actual handles once, and never requests stdin",
     await assert.rejects(scope.open(path), /closed/i);
   } finally {
     await scope.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("waits for an in-flight acquisition and releases its handle once", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "file-inspect-opening-"));
+  const path = join(directory, "sample.txt");
+  await writeFile(path, "sample");
+  const acquired = Promise.withResolvers<FileHandle>();
+  const resume = Promise.withResolvers<void>();
+  let releases = 0;
+  const scope = createInputScope({
+    async openFile(path) {
+      const handle = await open(path, "r");
+      const close = handle.close.bind(handle);
+      handle.close = async () => {
+        await close();
+        releases++;
+      };
+      acquired.resolve(handle);
+      await resume.promise;
+      return handle;
+    },
+  });
+  const opening = scope.open(path);
+  const handle = await acquired.promise;
+  try {
+    const closing = scope.close();
+    assert.equal(scope.close(), closing);
+    resume.resolve();
+    await Promise.all([assert.rejects(opening, /closed/i), closing]);
+    assert.equal(releases, 1);
+    await assert.rejects(handle.stat());
+  } finally {
+    resume.resolve();
+    await scope.close();
+    await handle.close();
     await rm(directory, { recursive: true, force: true });
   }
 });
