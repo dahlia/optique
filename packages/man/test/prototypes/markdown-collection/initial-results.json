@@ -1,0 +1,95 @@
+{
+  "status": "failed-fixed-oracle",
+  "failures": [
+    "static-default",
+    "choices",
+    "unexpected-reports"
+  ],
+  "paths": [
+    [],
+    [
+      "serve"
+    ],
+    [
+      "config"
+    ],
+    [
+      "config",
+      "get"
+    ],
+    [
+      "config",
+      "set"
+    ],
+    [
+      "async"
+    ],
+    [
+      "opaque"
+    ]
+  ],
+  "unresolved": [
+    {
+      "path": [
+        "opaque"
+      ],
+      "scope": "subtree",
+      "reason": "unregistered-parser"
+    },
+    {
+      "path": [
+        "serve"
+      ],
+      "scope": "page",
+      "reason": "value-metadata-unavailable"
+    },
+    {
+      "path": [
+        "serve"
+      ],
+      "scope": "page",
+      "reason": "static-default-format-unavailable"
+    },
+    {
+      "path": [
+        "config",
+        "get"
+      ],
+      "scope": "page",
+      "reason": "value-metadata-unavailable"
+    },
+    {
+      "path": [
+        "config",
+        "set"
+      ],
+      "scope": "page",
+      "reason": "value-metadata-unavailable"
+    },
+    {
+      "path": [
+        "async"
+      ],
+      "scope": "page",
+      "reason": "value-metadata-unavailable"
+    }
+  ],
+  "prefixUsage": "probe PROFILE serve [--port PORT]",
+  "callbackCounters": {
+    "parse": 0,
+    "complete": 0,
+    "suggest": 0,
+    "getDocFragments": 0,
+    "format": 0,
+    "normalizeValue": 0,
+    "validateValue": 0,
+    "normalize": 0,
+    "validate": 0,
+    "metavar": 0,
+    "defaultThunk": 0,
+    "usageLine": 0
+  },
+  "forbiddenCounterDelta": 0,
+  "parserInterfaceChanged": false,
+  "constructorsOutsideFrozenListChanged": false
+}

@@ -38,7 +38,7 @@ const groups = [
     role: "Surfaces & tooling",
     packages: [
       { name: "@optique/discover", desc: "File-based command discovery and dispatch.", link: "/concepts/discover" },
-      { name: "@optique/man", desc: "Unix man pages from parsers.", link: "/concepts/man" },
+      { name: "@optique/man", desc: "Man pages and Markdown references.", link: "/concepts/man" },
       { name: "@optique/logtape", desc: "Log-level options for LogTape.", link: "/integrations/logtape" },
       { name: "@optique/testing", desc: "Test parsers, runners, dispatch, and real CLIs.", link: "/concepts/testing" },
     ],

@@ -273,7 +273,7 @@ Reference links
  -  Structured messages: <https://optique.dev/concepts/messages.md>
  -  Shell completion: <https://optique.dev/concepts/completion.md>
  -  Command discovery: <https://optique.dev/concepts/discover.md>
- -  Man pages: <https://optique.dev/concepts/man.md>
+ -  Markdown references: <https://optique.dev/concepts/markdown-reference.md>
 
 
 Integration packages
@@ -294,6 +294,6 @@ Integration packages
 | `@optique/temporal`         | Temporal date and time parsers              | <https://optique.dev/integrations/temporal.md>        |
 | `@optique/git`              | Async Git reference validation              | <https://optique.dev/integrations/git.md>             |
 | `@optique/logtape`          | LogTape levels and formatter/output options | <https://optique.dev/integrations/logtape.md>         |
-| `@optique/man`              | Man page generation                         | <https://optique.dev/concepts/man.md>                 |
+| `@optique/man`              | Man pages and Markdown references           | <https://optique.dev/concepts/man.md>                 |
 | `@optique/discover`         | Command discovery; opt-in `help.bareGroup`  | <https://optique.dev/concepts/discover.md>            |
 | `@optique/testing`          | Layered CLI testing at a chosen boundary    | <https://optique.dev/concepts/testing.md>             |

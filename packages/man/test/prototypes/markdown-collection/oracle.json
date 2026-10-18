@@ -1,0 +1,89 @@
+{
+  "supportedConstructors": [
+    "command",
+    "or",
+    "object",
+    "option",
+    "flag",
+    "argument",
+    "optional",
+    "multiple",
+    "withDefault",
+    "seq"
+  ],
+  "supportedValueParsers": [
+    "string",
+    "integer",
+    "choice"
+  ],
+  "expectedPaths": [
+    [],
+    [
+      "serve"
+    ],
+    [
+      "config"
+    ],
+    [
+      "config",
+      "get"
+    ],
+    [
+      "config",
+      "set"
+    ],
+    [
+      "async"
+    ],
+    [
+      "opaque"
+    ]
+  ],
+  "sharedOption": "--verbose",
+  "requiredStaticDefault": {
+    "path": [
+      "serve"
+    ],
+    "option": "--port",
+    "text": "8080"
+  },
+  "requiredChoices": {
+    "path": [
+      "config",
+      "set"
+    ],
+    "option": "--format",
+    "values": [
+      "json",
+      "text"
+    ]
+  },
+  "functionDefault": "omitted without a documentation message",
+  "documentedFunctionDefault": "port chosen by the application",
+  "orderedPrefix": {
+    "path": [
+      "serve"
+    ],
+    "usage": "probe PROFILE serve [--port PORT]",
+    "forbiddenPathSegment": "prod"
+  },
+  "expectedReports": [
+    {
+      "path": [
+        "async"
+      ],
+      "scope": "page",
+      "reason": "value-metadata-unavailable"
+    },
+    {
+      "path": [
+        "opaque"
+      ],
+      "scope": "subtree",
+      "reason": "unregistered-parser"
+    }
+  ],
+  "forbiddenCounterDelta": 0,
+  "hiddenScopes": "excluded before reports",
+  "passRule": "All required pages/content and exactly the expected reports, without post-construction callbacks, parser-interface changes, or constructor edits outside the frozen list."
+}

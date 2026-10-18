@@ -251,6 +251,14 @@
       },
       "import": "./dist/internal/help-request.js",
       "require": "./dist/internal/help-request.cjs"
+    },
+    "./doc-pages": {
+      "types": {
+        "import": "./dist/doc-pages.d.ts",
+        "require": "./dist/doc-pages.d.cts"
+      },
+      "import": "./dist/doc-pages.js",
+      "require": "./dist/doc-pages.cjs"
     }
   },
   "imports": {

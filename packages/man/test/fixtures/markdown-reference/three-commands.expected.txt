@@ -1,0 +1,36 @@
+# `tool` command reference
+
+Coverage: author-declared all visible commands.
+
+Runner inputs: help: not documented here (if configured); version: not documented here (if configured); completion: not documented here (if configured).
+
+## Contents
+
+ -  <a href="#optique-command.5b5d"><code>tool</code></a>
+ -  <a href="#optique-command.5b2267616d6d61225d"><code>tool gamma</code></a>
+ -  <a href="#optique-command.5b22616c706861225d"><code>tool alpha</code></a>
+ -  <a href="#optique-command.5b2262657461225d"><code>tool beta</code></a>
+
+<a id="optique-command.5b5d"></a>
+
+## `tool`
+
+### Commands
+
+ -  <a href="#optique-command.5b22616c706861225d"><code>alpha</code></a>
+
+ -  <a href="#optique-command.5b2262657461225d"><code>beta</code></a>
+
+ -  <a href="#optique-command.5b2267616d6d61225d"><code>gamma</code></a>
+
+<a id="optique-command.5b2267616d6d61225d"></a>
+
+## `tool gamma`
+
+<a id="optique-command.5b22616c706861225d"></a>
+
+## `tool alpha`
+
+<a id="optique-command.5b2262657461225d"></a>
+
+## `tool beta`
