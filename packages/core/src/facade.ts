@@ -3,6 +3,7 @@ import {
   collectActiveOptionNames,
   collectRootOptionNames,
   type CurrentOptionNames,
+  projectCommandUsage,
 } from "./usage-internals.ts";
 import {
   hasAutomaticWidth,
@@ -1449,6 +1450,18 @@ export interface RunOptions<THelp, TError> {
   readonly aboveError?: "usage" | "help" | "none";
 
   /**
+   * Scope of the compact preamble when `aboveError` is `"usage"`.
+   * `"command"` uses the failed parse's canonical command path and usage
+   * metadata, retaining parent options. Hidden or unresolved paths and
+   * unsupported compositions fall back to root usage. Neither mode applies
+   * help-only `usageLine` overrides or evaluates the parser again.
+   *
+   * @default `"root"`
+   * @since 1.4.0
+   */
+  readonly errorUsage?: "root" | "command";
+
+  /**
    * Callback invoked after error output for a parse failure, an invalid
    * command path before help, or a missing or unsupported completion shell.
    * Receives the exit code and the structured error message used for output.
@@ -2277,6 +2290,7 @@ export function runParser<
     usageLine,
     commandList = "recursive",
     aboveError = "usage",
+    errorUsage = "root",
     onError = () => {
       throw new RunParserError("Failed to parse command line arguments.");
     },
@@ -2931,11 +2945,28 @@ export function runParser<
             }
           }
           if (effectiveAboveError === "usage") {
-            resolveUsageWidth(augmentedParser.usage);
+            const rootUsage = augmentedParser.usage;
+            const optionCount = Number(helpParsers.helpOption != null) +
+              Number(versionParsers.versionOption != null);
+            const alternativeCount = optionCount +
+              Number(helpParsers.helpCommand != null) +
+              Number(versionParsers.versionCommand != null) +
+              Number(completionParsers.completionCommand != null);
+            const errorUsageTerms = aboveError === "usage" &&
+                errorUsage === "command"
+              ? projectCommandUsage(
+                rootUsage,
+                classified.commandPath,
+                alternativeCount === 0
+                  ? undefined
+                  : { optionCount, alternativeCount },
+              ) ?? rootUsage
+              : rootUsage;
+            resolveUsageWidth(errorUsageTerms);
             stderr(
               `${usageLabel()}${
                 indentLines(
-                  formatUsage(programName, augmentedParser.usage, {
+                  formatUsage(programName, errorUsageTerms, {
                     theme,
                     colors,
                     maxWidth: maxWidth == null

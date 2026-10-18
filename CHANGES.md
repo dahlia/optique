@@ -50,6 +50,10 @@ To be released.
     and transparent wrappers can contribute known empty-input behavior to
     usage groups. Undeclared and context-dependent outcomes stay unknown.
     [[#1014], [#1016]]
+ -  Added `errorUsage: "command"` to show the matched command's usage above
+    parse errors while preserving parent options.  Root usage remains the
+    default and the fallback for hidden or uncertain command paths.
+    [[#1086], [#1093]]
  -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
     value is attached to a flag.  It accepts a static message or a callback
     receiving the matched option name and the supplied value.  [[#968], [#984]]
@@ -132,12 +136,17 @@ To be released.
 [#1017]: https://github.com/dahlia/optique/pull/1017
 [#1020]: https://github.com/dahlia/optique/issues/1020
 [#1023]: https://github.com/dahlia/optique/pull/1023
+[#1086]: https://github.com/dahlia/optique/issues/1086
+[#1093]: https://github.com/dahlia/optique/pull/1093
 
 ### @optique/run
 
  -  Added `completion.errors` to `run()`, `runSync()`, and `runAsync()` for
     customizing missing or unsupported completion shell messages.
     [[#967], [#982]]
+ -  Added the `errorUsage` option to select root or matched-command usage
+    above parse errors without changing error messages or exit behavior.
+    [[#1086], [#1093]]
  -  Added the `helpSections` option to `run()`, `runSync()`, and `runAsync()`
     to separate command lists from options in help while keeping pages without
     commands free of automatic headings.  [[#972], [#983]]
