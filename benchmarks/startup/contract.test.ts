@@ -51,7 +51,7 @@ describe("runChecked", () => {
     executable: "node",
     args: ["-e", script],
     cwd: process.cwd(),
-    env: {},
+    env: { PATH: process.env.PATH ?? "" },
   });
   const expected = { status: 0, stdout: "ok\n", stderr: "" };
   it("should capture and validate streams and exit status", () => {
