@@ -53,9 +53,8 @@ Core rules
  -  Async value parsers like *@optique/git* make containing parsers async.
     Await `run()`/`parse()`/`runParser()` or, for `bindKeyring()`, `runAsync()`.
  -  Use `dependency()` when one value parser controls another's valid values.
-    For a multi-level chain, wrap the middle derivation too:
-    `dependency(source.deriveSync(...))`. Optique resolves such chains by
-    dependency order, independently of object/tuple field order.
+    Wrap middle steps too: `dependency(source.deriveSync(...))`. Resolution
+    follows dependency order, independently of object/tuple field order.
  -  Use `derivePromptConfig(source, resolver)` from *@optique/prompt* or its
     adapters for choices/messages depending on parsed values; use
     `[sourceA, sourceB]` for several sources. Async resolvers run at fallback
@@ -274,6 +273,7 @@ Reference links
  -  Shell completion: <https://optique.dev/concepts/completion.md>
  -  Command discovery: <https://optique.dev/concepts/discover.md>
  -  Man pages: <https://optique.dev/concepts/man.md>
+ -  Consumer skills: <https://optique.dev/consumer-skills.md>
 
 
 Integration packages

@@ -1,0 +1,22 @@
+{
+  "name": "skill-notes",
+  "version": "1.4.0",
+  "private": true,
+  "description": "A tested consumer Agent Skill specimen for an Optique CLI",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "skill-notes": "./dist/cli.js" },
+  "files": ["dist/", "skills/", "README.md"],
+  "engines": { "node": ">=24.15.0" },
+  "scripts": {
+    "build": "bun build src/cli.ts --target=node --packages=bundle --outdir=dist",
+    "test": "node --test src/pilot.test.ts",
+    "test:bun": "bun test src/pilot.test.ts"
+  },
+  "devDependencies": {
+    "@optique/core": "workspace:",
+    "@optique/run": "workspace:",
+    "@optique/testing": "workspace:",
+    "@types/node": "catalog:"
+  }
+}

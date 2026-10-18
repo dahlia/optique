@@ -13,6 +13,10 @@ To be released.
  -  Added a `key` option to `choice()` for matching string inputs and
     completion prefixes against declared choices under a custom rule while
     returning the declared spelling.  [[#998], [#1000]]
+ -  Added a tested consumer Agent Skill specimen and adaptation guide for
+    teaching agents to use an application built with Optique, with a runnable
+    example covering file input, redirected stdin, and a new output file.
+    [[#1090], [#1092]]
  -  Added a way to show command aliases in help output, so users can discover
     them without relying on shell completion.  Set `showAliases: true` on
     `command()` to list a command's aliases next to its description, as in
@@ -137,6 +141,8 @@ To be released.
 [#1020]: https://github.com/dahlia/optique/issues/1020
 [#1023]: https://github.com/dahlia/optique/pull/1023
 [#1086]: https://github.com/dahlia/optique/issues/1086
+[#1090]: https://github.com/dahlia/optique/issues/1090
+[#1092]: https://github.com/dahlia/optique/pull/1092
 [#1093]: https://github.com/dahlia/optique/pull/1093
 
 ### @optique/run
