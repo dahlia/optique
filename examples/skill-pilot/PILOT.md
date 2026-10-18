@@ -26,6 +26,11 @@ that artifact through the installed bin shim. The skill directory was copied
 from that installation and compared byte-for-byte with its source. Neither the
 installed command nor the copied bundle needed the checkout at execution time.
 
+This earlier pilot artifact differs from the committed ten-example bundle:
+it did not contain the `missing-input` and `existing-output` examples added
+later. The retained receipt and hashes below identify that eight-example
+pilot artifact.
+
 The source base was `c7a6d04d94c5c067e02d0a58857a590533528fd3` with uncommitted
 pilot changes. The hashes identify the actual artifacts used, rather than a
 later committed revision:
