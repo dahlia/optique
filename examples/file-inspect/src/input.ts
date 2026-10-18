@@ -22,7 +22,7 @@ export interface InputScope {
   readonly open: (path: string) => Promise<Input>;
   /** Writes one result line. Throws if the output writer fails. */
   readonly write: (line: string) => void;
-  /** Releases owned handles once; repeated calls share the cleanup promise. */
+  /** Waits for opens and releases owned handles once, sharing the promise. */
   readonly close: () => Promise<void>;
 }
 
@@ -40,6 +40,7 @@ export interface InputOptions {
  */
 export function createInputScope(options: InputOptions = {}): InputScope {
   const handles = new Set<FileHandle>();
+  const acquisitions = new Set<Promise<void>>();
   let cleanup: Promise<void> | undefined;
   return {
     write: options.write ?? ((line) => {
@@ -74,41 +75,50 @@ export function createInputScope(options: InputOptions = {}): InputScope {
           },
         };
       }
-      if (!(await stat(path)).isFile()) {
-        throw new TypeError("Input must be a regular file.");
+      // Cleanup waits for acquisitions, including handles not yet returned.
+      const { promise, resolve: finish } = Promise.withResolvers<void>();
+      acquisitions.add(promise);
+      try {
+        if (!(await stat(path)).isFile()) {
+          throw new TypeError("Input must be a regular file.");
+        }
+        if (cleanup != null) throw new TypeError("Input scope is closed.");
+        // Avoid waiting if the checked path is replaced with a FIFO before open.
+        // The acquired handle is validated independently below.
+        const handle = await (options.openFile ??
+          ((path) => open(path, constants.O_RDONLY | constants.O_NONBLOCK)))(
+            path,
+          );
+        handles.add(handle);
+        if (!(await handle.stat()).isFile()) {
+          throw new TypeError("Input must be a regular file.");
+        }
+        if (cleanup != null) throw new TypeError("Input scope is closed.");
+        return {
+          kind: "file",
+          handle,
+          async *chunks() {
+            while (true) {
+              const buffer = new Uint8Array(64 * 1024);
+              const { bytesRead } = await handle.read(
+                buffer,
+                0,
+                buffer.length,
+                null,
+              );
+              if (bytesRead === 0) return;
+              yield buffer.subarray(0, bytesRead);
+            }
+          },
+        };
+      } finally {
+        acquisitions.delete(promise);
+        finish();
       }
-      // Avoid waiting if the checked path is replaced with a FIFO before open.
-      // The acquired handle is validated independently below.
-      const handle = await (options.openFile ??
-        ((path) => open(path, constants.O_RDONLY | constants.O_NONBLOCK)))(
-          path,
-        );
-      handles.add(handle);
-      if (!(await handle.stat()).isFile()) {
-        throw new TypeError("Input must be a regular file.");
-      }
-      return {
-        kind: "file",
-        handle,
-        async *chunks() {
-          while (true) {
-            const buffer = new Uint8Array(64 * 1024);
-            const { bytesRead } = await handle.read(
-              buffer,
-              0,
-              buffer.length,
-              null,
-            );
-            if (bytesRead === 0) return;
-            yield buffer.subarray(0, bytesRead);
-          }
-        },
-      };
     },
     close() {
-      return cleanup ??= Promise.all(
-        [...handles].map((handle) => handle.close()),
-      )
+      return cleanup ??= Promise.all(acquisitions)
+        .then(() => Promise.all([...handles].map((handle) => handle.close())))
         .then(() => {});
     },
   };
