@@ -1,0 +1,322 @@
+[
+  {
+    "id": "node-empty",
+    "medians": [
+      22.8400215,
+      25.693646,
+      26.9118715
+    ],
+    "spreadMs": 4.071850000000001,
+    "spreadPercent": 15.847692460618477
+  },
+  {
+    "id": "node-import:@optique/core",
+    "medians": [
+      76.75128000000001,
+      84.86248850000001,
+      80.87525400000001
+    ],
+    "spreadMs": 8.111208500000004,
+    "spreadPercent": 10.029283493811349
+  },
+  {
+    "id": "node-import:@optique/run",
+    "medians": [
+      80.89729700000001,
+      92.47628499999999,
+      87.919341
+    ],
+    "spreadMs": 11.578987999999981,
+    "spreadPercent": 13.170012272953661
+  },
+  {
+    "id": "node-import:@optique/discover",
+    "medians": [
+      85.84145699999999,
+      97.0271735,
+      92.10751099999999
+    ],
+    "spreadMs": 11.185716500000012,
+    "spreadPercent": 12.144195819166162
+  },
+  {
+    "id": "node-import:@optique/core/constructs",
+    "medians": [
+      64.022171,
+      67.82755399999999,
+      65.094742
+    ],
+    "spreadMs": 3.805382999999992,
+    "spreadPercent": 5.845914559427845
+  },
+  {
+    "id": "node-import:@optique/core/primitives",
+    "medians": [
+      61.653017500000004,
+      67.8765345,
+      66.2030575
+    ],
+    "spreadMs": 6.223517000000001,
+    "spreadPercent": 9.40064890507512
+  },
+  {
+    "id": "node-import:@optique/core/modifiers",
+    "medians": [
+      54.458614,
+      59.6954135,
+      57.7791195
+    ],
+    "spreadMs": 5.236799500000004,
+    "spreadPercent": 9.063480969106848
+  },
+  {
+    "id": "node-import:@optique/core/valueparser",
+    "medians": [
+      45.53545,
+      50.4535155,
+      50.408964999999995
+    ],
+    "spreadMs": 4.918065500000004,
+    "spreadPercent": 9.75633104151217
+  },
+  {
+    "id": "node-import:@optique/run/run",
+    "medians": [
+      80.654653,
+      90.1030525,
+      88.584264
+    ],
+    "spreadMs": 9.448399500000008,
+    "spreadPercent": 10.666002146837283
+  },
+  {
+    "id": "node-minimal-help",
+    "medians": [
+      93.07435749999999,
+      104.3774145,
+      99.37782050000001
+    ],
+    "spreadMs": 11.30305700000001,
+    "spreadPercent": 11.373822592537143
+  },
+  {
+    "id": "node-minimal-dispatch",
+    "medians": [
+      87.70787,
+      96.690618,
+      99.3852255
+    ],
+    "spreadMs": 11.677355500000004,
+    "spreadPercent": 12.077030576017213
+  },
+  {
+    "id": "node-three-root-help",
+    "medians": [
+      100.4229565,
+      109.6610635,
+      107.48373699999999
+    ],
+    "spreadMs": 9.238107,
+    "spreadPercent": 8.594888173640632
+  },
+  {
+    "id": "node-three-nested-help",
+    "medians": [
+      104.9384805,
+      118.464136,
+      111.2177075
+    ],
+    "spreadMs": 13.5256555,
+    "spreadPercent": 12.161422676330563
+  },
+  {
+    "id": "node-three-version",
+    "medians": [
+      90.9235995,
+      101.0889465,
+      101.069681
+    ],
+    "spreadMs": 10.165347000000011,
+    "spreadPercent": 10.057761041117772
+  },
+  {
+    "id": "node-three-dispatch",
+    "medians": [
+      93.8470265,
+      105.61439,
+      102.69106199999999
+    ],
+    "spreadMs": 11.767363500000002,
+    "spreadPercent": 11.458994844166675
+  },
+  {
+    "id": "node-three-invalid",
+    "medians": [
+      95.817599,
+      111.47223,
+      105.9038095
+    ],
+    "spreadMs": 15.654630999999995,
+    "spreadPercent": 14.781933788699071
+  },
+  {
+    "id": "node-three-completion",
+    "medians": [
+      89.606573,
+      102.74637799999999,
+      98.60427
+    ],
+    "spreadMs": 13.139804999999996,
+    "spreadPercent": 13.325797148541332
+  },
+  {
+    "id": "node-discovery-root-help",
+    "medians": [
+      109.7692035,
+      121.9271985,
+      122.2647195
+    ],
+    "spreadMs": 12.495515999999995,
+    "spreadPercent": 10.248341759447541
+  },
+  {
+    "id": "node-discovery-nested-help",
+    "medians": [
+      111.28882999999999,
+      123.93281999999999,
+      124.497706
+    ],
+    "spreadMs": 13.208876000000004,
+    "spreadPercent": 10.658093634922537
+  },
+  {
+    "id": "node-discovery-version",
+    "medians": [
+      99.67740699999999,
+      111.48345,
+      111.020238
+    ],
+    "spreadMs": 11.806043000000017,
+    "spreadPercent": 10.634135913129656
+  },
+  {
+    "id": "node-discovery-dispatch",
+    "medians": [
+      103.382045,
+      116.365694,
+      113.20455100000001
+    ],
+    "spreadMs": 12.983649,
+    "spreadPercent": 11.469193495586586
+  },
+  {
+    "id": "node-discovery-invalid",
+    "medians": [
+      105.7515705,
+      116.151159,
+      113.755509
+    ],
+    "spreadMs": 10.399588500000007,
+    "spreadPercent": 9.14205262797427
+  },
+  {
+    "id": "node-discovery-completion",
+    "medians": [
+      101.8800975,
+      111.10507,
+      109.555257
+    ],
+    "spreadMs": 9.224972499999993,
+    "spreadPercent": 8.420383240942963
+  },
+  {
+    "id": "cjs-three-root-help",
+    "medians": [
+      83.899525,
+      93.660271,
+      92.6961965
+    ],
+    "spreadMs": 9.760745999999997,
+    "spreadPercent": 10.529823626582129
+  },
+  {
+    "id": "bun-three-root-help",
+    "medians": [
+      68.36640700000001,
+      80.33302,
+      77.666922
+    ],
+    "spreadMs": 11.966612999999995,
+    "spreadPercent": 15.40760556984606
+  },
+  {
+    "id": "deno-three-root-help",
+    "medians": [
+      119.450271,
+      131.069151,
+      128.42227350000002
+    ],
+    "spreadMs": 11.618880000000004,
+    "spreadPercent": 9.047402513085085
+  },
+  {
+    "id": "node-cache-three-root-help",
+    "medians": [
+      90.1387885,
+      98.9189945,
+      95.335778
+    ],
+    "spreadMs": 8.780205999999993,
+    "spreadPercent": 9.209770124286385
+  },
+  {
+    "id": "cjs-three-dispatch",
+    "medians": [
+      82.98720349999999,
+      90.152688,
+      88.97616
+    ],
+    "spreadMs": 7.165484500000005,
+    "spreadPercent": 8.053263368524789
+  },
+  {
+    "id": "bun-three-dispatch",
+    "medians": [
+      62.464558,
+      68.34731,
+      65.86074500000001
+    ],
+    "spreadMs": 5.882751999999996,
+    "spreadPercent": 8.93210667446898
+  },
+  {
+    "id": "deno-three-dispatch",
+    "medians": [
+      116.852114,
+      131.23042099999998,
+      129.8374835
+    ],
+    "spreadMs": 14.378306999999978,
+    "spreadPercent": 11.074080159601968
+  },
+  {
+    "id": "node-cache-three-dispatch",
+    "medians": [
+      85.7159255,
+      92.9775805,
+      93.5891685
+    ],
+    "spreadMs": 7.873243000000002,
+    "spreadPercent": 8.467894042478338
+  },
+  {
+    "id": "cjs-import:@optique/core",
+    "medians": [
+      61.877334,
+      67.64632499999999,
+      65.91153
+    ],
+    "spreadMs": 5.768990999999993,
+    "spreadPercent": 8.752627954471688
+  }
+]

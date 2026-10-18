@@ -45,6 +45,7 @@
     "npm:typescript@^5.8.3": "5.8.3",
     "npm:valibot@*": "1.4.0_typescript@5.8.3",
     "npm:valibot@1.4.0": "1.4.0_typescript@5.8.3",
+    "npm:yaml@^2.9.1": "2.9.1",
     "npm:zod@*": "4.1.12",
     "npm:zod@3.25.76": "3.25.76",
     "npm:zod@4": "4.1.12",
@@ -2450,6 +2451,10 @@
     "xml-naming@0.3.0": {
       "integrity": "sha512-ghig2TBE/H11aOVgmahA3MhimvkBr6JIYknH/Dhdk10nXwdbIqBJsbfMxpvFPG8bAw77gN29aQWvKpmVoPlvPQ=="
     },
+    "yaml@2.9.1": {
+      "integrity": "sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==",
+      "bin": true
+    },
     "zod@3.25.76": {
       "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="
     },
@@ -2475,6 +2480,7 @@
       "npm:markdownlint-cli2@0.20",
       "npm:tsdown@0.13",
       "npm:typescript@^5.8.3",
+      "npm:yaml@^2.9.1",
       "npm:zod@4"
     ],
     "members": {

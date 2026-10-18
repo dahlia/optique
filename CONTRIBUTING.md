@@ -69,6 +69,16 @@ mise test:bun    # Run tests with Bun
 mise test        # Run all checks and tests across all runtimes
 ~~~~
 
+### Startup and installation measurements
+
+Use `mise run benchmark:prepare` to build and verify isolated npm consumers,
+then `mise run benchmark:smoke` for a short behavior check or
+`mise run benchmark:baseline` for three full measurement runs.  Timing is
+informational.  See the [baseline guide] for fixture contracts, cache policies,
+installation accounting, and interpreting the raw artifacts.
+
+[baseline guide]: ./benchmarks/startup/README.md
+
 ### Building (for npm publishing)
 
 ~~~~ bash

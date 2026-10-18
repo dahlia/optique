@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "pnpmVersion": "11.28.6",
+  "imports": [
+    "@optique/core",
+    "@optique/run",
+    "@optique/discover",
+    "@optique/core/constructs",
+    "@optique/core/primitives",
+    "@optique/core/modifiers",
+    "@optique/core/valueparser",
+    "@optique/run/run"
+  ],
+  "consumers": [
+    { "id": "core-run", "packages": ["@optique/core", "@optique/run"] },
+    {
+      "id": "discover",
+      "packages": ["@optique/core", "@optique/run", "@optique/discover"]
+    }
+  ],
+  "requests": [
+    { "id": "root-help", "args": ["--help"], "status": 0 },
+    { "id": "nested-help", "args": ["config", "set", "--help"], "status": 0 },
+    { "id": "version", "args": ["--version"], "status": 0 },
+    { "id": "dispatch", "args": ["start", "alpha", "beta"], "status": 0 },
+    { "id": "invalid", "args": ["start", "--invalid"], "status": 1 },
+    { "id": "completion", "args": ["completion", "bash", "st"], "status": 0 }
+  ],
+  "minimalRequests": [
+    { "id": "help", "args": ["--help"], "status": 0 },
+    { "id": "dispatch", "args": [], "status": 0 }
+  ],
+  "discoveryImports": [
+    "commands/config/set.js",
+    "commands/start.js",
+    "commands/status.js",
+    "handlers/set.js",
+    "handlers/start.js",
+    "handlers/status.js"
+  ]
+}

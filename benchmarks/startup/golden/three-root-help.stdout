@@ -1,0 +1,22 @@
+Usage: baseline start [--mode TYPE] [PATH...]
+       baseline status [--format TYPE]
+       baseline config set TYPE VALUE...
+       baseline help [COMMAND...]
+       baseline completion [SHELL] [ARG...]
+       baseline --help
+       baseline --version
+       baseline --completion SHELL [[ARG...]]
+
+  start                     
+  status                    
+  config                    
+  help                        Show help information.
+  completion                  Generate shell completion script or provide 
+                              completions.
+  --help                      Show help information.
+  --version                   Show version information.
+  --completion SHELL          Generate shell completion script.
+  ARG                         Command line arguments for completion suggestions 
+                              (used by shell integration; you usually don't 
+                              need to provide this).
+
