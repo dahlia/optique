@@ -1,0 +1,35 @@
+name: File inspection example
+
+on:
+  pull_request:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  file-inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MISE_EXPERIMENTAL: "true"
+      MISE_JOBS: "1"
+    steps:
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v4
+      with:
+        experimental: true
+        install: true
+    - run: mise file-inspect:test
+    - run: mise file-inspect:smoke
+    - uses: actions/upload-artifact@v7
+      with:
+        name: file-inspect-evidence
+        if-no-files-found: error
+        path: |
+          examples/file-inspect/dist/evidence.json
+          examples/file-inspect/dist/build-evidence.json
+          examples/file-inspect/dist/standalone-evidence.json
+          examples/file-inspect/dist/bundle-meta.json

@@ -263,7 +263,6 @@ For the detailed maintained guide, use <https://optique.dev/pitfalls.md>.
 Reference links
 ---------------
 
- -  Documentation index for agents: <https://optique.dev/llms.txt>
  -  Runners and entry points: <https://optique.dev/concepts/runners.md>
  -  Primitive parsers: <https://optique.dev/concepts/primitives.md>
  -  Construct combinators: <https://optique.dev/concepts/constructs.md>
@@ -273,6 +272,7 @@ Reference links
  -  Structured messages: <https://optique.dev/concepts/messages.md>
  -  Shell completion: <https://optique.dev/concepts/completion.md>
  -  Command discovery: <https://optique.dev/concepts/discover.md>
+ -  CLI: <https://github.com/dahlia/optique/tree/main/examples/file-inspect>
  -  Markdown references: <https://optique.dev/concepts/markdown-reference.md>
 
 

@@ -1529,6 +1529,10 @@ process.
 Next steps
 ----------
 
+For a complete executable, follow the [file inspection example]. It connects
+static `runProgram()` registration and resource hooks to tests, Bash completion,
+an offline npm package, and a standalone executable.
+
 You now have a solid foundation for building CLI applications with Optique.
 Here are some directions to explore next:
 
@@ -1547,5 +1551,7 @@ Here are some directions to explore next:
     [Git references](./integrations/git.md),
     [Temporal dates](./integrations/temporal.md)
  -  [Why Optique?](./why.md): The design philosophy behind parser combinators
+
+[file inspection example]: https://github.com/dahlia/optique/tree/main/examples/file-inspect
 
 <!-- cSpell: ignore myapp mydb -->
