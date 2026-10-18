@@ -8,6 +8,11 @@ try {
   await runProgram<InputScope>(createFileProgram());
 } catch (error) {
   const reason = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`file-inspect: ${reason.replace(/[\r\n]+/g, " ")}\n`);
+  const printableReason = reason.replace(
+    /[\p{Cc}\p{Zl}\p{Zp}]/gu,
+    (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+  process.stderr.write(`file-inspect: ${printableReason}\n`);
   process.exitCode = 1;
 }
