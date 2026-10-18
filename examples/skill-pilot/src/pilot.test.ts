@@ -459,6 +459,37 @@ describe("documented workflows", () => {
       assert.deepEqual(await snapshot(cwd), before);
     });
   });
+  it("requires save options before the -- terminator", async () => {
+    for (const valid of [false, true]) {
+      await withFixture(async (cwd) => {
+        await writeFile(join(cwd, "-notes.txt"), "one\ntwo");
+        const before = await snapshot(cwd);
+        const args = valid
+          ? ["save", "--output", "saved.txt", "--", "-notes.txt"]
+          : ["save", "--", "-notes.txt", "--output", "saved.txt"];
+        const result = await runner(cwd).invoke({ args, stdin: "" });
+        const after = await snapshot(cwd);
+        if (valid) {
+          assert.deepEqual([result.stdout, result.stderr, result.exitCode], [
+            "Saved 7 bytes.\n",
+            "",
+            0,
+          ]);
+          assert.equal(
+            await readFile(join(cwd, "saved.txt"), "utf8"),
+            "one\ntwo",
+          );
+          delete after["saved.txt"];
+        } else {
+          assert.equal(result.exitCode, 1);
+          assert.equal(result.stdout, "");
+          assert.match(result.stderr, /--output/);
+          assert.ok(!result.stderr.includes("File operation"));
+        }
+        assert.deepEqual(after, before);
+      });
+    }
+  });
   it("fails safely for invalid syntax and file-operation failures", async () => {
     for (
       const args of [

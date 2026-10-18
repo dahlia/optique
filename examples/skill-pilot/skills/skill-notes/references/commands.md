@@ -4,8 +4,10 @@ skill-notes command reference
 All file paths resolve from the current working directory. INPUT `-` means
 stdin. FILE after `--output` is always a literal filesystem path: `--output -`
 creates a file named *-*; it does not write contents to stdout. Use `--` before
-an input path beginning with a hyphen. The examples below cover the maintained
-forms; they are not a claim that every accepted token spelling is listed.
+an input path beginning with a hyphen. Options are not recognized after `--`,
+so put `--output FILE` before it: `save --output FILE -- -input`.
+The examples below cover the maintained forms and do not list every accepted
+token spelling.
 
 Each successful invocation prints one LF-terminated line to stdout, no stderr,
 and exits with 0. Invalid syntax exits with 1 before input/output operations.
