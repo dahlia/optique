@@ -1,4 +1,4 @@
-import { object, or, seq } from "@optique/core/constructs";
+import { conditional, object, or, seq } from "@optique/core/constructs";
 import { multiple, optional } from "@optique/core/modifiers";
 import {
   argument,
@@ -7,6 +7,7 @@ import {
   flag,
   option,
 } from "@optique/core/primitives";
+import { parseSync } from "@optique/core/parser";
 import type { HiddenVisibility, Usage } from "@optique/core/usage";
 import { choice, string } from "@optique/core/valueparser";
 import { captureRun } from "@optique/testing/run";
@@ -327,6 +328,62 @@ describe("command-scoped error usage", () => {
       assert.match(result.stderr, /^Usage: tool ENV config --port TYPE\n/);
       assert.doesNotMatch(result.stderr, /serve|\(ENV/);
     }
+  });
+
+  for (const multipleBranches of [false, true]) {
+    for (const help of [undefined, "option"] as const) {
+      it(`should keep a conditional discriminator before its command (${multipleBranches}, ${help})`, async () => {
+        const branches = {
+          x: or(
+            command("a", option("--x", choice(["ok"]))),
+            command("unused", constant(null)),
+          ),
+          ...(multipleBranches ? { y: command("b", constant(null)) } : {}),
+        };
+        const parser = conditional(option("--kind", string()), branches);
+        assert.ok(parseSync(parser, ["--kind", "x", "a", "--x", "ok"]).success);
+        assert.ok(
+          !parseSync(parser, ["a", "--kind", "x", "--x", "ok"]).success,
+        );
+        const options = {
+          ...format,
+          help,
+          args: ["--kind", "x", "a", "--x", "bad"],
+        } as const;
+        const root = await captureRun(parser, options);
+        const result = await captureRun(parser, {
+          ...options,
+          errorUsage: "command",
+        });
+        const usage = result.stderr.split("Error:")[0];
+        assert.equal(result.exitCode, 1);
+        assert.match(usage, /--kind x a --x TYPE/);
+        assert.doesNotMatch(usage, /unused|--kind y/);
+        assert.equal(errorText(result.stderr), errorText(root.stderr));
+        if (help != null) assert.match(usage, /--help/);
+      });
+    }
+  }
+
+  it("should keep a positional discriminator before its command", async () => {
+    const parser = conditional(
+      argument(choice(["x", "y"], { metavar: "KIND" })),
+      {
+        x: command("a", option("--x", choice(["ok"]))),
+        y: command("b", constant(null)),
+      },
+    );
+    assert.ok(parseSync(parser, ["x", "a", "--x", "ok"]).success);
+    assert.ok(!parseSync(parser, ["a", "x", "--x", "ok"]).success);
+    const result = await captureRun(parser, {
+      ...format,
+      args: ["x", "a", "--x", "bad"],
+      errorUsage: "command",
+    });
+    const usage = result.stderr.split("Error:")[0];
+    assert.match(usage, /tool KIND a --x TYPE/);
+    assert.doesNotMatch(usage, /\bb\b/);
+    assert.equal(result.exitCode, 1);
   });
 
   it("should distinguish completion-option-only configuration from augmentation", async () => {

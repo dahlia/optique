@@ -51,9 +51,9 @@ To be released.
     usage groups. Undeclared and context-dependent outcomes stay unknown.
     [[#1014], [#1016]]
  -  Added `errorUsage: "command"` to show the matched command's usage above
-    parse errors while preserving parent options.  Root usage remains the
-    default and the fallback for hidden or uncertain command paths.
-    [[#1086], [#1093]]
+    parse errors while preserving parent options and required argument order.
+    Root usage remains the default and the fallback for hidden or uncertain
+    command paths.  [[#1086], [#1093]]
  -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
     value is attached to a flag.  It accepts a static message or a callback
     receiving the matched option name and the supplied value.  [[#968], [#984]]

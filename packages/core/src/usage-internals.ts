@@ -89,12 +89,20 @@ function projectCommandTerms(
   const host = usage[index];
   const prefix = usage.slice(0, index);
   const suffix = usage.slice(index + 1);
+  // A required prefix can be a conditional() discriminator. Keep its order
+  // attached to the selected grammar instead of hoisting commands over it.
+  const orderedPrefix = prefix.some((term) =>
+    term.type === "option" || term.type === "argument" ||
+    term.type === "literal"
+  );
+  const preserveOrder = (terms: Usage): Usage =>
+    orderedPrefix ? [{ type: "sequence", terms }] : terms;
   if (host.type === "command") {
     if (host.name !== path[offset] || isUsageHidden(host.hidden)) {
       return undefined;
     }
     const rest = projectCommandTerms(suffix, path, offset + 1);
-    return rest == null ? undefined : [...prefix, host, ...rest];
+    return rest == null ? undefined : preserveOrder([...prefix, host, ...rest]);
   }
   // A group followed by another command host might be an independent
   // free-order field. Usage has no boundary proving a parent-child relation.
@@ -103,7 +111,7 @@ function projectCommandTerms(
     const terms = projectCommandTerms(host.terms, path, offset);
     return terms == null
       ? undefined
-      : [...prefix, { ...host, terms }, ...suffix];
+      : preserveOrder([...prefix, { ...host, terms }, ...suffix]);
   }
   if (host.type !== "exclusive") return undefined;
   let selected: Usage | undefined;
@@ -118,7 +126,9 @@ function projectCommandTerms(
   const terms = projectCommandTerms(selected, path, offset);
   // Splice the branch; the removed alternatives' acceptsEmpty is no longer
   // a statement about this already-matched command's grammar.
-  return terms == null ? undefined : [...prefix, ...terms, ...suffix];
+  return terms == null
+    ? undefined
+    : preserveOrder([...prefix, ...terms, ...suffix]);
 }
 
 /**
