@@ -159,6 +159,9 @@ To be released.
 
  -  Added `completion.errors` to `runProgram()` for customizing missing or
     unsupported completion shell messages.  [[#967], [#982]]
+ -  Added `errorUsage: "command"` support to `runProgram()` to show the matched
+    command's usage above parse errors.  Root usage remains the default and
+    fallback.  [[#1086], [#1093]]
  -  Added opt-in help for bare command groups through `runProgram()`'s
     `help.bareGroup` setting.  Use `"namespace"` for groups without their own
     command definition or `"always"` to show help instead of executing bare
@@ -311,6 +314,12 @@ To be released.
  -  Recorded the known empty parse step of `prompt()` so alternative groups
     with ambiguous empty fallbacks can be drawn as required. Completion that
     depends on sources or validation remains unknown. [[#1014], [#1016]]
+
+### @optique/testing
+
+ -  Added `errorUsage: "command"` support to `captureRun()` to include the
+    matched command's usage in captured parse-error output.  Root usage remains
+    the default and fallback.  [[#1086], [#1093]]
 
 
 Version 1.3.6
