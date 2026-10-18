@@ -71,6 +71,7 @@ const CONCEPTS = {
     { text: "Runners and execution", link: "/concepts/runners" },
     { text: "Runtime context extension", link: "/concepts/extend" },
     { text: "Testing", link: "/concepts/testing" },
+    { text: "Consumer CLI skills", link: "/consumer-skills" },
   ],
 };
 
