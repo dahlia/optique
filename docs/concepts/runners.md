@@ -372,6 +372,49 @@ width.  When `maxWidth` constrains the layout, automatic sizing reserves at
 least half of the available space for descriptions.  Numeric widths retain
 their existing fallback behavior.
 
+### Command-scoped error usage
+
+*Available since Optique 1.4.0.*
+
+Set `errorUsage: "command"` to show the matched command's grammar above a
+parse error. The default, `errorUsage: "root"`, keeps the whole program's
+usage. `errorUsage` only takes effect when `aboveError` is `"usage"`.
+
+~~~~ typescript twoslash
+import { or } from "@optique/core/constructs";
+import { command, constant, option } from "@optique/core/primitives";
+import { choice } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = or(
+  command("config", command("set", option(
+    "--port",
+    choice(["80", "443"], { metavar: "PORT" }),
+  ))),
+  command("serve", constant(null)),
+);
+
+run(parser, { errorUsage: "command" });
+~~~~
+
+For `config set --port invalid`, this shows usage for `config set` without
+the unrelated `serve` command. Applicable parent options and runner meta
+options already present in root usage remain visible. Aliases display their
+canonical command names. A missing or unknown child command shows its matched
+parent's alternatives.
+
+The scope comes from the failed parse's recorded command path and usage
+metadata. Formatting does not re-parse the input or reload sources and
+prompts. An unknown root command, a matched command hidden from usage,
+or metadata that cannot reliably describe the selected grammar keeps root
+usage. Optional or repeated command wrappers and independent command groups
+may also retain root usage.
+
+`errorUsage` leaves `aboveError: "help"` and `aboveError: "none"` unchanged,
+including the root-usage fallback when full help is unavailable. Neither
+`errorUsage` mode applies the runner's or a command's help-only `usageLine`
+override. Error messages, suggestions, callbacks and exit codes are unchanged.
+
 ### Structured help callbacks
 
 *The page argument is available since Optique 1.3.0.*
@@ -430,6 +473,14 @@ invalid command paths before help, and missing or unsupported completion
 shells.  When `completion.errors` is configured, the callback receives the
 chosen custom message.  You can inspect the message terms or format them for
 your application without extracting a reason from rendered stderr text.
+
+For applications that manage parsing themselves, `parseDetailed()` also
+retains the canonical `commandPath` and `remainingArgs` on failure. These
+describe parse progress. Neither they nor the `Message` passed to `onError()`
+provide stable machine error codes. Use the structured values for integration
+rather than
+parsing the English text printed by a runner. Changing `errorUsage` only
+changes the usage shown above the error.
 
 The runner writes its usual output before calling `onError`.  The message
 argument contains the error itself; the runner's `Error: ` prefix, usage/help

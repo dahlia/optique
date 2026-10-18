@@ -80,9 +80,9 @@ Core rules
     Show hidden `aliases` in help with `showAliases` on `command()` or runner.
  -  Use `run(parser, { completion: "both" })` for completion, or the object form
     with `completion.errors` for custom shell errors. Do not hand-write scripts.
- -  Use `usageLine: [{ type: "ellipsis" }]` in runner options when a large root
-    synopsis should become a compact `Usage: myapp ...` line. This applies only
-    to root full help; use `command()`'s `usageLine` for subcommand help.
+ -  Use `usageLine: [{ type: "ellipsis" }]` for compact root full help and the
+    override on `command()` for subcommand help. `errorUsage: "command"` scopes
+    usage above errors with root fallback, ignoring help-only overrides.
  -  Use `showUsage: false` in runner options when full help should show the
     brief and sections without `Usage:`. Set `command()`'s `showUsage: true`
     to restore it; children inherit the nearest explicit ancestor setting.

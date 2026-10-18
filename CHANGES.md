@@ -50,6 +50,10 @@ To be released.
     and transparent wrappers can contribute known empty-input behavior to
     usage groups. Undeclared and context-dependent outcomes stay unknown.
     [[#1014], [#1016]]
+ -  Added `errorUsage: "command"` to show the matched command's usage above
+    parse errors while preserving parent options and required argument order.
+    Root usage remains the default and the fallback for hidden or uncertain
+    command paths.  [[#1086], [#1093]]
  -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
     value is attached to a flag.  It accepts a static message or a callback
     receiving the matched option name and the supplied value.  [[#968], [#984]]
@@ -132,12 +136,17 @@ To be released.
 [#1017]: https://github.com/dahlia/optique/pull/1017
 [#1020]: https://github.com/dahlia/optique/issues/1020
 [#1023]: https://github.com/dahlia/optique/pull/1023
+[#1086]: https://github.com/dahlia/optique/issues/1086
+[#1093]: https://github.com/dahlia/optique/pull/1093
 
 ### @optique/run
 
  -  Added `completion.errors` to `run()`, `runSync()`, and `runAsync()` for
     customizing missing or unsupported completion shell messages.
     [[#967], [#982]]
+ -  Added the `errorUsage` option to select root or matched-command usage
+    above parse errors without changing error messages or exit behavior.
+    [[#1086], [#1093]]
  -  Added the `helpSections` option to `run()`, `runSync()`, and `runAsync()`
     to separate command lists from options in help while keeping pages without
     commands free of automatic headings.  [[#972], [#983]]
@@ -150,6 +159,9 @@ To be released.
 
  -  Added `completion.errors` to `runProgram()` for customizing missing or
     unsupported completion shell messages.  [[#967], [#982]]
+ -  Added `errorUsage: "command"` support to `runProgram()` to show the matched
+    command's usage above parse errors.  Root usage remains the default and
+    fallback.  [[#1086], [#1093]]
  -  Added opt-in help for bare command groups through `runProgram()`'s
     `help.bareGroup` setting.  Use `"namespace"` for groups without their own
     command definition or `"always"` to show help instead of executing bare
@@ -302,6 +314,12 @@ To be released.
  -  Recorded the known empty parse step of `prompt()` so alternative groups
     with ambiguous empty fallbacks can be drawn as required. Completion that
     depends on sources or validation remains unknown. [[#1014], [#1016]]
+
+### @optique/testing
+
+ -  Added `errorUsage: "command"` support to `captureRun()` to include the
+    matched command's usage in captured parse-error output.  Root usage remains
+    the default and fallback.  [[#1086], [#1093]]
 
 
 Version 1.3.6

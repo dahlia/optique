@@ -379,6 +379,17 @@ export interface RunOptions {
   readonly aboveError?: "usage" | "help" | "none";
 
   /**
+   * Scope of the compact preamble when `aboveError` is `"usage"`.
+   * `"command"` shows the matched canonical command's grammar, retaining
+   * parent options and falling back to root for hidden or uncertain paths.
+   * This does not affect full help or help-only `usageLine` overrides.
+   *
+   * @default `"root"`
+   * @since 1.4.0
+   */
+  readonly errorUsage?: "root" | "command";
+
+  /**
    * The exit code to use when the parser encounters an error.
    *
    * @default `1`
@@ -1105,6 +1116,7 @@ function buildCoreOptions(
     version: versionConfig,
     completion: completionConfig,
     aboveError,
+    errorUsage: options.errorUsage,
     brief,
     description,
     examples,
@@ -1157,6 +1169,7 @@ const knownRunOptionsKeyList = [
   "version",
   "completion",
   "aboveError",
+  "errorUsage",
   "errorExitCode",
   "brief",
   "description",

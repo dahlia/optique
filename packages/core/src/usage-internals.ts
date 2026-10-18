@@ -5,7 +5,131 @@
  * without notice.  Import them only from within the `@optique/core` package
  * sources; do not re-export them from any public subpath.
  */
-import { isSuggestionHidden, type Usage } from "./usage.ts";
+import { isSuggestionHidden, isUsageHidden, type Usage } from "./usage.ts";
+
+/**
+ * Projects augmented runner usage onto a recorded canonical command path.
+ * Unsupported or ambiguous metadata returns undefined, preserving root usage.
+ * No parser, documentation, or usage-override callbacks are evaluated.
+ * @param usage The runner's original augmented usage.
+ * @param path The canonical path recorded by the failed parse.
+ * @param meta The known augmentation boundary, absent without alternatives.
+ * @returns The selected grammar, or undefined when projection is uncertain.
+ * @internal
+ */
+export function projectCommandUsage(
+  usage: Usage,
+  path: readonly string[],
+  meta?: {
+    readonly optionCount: number;
+    readonly alternativeCount: number;
+  },
+): Usage | undefined {
+  if (path.length === 0) return undefined;
+  if (meta == null) return projectCommandTerms(usage, path, 0);
+  const top = usage[0];
+  if (
+    usage.length !== 1 || top.type !== "exclusive" ||
+    top.terms.length !== meta.alternativeCount + 1
+  ) return undefined;
+  const selected = projectCommandTerms(top.terms[meta.optionCount], path, 0);
+  if (selected == null) return undefined;
+  const options = top.terms.slice(0, meta.optionCount).filter((branch) =>
+    branch.some((term) => term.type === "option" && !isUsageHidden(term.hidden))
+  );
+  return options.length === 0 ? selected : [{
+    type: "exclusive",
+    terms: [...options, selected],
+  }];
+}
+
+function containsCommand(usage: Usage): boolean {
+  return usage.some((term) => {
+    switch (term.type) {
+      case "command":
+        return true;
+      case "exclusive":
+        return term.terms.some(containsCommand);
+      case "optional":
+      case "multiple":
+      case "sequence":
+        return containsCommand(term.terms);
+      default:
+        return false;
+    }
+  });
+}
+
+/** Undefined distinguishes unsupported metadata from a command-free branch. */
+function firstCommandNames(usage: Usage): readonly string[] | undefined {
+  const hosts = usage.filter((term) => containsCommand([term]));
+  const first = hosts[0];
+  if (first == null) return [];
+  if (first.type === "command") return [first.name];
+  if (hosts.length !== 1) return undefined;
+  if (first.type === "sequence") return firstCommandNames(first.terms);
+  if (first.type !== "exclusive") return undefined;
+  const names: string[] = [];
+  for (const branch of first.terms) {
+    const found = firstCommandNames(branch);
+    if (found == null) return undefined;
+    names.push(...found);
+  }
+  return names;
+}
+
+function projectCommandTerms(
+  usage: Usage,
+  path: readonly string[],
+  offset: number,
+): Usage | undefined {
+  if (offset === path.length) return usage;
+  const index = usage.findIndex((term) => containsCommand([term]));
+  if (index < 0) return undefined;
+  const host = usage[index];
+  const prefix = usage.slice(0, index);
+  const suffix = usage.slice(index + 1);
+  // A required prefix can be a conditional() discriminator. Keep its order
+  // attached to the selected grammar instead of hoisting commands over it.
+  const orderedPrefix = prefix.some((term) =>
+    term.type === "option" || term.type === "argument" ||
+    term.type === "literal"
+  );
+  const preserveOrder = (terms: Usage): Usage =>
+    orderedPrefix ? [{ type: "sequence", terms }] : terms;
+  if (host.type === "command") {
+    if (host.name !== path[offset] || isUsageHidden(host.hidden)) {
+      return undefined;
+    }
+    const rest = projectCommandTerms(suffix, path, offset + 1);
+    return rest == null ? undefined : preserveOrder([...prefix, host, ...rest]);
+  }
+  // A group followed by another command host might be an independent
+  // free-order field. Usage has no boundary proving a parent-child relation.
+  if (containsCommand(suffix)) return undefined;
+  if (host.type === "sequence") {
+    const terms = projectCommandTerms(host.terms, path, offset);
+    return terms == null
+      ? undefined
+      : preserveOrder([...prefix, { ...host, terms }, ...suffix]);
+  }
+  if (host.type !== "exclusive") return undefined;
+  let selected: Usage | undefined;
+  for (const branch of host.terms) {
+    const names = firstCommandNames(branch);
+    if (names == null) return undefined;
+    if (!names.includes(path[offset])) continue;
+    if (selected != null) return undefined;
+    selected = branch;
+  }
+  if (selected == null) return undefined;
+  const terms = projectCommandTerms(selected, path, offset);
+  // Splice the branch; the removed alternatives' acceptsEmpty is no longer
+  // a statement about this already-matched command's grammar.
+  return terms == null
+    ? undefined
+    : preserveOrder([...prefix, ...terms, ...suffix]);
+}
 
 /**
  * Collects option names and command names that are valid as the *immediate*
