@@ -1,0 +1,10 @@
+{
+  "name": "@optique/startup-baseline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test *.test.ts",
+    "test:bun": "bun test *.test.ts"
+  },
+  "devDependencies": { "@types/node": "catalog:", "yaml": "catalog:" }
+}

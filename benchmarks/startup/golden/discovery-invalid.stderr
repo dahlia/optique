@@ -1,0 +1,8 @@
+Usage: baseline --help
+       baseline --version
+       baseline config set TYPE VALUE...
+       baseline start [--mode TYPE] [PATH...]
+       baseline status [--format TYPE]
+       baseline completion [--help] [SHELL] [ARG...]
+       baseline help [COMMAND...]
+Error: Unexpected option or subcommand: `--invalid`.

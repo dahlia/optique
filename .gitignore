@@ -12,3 +12,4 @@
 /PLAN.md
 /coverage/
 /tmp/
+/benchmarks/*/node_modules/
