@@ -4,10 +4,10 @@
   "sampleCount": 3,
   "warmupCount": 1,
   "metadata": {
-    "revision": "5aa2b1d8e8136ccd16a48ec238df84806e62a001",
-    "startedAt": "2026-10-19T10:10:00.645Z",
-    "finishedAt": "2026-10-19T10:10:10.346Z",
-    "identity": "a4640a3dbf3ce4da85cac1fa80433926a7c0664e10c43066761e1405ced1e7de",
+    "revision": "6dc63e1bbb7908290575546e0ec564a89f568d0d",
+    "startedAt": "2026-10-19T12:43:46.992Z",
+    "finishedAt": "2026-10-19T12:43:56.897Z",
+    "identity": "1e2bccdd4bbee736a1120bc79ea77aa6957a37ff30a4aa6e973d7831f6107e18",
     "inputSelection": {
       "schemaVersion": 1,
       "files": [
@@ -19,7 +19,12 @@
         {
           "path": "benchmarks/startup/contract.ts",
           "executable": false,
-          "sha256": "f874e83ffab71af9c067a0353c9263e665ac75ac30a74f2232f70dbfe8505921"
+          "sha256": "09b8b4d660252a3e42ea8767cae3d8ab129be562ffe9ed3d37e9d11895f1990c"
+        },
+        {
+          "path": "benchmarks/startup/executable.ts",
+          "executable": false,
+          "sha256": "92109a3b413b484fc79a0da90c668e44f37fead63a35bb11a2c0f705a4246ece"
         },
         {
           "path": "benchmarks/startup/fixtures/commands/config/set.js",
@@ -229,7 +234,7 @@
         {
           "path": "benchmarks/startup/harness.ts",
           "executable": false,
-          "sha256": "1d4348a689711c789e8b69be81797ed96e0323c2bd8c4d6e9c8fb35f553e5b3f"
+          "sha256": "eda4f23a83745d36a805c5c5ff771cb9604bdfca3229adbce44194f28a77cdab"
         },
         {
           "path": "benchmarks/startup/inventory.ts",
@@ -667,7 +672,7 @@
           "sha256": "41c3e40d676fb9a4134ffa4862ad298c52df23c49f107b3307af7f7cb07006f6"
         }
       ],
-      "hash": "a4640a3dbf3ce4da85cac1fa80433926a7c0664e10c43066761e1405ced1e7de"
+      "hash": "1e2bccdd4bbee736a1120bc79ea77aa6957a37ff30a4aa6e973d7831f6107e18"
     },
     "manifestHash": "076a76b266b124a44c9230039b9f13f678b2d01045423e7db8746e701a146bbc",
     "runtimes": {
@@ -781,7 +786,7 @@
           "packageManager": "pnpm@11.28.6",
           "pendingBuilds": [],
           "publicHoistPattern": [],
-          "prunedAt": "Mon, 19 Oct 2026 09:15:41 GMT",
+          "prunedAt": "Mon, 19 Oct 2026 11:33:53 GMT",
           "skipped": [],
           "storeDir": "${REPO_ROOT}/tmp/startup-baseline/store/v11",
           "virtualStoreDir": ".pnpm",
@@ -2380,7 +2385,7 @@
           "packageManager": "pnpm@11.28.6",
           "pendingBuilds": [],
           "publicHoistPattern": [],
-          "prunedAt": "Mon, 19 Oct 2026 09:15:42 GMT",
+          "prunedAt": "Mon, 19 Oct 2026 11:33:54 GMT",
           "skipped": [],
           "storeDir": "${REPO_ROOT}/tmp/startup-baseline/store/v11",
           "virtualStoreDir": ".pnpm",
@@ -2401,7 +2406,7 @@
               "path": ".bin/optique-discover",
               "size": 4816,
               "allocatedBytes": 8192,
-              "sha256": "c74f1e5d4baeaf93220de703d48e7996534cc0d9997b789a5c31ec6c1cf89638",
+              "sha256": "219d0d415ebc563261cd8b8d148c18b236a6ba6d699a82ccf77d9a097e0a7c38",
               "links": 1
             },
             {
@@ -3955,7 +3960,7 @@
               "path": ".pnpm/@optique+discover@file+..+tarballs+discover.tgz/node_modules/@optique/discover/node_modules/.bin/optique-discover",
               "size": 4324,
               "allocatedBytes": 8192,
-              "sha256": "e10d496e95133c4a01e5f027acad68deb5e9add277b090464792ad1f5d706ae1",
+              "sha256": "afc3891b1a825a0d3d31ef0044d516a6f9a90d17d8c64bcc7c65bd2c9a419de1",
               "links": 1
             },
             {
@@ -4162,14 +4167,14 @@
       "logicalCpus": 16,
       "memoryBytes": 65952522240,
       "loadBefore": [
-        16.86,
-        12.42,
-        12.96
+        17.28,
+        15.66,
+        13.56
       ],
       "loadAfter": [
-        15.8,
-        12.34,
-        12.93
+        16.85,
+        15.62,
+        13.57
       ]
     },
     "outputMode": "bounded stdout/stderr pipes; stdin ignored",
@@ -4760,7 +4765,7 @@
       "loadingMode": "empty-esm",
       "warmups": [
         {
-          "wallMs": 20.699111,
+          "wallMs": 19.32384,
           "status": 0,
           "signal": null,
           "error": null,
@@ -4769,21 +4774,21 @@
       ],
       "samples": [
         {
-          "wallMs": 31.181067,
+          "wallMs": 20.6938,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 27.481005,
+          "wallMs": 22.819291,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 18.056449,
+          "wallMs": 17.238489,
           "status": 0,
           "signal": null,
           "error": null,
@@ -4792,7 +4797,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 27.481005,
+        "medianMs": 20.6938,
         "p95Ms": null
       }
     },
@@ -4831,7 +4836,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 62.131443,
+          "wallMs": 65.310572,
           "status": 0,
           "signal": null,
           "error": null,
@@ -4840,21 +4845,21 @@
       ],
       "samples": [
         {
-          "wallMs": 76.976981,
+          "wallMs": 62.47086,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 65.555805,
+          "wallMs": 66.231532,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 63.365234,
+          "wallMs": 63.040071,
           "status": 0,
           "signal": null,
           "error": null,
@@ -4863,7 +4868,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 65.555805,
+        "medianMs": 63.040071,
         "p95Ms": null
       }
     },
@@ -4902,7 +4907,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 66.490936,
+          "wallMs": 69.050134,
           "status": 0,
           "signal": null,
           "error": null,
@@ -4911,21 +4916,21 @@
       ],
       "samples": [
         {
-          "wallMs": 80.303892,
+          "wallMs": 64.220062,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 70.558777,
+          "wallMs": 69.926754,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 73.798939,
+          "wallMs": 70.834185,
           "status": 0,
           "signal": null,
           "error": null,
@@ -4934,7 +4939,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 73.798939,
+        "medianMs": 69.926754,
         "p95Ms": null
       }
     },
@@ -4973,7 +4978,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 69.858017,
+          "wallMs": 76.442517,
           "status": 0,
           "signal": null,
           "error": null,
@@ -4982,21 +4987,21 @@
       ],
       "samples": [
         {
-          "wallMs": 81.417493,
+          "wallMs": 69.965214,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 75.32994,
+          "wallMs": 70.418935,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 82.389153,
+          "wallMs": 81.99908,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5005,7 +5010,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 81.417493,
+        "medianMs": 70.418935,
         "p95Ms": null
       }
     },
@@ -5044,7 +5049,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 54.570758,
+          "wallMs": 57.382478,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5053,21 +5058,21 @@
       ],
       "samples": [
         {
-          "wallMs": 60.660642,
+          "wallMs": 55.920087,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 49.648177,
+          "wallMs": 50.287134,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 64.152505,
+          "wallMs": 69.241874,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5076,7 +5081,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 60.660642,
+        "medianMs": 55.920087,
         "p95Ms": null
       }
     },
@@ -5115,7 +5120,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 60.535713,
+          "wallMs": 52.049986,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5124,21 +5129,21 @@
       ],
       "samples": [
         {
-          "wallMs": 53.849269,
+          "wallMs": 60.116449,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 51.816357,
+          "wallMs": 53.397356,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 60.550921,
+          "wallMs": 56.608398,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5147,7 +5152,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 53.849269,
+        "medianMs": 56.608398,
         "p95Ms": null
       }
     },
@@ -5186,7 +5191,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 46.659784,
+          "wallMs": 49.433164,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5195,21 +5200,21 @@
       ],
       "samples": [
         {
-          "wallMs": 48.773916,
+          "wallMs": 44.065722,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 45.059324,
+          "wallMs": 54.298577,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 46.987935,
+          "wallMs": 48.322503,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5218,7 +5223,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 46.987935,
+        "medianMs": 48.322503,
         "p95Ms": null
       }
     },
@@ -5257,7 +5262,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 38.28133,
+          "wallMs": 44.593242,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5266,21 +5271,21 @@
       ],
       "samples": [
         {
-          "wallMs": 36.614339,
+          "wallMs": 37.018278,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 39.155881,
+          "wallMs": 51.116285,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 50.222217,
+          "wallMs": 40.60042,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5289,7 +5294,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 39.155881,
+        "medianMs": 40.60042,
         "p95Ms": null
       }
     },
@@ -5328,7 +5333,7 @@
       "loadingMode": "packaged-esm-import-only",
       "warmups": [
         {
-          "wallMs": 65.082265,
+          "wallMs": 68.242753,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5337,21 +5342,21 @@
       ],
       "samples": [
         {
-          "wallMs": 68.917827,
+          "wallMs": 65.202522,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 64.492234,
+          "wallMs": 71.424695,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 74.70949,
+          "wallMs": 67.302983,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5360,7 +5365,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 68.917827,
+        "medianMs": 67.302983,
         "p95Ms": null
       }
     },
@@ -5398,7 +5403,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 76.31408,
+          "wallMs": 77.764097,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5407,21 +5412,21 @@
       ],
       "samples": [
         {
-          "wallMs": 87.931836,
+          "wallMs": 80.147499,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "798edc539780e7916f87045153026065b9a75db03a17ea12c5ad51925615a726"
         },
         {
-          "wallMs": 76.16883,
+          "wallMs": 76.424888,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "798edc539780e7916f87045153026065b9a75db03a17ea12c5ad51925615a726"
         },
         {
-          "wallMs": 83.299523,
+          "wallMs": 86.052622,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5430,7 +5435,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 83.299523,
+        "medianMs": 80.147499,
         "p95Ms": null
       }
     },
@@ -5467,7 +5472,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 71.142348,
+          "wallMs": 78.074469,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5476,21 +5481,21 @@
       ],
       "samples": [
         {
-          "wallMs": 77.121051,
+          "wallMs": 93.004375,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "798718482c5374200e65f3949867e4af91d10cd017ab570da10f5324a0d3fd3b"
         },
         {
-          "wallMs": 75.23356,
+          "wallMs": 87.813673,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "798718482c5374200e65f3949867e4af91d10cd017ab570da10f5324a0d3fd3b"
         },
         {
-          "wallMs": 74.3971,
+          "wallMs": 75.178327,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5499,7 +5504,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 75.23356,
+        "medianMs": 87.813673,
         "p95Ms": null
       }
     },
@@ -5537,7 +5542,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 85.453775,
+          "wallMs": 82.18333,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5546,21 +5551,21 @@
       ],
       "samples": [
         {
-          "wallMs": 92.612859,
+          "wallMs": 94.563146,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 87.684556,
+          "wallMs": 92.158175,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 84.346994,
+          "wallMs": 91.866565,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5569,7 +5574,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 87.684556,
+        "medianMs": 92.158175,
         "p95Ms": null
       }
     },
@@ -5609,7 +5614,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 88.297157,
+          "wallMs": 96.189087,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5618,21 +5623,21 @@
       ],
       "samples": [
         {
-          "wallMs": 86.849936,
+          "wallMs": 85.695352,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "807aa62e9fcbc4ada0dedf9e64e525cbf6d81cedfa70f4a59e903d75e1b5dbe9"
         },
         {
-          "wallMs": 87.313846,
+          "wallMs": 87.161802,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "807aa62e9fcbc4ada0dedf9e64e525cbf6d81cedfa70f4a59e903d75e1b5dbe9"
         },
         {
-          "wallMs": 88.468717,
+          "wallMs": 93.828026,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5641,7 +5646,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 87.313846,
+        "medianMs": 87.161802,
         "p95Ms": null
       }
     },
@@ -5679,7 +5684,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 76.17524,
+          "wallMs": 76.492268,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5688,21 +5693,21 @@
       ],
       "samples": [
         {
-          "wallMs": 82.710093,
+          "wallMs": 77.642618,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "3278bd3d96f9981651bbda4208345af59d65be751992dc8cb9324bc0fe34b0c2"
         },
         {
-          "wallMs": 76.995941,
+          "wallMs": 83.653721,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "3278bd3d96f9981651bbda4208345af59d65be751992dc8cb9324bc0fe34b0c2"
         },
         {
-          "wallMs": 75.5058,
+          "wallMs": 85.497172,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5711,7 +5716,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 76.995941,
+        "medianMs": 83.653721,
         "p95Ms": null
       }
     },
@@ -5751,7 +5756,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 80.727343,
+          "wallMs": 89.976834,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5760,21 +5765,21 @@
       ],
       "samples": [
         {
-          "wallMs": 98.244292,
+          "wallMs": 84.563451,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 81.649433,
+          "wallMs": 108.534513,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 86.725706,
+          "wallMs": 94.177576,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5783,7 +5788,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 86.725706,
+        "medianMs": 94.177576,
         "p95Ms": null
       }
     },
@@ -5822,7 +5827,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 92.129308,
+          "wallMs": 82.91393,
           "status": 1,
           "signal": null,
           "error": null,
@@ -5831,21 +5836,21 @@
       ],
       "samples": [
         {
-          "wallMs": 101.310974,
+          "wallMs": 97.968908,
           "status": 1,
           "signal": null,
           "error": null,
           "outputHash": "de782034d545bfc0e2a0075e399a1f067ad66b386898d917614317b016d4929b"
         },
         {
-          "wallMs": 81.545983,
+          "wallMs": 103.147861,
           "status": 1,
           "signal": null,
           "error": null,
           "outputHash": "de782034d545bfc0e2a0075e399a1f067ad66b386898d917614317b016d4929b"
         },
         {
-          "wallMs": 82.674624,
+          "wallMs": 75.001517,
           "status": 1,
           "signal": null,
           "error": null,
@@ -5854,7 +5859,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 82.674624,
+        "medianMs": 97.968908,
         "p95Ms": null
       }
     },
@@ -5894,7 +5899,7 @@
       "loadingMode": "packaged-esm",
       "warmups": [
         {
-          "wallMs": 100.899964,
+          "wallMs": 74.409457,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5903,21 +5908,21 @@
       ],
       "samples": [
         {
-          "wallMs": 82.778574,
+          "wallMs": 95.481937,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "c72dd412603212154f98a678a4fe5427076f34e460dff89aefd924129b1240ff"
         },
         {
-          "wallMs": 71.910918,
+          "wallMs": 106.201512,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "c72dd412603212154f98a678a4fe5427076f34e460dff89aefd924129b1240ff"
         },
         {
-          "wallMs": 84.294884,
+          "wallMs": 74.424296,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5926,7 +5931,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 82.778574,
+        "medianMs": 95.481937,
         "p95Ms": null
       }
     },
@@ -5964,7 +5969,7 @@
       "loadingMode": "packaged-esm-filesystem-discovery",
       "warmups": [
         {
-          "wallMs": 108.147907,
+          "wallMs": 99.654038,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5973,21 +5978,21 @@
       ],
       "samples": [
         {
-          "wallMs": 102.926884,
+          "wallMs": 97.276317,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ebb3e223a75d4731a91da958f6a2cdad89bd2d7495cc45f66a085e0600d428e4"
         },
         {
-          "wallMs": 92.028859,
+          "wallMs": 101.41367,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ebb3e223a75d4731a91da958f6a2cdad89bd2d7495cc45f66a085e0600d428e4"
         },
         {
-          "wallMs": 94.9814,
+          "wallMs": 98.530178,
           "status": 0,
           "signal": null,
           "error": null,
@@ -5996,7 +6001,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 94.9814,
+        "medianMs": 98.530178,
         "p95Ms": null
       }
     },
@@ -6036,7 +6041,7 @@
       "loadingMode": "packaged-esm-filesystem-discovery",
       "warmups": [
         {
-          "wallMs": 103.717855,
+          "wallMs": 87.704132,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6045,21 +6050,21 @@
       ],
       "samples": [
         {
-          "wallMs": 99.224683,
+          "wallMs": 115.507127,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "807aa62e9fcbc4ada0dedf9e64e525cbf6d81cedfa70f4a59e903d75e1b5dbe9"
         },
         {
-          "wallMs": 92.460109,
+          "wallMs": 90.339104,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "807aa62e9fcbc4ada0dedf9e64e525cbf6d81cedfa70f4a59e903d75e1b5dbe9"
         },
         {
-          "wallMs": 97.950431,
+          "wallMs": 103.438511,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6068,7 +6073,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 97.950431,
+        "medianMs": 103.438511,
         "p95Ms": null
       }
     },
@@ -6106,7 +6111,7 @@
       "loadingMode": "packaged-esm-filesystem-discovery",
       "warmups": [
         {
-          "wallMs": 99.462223,
+          "wallMs": 96.249038,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6115,21 +6120,21 @@
       ],
       "samples": [
         {
-          "wallMs": 84.085984,
+          "wallMs": 88.760624,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "3278bd3d96f9981651bbda4208345af59d65be751992dc8cb9324bc0fe34b0c2"
         },
         {
-          "wallMs": 83.670434,
+          "wallMs": 90.229254,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "3278bd3d96f9981651bbda4208345af59d65be751992dc8cb9324bc0fe34b0c2"
         },
         {
-          "wallMs": 88.444306,
+          "wallMs": 101.04907,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6138,7 +6143,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 84.085984,
+        "medianMs": 90.229254,
         "p95Ms": null
       }
     },
@@ -6178,7 +6183,7 @@
       "loadingMode": "packaged-esm-filesystem-discovery",
       "warmups": [
         {
-          "wallMs": 118.005422,
+          "wallMs": 86.093002,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6187,21 +6192,21 @@
       ],
       "samples": [
         {
-          "wallMs": 87.961946,
+          "wallMs": 80.535629,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 79.372442,
+          "wallMs": 104.837231,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 86.878866,
+          "wallMs": 86.127772,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6210,7 +6215,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 86.878866,
+        "medianMs": 86.127772,
         "p95Ms": null
       }
     },
@@ -6249,7 +6254,7 @@
       "loadingMode": "packaged-esm-filesystem-discovery",
       "warmups": [
         {
-          "wallMs": 97.078561,
+          "wallMs": 108.235123,
           "status": 1,
           "signal": null,
           "error": null,
@@ -6258,21 +6263,21 @@
       ],
       "samples": [
         {
-          "wallMs": 93.666199,
+          "wallMs": 93.329606,
           "status": 1,
           "signal": null,
           "error": null,
           "outputHash": "091d04c136afb7b0732ada085629efff4d58421bff87a41c7d80a226f8c7e726"
         },
         {
-          "wallMs": 80.302973,
+          "wallMs": 108.177604,
           "status": 1,
           "signal": null,
           "error": null,
           "outputHash": "091d04c136afb7b0732ada085629efff4d58421bff87a41c7d80a226f8c7e726"
         },
         {
-          "wallMs": 87.195816,
+          "wallMs": 93.556415,
           "status": 1,
           "signal": null,
           "error": null,
@@ -6281,7 +6286,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 87.195816,
+        "medianMs": 93.556415,
         "p95Ms": null
       }
     },
@@ -6321,7 +6326,7 @@
       "loadingMode": "packaged-esm-filesystem-discovery",
       "warmups": [
         {
-          "wallMs": 90.168238,
+          "wallMs": 80.569409,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6330,21 +6335,21 @@
       ],
       "samples": [
         {
-          "wallMs": 89.295027,
+          "wallMs": 97.080097,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "c72dd412603212154f98a678a4fe5427076f34e460dff89aefd924129b1240ff"
         },
         {
-          "wallMs": 76.5585,
+          "wallMs": 96.487357,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "c72dd412603212154f98a678a4fe5427076f34e460dff89aefd924129b1240ff"
         },
         {
-          "wallMs": 78.621792,
+          "wallMs": 100.582029,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6353,7 +6358,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 78.621792,
+        "medianMs": 97.080097,
         "p95Ms": null
       }
     },
@@ -6391,7 +6396,7 @@
       "loadingMode": "packaged-cjs",
       "warmups": [
         {
-          "wallMs": 75.41203,
+          "wallMs": 69.697234,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6400,21 +6405,21 @@
       ],
       "samples": [
         {
-          "wallMs": 79.796813,
+          "wallMs": 84.434072,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 72.335888,
+          "wallMs": 84.526511,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 70.642557,
+          "wallMs": 66.581972,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6423,7 +6428,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 72.335888,
+        "medianMs": 84.434072,
         "p95Ms": null
       }
     },
@@ -6463,7 +6468,7 @@
       "loadingMode": "packaged-esm-bun",
       "warmups": [
         {
-          "wallMs": 63.298673,
+          "wallMs": 77.620188,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6472,21 +6477,21 @@
       ],
       "samples": [
         {
-          "wallMs": 81.830053,
+          "wallMs": 67.036463,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 59.382292,
+          "wallMs": 74.097656,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 55.89398,
+          "wallMs": 57.194878,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6495,7 +6500,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 59.382292,
+        "medianMs": 67.036463,
         "p95Ms": null
       }
     },
@@ -6543,7 +6548,7 @@
       "loadingMode": "checkout-typescript-explicit-import-map",
       "warmups": [
         {
-          "wallMs": 113.02729,
+          "wallMs": 104.660342,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6552,21 +6557,21 @@
       ],
       "samples": [
         {
-          "wallMs": 103.559375,
+          "wallMs": 112.623095,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 129.665308,
+          "wallMs": 113.999366,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 103.644235,
+          "wallMs": 106.841613,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6575,7 +6580,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 103.644235,
+        "medianMs": 112.623095,
         "p95Ms": null
       }
     },
@@ -6613,7 +6618,7 @@
       "loadingMode": "packaged-esm-prepopulated-node-compile-cache",
       "warmups": [
         {
-          "wallMs": 78.675892,
+          "wallMs": 73.122306,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6622,21 +6627,21 @@
       ],
       "samples": [
         {
-          "wallMs": 78.609651,
+          "wallMs": 76.191567,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 80.983813,
+          "wallMs": 70.976235,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "413794e5b2b883c32c5abf26fbbeb03d776c6f575afea2274c2ace754c2836aa"
         },
         {
-          "wallMs": 73.723229,
+          "wallMs": 80.718789,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6645,7 +6650,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 78.609651,
+        "medianMs": 76.191567,
         "p95Ms": null
       }
     },
@@ -6685,7 +6690,7 @@
       "loadingMode": "packaged-cjs",
       "warmups": [
         {
-          "wallMs": 72.601918,
+          "wallMs": 85.429531,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6694,21 +6699,21 @@
       ],
       "samples": [
         {
-          "wallMs": 68.228086,
+          "wallMs": 64.505112,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 67.265276,
+          "wallMs": 68.358073,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 66.053905,
+          "wallMs": 72.207096,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6717,7 +6722,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 67.265276,
+        "medianMs": 68.358073,
         "p95Ms": null
       }
     },
@@ -6759,7 +6764,7 @@
       "loadingMode": "packaged-esm-bun",
       "warmups": [
         {
-          "wallMs": 58.361971,
+          "wallMs": 66.300263,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6768,21 +6773,21 @@
       ],
       "samples": [
         {
-          "wallMs": 50.849146,
+          "wallMs": 45.205302,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 50.754797,
+          "wallMs": 57.340459,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 48.598435,
+          "wallMs": 49.588514,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6791,7 +6796,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 50.754797,
+        "medianMs": 49.588514,
         "p95Ms": null
       }
     },
@@ -6841,7 +6846,7 @@
       "loadingMode": "checkout-typescript-explicit-import-map",
       "warmups": [
         {
-          "wallMs": 109.235768,
+          "wallMs": 97.637188,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6850,21 +6855,21 @@
       ],
       "samples": [
         {
-          "wallMs": 104.395466,
+          "wallMs": 97.661687,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 99.233972,
+          "wallMs": 139.338018,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 95.0996,
+          "wallMs": 103.599701,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6873,7 +6878,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 99.233972,
+        "medianMs": 103.599701,
         "p95Ms": null
       }
     },
@@ -6913,7 +6918,7 @@
       "loadingMode": "packaged-esm-prepopulated-node-compile-cache",
       "warmups": [
         {
-          "wallMs": 76.38995,
+          "wallMs": 74.166406,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6922,21 +6927,21 @@
       ],
       "samples": [
         {
-          "wallMs": 73.770069,
+          "wallMs": 68.835654,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 68.070836,
+          "wallMs": 76.063807,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "7fec03b26db7659ba9a5a3039a625a57de2644f3b5c4be1ac5f126994fa7cea3"
         },
         {
-          "wallMs": 68.696987,
+          "wallMs": 73.352446,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6945,7 +6950,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 68.696987,
+        "medianMs": 73.352446,
         "p95Ms": null
       }
     },
@@ -6983,7 +6988,7 @@
       "loadingMode": "packaged-cjs-import-only",
       "warmups": [
         {
-          "wallMs": 77.936901,
+          "wallMs": 64.266841,
           "status": 0,
           "signal": null,
           "error": null,
@@ -6992,21 +6997,21 @@
       ],
       "samples": [
         {
-          "wallMs": 52.520777,
+          "wallMs": 63.539752,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 55.265099,
+          "wallMs": 54.337127,
           "status": 0,
           "signal": null,
           "error": null,
           "outputHash": "ce23b690b1ba0b553ec416a2c080d33fea4191428954a8316ad922ebbfed1968"
         },
         {
-          "wallMs": 50.790817,
+          "wallMs": 50.725784,
           "status": 0,
           "signal": null,
           "error": null,
@@ -7015,7 +7020,7 @@
       ],
       "summary": {
         "count": 3,
-        "medianMs": 52.520777,
+        "medianMs": 54.337127,
         "p95Ms": null
       }
     }

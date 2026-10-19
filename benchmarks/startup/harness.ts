@@ -19,7 +19,7 @@ import {
   buildInputIdentity,
   type Command,
   type Expectation,
-  inputIdentity,
+  type inputIdentity,
   isInside,
   portableCommand,
   portableEvidence,
@@ -29,6 +29,7 @@ import {
   summarize,
   validateDenoGraph,
   verifyPreparedMap,
+  withStableInputs,
 } from "./contract.ts";
 import { resolveExecutable } from "./executable.ts";
 import {
@@ -260,6 +261,17 @@ function listFiles(base: string): readonly string[] {
 }
 
 function prepare(): void {
+  const state = withStableInputs(
+    root,
+    (identity) => prepareConsumers(identity.hash),
+  );
+  json(join(work, "prepared.json"), state);
+  console.log(
+    `Prepared ${state.consumers.length} isolated consumers and ${state.archives.length} verified local tarballs.`,
+  );
+}
+
+function prepareConsumers(initialHash: string): Prepared {
   const definition = manifest();
   const binaries = Object.fromEntries(
     ["node", "deno", "bun", "pnpm"].map((name) => [name, binary(name)]),
@@ -572,12 +584,9 @@ function prepare(): void {
     preparationCommands: commands,
     denoGraph,
     importMapHash: sha256(readFileSync(mapFile)),
-    packageInputsHash: packageInputsHash(),
+    packageInputsHash: initialHash,
   };
-  json(join(work, "prepared.json"), prepared);
-  console.log(
-    `Prepared ${consumers.length} isolated consumers and ${archives.length} verified local tarballs.`,
-  );
+  return prepared;
 }
 
 function prepared(): Prepared {
@@ -980,6 +989,25 @@ function measure(
   mode: "smoke" | "baseline",
   path: string,
 ): Report {
+  const report = withStableInputs(
+    root,
+    (identity) => measureCases(state, mode, identity),
+    state.packageInputsHash,
+  );
+  writeReport(path, report);
+  console.log(
+    `${mode}: ${report.cases.length} cases × ${report.sampleCount} samples -> ${
+      relative(root, path)
+    }`,
+  );
+  return report;
+}
+
+function measureCases(
+  state: Prepared,
+  mode: "smoke" | "baseline",
+  initialIdentity: Readonly<ReturnType<typeof inputIdentity>>,
+): Report {
   const git = resolveExecutable("git");
   // Inherit setup settings without serializing them in preparation diagnostics.
   const revision = execFileSync(git, ["rev-parse", "HEAD"], {
@@ -992,8 +1020,7 @@ function measure(
   const sampleCount = mode === "baseline" ? 100 : 3,
     warmupCount = mode === "baseline" ? 5 : 1;
   const definitions = cases(state),
-    replacements = tokens(state),
-    initialIdentity = inputIdentity(root);
+    replacements = tokens(state);
   rmSync(join(work, "node-cache"), { recursive: true, force: true });
   mkdirSync(join(work, "node-cache"));
   const probe = cacheProbe(state);
@@ -1030,9 +1057,6 @@ function measure(
         rawSample(runChecked(item.command, item.expected), outputs),
       );
     }
-  }
-  if (initialIdentity.hash !== inputIdentity(root).hash) {
-    throw new TypeError("Measured inputs changed during the run.");
   }
   const results: CaseResult[] = definitions.map((item) => ({
     id: item.id,
@@ -1111,12 +1135,6 @@ function measure(
     outputs,
     cases: results,
   };
-  writeReport(path, report);
-  console.log(
-    `${mode}: ${definitions.length} cases × ${sampleCount} samples -> ${
-      relative(root, path)
-    }`,
-  );
   return report;
 }
 

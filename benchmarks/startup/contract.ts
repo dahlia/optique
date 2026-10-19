@@ -274,6 +274,32 @@ export function buildInputIdentity(root: string) {
   return { files, hash: sha256(JSON.stringify(files)) };
 }
 
+/**
+ * Runs a synchronous operation without publishing results from changed inputs.
+ *
+ * @throws {TypeError} If inputs differ from preparation or change during the operation.
+ */
+export function withStableInputs<T>(
+  root: string,
+  operation: (identity: Readonly<ReturnType<typeof inputIdentity>>) => T,
+  expectedHash?: string,
+): T {
+  const identity = inputIdentity(root);
+  const initialHash = identity.hash;
+  if (expectedHash !== undefined && initialHash !== expectedHash) {
+    throw new TypeError(
+      "Prepared inputs changed; run benchmark:prepare again.",
+    );
+  }
+  const result = operation(identity);
+  if (inputIdentity(root).hash !== initialHash) {
+    throw new TypeError(
+      "Benchmark inputs changed during the operation; run benchmark:prepare again.",
+    );
+  }
+  return result;
+}
+
 /** Prevents a prepared Deno graph from being paired with a changed import map. */
 export function verifyPreparedMap(path: string, expectedHash: string): void {
   if (sha256(readFileSync(path)) !== expectedHash) {

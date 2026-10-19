@@ -21,6 +21,7 @@ import {
   summarize,
   validateDenoGraph,
   verifyPreparedMap,
+  withStableInputs,
 } from "./contract.ts";
 
 const testRoot = fileURLToPath(
@@ -174,6 +175,68 @@ describe("validateDenoGraph", () => {
         modules: [{ specifier: "node:process", error: "bad" }],
       }, [process.cwd()])
     );
+  });
+});
+
+describe("withStableInputs", () => {
+  it("should reject packing-time source drift before publishing prepared state", () => {
+    mkdirSync(testRoot, { recursive: true });
+    const root = mkdtempSync(join(testRoot, "packing-drift-"));
+    try {
+      const source = join(root, "LICENSE");
+      writeFileSync(source, "before packing");
+      let published = false;
+      assert.throws(() => {
+        const prepared = withStableInputs(root, (identity) => {
+          writeFileSync(join(root, "packed-copy"), "before packing");
+          writeFileSync(source, "after packing");
+          return { packageInputsHash: identity.hash };
+        });
+        published = prepared.packageInputsHash.length > 0;
+      }, /inputs changed.*prepare/i);
+      assert.ok(!published);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  it("should reject validation-time drift before invoking the sampler", () => {
+    mkdirSync(testRoot, { recursive: true });
+    const root = mkdtempSync(join(testRoot, "validation-drift-"));
+    try {
+      const source = join(root, "LICENSE");
+      writeFileSync(source, "prepared source");
+      const preparedHash = buildInputIdentity(root).hash;
+      writeFileSync(source, "edited during validation");
+      let samples = 0;
+      assert.throws(
+        () => withStableInputs(root, () => ++samples, preparedHash),
+        /inputs changed.*prepare/i,
+      );
+      assert.equal(samples, 0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  it("should return the captured identity when only generated outputs change", () => {
+    mkdirSync(testRoot, { recursive: true });
+    const root = mkdtempSync(join(testRoot, "stable-inputs-"));
+    try {
+      writeFileSync(join(root, "LICENSE"), "source");
+      const before = inputIdentity(root);
+      const result = withStableInputs(root, (identity) => {
+        mkdirSync(join(root, "benchmarks/startup/results"), {
+          recursive: true,
+        });
+        writeFileSync(
+          join(root, "benchmarks/startup/results/run.json"),
+          "output",
+        );
+        return identity;
+      }, before.hash);
+      assert.deepEqual(result, before);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
