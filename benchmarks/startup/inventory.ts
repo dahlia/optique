@@ -78,7 +78,10 @@ export function readTar(input: Uint8Array): readonly TarFile[] {
       pax = parsePax(content);
       continue;
     }
-    if (type === "5") continue;
+    if (type === "5") {
+      pax = {};
+      continue;
+    }
     if (type !== "0" && type !== "") {
       throw new TypeError(`Unsupported tar entry type: ${type}`);
     }
