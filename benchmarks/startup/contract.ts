@@ -268,11 +268,9 @@ export function isInside(path: string, root: string): boolean {
       !resolve(root, rel).startsWith(`${root}${sep}..`));
 }
 
-/** Fingerprints release-pack inputs, including root build catalogs and locks. */
+/** Fingerprints release-pack inputs and benchmark preparation sources. */
 export function buildInputIdentity(root: string) {
-  const files = inputIdentity(root).files.filter((file) =>
-    !file.path.startsWith("benchmarks/")
-  );
+  const files = inputIdentity(root).files;
   return { files, hash: sha256(JSON.stringify(files)) };
 }
 

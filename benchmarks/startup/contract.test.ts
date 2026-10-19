@@ -178,6 +178,50 @@ describe("validateDenoGraph", () => {
 });
 
 describe("buildInputIdentity", () => {
+  it("should invalidate preparation after benchmark source and fixture changes", () => {
+    mkdirSync(testRoot, { recursive: true });
+    const root = mkdtempSync(join(testRoot, "preparation-inputs-"));
+    try {
+      const files = [
+        "harness.ts",
+        "inventory.ts",
+        "isolation.ts",
+        "contract.ts",
+        "manifest.json",
+        "fixtures/three.mjs",
+        "golden/three-root-help.stdout",
+      ];
+      for (const file of files) {
+        const path = join(root, "benchmarks/startup", file);
+        mkdirSync(join(path, ".."), { recursive: true });
+        writeFileSync(path, "original");
+      }
+      for (const file of files) {
+        const initial = buildInputIdentity(root).hash;
+        writeFileSync(join(root, "benchmarks/startup", file), "changed");
+        assert.notEqual(buildInputIdentity(root).hash, initial, file);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  it("should ignore generated reports, benchmark docs and regression tests", () => {
+    mkdirSync(testRoot, { recursive: true });
+    const root = mkdtempSync(join(testRoot, "preparation-outputs-"));
+    try {
+      mkdirSync(join(root, "benchmarks/startup/results"), { recursive: true });
+      writeFileSync(join(root, "benchmarks/startup/harness.ts"), "source");
+      const initial = buildInputIdentity(root).hash;
+      for (
+        const file of ["results/run-1.json", "README.md", "contract.test.ts"]
+      ) {
+        writeFileSync(join(root, "benchmarks/startup", file), "changed");
+        assert.equal(buildInputIdentity(root).hash, initial, file);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
   it("should invalidate prepared archives after root lock/catalog drift", () => {
     mkdirSync(testRoot, { recursive: true });
     const root = mkdtempSync(join(testRoot, "build-inputs-"));
