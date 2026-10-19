@@ -312,3 +312,23 @@ export function portableArtifact(
   }
   return value;
 }
+
+/**
+ * Tokenizes checkout and external consumer paths in nested benchmark evidence.
+ *
+ * @throws {TypeError} If either root is empty or a filesystem root.
+ */
+export function portableEvidence(
+  value: unknown,
+  repoRoot: string,
+  consumersRoot: string,
+): unknown {
+  return Object.entries({
+    "${REPO_ROOT}": repoRoot.replace(/[\\/]+$/, ""),
+    "${CONSUMERS_ROOT}": consumersRoot.replace(/[\\/]+$/, ""),
+  }).sort(([, left], [, right]) => right.length - left.length)
+    .reduce<unknown>(
+      (artifact, [token, prefix]) => portableArtifact(artifact, prefix, token),
+      value,
+    );
+}
