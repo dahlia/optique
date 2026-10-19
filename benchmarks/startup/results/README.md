@@ -2,12 +2,12 @@ Recorded baseline
 =================
 
 These three captures use the same measured inputs, built archives, isolated
-consumer inventories, locks and runtime versions. Each of the 32 cases has
+consumer inventories, lockfiles and runtime versions. Each of the 32 cases has
 100 measured fresh processes and five warmups per run. All 9,600 measured
 processes and 480 warmups matched their exact output and exit-status goldens.
 The separate three-sample smoke run does not report p95.
 
-Reproduce the setup and commands in [the harness guide]. The raw
+The setup and commands are described in [the harness guide]. The raw
 *run-1.json*, *run-2.json* and *run-3.json* retain samples, command arguments,
 allowlisted environments, exact output tables, quantiles, case order, host
 load, input hashes and installation inventories. *spread.json* retains
@@ -20,84 +20,85 @@ checks. Timing runs do not load the tracing hook.
 Host and interpretation
 -----------------------
 
-Captured from 2026-10-18T18:52:43.253Z through
-2026-10-18T19:08:23.841Z on Linux 7.2.9-200.fc44.x86\_64
+Captured from 2026-10-19T00:19:24.291Z through
+2026-10-19T00:30:08.933Z on linux 7.2.9-200.fc44.x86\_64
 (x64), AMD Ryzen 7 7700X 8-Core Processor, 16 logical CPUs.
-The library revision was `6ba561db5b61d1d6e76f6d07f825650a6e5a7b00`; the
+The library revision was `f5248215f64f3879f19fedf577bffbb8e52f2ec3`; the
 uncommitted harness and build-input contents are identified by the complete
 input-selection list and SHA-256
-`22fba717ea2e2cf5254b738273adb8da464efc002652c4e019f150797373cdcd`. The commit
-containing these artifacts can therefore differ from that library revision
-while still identifying exactly which bytes were measured.
+`faea27718c1986389962dcd2f30f5227a0c5fdd584de4bb19e46a81247cfb076`. The commit
+that contains these artifacts can therefore differ from that library revision;
+the input-selection list and hash still identify exactly which bytes were
+measured.
 
-Runtime versions were Node v26.12.0, Bun 1.3.14, pnpm 11.28.6, and
+Tool versions were Node v26.12.0, Bun 1.3.14, pnpm 11.28.6, and
 Deno 2.9.7 (stable, release, x86\_64-unknown-linux-gnu).
 Node ESM/CJS and Bun use installed plain JavaScript. Deno loads checkout
 TypeScript with cached dependencies and disabled V8 code cache; these are
-distinct deployment modes, not directly interchangeable parser measurements.
+distinct deployment modes, not directly comparable parser measurements.
 
-The coordinator reserved this capture window and excluded this issue wave's
-builds, tests and reviews that could run tests. The *heavy.lock* and
-*measurement.lock* advisory locks were held throughout capture. Unrelated
-machine activity was not controlled. *host-context.json* records the CPU
-governor/driver and power preference before and after; per-run load averages
-are retained in the raw reports. Fresh processes do not imply cold filesystem
-caches.
+Both shared advisory locks were held exclusively throughout this capture,
+which kept out cooperating builds, tests and reviews that honor those locks.
+Unrelated machine activity was not controlled. *host-context.json* records
+the CPU governor/driver and power preference before and after; per-run load
+averages are retained in the raw reports. Fresh processes do not imply cold
+filesystem caches.
 
 | Run | Start                    | Load before (1/5/15 min) | Load after (1/5/15 min) |
 | --- | ------------------------ | ------------------------ | ----------------------- |
-| 1   | 2026-10-18T18:52:43.253Z | 5.80, 6.85, 10.45        | 24.21, 16.41, 13.42     |
-| 2   | 2026-10-18T18:57:33.303Z | 24.21, 16.41, 13.42      | 22.23, 19.95, 15.88     |
-| 3   | 2026-10-18T19:02:57.476Z | 22.23, 19.95, 15.88      | 21.36, 22.48, 18.34     |
+| 1   | 2026-10-19T00:19:24.291Z | 6.50, 9.22, 11.02        | 5.60, 6.88, 9.64        |
+| 2   | 2026-10-19T00:23:05.084Z | 5.60, 6.88, 9.64         | 3.94, 5.31, 8.44        |
+| 3   | 2026-10-19T00:26:37.265Z | 3.94, 5.31, 8.44         | 3.45, 4.54, 7.50        |
 
-| Case                                  | Median 1 ms | Median 2 ms | Median 3 ms |    p95 range ms | Median spread % |
-| ------------------------------------- | ----------: | ----------: | ----------: | --------------: | --------------: |
-| node-empty                            |      22.840 |      25.694 |      26.912 |   35.573–45.045 |           15.85 |
-| node-import:@optique/core             |      76.751 |      84.862 |      80.875 |  95.022–114.875 |           10.03 |
-| node-import:@optique/run              |      80.897 |      92.476 |      87.919 | 117.439–130.552 |           13.17 |
-| node-import:@optique/discover         |      85.841 |      97.027 |      92.108 | 119.107–133.155 |           12.14 |
-| node-import:@optique/core/constructs  |      64.022 |      67.828 |      65.095 |  86.278–100.855 |            5.85 |
-| node-import:@optique/core/primitives  |      61.653 |      67.877 |      66.203 |   84.959–93.755 |            9.40 |
-| node-import:@optique/core/modifiers   |      54.459 |      59.695 |      57.779 |   71.250–81.644 |            9.06 |
-| node-import:@optique/core/valueparser |      45.535 |      50.454 |      50.409 |   62.552–63.972 |            9.76 |
-| node-import:@optique/run/run          |      80.655 |      90.103 |      88.584 | 102.783–122.219 |           10.67 |
-| node-minimal-help                     |      93.074 |     104.377 |      99.378 | 124.008–145.713 |           11.37 |
-| node-minimal-dispatch                 |      87.708 |      96.691 |      99.385 | 116.377–129.294 |           12.08 |
-| node-three-root-help                  |     100.423 |     109.661 |     107.484 | 137.065–153.746 |            8.59 |
-| node-three-nested-help                |     104.938 |     118.464 |     111.218 | 136.091–160.308 |           12.16 |
-| node-three-version                    |      90.924 |     101.089 |     101.070 | 129.559–138.967 |           10.06 |
-| node-three-dispatch                   |      93.847 |     105.614 |     102.691 | 122.977–155.925 |           11.46 |
-| node-three-invalid                    |      95.818 |     111.472 |     105.904 | 123.970–157.366 |           14.78 |
-| node-three-completion                 |      89.607 |     102.746 |      98.604 | 121.516–144.306 |           13.33 |
-| node-discovery-root-help              |     109.769 |     121.927 |     122.265 | 146.138–175.719 |           10.25 |
-| node-discovery-nested-help            |     111.289 |     123.933 |     124.498 | 148.515–176.897 |           10.66 |
-| node-discovery-version                |      99.677 |     111.483 |     111.020 | 134.209–167.033 |           10.63 |
-| node-discovery-dispatch               |     103.382 |     116.366 |     113.205 | 135.038–172.563 |           11.47 |
-| node-discovery-invalid                |     105.752 |     116.151 |     113.756 | 130.021–160.612 |            9.14 |
-| node-discovery-completion             |     101.880 |     111.105 |     109.555 | 133.209–158.088 |            8.42 |
-| cjs-three-root-help                   |      83.900 |      93.660 |      92.696 | 119.804–124.018 |           10.53 |
-| bun-three-root-help                   |      68.366 |      80.333 |      77.667 | 102.869–120.227 |           15.41 |
-| deno-three-root-help                  |     119.450 |     131.069 |     128.422 | 156.092–188.613 |            9.05 |
-| node-cache-three-root-help            |      90.139 |      98.919 |      95.336 | 124.847–127.361 |            9.21 |
-| cjs-three-dispatch                    |      82.987 |      90.153 |      88.976 | 104.882–122.602 |            8.05 |
-| bun-three-dispatch                    |      62.465 |      68.347 |      65.861 |  83.998–106.343 |            8.93 |
-| deno-three-dispatch                   |     116.852 |     131.230 |     129.837 | 164.596–247.733 |           11.07 |
-| node-cache-three-dispatch             |      85.716 |      92.978 |      93.589 | 116.235–123.935 |            8.47 |
-| cjs-import:@optique/core              |      61.877 |      67.646 |      65.912 |   81.851–99.692 |            8.75 |
+| Case                                  | Median 1 ms | Median 2 ms | Median 3 ms |   p95 range ms | Median spread % |
+| ------------------------------------- | ----------: | ----------: | ----------: | -------------: | --------------: |
+| node-empty                            |      17.030 |      17.101 |      17.044 |  19.058–26.325 |            0.41 |
+| node-import:@optique/core             |      54.788 |      55.039 |      55.240 |  59.462–79.157 |            0.82 |
+| node-import:@optique/run              |      59.541 |      59.953 |      59.456 |  63.368–87.850 |            0.83 |
+| node-import:@optique/discover         |      62.381 |      62.977 |      63.248 |  67.498–89.919 |            1.38 |
+| node-import:@optique/core/constructs  |      46.152 |      46.412 |      46.345 |  48.860–64.515 |            0.56 |
+| node-import:@optique/core/primitives  |      46.022 |      46.068 |      45.915 |  48.979–66.814 |            0.33 |
+| node-import:@optique/core/modifiers   |      40.278 |      40.377 |      40.178 |  43.401–58.571 |            0.50 |
+| node-import:@optique/core/valueparser |      33.997 |      34.532 |      34.620 |  37.685–50.444 |            1.80 |
+| node-import:@optique/run/run          |      58.393 |      58.487 |      58.528 |  62.320–85.746 |            0.23 |
+| node-minimal-help                     |      68.287 |      67.939 |      68.121 |  72.219–99.790 |            0.51 |
+| node-minimal-dispatch                 |      64.779 |      64.778 |      65.237 |  69.194–89.406 |            0.71 |
+| node-three-root-help                  |      73.165 |      73.416 |      73.662 | 76.825–105.788 |            0.68 |
+| node-three-nested-help                |      76.841 |      76.645 |      77.065 | 80.952–116.805 |            0.55 |
+| node-three-version                    |      67.022 |      67.094 |      66.903 |  71.609–98.034 |            0.29 |
+| node-three-dispatch                   |      70.401 |      70.345 |      70.833 |  74.113–97.982 |            0.69 |
+| node-three-invalid                    |      71.795 |      71.533 |      72.055 | 74.691–102.623 |            0.73 |
+| node-three-completion                 |      67.643 |      67.621 |      67.965 |  71.429–97.458 |            0.51 |
+| node-discovery-root-help              |      79.227 |      78.496 |      79.055 | 83.669–110.452 |            0.93 |
+| node-discovery-nested-help            |      82.526 |      82.224 |      82.381 | 86.882–122.647 |            0.37 |
+| node-discovery-version                |      70.551 |      70.997 |      71.023 | 75.567–108.960 |            0.67 |
+| node-discovery-dispatch               |      75.880 |      76.342 |      75.910 | 80.653–112.743 |            0.61 |
+| node-discovery-invalid                |      76.500 |      76.339 |      75.998 | 82.944–113.918 |            0.66 |
+| node-discovery-completion             |      71.756 |      71.689 |      71.471 | 77.221–110.818 |            0.40 |
+| cjs-three-root-help                   |      63.732 |      64.338 |      63.906 |  68.769–95.363 |            0.95 |
+| bun-three-root-help                   |      50.268 |      49.737 |      50.184 |  53.875–73.246 |            1.06 |
+| deno-three-root-help                  |      89.294 |      90.414 |      89.427 | 94.882–133.245 |            1.25 |
+| node-cache-three-root-help            |      63.644 |      64.287 |      63.982 |  68.404–93.269 |            1.01 |
+| cjs-three-dispatch                    |      60.152 |      60.107 |      60.182 |  66.143–89.020 |            0.12 |
+| bun-three-dispatch                    |      43.836 |      44.116 |      43.904 |  48.535–65.400 |            0.64 |
+| deno-three-dispatch                   |      86.112 |      87.011 |      86.865 | 92.811–128.013 |            1.04 |
+| node-cache-three-dispatch             |      60.976 |      60.970 |      61.363 |  65.942–88.708 |            0.64 |
+| cjs-import:@optique/core              |      45.298 |      45.462 |      46.033 |  48.602–67.501 |            1.62 |
 
-Median spread, defined as the range of the three run medians divided by
-their middle value,
-ranged from 5.85% (node-import:@optique/core/constructs) to
-15.85% (node-empty).
+The p95 range column lists the lowest and highest per-run p95 across the
+three runs. The median spread of a case is the range of its three run medians
+divided by their middle value. It ranged from 0.12% (cjs-three-dispatch) to
+1.80% (node-import:@optique/core/valueparser).
 These are whole-process wall times. Within each run, cases were interleaved
 rather than executed in blocks. Interleaving reduces systematic case-order
 effects but does not remove scheduler noise, frequency changes or shared-host
 activity. Load and power context describe the conditions; three runs cannot
 establish a causal explanation for individual differences. Across the three
-runs, 5 case medians strictly increased, 0 strictly decreased, and 27 were
-mixed or unchanged. The available CPU power settings matched at the window
-endpoints. The observed spread is why this initial baseline supplies no hard
-regression budget. Subtracting the empty case would not isolate parser cost.
+runs, 7 case medians strictly increased, 2 strictly decreased, and 23 were
+mixed or unchanged. The recorded CPU governor, driver and power
+preference matched before and after the capture window. The observed spread is
+why this initial baseline supplies no hard regression budget. Subtracting the
+empty case would not isolate parser cost.
 
 
 Installation
@@ -105,15 +106,15 @@ Installation
 
 Both production consumers used pnpm's copy import method and isolated linker.
 All Optique dependencies resolved to harness-generated local tarballs, with
-lock SHA-512 integrity verified against archive bytes. Installed contents were
-rechecked before capture; no package resolves to a workspace link. Files are
-deduplicated by real path, with pnpm metadata, lockfiles and external store
+lockfile SHA-512 integrity verified against archive bytes. Installed contents
+were rechecked before capture; no package resolves to a workspace link. Files
+are deduplicated by real path, with pnpm metadata, lockfiles and external store
 excluded. Executable shims are included in apparent and allocated totals.
 
 | Consumer | Unique packages | Compressed bytes | Expanded content bytes | Installed apparent bytes | Allocated bytes |
 | -------- | --------------: | ---------------: | ---------------------: | -----------------------: | --------------: |
 | core-run |               2 |           817321 |                4099699 |                  4099699 |         4579328 |
-| discover |               3 |           865361 |                4312914 |                  4322970 |         4907008 |
+| discover |               3 |           865361 |                4312914 |                  4322054 |         4907008 |
 
 | Package           | ESM bytes | CJS bytes | Declaration bytes | Other bytes |
 | ----------------- | --------: | --------: | ----------------: | ----------: |
@@ -126,7 +127,7 @@ The core/run graph has two packages; the discovery graph adds only
 The filesystem type reported by `statfs` was `2435016766` (0x9123683E, Btrfs).
 Allocated blocks describe this filesystem, not exclusive physical storage;
 hard links or clones can share blocks elsewhere. Archive totals count only
-regular files. Classification checks declaration extensions (*.d.ts*, *.d.cts*
-and *.d.mts*) before ESM/CJS extensions. These totals exclude installed shims
-and do not estimate network download volume.
+regular files. Classification tests for declaration files before testing
+ESM/CJS extensions.
+They exclude installed shims and do not estimate network download volume.
 Loading traces, installed size and archive size remain separate measurements.

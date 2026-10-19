@@ -98,11 +98,11 @@
       }
     }
   ],
-  "bunResolution": "${REPO_ROOT}/tmp/startup-baseline/consumers/core-run/node_modules/.pnpm/@optique+run@file+..+..+tarballs+run.tgz/node_modules/@optique/run/dist/index.js",
+  "bunResolution": "${CONSUMERS_ROOT}/core-run/node_modules/.pnpm/@optique+run@file+..+tarballs+run.tgz/node_modules/@optique/run/dist/index.js",
   "denoGraph": {
     "version": 1,
     "roots": [
-      "file://${REPO_ROOT}/tmp/startup-baseline/consumers/core-run/fixtures/three.js"
+      "file://${CONSUMERS_ROOT}/core-run/fixtures/three.js"
     ],
     "modules": [
       {
@@ -4777,10 +4777,10 @@
             }
           }
         ],
-        "local": "${REPO_ROOT}/tmp/startup-baseline/consumers/core-run/fixtures/grammar.js",
+        "local": "${CONSUMERS_ROOT}/core-run/fixtures/grammar.js",
         "size": 916,
         "mediaType": "JavaScript",
-        "specifier": "file://${REPO_ROOT}/tmp/startup-baseline/consumers/core-run/fixtures/grammar.js"
+        "specifier": "file://${CONSUMERS_ROOT}/core-run/fixtures/grammar.js"
       },
       {
         "kind": "esm",
@@ -4868,7 +4868,7 @@
           {
             "specifier": "./grammar.js",
             "code": {
-              "specifier": "file://${REPO_ROOT}/tmp/startup-baseline/consumers/core-run/fixtures/grammar.js",
+              "specifier": "file://${CONSUMERS_ROOT}/core-run/fixtures/grammar.js",
               "span": {
                 "start": {
                   "line": 5,
@@ -4882,10 +4882,10 @@
             }
           }
         ],
-        "local": "${REPO_ROOT}/tmp/startup-baseline/consumers/core-run/fixtures/three.js",
+        "local": "${CONSUMERS_ROOT}/core-run/fixtures/three.js",
         "size": 673,
         "mediaType": "JavaScript",
-        "specifier": "file://${REPO_ROOT}/tmp/startup-baseline/consumers/core-run/fixtures/three.js"
+        "specifier": "file://${CONSUMERS_ROOT}/core-run/fixtures/three.js"
       },
       {
         "kind": "node",

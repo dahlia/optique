@@ -221,6 +221,16 @@ describe("verifyPreparedMap", () => {
 });
 
 describe("portableArtifact", () => {
+  it("should tokenize external consumer paths recursively", () => {
+    assert.deepEqual(
+      portableArtifact(
+        { files: ["/var/tmp/owned-consumers/core-run/package.json"] },
+        "/var/tmp/owned-consumers",
+        "${CONSUMERS_ROOT}",
+      ),
+      { files: ["${CONSUMERS_ROOT}/core-run/package.json"] },
+    );
+  });
   it("should sanitize nested validation URLs and preserve portable/system paths", () => {
     const root = "/tmp/contributor/checkouts/project/";
     assert.deepEqual(
