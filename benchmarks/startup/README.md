@@ -61,9 +61,12 @@ disabled.
 
 Reusing a preparation verifies a fingerprint of package/build inputs and
 selected benchmark sources, including preparation logic, the manifest, fixtures
-and goldens. After changing those inputs, rerun `benchmark:prepare` before
-measuring. Generated reports, benchmark documentation and regression tests are
-excluded, so updating them does not require preparing again.
+and goldens. Preparation captures that fingerprint before packing and fails if
+those inputs change before preparation finishes. Measurement checks it again
+after validation, before any cache probe, warmup or sample, and before
+publishing the report. After changing those inputs, rerun `benchmark:prepare`
+before measuring. Generated reports, benchmark documentation and regression
+tests are excluded, so updating them does not require preparing again.
 
 The current baseline is under *results/*. Raw samples refer to exact captured
 stdout/stderr in each report's output table. Commands preserve argument

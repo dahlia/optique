@@ -321,15 +321,6 @@ To be released.
     matched command's usage in captured parse-error output.  Root usage remains
     the default and fallback.  [[#1086], [#1093]]
 
-### Development tooling
-
- -  Added reproducible startup and production installation baselines, with
-    isolated npm consumers and runtime fixtures for comparing future loading
-    changes.  [[#1083], [#1096]]
-
-[#1083]: https://github.com/dahlia/optique/issues/1083
-[#1096]: https://github.com/dahlia/optique/pull/1096
-
 
 Version 1.3.6
 -------------

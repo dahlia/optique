@@ -107,8 +107,3 @@ paths = ["packages/prompt/**"]
 id = "@optique/testing"
 directory = "testing"
 paths = ["packages/testing/**"]
-
-[[sections]]
-id = "Development tooling"
-directory = "tooling"
-paths = ["benchmarks/startup/**"]
