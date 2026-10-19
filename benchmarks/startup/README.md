@@ -45,10 +45,16 @@ owned store, an isolated linker, ignored install scripts and offline
 installation. Harness tools, including its YAML parser, stay outside measured
 installations.
 
-Everything generated locally lives under *tmp/startup-baseline/*, including
-archives, consumers, store, caches, preparation commands, validation traces,
-*smoke.json*, three *run-N.json* files and *spread.json*. Preparation recreates
-only this directory, after checking its ownership marker. Inspect failures
+Archives, store, caches, preparation commands, validation traces, *smoke.json*,
+three *run-N.json* files and *spread.json* live under *tmp/startup-baseline/*.
+Consumers live in a separate owned temporary directory, recorded in
+*tmp/startup-baseline/consumer-root.json*. Preparation uses the system temporary
+directory, falling back to */var/tmp*, and accepts a candidate only if neither
+it nor any ancestor contains *node\_modules*. If both candidates fail that
+check, preparation stops. Node and Bun therefore cannot find undeclared
+dependencies in the checkout. Reusing a preparation checks those ancestors
+again. Preparation recreates its local directory and its recorded external
+consumer directory after checking their ownership markers. Inspect failures
 before preparing again. No network acquisition happens during timing; Deno's
 cached-only execution has no network permission and Bun auto-install is
 disabled.
@@ -56,8 +62,10 @@ disabled.
 The current baseline is under *results/*. Raw samples refer to exact captured
 stdout/stderr in each report's output table. Commands preserve argument
 boundaries and use `${REPO_ROOT}`, `${NODE_BIN}`, `${DENO_BIN}`, `${BUN_BIN}`,
-`${PNPM_BIN}` and corresponding `*_DIR` tokens. Set the root to your checkout,
-resolve binaries with `mise which`, and use their directories for `*_DIR`.
+`${PNPM_BIN}`, `${CONSUMERS_ROOT}` and corresponding `*_DIR` tokens. Set the
+checkout root and the consumer root recorded in *consumer-root.json*. Resolve
+each binary with `mise which`, and use its directory for the matching `*_DIR`
+token.
 `expandCommand()` in *contract.ts* performs this substitution without a shell.
 Actual runtime versions, source revision and selected input hashes are recorded.
 Historical source drift is informational; internal report inconsistency fails.
@@ -111,10 +119,10 @@ large source files. None of these policies clears the kernel's filesystem cache.
 Separate instrumented validation records module loads. It asserts today's eager
 imports of all discovered command definitions and handler implementations for
 every request, with dispatch output only on successful dispatch. Timing
-processes never load the trace hook. Node checks packaged ESM/CJS resolution,
-Bun checks its installed entry and Deno checks its source graph, including
-recognized builtins. Module traces, downloaded bytes and installed bytes
-describe different things.
+processes never load the trace hook. Node checks loaded *node\_modules* paths
+against the consumer and verifies packaged ESM/CJS resolution. Bun checks its
+installed entry. Deno checks its source graph, including recognized builtins.
+Module traces, downloaded bytes and installed bytes describe different things.
 
 
 Installation accounting

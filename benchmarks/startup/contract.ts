@@ -284,26 +284,30 @@ export function verifyPreparedMap(path: string, expectedHash: string): void {
 }
 
 /**
- * Replaces checkout paths in nested JSON artifact values with the root token.
+ * Replaces paths in nested JSON artifact values with a portable root token.
  *
  * @throws {TypeError} If the checkout root is empty or a filesystem root.
  */
-export function portableArtifact(value: unknown, root: string): unknown {
+export function portableArtifact(
+  value: unknown,
+  root: string,
+  token = "${REPO_ROOT}",
+): unknown {
   const prefix = root.replace(/[\\/]+$/, "");
   if (prefix === "" || /^[A-Za-z]:$/.test(prefix)) {
     throw new TypeError("Expected a checkout root.");
   }
   if (typeof value === "string") {
-    return value.split(prefix).join("${REPO_ROOT}");
+    return value.split(prefix).join(token);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => portableArtifact(item, prefix));
+    return value.map((item) => portableArtifact(item, prefix, token));
   }
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value).map((
         [key, item],
-      ) => [key, portableArtifact(item, prefix)]),
+      ) => [key, portableArtifact(item, prefix, token)]),
     );
   }
   return value;

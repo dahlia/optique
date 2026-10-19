@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "window": "Coordinator excluded this wave heavy gates and test-capable reviews; unrelated machine activity was not controlled.",
+  "window": "Both shared advisory locks were held exclusively for this capture; unrelated machine activity was not controlled.",
   "before": {
-    "at": "2026-10-18T18:52:25.558710+00:00",
+    "at": "2026-10-19T00:19:06.799492+00:00",
     "cpu0": {
       "scaling_governor": "powersave",
       "scaling_driver": "amd-pstate-epp",
@@ -10,7 +10,7 @@
     }
   },
   "after": {
-    "at": "2026-10-18T19:08:23.922191+00:00",
+    "at": "2026-10-19T00:30:09.012749+00:00",
     "cpu0": {
       "scaling_governor": "powersave",
       "scaling_driver": "amd-pstate-epp",

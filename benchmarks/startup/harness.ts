@@ -1,4 +1,5 @@
 import {
+  copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -29,6 +30,12 @@ import {
   validateDenoGraph,
   verifyPreparedMap,
 } from "./contract.ts";
+import {
+  consumerRoot,
+  createConsumerRoot,
+  removeConsumerRoot,
+  verifyConsumerAncestors,
+} from "./isolation.ts";
 import {
   archiveIntegrity,
   classifyFile,
@@ -204,12 +211,22 @@ function environment(
   };
 }
 function tokens(prepared: Pick<Prepared, "binaries">): Record<string, string> {
-  const result: Record<string, string> = { REPO_ROOT: root.replace(/\/$/, "") };
+  const result: Record<string, string> = {
+    REPO_ROOT: root.replace(/\/$/, ""),
+    CONSUMERS_ROOT: consumerRoot(work),
+  };
   for (const [name, path] of Object.entries(prepared.binaries)) {
     result[`${name.toUpperCase()}_BIN`] = path;
     result[`${name.toUpperCase()}_DIR`] = dirname(path);
   }
   return result;
+}
+function portableEvidence(value: unknown): unknown {
+  return portableArtifact(
+    portableArtifact(value, root),
+    consumerRoot(work),
+    "${CONSUMERS_ROOT}",
+  );
 }
 function invoke(command: Command, commands?: Command[]): string {
   commands?.push(command);
@@ -263,6 +280,7 @@ function prepare(): void {
         "Refusing to remove an unowned preparation directory.",
       );
     }
+    removeConsumerRoot(work);
     rmSync(work, { recursive: true });
   }
   for (
@@ -279,6 +297,8 @@ function prepare(): void {
     ]
   ) mkdirSync(join(work, path), { recursive: true });
   writeFileSync(join(work, ".owned"), marker);
+  createConsumerRoot(work);
+  mkdirSync(join(consumerRoot(work), "tarballs"));
   writeFileSync(join(work, "empty.npmrc"), "");
   const env = environment(binaries);
   const commands: Command[] = [];
@@ -312,6 +332,7 @@ function prepare(): void {
     }, commands);
     writeFileSync(join(work, `tarballs/${name}-pack.json`), output);
     const bytes = readFileSync(file), files = readTar(bytes);
+    copyFileSync(file, join(consumerRoot(work), `tarballs/${name}.tgz`));
     const structuredStart = output.lastIndexOf("\n{") + 1;
     verifyPackList(
       JSON.parse(output.slice(structuredStart)),
@@ -353,7 +374,7 @@ function prepare(): void {
     for (const file of files) categories[classifyFile(file.path)] += file.size;
     archives.push({
       name: `@optique/${name}`,
-      specifier: `file:../../tarballs/${name}.tgz`,
+      specifier: `file:../tarballs/${name}.tgz`,
       integrity: archiveIntegrity(bytes),
       contentHash: sha256(
         JSON.stringify(
@@ -371,7 +392,7 @@ function prepare(): void {
   }
   const consumers: Record<string, unknown>[] = [];
   for (const consumer of definition.consumers) {
-    const cwd = join(work, `consumers/${consumer.id}`);
+    const cwd = join(consumerRoot(work), consumer.id);
     mkdirSync(cwd, { recursive: true });
     cpSync(join(directory, "fixtures"), join(cwd, "fixtures"), {
       recursive: true,
@@ -513,7 +534,7 @@ function prepare(): void {
   }
   const mapFile = join(work, "deno-import-map.json");
   json(mapFile, { imports });
-  const fixture = join(work, "consumers/core-run/fixtures/three.js");
+  const fixture = join(consumerRoot(work), "core-run/fixtures/three.js");
   invoke({
     executable: binaries.deno,
     args: [
@@ -546,7 +567,7 @@ function prepare(): void {
   validateDenoGraph(denoGraph, [
     join(root, "packages/core/src"),
     join(root, "packages/run/src"),
-    join(work, "consumers/core-run/fixtures"),
+    join(consumerRoot(work), "core-run/fixtures"),
   ]);
   const prepared: Prepared = {
     schemaVersion: 1,
@@ -566,6 +587,7 @@ function prepare(): void {
 }
 
 function prepared(): Prepared {
+  verifyConsumerAncestors(consumerRoot(work));
   const value: Prepared = JSON.parse(
     readFileSync(join(work, "prepared.json"), "utf8"),
   );
@@ -577,7 +599,7 @@ function prepared(): Prepared {
   }
   verifyPreparedMap(join(work, "deno-import-map.json"), value.importMapHash);
   for (const consumer of manifest().consumers) {
-    const copied = join(work, `consumers/${consumer.id}/fixtures`);
+    const copied = join(consumerRoot(work), `${consumer.id}/fixtures`);
     if (
       listFiles(copied).join("\0") !==
         listFiles(join(directory, "fixtures")).join("\0")
@@ -593,12 +615,14 @@ function prepared(): Prepared {
       expected == null ||
       expected.lockHash !==
         sha256(
-          readFileSync(join(work, `consumers/${consumer.id}/pnpm-lock.yaml`)),
+          readFileSync(
+            join(consumerRoot(work), `${consumer.id}/pnpm-lock.yaml`),
+          ),
         )
     ) throw new TypeError("Prepared consumer lock changed.");
     verifyInventory(
       inventoryTree(
-        join(work, `consumers/${consumer.id}/node_modules`),
+        join(consumerRoot(work), `${consumer.id}/node_modules`),
         exclusions,
       ),
       expected.inventory,
@@ -650,7 +674,7 @@ function cases(state: Prepared, audit = false): readonly Case[] {
     entry = `${fixture}.js`,
     extraEnv: Readonly<Record<string, string>> = {},
   ) => {
-    const cwd = join(work, `consumers/${consumer}`);
+    const cwd = join(consumerRoot(work), consumer);
     result.push({
       id,
       command: {
@@ -665,7 +689,7 @@ function cases(state: Prepared, audit = false): readonly Case[] {
       request: request.id,
     });
   };
-  const core = join(work, "consumers/core-run");
+  const core = join(consumerRoot(work), "core-run");
   result.push({
     id: "node-empty",
     command: {
@@ -683,7 +707,7 @@ function cases(state: Prepared, audit = false): readonly Case[] {
     const consumer = specifier.startsWith("@optique/discover")
       ? "discover"
       : "core-run";
-    const cwd = join(work, `consumers/${consumer}`);
+    const cwd = join(consumerRoot(work), consumer);
     result.push({
       id: `node-import:${specifier}`,
       command: {
@@ -826,13 +850,11 @@ function validate(state: Prepared): void {
     ).map((line) => record(JSON.parse(line)));
     for (const entry of loaded) {
       const path = fileURLToPath(text(entry.url));
-      if (
-        path.includes(`${sep}node_modules${sep}`) &&
-        path.includes(`${sep}@optique${sep}`)
-      ) {
+      if (path.includes(`${sep}node_modules${sep}`)) {
         if (
           !isInside(realpathSync(path), join(item.command.cwd, "node_modules"))
-        ) throw new TypeError("Runtime loaded Optique outside its consumer.");
+        ) throw new TypeError("Runtime loaded a package outside its consumer.");
+        if (!path.includes(`${sep}@optique${sep}`)) continue;
         if (
           item.id.startsWith("cjs-")
             ? !path.endsWith(".cjs")
@@ -862,7 +884,7 @@ function validate(state: Prepared): void {
       });
     }
   }
-  const core = join(work, "consumers/core-run");
+  const core = join(consumerRoot(work), "core-run");
   const bunResolution = invoke({
     executable: state.binaries.bun,
     args: [
@@ -880,14 +902,14 @@ function validate(state: Prepared): void {
   ) throw new TypeError("Bun resolved an unexpected installation.");
   json(
     join(work, "validation.json"),
-    portableArtifact({
+    portableEvidence({
       schemaVersion: 1,
       observations,
       bunResolution,
       denoGraph: state.denoGraph,
       note:
         "Separate instrumented validation; no traced process contributes a timing sample.",
-    }, root),
+    }),
   );
   console.log(
     `Validated ${
@@ -1063,7 +1085,7 @@ function measure(
       bun:
         "owned runtime transpiler cache; only sufficiently large files use it",
       clearing:
-        "prepare recreates only marked tmp/startup-baseline; each run clears own node-cache before untimed prepopulation",
+        "prepare recreates marked tmp/startup-baseline and its owned external consumers; each run clears own node-cache before untimed prepopulation",
       filesystem:
         "warm/unspecified OS filesystem cache; fresh processes are not cold filesystem cache",
     },
@@ -1071,9 +1093,9 @@ function measure(
       portableCommand(command, replacements)
     ),
     commandTokens:
-      "REPO_ROOT=checkout; *_BIN=mise which runtime; *_DIR=dirname of that binary",
+      "REPO_ROOT=checkout; CONSUMERS_ROOT=owned external directory from consumer-root.json; *_BIN=mise which runtime; *_DIR=dirname of that binary",
   };
-  const sanitized = record(portableArtifact(metadata, root));
+  const sanitized = record(portableEvidence(metadata));
   const report: Report = {
     schemaVersion: 1,
     mode,
