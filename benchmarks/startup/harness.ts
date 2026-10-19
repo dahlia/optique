@@ -21,8 +21,8 @@ import {
   type Expectation,
   inputIdentity,
   isInside,
-  portableArtifact,
   portableCommand,
+  portableEvidence,
   record,
   runChecked,
   sha256,
@@ -220,13 +220,6 @@ function tokens(prepared: Pick<Prepared, "binaries">): Record<string, string> {
     result[`${name.toUpperCase()}_DIR`] = dirname(path);
   }
   return result;
-}
-function portableEvidence(value: unknown): unknown {
-  return portableArtifact(
-    portableArtifact(value, root),
-    consumerRoot(work),
-    "${CONSUMERS_ROOT}",
-  );
 }
 function invoke(command: Command, commands?: Command[]): string {
   commands?.push(command);
@@ -902,14 +895,18 @@ function validate(state: Prepared): void {
   ) throw new TypeError("Bun resolved an unexpected installation.");
   json(
     join(work, "validation.json"),
-    portableEvidence({
-      schemaVersion: 1,
-      observations,
-      bunResolution,
-      denoGraph: state.denoGraph,
-      note:
-        "Separate instrumented validation; no traced process contributes a timing sample.",
-    }),
+    portableEvidence(
+      {
+        schemaVersion: 1,
+        observations,
+        bunResolution,
+        denoGraph: state.denoGraph,
+        note:
+          "Separate instrumented validation; no traced process contributes a timing sample.",
+      },
+      root,
+      consumerRoot(work),
+    ),
   );
   console.log(
     `Validated ${
@@ -1095,7 +1092,9 @@ function measure(
     commandTokens:
       "REPO_ROOT=checkout; CONSUMERS_ROOT=owned external directory from consumer-root.json; *_BIN=mise which runtime; *_DIR=dirname of that binary",
   };
-  const sanitized = record(portableEvidence(metadata));
+  const sanitized = record(
+    portableEvidence(metadata, root, consumerRoot(work)),
+  );
   const report: Report = {
     schemaVersion: 1,
     mode,

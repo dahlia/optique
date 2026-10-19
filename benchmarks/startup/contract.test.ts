@@ -15,6 +15,7 @@ import {
   inputIdentity,
   portableArtifact,
   portableCommand,
+  portableEvidence,
   runChecked,
   sha256,
   summarize,
@@ -217,6 +218,51 @@ describe("verifyPreparedMap", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("portableEvidence", () => {
+  it("should preserve checkout tokens when consumer roots prefix their path", () => {
+    const consumersRoot = "/tmp/optique-startup-consumers-AbC123";
+    const repoRoot = `${consumersRoot}-checkout`;
+    assert.deepEqual(
+      portableEvidence(
+        {
+          checkout: `${repoRoot}/benchmarks/startup/harness.ts`,
+          consumer: `${consumersRoot}/core-run/cli.js`,
+        },
+        repoRoot,
+        consumersRoot,
+      ),
+      {
+        checkout: "${REPO_ROOT}/benchmarks/startup/harness.ts",
+        consumer: "${CONSUMERS_ROOT}/core-run/cli.js",
+      },
+    );
+  });
+  it("should preserve consumer tokens when the checkout prefixes their path", () => {
+    assert.deepEqual(
+      portableEvidence(
+        {
+          paths: [
+            "file:///tmp/optique-startup-consumers-AbC123/core-run/cli.js",
+            "/tmp/optique/benchmarks/startup/harness.ts",
+          ],
+          token: "${CONSUMERS_ROOT}/discover/package.json",
+          system: "/usr/bin/node",
+        },
+        "/tmp/optique",
+        "/tmp/optique-startup-consumers-AbC123",
+      ),
+      {
+        paths: [
+          "file://${CONSUMERS_ROOT}/core-run/cli.js",
+          "${REPO_ROOT}/benchmarks/startup/harness.ts",
+        ],
+        token: "${CONSUMERS_ROOT}/discover/package.json",
+        system: "/usr/bin/node",
+      },
+    );
   });
 });
 
