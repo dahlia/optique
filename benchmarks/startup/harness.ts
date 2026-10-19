@@ -10,7 +10,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { arch, cpus, loadavg, platform, release, totalmem } from "node:os";
@@ -30,6 +30,7 @@ import {
   validateDenoGraph,
   verifyPreparedMap,
 } from "./contract.ts";
+import { resolveExecutable } from "./executable.ts";
 import {
   consumerRoot,
   createConsumerRoot,
@@ -979,6 +980,15 @@ function measure(
   mode: "smoke" | "baseline",
   path: string,
 ): Report {
+  const git = resolveExecutable("git");
+  // Inherit setup settings without serializing them in preparation diagnostics.
+  const revision = execFileSync(git, ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 180_000,
+    killSignal: "SIGKILL",
+    maxBuffer: 1024 * 1024,
+  }).trim();
   const sampleCount = mode === "baseline" ? 100 : 3,
     warmupCount = mode === "baseline" ? 5 : 1;
   const definitions = cases(state),
@@ -1039,12 +1049,6 @@ function measure(
     samples: samples.get(item.id)!,
     summary: summarize(samples.get(item.id)!.map((sample) => sample.wallMs)),
   }));
-  const revision = invoke({
-    executable: "/usr/bin/git",
-    args: ["rev-parse", "HEAD"],
-    cwd: root,
-    env: environment(state.binaries),
-  }).trim();
   const metadata = {
     revision,
     startedAt,

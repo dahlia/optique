@@ -73,8 +73,10 @@ checkout root and the consumer root recorded in *consumer-root.json*. Resolve
 each binary with `mise which`, and use its directory for the matching `*_DIR`
 token.
 `expandCommand()` in *contract.ts* performs this substitution without a shell.
-Actual runtime versions, source revision and selected input hashes are recorded.
-Historical source drift is informational; internal report inconsistency fails.
+Git is resolved from the invoking environment's `PATH` and uses that
+environment to read the checkout's revision before timing. Actual runtime
+versions, source revision and selected input hashes are recorded. Historical
+source drift is informational; internal report inconsistency fails.
 
 During a coordinated issue wave, reserve an exclusive measurement window before
 running the full baseline, then hold both shared locks for its duration:
