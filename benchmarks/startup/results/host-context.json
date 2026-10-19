@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "window": "Both shared advisory locks were held exclusively for this capture; unrelated machine activity was not controlled.",
   "before": {
-    "at": "2026-10-19T06:34:26.854933+00:00",
+    "at": "2026-10-19T10:09:55.244838+00:00",
     "cpu0": {
       "scaling_governor": "powersave",
       "scaling_driver": "amd-pstate-epp",
@@ -10,7 +10,7 @@
     }
   },
   "after": {
-    "at": "2026-10-19T06:46:02.789085+00:00",
+    "at": "2026-10-19T10:21:37.219025+00:00",
     "cpu0": {
       "scaling_governor": "powersave",
       "scaling_driver": "amd-pstate-epp",

@@ -588,7 +588,9 @@ function prepared(): Prepared {
     throw new TypeError("Unsupported preparation format.");
   }
   if (value.packageInputsHash !== packageInputsHash()) {
-    throw new TypeError("Packed source inputs changed; prepare again.");
+    throw new TypeError(
+      "Preparation inputs changed; run benchmark:prepare again.",
+    );
   }
   verifyPreparedMap(join(work, "deno-import-map.json"), value.importMapHash);
   for (const consumer of manifest().consumers) {

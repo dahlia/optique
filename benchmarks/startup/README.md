@@ -59,6 +59,12 @@ before preparing again. No network acquisition happens during timing; Deno's
 cached-only execution has no network permission and Bun auto-install is
 disabled.
 
+Reusing a preparation verifies a fingerprint of package/build inputs and
+selected benchmark sources, including preparation logic, the manifest, fixtures
+and goldens. After changing those inputs, rerun `benchmark:prepare` before
+measuring. Generated reports, benchmark documentation and regression tests are
+excluded, so updating them does not require preparing again.
+
 The current baseline is under *results/*. Raw samples refer to exact captured
 stdout/stderr in each report's output table. Commands preserve argument
 boundaries and use `${REPO_ROOT}`, `${NODE_BIN}`, `${DENO_BIN}`, `${BUN_BIN}`,
