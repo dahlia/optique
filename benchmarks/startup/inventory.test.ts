@@ -130,6 +130,22 @@ describe("release archive content", () => {
       size: 3,
     }, { path: "nested/file.d.cts", size: 5 }]);
   });
+  it("should consume directory PAX attributes before the next regular file", () => {
+    const item = "path=package/" + "nested/".repeat(20) + "\n";
+    let length = item.length + 3;
+    while (`${length} ${item}`.length !== length) {
+      length = `${length} ${item}`.length;
+    }
+    const files = readTar(tarFixture([
+      { path: "PaxHeader", type: "x", content: `${length} ${item}` },
+      { path: "package/short/", type: "5", content: "" },
+      { path: "package/actual.js", content: "actual" },
+    ]));
+    assert.deepEqual(files.map(({ path, size }) => ({ path, size })), [
+      { path: "actual.js", size: 6 },
+    ]);
+    verifyPackList({ files: [{ path: "actual.js" }] }, [files[0].path]);
+  });
   it("should honor PAX path and reject unsupported links and path traversal", () => {
     const item = "path=package/long-name.js\n";
     let length = item.length + 3;
