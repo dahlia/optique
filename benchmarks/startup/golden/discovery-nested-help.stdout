@@ -1,0 +1,5 @@
+Usage: baseline config set TYPE VALUE...
+
+  TYPE                         (choices: color, width)
+  VALUE                     
+
