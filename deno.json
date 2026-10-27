@@ -1,7 +1,8 @@
 {
   "workspace": [
     "packages/*",
-    "examples/*"
+    "examples/*",
+    "benchmarks/startup"
   ],
   "imports": {
     "@clack/prompts": "npm:@clack/prompts@^1.6.0",
@@ -20,7 +21,8 @@
     "tsdown": "npm:tsdown@^0.13.0",
     "typescript": "npm:typescript@^5.8.3",
     "valibot": "jsr:@valibot/valibot@^1.2.0",
-    "zod": "npm:zod@^4.0.0"
+    "zod": "npm:zod@^4.0.0",
+    "yaml": "npm:yaml@^2.9.1"
   },
   "unstable": [
     "temporal"
@@ -30,7 +32,9 @@
     ".claude/",
     ".github/",
     ".issues/",
-    "docs"
+    "docs",
+    "tmp/startup-baseline",
+    "tmp/startup-tests"
   ],
   "fmt": {
     "exclude": [

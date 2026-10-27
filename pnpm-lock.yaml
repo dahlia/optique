@@ -48,6 +48,9 @@ catalogs:
     valibot:
       specifier: ^1.2.0
       version: 1.2.0
+    yaml:
+      specifier: ^2.9.1
+      version: 2.9.1
     zod:
       specifier: ^3.25.0 || ^4.0.0
       version: 4.1.12
@@ -56,6 +59,15 @@ patchedDependencies:
   vite@7.3.5: c93908c36d57e15b6a2d0014f356e0ddcb021ece7c4436f9145cc52acb6dcb49
 
 importers:
+
+  benchmarks/startup:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.1
 
   docs:
     dependencies:
@@ -3377,6 +3389,11 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yargs-parser@21.1.1:
     resolution: {integrity: sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==}
     engines: {node: '>=12'}
@@ -6232,6 +6249,8 @@ snapshots:
   y18n@5.0.8: {}
 
   yaml@2.8.2: {}
+
+  yaml@2.9.1: {}
 
   yargs-parser@21.1.1: {}
 

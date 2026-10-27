@@ -9,7 +9,7 @@ deno = "2.9"
 "github:dahlia/sacho" = "0.3.2"
 "github:PowerShell/PowerShell" = "latest"
 "github:nushell/nushell" = "latest"
-"github:pnpm/pnpm" = "11"
+"github:pnpm/pnpm" = "11.28.6"
 node = "26"
 
 [deps.deno]
@@ -149,3 +149,28 @@ run = [
   'deno coverage coverage/raw --lcov --include="packages/" --output=coverage/lcov.info',
   'deno coverage coverage/raw --include="packages/"',
 ]
+
+[tasks."benchmark:test"]
+description = "Test startup baseline measurement contracts"
+run = "node --test benchmarks/startup/*.test.ts"
+
+[tasks."benchmark:build"]
+description = "Build packages used by startup fixtures"
+run = 'pnpm --workspace-concurrency=1 --filter "@optique/discover..." -r build'
+
+[tasks."benchmark:prepare"]
+description = "Pack and verify isolated startup consumers"
+depends = ["benchmark:build"]
+run = "node benchmarks/startup/harness.ts prepare"
+
+[tasks."benchmark:validate"]
+description = "Validate startup fixture behavior and module loading"
+run = "node benchmarks/startup/harness.ts validate"
+
+[tasks."benchmark:smoke"]
+description = "Write a bounded informational startup smoke report"
+run = "node benchmarks/startup/harness.ts smoke"
+
+[tasks."benchmark:baseline"]
+description = "Run three full 100-sample startup baselines"
+run = "node benchmarks/startup/harness.ts baseline"
