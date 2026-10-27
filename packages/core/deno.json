@@ -27,7 +27,8 @@
     "./internal/terminal": "./src/internal/terminal.ts",
     "./internal/usage": "./src/internal/usage.ts",
     "./internal/command-doc-policy": "./src/internal/command-doc-policy.ts",
-    "./internal/help-request": "./src/internal/help-request.ts"
+    "./internal/help-request": "./src/internal/help-request.ts",
+    "./doc-pages": "./src/doc-pages.ts"
   },
   "imports": {
     "#src/": "./src/"
@@ -38,7 +39,8 @@
   ],
   "publish": {
     "exclude": [
-      "skills/optique/SKILL.test.ts"
+      "skills/optique/SKILL.test.ts",
+      "src/doc-pages-prototype.test.ts"
     ]
   },
   "tasks": {

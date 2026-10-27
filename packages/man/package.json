@@ -1,7 +1,7 @@
 {
   "name": "@optique/man",
   "version": "1.4.0",
-  "description": "Man page generator for Optique CLI parsers",
+  "description": "Man pages and Markdown command references for Optique",
   "keywords": [
     "CLI",
     "command-line",
@@ -77,6 +77,14 @@
       },
       "import": "./dist/cli.js",
       "require": "./dist/cli.cjs"
+    },
+    "./markdown": {
+      "types": {
+        "import": "./dist/markdown.d.ts",
+        "require": "./dist/markdown.d.cts"
+      },
+      "import": "./dist/markdown.js",
+      "require": "./dist/markdown.cjs"
     }
   },
   "imports": {

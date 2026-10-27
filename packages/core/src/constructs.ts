@@ -1,3 +1,4 @@
+import { captureDocParser } from "./internal/doc-metadata.ts";
 import {
   mergeCommandDocPolicy,
   withoutCommandDocPolicySubtree,
@@ -5525,17 +5526,20 @@ export function or(
     parsers,
     (state) => selectExclusiveChildren(parsers, state, true),
   );
-  return fluent(withEmptyInputFacts(
-    scopeParser(
-      singleResult as Parser<
-        Mode,
-        unknown,
-        [number, ParserResult<unknown>] | undefined
-      >,
-      combinedOptionScope(parsers, parsers.map((_, index) => index)),
-    ),
-    emptyInputFacts,
-  ));
+  return captureDocParser(
+    fluent(withEmptyInputFacts(
+      scopeParser(
+        singleResult as Parser<
+          Mode,
+          unknown,
+          [number, ParserResult<unknown>] | undefined
+        >,
+        combinedOptionScope(parsers, parsers.map((_, index) => index)),
+      ),
+      emptyInputFacts,
+    )),
+    { kind: "or", children: parsers },
+  );
 }
 
 /**
@@ -8969,26 +8973,34 @@ export function object<
       }));
     },
   );
-  return fluent(withEmptyInputFacts(
-    scopeParser(
-      objectParser,
-      combinedOptionScope(
-        parserPairs.map(([, p]) => p),
-        parserPairs.map(([field]) => field),
+  return captureDocParser(
+    fluent(withEmptyInputFacts(
+      scopeParser(
+        objectParser,
+        combinedOptionScope(
+          parserPairs.map(([, p]) => p),
+          parserPairs.map(([field]) => field),
+        ),
+        undefined,
+        true,
       ),
-      undefined,
-      true,
-    ),
-    combinedMode === "sync"
-      ? objectFacts(
-        parserPairs.map(([, p]) => ({
-          facts: getEmptyInputFacts(p),
-          matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
-        })),
-        parserPairs.map(([field]) => field),
-      )
-      : {},
-  ));
+      combinedMode === "sync"
+        ? objectFacts(
+          parserPairs.map(([, p]) => ({
+            facts: getEmptyInputFacts(p),
+            matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
+          })),
+          parserPairs.map(([field]) => field),
+        )
+        : {},
+    )),
+    {
+      kind: "object",
+      children: parserPairs.map((pair) => pair[1]),
+      label,
+      hidden: options.hidden,
+    },
+  );
 }
 
 /**
@@ -12239,12 +12251,15 @@ export function seq<
   }
 
   defineInheritedAnnotationParser(seqParser);
-  return fluent(scopeParser(seqParser, seqScope.source, (context) => {
-    seqScope.select(
-      context,
-      reachableSeqScope(context),
-    );
-  }, true));
+  return captureDocParser(
+    fluent(scopeParser(seqParser, seqScope.source, (context) => {
+      seqScope.select(
+        context,
+        reachableSeqScope(context),
+      );
+    }, true)),
+    { kind: "seq", children: parsers, label },
+  );
 }
 
 /**

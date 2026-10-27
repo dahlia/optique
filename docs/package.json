@@ -42,7 +42,7 @@
     "build:packages": "cd ../ && pnpm run --filter '!{docs}' -r build",
     "build:site": "node .vitepress/warm-twoslash-cache.mts && NODE_OPTIONS=--max-old-space-size=12288 vitepress build",
     "preview": "vitepress preview",
-    "test": "tsc --noEmit --allowImportingTsExtensions --module nodenext --moduleResolution nodenext --target esnext --types node --skipLibCheck .vitepress/twoslash-cache.mts .vitepress/twoslash-cache.test.mts .vitepress/warm-twoslash-cache.mts && node --test .vitepress/*.test.mts"
+    "test": "tsc --noEmit --allowImportingTsExtensions --module nodenext --moduleResolution nodenext --target esnext --types node --skipLibCheck .vitepress/twoslash-cache.mts .vitepress/twoslash-cache.test.mts .vitepress/warm-twoslash-cache.mts .vitepress/markdown-reference.test.mts && node --test .vitepress/*.test.mts"
   },
   "dependencies": {
     "wrangler": "^4",

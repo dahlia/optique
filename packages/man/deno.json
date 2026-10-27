@@ -6,7 +6,8 @@
     ".": "./src/index.ts",
     "./roff": "./src/roff.ts",
     "./man": "./src/man.ts",
-    "./cli": "./src/cli.ts"
+    "./cli": "./src/cli.ts",
+    "./markdown": "./src/markdown.ts"
   },
   "imports": {
     "#src/": "./src/",
@@ -38,5 +39,11 @@
         "test:bun"
       ]
     }
+  },
+  "publish": {
+    "exclude": [
+      "test/prototypes/",
+      "test/fixtures/markdown-reference/"
+    ]
   }
 }

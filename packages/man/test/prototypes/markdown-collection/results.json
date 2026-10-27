@@ -1,0 +1,658 @@
+{
+  "status": "passed-fixed-oracle",
+  "failures": [],
+  "entries": [
+    {
+      "path": [],
+      "source": "automatic",
+      "page": {
+        "usage": [
+          {
+            "type": "exclusive",
+            "terms": [
+              [
+                {
+                  "type": "command",
+                  "name": "serve"
+                },
+                {
+                  "type": "optional",
+                  "terms": [
+                    {
+                      "type": "option",
+                      "names": [
+                        "--port"
+                      ],
+                      "metavar": "PORT"
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "type": "command",
+                  "name": "config"
+                },
+                {
+                  "type": "exclusive",
+                  "terms": [
+                    [
+                      {
+                        "type": "command",
+                        "name": "get"
+                      },
+                      {
+                        "type": "multiple",
+                        "terms": [
+                          {
+                            "type": "argument",
+                            "metavar": "KEY"
+                          }
+                        ],
+                        "min": 1
+                      }
+                    ],
+                    [
+                      {
+                        "type": "command",
+                        "name": "set"
+                      },
+                      {
+                        "type": "option",
+                        "names": [
+                          "--format"
+                        ],
+                        "metavar": "FORMAT"
+                      }
+                    ]
+                  ],
+                  "acceptsEmpty": false
+                }
+              ],
+              [
+                {
+                  "type": "command",
+                  "name": "async"
+                },
+                {
+                  "type": "option",
+                  "names": [
+                    "--value"
+                  ],
+                  "metavar": "VALUE"
+                }
+              ],
+              [
+                {
+                  "type": "command",
+                  "name": "opaque"
+                },
+                {
+                  "type": "option",
+                  "names": [
+                    "--opaque-input"
+                  ]
+                }
+              ],
+              [
+                {
+                  "type": "command",
+                  "name": "secret",
+                  "hidden": "doc"
+                },
+                {
+                  "type": "option",
+                  "names": [
+                    "--hidden-input"
+                  ]
+                }
+              ]
+            ],
+            "acceptsEmpty": false
+          },
+          {
+            "type": "optional",
+            "terms": [
+              {
+                "type": "option",
+                "names": [
+                  "--verbose"
+                ]
+              }
+            ]
+          }
+        ],
+        "sections": [
+          {
+            "entries": [
+              {
+                "term": {
+                  "type": "command",
+                  "name": "serve",
+                  "aliases": []
+                }
+              },
+              {
+                "term": {
+                  "type": "command",
+                  "name": "config",
+                  "aliases": []
+                }
+              },
+              {
+                "term": {
+                  "type": "command",
+                  "name": "async",
+                  "aliases": []
+                }
+              },
+              {
+                "term": {
+                  "type": "command",
+                  "name": "opaque",
+                  "aliases": []
+                }
+              },
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--verbose"
+                  ]
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Detailed output."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": [
+        "serve"
+      ],
+      "aliases": [],
+      "hiddenAliases": [],
+      "source": "automatic",
+      "page": {
+        "usage": [
+          {
+            "type": "command",
+            "name": "serve"
+          },
+          {
+            "type": "optional",
+            "terms": [
+              {
+                "type": "option",
+                "names": [
+                  "--port"
+                ],
+                "metavar": "PORT"
+              }
+            ]
+          },
+          {
+            "type": "optional",
+            "terms": [
+              {
+                "type": "option",
+                "names": [
+                  "--verbose"
+                ]
+              }
+            ]
+          }
+        ],
+        "sections": [
+          {
+            "entries": [
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--port"
+                  ],
+                  "metavar": "PORT"
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Listening port."
+                  }
+                ],
+                "default": [
+                  {
+                    "type": "text",
+                    "text": "8080"
+                  }
+                ]
+              },
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--verbose"
+                  ]
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Detailed output."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": [
+        "config"
+      ],
+      "aliases": [],
+      "hiddenAliases": [],
+      "source": "automatic",
+      "page": {
+        "usage": [
+          {
+            "type": "command",
+            "name": "config"
+          },
+          {
+            "type": "exclusive",
+            "terms": [
+              [
+                {
+                  "type": "command",
+                  "name": "get"
+                },
+                {
+                  "type": "multiple",
+                  "terms": [
+                    {
+                      "type": "argument",
+                      "metavar": "KEY"
+                    }
+                  ],
+                  "min": 1
+                }
+              ],
+              [
+                {
+                  "type": "command",
+                  "name": "set"
+                },
+                {
+                  "type": "option",
+                  "names": [
+                    "--format"
+                  ],
+                  "metavar": "FORMAT"
+                }
+              ]
+            ],
+            "acceptsEmpty": false
+          },
+          {
+            "type": "optional",
+            "terms": [
+              {
+                "type": "option",
+                "names": [
+                  "--verbose"
+                ]
+              }
+            ]
+          }
+        ],
+        "sections": [
+          {
+            "entries": [
+              {
+                "term": {
+                  "type": "command",
+                  "name": "get",
+                  "aliases": [
+                    "g"
+                  ]
+                }
+              },
+              {
+                "term": {
+                  "type": "command",
+                  "name": "set",
+                  "aliases": [
+                    "s"
+                  ]
+                }
+              },
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--verbose"
+                  ]
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Detailed output."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": [
+        "config",
+        "get"
+      ],
+      "aliases": [
+        "g"
+      ],
+      "hiddenAliases": [],
+      "source": "automatic",
+      "page": {
+        "usage": [
+          {
+            "type": "command",
+            "name": "config"
+          },
+          {
+            "type": "command",
+            "name": "get"
+          },
+          {
+            "type": "multiple",
+            "terms": [
+              {
+                "type": "argument",
+                "metavar": "KEY"
+              }
+            ],
+            "min": 1
+          },
+          {
+            "type": "optional",
+            "terms": [
+              {
+                "type": "option",
+                "names": [
+                  "--verbose"
+                ]
+              }
+            ]
+          }
+        ],
+        "sections": [
+          {
+            "entries": [
+              {
+                "term": {
+                  "type": "argument",
+                  "metavar": "KEY"
+                }
+              },
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--verbose"
+                  ]
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Detailed output."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": [
+        "config",
+        "set"
+      ],
+      "aliases": [
+        "s"
+      ],
+      "hiddenAliases": [
+        "old-set"
+      ],
+      "source": "automatic",
+      "page": {
+        "usage": [
+          {
+            "type": "command",
+            "name": "config"
+          },
+          {
+            "type": "command",
+            "name": "set"
+          },
+          {
+            "type": "option",
+            "names": [
+              "--format"
+            ],
+            "metavar": "FORMAT"
+          },
+          {
+            "type": "optional",
+            "terms": [
+              {
+                "type": "option",
+                "names": [
+                  "--verbose"
+                ]
+              }
+            ]
+          }
+        ],
+        "sections": [
+          {
+            "entries": [
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--format"
+                  ],
+                  "metavar": "FORMAT"
+                },
+                "choices": [
+                  {
+                    "type": "text",
+                    "text": "json, text"
+                  }
+                ]
+              },
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--verbose"
+                  ]
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Detailed output."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": [
+        "async"
+      ],
+      "aliases": [],
+      "hiddenAliases": [],
+      "source": "automatic",
+      "page": {
+        "usage": [
+          {
+            "type": "command",
+            "name": "async"
+          },
+          {
+            "type": "option",
+            "names": [
+              "--value"
+            ],
+            "metavar": "VALUE"
+          },
+          {
+            "type": "optional",
+            "terms": [
+              {
+                "type": "option",
+                "names": [
+                  "--verbose"
+                ]
+              }
+            ]
+          }
+        ],
+        "sections": [
+          {
+            "entries": [
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--value"
+                  ],
+                  "metavar": "VALUE"
+                }
+              },
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--verbose"
+                  ]
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Detailed output."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": [
+        "opaque"
+      ],
+      "aliases": [],
+      "hiddenAliases": [],
+      "source": "automatic",
+      "page": {
+        "sections": [
+          {
+            "entries": [
+              {
+                "term": {
+                  "type": "option",
+                  "names": [
+                    "--verbose"
+                  ]
+                },
+                "description": [
+                  {
+                    "type": "text",
+                    "text": "Detailed output."
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "paths": [
+    [],
+    [
+      "serve"
+    ],
+    [
+      "config"
+    ],
+    [
+      "config",
+      "get"
+    ],
+    [
+      "config",
+      "set"
+    ],
+    [
+      "async"
+    ],
+    [
+      "opaque"
+    ]
+  ],
+  "unresolved": [
+    {
+      "path": [
+        "opaque"
+      ],
+      "scope": "subtree",
+      "reason": "unregistered-parser"
+    },
+    {
+      "path": [
+        "async"
+      ],
+      "scope": "page",
+      "reason": "value-metadata-unavailable"
+    }
+  ],
+  "prefixUsage": "probe PROFILE serve [--port PORT]",
+  "callbackCounters": {
+    "parse": 0,
+    "complete": 0,
+    "suggest": 0,
+    "getDocFragments": 0,
+    "format": 0,
+    "normalizeValue": 0,
+    "validateValue": 0,
+    "normalize": 0,
+    "validate": 0,
+    "metavar": 0,
+    "choices": 0,
+    "usage": 0,
+    "initialState": 0,
+    "mode": 0,
+    "defaultThunk": 0,
+    "usageLine": 0
+  },
+  "forbiddenCounterDelta": 0,
+  "parserInterfaceChanged": false,
+  "constructorsOutsideFrozenListChanged": false
+}

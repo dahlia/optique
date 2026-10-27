@@ -1,0 +1,772 @@
+diff --git a/packages/core/src/constructs.ts b/packages/core/src/constructs.ts
+index a5c1fab1..cfa2692c 100644
+--- a/packages/core/src/constructs.ts
++++ b/packages/core/src/constructs.ts
+@@ -1,3 +1,4 @@
++import { captureDocParser } from "./internal/doc-pages-prototype.ts";
+ import {
+   mergeCommandDocPolicy,
+   withoutCommandDocPolicySubtree,
+@@ -5525,7 +5526,7 @@ export function or(
+     parsers,
+     (state) => selectExclusiveChildren(parsers, state, true),
+   );
+-  return fluent(withEmptyInputFacts(
++  return captureDocParser(fluent(withEmptyInputFacts(
+     scopeParser(
+       singleResult as Parser<
+         Mode,
+@@ -5535,7 +5536,7 @@ export function or(
+       combinedOptionScope(parsers, parsers.map((_, index) => index)),
+     ),
+     emptyInputFacts,
+-  ));
++  )), { kind: "or", children: parsers });
+ }
+ 
+ /**
+@@ -8969,7 +8970,7 @@ export function object<
+       }));
+     },
+   );
+-  return fluent(withEmptyInputFacts(
++  return captureDocParser(fluent(withEmptyInputFacts(
+     scopeParser(
+       objectParser,
+       combinedOptionScope(
+@@ -8988,7 +8989,7 @@ export function object<
+         parserPairs.map(([field]) => field),
+       )
+       : {},
+-  ));
++  )), { kind: "object", children: parserPairs.map((pair) => pair[1]), label });
+ }
+ 
+ /**
+@@ -12239,12 +12240,12 @@ export function seq<
+   }
+ 
+   defineInheritedAnnotationParser(seqParser);
+-  return fluent(scopeParser(seqParser, seqScope.source, (context) => {
++  return captureDocParser(fluent(scopeParser(seqParser, seqScope.source, (context) => {
+     seqScope.select(
+       context,
+       reachableSeqScope(context),
+     );
+-  }, true));
++  }, true)), { kind: "seq", children: parsers });
+ }
+ 
+ /**
+diff --git a/packages/core/src/modifiers.ts b/packages/core/src/modifiers.ts
+index 60a8221a..bb5edde0 100644
+--- a/packages/core/src/modifiers.ts
++++ b/packages/core/src/modifiers.ts
+@@ -1,3 +1,4 @@
++import { captureDocParser } from "./internal/doc-pages-prototype.ts";
+ import { mergeJoinedFileSuggestions } from "./internal/joined-file-suggestion.ts";
+ import {
+   combinedOptionScope,
+@@ -1116,7 +1117,7 @@ export function optional<M extends Mode, TValue, TState>(
+       completesOptionalLikeFallback(parser),
+     ),
+   );
+-  return fluent(scopedOptionalParser);
++  return captureDocParser(fluent(scopedOptionalParser), { kind: "optional", children: [parser] });
+ }
+ 
+ /**
+@@ -1732,7 +1733,7 @@ export function withDefault<
+         : completesOptionalLikeFallback(parser),
+     ),
+   );
+-  return fluent(scopedWithDefaultParser);
++  return captureDocParser(fluent(scopedWithDefaultParser), { kind: "default", children: [parser], defaultValue, defaultMessage: options?.message });
+ }
+ 
+ /**
+@@ -3608,7 +3609,7 @@ export function multiple<M extends Mode, TValue, TState>(
+     repeatedOptionScope(parser),
+   );
+   defineEmptyInputFacts(scopedResultParser, emptyInputFacts);
+-  return fluent(scopedResultParser);
++  return captureDocParser(fluent(scopedResultParser), { kind: "multiple", children: [parser], min });
+ }
+ 
+ /**
+diff --git a/packages/core/src/primitives.ts b/packages/core/src/primitives.ts
+index e4253160..44be2d71 100644
+--- a/packages/core/src/primitives.ts
++++ b/packages/core/src/primitives.ts
+@@ -1,3 +1,4 @@
++import { captureDocParser } from "./internal/doc-pages-prototype.ts";
+ import { joinedFileSuggestion } from "./internal/joined-file-suggestion.ts";
+ import {
+   defineBareCommandDocPolicy,
+@@ -1718,13 +1719,13 @@ export function option<M extends Mode, T>(
+   // At runtime, the isAsync flag ensures correct behavior:
+   // - When M = "sync": parse() returns ParserResult directly
+   // - When M = "async": parse() returns Promise<ParserResult>
+-  return fluent(
++  return captureDocParser(fluent(
+     result as unknown as Parser<
+       M,
+       T | boolean,
+       ValueParserResult<T | boolean> | undefined
+     >,
+-  );
++  ), { kind: "leaf", description: options.description, valueParser, choicesRequested: valueParser != null, boolean: valueParser == null });
+ }
+ 
+ /**
+@@ -2084,7 +2085,7 @@ export function flag(
+     writable: false,
+   });
+   defineEmptyInputFacts(result, failingStepFacts(false));
+-  return fluent(result);
++  return captureDocParser(fluent(result), { kind: "leaf", description: options.description, boolean: true });
+ }
+ 
+ /**
+@@ -2962,9 +2963,9 @@ export function argument<M extends Mode, T>(
+   }
+   // Type assertion via 'unknown' needed because TypeScript's conditional type
+   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
+-  return fluent(
++  return captureDocParser(fluent(
+     result as unknown as Parser<M, T, ValueParserResult<T> | undefined>,
+-  );
++  ), { kind: "leaf", description: options.description, valueParser, choicesRequested: true });
+ }
+ 
+ /**
+@@ -3926,7 +3927,7 @@ export function command<M extends Mode, T, TState>(
+     },
+   );
+   defineEmptyInputFacts(scoped, failingStepFacts(false));
+-  return fluent(scoped);
++  return captureDocParser(fluent(scoped), { kind: "command", name, aliases, hiddenAliases, showAliases, showUsage, hidden: options.hidden, brief: options.brief, description: options.description, footer: options.footer, usageLine: options.usageLine, children: [parser] });
+ }
+ 
+ /**
+diff --git a/packages/core/src/internal/doc-pages-prototype.ts b/packages/core/src/internal/doc-pages-prototype.ts
+new file mode 100644
+index 00000000..1f8209de
+--- /dev/null
++++ b/packages/core/src/internal/doc-pages-prototype.ts
+@@ -0,0 +1,288 @@
++/** Experimental core-owned registry, not a published API. */
++import type { DocEntry, DocPage } from "../doc.ts";
++import type { Message } from "../message.ts";
++import {
++  cloneUsage,
++  type HiddenVisibility,
++  isDocHidden,
++  type Usage,
++  type UsageTerm,
++} from "../usage.ts";
++
++interface Capture {
++  readonly kind:
++    | "leaf"
++    | "command"
++    | "or"
++    | "object"
++    | "seq"
++    | "optional"
++    | "multiple"
++    | "default";
++  readonly children?: readonly object[];
++  readonly name?: string;
++  readonly aliases?: readonly string[];
++  readonly hiddenAliases?: readonly string[];
++  readonly showAliases?: boolean;
++  readonly showUsage?: boolean;
++  readonly hidden?: HiddenVisibility;
++  readonly brief?: Message;
++  readonly description?: Message;
++  readonly footer?: Message;
++  readonly usageLine?: Usage | ((usage: Usage) => Usage);
++  readonly valueParser?: object;
++  readonly choicesRequested?: boolean;
++  readonly boolean?: boolean;
++  readonly label?: string;
++  readonly min?: number;
++  readonly defaultValue?: unknown;
++  readonly defaultMessage?: Message;
++}
++interface Node extends Capture {
++  readonly usage: Usage;
++}
++const nodes = new WeakMap<object, Node>();
++
++/** Captures metadata at the return boundary of a listed built-in constructor. */
++export function captureDocParser<T extends { readonly usage: Usage }>(
++  parser: T,
++  metadata: Capture,
++): T {
++  nodes.set(parser, {
++    ...metadata,
++    children: metadata.children?.slice(),
++    aliases: metadata.aliases?.slice(),
++    hiddenAliases: metadata.hiddenAliases?.slice(),
++    usage: cloneUsage(parser.usage),
++  });
++  return parser;
++}
++
++interface Report {
++  readonly path: readonly string[];
++  readonly scope: "page" | "subtree";
++  readonly reason: string;
++}
++interface PageEntry {
++  readonly path: readonly string[];
++  readonly aliases?: readonly string[];
++  readonly page: DocPage;
++}
++interface Projection {
++  readonly usage: Usage;
++  readonly entries: readonly DocEntry[];
++  readonly brief?: Message;
++  readonly description?: Message;
++  readonly footer?: Message;
++  readonly showUsage?: boolean;
++  readonly unresolvedUsage?: boolean;
++}
++
++function hasPath(parser: object, path: readonly string[]): boolean {
++  const node = nodes.get(parser);
++  if (node == null || path.length === 0) return false;
++  if (node.kind === "command") {
++    return !isDocHidden(node.hidden) && node.name === path[0] &&
++      (path.length === 1 || hasPath(node.children![0], path.slice(1)));
++  }
++  return node.children?.some((child) => hasPath(child, path)) ?? false;
++}
++
++function leafTerm(usage: Usage): UsageTerm | undefined {
++  for (const term of usage) {
++    if (
++      term.type === "optional" || term.type === "multiple" ||
++      term.type === "sequence"
++    ) {
++      const found = leafTerm(term.terms);
++      if (found != null) return found;
++    } else return term;
++  }
++  return undefined;
++}
++
++/**
++ * Attempts documentation from constructor-captured nodes only. Value parser
++ * provenance/formatting has deliberately not been presumed safe: absent core
++ * value metadata is reported, and no formatter/choice getter is consulted.
++ */
++export function collectPrototypePages(
++  parser: object,
++): {
++  readonly entries: readonly PageEntry[];
++  readonly unresolved: readonly Report[];
++} {
++  const paths: {
++    readonly path: readonly string[];
++    readonly aliases?: readonly string[];
++  }[] = [{ path: [] }];
++  const reports = new Map<string, Report>();
++  const report = (
++    path: readonly string[],
++    scope: "page" | "subtree",
++    reason: string,
++  ) => {
++    const value = { path, scope, reason };
++    reports.set(JSON.stringify(value), value);
++  };
++  function enumerate(input: object, path: readonly string[]): void {
++    const node = nodes.get(input);
++    if (node == null) {
++      report(path, "subtree", "unregistered-parser");
++      return;
++    }
++    if (node.kind === "command") {
++      if (isDocHidden(node.hidden)) return;
++      const childPath = [...path, node.name!];
++      paths.push({ path: childPath, aliases: node.aliases });
++      enumerate(node.children![0], childPath);
++    } else for (const child of node.children ?? []) enumerate(child, path);
++  }
++  enumerate(parser, []);
++  function project(
++    input: object,
++    target: readonly string[],
++    path: readonly string[],
++  ): Projection {
++    const node = nodes.get(input);
++    if (node == null) {
++      report(path, "subtree", "unregistered-parser");
++      return { usage: [], entries: [] };
++    }
++    if (node.kind === "leaf") {
++      const term = leafTerm(node.usage);
++      if (term == null || ("hidden" in term && isDocHidden(term.hidden))) {
++        return { usage: node.usage, entries: [] };
++      }
++      if (node.valueParser != null) {
++        report(path, "page", "value-metadata-unavailable");
++      }
++      return {
++        usage: node.usage,
++        entries: [{ term, description: node.description }],
++      };
++    }
++    if (node.kind === "command") {
++      if (isDocHidden(node.hidden)) return { usage: node.usage, entries: [] };
++      if (target.length === 0) {
++        return {
++          usage: node.usage,
++          entries: [{
++            term: {
++              type: "command",
++              name: node.name!,
++              aliases: node.aliases,
++              hidden: node.hidden,
++            },
++            description: node.brief ?? node.description,
++            showAliases: node.showAliases,
++          }],
++        };
++      }
++      if (target[0] !== node.name) return { usage: [], entries: [] };
++      const selected = project(node.children![0], target.slice(1), [
++        ...path,
++        node.name!,
++      ]);
++      let usage: Usage | undefined = selected.usage;
++      let unresolvedUsage = selected.unresolvedUsage;
++      if (target.length === 1 && node.usageLine != null) {
++        if (typeof node.usageLine === "function") {
++          report([...path, node.name!], "page", "functional-usage");
++          unresolvedUsage = true;
++        } else usage = node.usageLine;
++      }
++      return {
++        ...selected,
++        usage: [
++          { type: "command", name: node.name!, hidden: node.hidden },
++          ...usage,
++        ],
++        unresolvedUsage,
++        brief: selected.brief ?? node.brief,
++        description: selected.description ?? node.description,
++        footer: selected.footer ?? node.footer,
++        showUsage: node.showUsage,
++      };
++    }
++    if (
++      node.kind === "optional" || node.kind === "multiple" ||
++      node.kind === "default"
++    ) {
++      const inner = project(node.children![0], target, path);
++      if (node.kind === "default") {
++        if (node.defaultMessage != null) {
++          return {
++            ...inner,
++            entries: inner.entries.map((entry) => ({
++              ...entry,
++              default: node.defaultMessage,
++            })),
++          };
++        }
++        if (typeof node.defaultValue !== "function") {
++          report(path, "page", "static-default-format-unavailable");
++        }
++        return { ...inner, usage: [{ type: "optional", terms: inner.usage }] };
++      }
++      return {
++        ...inner,
++        usage: [
++          node.kind === "optional"
++            ? { type: "optional", terms: inner.usage }
++            : { type: "multiple", terms: inner.usage, min: node.min ?? 0 },
++        ],
++      };
++    }
++    const children = node.children ?? [];
++    if (node.kind === "or") {
++      if (target.length > 0) {
++        const selected = children.filter((child) => hasPath(child, target));
++        if (selected.length !== 1) {
++          report(path, "subtree", "ambiguous-command-path");
++          return { usage: [], entries: [] };
++        }
++        return project(selected[0], target, path);
++      }
++      const projected = children.map((child) => project(child, [], path));
++      return {
++        usage: node.usage,
++        entries: projected.flatMap((child) => child.entries),
++      };
++    }
++    const projected = children.map((child) =>
++      project(child, hasPath(child, target) ? target : [], path)
++    );
++    return {
++      usage: node.kind === "seq"
++        ? [{
++          type: "sequence",
++          terms: projected.flatMap((child) => child.usage),
++        }]
++        : projected.flatMap((child) => child.usage),
++      entries: projected.flatMap((child) => child.entries),
++      unresolvedUsage: projected.some((child) => child.unresolvedUsage),
++      brief: projected.find((child) => child.brief != null)?.brief,
++      description: projected.find((child) => child.description != null)
++        ?.description,
++      footer: projected.find((child) => child.footer != null)?.footer,
++      showUsage: projected.find((child) => child.showUsage != null)?.showUsage,
++    };
++  }
++  const entries = paths.map(({ path, aliases }) => {
++    const page = project(parser, path, []);
++    return {
++      path,
++      aliases,
++      page: {
++        usage: page.unresolvedUsage ? undefined : page.usage,
++        sections: [{ entries: page.entries }],
++        brief: page.brief,
++        description: page.description,
++        footer: page.footer,
++        showUsage: page.showUsage,
++      },
++    };
++  });
++  return { entries, unresolved: [...reports.values()] };
++}
+diff --git a/packages/core/src/doc-pages-prototype.test.ts b/packages/core/src/doc-pages-prototype.test.ts
+new file mode 100644
+index 00000000..e38a9064
+--- /dev/null
++++ b/packages/core/src/doc-pages-prototype.test.ts
+@@ -0,0 +1,321 @@
++import assert from "node:assert/strict";
++import { readFileSync, writeFileSync } from "node:fs";
++import { it } from "node:test";
++import { hiddenCommandAliasesKey } from "./internal/command-alias.ts";
++import { object, or, seq } from "./constructs.ts";
++import { message } from "./message.ts";
++import { multiple, optional, withDefault } from "./modifiers.ts";
++import { argument, command, flag, option } from "./primitives.ts";
++import { choice, integer, string } from "./valueparser.ts";
++import { collectPrototypePages } from "./internal/doc-pages-prototype.ts";
++import { formatMessage } from "./message.ts";
++import { formatUsage } from "./usage.ts";
++
++it("records the frozen documentation-only registry prototype outcome", () => {
++  const oracle = JSON.parse(
++    readFileSync(
++      new URL(
++        "../../man/test/prototypes/markdown-collection/oracle.json",
++        import.meta.url,
++      ),
++      "utf8",
++    ),
++  );
++  const counters = new Map<string, number>();
++  const objects: object[] = [];
++  const count = (name: string) =>
++    counters.set(name, (counters.get(name) ?? 0) + 1);
++  const watch = <T extends object>(input: T): T => {
++    objects.push(input);
++    for (
++      const name of [
++        "parse",
++        "complete",
++        "suggest",
++        "getDocFragments",
++        "format",
++        "normalizeValue",
++        "validateValue",
++        "normalize",
++        "validate",
++      ]
++    ) {
++      const descriptor = Object.getOwnPropertyDescriptor(input, name);
++      if (descriptor == null || typeof descriptor.value !== "function") {
++        continue;
++      }
++      const original = descriptor.value;
++      Object.defineProperty(input, name, {
++        ...descriptor,
++        value(...args: unknown[]) {
++          count(name);
++          return Reflect.apply(original, input, args);
++        },
++      });
++    }
++    return input;
++  };
++  const numeric = watch(integer({ metavar: "PORT" }));
++  const format = watch(choice(["json", "text"], { metavar: "FORMAT" }));
++  const text = watch(string({ metavar: "KEY" }));
++  const customValue = watch({
++    mode: "async" as const,
++    placeholder: "",
++    metavar: "VALUE" as const,
++    async parse(
++      _input: string,
++    ): Promise<{ readonly success: true; readonly value: string }> {
++      throw new Error("Runtime resolver.");
++    },
++    format(_value: string): string {
++      throw new Error("Custom formatting.");
++    },
++    normalize(_value: string): string {
++      throw new Error("Custom normalization.");
++    },
++    validate(_value: string): never {
++      throw new Error("Custom validation.");
++    },
++    async *suggest(_prefix: string): AsyncGenerator<never> {
++      throw new Error("Custom suggestions.");
++    },
++  });
++  const verbose = watch(
++    optional(
++      watch(flag("--verbose", { description: message`Detailed output.` })),
++    ),
++  );
++  const servePort = watch(
++    withDefault(
++      watch(
++        option("--port", numeric, { description: message`Listening port.` }),
++      ),
++      8080,
++    ),
++  );
++  const get = watch(
++    command("get", watch(multiple(watch(argument(text)), { min: 1 })), {
++      aliases: ["g"],
++    }),
++  );
++  const setAliases = {
++    aliases: ["s"] as const,
++    [hiddenCommandAliasesKey]: ["old-set"] as const,
++  };
++  const set = watch(
++    command("set", watch(option("--format", format)), setAliases),
++  );
++  const config = watch(command("config", watch(or(get, set))));
++  const customParser = watch({ ...flag("--opaque-input") });
++  const hiddenParser = watch({ ...flag("--hidden-input") });
++  const root = watch(object({
++    verbose,
++    action: watch(or(
++      watch(command("serve", servePort)),
++      config,
++      watch(command("async", watch(option("--value", customValue)))),
++      watch(command("opaque", customParser)),
++      watch(command("secret", hiddenParser, { hidden: "doc" })),
++    )),
++  }));
++  const prefixed = watch(
++    seq(
++      watch(argument(watch(string({ metavar: "PROFILE" })))),
++      watch(command("serve", servePort)),
++    ),
++  );
++  const thunk = () => {
++    count("defaultThunk");
++    throw new Error("Default thunk.");
++  };
++  const defaultOmitted = watch(
++    withDefault(watch(option("--dynamic", numeric)), thunk),
++  );
++  const defaultDocumented = watch(
++    withDefault(watch(option("--dynamic", numeric)), thunk, {
++      message: message`port chosen by the application`,
++    }),
++  );
++  const usageCallback = () => {
++    count("usageLine");
++    throw new Error("Usage callback.");
++  };
++  const customFallback = watch(
++    withDefault(watch(option("--custom-default", customValue)), "initial"),
++  );
++  const functional = watch(
++    command("dynamic", servePort, { usageLine: usageCallback }),
++  );
++  const poison = () => {
++    throw new Error("Forbidden collection callback.");
++  };
++  counters.clear();
++  for (const input of objects) {
++    for (
++      const name of [
++        "parse",
++        "complete",
++        "suggest",
++        "getDocFragments",
++        "format",
++        "normalizeValue",
++        "validateValue",
++        "normalize",
++        "validate",
++        "metavar",
++      ]
++    ) {
++      const descriptor = Object.getOwnPropertyDescriptor(input, name);
++      if (descriptor == null || !descriptor.configurable) continue;
++      Object.defineProperty(
++        input,
++        name,
++        name === "metavar"
++          ? {
++            configurable: true,
++            get() {
++              count("metavar");
++              return poison();
++            },
++          }
++          : {
++            configurable: true,
++            value() {
++              count(name);
++              return poison();
++            },
++          },
++      );
++    }
++  }
++  const result = collectPrototypePages(root);
++  const prefixResult = collectPrototypePages(prefixed);
++  const omitted = collectPrototypePages(defaultOmitted);
++  const documented = collectPrototypePages(defaultDocumented);
++  const functionalResult = collectPrototypePages(functional);
++  collectPrototypePages(customFallback);
++  const paths = result.entries.map((entry) => entry.path);
++  assert.deepEqual(paths, oracle.expectedPaths);
++  assert.ok(
++    result.entries.every((entry) =>
++      entry.page.sections.flatMap((section) => section.entries).some((entry) =>
++        entry.term.type === "option" && entry.term.names.includes("--verbose")
++      )
++    ),
++  );
++  assert.ok(result.entries.every((entry) => !entry.path.includes("secret")));
++  assert.ok(
++    result.unresolved.every((report) => !report.path.includes("secret")),
++  );
++  const portEntry = result.entries.find((entry) =>
++    entry.path.join("/") === "serve"
++  )?.page.sections.flatMap((section) => section.entries).find((entry) =>
++    entry.term.type === "option" && entry.term.names.includes("--port")
++  );
++  const choiceEntry = result.entries.find((entry) =>
++    entry.path.join("/") === "config/set"
++  )?.page.sections.flatMap((section) => section.entries).find((entry) =>
++    entry.term.type === "option" && entry.term.names.includes("--format")
++  );
++  assert.ok(portEntry != null);
++  assert.ok(choiceEntry != null);
++  const failures: string[] = [];
++  if (
++    portEntry.default == null ||
++    formatMessage(portEntry.default, { colors: false }) !==
++      oracle.requiredStaticDefault.text
++  ) failures.push("static-default");
++  if (
++    choiceEntry.choices == null ||
++    !oracle.requiredChoices.values.every((value: string) =>
++      formatMessage(choiceEntry.choices ?? [], { colors: false }).includes(
++        value,
++      )
++    )
++  ) failures.push("choices");
++  if (
++    JSON.stringify(
++      result.unresolved.map((report) => JSON.stringify(report)).sort(),
++    ) !== JSON.stringify(
++      oracle.expectedReports.map((report: unknown) => JSON.stringify(report))
++        .sort(),
++    )
++  ) failures.push("unexpected-reports");
++  assert.deepEqual(failures, [
++    "static-default",
++    "choices",
++    "unexpected-reports",
++  ]);
++  assert.ok(
++    prefixResult.entries.some((entry) => entry.path.join("/") === "serve"),
++  );
++  assert.ok(
++    prefixResult.entries.every((entry) => !entry.path.includes("prod")),
++  );
++  const prefixPage = prefixResult.entries.find((entry) =>
++    entry.path.join("/") === "serve"
++  )?.page;
++  assert.ok(prefixPage?.usage);
++  assert.equal(
++    formatUsage("probe", prefixPage.usage, { colors: false }),
++    oracle.orderedPrefix.usage,
++  );
++  assert.ok(
++    omitted.entries[0].page.sections.flatMap((section) => section.entries)
++      .every((entry) => entry.default == null),
++  );
++  assert.ok(
++    documented.entries[0].page.sections.flatMap((section) => section.entries)
++      .some((entry) =>
++        entry.default != null &&
++        formatMessage(entry.default, { colors: false }) ===
++          oracle.documentedFunctionDefault
++      ),
++  );
++  assert.ok(
++    functionalResult.unresolved.some((report) =>
++      report.reason === "functional-usage"
++    ),
++  );
++  assert.ok(
++    functionalResult.entries.find((entry) => entry.path[0] === "dynamic")?.page
++      .usage == null,
++  );
++  assert.equal(
++    [...counters.values()].reduce((sum, count) => sum + count, 0),
++    oracle.forbiddenCounterDelta,
++  );
++  writeFileSync(
++    new URL("../../../tmp/issue-1025/prototype-results.json", import.meta.url),
++    JSON.stringify(
++      {
++        status: "failed-fixed-oracle",
++        failures,
++        paths,
++        unresolved: result.unresolved,
++        prefixUsage: formatUsage("probe", prefixPage.usage, { colors: false }),
++        callbackCounters: Object.fromEntries(
++          [
++            "parse",
++            "complete",
++            "suggest",
++            "getDocFragments",
++            "format",
++            "normalizeValue",
++            "validateValue",
++            "normalize",
++            "validate",
++            "metavar",
++            "defaultThunk",
++            "usageLine",
++          ].map((name) => [name, counters.get(name) ?? 0]),
++        ),
++        forbiddenCounterDelta: 0,
++        parserInterfaceChanged: false,
++        constructorsOutsideFrozenListChanged: false,
++      },
++      null,
++      2,
++    ) + "\n",
++  );
++});

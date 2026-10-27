@@ -1,3 +1,4 @@
+import { captureDocParser } from "./internal/doc-metadata.ts";
 import { mergeJoinedFileSuggestions } from "./internal/joined-file-suggestion.ts";
 import {
   combinedOptionScope,
@@ -1116,7 +1117,10 @@ export function optional<M extends Mode, TValue, TState>(
       completesOptionalLikeFallback(parser),
     ),
   );
-  return fluent(scopedOptionalParser);
+  return captureDocParser(fluent(scopedOptionalParser), {
+    kind: "optional",
+    children: [parser],
+  });
 }
 
 /**
@@ -1732,7 +1736,12 @@ export function withDefault<
         : completesOptionalLikeFallback(parser),
     ),
   );
-  return fluent(scopedWithDefaultParser);
+  return captureDocParser(fluent(scopedWithDefaultParser), {
+    kind: "default",
+    children: [parser],
+    defaultValue,
+    defaultMessage: options?.message,
+  });
 }
 
 /**
@@ -3608,7 +3617,11 @@ export function multiple<M extends Mode, TValue, TState>(
     repeatedOptionScope(parser),
   );
   defineEmptyInputFacts(scopedResultParser, emptyInputFacts);
-  return fluent(scopedResultParser);
+  return captureDocParser(fluent(scopedResultParser), {
+    kind: "multiple",
+    children: [parser],
+    min,
+  });
 }
 
 /**

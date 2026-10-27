@@ -66,6 +66,7 @@ const CONCEPTS = {
     { text: "Derived defaults", link: "/concepts/derived-defaults" },
     { text: "Shell completion", link: "/concepts/completion" },
     { text: "Man pages", link: "/concepts/man" },
+    { text: "Markdown references", link: "/concepts/markdown-reference" },
     { text: "Command discovery", link: "/concepts/discover" },
     { text: "Messages", link: "/concepts/messages" },
     { text: "Runners and execution", link: "/concepts/runners" },

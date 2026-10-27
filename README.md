@@ -199,7 +199,7 @@ The following is a list of the available packages:
 | [@optique/keyring](/packages/keyring/)                   | [JSR][jsr:@optique/keyring]          | [npm][npm:@optique/keyring]          | OS credential-store password fallback       |
 | [@optique/git](/packages/git/)                           | [JSR][jsr:@optique/git]              | [npm][npm:@optique/git]              | Git reference parsers (branches, tags, etc) |
 | [@optique/logtape](/packages/logtape/)                   | [JSR][jsr:@optique/logtape]          | [npm][npm:@optique/logtape]          | [LogTape] logging integration               |
-| [@optique/man](/packages/man/)                           | [JSR][jsr:@optique/man]              | [npm][npm:@optique/man]              | Man page generation from parsers            |
+| [@optique/man](/packages/man/)                           | [JSR][jsr:@optique/man]              | [npm][npm:@optique/man]              | Man pages and Markdown command references   |
 | [@optique/standard-schema](/packages/standard-schema/)   | [JSR][jsr:@optique/standard-schema]  | [npm][npm:@optique/standard-schema]  | [Standard Schema] value parser integration  |
 | [@optique/temporal](/packages/temporal/)                 | [JSR][jsr:@optique/temporal]         | [npm][npm:@optique/temporal]         | [Temporal] value parsers (date and time)    |
 | [@optique/valibot](/packages/valibot/)                   | [JSR][jsr:@optique/valibot]          | [npm][npm:@optique/valibot]          | [Valibot] schema integration for validation |
