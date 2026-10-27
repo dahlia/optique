@@ -1,0 +1,5 @@
+{
+  "tasks": {
+    "start": "deno run --allow-read --allow-write --allow-env src/cli.ts"
+  }
+}
