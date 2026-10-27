@@ -243,15 +243,13 @@ Common mistakes checklist
  -  Wrap required `flag("--x")` in `optional()` or `withDefault(..., false)`.
  -  Do not expect `multiple(p)` to fail when absent; it returns `[]`. Wrap with
     `nonEmpty()` when at least one value is required.
- -  Do not confuse free-order parsing with `seq()`. Most constructs let child
-    parsers compete by priority; use `seq()` only for truly ordered grammars.
+ -  Use `seq()` only for ordered grammars; most constructs use parser priority.
  -  Use structured `message` values for errors and descriptions.
  -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,
     and `bindKeyring()` in the runner's `contexts` option.
  -  Use `bindEnv().readFallback()` for env/default in error handlers.
  -  Enable `showEnvironment` for env-only help; set `documentation.description`.
- -  Keep multi-level dependency graphs with `dependency()` rather than
-    duplicating one-level factories.
+ -  Keep multi-level `dependency()` graphs; avoid duplicate one-level factories.
  -  Put runtime prompt checks in `when`, with typed `otherwise`; evaluate them
     only at fallback, never eagerly during construction.
 
@@ -263,7 +261,6 @@ For the detailed maintained guide, use <https://optique.dev/pitfalls.md>.
 Reference links
 ---------------
 
- -  Documentation index for agents: <https://optique.dev/llms.txt>
  -  Runners and entry points: <https://optique.dev/concepts/runners.md>
  -  Primitive parsers: <https://optique.dev/concepts/primitives.md>
  -  Construct combinators: <https://optique.dev/concepts/constructs.md>
@@ -273,7 +270,10 @@ Reference links
  -  Structured messages: <https://optique.dev/concepts/messages.md>
  -  Shell completion: <https://optique.dev/concepts/completion.md>
  -  Command discovery: <https://optique.dev/concepts/discover.md>
+ -  [CLI recipe][file-inspect]
  -  Markdown references: <https://optique.dev/concepts/markdown-reference.md>
+
+[file-inspect]: https://github.com/dahlia/optique/tree/main/examples/file-inspect
 
 
 Integration packages
