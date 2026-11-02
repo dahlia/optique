@@ -1,0 +1,43 @@
+name: Startup baseline smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: startup-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MISE_EXPERIMENTAL: "true"
+      MISE_JOBS: "1"
+      PNPM_CONFIG_WORKSPACE_CONCURRENCY: "1"
+    steps:
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      with:
+        persist-credentials: false
+    - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+      with:
+        experimental: true
+        install: true
+    - run: mise run benchmark:test
+    - run: mise run --jobs 1 benchmark:prepare
+    - run: mise run benchmark:smoke
+    - run: node benchmarks/startup/harness.ts check tmp/startup-baseline/smoke.json
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: startup-baseline-smoke
+        path: |
+          tmp/startup-baseline/smoke.json
+          tmp/startup-baseline/validation.json
+        retention-days: 7
+        if-no-files-found: error

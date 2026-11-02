@@ -1,0 +1,8 @@
+Usage: minimal [--name STRING]
+       minimal help [COMMAND...]
+       minimal --help
+
+  --name STRING                ["world"]
+  help                        Show help information.
+  --help                      Show help information.
+

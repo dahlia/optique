@@ -1,0 +1,4910 @@
+{
+  "schemaVersion": 1,
+  "observations": [
+    {
+      "id": "node-discovery-root-help",
+      "imports": [
+        "commands/config/set.js",
+        "commands/start.js",
+        "commands/status.js",
+        "handlers/set.js",
+        "handlers/start.js",
+        "handlers/status.js"
+      ],
+      "handlerInvoked": false,
+      "output": {
+        "stdout": "Usage: baseline config set TYPE VALUE...\n       baseline start [--mode TYPE] [PATH...]\n       baseline status [--format TYPE]\n       baseline help [COMMAND...]\n       baseline completion [SHELL] [ARG...]\n       baseline --help\n       baseline --version\n       baseline --completion SHELL [[ARG...]]\n\n  config set                \n  start                     \n  status                    \n  help                        Show help information.\n  completion                  Generate shell completion script or provide \n                              completions.\n  --help                      Show help information.\n  --version                   Show version information.\n  --completion SHELL          Generate shell completion script.\n  ARG                         Command line arguments for completion suggestions \n                              (used by shell integration; you usually don't \n                              need to provide this).\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "node-discovery-nested-help",
+      "imports": [
+        "commands/config/set.js",
+        "commands/start.js",
+        "commands/status.js",
+        "handlers/set.js",
+        "handlers/start.js",
+        "handlers/status.js"
+      ],
+      "handlerInvoked": false,
+      "output": {
+        "stdout": "Usage: baseline config set TYPE VALUE...\n\n  TYPE                         (choices: color, width)\n  VALUE                     \n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "node-discovery-version",
+      "imports": [
+        "commands/config/set.js",
+        "commands/start.js",
+        "commands/status.js",
+        "handlers/set.js",
+        "handlers/start.js",
+        "handlers/status.js"
+      ],
+      "handlerInvoked": false,
+      "output": {
+        "stdout": "1.0.0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "node-discovery-dispatch",
+      "imports": [
+        "commands/config/set.js",
+        "commands/start.js",
+        "commands/status.js",
+        "handlers/set.js",
+        "handlers/start.js",
+        "handlers/status.js"
+      ],
+      "handlerInvoked": true,
+      "output": {
+        "stdout": "{\"command\":\"start\",\"mode\":\"safe\",\"paths\":[\"alpha\",\"beta\"]}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "node-discovery-invalid",
+      "imports": [
+        "commands/config/set.js",
+        "commands/start.js",
+        "commands/status.js",
+        "handlers/set.js",
+        "handlers/start.js",
+        "handlers/status.js"
+      ],
+      "handlerInvoked": false,
+      "output": {
+        "stdout": "",
+        "stderr": "Usage: baseline --help\n       baseline --version\n       baseline config set TYPE VALUE...\n       baseline start [--mode TYPE] [PATH...]\n       baseline status [--format TYPE]\n       baseline completion [--help] [SHELL] [ARG...]\n       baseline help [COMMAND...]\nError: Unexpected option or subcommand: `--invalid`.\n"
+      }
+    },
+    {
+      "id": "node-discovery-completion",
+      "imports": [
+        "commands/config/set.js",
+        "commands/start.js",
+        "commands/status.js",
+        "handlers/set.js",
+        "handlers/start.js",
+        "handlers/status.js"
+      ],
+      "handlerInvoked": false,
+      "output": {
+        "stdout": "start\n\n\nstatus\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "bunResolution": "${CONSUMERS_ROOT}/core-run/node_modules/.pnpm/@optique+run@file+..+tarballs+run.tgz/node_modules/@optique/run/dist/index.js",
+  "denoGraph": {
+    "version": 1,
+    "roots": [
+      "file://${CONSUMERS_ROOT}/core-run/fixtures/three.js"
+    ],
+    "modules": [
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 8,
+                  "character": 7
+                },
+                "end": {
+                  "line": 8,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/parser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "span": {
+                "start": {
+                  "line": 13,
+                  "character": 7
+                },
+                "end": {
+                  "line": 13,
+                  "character": 29
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/annotation-state.ts",
+        "size": 21843,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/annotation-state.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 11,
+                  "character": 31
+                },
+                "end": {
+                  "line": 11,
+                  "character": 58
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 10,
+                  "character": 47
+                },
+                "end": {
+                  "line": 10,
+                  "character": 74
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/annotations.ts",
+        "size": 355,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/annotations.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/joined-file-suggestion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/joined-file-suggestion.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 40
+                },
+                "end": {
+                  "line": 0,
+                  "character": 78
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 30
+                },
+                "end": {
+                  "line": 1,
+                  "character": 44
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 32
+                },
+                "end": {
+                  "line": 2,
+                  "character": 45
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/completion.ts",
+        "size": 134199,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/completion.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/command-doc-policy.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-policy.ts",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 7
+                },
+                "end": {
+                  "line": 3,
+                  "character": 41
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/empty-input.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/empty-input.ts",
+              "span": {
+                "start": {
+                  "line": 14,
+                  "character": 7
+                },
+                "end": {
+                  "line": 14,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./short-option.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/short-option.ts",
+              "span": {
+                "start": {
+                  "line": 25,
+                  "character": 7
+                },
+                "end": {
+                  "line": 25,
+                  "character": 26
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/command-doc-metadata.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-metadata.ts",
+              "span": {
+                "start": {
+                  "line": 31,
+                  "character": 7
+                },
+                "end": {
+                  "line": 31,
+                  "character": 43
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/passthrough.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/passthrough.ts",
+              "span": {
+                "start": {
+                  "line": 46,
+                  "character": 7
+                },
+                "end": {
+                  "line": 46,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./annotation-state.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/annotation-state.ts",
+              "span": {
+                "start": {
+                  "line": 53,
+                  "character": 7
+                },
+                "end": {
+                  "line": 53,
+                  "character": 30
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/dependency.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/dependency.ts",
+              "span": {
+                "start": {
+                  "line": 61,
+                  "character": 7
+                },
+                "end": {
+                  "line": 61,
+                  "character": 33
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/dependency.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 6881,
+                  "character": 10
+                },
+                "end": {
+                  "line": 6881,
+                  "character": 36
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-runtime.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-runtime.ts",
+              "span": {
+                "start": {
+                  "line": 97,
+                  "character": 7
+                },
+                "end": {
+                  "line": 97,
+                  "character": 32
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 102,
+                  "character": 7
+                },
+                "end": {
+                  "line": 102,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/command-alias.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-alias.ts",
+              "span": {
+                "start": {
+                  "line": 103,
+                  "character": 53
+                },
+                "end": {
+                  "line": 103,
+                  "character": 82
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./execution-context.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/execution-context.ts",
+              "span": {
+                "start": {
+                  "line": 108,
+                  "character": 7
+                },
+                "end": {
+                  "line": 108,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 112,
+                  "character": 7
+                },
+                "end": {
+                  "line": 112,
+                  "character": 36
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/failure.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/failure.ts",
+              "span": {
+                "start": {
+                  "line": 117,
+                  "character": 7
+                },
+                "end": {
+                  "line": 117,
+                  "character": 30
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./phase2-seed.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/phase2-seed.ts",
+              "span": {
+                "start": {
+                  "line": 123,
+                  "character": 7
+                },
+                "end": {
+                  "line": 123,
+                  "character": 25
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/phase2-seed.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 2844,
+                  "character": 26
+                },
+                "end": {
+                  "line": 2844,
+                  "character": 44
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./fluent.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/fluent.ts",
+              "span": {
+                "start": {
+                  "line": 124,
+                  "character": 42
+                },
+                "end": {
+                  "line": 124,
+                  "character": 55
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./registry-types.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/registry-types.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 125,
+                  "character": 44
+                },
+                "end": {
+                  "line": 125,
+                  "character": 65
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./doc.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/doc.ts",
+              "span": {
+                "start": {
+                  "line": 132,
+                  "character": 7
+                },
+                "end": {
+                  "line": 132,
+                  "character": 17
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 139,
+                  "character": 7
+                },
+                "end": {
+                  "line": 139,
+                  "character": 21
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 152,
+                  "character": 7
+                },
+                "end": {
+                  "line": 152,
+                  "character": 20
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/parser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "span": {
+                "start": {
+                  "line": 161,
+                  "character": 7
+                },
+                "end": {
+                  "line": 161,
+                  "character": 29
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-metadata.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-metadata.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 165,
+                  "character": 7
+                },
+                "end": {
+                  "line": 165,
+                  "character": 33
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 625,
+                  "character": 39
+                },
+                "end": {
+                  "line": 625,
+                  "character": 57
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./suggestion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/suggestion.ts",
+              "span": {
+                "start": {
+                  "line": 1753,
+                  "character": 7
+                },
+                "end": {
+                  "line": 1753,
+                  "character": 24
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 1763,
+                  "character": 7
+                },
+                "end": {
+                  "line": 1763,
+                  "character": 19
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage-internals.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage-internals.ts",
+              "span": {
+                "start": {
+                  "line": 1764,
+                  "character": 41
+                },
+                "end": {
+                  "line": 1764,
+                  "character": 63
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./validate.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/validate.ts",
+              "span": {
+                "start": {
+                  "line": 1765,
+                  "character": 30
+                },
+                "end": {
+                  "line": 1765,
+                  "character": 45
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/constructs.ts",
+        "size": 685437,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/constructs.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./annotations.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/annotations.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 33
+                },
+                "end": {
+                  "line": 12,
+                  "character": 51
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/context.ts",
+        "size": 9454,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/context.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 50
+                },
+                "end": {
+                  "line": 12,
+                  "character": 63
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/dependency.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/dependency.ts",
+              "span": {
+                "start": {
+                  "line": 24,
+                  "character": 7
+                },
+                "end": {
+                  "line": 24,
+                  "character": 33
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 25,
+                  "character": 58
+                },
+                "end": {
+                  "line": 25,
+                  "character": 76
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/dependency-metadata.ts",
+        "size": 18413,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-metadata.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/dependency.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/dependency.ts",
+              "span": {
+                "start": {
+                  "line": 20,
+                  "character": 7
+                },
+                "end": {
+                  "line": 20,
+                  "character": 33
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./input-trace.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/input-trace.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 21,
+                  "character": 32
+                },
+                "end": {
+                  "line": 21,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 22,
+                  "character": 38
+                },
+                "end": {
+                  "line": 22,
+                  "character": 52
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/parser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "span": {
+                "start": {
+                  "line": 27,
+                  "character": 7
+                },
+                "end": {
+                  "line": 27,
+                  "character": 29
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./registry-types.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/registry-types.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 28,
+                  "character": 44
+                },
+                "end": {
+                  "line": 28,
+                  "character": 65
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 29,
+                  "character": 39
+                },
+                "end": {
+                  "line": 29,
+                  "character": 57
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-metadata.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-metadata.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 30,
+                  "character": 46
+                },
+                "end": {
+                  "line": 30,
+                  "character": 72
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/dependency-runtime.ts",
+        "size": 136682,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-runtime.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/displaywidth.ts",
+        "size": 7767,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/displaywidth.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./terminal-width.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-width.ts",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 7
+                },
+                "end": {
+                  "line": 4,
+                  "character": 28
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message-registry.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message-registry.ts",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 33
+                },
+                "end": {
+                  "line": 5,
+                  "character": 56
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message-renderer.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message-renderer.ts",
+              "span": {
+                "start": {
+                  "line": 6,
+                  "character": 40
+                },
+                "end": {
+                  "line": 6,
+                  "character": 63
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-internal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+              "span": {
+                "start": {
+                  "line": 11,
+                  "character": 7
+                },
+                "end": {
+                  "line": 11,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 17,
+                  "character": 7
+                },
+                "end": {
+                  "line": 17,
+                  "character": 22
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./text-layout.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/text-layout.ts",
+              "span": {
+                "start": {
+                  "line": 25,
+                  "character": 7
+                },
+                "end": {
+                  "line": 25,
+                  "character": 25
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 37,
+                  "character": 7
+                },
+                "end": {
+                  "line": 37,
+                  "character": 21
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 47,
+                  "character": 7
+                },
+                "end": {
+                  "line": 47,
+                  "character": 19
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./validate.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/validate.ts",
+              "span": {
+                "start": {
+                  "line": 48,
+                  "character": 51
+                },
+                "end": {
+                  "line": 48,
+                  "character": 66
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/doc.ts",
+        "size": 51951,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/doc.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/command-doc-policy.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-policy.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 38
+                },
+                "end": {
+                  "line": 0,
+                  "character": 72
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./short-option.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/short-option.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 37
+                },
+                "end": {
+                  "line": 1,
+                  "character": 56
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 53
+                },
+                "end": {
+                  "line": 2,
+                  "character": 66
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 27
+                },
+                "end": {
+                  "line": 3,
+                  "character": 39
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/execution-context.ts",
+        "size": 2170,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/execution-context.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/help-request.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/help-request.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 31
+                },
+                "end": {
+                  "line": 0,
+                  "character": 59
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage-internals.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage-internals.ts",
+              "span": {
+                "start": {
+                  "line": 6,
+                  "character": 7
+                },
+                "end": {
+                  "line": 6,
+                  "character": 29
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-width.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-width.ts",
+              "span": {
+                "start": {
+                  "line": 11,
+                  "character": 7
+                },
+                "end": {
+                  "line": 11,
+                  "character": 28
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message-renderer.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message-renderer.ts",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 35
+                },
+                "end": {
+                  "line": 12,
+                  "character": 58
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-internal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+              "span": {
+                "start": {
+                  "line": 13,
+                  "character": 55
+                },
+                "end": {
+                  "line": 13,
+                  "character": 79
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 14,
+                  "character": 35
+                },
+                "end": {
+                  "line": 14,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./text-layout.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/text-layout.ts",
+              "span": {
+                "start": {
+                  "line": 15,
+                  "character": 45
+                },
+                "end": {
+                  "line": 15,
+                  "character": 63
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./completion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/completion.ts",
+              "span": {
+                "start": {
+                  "line": 23,
+                  "character": 7
+                },
+                "end": {
+                  "line": 23,
+                  "character": 24
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./constructs.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/constructs.ts",
+              "span": {
+                "start": {
+                  "line": 29,
+                  "character": 7
+                },
+                "end": {
+                  "line": 29,
+                  "character": 24
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./doc.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/doc.ts",
+              "span": {
+                "start": {
+                  "line": 41,
+                  "character": 7
+                },
+                "end": {
+                  "line": 41,
+                  "character": 17
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 52,
+                  "character": 7
+                },
+                "end": {
+                  "line": 52,
+                  "character": 21
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./modifiers.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/modifiers.ts",
+              "span": {
+                "start": {
+                  "line": 53,
+                  "character": 48
+                },
+                "end": {
+                  "line": 53,
+                  "character": 64
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./program.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/program.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 54,
+                  "character": 29
+                },
+                "end": {
+                  "line": 54,
+                  "character": 43
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "span": {
+                "start": {
+                  "line": 68,
+                  "character": 7
+                },
+                "end": {
+                  "line": 68,
+                  "character": 20
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/parser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "span": {
+                "start": {
+                  "line": 74,
+                  "character": 7
+                },
+                "end": {
+                  "line": 74,
+                  "character": 29
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 75,
+                  "character": 31
+                },
+                "end": {
+                  "line": 75,
+                  "character": 60
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-runtime.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-runtime.ts",
+              "span": {
+                "start": {
+                  "line": 81,
+                  "character": 7
+                },
+                "end": {
+                  "line": 81,
+                  "character": 32
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./input-trace.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/input-trace.ts",
+              "span": {
+                "start": {
+                  "line": 82,
+                  "character": 33
+                },
+                "end": {
+                  "line": 82,
+                  "character": 51
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./phase2-seed.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/phase2-seed.ts",
+              "span": {
+                "start": {
+                  "line": 83,
+                  "character": 44
+                },
+                "end": {
+                  "line": 83,
+                  "character": 62
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./primitives.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/primitives.ts",
+              "span": {
+                "start": {
+                  "line": 84,
+                  "character": 58
+                },
+                "end": {
+                  "line": 84,
+                  "character": 75
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 95,
+                  "character": 7
+                },
+                "end": {
+                  "line": 95,
+                  "character": 19
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "span": {
+                "start": {
+                  "line": 96,
+                  "character": 41
+                },
+                "end": {
+                  "line": 96,
+                  "character": 59
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 97,
+                  "character": 52
+                },
+                "end": {
+                  "line": 97,
+                  "character": 79
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/command-alias.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-alias.ts",
+              "span": {
+                "start": {
+                  "line": 101,
+                  "character": 7
+                },
+                "end": {
+                  "line": 101,
+                  "character": 36
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./validate.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/validate.ts",
+              "span": {
+                "start": {
+                  "line": 110,
+                  "character": 7
+                },
+                "end": {
+                  "line": 110,
+                  "character": 22
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./context.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/context.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 115,
+                  "character": 7
+                },
+                "end": {
+                  "line": 115,
+                  "character": 21
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/facade.ts",
+        "size": 141221,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/facade.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./modifiers.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/modifiers.ts",
+              "span": {
+                "start": {
+                  "line": 14,
+                  "character": 7
+                },
+                "end": {
+                  "line": 14,
+                  "character": 23
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/fluent.ts",
+        "size": 319,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/fluent.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 39
+                },
+                "end": {
+                  "line": 12,
+                  "character": 57
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/input-trace.ts",
+        "size": 5261,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/input-trace.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+        "size": 14503,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/internal/command-alias.ts",
+        "size": 593,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-alias.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../doc.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/doc.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 34
+                },
+                "end": {
+                  "line": 0,
+                  "character": 45
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../message.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 29
+                },
+                "end": {
+                  "line": 1,
+                  "character": 44
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/command-doc-metadata.ts",
+        "size": 5729,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-metadata.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 38
+                },
+                "end": {
+                  "line": 0,
+                  "character": 52
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/command-doc-policy.ts",
+        "size": 5913,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-policy.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 38
+                },
+                "end": {
+                  "line": 0,
+                  "character": 53
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../nonempty.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/nonempty.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 36
+                },
+                "end": {
+                  "line": 1,
+                  "character": 52
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 38
+                },
+                "end": {
+                  "line": 2,
+                  "character": 52
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../registry-types.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/registry-types.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 44
+                },
+                "end": {
+                  "line": 3,
+                  "character": 66
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 52
+                },
+                "end": {
+                  "line": 4,
+                  "character": 71
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/dependency.ts",
+        "size": 69759,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/dependency.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/internal/empty-input.ts",
+        "size": 21718,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/empty-input.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../message.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 29
+                },
+                "end": {
+                  "line": 0,
+                  "character": 44
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/failure.ts",
+        "size": 2314,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/failure.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/internal/help-request.ts",
+        "size": 1073,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/help-request.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 32
+                },
+                "end": {
+                  "line": 0,
+                  "character": 45
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/joined-file-suggestion.ts",
+        "size": 2696,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/joined-file-suggestion.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 59
+                },
+                "end": {
+                  "line": 12,
+                  "character": 73
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+        "size": 5970,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./command-doc-policy.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-policy.ts",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 7
+                },
+                "end": {
+                  "line": 4,
+                  "character": 32
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../doc.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/doc.ts",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 7
+                },
+                "end": {
+                  "line": 12,
+                  "character": 18
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 13,
+                  "character": 52
+                },
+                "end": {
+                  "line": 13,
+                  "character": 67
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../registry-types.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/registry-types.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 14,
+                  "character": 44
+                },
+                "end": {
+                  "line": 14,
+                  "character": 66
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 21,
+                  "character": 7
+                },
+                "end": {
+                  "line": 21,
+                  "character": 20
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 22,
+                  "character": 52
+                },
+                "end": {
+                  "line": 22,
+                  "character": 71
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 30,
+                  "character": 7
+                },
+                "end": {
+                  "line": 30,
+                  "character": 25
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 31,
+                  "character": 53
+                },
+                "end": {
+                  "line": 31,
+                  "character": 73
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../dependency-metadata.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-metadata.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 32,
+                  "character": 46
+                },
+                "end": {
+                  "line": 32,
+                  "character": 73
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../dependency-runtime.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-runtime.ts",
+              "span": {
+                "start": {
+                  "line": 39,
+                  "character": 7
+                },
+                "end": {
+                  "line": 39,
+                  "character": 33
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../input-trace.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/input-trace.ts",
+              "span": {
+                "start": {
+                  "line": 40,
+                  "character": 50
+                },
+                "end": {
+                  "line": 40,
+                  "character": 69
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/parser.ts",
+        "size": 89996,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../message.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 29
+                },
+                "end": {
+                  "line": 0,
+                  "character": 44
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../usage.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 27
+                },
+                "end": {
+                  "line": 1,
+                  "character": 40
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 49
+                },
+                "end": {
+                  "line": 2,
+                  "character": 63
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/passthrough.ts",
+        "size": 17124,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/passthrough.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../displaywidth.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/displaywidth.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 32
+                },
+                "end": {
+                  "line": 1,
+                  "character": 52
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../message-renderer.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message-renderer.ts",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 7
+                },
+                "end": {
+                  "line": 5,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../terminal-internal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+              "span": {
+                "start": {
+                  "line": 6,
+                  "character": 35
+                },
+                "end": {
+                  "line": 6,
+                  "character": 60
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../text-layout.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/text-layout.ts",
+              "span": {
+                "start": {
+                  "line": 7,
+                  "character": 56
+                },
+                "end": {
+                  "line": 7,
+                  "character": 75
+                }
+              }
+            }
+          },
+          {
+            "specifier": "../terminal-width.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-width.ts",
+              "span": {
+                "start": {
+                  "line": 8,
+                  "character": 35
+                },
+                "end": {
+                  "line": 8,
+                  "character": 57
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/terminal.ts",
+        "size": 437,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/terminal.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "../usage.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 56
+                },
+                "end": {
+                  "line": 5,
+                  "character": 69
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/internal/usage.ts",
+        "size": 9231,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/internal/usage.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 35
+                },
+                "end": {
+                  "line": 0,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 7
+                },
+                "end": {
+                  "line": 5,
+                  "character": 21
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/message-registry.ts",
+        "size": 319,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/message-registry.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./terminal-width.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-width.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 56
+                },
+                "end": {
+                  "line": 0,
+                  "character": 77
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-internal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 35
+                },
+                "end": {
+                  "line": 1,
+                  "character": 59
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./text-layout.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/text-layout.ts",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 56
+                },
+                "end": {
+                  "line": 2,
+                  "character": 74
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 7
+                },
+                "end": {
+                  "line": 9,
+                  "character": 21
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 10,
+                  "character": 50
+                },
+                "end": {
+                  "line": 10,
+                  "character": 65
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message-registry.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message-registry.ts",
+              "span": {
+                "start": {
+                  "line": 11,
+                  "character": 33
+                },
+                "end": {
+                  "line": 11,
+                  "character": 56
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/message-renderer.ts",
+        "size": 3513,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/message-renderer.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./message-registry.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message-registry.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 33
+                },
+                "end": {
+                  "line": 0,
+                  "character": 56
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 50
+                },
+                "end": {
+                  "line": 1,
+                  "character": 65
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-internal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+              "span": {
+                "start": {
+                  "line": 7,
+                  "character": 7
+                },
+                "end": {
+                  "line": 7,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./displaywidth.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/displaywidth.ts",
+              "span": {
+                "start": {
+                  "line": 8,
+                  "character": 43
+                },
+                "end": {
+                  "line": 8,
+                  "character": 62
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./nonempty.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/nonempty.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 36
+                },
+                "end": {
+                  "line": 9,
+                  "character": 51
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/message.ts",
+        "size": 26425,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/joined-file-suggestion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/joined-file-suggestion.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 43
+                },
+                "end": {
+                  "line": 0,
+                  "character": 81
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./short-option.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/short-option.ts",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 7
+                },
+                "end": {
+                  "line": 5,
+                  "character": 26
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/command-doc-metadata.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-metadata.ts",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 7
+                },
+                "end": {
+                  "line": 9,
+                  "character": 43
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/passthrough.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/passthrough.ts",
+              "span": {
+                "start": {
+                  "line": 14,
+                  "character": 7
+                },
+                "end": {
+                  "line": 14,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./annotation-state.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/annotation-state.ts",
+              "span": {
+                "start": {
+                  "line": 21,
+                  "character": 7
+                },
+                "end": {
+                  "line": 21,
+                  "character": 30
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-metadata.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-metadata.ts",
+              "span": {
+                "start": {
+                  "line": 22,
+                  "character": 42
+                },
+                "end": {
+                  "line": 22,
+                  "character": 68
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/empty-input.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/empty-input.ts",
+              "span": {
+                "start": {
+                  "line": 31,
+                  "character": 7
+                },
+                "end": {
+                  "line": 31,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-runtime.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-runtime.ts",
+              "span": {
+                "start": {
+                  "line": 32,
+                  "character": 56
+                },
+                "end": {
+                  "line": 32,
+                  "character": 81
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 33,
+                  "character": 59
+                },
+                "end": {
+                  "line": 33,
+                  "character": 73
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 41,
+                  "character": 7
+                },
+                "end": {
+                  "line": 41,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./execution-context.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/execution-context.ts",
+              "span": {
+                "start": {
+                  "line": 46,
+                  "character": 7
+                },
+                "end": {
+                  "line": 46,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 52,
+                  "character": 7
+                },
+                "end": {
+                  "line": 52,
+                  "character": 36
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./phase2-seed.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/phase2-seed.ts",
+              "span": {
+                "start": {
+                  "line": 58,
+                  "character": 7
+                },
+                "end": {
+                  "line": 58,
+                  "character": 25
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/phase2-seed.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 59,
+                  "character": 32
+                },
+                "end": {
+                  "line": 59,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/parser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "span": {
+                "start": {
+                  "line": 67,
+                  "character": 7
+                },
+                "end": {
+                  "line": 67,
+                  "character": 29
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 77,
+                  "character": 7
+                },
+                "end": {
+                  "line": 77,
+                  "character": 20
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 78,
+                  "character": 52
+                },
+                "end": {
+                  "line": 78,
+                  "character": 70
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/modifiers.ts",
+        "size": 140217,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/modifiers.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/nonempty.ts",
+        "size": 1062,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/nonempty.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./annotations.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/annotations.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 34
+                },
+                "end": {
+                  "line": 0,
+                  "character": 52
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/parser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "span": {
+                "start": {
+                  "line": 32,
+                  "character": 7
+                },
+                "end": {
+                  "line": 32,
+                  "character": 29
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 19,
+                  "character": 7
+                },
+                "end": {
+                  "line": 19,
+                  "character": 29
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/parser.ts",
+        "size": 572,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 48
+                },
+                "end": {
+                  "line": 0,
+                  "character": 75
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 31
+                },
+                "end": {
+                  "line": 1,
+                  "character": 60
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 63
+                },
+                "end": {
+                  "line": 2,
+                  "character": 76
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 52
+                },
+                "end": {
+                  "line": 3,
+                  "character": 70
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/phase2-seed.ts",
+        "size": 3538,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/phase2-seed.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/joined-file-suggestion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/joined-file-suggestion.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 37
+                },
+                "end": {
+                  "line": 0,
+                  "character": 75
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/command-doc-policy.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-policy.ts",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 7
+                },
+                "end": {
+                  "line": 5,
+                  "character": 41
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./short-option.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/short-option.ts",
+              "span": {
+                "start": {
+                  "line": 13,
+                  "character": 7
+                },
+                "end": {
+                  "line": 13,
+                  "character": 26
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/command-doc-metadata.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-doc-metadata.ts",
+              "span": {
+                "start": {
+                  "line": 17,
+                  "character": 7
+                },
+                "end": {
+                  "line": 17,
+                  "character": 43
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/passthrough.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/passthrough.ts",
+              "span": {
+                "start": {
+                  "line": 23,
+                  "character": 7
+                },
+                "end": {
+                  "line": 23,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/empty-input.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/empty-input.ts",
+              "span": {
+                "start": {
+                  "line": 28,
+                  "character": 7
+                },
+                "end": {
+                  "line": 28,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./annotation-state.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/annotation-state.ts",
+              "span": {
+                "start": {
+                  "line": 34,
+                  "character": 7
+                },
+                "end": {
+                  "line": 34,
+                  "character": 30
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/dependency.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/dependency.ts",
+              "span": {
+                "start": {
+                  "line": 42,
+                  "character": 7
+                },
+                "end": {
+                  "line": 42,
+                  "character": 33
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 43,
+                  "character": 51
+                },
+                "end": {
+                  "line": 43,
+                  "character": 78
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-metadata.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-metadata.ts",
+              "span": {
+                "start": {
+                  "line": 44,
+                  "character": 42
+                },
+                "end": {
+                  "line": 44,
+                  "character": 68
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./dependency-runtime.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/dependency-runtime.ts",
+              "span": {
+                "start": {
+                  "line": 54,
+                  "character": 7
+                },
+                "end": {
+                  "line": 54,
+                  "character": 32
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./execution-context.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/execution-context.ts",
+              "span": {
+                "start": {
+                  "line": 59,
+                  "character": 7
+                },
+                "end": {
+                  "line": 59,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./doc.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/doc.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 60,
+                  "character": 33
+                },
+                "end": {
+                  "line": 60,
+                  "character": 43
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 65,
+                  "character": 7
+                },
+                "end": {
+                  "line": 65,
+                  "character": 36
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/failure.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/failure.ts",
+              "span": {
+                "start": {
+                  "line": 66,
+                  "character": 38
+                },
+                "end": {
+                  "line": 66,
+                  "character": 61
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./phase2-seed.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/phase2-seed.ts",
+              "span": {
+                "start": {
+                  "line": 70,
+                  "character": 7
+                },
+                "end": {
+                  "line": 70,
+                  "character": 25
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/command-alias.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/command-alias.ts",
+              "span": {
+                "start": {
+                  "line": 74,
+                  "character": 7
+                },
+                "end": {
+                  "line": 74,
+                  "character": 36
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./input-trace.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/input-trace.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 75,
+                  "character": 32
+                },
+                "end": {
+                  "line": 75,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./fluent.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/fluent.ts",
+              "span": {
+                "start": {
+                  "line": 76,
+                  "character": 42
+                },
+                "end": {
+                  "line": 76,
+                  "character": 55
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./registry-types.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/registry-types.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 77,
+                  "character": 44
+                },
+                "end": {
+                  "line": 77,
+                  "character": 65
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./validate.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/validate.ts",
+              "span": {
+                "start": {
+                  "line": 78,
+                  "character": 58
+                },
+                "end": {
+                  "line": 78,
+                  "character": 73
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 274,
+                  "character": 7
+                },
+                "end": {
+                  "line": 274,
+                  "character": 21
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 284,
+                  "character": 7
+                },
+                "end": {
+                  "line": 284,
+                  "character": 20
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./suggestion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/suggestion.ts",
+              "span": {
+                "start": {
+                  "line": 291,
+                  "character": 7
+                },
+                "end": {
+                  "line": 291,
+                  "character": 24
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 302,
+                  "character": 7
+                },
+                "end": {
+                  "line": 302,
+                  "character": 19
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 297,
+                  "character": 7
+                },
+                "end": {
+                  "line": 297,
+                  "character": 19
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage-internals.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage-internals.ts",
+              "span": {
+                "start": {
+                  "line": 303,
+                  "character": 43
+                },
+                "end": {
+                  "line": 303,
+                  "character": 65
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "span": {
+                "start": {
+                  "line": 308,
+                  "character": 7
+                },
+                "end": {
+                  "line": 308,
+                  "character": 25
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/primitives.ts",
+        "size": 135246,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/primitives.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./message.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 29
+                },
+                "end": {
+                  "line": 12,
+                  "character": 43
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 13,
+                  "character": 34
+                },
+                "end": {
+                  "line": 13,
+                  "character": 47
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./validate.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/validate.ts",
+              "span": {
+                "start": {
+                  "line": 14,
+                  "character": 36
+                },
+                "end": {
+                  "line": 14,
+                  "character": 51
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/program.ts",
+        "size": 3959,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/program.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/registry-types.ts",
+        "size": 1066,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/registry-types.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./execution-context.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/execution-context.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 34
+                },
+                "end": {
+                  "line": 0,
+                  "character": 58
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 29
+                },
+                "end": {
+                  "line": 1,
+                  "character": 58
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/annotations.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/annotations.ts",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 35
+                },
+                "end": {
+                  "line": 2,
+                  "character": 62
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 61
+                },
+                "end": {
+                  "line": 3,
+                  "character": 74
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 35
+                },
+                "end": {
+                  "line": 4,
+                  "character": 47
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage-internals.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage-internals.ts",
+              "span": {
+                "start": {
+                  "line": 8,
+                  "character": 7
+                },
+                "end": {
+                  "line": 8,
+                  "character": 29
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/short-option.ts",
+        "size": 15818,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/short-option.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./internal/joined-file-suggestion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/joined-file-suggestion.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 43
+                },
+                "end": {
+                  "line": 0,
+                  "character": 81
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 60
+                },
+                "end": {
+                  "line": 2,
+                  "character": 74
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 42
+                },
+                "end": {
+                  "line": 1,
+                  "character": 56
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 32
+                },
+                "end": {
+                  "line": 3,
+                  "character": 45
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 7
+                },
+                "end": {
+                  "line": 9,
+                  "character": 19
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 27
+                },
+                "end": {
+                  "line": 4,
+                  "character": 39
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/suggestion.ts",
+        "size": 18727,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/suggestion.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./displaywidth.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/displaywidth.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 32
+                },
+                "end": {
+                  "line": 0,
+                  "character": 51
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 7
+                },
+                "end": {
+                  "line": 9,
+                  "character": 22
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-separators.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-separators.ts",
+              "span": {
+                "start": {
+                  "line": 10,
+                  "character": 39
+                },
+                "end": {
+                  "line": 10,
+                  "character": 65
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+        "size": 14396,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 38
+                },
+                "end": {
+                  "line": 0,
+                  "character": 53
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/terminal-separators.ts",
+        "size": 409,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-separators.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./terminal-internal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 51
+                },
+                "end": {
+                  "line": 0,
+                  "character": 75
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 35
+                },
+                "end": {
+                  "line": 1,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./text-layout.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/text-layout.ts",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 28
+                },
+                "end": {
+                  "line": 2,
+                  "character": 46
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 44
+                },
+                "end": {
+                  "line": 3,
+                  "character": 56
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/terminal-width.ts",
+        "size": 2740,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-width.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./message.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 33
+                },
+                "end": {
+                  "line": 0,
+                  "character": 47
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-separators.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-separators.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 39
+                },
+                "end": {
+                  "line": 1,
+                  "character": 65
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/terminal.ts",
+        "size": 7239,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./displaywidth.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/displaywidth.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 43
+                },
+                "end": {
+                  "line": 0,
+                  "character": 62
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/text-layout.ts",
+        "size": 5177,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/text-layout.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "span": {
+                "start": {
+                  "line": 7,
+                  "character": 62
+                },
+                "end": {
+                  "line": 7,
+                  "character": 74
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/usage-internals.ts",
+        "size": 12641,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/usage-internals.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./terminal.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 7
+                },
+                "end": {
+                  "line": 5,
+                  "character": 22
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal-internal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal-internal.ts",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 7
+                },
+                "end": {
+                  "line": 12,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./displaywidth.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/displaywidth.ts",
+              "span": {
+                "start": {
+                  "line": 13,
+                  "character": 32
+                },
+                "end": {
+                  "line": 13,
+                  "character": 51
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/usage.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/usage.ts",
+              "span": {
+                "start": {
+                  "line": 14,
+                  "character": 57
+                },
+                "end": {
+                  "line": 14,
+                  "character": 78
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./nonempty.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/nonempty.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 15,
+                  "character": 36
+                },
+                "end": {
+                  "line": 15,
+                  "character": 51
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./validate.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/validate.ts",
+              "span": {
+                "start": {
+                  "line": 16,
+                  "character": 36
+                },
+                "end": {
+                  "line": 16,
+                  "character": 51
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/usage.ts",
+        "size": 41602,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts"
+      },
+      {
+        "kind": "esm",
+        "local": "${REPO_ROOT}/packages/core/src/validate.ts",
+        "size": 9616,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/validate.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./message.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 7
+                },
+                "end": {
+                  "line": 9,
+                  "character": 21
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/dependency.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/dependency.ts",
+              "span": {
+                "start": {
+                  "line": 23,
+                  "character": 7
+                },
+                "end": {
+                  "line": 23,
+                  "character": 33
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./internal/mode-dispatch.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/mode-dispatch.ts",
+              "span": {
+                "start": {
+                  "line": 28,
+                  "character": 7
+                },
+                "end": {
+                  "line": 28,
+                  "character": 36
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./nonempty.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/nonempty.ts",
+              "span": {
+                "start": {
+                  "line": 29,
+                  "character": 58
+                },
+                "end": {
+                  "line": 29,
+                  "character": 73
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./parser.ts",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 30,
+                  "character": 63
+                },
+                "end": {
+                  "line": 30,
+                  "character": 76
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./suggestion.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/suggestion.ts",
+              "span": {
+                "start": {
+                  "line": 36,
+                  "character": 7
+                },
+                "end": {
+                  "line": 36,
+                  "character": 24
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/core/src/valueparser.ts",
+        "size": 388690,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "./run.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/run/src/run.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 14
+                },
+                "end": {
+                  "line": 0,
+                  "character": 24
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./valueparser.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/run/src/valueparser.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 14
+                },
+                "end": {
+                  "line": 1,
+                  "character": 32
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./print.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/run/src/print.ts",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 14
+                },
+                "end": {
+                  "line": 2,
+                  "character": 26
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/run/src/index.ts",
+        "size": 88,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/run/src/index.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "node:fs",
+            "code": {
+              "specifier": "node:fs",
+              "span": {
+                "start": {
+                  "line": 12,
+                  "character": 41
+                },
+                "end": {
+                  "line": 12,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "node:process",
+            "code": {
+              "specifier": "node:process",
+              "span": {
+                "start": {
+                  "line": 13,
+                  "character": 20
+                },
+                "end": {
+                  "line": 13,
+                  "character": 34
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/run/src/output.ts",
+        "size": 6992,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/run/src/output.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "@optique/core/terminal",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 35
+                },
+                "end": {
+                  "line": 0,
+                  "character": 59
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/internal/terminal",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/terminal.ts",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 7
+                },
+                "end": {
+                  "line": 4,
+                  "character": 40
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/message",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 7
+                },
+                "end": {
+                  "line": 9,
+                  "character": 30
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./output.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/run/src/output.ts",
+              "span": {
+                "start": {
+                  "line": 10,
+                  "character": 28
+                },
+                "end": {
+                  "line": 10,
+                  "character": 41
+                }
+              }
+            }
+          },
+          {
+            "specifier": "node:process",
+            "code": {
+              "specifier": "node:process",
+              "span": {
+                "start": {
+                  "line": 11,
+                  "character": 20
+                },
+                "end": {
+                  "line": 11,
+                  "character": 34
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/run/src/print.ts",
+        "size": 7574,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/run/src/print.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "@optique/core/internal/help-request",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/help-request.ts",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 7
+                },
+                "end": {
+                  "line": 3,
+                  "character": 44
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/internal/terminal",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/internal/terminal.ts",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 35
+                },
+                "end": {
+                  "line": 4,
+                  "character": 68
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/message",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 38
+                },
+                "end": {
+                  "line": 5,
+                  "character": 61
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/terminal",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/terminal.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 6,
+                  "character": 35
+                },
+                "end": {
+                  "line": 6,
+                  "character": 59
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/completion",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/completion.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 7,
+                  "character": 37
+                },
+                "end": {
+                  "line": 7,
+                  "character": 63
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/context",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/context.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 8,
+                  "character": 35
+                },
+                "end": {
+                  "line": 8,
+                  "character": 58
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/facade",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/facade.ts",
+              "span": {
+                "start": {
+                  "line": 9,
+                  "character": 48
+                },
+                "end": {
+                  "line": 9,
+                  "character": 70
+                }
+              }
+            },
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/facade.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 17,
+                  "character": 7
+                },
+                "end": {
+                  "line": 17,
+                  "character": 29
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/parser",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 24,
+                  "character": 7
+                },
+                "end": {
+                  "line": 24,
+                  "character": 29
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/program",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/program.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 25,
+                  "character": 29
+                },
+                "end": {
+                  "line": 25,
+                  "character": 52
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/doc",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/doc.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 32,
+                  "character": 7
+                },
+                "end": {
+                  "line": 32,
+                  "character": 26
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/usage",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/usage.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 34,
+                  "character": 27
+                },
+                "end": {
+                  "line": 34,
+                  "character": 48
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./output.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/run/src/output.ts",
+              "span": {
+                "start": {
+                  "line": 35,
+                  "character": 28
+                },
+                "end": {
+                  "line": 35,
+                  "character": 41
+                }
+              }
+            }
+          },
+          {
+            "specifier": "node:path",
+            "code": {
+              "specifier": "node:path",
+              "span": {
+                "start": {
+                  "line": 36,
+                  "character": 17
+                },
+                "end": {
+                  "line": 36,
+                  "character": 28
+                }
+              }
+            }
+          },
+          {
+            "specifier": "node:process",
+            "code": {
+              "specifier": "node:process",
+              "span": {
+                "start": {
+                  "line": 37,
+                  "character": 20
+                },
+                "end": {
+                  "line": 37,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./terminal.ts",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/run/src/terminal.ts",
+              "span": {
+                "start": {
+                  "line": 42,
+                  "character": 7
+                },
+                "end": {
+                  "line": 42,
+                  "character": 22
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/run/src/run.ts",
+        "size": 39736,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/run/src/run.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "node:process",
+            "code": {
+              "specifier": "node:process",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 34
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/run/src/terminal.ts",
+        "size": 3053,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/run/src/terminal.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "@optique/core/message",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/message.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 44
+                },
+                "end": {
+                  "line": 0,
+                  "character": 67
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/nonempty",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/nonempty.ts",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 7
+                },
+                "end": {
+                  "line": 4,
+                  "character": 31
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/parser",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/parser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 32
+                },
+                "end": {
+                  "line": 5,
+                  "character": 54
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/valueparser",
+            "type": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "resolutionMode": "import",
+              "span": {
+                "start": {
+                  "line": 6,
+                  "character": 52
+                },
+                "end": {
+                  "line": 6,
+                  "character": 79
+                }
+              }
+            }
+          },
+          {
+            "specifier": "node:fs",
+            "code": {
+              "specifier": "node:fs",
+              "span": {
+                "start": {
+                  "line": 7,
+                  "character": 37
+                },
+                "end": {
+                  "line": 7,
+                  "character": 46
+                }
+              }
+            }
+          },
+          {
+            "specifier": "node:path",
+            "code": {
+              "specifier": "node:path",
+              "span": {
+                "start": {
+                  "line": 8,
+                  "character": 43
+                },
+                "end": {
+                  "line": 8,
+                  "character": 54
+                }
+              }
+            }
+          }
+        ],
+        "local": "${REPO_ROOT}/packages/run/src/valueparser.ts",
+        "size": 14249,
+        "mediaType": "TypeScript",
+        "specifier": "file://${REPO_ROOT}/packages/run/src/valueparser.ts"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "@optique/core/constructs",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/constructs.ts",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 23
+                },
+                "end": {
+                  "line": 0,
+                  "character": 49
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/primitives",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/primitives.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 33
+                },
+                "end": {
+                  "line": 1,
+                  "character": 59
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/modifiers",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/modifiers.ts",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 38
+                },
+                "end": {
+                  "line": 2,
+                  "character": 63
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/valueparser",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/valueparser.ts",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 31
+                },
+                "end": {
+                  "line": 3,
+                  "character": 58
+                }
+              }
+            }
+          }
+        ],
+        "local": "${CONSUMERS_ROOT}/core-run/fixtures/grammar.js",
+        "size": 916,
+        "mediaType": "JavaScript",
+        "specifier": "file://${CONSUMERS_ROOT}/core-run/fixtures/grammar.js"
+      },
+      {
+        "kind": "esm",
+        "dependencies": [
+          {
+            "specifier": "node:process",
+            "code": {
+              "specifier": "node:process",
+              "span": {
+                "start": {
+                  "line": 0,
+                  "character": 20
+                },
+                "end": {
+                  "line": 0,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/constructs",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/constructs.ts",
+              "span": {
+                "start": {
+                  "line": 1,
+                  "character": 19
+                },
+                "end": {
+                  "line": 1,
+                  "character": 45
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/primitives",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/primitives.ts",
+              "span": {
+                "start": {
+                  "line": 2,
+                  "character": 24
+                },
+                "end": {
+                  "line": 2,
+                  "character": 50
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/core/modifiers",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/core/src/modifiers.ts",
+              "span": {
+                "start": {
+                  "line": 3,
+                  "character": 20
+                },
+                "end": {
+                  "line": 3,
+                  "character": 45
+                }
+              }
+            }
+          },
+          {
+            "specifier": "@optique/run",
+            "code": {
+              "specifier": "file://${REPO_ROOT}/packages/run/src/index.ts",
+              "span": {
+                "start": {
+                  "line": 4,
+                  "character": 20
+                },
+                "end": {
+                  "line": 4,
+                  "character": 34
+                }
+              }
+            }
+          },
+          {
+            "specifier": "./grammar.js",
+            "code": {
+              "specifier": "file://${CONSUMERS_ROOT}/core-run/fixtures/grammar.js",
+              "span": {
+                "start": {
+                  "line": 5,
+                  "character": 44
+                },
+                "end": {
+                  "line": 5,
+                  "character": 58
+                }
+              }
+            }
+          }
+        ],
+        "local": "${CONSUMERS_ROOT}/core-run/fixtures/three.js",
+        "size": 673,
+        "mediaType": "JavaScript",
+        "specifier": "file://${CONSUMERS_ROOT}/core-run/fixtures/three.js"
+      },
+      {
+        "kind": "node",
+        "specifier": "node:fs",
+        "moduleName": "fs"
+      },
+      {
+        "kind": "node",
+        "specifier": "node:path",
+        "moduleName": "path"
+      },
+      {
+        "kind": "node",
+        "specifier": "node:process",
+        "moduleName": "process"
+      }
+    ],
+    "redirects": {},
+    "npmPackages": {}
+  },
+  "note": "Separate instrumented validation; no traced process contributes a timing sample."
+}
