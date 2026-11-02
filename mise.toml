@@ -149,3 +149,42 @@ run = [
   'deno coverage coverage/raw --lcov --include="packages/" --output=coverage/lcov.info',
   'deno coverage coverage/raw --include="packages/"',
 ]
+
+[tasks."file-inspect:deps"]
+description = "Install the file inspection workspace dependencies"
+run = "pnpm install"
+
+[tasks."file-inspect:build"]
+description = "Build the file inspection recipe and its test dependencies"
+run = 'pnpm --filter "file-inspect..." -r build'
+
+[tasks."file-inspect:test:deno"]
+description = "Check and test the file inspection recipe with Deno"
+dir = "examples/file-inspect"
+run = "deno task test"
+
+[tasks."file-inspect:test:node"]
+description = "Test the file inspection recipe with Node.js"
+depends = ["file-inspect:build"]
+run = "pnpm --filter file-inspect test"
+
+[tasks."file-inspect:test:bun"]
+description = "Test the file inspection recipe with Bun"
+depends = ["file-inspect:build"]
+run = "pnpm --filter file-inspect test:bun"
+
+[tasks."file-inspect:test"]
+description = "Test the file inspection recipe across all runtimes"
+depends = ["file-inspect:test:deno", "file-inspect:test:node", "file-inspect:test:bun"]
+
+[tasks."file-inspect:standalone"]
+description = "Compile the verified JS bundle for the current host"
+depends = ["file-inspect:build"]
+dir = "examples/file-inspect"
+run = "node scripts/standalone.ts"
+
+[tasks."file-inspect:smoke"]
+description = "Verify offline npm installation, standalone output and Bash completion"
+depends = ["file-inspect:standalone"]
+dir = "examples/file-inspect"
+run = "node scripts/smoke.ts"
