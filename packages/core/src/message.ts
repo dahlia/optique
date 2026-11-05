@@ -657,9 +657,13 @@ export function formatMessage(
           // Text without double newlines: replace single \n with space
           const normalizedText = rawText.replace(/\n/g, " ");
 
-          // Handle whitespace-only text specially to preserve spaces
+          // The word pattern cannot match whitespace-only text.
           if (normalizedText.trim() === "" && normalizedText.length > 0) {
-            yield { text: " ", width: 1, trimOnWrap: true };
+            yield {
+              text: normalizedText,
+              width: getDisplayWidth(normalizedText),
+              trimOnWrap: true,
+            };
           } else {
             wordPattern.lastIndex = 0;
             while (true) {

@@ -13,8 +13,13 @@ To be released.
  -  Fixed fish completion scripts to preserve backslashes in additional
     arguments passed to `fish.generateScript()`, preventing invalid scripts
     and altered argument values.  [[#1101], [#1105]]
+ -  Fixed `formatMessage()` to preserve indentation and other spacing in
+    whitespace-only `text()` terms, including before styled command-line
+    examples.  [[#1098], [#1104]]
 
+[#1098]: https://github.com/dahlia/optique/issues/1098
 [#1101]: https://github.com/dahlia/optique/issues/1101
+[#1104]: https://github.com/dahlia/optique/pull/1104
 [#1105]: https://github.com/dahlia/optique/pull/1105
 
 

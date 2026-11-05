@@ -955,7 +955,7 @@ describe("formatMessage - explicit line breaks", () => {
     const msg = message`First:${lineBreak()}  ${optionName("--help")}`;
     const formatted = formatMessage(msg, { quotes: false });
 
-    assert.equal(formatted, "First:\n --help");
+    assert.equal(formatted, "First:\n  --help");
   });
 
   it("should treat single newline as space (soft break)", () => {
@@ -1153,6 +1153,126 @@ ${commandLine("myapp status")}        Show status`;
 });
 
 // https://github.com/dahlia/optique/issues/1003
+describe("formatMessage - whitespace-only text terms", () => {
+  it("should preserve spaces across text term boundaries", () => {
+    const options = { colors: false, quotes: false };
+    assert.equal(formatMessage([text("  ")], options), "  ");
+    assert.equal(
+      formatMessage([text("  "), commandLine("kayra status")], options),
+      "  kayra status",
+    );
+    assert.equal(
+      formatMessage([text("  "), text("kayra status")], options),
+      formatMessage([text("  kayra status")], options),
+    );
+    assert.equal(
+      formatMessage([text("a"), text("  "), text("b"), text("  ")], options),
+      "a  b  ",
+    );
+    assert.equal(
+      formatMessage([text(" "), text(""), text("  "), text("b")], options),
+      "   b",
+    );
+  });
+
+  it("should preserve whitespace after newline normalization", () => {
+    assert.equal(formatMessage([text("\t")]), "\t");
+    assert.equal(formatMessage([text("　")]), "　");
+    assert.equal(formatMessage([text(" \n\t　")]), "  \t　");
+    assert.equal(
+      formatMessage([text("a"), text("\n  "), text("b")]),
+      "a   b",
+    );
+    assert.equal(formatMessage([text("")]), "");
+  });
+
+  it("should preserve split indentation after explicit breaks", () => {
+    const options = { colors: false, quotes: false };
+    assert.equal(
+      formatMessage(
+        message`Examples:${lineBreak()}  ${commandLine("kayra status")}`,
+        options,
+      ),
+      "Examples:\n  kayra status",
+    );
+    assert.equal(
+      formatMessage(
+        message`Examples:${lineBreak()}
+  ${commandLine("kayra status")}`,
+        options,
+      ),
+      "Examples:\n  kayra status",
+    );
+    assert.equal(
+      formatMessage([lineBreak(), text("\n"), text("end")], options),
+      "\nend",
+    );
+    assert.equal(
+      formatMessage([lineBreak(), text("  "), commandLine("bb")], {
+        ...options,
+        maxWidth: 4,
+      }),
+      "\n  bb",
+    );
+  });
+
+  it("should keep indentation outside command-line styling and quotes", () => {
+    for (const colors of [false, true]) {
+      for (const quotes of [false, true]) {
+        const command = quotes ? "`kayra status`" : "kayra status";
+        const styled = colors ? `\x1b[36m${command}\x1b[0m` : command;
+        assert.equal(
+          formatMessage([text("  "), commandLine("kayra status")], {
+            colors,
+            quotes,
+          }),
+          `  ${styled}`,
+        );
+      }
+    }
+  });
+
+  it("should count the full display width of whitespace-only terms", () => {
+    assert.equal(
+      formatMessage([text("ab"), text("  "), text("c")], { maxWidth: 3 }),
+      "ab\nc",
+    );
+    const wideSpace: Message = [text("a"), text("　"), text("b")];
+    assert.equal(formatMessage(wideSpace, { maxWidth: 2 }), "a\nb");
+    assert.equal(formatMessage(wideSpace, { maxWidth: 4 }), "a　b");
+    // A separator that fits exactly stays on the preceding line.
+    assert.equal(
+      formatMessage([text("ab"), text("　"), text("c")], { maxWidth: 4 }),
+      "ab　\nc",
+    );
+  });
+
+  it("should keep deferred-wrap behavior for multi-space separators", () => {
+    const prefix: Message = [text("abc"), text("  ")];
+    assert.equal(formatMessage(prefix, { maxWidth: 4 }), "abc");
+    assert.equal(
+      formatMessage([...prefix, lineBreak(), text("d")], { maxWidth: 4 }),
+      "abc\nd",
+    );
+    // Existing behavior: an empty semantic term must not flush a pending wrap.
+    assert.equal(
+      formatMessage([...prefix, value(""), text("  "), text("def")], {
+        quotes: false,
+        maxWidth: 3,
+      }),
+      "abc\ndef",
+    );
+  });
+
+  it("should drop multi-space separators when startWidth forces a wrap", () => {
+    const options: MessageFormatOptions & { readonly startWidth?: number } = {
+      maxWidth: 3,
+      startWidth: 2,
+    };
+    assert.equal(formatMessage([text("  "), text("b")], options), "\nb");
+  });
+});
+
 describe("formatMessage - whitespace at automatic wraps", () => {
   it("should drop a text term's leading space when it wraps", () => {
     const msg: Message = [
