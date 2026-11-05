@@ -1532,8 +1532,11 @@ export const fish: ShellCompletion = {
   name: "fish",
   generateScript(programName: string, args: readonly string[] = []): string {
     validateProgramName(programName);
-    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "\\'")}'`)
-      .join(" ");
+    // fish single quotes interpret both \\ and \'. Escape original
+    // backslashes before adding the escapes for apostrophes.
+    const escapedArgs = args.map((arg) =>
+      `'${arg.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
+    ).join(" ");
     const functionName = `__${programName}_complete`;
     return `
 function ${functionName}
