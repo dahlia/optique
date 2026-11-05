@@ -116,6 +116,15 @@ admin completion bash
 admin --completion bash
 ~~~~
 
+When a root command is present, the first token selects a registered command
+if it matches that command's name or an alias, even if its arguments are
+invalid. If no registered command matches, enabled meta command names and
+aliases take precedence over root arguments. Root help still includes the root
+command's options and positional arguments. Use `admin ./help` or
+`admin -- help` to pass `help` as a root argument. This precedence applies to
+`runProgram()`; `createProgramParser()` retains the ordinary parser combinator
+rules.
+
 You can disable or customize these runner features with the same option shapes
 accepted by `run()`:
 

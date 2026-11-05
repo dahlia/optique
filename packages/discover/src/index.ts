@@ -14,7 +14,7 @@ import {
 } from "@optique/core/extension";
 import { fluent, type FluentParser } from "@optique/core/fluent";
 import { map } from "@optique/core/modifiers";
-import type { Message } from "@optique/core/message";
+import { type Message, message } from "@optique/core/message";
 import type {
   ExecutionContext,
   Mode,
@@ -555,6 +555,17 @@ export function createProgramParser(
   commands: readonly CommandEntry[],
   options: CreateProgramParserOptions = {},
 ): FluentParser<Mode, ProgramInvocation, unknown> {
+  return createProgram(commands, options).parser;
+}
+
+function createProgram(
+  commands: readonly CommandEntry[],
+  options: CreateProgramParserOptions,
+  preferRootChildren = false,
+): {
+  readonly parser: FluentParser<Mode, ProgramInvocation, unknown>;
+  readonly tree: CommandTreeNode;
+} {
   if (commands.length < 1) {
     throw new TypeError("createProgramParser() requires at least one command.");
   }
@@ -566,8 +577,11 @@ export function createProgramParser(
     })),
   );
   const rootNode = buildCommandTree(sortedCommands);
-  const parser = buildNodeParser(rootNode);
-  return fluent(withRootDocs(parser, sortedCommands, options));
+  const parser = buildNodeParser(rootNode, undefined, preferRootChildren);
+  return {
+    parser: fluent(withRootDocs(parser, sortedCommands, options)),
+    tree: rootNode,
+  };
 }
 
 /**
@@ -601,11 +615,17 @@ export async function runProgram<R = unknown>(
       entryFileName: options.entryFileName,
     });
   }
-  const parser = createProgramParser(commands, {
-    ...options.metadata,
-    commandList: options.commandList,
-  });
-  const invocation = await runAsync(parser, buildRunOptions(options));
+  const { parser, tree } = createProgram(
+    commands,
+    { ...options.metadata, commandList: options.commandList },
+    true,
+  );
+  const args = options.args ?? process.argv.slice(2);
+  const runOptions = { ...buildRunOptions(options), args };
+  const invocation = await runAsync(
+    withRootMetaCommands(parser, tree, runOptions, args),
+    runOptions,
+  );
   await dispatchInvocation(invocation, options.hooks);
 }
 
@@ -1117,6 +1137,7 @@ function buildCommandTree(
 function buildNodeParser(
   node: CommandTreeNode,
   inheritedHidden?: HiddenVisibility,
+  preferChildren = false,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const childParser = buildChildrenParser(node, inheritedHidden);
   if (childParser != null && node.command != null) {
@@ -1124,6 +1145,7 @@ function buildNodeParser(
       childParser,
       node.command,
       node.path ?? [],
+      preferChildren,
     );
   }
   if (childParser != null) return childParser;
@@ -1145,6 +1167,7 @@ function createExecutableNodeParser(
   childParser: Parser<Mode, ProgramInvocation, unknown>,
   commandDefinition: AnyCommand,
   path: CommandPath,
+  preferChildren = false,
 ): Parser<Mode, ProgramInvocation, ExecutableNodeParserState> {
   const leafParser = createLeafParser(commandDefinition, path, true);
   const branchParsers = [childParser, leafParser] as const;
@@ -1164,6 +1187,34 @@ function createExecutableNodeParser(
     initialState: undefined,
     parse(context) {
       const activeState = normalizeExecutableNodeState(context.state);
+      const firstArg = context.buffer[0];
+      if (
+        preferChildren && activeState == null &&
+        !context.optionsTerminated && firstArg != null &&
+        childParser.leadingNames.has(firstArg)
+      ) {
+        // A registered first token selects its own grammar even when the root
+        // could consume more input. Use the existing branch state so docs,
+        // completion and source contexts follow the same committed path.
+        const result = childParser.parse(
+          withExecutableNodeChildContext(
+            context,
+            0,
+            inheritAnnotations(context.state, childParser.initialState),
+            childParser,
+          ),
+        );
+        return mapModeValue(
+          parser.mode,
+          wrapForMode(parser.mode, result),
+          (resolved) =>
+            wrapBranchParseResult(
+              context,
+              { branch: 0, committed: false },
+              resolved,
+            ),
+        );
+      }
       if (activeState?.committed === true && activeState.result.success) {
         const branchParser = branchParsers[activeState.branch];
         const result = branchParser.parse(
@@ -1526,7 +1577,7 @@ function wrapInitialParseResult(
 
 function wrapBranchParseResult(
   context: ParserContext<ExecutableNodeParserState>,
-  activeState: ExecutableNodeState,
+  activeState: Pick<ExecutableNodeState, "branch" | "committed">,
   result: ParserResult<unknown>,
 ): ParserResult<ExecutableNodeParserState> {
   if (!result.success) return result;
@@ -1889,6 +1940,70 @@ function commandPathHidden(
     );
   }
   return hidden;
+}
+
+function withRootMetaCommands(
+  parser: Parser<Mode, ProgramInvocation, unknown>,
+  tree: CommandTreeNode,
+  options: RunOptions,
+  args: readonly string[],
+): Parser<Mode, ProgramInvocation, unknown> {
+  const firstArg = args[0];
+  if (
+    tree.command == null || firstArg == null ||
+    [...tree.children].some(([name, child]) =>
+      name === firstArg || child.command?.metadata?.aliases?.includes(firstArg)
+    ) || !rootMetaCommandNames(options).includes(firstArg)
+  ) {
+    return parser;
+  }
+  const wrapped: typeof parser = {
+    ...parser,
+    parse(context) {
+      // Annotations can replace the initial state. Buffer progress identifies
+      // the original request without relying on state identity. Completion
+      // reparses user input with this same full parser in the suggest phase.
+      if (
+        context.buffer.length === args.length &&
+        context.buffer[0] === firstArg && !context.optionsTerminated &&
+        context.exec?.phase !== "suggest"
+      ) {
+        return wrapForMode(parser.mode, {
+          success: false,
+          consumed: 0,
+          error: message`Unexpected option or argument: ${firstArg}.`,
+        });
+      }
+      return parser.parse(context);
+    },
+  };
+  return wrapped;
+}
+
+function rootMetaCommandNames(options: RunOptions): readonly string[] {
+  const names = (
+    config: Extract<RunOptions["help"], object>["command"],
+    defaultName: string,
+  ): readonly string[] =>
+    config == null
+      ? []
+      : config === true
+      ? [defaultName]
+      : config.names ?? [defaultName];
+  const commandConfig = (
+    config: RunOptions["help"] | RunOptions["completion"],
+  ): Extract<RunOptions["help"], object>["command"] =>
+    typeof config === "string"
+      ? config === "option" ? undefined : true
+      : config?.command;
+  return [
+    ...names(commandConfig(options.help), "help"),
+    ...names(
+      typeof options.version === "object" ? options.version.command : undefined,
+      "version",
+    ),
+    ...names(commandConfig(options.completion), "completion"),
+  ];
 }
 
 function buildRunOptions<R>(options: RunProgramOptions<R>): RunOptions {

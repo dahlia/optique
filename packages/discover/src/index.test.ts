@@ -8,7 +8,7 @@ import {
   injectAnnotations,
 } from "@optique/core/extension";
 import { formatMessage, message } from "@optique/core/message";
-import { withDefault } from "@optique/core/modifiers";
+import { multiple, withDefault } from "@optique/core/modifiers";
 import {
   getDocPageAsync,
   type Parser,
@@ -16,7 +16,7 @@ import {
   type ParserResult,
   suggestAsync,
 } from "@optique/core/parser";
-import { option } from "@optique/core/primitives";
+import { argument, option } from "@optique/core/primitives";
 import type { OptionName } from "@optique/core/usage";
 import type { SourceContext } from "@optique/core/context";
 import {
@@ -2006,6 +2006,52 @@ describe("createProgramParser()", () => {
 });
 
 describe("runProgram()", () => {
+  it("preserves selected child annotations and phase-two seeds under a greedy root", async () => {
+    const sourceId = Symbol("selected-child-source");
+    const seeds: unknown[] = [];
+    const values: unknown[] = [];
+    const context: SourceContext = {
+      id: Symbol("selected-child-context"),
+      phase: "two-pass",
+      getAnnotations(request) {
+        if (request?.phase === "phase2") {
+          seeds.push(request.parsed);
+          return { [sourceId]: "phase-two" };
+        }
+        return { [sourceId]: "phase-one" };
+      },
+    };
+    await runProgram({
+      commands: [
+        defineCommand({
+          path: [],
+          parser: multiple(argument(string())),
+          handler() {
+            assert.fail("A registered child must win.");
+          },
+        }),
+        defineCommand({
+          path: ["build"],
+          metadata: { aliases: ["b"] },
+          parser: object({
+            source: createSourceBackedOptionParser(sourceId, "--source"),
+          }),
+          handler(value) {
+            values.push(value);
+          },
+        }),
+      ],
+      metadata: { name: "tool" },
+      args: ["b"],
+      contexts: [context],
+      onExit(code): never {
+        assert.fail(`Unexpected exit ${code}.`);
+      },
+    });
+    assert.deepEqual(seeds, [{ source: "phase-one" }]);
+    assert.deepEqual(values, [{ source: "phase-two" }]);
+  });
+
   it("should reject non-object options", async () => {
     await assert.rejects(
       () => runProgram([] as never),
@@ -2499,7 +2545,7 @@ describe("runProgram()", () => {
             "../../core/dist/constructs.js",
           )
         }";
-          import { withDefault } from "${
+          import { multiple, withDefault } from "${
           runtimeModuleUrl(
             "../../core/src/modifiers.ts",
             "../../core/dist/modifiers.js",
