@@ -27,7 +27,7 @@ jobs:
     - run: mise run check
 
   test-deno:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
         files: coverage/lcov.info
 
   test-node:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
@@ -70,7 +70,7 @@ jobs:
     - run: mise run test:node
 
   test-bun:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4

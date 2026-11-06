@@ -7770,6 +7770,20 @@ printf '__FILE__:file:.json,.yaml::0\\n'
       deepStrictEqual(script.includes("'it\\'s'"), true);
     });
 
+    for (
+      const [arg, quoted] of [
+        ["a\\b", String.raw`'a\\b'`],
+        ["a\\", String.raw`'a\\'`],
+        ["a\\\\b", String.raw`'a\\\\b'`],
+        ["a\\'b", String.raw`'a\\\'b'`],
+      ]
+    ) {
+      it(`should quote fixed fish argument ${JSON.stringify(arg)}`, () => {
+        const script = fish.generateScript("myapp", [arg]);
+        ok(script.includes(`myapp ${quoted} $prev $current 2>/dev/null`));
+      });
+    }
+
     it("should encode suggestions with tab-separated format", () => {
       const suggestions: Suggestion[] = [
         { kind: "literal", text: "--verbose" },
