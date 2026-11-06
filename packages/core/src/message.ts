@@ -608,6 +608,9 @@ export function formatMessage(
       prevWasLineBreak = false;
 
       if (term.type === "text") {
+        // Treat CRLF and CR as newlines before processing line breaks.
+        const textWithLf = term.text.replace(/\r\n?/g, "\n");
+
         // Strip a lone leading \n immediately following a lineBreak() term.
         // In template literals such as `${lineBreak()}\nContent`, the parser
         // produces a text("\n…") term; that \n is a source-formatting artifact
@@ -615,8 +618,8 @@ export function formatMessage(
         // Only a lone \n is stripped; \n\n (paragraph break) is intentional
         // and must be preserved so the double-newline → hard-break logic works.
         const rawText = isAfterLineBreak
-          ? term.text.replace(/^\n(?!\n)/, "")
-          : term.text;
+          ? textWithLf.replace(/^\n(?!\n)/, "")
+          : textWithLf;
 
         // Handle explicit line breaks:
         // - Single \n: treated as space (soft break, word wrap friendly)

@@ -1152,6 +1152,65 @@ ${commandLine("myapp status")}        Show status`;
   });
 });
 
+describe("formatMessage - carriage-return line endings", () => {
+  for (const ending of ["\r\n", "\r"]) {
+    it(`should normalize ${JSON.stringify(ending)} as a soft break`, () => {
+      assert.equal(formatMessage([text(ending)]), " ");
+      assert.equal(formatMessage([text(`${ending}  `)]), "   ");
+      assert.equal(
+        formatMessage([text("before"), text(ending), text("after")]),
+        "before after",
+      );
+      assert.equal(
+        formatMessage([text(`before${ending}after`)]),
+        "before after",
+      );
+    });
+
+    it(`should recognize ${JSON.stringify(ending)} paragraph breaks`, () => {
+      assert.equal(
+        formatMessage([text(`before${ending}${ending}  after`)]),
+        "before\n\n  after",
+      );
+      assert.equal(
+        formatMessage([
+          text("before"),
+          lineBreak(),
+          text(`${ending}${ending}after`),
+        ]),
+        "before\n\nafter",
+      );
+    });
+
+    it(`should absorb ${JSON.stringify(ending)} after lineBreak()`, () => {
+      const options = { colors: false, quotes: false };
+      assert.equal(
+        formatMessage([
+          text("Examples:"),
+          lineBreak(),
+          text(`${ending}  `),
+          commandLine("kayra status"),
+        ], options),
+        "Examples:\n  kayra status",
+      );
+      assert.equal(
+        formatMessage([lineBreak(), text(`${ending}  next`)], options),
+        "\n  next",
+      );
+      assert.equal(
+        formatMessage([lineBreak(), text(ending), text("next")], options),
+        "\nnext",
+      );
+    });
+
+    it(`should wrap using normalized ${JSON.stringify(ending)} spacing`, () => {
+      const msg: Message = [text("ab"), text(`${ending} `), text("c")];
+      assert.equal(formatMessage(msg), "ab  c");
+      assert.equal(formatMessage(msg, { maxWidth: 3 }), "ab\nc");
+    });
+  }
+});
+
 // https://github.com/dahlia/optique/issues/1003
 describe("formatMessage - whitespace-only text terms", () => {
   it("should preserve spaces across text term boundaries", () => {

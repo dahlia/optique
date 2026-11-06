@@ -15,7 +15,8 @@ To be released.
     and altered argument values.  [[#1101], [#1105]]
  -  Fixed `formatMessage()` to preserve indentation and other spacing in
     whitespace-only `text()` terms, including before styled command-line
-    examples.  [[#1098], [#1104]]
+    examples.  CRLF and CR line endings now follow the same formatting rules
+    as LF.  [[#1098], [#1104]]
 
 [#1098]: https://github.com/dahlia/optique/issues/1098
 [#1101]: https://github.com/dahlia/optique/issues/1101
