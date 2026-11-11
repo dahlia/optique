@@ -15,7 +15,7 @@ import { dependency } from "@optique/core/dependency";
 import { runWith } from "@optique/core/facade";
 import { formatMessage, message } from "@optique/core/message";
 import type { ValueParser, ValueParserResult } from "@optique/core/valueparser";
-import type { Parser } from "@optique/core/parser";
+import type { Mode, Parser } from "@optique/core/parser";
 import {
   parse,
   parseAsync,
@@ -23,7 +23,13 @@ import {
   suggestSync,
 } from "@optique/core/parser";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
-import { constant, fail, flag, option } from "@optique/core/primitives";
+import {
+  command,
+  constant,
+  fail,
+  flag,
+  option,
+} from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { bindConfig, createConfigContext } from "../../config/src/index.ts";
 import {
@@ -3318,5 +3324,154 @@ describe("or(bindEnv(...), constant(...))", () => {
     const result = parse(parser, [], { annotations });
     assert.ok(result.success);
     assert.equal(result.value, "fallback");
+  });
+});
+
+// https://github.com/dahlia/optique/issues/1108
+describe("source fallbacks through mapped commands", () => {
+  function createParser<M extends Mode>(
+    valueParser: ValueParser<M, string>,
+    source: (key: string) => string | undefined = (key) =>
+      key === "TEST_VALUE" ? "from-env" : undefined,
+  ) {
+    const context = createEnvContext({ prefix: "TEST_", source });
+    const parser = command(
+      "example",
+      map(
+        or(
+          object({
+            subcommand: command("run", object({})),
+            value: bindEnv(option("--value", valueParser), {
+              context,
+              key: "VALUE",
+              parser: string(),
+            }),
+          }),
+          object({ subcommand: command("other", object({})) }),
+        ),
+        (value) => ({ wrapped: value }),
+      ),
+    );
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    return { parser, context, annotations };
+  }
+
+  it("should resolve registered env contexts through command(map(or(...)))", async () => {
+    const { parser, context } = createParser(string());
+
+    const result = await runWith(parser, "test", [context], {
+      args: ["example", "run"],
+    });
+
+    assert.deepEqual(result, {
+      wrapped: { subcommand: {}, value: "from-env" },
+    });
+  });
+
+  it("should prefer explicit CLI values over mapped env fallbacks", () => {
+    const { parser, annotations } = createParser(string());
+
+    const result = parse(parser, ["example", "run", "--value", "from-cli"], {
+      annotations,
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { wrapped: { subcommand: {}, value: "from-cli" } },
+    });
+  });
+
+  it("should still fail when both CLI and env values are missing", () => {
+    const { parser, annotations } = createParser(string(), () => undefined);
+
+    const result = parse(parser, ["example", "run"], { annotations });
+
+    assert.ok(!result.success);
+    assert.match(formatMessage(result.error), /Missing option.*--value/);
+  });
+
+  it("should select a branch without an env-bound field", () => {
+    const { parser, annotations } = createParser(string(), () => {
+      throw new Error("The unselected branch must not read the environment.");
+    });
+
+    const result = parse(parser, ["example", "other"], { annotations });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { wrapped: { subcommand: {} } },
+    });
+  });
+
+  it("should resolve mapped env fallbacks with an async value parser", async () => {
+    const { parser, annotations } = createParser(
+      asyncChoice(["from-env", "from-cli"]),
+    );
+
+    const result = await parseAsync(parser, ["example", "run"], {
+      annotations,
+    });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { wrapped: { subcommand: {}, value: "from-env" } },
+    });
+  });
+
+  it("should resolve config fallbacks through the same mapped command boundary", () => {
+    const context = createConfigContext<{ readonly value: string }>({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            if (
+              input != null && typeof input === "object" &&
+              "value" in input && typeof input.value === "string"
+            ) {
+              return { value: { value: input.value } };
+            }
+            return { issues: [{ message: "Expected a string value." }] };
+          },
+        },
+      },
+    });
+    const annotations = context.getAnnotations(
+      { phase: "phase2", parsed: {} },
+      {
+        load: () => ({
+          config: { value: "from-config" },
+          meta: undefined,
+        }),
+      },
+    );
+    assert.ok(!(annotations instanceof Promise));
+    if (annotations instanceof Promise) return;
+    const parser = command(
+      "example",
+      map(
+        or(
+          object({
+            subcommand: command("run", object({})),
+            value: bindConfig(option("--value", string()), {
+              context,
+              key: "value",
+            }),
+          }),
+          object({ subcommand: command("other", object({})) }),
+        ),
+        (value) => ({ wrapped: value }),
+      ),
+    );
+
+    const result = parse(parser, ["example", "run"], { annotations });
+
+    assert.deepEqual(result, {
+      success: true,
+      value: { wrapped: { subcommand: {}, value: "from-config" } },
+    });
   });
 });

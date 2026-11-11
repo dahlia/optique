@@ -17,11 +17,17 @@ To be released.
     whitespace-only `text()` terms, including before styled command-line
     examples.  CRLF and CR line endings now follow the same formatting rules
     as LF.  [[#1098], [#1104]]
+ -  Fixed `map()` losing `bindEnv()` and `bindConfig()` fallbacks inside
+    composed commands, and making `prompt()` skip mapped `optional()` or
+    `withDefault()` parsers when context annotations were present.
+    [[#1108], [#1109]]
 
 [#1098]: https://github.com/dahlia/optique/issues/1098
 [#1101]: https://github.com/dahlia/optique/issues/1101
 [#1104]: https://github.com/dahlia/optique/pull/1104
 [#1105]: https://github.com/dahlia/optique/pull/1105
+[#1108]: https://github.com/dahlia/optique/issues/1108
+[#1109]: https://github.com/dahlia/optique/pull/1109
 
 
 Version 1.0.15

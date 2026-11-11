@@ -19,6 +19,7 @@ import {
   normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
+import { defineTraits, getTraits } from "./extension.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
@@ -1764,6 +1765,9 @@ export function map<M extends Mode, T, U, TState>(
     },
   } as Parser<M, U, TState>;
   defineParseLanes(mappedParser, getOwnParseLanes(parser));
+  // map() keeps the inner state unchanged, so preserve its annotation and
+  // source traits even though output-dependent hooks are stripped below.
+  defineTraits(mappedParser, getTraits(parser));
   // Strip any normalizeValue inherited from the inner parser via ...parser
   // spread.  The inner normalizer operates on type T, not the mapped type U,
   // so keeping it would corrupt mapped defaults.
