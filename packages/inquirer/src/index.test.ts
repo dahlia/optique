@@ -5847,3 +5847,79 @@ describe("or(prompt(...), constant(...))", () => {
     }
   });
 });
+
+// https://github.com/dahlia/optique/issues/1108
+describe("prompt() with mapped optional and defaulted parsers", () => {
+  for (const wrapper of ["optional", "withDefault"] as const) {
+    for (const hasCliValue of [false, true]) {
+      it(`should ${hasCliValue ? "use CLI input" : "prompt"} for mapped ${wrapper}() under unrelated annotations`, async () => {
+        const inner = option("--name", string());
+        const wrapped = wrapper === "optional"
+          ? optional(inner)
+          : withDefault(inner, "default");
+        let promptCalls = 0;
+        const parser = prompt(
+          map(wrapped, (value) => (value ?? "missing").toUpperCase()),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("entered");
+            },
+          },
+        );
+
+        const result = await parseAsync(
+          parser,
+          hasCliValue ? ["--name", "from-cli"] : [],
+          { annotations: { [Symbol("unrelated")]: "present" } },
+        );
+
+        assert.deepEqual(result, {
+          success: true,
+          value: hasCliValue ? "FROM-CLI" : "entered",
+        });
+        assert.equal(promptCalls, hasCliValue ? 0 : 1);
+      });
+    }
+  }
+
+  it("should skip prompting when a mapped defaulted parser has an env source", async () => {
+    const context = createEnvContext({
+      prefix: "TEST_",
+      source: (key) => key === "TEST_NAME" ? "from-env" : undefined,
+    });
+    const annotations = context.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    let promptCalls = 0;
+    const parser = prompt(
+      map(
+        withDefault(
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: string(),
+          }),
+          "default",
+        ),
+        (value) => value.toUpperCase(),
+      ),
+      {
+        type: "input",
+        message: "Enter name:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("entered");
+        },
+      },
+    );
+
+    const result = await parseAsync(parser, [], { annotations });
+
+    assert.deepEqual(result, { success: true, value: "FROM-ENV" });
+    assert.equal(promptCalls, 0);
+  });
+});

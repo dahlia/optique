@@ -1,5 +1,10 @@
 import { group, longestMatch, object } from "@optique/core/constructs";
 import {
+  defineTraits,
+  getTraits,
+  type ParserTraits,
+} from "@optique/core/extension";
+import {
   annotationStateValueKey,
   getAnnotations,
   injectAnnotations,
@@ -2232,6 +2237,50 @@ describe("withDefault", () => {
 });
 
 describe("map", () => {
+  const traitCases: readonly {
+    readonly name: string;
+    readonly traits: ParserTraits;
+  }[] = [
+    { name: "no traits", traits: {} },
+    { name: "annotation inheritance", traits: { inheritsAnnotations: true } },
+    { name: "source completion", traits: { completesFromSource: true } },
+    { name: "source binding", traits: { requiresSourceBinding: true } },
+    {
+      name: "all traits",
+      traits: {
+        inheritsAnnotations: true,
+        completesFromSource: true,
+        requiresSourceBinding: true,
+      },
+    },
+  ];
+
+  for (const { name, traits } of traitCases) {
+    it(`should preserve ${name} through nested mappings`, () => {
+      const inner = option("--name", string());
+      defineTraits(inner, traits);
+
+      const mapped = map(inner, (value) => value.length);
+      const nested = map(mapped, (value) => `length=${value}`);
+
+      assert.deepEqual(getTraits(mapped), traits);
+      assert.deepEqual(getTraits(nested), traits);
+      assert.deepEqual(getTraits(inner), traits);
+    });
+  }
+
+  it("should preserve the state traits of a defaulted parser", () => {
+    const parser = map(
+      withDefault(option("--name", string()), "default"),
+      (value) => value.length,
+    );
+
+    assert.deepEqual(getTraits(parser), {
+      inheritsAnnotations: true,
+      requiresSourceBinding: true,
+    });
+  });
+
   it("should create a parser with same priority and properties as wrapped parser", () => {
     const baseParser = option("-v", "--verbose");
     const mappedParser = map(baseParser, (b) => !b);
