@@ -46,7 +46,7 @@ Core rules
     one-to-one mappings, `transform()` for mapped results, and
     `choice(values, { key })` for custom string matching that returns the
     declared spelling. Use `normalizeInput()` to clean raw strings,
-    `withSuggestions()` to add completions, and `path()` (*@optique/run*)
+    `withSuggestions()` to replace completions, and `path()` (*@optique/run*)
     for paths. Write a custom value parser only when these do not fit.
  -  Since 1.4.0, `-p8080`/`-vp8080` accept attached values. Values consume
     the literal suffix (`-p=5` gives `"=5"`); full single-dash names win.
