@@ -243,3 +243,87 @@ describe("hidden command branch selection", () => {
     });
   }
 });
+
+describe("exclusive navigation with a usage-free discriminator", () => {
+  for (const mode of ["sync", "async"] as const) {
+    for (const shape of ["direct", "nested", "default"] as const) {
+      it(`${mode}: navigates to the selected ${shape} branch`, async () => {
+        const parsedInputs: string[] = [];
+        const value = values(mode, parsedInputs);
+        const branches = {
+          public: command("serve", option("--public-host", value), hidden),
+          internal: command("serve", option("--internal-token", value), hidden),
+        };
+        const cli = shape === "default"
+          ? conditional(
+            constant("fallback"),
+            branches,
+            command("serve", option("--default-target", value), hidden),
+          )
+          : conditional(constant("internal"), branches);
+        const parser = shape === "nested"
+          ? command(
+            "project",
+            tuple([cli, optional(option("--global"))]),
+            hidden,
+          )
+          : cli;
+        const flag = shape === "default"
+          ? "--default-target"
+          : "--internal-token";
+        const args = shape === "nested"
+          ? ["project", "serve", flag, "selected", "--global"]
+          : ["serve", flag, "selected"];
+        const expected = shape === "nested"
+          ? [["internal", "selected"], true]
+          : [shape === "default" ? undefined : "internal", "selected"];
+        const page = await selectedPage(
+          parser,
+          mode,
+          args,
+          expected,
+          parsedInputs,
+        );
+        const text = synopsis(page);
+        assert.match(text, /\bserve\b/);
+        assert.ok(text.includes(flag));
+        assert.doesNotMatch(text, /--public-host/);
+        if (shape === "nested") assert.match(text, /--global/);
+      });
+    }
+
+    it(`${mode}: applies only the selected same-named command's usageLine`, async () => {
+      const parsedInputs: string[] = [];
+      const called: string[] = [];
+      const value = values(mode, parsedInputs);
+      const parser = conditional(constant("internal"), {
+        public: command("serve", option("--public-host", value), {
+          ...hidden,
+          usageLine() {
+            called.push("public");
+            return [{ type: "literal", value: "PUBLIC" }];
+          },
+        }),
+        internal: command("serve", option("--internal-token", value), {
+          ...hidden,
+          usageLine() {
+            called.push("internal");
+            return [{ type: "literal", value: "INTERNAL" }];
+          },
+        }),
+      });
+      await selectedPage(
+        parser,
+        mode,
+        ["serve", "--internal-token", "selected"],
+        ["internal", "selected"],
+        parsedInputs,
+      );
+      assert.equal(
+        synopsis(await getDocPage(parser, ["serve"])),
+        "app serve INTERNAL",
+      );
+      assert.deepEqual(called, ["internal"]);
+    });
+  }
+});

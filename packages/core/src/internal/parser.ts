@@ -1502,11 +1502,28 @@ export function suggest<M extends Mode, T>(
  *
  * @param term The usage term to search in
  * @param commandName The command name to find
+ * @param selectedCommandUsage The command occurrences selected by parser state
  * @returns The expanded usage terms if found, null otherwise
  */
 function findCommandInExclusive(
   term: UsageTerm,
   commandName: string,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+): Usage | null {
+  // Exhaust the identity search, including nested groups, before considering
+  // a name-only match from any branch.
+  return findCommandInExclusiveMatching(
+    term,
+    commandName,
+    selectedCommandUsage,
+  ) ??
+    findCommandInExclusiveMatching(term, commandName);
+}
+
+function findCommandInExclusiveMatching(
+  term: UsageTerm,
+  commandName: string,
+  selectedCommandUsage?: ReadonlySet<CommandUsageId>,
 ): Usage | null {
   if (term.type !== "exclusive") return null;
 
@@ -1515,12 +1532,20 @@ function findCommandInExclusive(
 
     // Direct match: first term is the command we're looking for
     if (firstTerm?.type === "command" && firstTerm.name === commandName) {
-      return termGroup;
+      const id = getCommandUsageId(firstTerm);
+      if (
+        selectedCommandUsage == null ||
+        id != null && selectedCommandUsage.has(id)
+      ) return termGroup;
     }
 
     // Recursive case: first term is another exclusive (nested structure)
     if (firstTerm?.type === "exclusive") {
-      const found = findCommandInExclusive(firstTerm, commandName);
+      const found = findCommandInExclusiveMatching(
+        firstTerm,
+        commandName,
+        selectedCommandUsage,
+      );
       if (found) {
         // Replace the nested exclusive with the found terms,
         // then append the rest of termGroup (e.g., global options)
@@ -1837,6 +1862,7 @@ function buildDocPage(
     }
   }
   const sections: DocSection[] = buildingSections;
+  const selectedCommandUsageIds = new Set(selectedCommandUsage);
   const usage = [...normalizeUsage(parser.usage)];
   const maybeApplyCommandUsageLine = (
     term: UsageTerm | undefined,
@@ -1869,7 +1895,7 @@ function buildDocPage(
     if (i >= usage.length) break;
     let term = usage[i];
     if (term.type === "exclusive") {
-      const found = findCommandInExclusive(term, arg);
+      const found = findCommandInExclusive(term, arg, selectedCommandUsageIds);
       if (found) {
         usage.splice(i, 1, ...found);
         term = usage[i];
@@ -1901,7 +1927,7 @@ function buildDocPage(
     usage: revealMatchedCommandUsage(
       usage,
       matchedCommandPath,
-      new Set(selectedCommandUsage),
+      selectedCommandUsageIds,
     ),
     sections,
     ...(brief != null && { brief: cloneMessage(brief) }),
