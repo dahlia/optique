@@ -99,6 +99,17 @@ program decide what to do with the existing file:
     converted, so a failing input never leads to a prompt.
  -  Otherwise, as in scripts, pipelines, and CI, it refuses and exits 1.
 
+A destination that is not a regular file, such as a directory or a FIFO, is
+rejected even with `--force`.  Replacing a regular file writes the CSV to a
+temporary file in the same directory and renames it over the destination.
+The rename replaces the directory entry rather than the file's contents, so
+other hard links to the old file and the target of a symbolic link are left
+as they were.  The new file gets default permissions instead of the old
+file's.  If a write fails, for example because the disk is full, the
+program removes the file it created, whether that is the new destination or
+the temporary file, so a failed run does not leave a partial CSV that the
+next run would refuse to replace.
+
 The prompt is asked from *src/cli.ts* through *src/confirm.ts*, in the
 application code that runs after parsing, not in a value parser.  `run()` exits
 the process for `--help`, `--version`, and parse errors before that code runs,
@@ -121,8 +132,11 @@ to it, even with `--force`.  A derived destination can never equal the input
 path, because it always ends in `.csv` while the extension it replaces is
 `.tsv`.
 
-The check has limits.  It is a snapshot taken just before the write, so
-another process could still swap either path afterward.  It also relies on
+The check has limits.  It is a snapshot taken before the prompt, so another
+process could still swap either path afterward.  Because the replacement
+renames a new file into place, such a swap cannot make the program write into
+the input, but the check may then have looked at a different file than the
+one replaced.  It also relies on
 the filesystem reporting stable device and inode numbers, which some network
 and virtual filesystems do not.  A plain string comparison would be weaker
 still: it misses links, `..` segments, and case-insensitive filesystems.
@@ -142,6 +156,10 @@ ending the input declines.  *src/app.test.ts* uses temporary directories to
 check the default and explicit destinations, refusal with the destination
 contents unchanged, forced replacement, both answers to the confirmation, and
 rejection of the input under another spelling, through a hard link, and through
-a symbolic link.  *src/cli.test.ts* runs *src/cli.ts* as a subprocess and
-checks stdout, stderr, and exit status for the same commands as above, and that
-help, version, and parse errors leave every file in the directory as it was.
+a symbolic link.  It also checks that replacing a destination leaves other hard
+links and symbolic link targets unchanged, cannot be redirected into the input
+while the question is open, and rejects a directory or FIFO.  *src/cli.test.ts*
+runs *src/cli.ts* as a subprocess and checks stdout, stderr, and exit status
+for the same commands as above, and that help, version, and parse errors leave
+every file in the directory as it was. On Linux it also runs the CLI under a
+zero file size limit to check that a failed write leaves no partial output.
