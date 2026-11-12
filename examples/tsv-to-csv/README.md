@@ -4,9 +4,11 @@ Converting a file with an explicit output policy
 This example converts a tab-separated file to CSV.  The conversion itself is
 deliberately small; the example is about the decisions around it: a required
 input, an optional output whose name is derived when omitted, and what happens
-when the output already exists.
+when the output already exists.  The cookbook recipe
+[file conversion with a derived output name] introduces the parser; this
+directory contains the complete, tested program.
 
-~~~~
+~~~~ text
 tsv-to-csv [-o/--output OUTPUT] [-f/--force] INPUT
 ~~~~
 
@@ -20,6 +22,8 @@ On success the program writes the output path to stdout and exits 0.  Every
 diagnostic, including a refused overwrite, goes to stderr with a
 `tsv-to-csv:` prefix and exit status 1.  Parse errors also exit 1, with usage
 on stderr.
+
+[file conversion with a derived output name]: https://optique.dev/cookbook.html#file-conversion-with-a-derived-output-name
 
 
 Run from a checkout

@@ -2505,8 +2505,9 @@ Application helper patterns
 
 These recipes collect small pieces of application code that usually grow
 around a parser: domain types for parsed values, runner settings shared by
-several entry points, and build metadata.  They use only existing
-*@optique/core* and *@optique/run* APIs.
+several entry points, build metadata, and the input and output arguments of
+a file converter.  They use only existing *@optique/core* and *@optique/run*
+APIs.
 
 ### Path objects from validated paths
 
@@ -2877,6 +2878,63 @@ still succeed.
 
 [reproducible builds]: https://reproducible-builds.org/
 [`SOURCE_DATE_EPOCH`]: https://reproducible-builds.org/docs/source-date-epoch/
+
+### File conversion with a derived output name
+
+A converter usually takes one required input and an optional output.  When
+the output is omitted, the program derives it from the input, for example
+*data.tsv* to *data.csv*:
+
+~~~~ typescript twoslash
+import { extname } from "node:path";
+import { object } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { argument, option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+import { path } from "@optique/run/valueparser";
+
+const parser = object({
+  input: argument(path({ metavar: "INPUT", mustExist: true, type: "file" })),
+  output: optional(
+    option(
+      "-o",
+      "--output",
+      path({ metavar: "OUTPUT", type: "file", allowCreate: true }),
+    ),
+  ),
+  force: option("-f", "--force"),
+});
+
+function deriveOutputPath(input: string): string {
+  const extension = extname(input);
+  const stem = extension.toLowerCase() === ".tsv"
+    ? input.slice(0, -extension.length)
+    : input;
+  return `${stem}.csv`;
+}
+
+const config = run(parser, { help: "option" });
+const output = config.output ?? deriveOutputPath(config.input);
+~~~~
+
+Use `optional()` rather than `withDefault()` here.  The fallback depends on
+another argument, so the application computes it after parsing, where both
+values are available.  The input is validated while parsing; the output only
+needs an existing parent directory, since it may not exist yet.
+
+Deliberately, the output option does not use `mustNotExist: true`.  That
+check runs during parsing and does not reserve the name, it would reject the
+path before `--force` could take effect, and it never sees the derived
+default.  Whether to replace an existing file is a decision for the code that
+writes it, right before it writes.
+
+The repository's *examples/tsv-to-csv* directory contains the complete
+program and its tests.  Its [README] covers the parts this recipe leaves out:
+creating the output without racing other processes, `--force`, an optional
+confirmation prompt for interactive terminals, consistent use of stdout and
+stderr, and what its same-file protection does and does not catch.
+
+[README]: https://github.com/dahlia/optique/tree/main/examples/tsv-to-csv
 
 
 Integration patterns
