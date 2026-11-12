@@ -1600,6 +1600,12 @@ function isStringArray(value: unknown): boolean {
  */
 function screenSuggestionInput(item: unknown): Suggestion | undefined {
   if (typeof item === "string") return { kind: "literal", text: item };
+  if (isThenable(item)) {
+    // A promise is never a candidate, but skipping a rejected one without a
+    // handler would surface as an unhandled rejection.
+    void Promise.resolve(item).then(undefined, () => {});
+    return undefined;
+  }
   if (item == null || typeof item !== "object" || !("kind" in item)) {
     return undefined;
   }

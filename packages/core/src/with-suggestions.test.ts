@@ -717,6 +717,27 @@ describe("withSuggestions", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     });
 
+    it("handles rejections of promise candidates it skips", async () => {
+      let handled = 0;
+      const candidate = () => ({
+        then(_onFulfilled?: unknown, onRejected?: unknown) {
+          if (typeof onRejected === "function") handled++;
+        },
+      });
+      const sync = withSuggestions(string(), {
+        suggest: () => ["ok", candidate()] as never,
+      });
+      assert.deepEqual(texts(Array.from(sync.suggest!(""))), ["ok"]);
+      const asyncParser = withSuggestions(string(), {
+        mode: "async",
+        suggest: () => ["ok", candidate()] as never,
+      });
+      assert.deepEqual(texts(await collect(asyncParser.suggest!(""))), [
+        "ok",
+      ]);
+      assert.equal(handled, 2);
+    });
+
     it("yields nothing for a bare string returned in async mode", async () => {
       const parser = withSuggestions(string(), {
         mode: "async",
