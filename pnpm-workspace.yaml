@@ -1,8 +1,8 @@
 packages:
-- packages/*
-- examples/*
-- docs
-- benchmarks/startup
+  - packages/*
+  - examples/*
+  - docs
+  - benchmarks/startup
 
 ignoreWorkspaceCycles: true
 
@@ -31,5 +31,8 @@ allowBuilds:
 
 engineStrict: true
 nodeVersion: 24.15.0
+# Temporary popup compilation fix from shikijs/shiki#1349 at
+# a5afc63679578b5d197665a8286ada283e76347b. Remove after verifying that
+# the installed release contains the fix and documentation checks pass.
 patchedDependencies:
-  vite@7.3.5: patches/vite@7.3.5.patch
+  '@shikijs/vitepress-twoslash@4.6.0': patches/@shikijs__vitepress-twoslash@4.6.0.patch
