@@ -2648,6 +2648,141 @@ absolute path, for example, `unmap()` returns that absolute path, and help
 or `format()` will show it instead of what the user typed.  That is fine as
 long as the result is still a valid input for the wrapped `path()` parser.
 
+### Shared runner options across entry points
+
+A project often has more than one place that calls `run()`: the main
+executable, a second binary in the same package, a development script, and
+tests.  Each of them should expose the same help, version, and completion
+entries, or users will find `--version` working in one place and not in
+another.  Put those settings in a small factory and let each entry point
+supply only what differs:
+
+~~~~ typescript twoslash
+import type { RunOptions } from "@optique/run";
+
+export function sharedRunOptions(version: string) {
+  return {
+    help: "option",
+    version: { value: version, option: { names: ["-V", "--version"] } },
+    completion: "option",
+    showDefault: true,
+  } as const satisfies RunOptions;
+}
+~~~~
+
+The `satisfies` operator checks the object against `RunOptions` without
+widening it, so a misspelled key or an invalid mode fails at compile time
+while each property keeps its precise type.  The factory takes the version
+as a parameter rather than importing it, so the same function works for
+every binary and for tests that pin a fixed value.
+
+The factory deliberately leaves out `args`, `stdout`, `stderr`, and `onExit`.
+Those describe one invocation, not the application, so pass them where the
+invocation happens:
+
+~~~~ typescript twoslash
+import type { RunOptions } from "@optique/run";
+function sharedRunOptions(version: string) {
+  return {
+    help: "option",
+    version: { value: version, option: { names: ["-V", "--version"] } },
+    completion: "option",
+    showDefault: true,
+  } as const satisfies RunOptions;
+}
+const output: string[] = [];
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({ input: argument(string({ metavar: "FILE" })) });
+
+// The executable reads process.argv and writes to the terminal:
+const config = run(parser, sharedRunOptions("1.2.3"));
+
+// A test supplies its own arguments and captures output instead:
+run(parser, {
+  ...sharedRunOptions("0.0.0-test"),
+  args: ["--version"],
+  stdout: (text) => output.push(text),
+  onExit: (code) => {
+    throw new Error(`Exited with ${code}.`);
+  },
+});
+~~~~
+
+For tests, [`captureRun()`](./concepts/testing.md#testing-a-run) from
+*@optique/testing/run* supplies the output and exit callbacks itself and accepts
+the rest of the shared options unchanged.
+
+#### Option and subcommand forms
+
+Each of `help`, `version`, and `completion` can be offered as an option
+(`--help`), a subcommand (`help`), or both.  The choice depends on the shape
+of the CLI:
+
+ -  The *option form* fits single-purpose tools, especially those whose
+    positional arguments accept arbitrary text.  Built-in entries are only
+    recognized when the parser leaves the token unconsumed, so a tool that
+    takes a positional file name reads `mytool help` as a file named *help*.
+ -  The *subcommand form* fits tools built around subcommands, where
+    `mytool help deploy` and `mytool completion bash` read naturally next to
+    the other commands.
+
+A factory can take the form as a parameter so each binary picks the one that
+matches its parser:
+
+~~~~ typescript twoslash
+import type { RunOptions } from "@optique/run";
+
+export function sharedRunOptions(
+  version: string,
+  form: "option" | "both" = "option",
+) {
+  return {
+    help: form,
+    version: form === "both"
+      ? { value: version, command: true, option: true }
+      : version,
+    completion: form === "both"
+      ? {
+        command: { names: ["completion", "completions"], group: "Other" },
+        option: true,
+      }
+      : "option",
+  } as const satisfies RunOptions;
+}
+~~~~
+
+Option names are given with `names`, all of which appear in help.  For
+commands, the first name is shown and the remaining ones are hidden aliases,
+which is how the `completions` spelling above stays accepted without
+cluttering help.  `group` moves the completion command under its own help
+heading.  See [help system options](./concepts/runners.md#help-system-options),
+[version system options](./concepts/runners.md#version-system-options), and
+[command name customization](./concepts/runners.md#command-name-customization)
+for the full set of sub-options.
+
+#### Program names
+
+Leave `programName` out of the shared options unless the application needs a
+fixed name.  When it is omitted, `run()` uses the file name of the script
+being executed (the base name of `process.argv[1]`), and a `Program` supplies
+its metadata name instead.  That keeps each entry point's help accurate
+without coordination.  Under Node.js and Deno, a command installed as a
+symbolic link to the script, which is what npm does on POSIX systems, shows
+the link's name.
+
+Other launch paths report the script's own file name: `node dist/cli.js`,
+npm's command shims on Windows, Bun (which resolves the symbolic link before
+setting `process.argv[1]`), and some bundled or compiled executables.  If help
+must always show the published command name, set `programName` for that
+entry point, or give the `Program` a metadata name.  Because it differs
+between binaries, it belongs next to the `run()` call rather than in the
+shared factory.
+
 
 Integration patterns
 --------------------
