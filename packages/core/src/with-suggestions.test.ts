@@ -486,6 +486,38 @@ describe("withSuggestions", () => {
   });
 
   describe("failure policy", () => {
+    it("ends a source whose iterator returns a non-object result", async () => {
+      let closed = 0;
+      const malformed = () => ({
+        [Symbol.iterator]: () => ({
+          next: () => 0,
+          return() {
+            closed++;
+            return { done: true, value: undefined };
+          },
+        }),
+      });
+      const sync = withSuggestions(string(), {
+        suggest: () => malformed() as never,
+      });
+      assert.deepEqual(Array.from(sync.suggest!("")), []);
+      const asyncParser = withSuggestions(string(), {
+        mode: "async",
+        suggest: () =>
+          ({
+            [Symbol.asyncIterator]: () => ({
+              next: () => Promise.resolve(0),
+              return() {
+                closed++;
+                return Promise.resolve({ done: true, value: undefined });
+              },
+            }),
+          }) as never,
+      });
+      assert.deepEqual(await collect(asyncParser.suggest!("")), []);
+      assert.equal(closed, 2);
+    });
+
     it("ignores a provider that throws when called", async () => {
       const sync = withSuggestions(string(), {
         suggest() {

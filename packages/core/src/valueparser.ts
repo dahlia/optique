@@ -1706,6 +1706,7 @@ function* guardedSuggestions(
       let suggestion: Suggestion | undefined;
       try {
         const step = iterator.next();
+        if (!isObjectLike(step)) return;
         if (step.done) {
           finished = true;
           return;
@@ -1743,6 +1744,7 @@ async function* guardedSuggestionsAsync(
       let suggestion: Suggestion | undefined;
       try {
         const step = await iterator.next();
+        if (!isObjectLike(step)) return;
         if (step.done) {
           finished = true;
           return;
