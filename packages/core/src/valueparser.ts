@@ -1,4 +1,4 @@
-import { captureDocValue } from "./internal/doc-metadata.ts";
+import { captureDocValue, getDocValue } from "./internal/doc-metadata.ts";
 import {
   cloneMessage,
   lineBreak,
@@ -24,6 +24,8 @@ import {
   suggestWithDependency,
 } from "./internal/dependency.ts";
 import {
+  dispatchByMode,
+  dispatchIterableByMode,
   mapMaybePromiseByMode,
   wrapForMode,
   wrapIterableForMode,
@@ -1160,6 +1162,613 @@ function preserveNormalizedDerivedMetadata<M extends Mode, T>(
       },
       enumerable: true,
     });
+  }
+}
+
+/**
+ * A completion candidate produced by a {@link withSuggestions} provider.
+ *
+ * A string is shorthand for a literal suggestion with that text.
+ *
+ * @since 1.4.0
+ */
+export type SuggestionInput = string | Suggestion;
+
+/**
+ * Options shared by every {@link withSuggestions} provider mode.
+ *
+ * @since 1.4.0
+ */
+export interface WithSuggestionsOptionsBase {
+  /**
+   * Whether to keep the wrapped parser's own suggestions.  When `true`, they
+   * are produced first, followed by the provider's candidates.  Literal
+   * candidates whose text was already produced are skipped.
+   *
+   * @default `false`
+   */
+  readonly includeExisting?: boolean;
+
+  /**
+   * Whether to drop provider literals whose text does not start with the
+   * completion prefix.  Turn this off when the provider already matches in
+   * its own way, such as case-insensitively or by completing `42` to `#42`,
+   * and returns spellings that differ from the typed prefix.  Suggestions
+   * kept by `includeExisting` are never filtered by this wrapper.
+   *
+   * @default `true`
+   */
+  readonly filterByPrefix?: boolean;
+}
+
+/**
+ * Options for {@link withSuggestions} with a synchronous provider.
+ *
+ * @since 1.4.0
+ */
+export interface WithSuggestionsSyncOptions extends WithSuggestionsOptionsBase {
+  /**
+   * The provider mode.  Synchronous providers keep the wrapped parser's mode.
+   *
+   * @default `"sync"`
+   */
+  readonly mode?: "sync";
+
+  /**
+   * Returns completion candidates for the given prefix.  This is a shell
+   * completion provider, unrelated to the typo hints configured by
+   * `choice()`'s `suggest` option.  It is called only during completion,
+   * never while parsing.  Failures are swallowed without logging, so log
+   * inside the provider if you need diagnostics.
+   *
+   * Return a collection of candidates, not a bare string: a string result
+   * yields no suggestions rather than one suggestion per character.
+   *
+   * @param prefix The current input prefix to complete.
+   * @returns The completion candidates.
+   */
+  readonly suggest: (prefix: string) => Iterable<SuggestionInput>;
+}
+
+/**
+ * Options for {@link withSuggestions} with an asynchronous provider.
+ *
+ * @since 1.4.0
+ */
+export interface WithSuggestionsAsyncOptions
+  extends WithSuggestionsOptionsBase {
+  /**
+   * The provider mode.  Asynchronous providers make the resulting value
+   * parser asynchronous.
+   */
+  readonly mode: "async";
+
+  /**
+   * Returns completion candidates for the given prefix.  It may be an async
+   * generator, or return an iterable, an async iterable, or a promise of
+   * either.  This is a shell completion provider, unrelated to the typo hints
+   * configured by `choice()`'s `suggest` option.  It is called only during
+   * completion, never while parsing.  Failures are swallowed without logging,
+   * so log inside the provider if you need diagnostics.  A bare string result
+   * yields no suggestions.
+   *
+   * @param prefix The current input prefix to complete.
+   * @returns The completion candidates.
+   */
+  readonly suggest: (
+    prefix: string,
+  ) =>
+    | Iterable<SuggestionInput>
+    | AsyncIterable<SuggestionInput>
+    | Promise<Iterable<SuggestionInput> | AsyncIterable<SuggestionInput>>;
+}
+
+/**
+ * Options for {@link withSuggestions}.
+ *
+ * @since 1.4.0
+ */
+export type WithSuggestionsOptions =
+  | WithSuggestionsSyncOptions
+  | WithSuggestionsAsyncOptions;
+
+/**
+ * Attaches completion candidates to an existing value parser.
+ *
+ * The returned parser accepts the same input and produces the same values as
+ * `parser`: parsing, formatting, `normalize()`, `validate()`, `choices`,
+ * the placeholder, and dependency-derived behavior are all delegated to it.
+ * Only `suggest()` changes.  By default the provider's candidates replace the
+ * wrapped parser's own suggestions; set `includeExisting` to keep them.
+ *
+ * The provider receives the raw completion prefix, so it can filter on the
+ * server side, and literal candidates that do not start with the prefix are
+ * dropped afterwards unless `filterByPrefix` is `false`.  Completion is best-effort: if the provider throws,
+ * rejects, or fails during iteration, candidates produced so far are kept and
+ * the rest are skipped.  Malformed candidates are skipped.
+ *
+ * A synchronous provider keeps the wrapped parser's mode.  An asynchronous
+ * provider (`mode: "async"`) makes the result asynchronous, so `parse()`
+ * returns a promise even when the wrapped parser is synchronous.
+ *
+ * @example
+ * ```typescript
+ * const issue = withSuggestions(integer({ min: 1 }), {
+ *   mode: "async",
+ *   async *suggest(prefix) {
+ *     yield* await listIssueNumbers(prefix);
+ *   },
+ * });
+ * ```
+ *
+ * @template M The mode of the wrapped parser.
+ * @template T The value type produced by the wrapped parser.
+ * @param parser The value parser to attach suggestions to.
+ * @param options The completion provider and its options.
+ * @returns A value parser that accepts the same input as `parser` and uses the
+ *          provider for completion.
+ * @throws {TypeError} If `parser` is not a value parser or is a dependency
+ *   source, or if `options` is invalid.
+ * @since 1.4.0
+ */
+export function withSuggestions<M extends Mode, T>(
+  parser: ValueParser<M, T>,
+  options: WithSuggestionsSyncOptions,
+): ValueParser<M, T>;
+export function withSuggestions<M extends Mode, T>(
+  parser: ValueParser<M, T>,
+  options: WithSuggestionsAsyncOptions,
+): ValueParser<"async", T>;
+export function withSuggestions<M extends Mode, T>(
+  parser: ValueParser<M, T>,
+  options: WithSuggestionsOptions,
+): ValueParser<M | "async", T>;
+export function withSuggestions<M extends Mode, T>(
+  parser: ValueParser<M, T>,
+  options: WithSuggestionsOptions,
+): ValueParser<Mode, T> {
+  if (!isValueParser(parser)) {
+    throw new TypeError("Expected parser to be a value parser.");
+  }
+  if (options == null || typeof options !== "object") {
+    throw new TypeError("Expected options to be an object.");
+  }
+  if (typeof options.suggest !== "function") {
+    throw new TypeError("Expected suggest to be a function.");
+  }
+  checkEnumOption(options, "mode", ["sync", "async"]);
+  checkBooleanOption(options, "includeExisting");
+  checkBooleanOption(options, "filterByPrefix");
+  if (isDependencySource(parser)) {
+    throw new TypeError(
+      "Cannot attach suggestions to a dependency source directly.",
+    );
+  }
+  const inner: ValueParser<Mode, T> = parser;
+  const providerMode: Mode = options.mode ?? "sync";
+  const resultMode: Mode = providerMode === "async" ? "async" : inner.mode;
+  const lift = resultMode !== inner.mode;
+  const provider: (prefix: string) => unknown = options.suggest;
+  const includeExisting = options.includeExisting ?? false;
+  const filterByPrefix = options.filterByPrefix ?? true;
+  const existingSuggest = includeExisting
+    ? inner.suggest?.bind(inner)
+    : undefined;
+  const normalizeValue = inner.normalize?.bind(inner);
+  const validate = inner.validate?.bind(inner);
+
+  const getProviderSource = (prefix: string) => (): unknown => {
+    const source = provider(prefix);
+    return providerMode === "sync" ? checkSyncProviderResult(source) : source;
+  };
+  const suggestFrom = (
+    prefix: string,
+    existing: (() => unknown) | undefined,
+  ): ModeIterable<Mode, Suggestion> =>
+    dispatchIterableByMode(
+      resultMode,
+      () =>
+        suggestFromSources(
+          createSuggestionProcessors(prefix, filterByPrefix),
+          existing,
+          getProviderSource(prefix),
+        ),
+      () =>
+        suggestFromSourcesAsync(
+          createSuggestionProcessors(prefix, filterByPrefix),
+          existing,
+          getProviderSource(prefix),
+        ),
+    );
+
+  // The wrapper's methods are closures over `inner` and never use `this`,
+  // because the runtime calls dependency hooks detached and `dependency()`
+  // copies them onto a new object.
+  const wrapped: ValueParser<Mode, T> = {
+    mode: resultMode,
+    metavar: inner.metavar,
+    get placeholder(): T {
+      return inner.placeholder;
+    },
+    ...(inner.choices == null ? {} : { choices: inner.choices }),
+    parse(input: string): ModeValue<Mode, ValueParserResult<T>> {
+      return lift ? liftToAsync(() => inner.parse(input)) : inner.parse(input);
+    },
+    format(value: T): string {
+      return inner.format(value);
+    },
+    ...(normalizeValue == null ? {} : {
+      normalize(value: T): T {
+        return normalizeValue(value);
+      },
+    }),
+    ...(validate == null ? {} : {
+      validate(value: T): ValueParserResult<T> {
+        return validate(value);
+      },
+    }),
+    suggest(prefix: string): ModeIterable<Mode, Suggestion> {
+      return suggestFrom(
+        prefix,
+        existingSuggest == null ? undefined : () => existingSuggest(prefix),
+      );
+    },
+  };
+  const docValue = getDocValue(inner);
+  if (docValue != null) captureDocValue(wrapped, docValue);
+  if (isDerivedValueParser(inner)) {
+    preserveSuggestedDerivedMetadata(
+      wrapped,
+      inner,
+      lift,
+      includeExisting,
+      suggestFrom,
+    );
+  }
+  return wrapped;
+}
+
+function preserveSuggestedDerivedMetadata<T>(
+  wrapped: ValueParser<Mode, T>,
+  parser: DerivedValueParser<Mode, T, unknown>,
+  lift: boolean,
+  includeExisting: boolean,
+  suggestFrom: (
+    prefix: string,
+    existing: (() => unknown) | undefined,
+  ) => ModeIterable<Mode, Suggestion>,
+): void {
+  Object.defineProperties(wrapped, {
+    [derivedValueParserMarker]: { value: true, enumerable: true },
+    [dependencyId]: { value: parser[dependencyId], enumerable: true },
+    [parseWithDependency]: {
+      value(
+        input: string,
+        dependencyValue: unknown,
+      ): ModeValue<Mode, ValueParserResult<T>> {
+        return lift
+          ? liftToAsync(() =>
+            parser[parseWithDependency](input, dependencyValue)
+          )
+          : parser[parseWithDependency](input, dependencyValue);
+      },
+      enumerable: true,
+    },
+  });
+  if (dependencyIds in parser && parser[dependencyIds] != null) {
+    Object.defineProperty(wrapped, dependencyIds, {
+      value: parser[dependencyIds],
+      enumerable: true,
+    });
+  }
+  if (defaultValues in parser && parser[defaultValues] != null) {
+    Object.defineProperty(wrapped, defaultValues, {
+      value: parser[defaultValues],
+      enumerable: true,
+    });
+  }
+  if (singleDefaultValue in parser && parser[singleDefaultValue] != null) {
+    Object.defineProperty(wrapped, singleDefaultValue, {
+      value: parser[singleDefaultValue],
+      enumerable: true,
+    });
+  }
+  // When replacing, the hook is omitted: the provider does not depend on the
+  // dependency values, so completion falls back to the public suggest().
+  if (
+    includeExisting && suggestWithDependency in parser &&
+    parser[suggestWithDependency] != null
+  ) {
+    const existing = parser[suggestWithDependency].bind(parser);
+    Object.defineProperty(wrapped, suggestWithDependency, {
+      value(
+        prefix: string,
+        dependencyValue: unknown,
+      ): ModeIterable<Mode, Suggestion> {
+        return suggestFrom(prefix, () => existing(prefix, dependencyValue));
+      },
+      enumerable: true,
+    });
+  }
+}
+
+/**
+ * Lifts a synchronous computation to async mode.  It runs inside an async
+ * function, so a synchronous throw becomes a rejected promise, and the
+ * resolved result object is passed through unchanged.
+ */
+function liftToAsync<T>(compute: () => T | Promise<T>): ModeValue<Mode, T> {
+  return dispatchByMode(
+    "async",
+    () => wrapForMode("sync", compute()),
+    async () => await compute(),
+  );
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return isObjectLike(value) && "then" in value &&
+    typeof value.then === "function";
+}
+
+/**
+ * Rejects results a synchronous provider must not return, even when the
+ * resulting parser is async.  A thenable gets a rejection handler first so
+ * that an invalid async callback cannot cause an unhandled rejection.
+ * @throws {TypeError} If the result is not a synchronous iterable.
+ */
+function checkSyncProviderResult(source: unknown): unknown {
+  if (isThenable(source)) {
+    void Promise.resolve(source).then(undefined, () => {});
+    throw new TypeError("A sync suggestion provider returned a promise.");
+  }
+  // Expose only the sync protocol so a dual-protocol result keeps its
+  // declared synchronous behavior when the wrapped parser is async.
+  return { [Symbol.iterator]: getSyncIteratorMethod(source) };
+}
+
+function isObjectLike(value: unknown): value is object {
+  return value != null &&
+    (typeof value === "object" || typeof value === "function");
+}
+
+/**
+ * @throws {TypeError} If the source is not a non-string iterable.
+ */
+function getSyncIteratorMethod(source: unknown): () => Iterator<unknown> {
+  if (
+    !isObjectLike(source) || !(Symbol.iterator in source) ||
+    typeof source[Symbol.iterator] !== "function"
+  ) {
+    throw new TypeError("Expected an iterable of suggestions.");
+  }
+  const iterable = source as Iterable<unknown>;
+  return () => iterable[Symbol.iterator]();
+}
+
+/**
+ * @throws {TypeError} If the source is not a non-string iterable.
+ */
+function getSyncIterator(source: unknown): Iterator<unknown> {
+  return getSyncIteratorMethod(source)();
+}
+
+/**
+ * @throws {TypeError} If the source is neither an async iterable nor a
+ *   non-string iterable.
+ */
+function getAnyIterator(
+  source: unknown,
+): Iterator<unknown> | AsyncIterator<unknown> {
+  if (
+    isObjectLike(source) && Symbol.asyncIterator in source &&
+    typeof source[Symbol.asyncIterator] === "function"
+  ) {
+    const iterable = source as AsyncIterable<unknown>;
+    return iterable[Symbol.asyncIterator]();
+  }
+  return getSyncIterator(source);
+}
+
+const fileSuggestionTypes: ReadonlySet<unknown> = new Set([
+  "file",
+  "directory",
+  "any",
+]);
+
+function isOptionalOfType(
+  item: object,
+  key: string,
+  check: (value: unknown) => boolean,
+): boolean {
+  const value: unknown = Reflect.get(item, key);
+  return value === undefined || check(value);
+}
+
+function isString(value: unknown): boolean {
+  return typeof value === "string";
+}
+
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every(isString);
+}
+
+/**
+ * Screens a provider item for the `Suggestion` fields that completion encoding
+ * relies on: required fields and the types of optional ones.  This is shape
+ * checking, not full validation; message terms inside a description are
+ * trusted.
+ */
+function screenSuggestionInput(item: unknown): Suggestion | undefined {
+  if (typeof item === "string") return { kind: "literal", text: item };
+  if (isThenable(item)) {
+    // A promise is never a candidate, but skipping a rejected one without a
+    // handler would surface as an unhandled rejection.
+    void Promise.resolve(item).then(undefined, () => {});
+    return undefined;
+  }
+  if (item == null || typeof item !== "object" || !("kind" in item)) {
+    return undefined;
+  }
+  if (!isOptionalOfType(item, "description", Array.isArray)) return undefined;
+  if (item.kind === "literal") {
+    return "text" in item && typeof item.text === "string"
+      ? item as Suggestion
+      : undefined;
+  }
+  if (item.kind === "file") {
+    return "type" in item && fileSuggestionTypes.has(item.type) &&
+        isOptionalOfType(item, "pattern", isString) &&
+        isOptionalOfType(item, "prefix", isString) &&
+        isOptionalOfType(item, "extensions", isStringArray) &&
+        isOptionalOfType(
+          item,
+          "includeHidden",
+          (value) => typeof value === "boolean",
+        )
+      ? item as Suggestion
+      : undefined;
+  }
+  return undefined;
+}
+
+type SuggestionProcessor = (item: unknown) => Suggestion | undefined;
+
+interface SuggestionProcessors {
+  readonly existing: SuggestionProcessor;
+  readonly provider: SuggestionProcessor;
+}
+
+function createSuggestionProcessors(
+  prefix: string,
+  filterByPrefix: boolean,
+): SuggestionProcessors {
+  const seen = new Set<string>();
+  const dedupe = (suggestion: Suggestion): Suggestion | undefined => {
+    if (suggestion.kind !== "literal") return suggestion;
+    if (seen.has(suggestion.text)) return undefined;
+    seen.add(suggestion.text);
+    return suggestion;
+  };
+  return {
+    // Existing suggestions keep their own prefix semantics (for example,
+    // normalizeInput() matches a normalized prefix), so they are neither
+    // screened nor re-filtered here.
+    existing: (item) => dedupe(item as Suggestion),
+    provider(item) {
+      const suggestion = screenSuggestionInput(item);
+      if (
+        suggestion == null ||
+        (filterByPrefix && suggestion.kind === "literal" &&
+          !suggestion.text.startsWith(prefix))
+      ) {
+        return undefined;
+      }
+      return dedupe(suggestion);
+    },
+  };
+}
+
+function* suggestFromSources(
+  processors: SuggestionProcessors,
+  existing: (() => unknown) | undefined,
+  provider: () => unknown,
+): Generator<Suggestion, void, undefined> {
+  if (existing != null) {
+    yield* guardedSuggestions(existing, processors.existing);
+  }
+  yield* guardedSuggestions(provider, processors.provider);
+}
+
+async function* suggestFromSourcesAsync(
+  processors: SuggestionProcessors,
+  existing: (() => unknown) | undefined,
+  provider: () => unknown,
+): AsyncGenerator<Suggestion, void, undefined> {
+  if (existing != null) {
+    yield* guardedSuggestionsAsync(existing, processors.existing);
+  }
+  yield* guardedSuggestionsAsync(provider, processors.provider);
+}
+
+/**
+ * Yields processed items from one source, ending quietly on any failure.
+ * Yields happen outside the guarded regions, so consumer cancellation is never
+ * mistaken for a source failure, and the source iterator is closed when the
+ * consumer stops early.
+ */
+function* guardedSuggestions(
+  getSource: () => unknown,
+  process: SuggestionProcessor,
+): Generator<Suggestion, void, undefined> {
+  let iterator: Iterator<unknown>;
+  try {
+    iterator = getSyncIterator(getSource());
+  } catch {
+    return;
+  }
+  let finished = false;
+  try {
+    while (true) {
+      let suggestion: Suggestion | undefined;
+      try {
+        const step = iterator.next();
+        if (!isObjectLike(step)) return;
+        if (step.done) {
+          finished = true;
+          return;
+        }
+        suggestion = process(step.value);
+      } catch {
+        return;
+      }
+      if (suggestion != null) yield suggestion;
+    }
+  } finally {
+    if (!finished) {
+      try {
+        iterator.return?.();
+      } catch {
+        // Closing is best-effort.
+      }
+    }
+  }
+}
+
+async function* guardedSuggestionsAsync(
+  getSource: () => unknown,
+  process: SuggestionProcessor,
+): AsyncGenerator<Suggestion, void, undefined> {
+  let iterator: Iterator<unknown> | AsyncIterator<unknown>;
+  try {
+    iterator = getAnyIterator(await getSource());
+  } catch {
+    return;
+  }
+  let finished = false;
+  try {
+    while (true) {
+      let suggestion: Suggestion | undefined;
+      try {
+        const step = await iterator.next();
+        if (!isObjectLike(step)) return;
+        if (step.done) {
+          finished = true;
+          return;
+        }
+        suggestion = process(step.value);
+      } catch {
+        return;
+      }
+      if (suggestion != null) yield suggestion;
+    }
+  } finally {
+    if (!finished) {
+      try {
+        await iterator.return?.();
+      } catch {
+        // Closing is best-effort.
+      }
+    }
   }
 }
 

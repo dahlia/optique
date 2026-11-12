@@ -14,6 +14,7 @@ const valueParsers = [
       ["biject", "biject-parser"],
       ["transform", "transform-combinator"],
       ["normalizeInput", "normalizeinput-combinator"],
+      ["withSuggestions", "withsuggestions-combinator"],
       ["firstOf", "firstof-combinator"],
       ["keyValue", "keyvalue-parser"],
     ],
