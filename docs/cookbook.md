@@ -2500,6 +2500,155 @@ The repository includes a runnable version of this pattern in
 [lifecycle hooks](./concepts/discover.md#lifecycle-hooks).
 
 
+Application helper patterns
+---------------------------
+
+These recipes collect small pieces of application code that usually grow
+around a parser: domain types for parsed values, runner settings shared by
+several entry points, and build metadata.  They use only existing
+*@optique/core* and *@optique/run* APIs.
+
+### Path objects from validated paths
+
+*This API is available since Optique 1.2.0.*
+
+The [`path()`](./concepts/valueparsers.md#path-parser) value parser returns
+a string.  Many applications prefer to pass a richer path object through the
+rest of their code, either from a path library or a type of their own.
+Wrap `path()` with
+[`transform()`](./concepts/valueparsers.md#transform-combinator) to convert the
+validated string once, at the parser boundary:
+
+~~~~ typescript twoslash
+import { basename, join } from "node:path";
+import { transform } from "@optique/core/valueparser";
+import { path, type PathOptions } from "@optique/run/valueparser";
+
+/** A minimal application-owned path type. */
+class AppPath {
+  readonly value: string;
+
+  constructor(value: string) {
+    this.value = value;
+  }
+
+  get name(): string {
+    return basename(this.value);
+  }
+
+  join(...segments: readonly string[]): AppPath {
+    return new AppPath(join(this.value, ...segments));
+  }
+
+  toString(): string {
+    return this.value;
+  }
+}
+
+function appPath(options: PathOptions = {}) {
+  return transform(path(options), {
+    map: (value) => new AppPath(value),
+    unmap: (value) => value.value,
+  });
+}
+~~~~
+
+The wrapped `path()` still does all of the validation, and its error messages
+are unchanged.  For command-line input, `map()` runs only after `path()` has
+accepted the value, so the class receives paths that passed the checks you
+asked for.  The inverse `unmap()` function turns an `AppPath` back into
+command-line text.  Optique uses it whenever it needs to show a value as
+input, such as `format()` or a default value displayed in help.
+
+`transform()` also keeps the wrapped parser's metavar and completion
+suggestions.  Shells therefore still offer native file and directory
+completion for these arguments, as described in
+[file path completion integration](#file-path-completion-integration).
+
+Small presets on top of `appPath()` keep common checks consistent across
+commands:
+
+~~~~ typescript twoslash
+import { transform } from "@optique/core/valueparser";
+import { path, type PathOptions } from "@optique/run/valueparser";
+
+class AppPath {
+  readonly value: string;
+  constructor(value: string) {
+    this.value = value;
+  }
+  join(...segments: readonly string[]): AppPath {
+    return new AppPath(`${this.value}/${segments.join("/")}`);
+  }
+}
+
+function appPath(options: PathOptions = {}) {
+  return transform(path(options), {
+    map: (value) => new AppPath(value),
+    unmap: (value) => value.value,
+  });
+}
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { withDefault } from "@optique/core/modifiers";
+import { argument, option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+interface PresetOptions {
+  readonly metavar?: PathOptions["metavar"];
+  readonly extensions?: readonly string[];
+}
+
+function inputFile(options: PresetOptions = {}) {
+  return appPath({ ...options, mustExist: true, type: "file" });
+}
+
+function inputDirectory(options: Omit<PresetOptions, "extensions"> = {}) {
+  return appPath({ ...options, mustExist: true, type: "directory" });
+}
+
+const parser = object({
+  source: argument(inputFile({ metavar: "SOURCE", extensions: [".md"] })),
+  assets: withDefault(
+    option("--assets", inputDirectory({ metavar: "DIR" })),
+    new AppPath("assets"),
+  ),
+});
+
+const config = run(parser, { help: "option", showDefault: true });
+const logo = config.assets.join("logo.svg");
+//    ^?
+~~~~
+
+With `showDefault: true`, the help text renders the default through `unmap()`
+and `path()`'s `format()`, so it shows the path text rather than an object:
+
+~~~~ bash
+$ build --help
+Usage: build [--assets DIR] SOURCE
+       build --help
+
+  --assets DIR                 ["assets"]
+  SOURCE
+  --help                      Show help information.
+~~~~
+
+Note that the `type` option is only checked against the filesystem when
+`mustExist: true` is also set.  Without `mustExist`, `path({ type: "file" })`
+accepts a directory or a path that does not exist yet; `type` then only
+affects completion and whether `extensions` applies.  The presets above set
+both options together for that reason.
+
+A default value is not parsed, so `withDefault()` does not run the existence
+check for `new AppPath("assets")`.  If the default must exist, check it in
+the application before using it, or make the option required instead.
+
+Keep the transformation reversible.  If `map()` resolves the input to an
+absolute path, for example, `unmap()` returns that absolute path, and help
+or `format()` will show it instead of what the user typed.  That is fine as
+long as the result is still a valid input for the wrapped `path()` parser.
+
+
 Integration patterns
 --------------------
 
