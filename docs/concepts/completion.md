@@ -292,6 +292,30 @@ function customParser(): ValueParser<"sync", string> {
 }
 ~~~~
 
+### Adding suggestions to an existing parser
+
+When an existing value parser such as `integer()` or `string()` already
+accepts the right input and only completion is missing, wrap it with
+`withSuggestions()` instead of writing a new value parser.  Parsing,
+formatting, and validation stay with the wrapped parser:
+
+~~~~ typescript twoslash
+declare function listBranches(prefix: string): Promise<string[]>;
+// ---cut-before---
+import { string, withSuggestions } from "@optique/core/valueparser";
+
+const branch = withSuggestions(string({ metavar: "BRANCH" }), {
+  mode: "async",
+  suggest: (prefix) => listBranches(prefix),
+});
+~~~~
+
+The wrapper filters literal candidates by the prefix and turns provider
+failures into empty or partial completion, so the contract below is handled
+for you.  See the
+[`withSuggestions()` reference](./valueparsers.md#withsuggestions-combinator)
+for modes, existing suggestions, and dependencies.
+
 ### Async completion sources
 
 When the candidate set for completions depends on network I/O, filesystem

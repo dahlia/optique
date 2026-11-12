@@ -45,9 +45,9 @@ Core rules
     parsing. Use `regExp({ flags })` for user-supplied sources, `biject()` for
     one-to-one mappings, `transform()` for mapped results, and
     `choice(values, { key })` for custom string matching that returns the
-    declared spelling. Use `normalizeInput()` for raw-string cleanup and
-    `path()` from `@optique/run/valueparser` for file-system paths. Write a
-    custom value parser only when these tools do not cover the domain.
+    declared spelling. Use `normalizeInput()` to clean raw strings,
+    `withSuggestions()` to add completions, and `path()` (*@optique/run*)
+    for paths. Write a custom value parser only when these do not fit.
  -  Since 1.4.0, `-p8080`/`-vp8080` accept attached values. Values consume
     the literal suffix (`-p=5` gives `"=5"`); full single-dash names win.
  -  Async value parsers like *@optique/git* make containing parsers async.

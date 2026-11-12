@@ -41,6 +41,7 @@ with Optique's type system.
 | `biject()`                       | *@optique/core*            | mapped value type              | One-to-one string-to-value choices                    |
 | `transform()`                    | *@optique/core*            | mapped value type              | Reversible value parser transformation                |
 | `normalizeInput()`               | *@optique/core*            | wrapped parser's value type    | Normalize raw input before validation                 |
+| `withSuggestions()`              | *@optique/core*            | wrapped parser's value type    | Attach completion candidates to a parser              |
 | `firstOf()`                      | *@optique/core*            | union of constituent types     | First-match union of value parsers                    |
 | `json()`                         | *@optique/core*            | `Json`                         | Any JSON value, with optional root type restriction   |
 | `cron()`                         | *@optique/core*            | `CronExpression`               | Cron schedule expression                              |
@@ -961,6 +962,129 @@ follow the parser's existing `validate()`/`normalize()` hooks or a
 `format()`/`parse()` round trip, so this function is not a general cleanup step
 for them.  Normalize configuration text in its schema or source when needed.
 `ValueParser.normalize()` is a separate hook for already parsed values.
+
+
+`withSuggestions()` combinator
+------------------------------
+
+*This combinator is available since Optique 1.4.0.*
+
+Use `withSuggestions()` when an existing value parser already describes what
+the CLI accepts, but shell completion should offer candidates from somewhere
+else, such as a remote service or a local cache.  The wrapped parser keeps
+deciding what is valid and what value it produces; only completion changes.
+
+~~~~ typescript twoslash
+declare function listIssueNumbers(prefix: string): Promise<string[]>;
+// ---cut-before---
+import { integer, withSuggestions } from "@optique/core/valueparser";
+
+const issue = withSuggestions(integer({ min: 1 }), {
+  mode: "async",
+  async suggest(prefix) {
+    return await listIssueNumbers(prefix);
+  },
+});
+
+const result = await issue.parse("42");
+//    ^?
+~~~~
+
+Parsing `"42"` still gives the number `42`, and `"0"` or `"abc"` still fail
+with the messages `integer()` would give.  Parsing never calls the provider;
+it runs only while the shell asks for completions.  Candidates need not cover
+every accepted value, so this is different from `choice()`, which rejects
+anything outside its list.
+
+The provider receives the current prefix, so it can ask the service for
+matching entries only.  It can yield or return strings, which become literal
+suggestions, or full `Suggestion` objects when you want descriptions or native
+file completion:
+
+~~~~ typescript twoslash
+import { message } from "@optique/core/message";
+import { string, withSuggestions } from "@optique/core/valueparser";
+
+const branch = withSuggestions(string({ metavar: "BRANCH" }), {
+  *suggest() {
+    yield "main";
+    yield { kind: "literal", text: "develop", description: message`Daily work` };
+  },
+});
+~~~~
+
+### Modes
+
+A provider is synchronous by default, and the result keeps the wrapped
+parser's mode.  With `mode: "async"`, the provider may be an async generator
+or return an iterable, an async iterable, or a promise of either.  An async
+provider makes the result an async value parser even when the wrapped parser
+is synchronous, so its `parse()` returns a promise and the parsers containing
+it must be run asynchronously.
+
+### Existing suggestions and prefix filtering
+
+By default, the provider's candidates replace the wrapped parser's own
+suggestions.  Set `includeExisting: true` to keep them; they come first, and
+a provider literal with the same text is skipped.
+
+Literal candidates that do not start with the prefix are dropped, so a
+provider may return an unfiltered list.  If the provider matches differently,
+for example case-insensitively, set `filterByPrefix: false` to keep its
+candidates as they are.  Shells may still filter them against what the user
+typed.  Suggestions kept by `includeExisting` are never filtered by
+`withSuggestions()`, so they keep the wrapped parser's own matching rules.
+
+### Failures
+
+Completion is best-effort.  If the provider throws, rejects, or fails partway
+through, the candidates it produced before the failure are kept and the rest
+are skipped, without an error reaching the shell.  `withSuggestions()` does
+not log these failures, so log inside the provider if you need to diagnose
+them.  Candidates that are not strings or well-formed `Suggestion` objects are
+skipped.
+
+### Dependencies
+
+`withSuggestions()` cannot wrap a dependency source directly.  Attach the
+suggestions first and pass the result to `dependency()`:
+
+~~~~ typescript twoslash
+import { dependency } from "@optique/core/dependency";
+import { choice, withSuggestions } from "@optique/core/valueparser";
+
+const env = dependency(
+  withSuggestions(choice(["dev", "staging", "prod"]), {
+    suggest: () => ["dev", "prod"],
+  }),
+);
+~~~~
+
+Derived value parsers from `derive()` or `deriveFrom()` can be wrapped, and
+keep parsing against the actual dependency values.  The provider only
+receives the prefix, not dependency values.  With `includeExisting: true`,
+the derived parser's dependency-aware suggestions come first.  When the
+candidates themselves depend on another option, wrap the parser returned by
+the factory instead.  An async provider needs an async factory:
+
+~~~~ typescript twoslash
+declare function listRegions(env: string): Promise<string[]>;
+// ---cut-before---
+import { dependency } from "@optique/core/dependency";
+import { choice, string, withSuggestions } from "@optique/core/valueparser";
+
+const env = dependency(choice(["dev", "prod"]));
+const region = env.derive({
+  metavar: "REGION",
+  mode: "async",
+  factory: (value) =>
+    withSuggestions(string(), {
+      mode: "async",
+      suggest: () => listRegions(value),
+    }),
+  defaultValue: () => "dev" as const,
+});
+~~~~
 
 
 `transform()` combinator

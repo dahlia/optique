@@ -84,6 +84,10 @@ To be released.
     pages without commands free of automatic headings.  Existing titled groups
     are preserved, and help callbacks receive the grouped page.
     [[#972], [#983]]
+ -  Added `withSuggestions()` for value parsers, allowing applications to
+    attach shell completion candidates, including ones fetched
+    asynchronously from a service, to an existing parser without changing
+    what it accepts or the type it produces.  [[#1111], [#1114]]
  -  Changed usage output to draw `or()`, `longestMatch()`, and `multiple()`
     groups as optional exactly when the parser accepts an empty argument list,
     if that is known from the parsers themselves.  For example,
@@ -145,6 +149,8 @@ To be released.
 [#1086]: https://github.com/dahlia/optique/issues/1086
 [#1093]: https://github.com/dahlia/optique/pull/1093
 [#1095]: https://github.com/dahlia/optique/pull/1095
+[#1111]: https://github.com/dahlia/optique/issues/1111
+[#1114]: https://github.com/dahlia/optique/pull/1114
 
 ### @optique/run
 
