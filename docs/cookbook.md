@@ -2703,15 +2703,23 @@ const parser = object({ input: argument(string({ metavar: "FILE" })) });
 // The executable reads process.argv and writes to the terminal:
 const config = run(parser, sharedRunOptions("1.2.3"));
 
-// A test supplies its own arguments and captures output instead:
-run(parser, {
-  ...sharedRunOptions("0.0.0-test"),
-  args: ["--version"],
-  stdout: (text) => output.push(text),
-  onExit: (code) => {
-    throw new Error(`Exited with ${code}.`);
-  },
-});
+// A test supplies its own arguments and captures output instead.  onExit
+// must not return, so it records the code and throws to stop the run:
+let exitCode: number | undefined;
+try {
+  run(parser, {
+    ...sharedRunOptions("0.0.0-test"),
+    args: ["--version"],
+    stdout: (text) => output.push(text),
+    onExit: (code) => {
+      exitCode = code;
+      throw new Error(`Exited with ${code}.`);
+    },
+  });
+} catch (error) {
+  if (exitCode == null) throw error;
+}
+// Now output is ["0.0.0-test"] and exitCode is 0.
 ~~~~
 
 For tests, [`captureRun()`](./concepts/testing.md#testing-a-run) from
