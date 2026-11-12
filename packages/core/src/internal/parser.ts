@@ -1930,9 +1930,11 @@ function revealMatchedCommandUsageTerms(
   matchedCommandPath: readonly string[],
   pathIndex: number,
   selectedCommandUsage: ReadonlySet<CommandUsageId>,
+  allowNameFallback = true,
 ): readonly [Usage, number] {
   const terms: UsageTerm[] = [];
   let nextPathIndex = pathIndex;
+  let nameFallbackEnabled = allowNameFallback;
   for (let index = 0; index < usage.length; index++) {
     const term = usage[index];
     if (term.type === "command") {
@@ -1949,11 +1951,15 @@ function revealMatchedCommandUsageTerms(
       }
       // Custom usage leaves do not have parser provenance. Retain the
       // conservative name-path fallback only for these untracked terms.
-      if (term.name !== matchedCommandPath[nextPathIndex]) {
+      if (
+        !nameFallbackEnabled || term.name !== matchedCommandPath[nextPathIndex]
+      ) {
         // Do not mistake an unmatched command's descendant for the next
-        // selected command. Only stop this list, not its enclosing container.
-        terms.push(...usage.slice(index));
-        break;
+        // selected command. Stop name matching in this list and its children,
+        // but keep checking identified terms independently of that fallback.
+        nameFallbackEnabled = false;
+        terms.push(term);
+        continue;
       }
       const { hidden: _hidden, ...revealed } = term;
       terms.push(revealed);
@@ -1964,6 +1970,7 @@ function revealMatchedCommandUsageTerms(
         matchedCommandPath,
         nextPathIndex,
         selectedCommandUsage,
+        nameFallbackEnabled,
       );
       terms.push({ ...term, terms: nested });
       nextPathIndex = afterTerm;
@@ -1974,6 +1981,7 @@ function revealMatchedCommandUsageTerms(
           matchedCommandPath,
           nextPathIndex,
           selectedCommandUsage,
+          nameFallbackEnabled,
         )
       );
       terms.push({ ...term, terms: branches.map(([branch]) => branch) });
