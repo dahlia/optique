@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { open, readFile, rename, rm, stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
 import { optional } from "@optique/core/modifiers";
@@ -148,10 +148,9 @@ async function createFile(path: string, contents: string): Promise<boolean> {
  * to some other file after the checks cannot redirect the write into it.
  */
 async function replaceFile(path: string, contents: string): Promise<void> {
-  const temporary = join(
-    dirname(path),
-    `.${basename(path)}.${randomUUID()}.tmp`,
-  );
+  // A fixed prefix keeps the name short however long the destination's
+  // name is; filesystems commonly limit a name to 255 bytes:
+  const temporary = join(dirname(path), `.tsv-to-csv-${randomUUID()}.tmp`);
   if (!await createFile(temporary, contents)) {
     throw new Error(`Temporary file already exists: ${temporary}`);
   }

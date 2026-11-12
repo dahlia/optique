@@ -209,6 +209,20 @@ describe("convertFile()", () => {
         assert.equal(await readFile(output, "utf8"), CSV);
       }));
 
+    it("replaces a destination whose name is near the length limit", () =>
+      inTemporaryDirectory(async (directory) => {
+        const input = join(directory, "data.tsv");
+        // 250 bytes, within the 255-byte limit of most filesystems:
+        const output = join(directory, `${"a".repeat(246)}.csv`);
+        await writeFile(input, TSV);
+        await writeFile(output, OLD);
+        const result = await convert({ input, output, force: true });
+        assert.deepEqual(result.stderr, []);
+        assert.equal(result.code, 0);
+        assert.equal(await readFile(output, "utf8"), CSV);
+        assert.equal((await readdir(directory)).length, 2);
+      }));
+
     it("rejects a destination that is not a regular file", {
       skip: process.platform === "win32",
     }, () => {
