@@ -1750,6 +1750,7 @@ function buildDocPage(
   args: readonly string[],
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
+  let matchedCommandPath = context.exec?.commandPath ?? [];
   let { brief, description, fragments, footer } = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
@@ -1781,6 +1782,7 @@ function buildDocPage(
     );
     ({ brief, description, fragments, footer } = matched);
     effectiveArgs = [cmdName];
+    matchedCommandPath = [cmdName];
   }
   // Build sections in the order that entries first appear in the fragment
   // stream, merging same-titled sections together.  This ensures that the
@@ -1884,10 +1886,70 @@ function buildDocPage(
     }
   }
   return {
-    usage,
+    usage: revealMatchedCommandUsage(usage, matchedCommandPath),
     sections,
     ...(brief != null && { brief: cloneMessage(brief) }),
     ...(description != null && { description: cloneMessage(description) }),
     ...(footer != null && { footer: cloneMessage(footer) }),
   };
+}
+
+// Hidden commands stay out of listings, but selected command names are still
+// required parts of the invocation shown in their own help.
+function revealMatchedCommandUsage(
+  usage: Usage,
+  matchedCommandPath: readonly string[],
+): Usage {
+  return revealMatchedCommandUsageTerms(usage, matchedCommandPath, 0)[0];
+}
+
+function revealMatchedCommandUsageTerms(
+  usage: Usage,
+  matchedCommandPath: readonly string[],
+  pathIndex: number,
+): readonly [Usage, number] {
+  const terms: UsageTerm[] = [];
+  let nextPathIndex = pathIndex;
+  for (let index = 0; index < usage.length; index++) {
+    if (nextPathIndex >= matchedCommandPath.length) {
+      terms.push(...usage.slice(index));
+      break;
+    }
+    const term = usage[index];
+    if (term.type === "command") {
+      if (term.name !== matchedCommandPath[nextPathIndex]) {
+        // Do not mistake an unmatched command's descendant for the next
+        // selected command. Only stop this list, not its enclosing container.
+        terms.push(...usage.slice(index));
+        break;
+      }
+      const { hidden: _hidden, ...revealed } = term;
+      terms.push(revealed);
+      nextPathIndex++;
+    } else if (term.type === "optional" || term.type === "multiple") {
+      const [nested, afterTerm] = revealMatchedCommandUsageTerms(
+        term.terms,
+        matchedCommandPath,
+        nextPathIndex,
+      );
+      terms.push({ ...term, terms: nested });
+      nextPathIndex = afterTerm;
+    } else if (term.type === "exclusive") {
+      const branches = term.terms.map((branch) =>
+        revealMatchedCommandUsageTerms(
+          branch,
+          matchedCommandPath,
+          nextPathIndex,
+        )
+      );
+      terms.push({ ...term, terms: branches.map(([branch]) => branch) });
+      nextPathIndex = Math.max(
+        nextPathIndex,
+        ...branches.map(([, afterBranch]) => afterBranch),
+      );
+    } else {
+      terms.push(term);
+    }
+  }
+  return [terms, nextPathIndex];
 }

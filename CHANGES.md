@@ -17,6 +17,9 @@ To be released.
     whitespace-only `text()` terms, including before styled command-line
     examples.  CRLF and CR line endings now follow the same formatting rules
     as LF.  [[#1098], [#1104]]
+ -  Fixed hidden commands disappearing from the usage synopsis in their own
+    help and their descendants' help.  Commands remain hidden in parent
+    synopses according to their visibility setting.  [[#1110], [#1113]]
  -  Fixed `map()` losing `bindEnv()` and `bindConfig()` fallbacks inside
     composed commands, and making `prompt()` skip mapped `optional()` or
     `withDefault()` parsers when context annotations were present.
@@ -28,6 +31,8 @@ To be released.
 [#1105]: https://github.com/dahlia/optique/pull/1105
 [#1108]: https://github.com/dahlia/optique/issues/1108
 [#1109]: https://github.com/dahlia/optique/pull/1109
+[#1110]: https://github.com/dahlia/optique/issues/1110
+[#1113]: https://github.com/dahlia/optique/pull/1113
 
 
 Version 1.0.15
