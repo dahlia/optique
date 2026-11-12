@@ -1602,6 +1602,64 @@ function hasSelectedLeadingCommand(
     );
 }
 
+// A wrapped command owns only the tail inside its containing usage list.
+// Locate the occurrence before calling user code: repeated alternatives can
+// contain several selected commands with the same name.
+function applyWrappedCommandUsageLine(
+  term: UsageTerm,
+  commandName: string,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+): UsageTerm {
+  const candidates: {
+    readonly command: Extract<UsageTerm, { type: "command" }>;
+    readonly tail: Usage;
+    readonly replace: (tail: Usage) => UsageTerm;
+  }[] = [];
+  const visit = (
+    terms: Usage,
+    rebuild: (terms: Usage) => UsageTerm,
+  ): void => {
+    const first = terms[0];
+    if (first?.type === "command") {
+      const id = getCommandUsageId(first);
+      if (
+        first.name === commandName && id != null &&
+        selectedCommandUsage.has(id)
+      ) {
+        candidates.push({
+          command: first,
+          tail: terms.slice(1),
+          replace: (tail) => rebuild([first, ...tail]),
+        });
+      }
+    } else if (first?.type === "optional" || first?.type === "multiple") {
+      visit(
+        first.terms,
+        (children) =>
+          rebuild([{ ...first, terms: children }, ...terms.slice(1)]),
+      );
+    } else if (first?.type === "exclusive") {
+      first.terms.forEach((branch, index) => {
+        visit(branch, (children) =>
+          rebuild([{
+            ...first,
+            terms: first.terms.map((other, otherIndex) =>
+              otherIndex === index ? children : other
+            ),
+          }, ...terms.slice(1)]));
+      });
+    }
+  };
+  visit([term], (terms) => terms[0]);
+  if (candidates.length !== 1) return term;
+  const { command, tail, replace } = candidates[0];
+  if (command.usageLine == null) return term;
+  const customUsageLine = typeof command.usageLine === "function"
+    ? command.usageLine(cloneUsage(tail))
+    : command.usageLine;
+  return replace(normalizeUsage(customUsageLine));
+}
+
 /**
  * Generates a documentation page for a synchronous parser.
  *
@@ -1915,10 +1973,21 @@ function buildDocPage(
     isLastArg: boolean,
     usageIndex: number,
   ): void => {
+    if (!isLastArg) return;
+    if (
+      term?.type === "optional" || term?.type === "multiple" ||
+      term?.type === "exclusive"
+    ) {
+      usage[usageIndex] = applyWrappedCommandUsageLine(
+        term,
+        arg,
+        selectedCommandUsageIds,
+      );
+      return;
+    }
     if (
       term?.type !== "command" ||
       term.name !== arg ||
-      !isLastArg ||
       term.usageLine == null
     ) {
       return;
