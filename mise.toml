@@ -189,6 +189,33 @@ depends = ["file-inspect:standalone"]
 dir = "examples/file-inspect"
 run = "node scripts/smoke.ts"
 
+[tasks."tsv-to-csv:deps"]
+description = "Install the file conversion workspace dependencies"
+run = "pnpm install"
+
+[tasks."tsv-to-csv:build"]
+description = "Build the packages the file conversion example uses"
+run = 'pnpm --filter "tsv-to-csv^..." -r build'
+
+[tasks."tsv-to-csv:test:deno"]
+description = "Check and test the file conversion example with Deno"
+dir = "examples/tsv-to-csv"
+run = "deno task test"
+
+[tasks."tsv-to-csv:test:node"]
+description = "Test the file conversion example with Node.js"
+depends = ["tsv-to-csv:build"]
+run = "pnpm --filter tsv-to-csv test"
+
+[tasks."tsv-to-csv:test:bun"]
+description = "Test the file conversion example with Bun"
+depends = ["tsv-to-csv:build"]
+run = "pnpm --filter tsv-to-csv test:bun"
+
+[tasks."tsv-to-csv:test"]
+description = "Test the file conversion example across all runtimes"
+depends = ["tsv-to-csv:test:deno", "tsv-to-csv:test:node", "tsv-to-csv:test:bun"]
+
 [tasks."benchmark:test"]
 description = "Test startup baseline measurement contracts"
 run = "node --test benchmarks/startup/*.test.ts"

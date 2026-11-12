@@ -2500,6 +2500,459 @@ The repository includes a runnable version of this pattern in
 [lifecycle hooks](./concepts/discover.md#lifecycle-hooks).
 
 
+Application helper patterns
+---------------------------
+
+These recipes collect small pieces of application code that usually grow
+around a parser: domain types for parsed values, runner settings shared by
+several entry points, build metadata, and the input and output arguments of
+a file converter.  They use only existing *@optique/core* and *@optique/run*
+APIs.
+
+### Path objects from validated paths
+
+*This API is available since Optique 1.2.0.*
+
+The [`path()`](./concepts/valueparsers.md#path-parser) value parser returns
+a string.  Many applications prefer to pass a richer path object through the
+rest of their code, either from a path library or a type of their own.
+Wrap `path()` with
+[`transform()`](./concepts/valueparsers.md#transform-combinator) to convert the
+validated string once, at the parser boundary:
+
+~~~~ typescript twoslash
+import { basename, join } from "node:path";
+import { transform } from "@optique/core/valueparser";
+import { path, type PathOptions } from "@optique/run/valueparser";
+
+/** A minimal application-owned path type. */
+class AppPath {
+  readonly value: string;
+
+  constructor(value: string) {
+    this.value = value;
+  }
+
+  get name(): string {
+    return basename(this.value);
+  }
+
+  join(...segments: readonly string[]): AppPath {
+    return new AppPath(join(this.value, ...segments));
+  }
+
+  toString(): string {
+    return this.value;
+  }
+}
+
+function appPath(options: PathOptions = {}) {
+  return transform(path(options), {
+    map: (value) => new AppPath(value),
+    unmap: (value) => value.value,
+  });
+}
+~~~~
+
+The wrapped `path()` still does all of the validation, and its error messages
+are unchanged.  For command-line input, `map()` runs only after `path()` has
+accepted the value, so the class receives paths that passed the checks you
+asked for.  The inverse `unmap()` function turns an `AppPath` back into
+command-line text.  Optique uses it whenever it needs to show a value as
+input, such as `format()` or a default value displayed in help.
+
+`transform()` also keeps the wrapped parser's metavar and completion
+suggestions.  Shells therefore still offer native file and directory
+completion for these arguments, as described in
+[file path completion integration](#file-path-completion-integration).
+
+Small presets on top of `appPath()` keep common checks consistent across
+commands:
+
+~~~~ typescript twoslash
+import { transform } from "@optique/core/valueparser";
+import { path, type PathOptions } from "@optique/run/valueparser";
+
+class AppPath {
+  readonly value: string;
+  constructor(value: string) {
+    this.value = value;
+  }
+  join(...segments: readonly string[]): AppPath {
+    return new AppPath(`${this.value}/${segments.join("/")}`);
+  }
+}
+
+function appPath(options: PathOptions = {}) {
+  return transform(path(options), {
+    map: (value) => new AppPath(value),
+    unmap: (value) => value.value,
+  });
+}
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { withDefault } from "@optique/core/modifiers";
+import { argument, option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+
+interface PresetOptions {
+  readonly metavar?: PathOptions["metavar"];
+  readonly extensions?: readonly string[];
+}
+
+function inputFile(options: PresetOptions = {}) {
+  return appPath({ ...options, mustExist: true, type: "file" });
+}
+
+function inputDirectory(options: Omit<PresetOptions, "extensions"> = {}) {
+  return appPath({ ...options, mustExist: true, type: "directory" });
+}
+
+const parser = object({
+  source: argument(inputFile({ metavar: "SOURCE", extensions: [".md"] })),
+  assets: withDefault(
+    option("--assets", inputDirectory({ metavar: "DIR" })),
+    new AppPath("assets"),
+  ),
+});
+
+const config = run(parser, { help: "option", showDefault: true });
+const logo = config.assets.join("logo.svg");
+//    ^?
+~~~~
+
+With `showDefault: true`, the help text renders the default through `unmap()`
+and `path()`'s `format()`, so it shows the path text rather than an object:
+
+~~~~ bash
+$ build --help
+Usage: build [--assets DIR] SOURCE
+       build --help
+
+  --assets DIR                 ["assets"]
+  SOURCE
+  --help                      Show help information.
+~~~~
+
+Note that the `type` option is only checked against the filesystem when
+`mustExist: true` is also set.  Without `mustExist`, `path({ type: "file" })`
+accepts a directory or a path that does not exist yet; `type` then only
+affects completion and whether `extensions` applies.  The presets above set
+both options together for that reason.
+
+A default value is not parsed, so `withDefault()` does not run the existence
+check for `new AppPath("assets")`.  If the default must exist, check it in
+the application before using it, or make the option required instead.
+
+Keep the transformation reversible.  If `map()` resolves the input to an
+absolute path, for example, `unmap()` returns that absolute path, and help
+or `format()` will show it instead of what the user typed.  That is fine as
+long as the result is still a valid input for the wrapped `path()` parser.
+
+### Shared runner options across entry points
+
+A project often has more than one place that calls `run()`: the main
+executable, a second binary in the same package, a development script, and
+tests.  Each of them should expose the same help, version, and completion
+entries, or users will find `--version` working in one place and not in
+another.  Put those settings in a small factory and let each entry point
+supply only what differs:
+
+~~~~ typescript twoslash
+import type { RunOptions } from "@optique/run";
+
+export function sharedRunOptions(version: string) {
+  return {
+    help: "option",
+    version: { value: version, option: { names: ["-V", "--version"] } },
+    completion: "option",
+    showDefault: true,
+  } as const satisfies RunOptions;
+}
+~~~~
+
+The `satisfies` operator checks the object against `RunOptions` without
+widening it, so a misspelled key or an invalid mode fails at compile time
+while each property keeps its precise type.  The factory takes the version
+as a parameter rather than importing it, so the same function works for
+every binary and for tests that pin a fixed value.
+
+The factory deliberately leaves out `args`, `stdout`, `stderr`, and `onExit`.
+Those describe one invocation, not the application, so pass them where the
+invocation happens:
+
+~~~~ typescript twoslash
+import type { RunOptions } from "@optique/run";
+function sharedRunOptions(version: string) {
+  return {
+    help: "option",
+    version: { value: version, option: { names: ["-V", "--version"] } },
+    completion: "option",
+    showDefault: true,
+  } as const satisfies RunOptions;
+}
+const output: string[] = [];
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+
+const parser = object({ input: argument(string({ metavar: "FILE" })) });
+
+// The executable reads process.argv and writes to the terminal:
+const config = run(parser, sharedRunOptions("1.2.3"));
+
+// A test supplies its own arguments and captures output instead.  onExit
+// must not return, so it records the code and throws to stop the run:
+let exitCode: number | undefined;
+try {
+  run(parser, {
+    ...sharedRunOptions("0.0.0-test"),
+    args: ["--version"],
+    stdout: (text) => output.push(text),
+    onExit: (code) => {
+      exitCode = code;
+      throw new Error(`Exited with ${code}.`);
+    },
+  });
+} catch (error) {
+  if (exitCode == null) throw error;
+}
+// Now output is ["0.0.0-test"] and exitCode is 0.
+~~~~
+
+For tests, [`captureRun()`](./concepts/testing.md#testing-a-run) from
+*@optique/testing/run* supplies the output and exit callbacks itself and accepts
+the rest of the shared options unchanged.
+
+#### Option and subcommand forms
+
+Each of `help`, `version`, and `completion` can be offered as an option
+(`--help`), a subcommand (`help`), or both.  The choice depends on the shape
+of the CLI:
+
+ -  The *option form* fits single-purpose tools, especially those whose
+    positional arguments accept arbitrary text.  Built-in entries are only
+    recognized when the parser leaves the token unconsumed, so a tool that
+    takes a positional file name reads `mytool help` as a file named *help*.
+ -  The *subcommand form* fits tools built around subcommands, where
+    `mytool help deploy` and `mytool completion bash` read naturally next to
+    the other commands.
+
+A factory can take the form as a parameter so each binary picks the one that
+matches its parser:
+
+~~~~ typescript twoslash
+import type { RunOptions } from "@optique/run";
+
+export function sharedRunOptions(
+  version: string,
+  form: "option" | "both" = "option",
+) {
+  return {
+    help: form,
+    version: form === "both"
+      ? { value: version, command: true, option: true }
+      : version,
+    completion: form === "both"
+      ? {
+        command: { names: ["completion", "completions"], group: "Other" },
+        option: true,
+      }
+      : "option",
+  } as const satisfies RunOptions;
+}
+~~~~
+
+Option names are given with `names`, all of which appear in help.  For
+commands, the first name is shown and the remaining ones are hidden aliases,
+which is how the `completions` spelling above stays accepted without
+cluttering help.  `group` moves the completion command under its own help
+heading.  See [help system options](./concepts/runners.md#help-system-options),
+[version system options](./concepts/runners.md#version-system-options), and
+[command name customization](./concepts/runners.md#command-name-customization)
+for the full set of sub-options.
+
+#### Program names
+
+Leave `programName` out of the shared options unless the application needs a
+fixed name.  When it is omitted, `run()` uses the file name of the script
+being executed (the base name of `process.argv[1]`), and a `Program` supplies
+its metadata name instead.  That keeps each entry point's help accurate
+without coordination.  Under Node.js and Deno, a command installed as a
+symbolic link to the script, which is what npm does on POSIX systems, shows
+the link's name.
+
+Other launch paths report the script's own file name: `node dist/cli.js`,
+npm's command shims on Windows, Bun (which resolves the symbolic link before
+setting `process.argv[1]`), and some bundled or compiled executables.  If help
+must always show the published command name, set `programName` for that
+entry point, or give the `Program` a metadata name.  Because it differs
+between binaries, it belongs next to the `run()` call rather than in the
+shared factory.
+
+### Build-generated version strings
+
+The `version` option of `run()` takes a plain string, so the runner does not
+care where it comes from.  Reading *package.json* at runtime works for many
+CLIs, but a release build often wants more: the Git revision it was built
+from, so a bug report can name the exact commit.  Asking Git at runtime is
+the wrong place for that.  An installed CLI usually has no *.git* directory
+next to it, and users may not have Git installed at all.
+
+Instead, compute the string while building and write it into a small
+generated module:
+
+~~~~ typescript twoslash
+// @filename: scripts/generate-version.ts
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import process from "node:process";
+
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+
+function gitRevision(): string | undefined {
+  try {
+    const revision = execFileSync("git", ["rev-parse", "--short=12", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return revision === "" ? undefined : revision;
+  } catch {
+    // Git is missing, or this is not a checkout (e.g., a source tarball).
+    return undefined;
+  }
+}
+
+const revision = process.env.BUILD_REVISION?.trim() || gitRevision();
+
+// SemVer build metadata is dot-separated [0-9A-Za-z-] identifiers:
+if (revision != null && !/^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$/.test(revision)) {
+  throw new TypeError(`Invalid SemVer build metadata: ${revision}`);
+}
+
+const buildVersion = revision == null
+  ? version
+  : `${version}${version.includes("+") ? "." : "+"}${revision}`;
+
+writeFileSync(
+  "src/version.generated.ts",
+  "// Generated by scripts/generate-version.ts; do not edit.\n" +
+    `export const version = ${JSON.stringify(buildVersion)};\n`,
+);
+~~~~
+
+The revision goes into the SemVer build metadata after `+` (or after the
+existing metadata, separated by `.`), so tools that compare versions still
+see `1.2.3`.  An empty `BUILD_REVISION` counts as unset, which is why the
+script uses `||` rather than `??` there.  A value that is not valid build
+metadata, such as `refs/heads/main`, stops the build instead of producing a
+version string that SemVer tools reject.  The fallback matters as much as the
+Git call: a build from a source archive without *.git*, or on a machine without
+Git, still produces the package version.  `BUILD_REVISION` lets a CI system or
+a packager that already knows the revision pass it in directly.
+
+Run the script before compiling or bundling, for example from a `prebuild`
+script in *package.json*, and add *src/version.generated.ts* to *.gitignore*.
+The entry point imports the constant like any other module:
+
+~~~~ typescript twoslash
+// @allowImportingTsExtensions
+// @noEmit
+// @filename: src/version.generated.ts
+export const version = "1.2.3+0123456789ab";
+// @filename: src/cli.ts
+// ---cut-before---
+import { object } from "@optique/core/constructs";
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { run } from "@optique/run";
+import { version } from "./version.generated.ts";
+
+const parser = object({ input: argument(string()) });
+
+const config = run(parser, { version });
+~~~~
+
+After bundling, the version is a string literal inside the output.  Running
+`mytool --version` neither spawns Git nor reads any file, so the distributed
+CLI does not need a source checkout.  Running from source does need the
+generated file, so run the script once after cloning, or as part of the
+development task that starts the CLI.
+
+#### Build timestamps
+
+A build date can be useful in `--version` output, but think twice before
+adding `new Date()` to the generated module.  The current time differs on
+every build, so two builds of the same commit no longer produce identical
+output, which defeats [reproducible builds].  If you do want a date, read it
+from [`SOURCE_DATE_EPOCH`] when the build environment sets it, or use the
+commit date (`git log -1 --format=%cI`), which is fixed for a given revision.
+Keep it optional, like the revision, so builds without that information
+still succeed.
+
+[reproducible builds]: https://reproducible-builds.org/
+[`SOURCE_DATE_EPOCH`]: https://reproducible-builds.org/docs/source-date-epoch/
+
+### File conversion with a derived output name
+
+A converter usually takes one required input and an optional output.  When
+the output is omitted, the program derives it from the input, for example
+*data.tsv* to *data.csv*:
+
+~~~~ typescript twoslash
+import { extname } from "node:path";
+import { object } from "@optique/core/constructs";
+import { optional } from "@optique/core/modifiers";
+import { argument, option } from "@optique/core/primitives";
+import { run } from "@optique/run";
+import { path } from "@optique/run/valueparser";
+
+const parser = object({
+  input: argument(path({ metavar: "INPUT", mustExist: true, type: "file" })),
+  output: optional(
+    option(
+      "-o",
+      "--output",
+      path({ metavar: "OUTPUT", type: "file", allowCreate: true }),
+    ),
+  ),
+  force: option("-f", "--force"),
+});
+
+function deriveOutputPath(input: string): string {
+  const extension = extname(input);
+  const stem = extension.toLowerCase() === ".tsv"
+    ? input.slice(0, -extension.length)
+    : input;
+  return `${stem}.csv`;
+}
+
+const config = run(parser, { help: "option" });
+const output = config.output ?? deriveOutputPath(config.input);
+~~~~
+
+Use `optional()` rather than `withDefault()` here.  The fallback depends on
+another argument, so the application computes it after parsing, where both
+values are available.  The input is validated while parsing; the output only
+needs an existing parent directory, since it may not exist yet.
+
+Deliberately, the output option does not use `mustNotExist: true`.  That
+check runs during parsing and does not reserve the name, it would reject the
+path before `--force` could take effect, and it never sees the derived
+default.  Whether to replace an existing file is a decision for the code that
+writes it, right before it writes.
+
+The repository's *examples/tsv-to-csv* directory contains the complete
+program and its tests.  Its [README] covers the parts this recipe leaves out:
+creating the output without racing other processes, `--force`, an optional
+confirmation prompt for interactive terminals, consistent use of stdout and
+stderr, and what its same-file protection does and does not catch.
+
+[README]: https://github.com/dahlia/optique/tree/main/examples/tsv-to-csv
+
+
 Integration patterns
 --------------------
 
