@@ -1575,22 +1575,50 @@ const fileSuggestionTypes: ReadonlySet<unknown> = new Set([
   "any",
 ]);
 
+function isOptionalOfType(
+  item: object,
+  key: string,
+  check: (value: unknown) => boolean,
+): boolean {
+  const value: unknown = Reflect.get(item, key);
+  return value === undefined || check(value);
+}
+
+function isString(value: unknown): boolean {
+  return typeof value === "string";
+}
+
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every(isString);
+}
+
 /**
- * Screens a provider item for the required `Suggestion` fields.  This is basic
- * shape checking, not full validation; optional fields are trusted.
+ * Screens a provider item for the `Suggestion` fields that completion encoding
+ * relies on: required fields and the types of optional ones.  This is shape
+ * checking, not full validation; message terms inside a description are
+ * trusted.
  */
 function screenSuggestionInput(item: unknown): Suggestion | undefined {
   if (typeof item === "string") return { kind: "literal", text: item };
   if (item == null || typeof item !== "object" || !("kind" in item)) {
     return undefined;
   }
+  if (!isOptionalOfType(item, "description", Array.isArray)) return undefined;
   if (item.kind === "literal") {
     return "text" in item && typeof item.text === "string"
       ? item as Suggestion
       : undefined;
   }
   if (item.kind === "file") {
-    return "type" in item && fileSuggestionTypes.has(item.type)
+    return "type" in item && fileSuggestionTypes.has(item.type) &&
+        isOptionalOfType(item, "pattern", isString) &&
+        isOptionalOfType(item, "prefix", isString) &&
+        isOptionalOfType(item, "extensions", isStringArray) &&
+        isOptionalOfType(
+          item,
+          "includeHidden",
+          (value) => typeof value === "boolean",
+        )
       ? item as Suggestion
       : undefined;
   }

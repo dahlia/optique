@@ -362,6 +362,32 @@ describe("withSuggestions", () => {
       ]);
     });
 
+    it("skips items whose optional fields have the wrong type", () => {
+      const parser = withSuggestions(string(), {
+        suggest: () =>
+          [
+            { kind: "literal", text: "bad-description", description: "x" },
+            { kind: "file", type: "file", pattern: 42 },
+            { kind: "file", type: "file", prefix: 1 },
+            { kind: "file", type: "file", extensions: ".ts" },
+            { kind: "file", type: "file", extensions: [1] },
+            { kind: "file", type: "file", includeHidden: "yes" },
+            { kind: "file", type: "file", description: 1 },
+            { kind: "literal", text: "ok", description: message`Fine` },
+            {
+              kind: "file",
+              type: "file",
+              pattern: "src/",
+              prefix: "src/",
+              extensions: [".ts"],
+              includeHidden: true,
+            },
+          ] as never,
+      });
+      const suggestions = Array.from(parser.suggest!(""));
+      assert.deepEqual(texts(suggestions), ["ok", "<file>"]);
+    });
+
     it("replaces existing suggestions by default", () => {
       const parser = withSuggestions(choice(["red", "green"]), {
         suggest: () => ["rose"],
