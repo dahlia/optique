@@ -1517,13 +1517,19 @@ function findCommandInExclusive(
     commandName,
     selectedCommandUsage,
   ) ??
-    findCommandInExclusiveMatching(term, commandName);
+    findCommandInExclusiveMatching(
+      term,
+      commandName,
+      selectedCommandUsage,
+      false,
+    );
 }
 
 function findCommandInExclusiveMatching(
   term: UsageTerm,
   commandName: string,
-  selectedCommandUsage?: ReadonlySet<CommandUsageId>,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+  requireSelectedIdentity = true,
 ): Usage | null {
   if (term.type !== "exclusive") return null;
 
@@ -1534,9 +1540,21 @@ function findCommandInExclusiveMatching(
     if (firstTerm?.type === "command" && firstTerm.name === commandName) {
       const id = getCommandUsageId(firstTerm);
       if (
-        selectedCommandUsage == null ||
-        id != null && selectedCommandUsage.has(id)
+        id == null ? !requireSelectedIdentity : selectedCommandUsage.has(id)
       ) return termGroup;
+    }
+
+    if (
+      requireSelectedIdentity &&
+      (firstTerm?.type === "optional" || firstTerm?.type === "multiple") &&
+      hasSelectedLeadingCommand(
+        firstTerm.terms,
+        commandName,
+        selectedCommandUsage,
+      )
+    ) {
+      // Preserve the wrapper, repeated alternatives, and the branch's tail.
+      return termGroup;
     }
 
     // Recursive case: first term is another exclusive (nested structure)
@@ -1545,6 +1563,7 @@ function findCommandInExclusiveMatching(
         firstTerm,
         commandName,
         selectedCommandUsage,
+        requireSelectedIdentity,
       );
       if (found) {
         // Replace the nested exclusive with the found terms,
@@ -1555,6 +1574,32 @@ function findCommandInExclusiveMatching(
   }
 
   return null;
+}
+
+// Only inspect leading terms: an unrelated command must not make its
+// descendants eligible for navigation at the current command position.
+function hasSelectedLeadingCommand(
+  usage: Usage,
+  commandName: string,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+): boolean {
+  const first = usage[0];
+  if (first?.type === "command") {
+    const id = getCommandUsageId(first);
+    return first.name === commandName && id != null &&
+      selectedCommandUsage.has(id);
+  }
+  if (first?.type === "optional" || first?.type === "multiple") {
+    return hasSelectedLeadingCommand(
+      first.terms,
+      commandName,
+      selectedCommandUsage,
+    );
+  }
+  return first?.type === "exclusive" &&
+    first.terms.some((branch) =>
+      hasSelectedLeadingCommand(branch, commandName, selectedCommandUsage)
+    );
 }
 
 /**
