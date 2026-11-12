@@ -1,4 +1,9 @@
 import {
+  getCommandDocMetadata,
+  getSelectedCommandUsage,
+} from "./command-doc-metadata.ts";
+import { type CommandUsageId, getCommandUsageId } from "./command-usage.ts";
+import {
   cloneDocEntry,
   type DocEntry,
   type DocFragments,
@@ -1497,11 +1502,34 @@ export function suggest<M extends Mode, T>(
  *
  * @param term The usage term to search in
  * @param commandName The command name to find
+ * @param selectedCommandUsage The command occurrences selected by parser state
  * @returns The expanded usage terms if found, null otherwise
  */
 function findCommandInExclusive(
   term: UsageTerm,
   commandName: string,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+): Usage | null {
+  // Exhaust the identity search, including nested groups, before considering
+  // a name-only match from any branch.
+  return findCommandInExclusiveMatching(
+    term,
+    commandName,
+    selectedCommandUsage,
+  ) ??
+    findCommandInExclusiveMatching(
+      term,
+      commandName,
+      selectedCommandUsage,
+      false,
+    );
+}
+
+function findCommandInExclusiveMatching(
+  term: UsageTerm,
+  commandName: string,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+  requireSelectedIdentity = true,
 ): Usage | null {
   if (term.type !== "exclusive") return null;
 
@@ -1510,12 +1538,33 @@ function findCommandInExclusive(
 
     // Direct match: first term is the command we're looking for
     if (firstTerm?.type === "command" && firstTerm.name === commandName) {
+      const id = getCommandUsageId(firstTerm);
+      if (
+        id == null ? !requireSelectedIdentity : selectedCommandUsage.has(id)
+      ) return termGroup;
+    }
+
+    if (
+      requireSelectedIdentity &&
+      (firstTerm?.type === "optional" || firstTerm?.type === "multiple") &&
+      hasSelectedLeadingCommand(
+        firstTerm.terms,
+        commandName,
+        selectedCommandUsage,
+      )
+    ) {
+      // Preserve the wrapper, repeated alternatives, and the branch's tail.
       return termGroup;
     }
 
     // Recursive case: first term is another exclusive (nested structure)
     if (firstTerm?.type === "exclusive") {
-      const found = findCommandInExclusive(firstTerm, commandName);
+      const found = findCommandInExclusiveMatching(
+        firstTerm,
+        commandName,
+        selectedCommandUsage,
+        requireSelectedIdentity,
+      );
       if (found) {
         // Replace the nested exclusive with the found terms,
         // then append the rest of termGroup (e.g., global options)
@@ -1525,6 +1574,90 @@ function findCommandInExclusive(
   }
 
   return null;
+}
+
+// Only inspect leading terms: an unrelated command must not make its
+// descendants eligible for navigation at the current command position.
+function hasSelectedLeadingCommand(
+  usage: Usage,
+  commandName: string,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+): boolean {
+  const first = usage[0];
+  if (first?.type === "command") {
+    const id = getCommandUsageId(first);
+    return first.name === commandName && id != null &&
+      selectedCommandUsage.has(id);
+  }
+  if (first?.type === "optional" || first?.type === "multiple") {
+    return hasSelectedLeadingCommand(
+      first.terms,
+      commandName,
+      selectedCommandUsage,
+    );
+  }
+  return first?.type === "exclusive" &&
+    first.terms.some((branch) =>
+      hasSelectedLeadingCommand(branch, commandName, selectedCommandUsage)
+    );
+}
+
+// A wrapped command owns only the tail inside its containing usage list.
+// Locate the occurrence before calling user code: repeated alternatives can
+// contain several selected commands with the same name.
+function applyWrappedCommandUsageLine(
+  term: UsageTerm,
+  commandName: string,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+): UsageTerm {
+  const candidates: {
+    readonly command: Extract<UsageTerm, { type: "command" }>;
+    readonly tail: Usage;
+    readonly replace: (tail: Usage) => UsageTerm;
+  }[] = [];
+  const visit = (
+    terms: Usage,
+    rebuild: (terms: Usage) => UsageTerm,
+  ): void => {
+    const first = terms[0];
+    if (first?.type === "command") {
+      const id = getCommandUsageId(first);
+      if (
+        first.name === commandName && id != null &&
+        selectedCommandUsage.has(id)
+      ) {
+        candidates.push({
+          command: first,
+          tail: terms.slice(1),
+          replace: (tail) => rebuild([first, ...tail]),
+        });
+      }
+    } else if (first?.type === "optional" || first?.type === "multiple") {
+      visit(
+        first.terms,
+        (children) =>
+          rebuild([{ ...first, terms: children }, ...terms.slice(1)]),
+      );
+    } else if (first?.type === "exclusive") {
+      first.terms.forEach((branch, index) => {
+        visit(branch, (children) =>
+          rebuild([{
+            ...first,
+            terms: first.terms.map((other, otherIndex) =>
+              otherIndex === index ? children : other
+            ),
+          }, ...terms.slice(1)]));
+      });
+    }
+  };
+  visit([term], (terms) => terms[0]);
+  if (candidates.length !== 1) return term;
+  const { command, tail, replace } = candidates[0];
+  if (command.usageLine == null) return term;
+  const customUsageLine = typeof command.usageLine === "function"
+    ? command.usageLine(cloneUsage(tail))
+    : command.usageLine;
+  return replace(normalizeUsage(customUsageLine));
 }
 
 /**
@@ -1750,10 +1883,15 @@ function buildDocPage(
   args: readonly string[],
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
-  let { brief, description, fragments, footer } = parser.getDocFragments(
+  let matchedCommandPath = context.exec?.commandPath ?? [];
+  const docs = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
   );
+  let selectedCommandUsage = getSelectedCommandUsage(
+    getCommandDocMetadata(docs),
+  );
+  let { brief, description, fragments, footer } = docs;
   // When the doc root is a bare command() parser and no args navigated into
   // it, the fragments contain only a single command entry instead of the
   // inner parser's options/arguments.  Detect this case and re-invoke
@@ -1780,7 +1918,11 @@ function buildDocPage(
       undefined,
     );
     ({ brief, description, fragments, footer } = matched);
+    selectedCommandUsage = getSelectedCommandUsage(
+      getCommandDocMetadata(matched),
+    );
     effectiveArgs = [cmdName];
+    matchedCommandPath = [cmdName];
   }
   // Build sections in the order that entries first appear in the fragment
   // stream, merging same-titled sections together.  This ensures that the
@@ -1823,6 +1965,7 @@ function buildDocPage(
     }
   }
   const sections: DocSection[] = buildingSections;
+  const selectedCommandUsageIds = new Set(selectedCommandUsage);
   const usage = [...normalizeUsage(parser.usage)];
   const maybeApplyCommandUsageLine = (
     term: UsageTerm | undefined,
@@ -1830,10 +1973,21 @@ function buildDocPage(
     isLastArg: boolean,
     usageIndex: number,
   ): void => {
+    if (!isLastArg) return;
+    if (
+      term?.type === "optional" || term?.type === "multiple" ||
+      term?.type === "exclusive"
+    ) {
+      usage[usageIndex] = applyWrappedCommandUsageLine(
+        term,
+        arg,
+        selectedCommandUsageIds,
+      );
+      return;
+    }
     if (
       term?.type !== "command" ||
       term.name !== arg ||
-      !isLastArg ||
       term.usageLine == null
     ) {
       return;
@@ -1855,7 +2009,7 @@ function buildDocPage(
     if (i >= usage.length) break;
     let term = usage[i];
     if (term.type === "exclusive") {
-      const found = findCommandInExclusive(term, arg);
+      const found = findCommandInExclusive(term, arg, selectedCommandUsageIds);
       if (found) {
         usage.splice(i, 1, ...found);
         term = usage[i];
@@ -1884,10 +2038,100 @@ function buildDocPage(
     }
   }
   return {
-    usage,
+    usage: revealMatchedCommandUsage(
+      usage,
+      matchedCommandPath,
+      selectedCommandUsageIds,
+    ),
     sections,
     ...(brief != null && { brief: cloneMessage(brief) }),
     ...(description != null && { description: cloneMessage(description) }),
     ...(footer != null && { footer: cloneMessage(footer) }),
   };
+}
+
+// Hidden commands stay out of listings, but selected command names are still
+// required parts of the invocation shown in their own help.
+function revealMatchedCommandUsage(
+  usage: Usage,
+  matchedCommandPath: readonly string[],
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+): Usage {
+  return revealMatchedCommandUsageTerms(
+    usage,
+    matchedCommandPath,
+    0,
+    selectedCommandUsage,
+  )[0];
+}
+
+function revealMatchedCommandUsageTerms(
+  usage: Usage,
+  matchedCommandPath: readonly string[],
+  pathIndex: number,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
+  allowNameFallback = true,
+): readonly [Usage, number] {
+  const terms: UsageTerm[] = [];
+  let nextPathIndex = pathIndex;
+  let nameFallbackEnabled = allowNameFallback;
+  for (let index = 0; index < usage.length; index++) {
+    const term = usage[index];
+    if (term.type === "command") {
+      const id = getCommandUsageId(term);
+      if (id != null) {
+        if (selectedCommandUsage.has(id)) {
+          const { hidden: _hidden, ...revealed } = term;
+          terms.push(revealed);
+          if (term.name === matchedCommandPath[nextPathIndex]) nextPathIndex++;
+        } else {
+          terms.push(term);
+        }
+        continue;
+      }
+      // Custom usage leaves do not have parser provenance. Retain the
+      // conservative name-path fallback only for these untracked terms.
+      if (
+        !nameFallbackEnabled || term.name !== matchedCommandPath[nextPathIndex]
+      ) {
+        // Do not mistake an unmatched command's descendant for the next
+        // selected command. Stop name matching in this list and its children,
+        // but keep checking identified terms independently of that fallback.
+        nameFallbackEnabled = false;
+        terms.push(term);
+        continue;
+      }
+      const { hidden: _hidden, ...revealed } = term;
+      terms.push(revealed);
+      nextPathIndex++;
+    } else if (term.type === "optional" || term.type === "multiple") {
+      const [nested, afterTerm] = revealMatchedCommandUsageTerms(
+        term.terms,
+        matchedCommandPath,
+        nextPathIndex,
+        selectedCommandUsage,
+        nameFallbackEnabled,
+      );
+      terms.push({ ...term, terms: nested });
+      nextPathIndex = afterTerm;
+    } else if (term.type === "exclusive") {
+      const branches = term.terms.map((branch) =>
+        revealMatchedCommandUsageTerms(
+          branch,
+          matchedCommandPath,
+          nextPathIndex,
+          selectedCommandUsage,
+          nameFallbackEnabled,
+        )
+      );
+      terms.push({ ...term, terms: branches.map(([branch]) => branch) });
+      nextPathIndex = Math.max(
+        nextPathIndex,
+        ...branches.map(([, afterBranch]) => afterBranch),
+      );
+    } else {
+      terms.push(term);
+    }
+  }
+  return [terms, nextPathIndex];
 }
