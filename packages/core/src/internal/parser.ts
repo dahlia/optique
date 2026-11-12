@@ -1,4 +1,9 @@
 import {
+  getCommandDocMetadata,
+  getSelectedCommandUsage,
+} from "./command-doc-metadata.ts";
+import { type CommandUsageId, getCommandUsageId } from "./command-usage.ts";
+import {
   cloneDocEntry,
   type DocEntry,
   type DocFragments,
@@ -1751,10 +1756,14 @@ function buildDocPage(
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
   let matchedCommandPath = context.exec?.commandPath ?? [];
-  let { brief, description, fragments, footer } = parser.getDocFragments(
+  const docs = parser.getDocFragments(
     { kind: "available", state: context.state },
     undefined,
   );
+  let selectedCommandUsage = getSelectedCommandUsage(
+    getCommandDocMetadata(docs),
+  );
+  let { brief, description, fragments, footer } = docs;
   // When the doc root is a bare command() parser and no args navigated into
   // it, the fragments contain only a single command entry instead of the
   // inner parser's options/arguments.  Detect this case and re-invoke
@@ -1781,6 +1790,9 @@ function buildDocPage(
       undefined,
     );
     ({ brief, description, fragments, footer } = matched);
+    selectedCommandUsage = getSelectedCommandUsage(
+      getCommandDocMetadata(matched),
+    );
     effectiveArgs = [cmdName];
     matchedCommandPath = [cmdName];
   }
@@ -1886,7 +1898,11 @@ function buildDocPage(
     }
   }
   return {
-    usage: revealMatchedCommandUsage(usage, matchedCommandPath),
+    usage: revealMatchedCommandUsage(
+      usage,
+      matchedCommandPath,
+      new Set(selectedCommandUsage),
+    ),
     sections,
     ...(brief != null && { brief: cloneMessage(brief) }),
     ...(description != null && { description: cloneMessage(description) }),
@@ -1899,24 +1915,40 @@ function buildDocPage(
 function revealMatchedCommandUsage(
   usage: Usage,
   matchedCommandPath: readonly string[],
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
 ): Usage {
-  return revealMatchedCommandUsageTerms(usage, matchedCommandPath, 0)[0];
+  return revealMatchedCommandUsageTerms(
+    usage,
+    matchedCommandPath,
+    0,
+    selectedCommandUsage,
+  )[0];
 }
 
 function revealMatchedCommandUsageTerms(
   usage: Usage,
   matchedCommandPath: readonly string[],
   pathIndex: number,
+  selectedCommandUsage: ReadonlySet<CommandUsageId>,
 ): readonly [Usage, number] {
   const terms: UsageTerm[] = [];
   let nextPathIndex = pathIndex;
   for (let index = 0; index < usage.length; index++) {
-    if (nextPathIndex >= matchedCommandPath.length) {
-      terms.push(...usage.slice(index));
-      break;
-    }
     const term = usage[index];
     if (term.type === "command") {
+      const id = getCommandUsageId(term);
+      if (id != null) {
+        if (selectedCommandUsage.has(id)) {
+          const { hidden: _hidden, ...revealed } = term;
+          terms.push(revealed);
+          if (term.name === matchedCommandPath[nextPathIndex]) nextPathIndex++;
+        } else {
+          terms.push(term);
+        }
+        continue;
+      }
+      // Custom usage leaves do not have parser provenance. Retain the
+      // conservative name-path fallback only for these untracked terms.
       if (term.name !== matchedCommandPath[nextPathIndex]) {
         // Do not mistake an unmatched command's descendant for the next
         // selected command. Only stop this list, not its enclosing container.
@@ -1931,6 +1963,7 @@ function revealMatchedCommandUsageTerms(
         term.terms,
         matchedCommandPath,
         nextPathIndex,
+        selectedCommandUsage,
       );
       terms.push({ ...term, terms: nested });
       nextPathIndex = afterTerm;
@@ -1940,6 +1973,7 @@ function revealMatchedCommandUsageTerms(
           branch,
           matchedCommandPath,
           nextPathIndex,
+          selectedCommandUsage,
         )
       );
       terms.push({ ...term, terms: branches.map(([branch]) => branch) });
