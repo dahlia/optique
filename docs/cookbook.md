@@ -2826,6 +2826,12 @@ function gitRevision(): string | undefined {
 }
 
 const revision = process.env.BUILD_REVISION?.trim() || gitRevision();
+
+// SemVer build metadata is dot-separated [0-9A-Za-z-] identifiers:
+if (revision != null && !/^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$/.test(revision)) {
+  throw new TypeError(`Invalid SemVer build metadata: ${revision}`);
+}
+
 const buildVersion = revision == null
   ? version
   : `${version}${version.includes("+") ? "." : "+"}${revision}`;
@@ -2840,7 +2846,9 @@ writeFileSync(
 The revision goes into the SemVer build metadata after `+` (or after the
 existing metadata, separated by `.`), so tools that compare versions still
 see `1.2.3`.  An empty `BUILD_REVISION` counts as unset, which is why the
-script uses `||` rather than `??` there.  The fallback matters as much as the
+script uses `||` rather than `??` there.  A value that is not valid build
+metadata, such as `refs/heads/main`, stops the build instead of producing a
+version string that SemVer tools reject.  The fallback matters as much as the
 Git call: a build from a source archive without *.git*, or on a machine without
 Git, still produces the package version.  `BUILD_REVISION` lets a CI system or
 a packager that already knows the revision pass it in directly.
