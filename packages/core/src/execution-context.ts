@@ -1,5 +1,5 @@
 import { mergeCommandDocPolicy } from "./internal/command-doc-policy.ts";
-import { withOptionScopeChild } from "./short-option.ts";
+import { getChildOptionScope } from "./short-option.ts";
 import type { ExecutionContext, ParserContext } from "./parser.ts";
 import type { Usage } from "./usage.ts";
 
@@ -56,7 +56,8 @@ export function withChildContext<TParentState, TChildState>(
   const dependencyRegistry = context.dependencyRegistry ??
     exec?.dependencyRegistry;
   return {
-    ...withOptionScopeChild(context, segment),
+    ...context,
+    ...getChildOptionScope(context, segment, exec?.path),
     state,
     ...(usage != null ? { usage } : {}),
     ...(exec != null

@@ -102,4 +102,22 @@ describe("execution-context helpers", () => {
     assert.strictEqual(child.exec?.dependencyRegistry, freshRegistry);
     assert.deepEqual(child.exec?.path, ["root", "field"]);
   });
+  it("should reuse child exec paths for the fallback after exec is removed", () => {
+    const parent: ParserContext<null> = {
+      state: null,
+      buffer: [],
+      usage: [],
+      optionsTerminated: false,
+      exec: { usage: [], phase: "parse", path: ["root"] },
+    };
+    const child = withChildContext(parent, "field", null);
+    const key = Object.getOwnPropertySymbols(child).find((key) =>
+      key.description === "optionScopePath"
+    );
+    assert.ok(key);
+    assert.strictEqual(Reflect.get(child, key), child.exec?.path);
+    const stripped = { ...child, exec: undefined };
+    const grandchild = withChildContext(stripped, 0, null);
+    assert.deepEqual(Reflect.get(grandchild, key), ["root", "field", 0]);
+  });
 });

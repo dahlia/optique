@@ -17,12 +17,18 @@ type ScopeSource = (
   context?: ParserContext<unknown>,
   path?: readonly PropertyKey[],
 ) => ReadonlySet<string>;
+// Contexts on the same committed route share a holder. A speculative fork
+// gets its own holder; neither side may mutate their shared map afterward.
+interface ScopeSelections {
+  map: Map<ScopeSource, ScopeSource>;
+  owned: boolean;
+}
 interface ScopedContext {
   readonly [optionPathKey]?: readonly PropertyKey[];
   readonly [optionScopeKey]?: {
     readonly names: ReadonlySet<string>;
     readonly sources: ReadonlySet<ScopeSource>;
-    readonly selections: Map<ScopeSource, ScopeSource>;
+    readonly selections: ScopeSelections;
   };
 }
 interface ScopedParser {
@@ -47,6 +53,21 @@ function getScopeBindings(selections: ReadonlyMap<ScopeSource, ScopeSource>) {
   }
   return bindings;
 }
+function setSelection(
+  selections: ScopeSelections,
+  source: ScopeSource,
+  selected: ScopeSource,
+): void {
+  if (selections.map.get(source) === selected) return;
+  if (!selections.owned) {
+    const previous = selections.map;
+    selections.map = new Map(previous);
+    scopeBindings.set(selections.map, getScopeBindings(previous));
+    selections.owned = true;
+  }
+  selections.map.set(source, selected);
+}
+
 function bindScope(
   source: ScopeSource,
   path: readonly PropertyKey[],
@@ -83,12 +104,13 @@ function scopePath(context: ParserContext<unknown>): readonly PropertyKey[] {
   return context.exec?.path ?? (context as ScopedContext)[optionPathKey] ?? [];
 }
 
-/** Tracks child occurrences even for contexts without execution metadata. @internal */
-export function withOptionScopeChild<S>(
-  context: ParserContext<S>,
+/** Supplies child occurrence metadata without copying the parent. @internal */
+export function getChildOptionScope(
+  context: ParserContext<unknown>,
   segment: PropertyKey,
-): ParserContext<S> & ScopedContext {
-  return { ...context, [optionPathKey]: [...scopePath(context), segment] };
+  path?: readonly PropertyKey[],
+): ScopedContext {
+  return { [optionPathKey]: path ?? [...scopePath(context), segment] };
 }
 
 const primitiveScopes = new WeakMap<object, ScopeSource>();
@@ -187,8 +209,9 @@ export function selectableOptionScope(initial: ScopeSource) {
     select(context: ParserContext<unknown>, selected: ScopeSource): void {
       const selections = (context as ScopedContext)[optionScopeKey]?.selections;
       if (selections == null) return;
-      selections.set(
-        bindScope(source, scopePath(context), selections),
+      setSelection(
+        selections,
+        bindScope(source, scopePath(context), selections.map),
         selected,
       );
     },
@@ -249,7 +272,7 @@ export function getOptionScope(
       ...scoped.names,
       ...[...scoped.sources].flatMap((
         source,
-      ) => [...source(scoped.selections, undefined, context)]),
+      ) => [...source(scoped.selections.map, undefined, context)]),
     ]);
   return names;
 }
@@ -265,9 +288,34 @@ export function withOptionScope<S>(
     [optionScopeKey]: {
       names: new Set([...(inherited?.names ?? []), ...names]),
       sources: inherited?.sources ?? new Set(),
-      selections: inherited?.selections ?? new Map(),
+      selections: inherited?.selections ?? { map: new Map(), owned: true },
     },
   };
+}
+
+// Both keys are weak: discarded parses and candidate occurrences can release
+// their cached unions. The immutable sets contain source/path bindings only,
+// never parse contexts or evaluated route selections.
+const scopeUnions = new WeakMap<
+  ReadonlySet<ScopeSource>,
+  WeakMap<ScopeSource, ReadonlySet<ScopeSource>>
+>();
+
+function withScopeSource(
+  sources: ReadonlySet<ScopeSource>,
+  source: ScopeSource,
+): ReadonlySet<ScopeSource> {
+  let unions = scopeUnions.get(sources);
+  if (unions == null) {
+    unions = new WeakMap();
+    scopeUnions.set(sources, unions);
+  }
+  let combined = unions.get(source);
+  if (combined == null) {
+    combined = new Set([...sources, source]);
+    unions.set(source, combined);
+  }
+  return combined;
 }
 
 /** Adds a parser's owned declarations, retaining modifier metadata. @internal */
@@ -277,22 +325,21 @@ export function withParserOptionScope<S>(
   segment?: PropertyKey,
 ): ParserContext<S> & ScopedContext {
   const inherited = (context as ScopedContext)[optionScopeKey];
-  const selections = inherited?.selections ??
-    new Map<ScopeSource, ScopeSource>();
+  const selections = inherited?.selections ?? { map: new Map(), owned: true };
+  const source = bindScope(
+    parserScope(parser),
+    segment == null ? scopePath(context) : [...scopePath(context), segment],
+    selections.map,
+  );
+  if (inherited?.sources.has(source)) return context;
+  const sources = inherited == null
+    ? new Set([source])
+    : withScopeSource(inherited.sources, source);
   return {
     ...context,
     [optionScopeKey]: {
       names: inherited?.names ?? new Set(),
-      sources: new Set([
-        ...(inherited?.sources ?? []),
-        bindScope(
-          parserScope(parser),
-          segment == null
-            ? scopePath(context)
-            : [...scopePath(context), segment],
-          selections,
-        ),
-      ]),
+      sources,
       selections,
     },
   };
@@ -304,8 +351,8 @@ export function forkOptionScope<S>(
 ): ParserContext<S> & ScopedContext {
   const scoped = (context as ScopedContext)[optionScopeKey];
   if (scoped == null) return context;
-  const selections = new Map(scoped.selections);
-  scopeBindings.set(selections, getScopeBindings(scoped.selections));
+  scoped.selections.owned = false;
+  const selections = { map: scoped.selections.map, owned: false };
   return {
     ...context,
     [optionScopeKey]: { ...scoped, selections },
@@ -319,9 +366,11 @@ export function adoptOptionScope<S>(
 ): ParserContext<S> {
   const own = (context as ScopedContext)[optionScopeKey];
   const child = (next as ScopedContext)[optionScopeKey];
-  if (own != null && child != null) {
-    for (const [source, selected] of child.selections) {
-      own.selections.set(source, selected);
+  if (
+    own != null && child != null && own.selections.map !== child.selections.map
+  ) {
+    for (const [source, selected] of child.selections.map) {
+      setSelection(own.selections, source, selected);
     }
   }
   return context;
@@ -435,7 +484,7 @@ export function attachedValuePrefix(
     collectOptionNamesAtCurrentCommandDepth(context.usage, names, false);
   } else {
     for (const source of scoped.sources) {
-      source(scoped.selections, names, context);
+      source(scoped.selections.map, names, context);
     }
   }
   for (let index = 1; index < prefix.length;) {
