@@ -30,6 +30,7 @@ import {
   suggestSync,
 } from "#src/parser.ts";
 import { choice, integer, string, type ValueParser } from "#src/valueparser.ts";
+import { inheritOptionScope } from "#src/extension.ts";
 import { dependency } from "#src/dependency.ts";
 import { formatMessage } from "#src/message.ts";
 
@@ -882,6 +883,42 @@ describe("attached short option values", () => {
         value: { v: undefined, c: ["a", true] },
       },
     );
+  });
+  it("keeps repeated positional literals after termination in both modes", async () => {
+    const paths = ["-verbose", "-🙂x", "--", "path/to/file"];
+    for (const value of [string(), asyncString()]) {
+      const parser = object({
+        v: optional(option("-v", value)),
+        paths: multiple(argument(value)),
+      });
+      assert.deepEqual(await parseAsync(parser, ["--", ...paths]), {
+        success: true,
+        value: { v: undefined, paths },
+      });
+    }
+  });
+  it("preserves conditional occurrence paths when transparent wrappers remove exec", async () => {
+    for (const value of [choice(["a", "b"]), asyncString()]) {
+      const inner = conditional(withDefault(option("--mode", value), "a"), {
+        a: option("-verbose"),
+        b: constant(null),
+      });
+      const wrapped = {
+        ...inner,
+        parse(context: Parameters<typeof inner.parse>[0]) {
+          return inner.parse({ ...context, exec: undefined });
+        },
+      };
+      inheritOptionScope(wrapped, inner);
+      const parser = object({
+        v: optional(option("-v", string())),
+        c: wrapped,
+      });
+      assert.deepEqual(await parseAsync(parser, ["--mode", "b", "-verbose"]), {
+        success: true,
+        value: { v: "erbose", c: ["b", null] },
+      });
+    }
   });
   it("honors full numeric-looking names and manual contexts", () => {
     const parser = object({

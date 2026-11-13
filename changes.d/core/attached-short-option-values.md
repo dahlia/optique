@@ -1,5 +1,6 @@
 ---
 links:
+  '#1121': https://github.com/dahlia/optique/pull/1121
   '#965': https://github.com/dahlia/optique/issues/965
   '#981': https://github.com/dahlia/optique/pull/981
 ---
@@ -14,4 +15,4 @@ links:
     parsers honor context-dependent skippable steps when recognizing full option
     names, and dash-prefixed command names no longer block attached values.
     Unicode short-option names work in attached forms and bundles too.
-    [[#965], [#981]]
+    [[#965], [#981], [#1121]]

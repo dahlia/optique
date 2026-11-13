@@ -34,7 +34,8 @@
     ".issues/",
     "docs",
     "tmp/startup-baseline",
-    "tmp/startup-tests"
+    "tmp/startup-tests",
+    "tmp/parse-scope"
   ],
   "fmt": {
     "exclude": [

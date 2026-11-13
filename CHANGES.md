@@ -37,7 +37,7 @@ To be released.
     parsers honor context-dependent skippable steps when recognizing full option
     names, and dash-prefixed command names no longer block attached values.
     Unicode short-option names work in attached forms and bundles too.
-    [[#965], [#981]]
+    [[#965], [#981], [#1121]]
  -  Added `collectDocPages()` in `@optique/core/doc-pages` to collect command
     documentation from supported built-in definitions without parsing or
     evaluating runtime callbacks. Unsupported scopes are reported explicitly,
@@ -151,6 +151,7 @@ To be released.
 [#1095]: https://github.com/dahlia/optique/pull/1095
 [#1111]: https://github.com/dahlia/optique/issues/1111
 [#1114]: https://github.com/dahlia/optique/pull/1114
+[#1121]: https://github.com/dahlia/optique/pull/1121
 
 ### @optique/run
 
