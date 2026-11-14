@@ -29,6 +29,10 @@ import { lineBreak, message, text } from "./message.ts";
 
 const ZSH_PTY_TEST_TIMEOUT = 10_000;
 
+// Cold PowerShell processes and multiple completion contexts can exceed Bun's
+// default five-second test timeout.
+const pwshTestTimeout = 30_000;
+
 // Helper functions for shell availability and testing
 function getStdoutFromExecError(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null) return undefined;
@@ -6741,7 +6745,9 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
       );
     });
 
-    it("should work with actual pwsh shell", (t) => {
+    it("should work with actual pwsh shell", {
+      timeout: pwshTestTimeout,
+    }, (t) => {
       if (!isShellAvailable("pwsh")) {
         t.skip("pwsh not available");
         return;
@@ -7645,7 +7651,9 @@ finally:
       ok(fileBlock.includes('-split "`t"'));
     });
 
-    it("should parse hidden field correctly with tab-delimited metadata", (t) => {
+    it("should parse hidden field correctly with tab-delimited metadata", {
+      timeout: pwshTestTimeout,
+    }, (t) => {
       if (!isShellAvailable("pwsh")) {
         t.skip("pwsh not available");
         return;
@@ -7757,6 +7765,7 @@ printf '__FILE__:file::src/:0\\n'
 
     it("should preserve backslash directory prefix on Windows", {
       skip: process.platform !== "win32" || !isShellAvailable("pwsh"),
+      timeout: pwshTestTimeout,
     }, () => {
       // Bun ignores the skip option, so we need an early return as well:
       if (process.platform !== "win32") return;
@@ -11356,7 +11365,11 @@ describe("fixed glob prefix completion", () => {
     for (const scenario of cases) {
       it(`${shell}: ${scenario.name}`, {
         skip: !available,
-        timeout: shell === "zsh" ? ZSH_PTY_TEST_TIMEOUT : undefined,
+        timeout: shell === "zsh"
+          ? ZSH_PTY_TEST_TIMEOUT
+          : shell === "pwsh"
+          ? pwshTestTimeout
+          : undefined,
       }, () => {
         // Bun ignores skip, so keep the early return as well.
         if (!available) return;
@@ -11384,6 +11397,7 @@ describe("fixed glob prefix completion", () => {
 
 it("PowerShell fixed glob after directory normalization", {
   skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+  timeout: pwshTestTimeout,
 }, () => {
   if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
   const output = testFixedGlobPrefix("pwsh", {
@@ -11748,6 +11762,7 @@ for (
 ) {
   it(`PowerShell fixed glob with quoted prefix ${prefix}`, {
     skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+    timeout: pwshTestTimeout,
   }, () => {
     if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
     const output = testFixedGlobPrefix("pwsh", {
@@ -11765,6 +11780,7 @@ for (const includeHidden of [false, true]) {
     `PowerShell fixed glob in a hidden parent (includeHidden: ${includeHidden})`,
     {
       skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+      timeout: pwshTestTimeout,
     },
     () => {
       if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
