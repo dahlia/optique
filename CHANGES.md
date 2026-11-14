@@ -25,8 +25,9 @@ To be released.
     `withDefault()` parsers when context annotations were present.
     [[#1108], [#1109]]
  -  Improved parsing performance for long lists of positional arguments and
-    repeated option values while preserving dependency replay and isolation
-    between parser alternatives.  [[#1122], [#1124]]
+    repeated option values, including `multiple()` state updates, while
+    preserving dependency replay and isolation between parser alternatives.
+    [[#1122], [#1123], [#1124], [#1128]]
 
 [#1098]: https://github.com/dahlia/optique/issues/1098
 [#1101]: https://github.com/dahlia/optique/issues/1101
@@ -37,7 +38,9 @@ To be released.
 [#1110]: https://github.com/dahlia/optique/issues/1110
 [#1113]: https://github.com/dahlia/optique/pull/1113
 [#1122]: https://github.com/dahlia/optique/issues/1122
+[#1123]: https://github.com/dahlia/optique/issues/1123
 [#1124]: https://github.com/dahlia/optique/pull/1124
+[#1128]: https://github.com/dahlia/optique/issues/1128
 
 
 Version 1.0.15

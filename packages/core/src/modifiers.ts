@@ -69,6 +69,10 @@ import type {
 } from "./parser.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 
+// Small states keep the original spread append.  Native copying is faster
+// for larger states; spread first preserves custom iteration and dense arrays.
+const MULTIPLE_NATIVE_APPEND_THRESHOLD = 256;
+
 function isTerminalMultipleItemState(state: unknown): boolean {
   const unwrapped = unwrapMultipleItemState(state).value;
   return unwrapped != null && typeof unwrapped === "object" &&
@@ -2216,10 +2220,16 @@ export function multiple<M extends Mode, TValue, TState>(
       ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
-        state: annotateFreshArray(context.state, [
-          ...(added ? context.state : context.state.slice(0, -1)),
-          nextItemState,
-        ]),
+        state: annotateFreshArray(
+          context.state,
+          itemIndex < MULTIPLE_NATIVE_APPEND_THRESHOLD
+            ? [
+              ...(added ? context.state : context.state.slice(0, -1)),
+              nextItemState,
+            ]
+            : [...(added ? context.state : context.state.slice(0, -1))]
+              .toSpliced(Infinity, 0, nextItemState),
+        ),
         ...(mergedExec != null
           ? {
             trace: mergedExec.trace,
@@ -2379,10 +2389,16 @@ export function multiple<M extends Mode, TValue, TState>(
       ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
-        state: annotateFreshArray(context.state, [
-          ...(added ? context.state : context.state.slice(0, -1)),
-          nextItemState,
-        ]),
+        state: annotateFreshArray(
+          context.state,
+          itemIndex < MULTIPLE_NATIVE_APPEND_THRESHOLD
+            ? [
+              ...(added ? context.state : context.state.slice(0, -1)),
+              nextItemState,
+            ]
+            : [...(added ? context.state : context.state.slice(0, -1))]
+              .toSpliced(Infinity, 0, nextItemState),
+        ),
         ...(mergedExec != null
           ? {
             trace: mergedExec.trace,
