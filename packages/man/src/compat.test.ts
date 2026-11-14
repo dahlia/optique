@@ -450,6 +450,6 @@ describe("man display control compatibility", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.ok(result.stdout.includes(".DEFAULT 20"), result.stdout);
     assert.ok(result.stdout.includes(".SH BAD"), result.stdout);
-    assert.ok(result.stdout.includes("'CHOICES 10, 20"), result.stdout);
+    assert.match(result.stdout, /['\u2019]CHOICES 10, 20/, result.stdout);
   });
 });
