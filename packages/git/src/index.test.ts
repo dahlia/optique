@@ -76,44 +76,67 @@ async function createTestRepoWithBranchesAndTags(): Promise<string> {
   return testRepoDir;
 }
 
-function createTestRepoWithAmbiguousPrefix(): Promise<{
+async function createTestRepoWithAmbiguousPrefix(): Promise<{
   readonly dir: string;
   readonly prefix: string;
-}> {
-  return createTestRepoWithAmbiguousPrefixLength(2);
-}
-
-async function createTestRepoWithAmbiguousPrefixLength(
-  prefixLength: number,
-): Promise<{
-  readonly dir: string;
-  readonly prefix: string;
+  readonly oids: readonly string[];
 }> {
   const dir = await fs.mkdtemp(join(tmpdir(), "optique-git-ambiguous-test-"));
-  await fs.writeFile(join(dir, "test.txt"), "seed");
-  await isomorphicGit.init({ fs, dir, defaultBranch: "main" });
-  const author = { name: "Test User", email: "test@example.com" };
-
-  const seen = new Set<string>();
-  for (let i = 0; i < 5000; i++) {
-    await fs.writeFile(join(dir, "test.txt"), `${i}-${Math.random()}`);
-    await isomorphicGit.add({ fs, dir, filepath: "test.txt" });
-    const oid = await isomorphicGit.commit({
+  try {
+    await isomorphicGit.init({ fs, dir, defaultBranch: "main" });
+    const tree = await isomorphicGit.writeTree({ fs, dir, tree: [] });
+    const author = {
+      name: "Test User",
+      email: "test@example.com",
+      timestamp: 1700000000,
+      timezoneOffset: 0,
+    };
+    // Precomputed from these messages, the empty tree and the fixed metadata
+    // above.  The roots share seven hex digits and differ at the eighth, so
+    // suggestions must lengthen their usual seven-character abbreviations.
+    const commits = [
+      {
+        message: "Collision 2311\n",
+        oid: "e8c5e9ad64417ce13cef182799a42eb03b01e97d",
+      },
+      {
+        message: "Collision 3391\n",
+        oid: "e8c5e9a1d6579fad84dd430c08754f1e46b11902",
+      },
+    ];
+    const oids: string[] = [];
+    for (const { message, oid } of commits) {
+      const actual = await isomorphicGit.writeCommit({
+        fs,
+        dir,
+        commit: { tree, parent: [], author, committer: author, message },
+      });
+      assert.equal(actual, oid);
+      oids.push(actual);
+    }
+    // Both roots must be reachable from HEAD for git.log()-based suggestions.
+    const tip = await isomorphicGit.writeCommit({
       fs,
       dir,
-      message: `Commit ${i}`,
-      author,
+      commit: {
+        tree,
+        parent: oids,
+        author,
+        committer: author,
+        message: "Collision tip\n",
+      },
     });
-    const prefix = oid.slice(0, prefixLength);
-    if (seen.has(prefix)) {
-      return { dir, prefix };
-    }
-    seen.add(prefix);
+    await isomorphicGit.writeRef({
+      fs,
+      dir,
+      ref: "refs/heads/main",
+      value: tip,
+    });
+    return { dir, prefix: oids[0].slice(0, 7), oids };
+  } catch (error) {
+    await cleanupTestRepo(dir);
+    throw error;
   }
-
-  throw new Error(
-    `Failed to create ambiguous commit prefix of length ${prefixLength}.`,
-  );
 }
 
 async function cleanupTestRepo(dir: string): Promise<void> {
@@ -121,6 +144,28 @@ async function cleanupTestRepo(dir: string): Promise<void> {
 }
 
 describe("git parsers", () => {
+  it("should build a fixed three-commit collision fixture", async () => {
+    const { dir } = await createTestRepoWithAmbiguousPrefix();
+    try {
+      const commits = await isomorphicGit.log({ fs, dir });
+      assert.equal(commits.length, 3);
+      assert.deepEqual(
+        new Set(commits.map((commit) => commit.oid)),
+        new Set([
+          "a83650cac73ac4ff44be0ffa506fb3d3f680ae9e",
+          "e8c5e9ad64417ce13cef182799a42eb03b01e97d",
+          "e8c5e9a1d6579fad84dd430c08754f1e46b11902",
+        ]),
+      );
+      assert.equal(
+        await isomorphicGit.resolveRef({ fs, dir, ref: "HEAD" }),
+        "a83650cac73ac4ff44be0ffa506fb3d3f680ae9e",
+      );
+    } finally {
+      await cleanupTestRepo(dir);
+    }
+  });
+
   describe("gitBranch()", () => {
     it("should parse existing local branch names", async () => {
       const testRepoDir = await createTestRepo();
@@ -711,9 +756,9 @@ describe("git parsers", () => {
     it("should suggest only unique and parseable commit SHAs", {
       timeout: 15000,
     }, async () => {
-      const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
+      const { dir, prefix, oids } = await createTestRepoWithAmbiguousPrefix();
       try {
-        const parser = gitCommit({ dir, suggestionDepth: 5000 });
+        const parser = gitCommit({ dir });
         const suggestions: Suggestion[] = [];
         for await (const s of parser.suggest!(prefix)) {
           suggestions.push(s);
@@ -722,11 +767,15 @@ describe("git parsers", () => {
           (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         );
         assert.ok(
-          literals.length >= 2,
-          `Should have at least 2 suggestions sharing prefix '${prefix}', ` +
+          literals.length === 2,
+          `Should have exactly 2 suggestions sharing prefix '${prefix}', ` +
             `got ${literals.length}`,
         );
         const texts = literals.map((s) => s.text);
+        assert.deepEqual(
+          new Set(texts),
+          new Set(oids.map((oid) => oid.slice(0, 8))),
+        );
         const unique = new Set(texts);
         assert.equal(
           unique.size,
@@ -739,6 +788,12 @@ describe("git parsers", () => {
             result.success,
             `Suggestion '${s.text}' should be parseable`,
           );
+          if (result.success) {
+            assert.equal(
+              result.value,
+              oids.find((oid) => oid.startsWith(s.text)),
+            );
+          }
         }
       } finally {
         await cleanupTestRepo(dir);
@@ -748,10 +803,10 @@ describe("git parsers", () => {
     it("should report ambiguous abbreviated commit SHAs", {
       timeout: 15000,
     }, async () => {
-      const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
+      const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
       try {
         const parser = gitCommit({ dir });
-        const result = await parser.parse(prefix);
+        const result = await parser.parse(prefix.slice(0, 4));
         assert.ok(!result.success);
         if (!result.success) {
           assert.match(formatMessage(result.error), /ambiguous/i);
@@ -835,7 +890,7 @@ describe("git parsers", () => {
       const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
       try {
         const parser = gitRef({ dir });
-        const result = await parser.parse(prefix);
+        const result = await parser.parse(prefix.slice(0, 2));
         assert.ok(!result.success);
         if (!result.success) {
           assert.match(formatMessage(result.error), /ambiguous/i);
@@ -1222,11 +1277,11 @@ describe("git parsers", () => {
     it("should suggest only unique and parseable commit SHAs", {
       timeout: 15000,
     }, async () => {
-      const { dir, prefix } = await createTestRepoWithAmbiguousPrefixLength(4);
+      const { dir, prefix, oids } = await createTestRepoWithAmbiguousPrefix();
       try {
-        const parser = gitRef({ dir, suggestionDepth: 5000 });
+        const parser = gitRef({ dir });
         const suggestions: Suggestion[] = [];
-        for await (const s of parser.suggest!(prefix)) {
+        for await (const s of parser.suggest!(prefix.slice(0, 4))) {
           suggestions.push(s);
         }
         const literals = suggestions.filter(
@@ -1237,11 +1292,15 @@ describe("git parsers", () => {
           (s) => /^[0-9a-f]+$/i.test(s.text),
         );
         assert.ok(
-          commitSuggestions.length >= 2,
-          `Should have at least 2 commit suggestions sharing prefix ` +
+          commitSuggestions.length === 2,
+          `Should have exactly 2 commit suggestions sharing prefix ` +
             `'${prefix}', got ${commitSuggestions.length}`,
         );
         const texts = commitSuggestions.map((s) => s.text);
+        assert.deepEqual(
+          new Set(texts),
+          new Set(oids.map((oid) => oid.slice(0, 8))),
+        );
         const unique = new Set(texts);
         assert.equal(
           unique.size,
@@ -1254,6 +1313,12 @@ describe("git parsers", () => {
             result.success,
             `Suggestion '${s.text}' should be parseable`,
           );
+          if (result.success) {
+            assert.equal(
+              result.value,
+              oids.find((oid) => oid.startsWith(s.text)),
+            );
+          }
         }
       } finally {
         await cleanupTestRepo(dir);
@@ -1688,54 +1753,17 @@ describe("git parsers", () => {
     it("should report ambiguous short SHA for commit and ref parsers", {
       timeout: 30000,
     }, async () => {
-      const testRepoDir = await createTestRepo();
+      const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
       try {
-        const author = { name: "Test User", email: "test@example.com" };
-        const seen = new Map<string, string>();
-        let ambiguousPrefix: string | undefined;
-
-        for (let i = 0; i < 1200; i++) {
-          await fs.writeFile(join(testRepoDir, "test.txt"), `content-${i}`);
-          await isomorphicGit.add({
-            fs,
-            dir: testRepoDir,
-            filepath: "test.txt",
-          });
-          await isomorphicGit.commit({
-            fs,
-            dir: testRepoDir,
-            message: `commit ${i}`,
-            author,
-          });
-          const oid = await isomorphicGit.resolveRef({
-            fs,
-            dir: testRepoDir,
-            ref: "HEAD",
-          });
-          const prefix = oid.slice(0, 4);
-          const prev = seen.get(prefix);
-          if (prev != null && prev !== oid) {
-            ambiguousPrefix = prefix;
-            break;
+        for (const parser of [gitCommit({ dir }), gitRef({ dir })]) {
+          const result = await parser.parse(prefix.slice(0, 4));
+          assert.ok(!result.success);
+          if (!result.success) {
+            assert.match(formatMessage(result.error), /ambiguous/i);
           }
-          seen.set(prefix, oid);
         }
-
-        assert.ok(
-          ambiguousPrefix != null,
-          "Failed to find an ambiguous 4-char commit prefix.",
-        );
-        const prefix = ambiguousPrefix!;
-
-        const commitResult = await gitCommit({ dir: testRepoDir }).parse(
-          prefix,
-        );
-        assert.ok(!commitResult.success);
-
-        const refResult = await gitRef({ dir: testRepoDir }).parse(prefix);
-        assert.ok(!refResult.success);
       } finally {
-        await cleanupTestRepo(testRepoDir);
+        await cleanupTestRepo(dir);
       }
     });
 
