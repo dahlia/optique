@@ -5,7 +5,12 @@
  */
 import { describe, test } from "node:test";
 import * as assert from "node:assert/strict";
-import { createInputTrace, type TraceEntry } from "./input-trace.ts";
+import {
+  createInputTrace,
+  type InputTrace,
+  inspectInputTrace,
+  type TraceEntry,
+} from "./input-trace.ts";
 
 // =============================================================================
 // Helpers
@@ -180,5 +185,145 @@ describe("InputTrace", () => {
       .set(["a", "b"], entry2);
     assert.deepStrictEqual(trace.get(["a\0sb"]), entry1);
     assert.deepStrictEqual(trace.get(["a", "b"]), entry2);
+  });
+});
+
+describe("persistent trace snapshots", () => {
+  function check(trace: InputTrace, expected: ReadonlyMap<number, TraceEntry>) {
+    const { size, height } = inspectInputTrace(trace);
+    assert.equal(size, expected.size);
+    assert.ok(height <= Math.ceil(1.45 * Math.log2(size + 2)));
+    for (let i = 0; i < 128; i++) {
+      assert.strictEqual(trace.get(["paths", i]), expected.get(i));
+    }
+  }
+
+  test("rotations and deletions preserve every historical version", () => {
+    const orders = [
+      [1],
+      [2, 1],
+      [1, 2],
+      [3, 2, 1], // Left-left.
+      [1, 2, 3], // Right-right.
+      [3, 1, 2], // Left-right.
+      [1, 3, 2], // Right-left.
+      [4, 2, 5, 1, 3], // Delete 5: sibling balance is zero.
+      [2, 1, 4, 3, 5], // Delete 1: mirrored zero-balance case.
+      [8, 4, 12, 2, 6, 10, 14, 9, 11], // Deeper successor.
+      [8, 4, 14, 2, 6, 10, 16, 11], // Successor has a right child.
+      [8, 4, 12, 2, 6, 10, 14, 9, 11, 13, 15],
+      Array.from({ length: 128 }, (_, i) => i),
+      Array.from({ length: 128 }, (_, i) => 127 - i),
+      Array.from({ length: 128 }, (_, i) => i % 2 ? 127 - (i >> 1) : i >> 1),
+    ];
+    for (const order of orders) {
+      for (
+        const deletion of [
+          order,
+          order.toReversed(),
+          order.toSorted((a, b) => a - b),
+          order.toSorted((a, b) => b - a),
+        ]
+      ) {
+        let trace = createInputTrace();
+        const expected = new Map<number, TraceEntry>();
+        const versions: [InputTrace, ReadonlyMap<number, TraceEntry>][] = [];
+        for (const i of order) {
+          const entry = makeEntry("argument-value", String(i));
+          trace = trace.set(["paths", i], entry);
+          expected.set(i, entry);
+          check(trace, expected);
+          versions.push([trace, new Map(expected)]);
+        }
+        const unchanged = trace.delete(["missing"]);
+        assert.notStrictEqual(unchanged, trace);
+        check(unchanged, expected);
+        for (const i of deletion) {
+          trace = trace.delete(["paths", i]);
+          expected.delete(i);
+          check(trace, expected);
+        }
+        assert.deepEqual(inspectInputTrace(trace), { size: 0, height: 0 });
+        for (const [snapshot, values] of versions) check(snapshot, values);
+      }
+    }
+  });
+
+  test("seeded operations can fork any retained version", () => {
+    let seed = 0x1122;
+    const random = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed;
+    };
+    const local = Symbol("same");
+    const paths: readonly (readonly PropertyKey[])[] = [
+      [],
+      [""],
+      ["a"],
+      ["a", "b"],
+      ["a\0sb"],
+      [0],
+      ["0"],
+      ["é"],
+      ["e\u0301"],
+      ["日本語", "한글"],
+      ["__proto__"],
+      [local],
+      [Symbol("same")],
+      [Symbol.for("same")],
+      [Infinity],
+      [-Infinity],
+      [NaN],
+      ["3:sx", "\0:"],
+      ...Array.from({ length: 96 }, (_, i) => ["paths", i]),
+    ];
+    const versions: [InputTrace, ReadonlyMap<number, TraceEntry>][] = [
+      [createInputTrace(), new Map()],
+    ];
+    for (let step = 0; step < 1500; step++) {
+      // High bits avoid correlations between the LCG's low bits and operations.
+      const [base, prior] = versions[(random() >>> 8) % versions.length];
+      const index = (random() >>> 8) % paths.length;
+      const expected = new Map(prior);
+      const entry = makeEntry("custom", `value-${step}`);
+      const remove = (random() >>> 8) % 3 === 0;
+      const next = remove
+        ? base.delete(paths[index])
+        : base.set(paths[index], entry);
+      if (remove) expected.delete(index);
+      else expected.set(index, entry);
+      assert.notStrictEqual(next, base);
+      assert.equal(inspectInputTrace(next).size, expected.size);
+      for (let i = 0; i < paths.length; i++) {
+        assert.strictEqual(next.get(paths[i]), expected.get(i));
+        assert.strictEqual(base.get(paths[i]), prior.get(i));
+      }
+      versions.push([next, expected]);
+    }
+    for (const [snapshot, values] of versions) {
+      assert.equal(inspectInputTrace(snapshot).size, values.size);
+      for (let i = 0; i < paths.length; i++) {
+        assert.strictEqual(snapshot.get(paths[i]), values.get(i));
+      }
+    }
+  });
+
+  test("caller path mutation and same-entry updates preserve identity", () => {
+    const path: PropertyKey[] = ["parent"];
+    const entry = makeEntry("custom", "parent");
+    const parent = createInputTrace().set(path, entry);
+    path.push("child");
+    const childEntry = makeEntry("custom", "child");
+    const child = parent.set(path, childEntry);
+    const same = child.set(path, childEntry);
+    assert.notStrictEqual(same, child);
+    assert.strictEqual(same.get(path), childEntry);
+    assert.strictEqual(parent.get(["parent"]), entry);
+    assert.equal(parent.get(path), undefined);
+    const removed = child.delete(["parent"]);
+    assert.equal(removed.get(["parent"]), undefined);
+    assert.strictEqual(removed.get(path), childEntry);
+    assert.strictEqual(child.get(["parent"]), entry);
+    assert.equal(inspectInputTrace(removed).size, 1);
   });
 });

@@ -126,28 +126,200 @@ function serializePath(path: readonly PropertyKey[]): string {
 // Implementation
 // ---------------------------------------------------------------------------
 
-class InputTraceImpl implements InputTrace {
-  readonly #entries: ReadonlyMap<string, TraceEntry>;
+// Nodes are immutable. Updating a trace copies only the search path and shares
+// untouched subtrees, so retaining or forking an earlier trace is safe.
+interface TraceNode {
+  readonly key: string;
+  readonly entry: TraceEntry;
+  readonly left: TraceNode | undefined;
+  readonly right: TraceNode | undefined;
+  readonly height: number;
+}
 
-  constructor(entries?: ReadonlyMap<string, TraceEntry>) {
-    this.#entries = entries ?? new Map();
+function height(node: TraceNode | undefined): number {
+  return node?.height ?? 0;
+}
+
+function node(
+  key: string,
+  entry: TraceEntry,
+  left: TraceNode | undefined,
+  right: TraceNode | undefined,
+): TraceNode {
+  return {
+    key,
+    entry,
+    left,
+    right,
+    height: 1 + Math.max(height(left), height(right)),
+  };
+}
+
+// Rebuild bottom-up, including rotations. A zero-balance heavy child requires
+// a single rotation (this case occurs during deletion).
+function balance(
+  key: string,
+  entry: TraceEntry,
+  left: TraceNode | undefined,
+  right: TraceNode | undefined,
+): TraceNode {
+  if (height(left) - height(right) > 1 && left != null) {
+    const pivot = left.right;
+    if (height(pivot) > height(left.left) && pivot != null) {
+      return node(
+        pivot.key,
+        pivot.entry,
+        node(left.key, left.entry, left.left, pivot.left),
+        node(key, entry, pivot.right, right),
+      );
+    }
+    return node(
+      left.key,
+      left.entry,
+      left.left,
+      node(key, entry, left.right, right),
+    );
+  }
+  if (height(right) - height(left) > 1 && right != null) {
+    const pivot = right.left;
+    if (height(pivot) > height(right.right) && pivot != null) {
+      return node(
+        pivot.key,
+        pivot.entry,
+        node(key, entry, left, pivot.left),
+        node(right.key, right.entry, pivot.right, right.right),
+      );
+    }
+    return node(
+      right.key,
+      right.entry,
+      node(key, entry, left, right.left),
+      right.right,
+    );
+  }
+  return node(key, entry, left, right);
+}
+
+function setEntry(
+  root: TraceNode | undefined,
+  key: string,
+  entry: TraceEntry,
+): TraceNode {
+  if (root == null) return node(key, entry, undefined, undefined);
+  if (key === root.key) return entry === root.entry ? root : { ...root, entry };
+  if (key < root.key) {
+    const left = setEntry(root.left, key, entry);
+    return left === root.left
+      ? root
+      : balance(root.key, root.entry, left, root.right);
+  }
+  const right = setEntry(root.right, key, entry);
+  return right === root.right
+    ? root
+    : balance(root.key, root.entry, root.left, right);
+}
+
+function popMin(root: TraceNode): readonly [TraceNode, TraceNode | undefined] {
+  if (root.left == null) return [root, root.right];
+  const [minimum, left] = popMin(root.left);
+  return [minimum, balance(root.key, root.entry, left, root.right)];
+}
+
+function deleteEntry(
+  root: TraceNode | undefined,
+  key: string,
+): TraceNode | undefined {
+  if (root == null) return undefined;
+  if (key === root.key) {
+    if (root.left == null) return root.right;
+    if (root.right == null) return root.left;
+    const [successor, right] = popMin(root.right);
+    return balance(successor.key, successor.entry, root.left, right);
+  }
+  if (key < root.key) {
+    const left = deleteEntry(root.left, key);
+    return left === root.left
+      ? root
+      : balance(root.key, root.entry, left, root.right);
+  }
+  const right = deleteEntry(root.right, key);
+  return right === root.right
+    ? root
+    : balance(root.key, root.entry, root.left, right);
+}
+
+function inspectNode(
+  root: TraceNode | undefined,
+  lower?: string,
+  upper?: string,
+): { readonly size: number; readonly height: number } {
+  if (root == null) return { size: 0, height: 0 };
+  if (
+    (lower !== undefined && root.key <= lower) ||
+    (upper !== undefined && root.key >= upper)
+  ) {
+    throw new TypeError("Input trace keys are not strictly ordered.");
+  }
+  const left = inspectNode(root.left, lower, root.key);
+  const right = inspectNode(root.right, root.key, upper);
+  const actualHeight = 1 + Math.max(left.height, right.height);
+  if (
+    root.height !== actualHeight || Math.abs(left.height - right.height) > 1
+  ) {
+    throw new TypeError("Input trace heights or balance are invalid.");
+  }
+  return { size: 1 + left.size + right.size, height: actualHeight };
+}
+
+class InputTraceImpl implements InputTrace {
+  readonly #root: TraceNode | undefined;
+
+  constructor(root?: TraceNode) {
+    this.#root = root;
   }
 
   get(path: readonly PropertyKey[]): TraceEntry | undefined {
-    return this.#entries.get(serializePath(path));
+    const key = serializePath(path);
+    let current = this.#root;
+    while (current != null) {
+      if (key === current.key) return current.entry;
+      current = key < current.key ? current.left : current.right;
+    }
+    return undefined;
   }
 
   set(path: readonly PropertyKey[], entry: TraceEntry): InputTrace {
-    const copy = new Map(this.#entries);
-    copy.set(serializePath(path), entry);
-    return new InputTraceImpl(copy);
+    return new InputTraceImpl(setEntry(this.#root, serializePath(path), entry));
   }
 
   delete(path: readonly PropertyKey[]): InputTrace {
-    const copy = new Map(this.#entries);
-    copy.delete(serializePath(path));
-    return new InputTraceImpl(copy);
+    return new InputTraceImpl(deleteEntry(this.#root, serializePath(path)));
   }
+
+  static inspect(
+    trace: InputTrace,
+  ): { readonly size: number; readonly height: number } {
+    if (!(trace instanceof InputTraceImpl)) {
+      throw new TypeError("Expected an Optique input trace.");
+    }
+    return inspectNode(trace.#root);
+  }
+}
+
+/**
+ * Checks private tree invariants without exposing mutable nodes.
+ * This module is not a package export; the checker is used by internal tests.
+ *
+ * @param trace The trace to inspect.
+ * @returns Its size and verified height.
+ * @throws {TypeError} If the trace is foreign or its tree invariants are invalid.
+ * @internal
+ * @since 1.0.16
+ */
+export function inspectInputTrace(
+  trace: InputTrace,
+): { readonly size: number; readonly height: number } {
+  return InputTraceImpl.inspect(trace);
 }
 
 /**
