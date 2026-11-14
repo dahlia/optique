@@ -24,6 +24,9 @@ To be released.
     composed commands, and making `prompt()` skip mapped `optional()` or
     `withDefault()` parsers when context annotations were present.
     [[#1108], [#1109]]
+ -  Improved parsing performance for long lists of positional arguments and
+    repeated option values while preserving dependency replay and isolation
+    between parser alternatives.  [[#1122], [#1124]]
 
 [#1098]: https://github.com/dahlia/optique/issues/1098
 [#1101]: https://github.com/dahlia/optique/issues/1101
@@ -33,6 +36,8 @@ To be released.
 [#1109]: https://github.com/dahlia/optique/pull/1109
 [#1110]: https://github.com/dahlia/optique/issues/1110
 [#1113]: https://github.com/dahlia/optique/pull/1113
+[#1122]: https://github.com/dahlia/optique/issues/1122
+[#1124]: https://github.com/dahlia/optique/pull/1124
 
 
 Version 1.0.15
