@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import process from "node:process";
+import { randomUUID } from "node:crypto";
 import {
   bash,
   fish,
@@ -25,6 +26,8 @@ import {
 } from "./completion.ts";
 import type { Suggestion } from "./parser.ts";
 import { lineBreak, message, text } from "./message.ts";
+
+const ZSH_PTY_TEST_TIMEOUT = 10_000;
 
 // Helper functions for shell availability and testing
 function getStdoutFromExecError(error: unknown): string | undefined {
@@ -102,7 +105,7 @@ function isInteractiveZshCompletionAvailable(): boolean {
       "zsh",
       [
         "-fc",
-        "autoload -U compinit && zmodload zsh/complist && zmodload zsh/zpty",
+        "autoload -U compinit && zmodload zsh/complist && zmodload zsh/zpty && zmodload zsh/zselect",
       ],
       { stdio: "ignore" },
     );
@@ -185,6 +188,8 @@ function testInteractiveZshCompletion(
     }
   )[],
   options: {
+    readonly deadlineMs?: number;
+    readonly subprocessTimeoutMs?: number;
     readonly withInsecureFpath?: boolean;
     readonly setup?: string;
     readonly payload?: string;
@@ -265,8 +270,6 @@ ${
 
     const startMarker = "\x1eOPTIQUE_ZSH_COMPLETION_START\x1e";
     const endMarker = "\x1eOPTIQUE_ZSH_COMPLETION_END\x1e";
-    const initReadyMarker = "__OPTIQUE_ZSH_INIT_READY__";
-    const afterCompletionMarker = "__OPTIQUE_ZSH_AFTER_COMPLETION_DONE__";
     const initPath = join(binDir, ".session.init");
     const insecureFpathDir = join(tempDir, "insecure-fpath");
     if (options.withInsecureFpath === true) {
@@ -275,13 +278,27 @@ ${
     }
     const init = `PS1='PROMPT> '
 bindkey -e
+integer __optique_sequence=0
+function __optique_ack() {
+  (( ++__optique_sequence ))
+  print -r -- $'\\x1eOPTIQUE_ACK:'"$OPTIQUE_ZSH_NONCE:$__optique_sequence"$'\\x1e'
+}
+function __optique_ready() {
+  # Clear inside ZLE: the tty can swallow Ctrl-U during a prompt redraw.
+  BUFFER=''
+  CURSOR=0
+  __optique_ack
+}
+zle -N __optique_ready
+bindkey '^Xr' __optique_ready
 function __optique_capture_completion() {
   zle -I
   print -r -- "__OPTIQUE_ZSH_BUFFER__\${BUFFER}__OPTIQUE_ZSH_BUFFER_END__"
   zle reset-prompt
+  __optique_ack
 }
 zle -N __optique_capture_completion
-bindkey '^X' __optique_capture_completion
+bindkey '^Xq' __optique_capture_completion
 ${options.autoload ? `fpath=(${JSON.stringify(binDir)} $fpath)` : ""}
 unsetopt zle_bracketed_paste 2>/dev/null || true
 ${
@@ -289,8 +306,8 @@ ${
         ? `fpath=(${JSON.stringify(insecureFpathDir)} $fpath)`
         : ""
     }
-autoload -U compinit && compinit -i -D
-zmodload zsh/complist
+autoload -U compinit && compinit -i -D || return 1
+zmodload zsh/complist || return 1
 setopt auto_list list_ambiguous
 unsetopt list_beep
 LISTMAX=0
@@ -301,118 +318,165 @@ ${
         : `function __optique_after_completion() {
   zle -I
   ${options.afterCompletion}
-  print -r -- ${JSON.stringify(afterCompletionMarker)}
   zle reset-prompt
+  __optique_ack
 }
 zle -N __optique_after_completion
 bindkey '^Y' __optique_after_completion`
     }
 export PATH=${JSON.stringify(binDir)}:$PATH
-${options.autoload ? "" : `source ${JSON.stringify(scriptPath)}`}
-cd ${JSON.stringify(workDir)}
+${options.autoload ? "" : `source ${JSON.stringify(scriptPath)} || return 1`}
+cd ${JSON.stringify(workDir)} || return 1
 ${
       options.captureBuffer === true
         ? `function __optique_capture_buffer() {
-  print -rn -- "$BUFFER" > '${bufferPath}'
+  print -rn -- "$BUFFER" > '${bufferPath}' || return 1
+  __optique_ack
 }
 zle -N __optique_capture_buffer
-bindkey '^Xb' __optique_capture_buffer`
+bindkey '^Xq' __optique_capture_buffer`
         : ""
     }
-print -r -- ${JSON.stringify(initReadyMarker)}
 print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_START\\x1e\\n'
 `;
     writeFileSync(initPath, init);
     const quoteInput = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
+    const programNames = options.programNames ?? ["extapp"];
+    const deadlineMs = options.deadlineMs ??
+      (programNames.length > 1 ? 15_000 : 6_000);
     const driver = `
-zmodload zsh/zpty
+zmodload zsh/zpty || exit 1
+zmodload zsh/zselect || exit 1
+typeset -F SECONDS=0
+typeset -F __optique_deadline=${deadlineMs / 1000}
+typeset __optique_phase=initialization
+integer __optique_started=0 __optique_forwarded=0 __optique_truncated=0
 
-function __optique_drain_zpty() {
-  local sentinel="$1"
-  local max_idle="\${2:-80}"
-  local buffer=""
-  local chunk=""
-  local idle=0
+function __optique_cleanup() {
+  if (( __optique_started )); then
+    __optique_started=0
+    # Redirecting this builtin after PTY EOF can lose the following stderr.
+    zpty -d child || true
+  fi
+}
+function __optique_fail() {
+  __optique_cleanup
+  print -ru2 -- "Zsh PTY phase=$__optique_phase reason=$1 elapsed=$SECONDS expected=\${2:-none} truncated=$__optique_truncated"
+  exit 1
+}
+function TRAPEXIT() { __optique_cleanup }
+function TRAPTERM() { __optique_fail SIGTERM }
+function TRAPINT() { __optique_fail SIGINT }
+function TRAPHUP() { __optique_fail SIGHUP }
 
-  while (( idle < max_idle )); do
-    if zpty -r -t child chunk; then
-      buffer+="\${chunk}"$'\\n'
-      if [[ -n "\${sentinel}" && "\${buffer}" == *"\${sentinel}"* ]]; then
-        break
+function __optique_write() {
+  zpty -w -n child "$1" || __optique_fail write
+}
+function __optique_wait() {
+  local sentinel=$'\\x1eOPTIQUE_ACK:'"$OPTIQUE_ZSH_NONCE:$1"$'\\x1e'
+  local buffer='' chunk=''
+  local rc
+  print -ru2 -- "Zsh PTY phase=$__optique_phase waiting=$1"
+  while true; do
+    (( SECONDS < __optique_deadline )) || __optique_fail deadline "$sentinel"
+    zpty -r -t child chunk
+    rc=$?
+    if (( rc == 0 )); then
+      # zpty already preserves line endings; a read can end inside a marker.
+      buffer+="$chunk"
+      buffer="\${buffer[-32768,-1]}"
+      if (( __optique_forwarded + \${#chunk} <= 262144 )); then
+        print -rn -- "$chunk"
+        (( __optique_forwarded += \${#chunk} ))
+      else
+        __optique_truncated=1
       fi
-      idle=0
+      [[ "$buffer" == *"$sentinel"* ]] && return 0
+    elif (( rc == 2 )); then
+      __optique_fail child-exited "$sentinel"
     else
-      sleep 0.05
-      (( idle++ ))
+      zselect -t 2 -r "$__optique_fd"
     fi
   done
-
-  print -rn -- "\${buffer}"
 }
 
-zpty child env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi
-zpty -w child ${JSON.stringify(`source ${JSON.stringify(initPath)}`)}
-sleep 0.5
-local __output="$(__optique_drain_zpty ${JSON.stringify(initReadyMarker)})"
+zpty child exec env TERM=xterm-256color ZDOTDIR=/nonexistent zsh -fi || __optique_fail spawn
+__optique_started=1
+integer __optique_fd=$REPLY
+__optique_write ${quoteInput(`source ${JSON.stringify(initPath)} || exit 1\n`)}
+# This chord is consumed only once sourcing has finished and ZLE is active.
+__optique_write $'\\x18r'
+__optique_wait 1
 ${
-      (options.programNames ?? ["extapp"]).map((programName) => `
-zpty -w -n child ${
-        quoteInput(
-          options.input ?? `${programName} ${
-            options.absolutePrefix
-              ? join(workDir, options.prefix ?? options.currentWord ?? "")
-              : options.prefix ?? options.currentWord ?? ""
-          }`,
-        )
-      }
-sleep 0.1
-for (( i=0; i < ${options.moveLeft ?? 0}; i++ )); do
-  zpty -w -n child $'\\x02'
-done
-for (( i=0; i < ${options.tabCount ?? 1}; i++ )); do
-  zpty -w -n child $'\\t'
-  sleep 0.1
-done
-${
-        options.captureBuffer === true
-          ? ""
-          : options.tabCount != null || options.tabPresses === 1
-          ? ""
-          : "zpty -w -n child $'\\t'\nsleep 0.1\n"
-      }
-${
-        options.captureBuffer === true
-          ? 'sleep 0.8\nzpty -w -n child $\'\\x18b\'\nsleep 0.1\n__output+="$(__optique_drain_zpty "" 20)"'
-          : 'zpty -w -n child $\'\\x18\'\n__output+="$(__optique_drain_zpty "__OPTIQUE_ZSH_BUFFER_END__")"'
-      }
-zpty -w -n child $'\\x15'
-`).join("\n")
+      programNames.map((programName, index) => {
+        const input = options.input ?? `${programName} ${
+          options.absolutePrefix
+            ? join(workDir, options.prefix ?? options.currentWord ?? "")
+            : options.prefix ?? options.currentWord ?? ""
+        }`;
+        const tabCount = options.tabCount ??
+          (options.captureBuffer === true || options.tabPresses === 1 ? 1 : 2);
+        return `
+__optique_phase=${quoteInput(`completion-${index + 1} (${programName})`)}
+__optique_write ${
+          quoteInput(
+            input + "\x02".repeat(options.moveLeft ?? 0) +
+              "\t".repeat(tabCount) + "\x18q",
+          )
+        }
+__optique_wait ${index * 2 + 2}
+__optique_phase=${quoteInput(`reset-${index + 1} (${programName})`)}
+__optique_write $'\\x18r'
+__optique_wait ${index * 2 + 3}
+`;
+      }).join("\n")
     }
 ${
       options.afterCompletion == null ? "" : `
-zpty -w -n child $'\\x19'
-__output+="$(__optique_drain_zpty ${JSON.stringify(afterCompletionMarker)})"
+__optique_phase=after-completion
+__optique_write $'\\x19'
+__optique_wait ${programNames.length * 2 + 2}
 `
     }
-__output+=$'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
-print -rn -- "$__output"
-zpty -d child 2>/dev/null || true
+(( __optique_truncated == 0 )) || __optique_fail output-limit
+__optique_cleanup
+print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
 `;
 
-    const rawOutput = runCommand("zsh", ["-fc", driver], {
+    const nonce = randomUUID();
+    const result = spawnSync("zsh", ["-fc", driver], {
       cwd: tempDir,
+      encoding: "utf8",
+      env: { ...process.env, OPTIQUE_ZSH_NONCE: nonce },
+      timeout: options.subprocessTimeoutMs ?? deadlineMs + 2_000,
+      maxBuffer: 1024 * 1024,
     });
+    const rawOutput = result.stdout ?? "";
+    if (result.error != null || result.status !== 0) {
+      throw new Error(
+        `Zsh PTY driver failed (status=${result.status}, signal=${result.signal}, ${
+          result.error?.message ?? "nonzero exit"
+        }):\n${result.stderr ?? ""}\n${
+          normalizeTerminalOutput(rawOutput.slice(-32_768))
+        }`,
+      );
+    }
+    // Keep the established buffer framing, but hide this session's protocol.
+    const output = rawOutput.replaceAll(
+      new RegExp(`\\x1eOPTIQUE_ACK:${nonce}:\\d+\\x1e`, "g"),
+      "",
+    );
 
-    const startIndex = rawOutput.indexOf(startMarker);
-    const endIndex = rawOutput.indexOf(
+    const startIndex = output.indexOf(startMarker);
+    const endIndex = output.indexOf(
       endMarker,
       startIndex + startMarker.length,
     );
     ok(
       startIndex >= 0 && endIndex >= 0,
       `Missing completion markers in output:\n${
-        normalizeTerminalOutput(rawOutput)
+        normalizeTerminalOutput(output)
       }`,
     );
 
@@ -429,12 +493,220 @@ zpty -d child 2>/dev/null || true
       return readFileSync(bufferPath, "utf8");
     }
     return normalizeTerminalOutput(
-      rawOutput.slice(startIndex + startMarker.length, endIndex),
+      output.slice(startIndex + startMarker.length, endIndex),
     );
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
 }
+
+describe("zsh PTY synchronization", () => {
+  it("waits for delayed completion before capturing the buffer", {
+    skip: !isInteractiveZshCompletionAvailable(),
+    timeout: 10_000,
+  }, () => {
+    if (!isInteractiveZshCompletionAvailable()) return;
+    const buffer = testInteractiveZshCompletion(
+      zsh.generateScript("extapp"),
+      "",
+      [],
+      {
+        backend: "sleep 3; printf 'alpha\\0\\0\\n'",
+        captureBuffer: true,
+      },
+    );
+    deepStrictEqual(buffer, "extapp alpha ");
+  });
+
+  it("preserves text and acknowledgments split across PTY reads", {
+    skip: !isInteractiveZshCompletionAvailable(),
+    timeout: 10_000,
+  }, () => {
+    if (!isInteractiveZshCompletionAvailable()) return;
+    const output = testInteractiveZshCompletion(
+      zsh.generateScript("extapp"),
+      "",
+      [],
+      {
+        setup: `zmodload zsh/zselect
+function __optique_ack() {
+  (( ++__optique_sequence ))
+  print -rn -- $'\\x1eOPTIQUE_ACK:'
+  zselect -t 10
+  print -r -- "$OPTIQUE_ZSH_NONCE:$__optique_sequence"$'\\x1e'
+}
+function __optique_capture_completion() {
+  zle -I
+  print -rn -- '__OPTIQUE_ZSH_BUFFER__split'
+  zselect -t 10
+  print -r -- 'read__OPTIQUE_ZSH_BUFFER_END__'
+  __optique_ack
+  zle reset-prompt
+}`,
+      },
+    );
+    ok(
+      output.includes(
+        "__OPTIQUE_ZSH_BUFFER__splitread__OPTIQUE_ZSH_BUFFER_END__",
+      ),
+      output,
+    );
+    ok(!output.includes("OPTIQUE_ACK:"), output);
+  });
+  it("waits for prompt reset before sending another request", {
+    skip: !isInteractiveZshCompletionAvailable(),
+    timeout: 20_000,
+  }, () => {
+    if (!isInteractiveZshCompletionAvailable()) return;
+    const requests = Array.from({ length: 8 }, () => "extapp");
+    const output = testInteractiveZshCompletion(
+      zsh.generateScript("extapp"),
+      "",
+      [],
+      {
+        programNames: requests,
+        backend: "printf 'alpha\\0\\0\\n'",
+        tabPresses: 1,
+        // Widen the redraw boundary so an early acknowledgment reliably
+        // lets the next request arrive before the editor is ready for it.
+        setup: `zmodload zsh/zselect
+function zle() {
+  if [[ "$1" == reset-prompt ]]; then zselect -t 5; fi
+  builtin zle "$@"
+}`,
+      },
+    );
+    deepStrictEqual(
+      Array.from(
+        output.matchAll(
+          /__OPTIQUE_ZSH_BUFFER__(.*?)__OPTIQUE_ZSH_BUFFER_END__/g,
+        ),
+        (match) => match[1].trim(),
+      ),
+      requests.map(() => "extapp alpha"),
+      output,
+    );
+  });
+
+  for (
+    const scenario of [
+      {
+        name: "silent initialization",
+        setup: "zmodload zsh/zselect; zselect -t 1000",
+        phase: "initialization",
+        reason: "deadline",
+      },
+      {
+        name: "continuous initialization output",
+        setup:
+          "zmodload zsh/zselect; repeat 250; do print -r -- NOISY_INITIALIZATION; zselect -t 2; done",
+        phase: "initialization",
+        reason: "deadline",
+        transcript: "NOISY_INITIALIZATION",
+      },
+      {
+        name: "early shell exit",
+        setup: "print -r -- EARLY_EXIT; exit 7",
+        phase: "initialization",
+        reason: "child-exited",
+        transcript: "EARLY_EXIT",
+      },
+      {
+        name: "missing capture acknowledgment",
+        setup:
+          "function __optique_capture_completion() { print -r -- MISSING_CAPTURE_ACK; }",
+        phase: "completion-1 (extapp)",
+        reason: "deadline",
+        transcript: "MISSING_CAPTURE_ACK",
+      },
+      {
+        name: "subprocess timeout",
+        setup: "zmodload zsh/zselect; zselect -t 1000",
+        phase: "initialization",
+        // The sync subprocess API can close its pipes before the signal
+        // handler prints, so only require the already-streamed phase here.
+        reason: undefined,
+        subprocessTimeoutMs: 3_000,
+        deadlineMs: 6_000,
+      },
+      {
+        name: "normal completion",
+        setup: "",
+        phase: undefined,
+        reason: undefined,
+      },
+    ]
+  ) {
+    it(`cleans up the child after ${scenario.name}`, {
+      skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
+    }, async () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const observationDir = mkdtempSync(
+        join(tmpdir(), "zsh-pty-observation-"),
+      );
+      const pidPath = join(observationDir, "pid");
+      const rootPath = join(observationDir, "root");
+      try {
+        const run = () =>
+          testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [],
+            {
+              setup: `print -r -- "$$" > ${JSON.stringify(pidPath)}
+print -r -- "$PWD" > ${JSON.stringify(rootPath)}
+${scenario.setup}`,
+              deadlineMs: scenario.deadlineMs ?? 2_000,
+              subprocessTimeoutMs: scenario.subprocessTimeoutMs,
+            },
+          );
+        if (scenario.phase == null) {
+          run();
+        } else {
+          throws(run, (error: unknown) => {
+            ok(error instanceof Error);
+            ok(
+              error.message.includes(`phase=${scenario.phase}`),
+              error.message,
+            );
+            if (scenario.reason != null) {
+              ok(
+                error.message.includes(`reason=${scenario.reason}`),
+                error.message,
+              );
+            }
+            if (scenario.transcript != null) {
+              ok(error.message.includes(scenario.transcript), error.message);
+            }
+            return true;
+          });
+        }
+        const childPid = Number(readFileSync(pidPath, "utf8").trim());
+        ok(Number.isSafeInteger(childPid) && childPid > 0);
+        // zpty deletion signals the shell; allow time for the OS to reap it.
+        const until = Date.now() + 3_000;
+        let alive = true;
+        while (alive && Date.now() < until) {
+          try {
+            process.kill(childPid, 0);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          } catch (error) {
+            if (
+              error instanceof Error && "code" in error &&
+              error.code === "ESRCH"
+            ) alive = false;
+            else throw error;
+          }
+        }
+        ok(!alive, `Zsh PTY child ${childPid} survived ${scenario.name}.`);
+        ok(!existsSync(readFileSync(rootPath, "utf8").trim()));
+      } finally {
+        rmSync(observationDir, { recursive: true, force: true });
+      }
+    });
+  }
+});
 
 function createTestCli(tempDir: string): string {
   const cliScript = `#!/bin/bash
@@ -2766,6 +3038,7 @@ fi
     ) {
       it(`should ${testCase.name} with COMPLETE_IN_WORD`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -2801,6 +3074,7 @@ fi
       for (const closed of [false, true]) {
         it(`should retain joined Zsh quote prefix ${quote} closed=${closed}`, {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         }, () => {
           if (!isInteractiveZshCompletionAvailable()) return;
           const output = testInteractiveZshCompletion(
@@ -2821,6 +3095,7 @@ fi
       }
       it(`should retain mixed Zsh quote prefix ${quote}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, () => {
         if (!isInteractiveZshCompletionAvailable()) return;
         const output = testInteractiveZshCompletion(
@@ -2849,6 +3124,7 @@ fi
     ) {
       it(`should preserve protected Zsh marker classes ${pattern}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, () => {
         if (!isInteractiveZshCompletionAvailable()) return;
         const output = testInteractiveZshCompletion(
@@ -2884,6 +3160,7 @@ fi
         `should preserve fixed Zsh syntax overlapping input ${typed}: ${pattern}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         () => {
           if (!isInteractiveZshCompletionAvailable()) return;
@@ -2927,6 +3204,7 @@ fi
         `should preserve fixed Zsh glob groups overlapping input ${typed}: ${pattern}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         () => {
           if (!isInteractiveZshCompletionAvailable()) return;
@@ -2955,6 +3233,7 @@ fi
     ) {
       it(`should preserve normalized chained Zsh qualifiers ${pattern}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, () => {
         if (!isInteractiveZshCompletionAvailable()) return;
         const output = testInteractiveZshCompletion(
@@ -2986,7 +3265,10 @@ fi
       ) {
         it(
           `should block chained executable Zsh qualifiers ${type}: ${qualifiers}`,
-          { skip: !isInteractiveZshCompletionAvailable() },
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: ZSH_PTY_TEST_TIMEOUT,
+          },
           () => {
             if (!isInteractiveZshCompletionAvailable()) return;
             const output = testInteractiveZshCompletion(
@@ -3026,6 +3308,7 @@ fi
         `should preserve a fixed Zsh tilde prefix overlapping input ${typed}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         () => {
           if (!isInteractiveZshCompletionAvailable()) return;
@@ -3053,6 +3336,7 @@ fi
           `should retain Zsh directory navigation with file qualifiers ${qualifiers}: ${firstTag}`,
           {
             skip: !isInteractiveZshCompletionAvailable(),
+            timeout: ZSH_PTY_TEST_TIMEOUT,
           },
           () => {
             if (!isInteractiveZshCompletionAvailable()) return;
@@ -3115,6 +3399,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     ) {
       it(`should complete quoted Zsh literal ${typed}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3140,6 +3425,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
 
     it("should match double-quoted Zsh file input in the completion backend", {
       skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
     }, (t) => {
       if (!isInteractiveZshCompletionAvailable()) {
         t.skip("interactive zsh completion not available");
@@ -3164,6 +3450,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       "should dequote previous Zsh arguments and preserve quoted empty values",
       {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       },
       (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
@@ -3192,6 +3479,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     for (const quote of ['"', "'"]) {
       it(`should complete quoted Zsh file values with ${quote}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3232,6 +3520,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     ) {
       it(`should preserve literal Zsh file prefix ${typed}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3284,6 +3573,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     ) {
       it(`should keep transformed Zsh file pattern literal ${typed}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3318,6 +3608,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     ) {
       it(`should keep transformed Zsh qualifier ${qualifier} literal`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3347,6 +3638,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         `should sanitize single-quoted transformed Zsh qualifier ${qualifier}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         (t) => {
           if (!isInteractiveZshCompletionAvailable()) {
@@ -3387,6 +3679,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         `should retain backslashes in transformed Zsh file patterns ${typed}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         (t) => {
           if (!isInteractiveZshCompletionAvailable()) {
@@ -3426,6 +3719,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     ) {
       it(`should keep transformed Zsh parentheses literal ${typed}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3457,6 +3751,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         `should separate literal Zsh text from backend pattern ${prefix}${suffix}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         (t) => {
           if (!isInteractiveZshCompletionAvailable()) {
@@ -3487,6 +3782,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
 
     it("should keep a typed Zsh qualifier literal inside a backend path", {
       skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
     }, (t) => {
       if (!isInteractiveZshCompletionAvailable()) {
         t.skip("interactive zsh completion not available");
@@ -3527,6 +3823,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     ) {
       it(`should keep transformed Zsh glob character literal ${typed}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3556,6 +3853,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     ) {
       it(`should quote leading Zsh literal text after a wildcard ${typed}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3604,6 +3902,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         `should preserve backend wildcards around literal Zsh input ${typed}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         (t) => {
           if (!isInteractiveZshCompletionAvailable()) {
@@ -3658,6 +3957,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         `should preserve fixed Zsh globs without retained input ${typed}/${pattern}/${setup}`,
         {
           skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
         (t) => {
           if (!isInteractiveZshCompletionAvailable()) {
@@ -3683,6 +3983,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
 
     it("should quote a retained closing Zsh parenthesis between wildcards", {
       skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
     }, () => {
       if (!isInteractiveZshCompletionAvailable()) return;
       const output = testInteractiveZshCompletion(
@@ -3703,6 +4004,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
 
     it("should combine negated Zsh attributes with the regular-file filter", {
       skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
     }, () => {
       if (!isInteractiveZshCompletionAvailable()) return;
       const output = testInteractiveZshCompletion(
@@ -3727,6 +4029,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
 
     it("should preserve backend Zsh qualifiers around literal dollar input", {
       skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
     }, (t) => {
       if (!isInteractiveZshCompletionAvailable()) {
         t.skip("interactive zsh completion not available");
@@ -3751,6 +4054,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
 
     it("should preserve safe Zsh qualifiers with EXTENDED_GLOB unset", {
       skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
     }, (t) => {
       if (!isInteractiveZshCompletionAvailable()) {
         t.skip("interactive zsh completion not available");
@@ -3774,6 +4078,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     for (const pattern of ["*.txt", "*.(txt|md)", "~+/", "*(-.)", "*(m+1)"]) {
       it(`should preserve fixed Zsh pattern ${pattern}`, {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       }, (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
@@ -3800,6 +4105,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
 
     it("should preserve a fixed Zsh qualifier with partial input overlap", {
       skip: !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
     }, (t) => {
       if (!isInteractiveZshCompletionAvailable()) {
         t.skip("interactive zsh completion not available");
@@ -3824,6 +4130,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       "should quote Zsh literal text between backend wildcards and a qualifier",
       {
         skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
       },
       (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
@@ -11047,7 +11354,10 @@ describe("fixed glob prefix completion", () => {
         ? isInteractiveZshCompletionAvailable()
         : isShellAvailable(shell));
     for (const scenario of cases) {
-      it(`${shell}: ${scenario.name}`, { skip: !available }, () => {
+      it(`${shell}: ${scenario.name}`, {
+        skip: !available,
+        timeout: shell === "zsh" ? ZSH_PTY_TEST_TIMEOUT : undefined,
+      }, () => {
         // Bun ignores skip, so keep the early return as well.
         if (!available) return;
         const output = testFixedGlobPrefix(
@@ -11088,6 +11398,7 @@ it("PowerShell fixed glob after directory normalization", {
 
 it("zsh fixed glob retains literal hash in directories", {
   skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+  timeout: ZSH_PTY_TEST_TIMEOUT,
 }, () => {
   if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
     return;
@@ -11138,6 +11449,7 @@ it("Nu fixed glob preserves literal tilde directories", {
 
 it("zsh fixed glob preserves negated character classes", {
   skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+  timeout: ZSH_PTY_TEST_TIMEOUT,
 }, () => {
   if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
     return;
@@ -11157,6 +11469,7 @@ it("zsh fixed glob preserves negated character classes", {
 
 it("zsh fixed glob preserves quoted parenthesized directories", {
   skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+  timeout: ZSH_PTY_TEST_TIMEOUT,
 }, () => {
   if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
     return;
@@ -11220,6 +11533,7 @@ for (const pattern of ["*[()#~].txt", "*[]()#~].txt"]) {
   it(`zsh fixed glob preserves literal metacharacters in classes: ${pattern}`, {
     skip: process.platform === "win32" ||
       !isInteractiveZshCompletionAvailable(),
+    timeout: ZSH_PTY_TEST_TIMEOUT,
   }, () => {
     if (
       process.platform === "win32" || !isInteractiveZshCompletionAvailable()
@@ -11250,6 +11564,7 @@ for (const pattern of ["*[()#~].txt", "*[]()#~].txt"]) {
 
 it("zsh fixed glob matches explicitly typed hidden parents", {
   skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+  timeout: ZSH_PTY_TEST_TIMEOUT,
 }, () => {
   if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
     return;
@@ -11265,6 +11580,7 @@ it("zsh fixed glob matches explicitly typed hidden parents", {
 
 it("zsh fixed glob preserves a lone class negation character", {
   skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+  timeout: ZSH_PTY_TEST_TIMEOUT,
 }, () => {
   if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
     return;
@@ -11312,6 +11628,7 @@ for (
   it(`zsh fixed glob keeps hidden-child policy: ${scenario.label}`, {
     skip: process.platform === "win32" ||
       !isInteractiveZshCompletionAvailable(),
+    timeout: ZSH_PTY_TEST_TIMEOUT,
   }, () => {
     if (
       process.platform === "win32" || !isInteractiveZshCompletionAvailable()
@@ -11336,6 +11653,7 @@ for (const member of [".", "="]) {
   it(`zsh fixed glob preserves literal bracket members: ${member}`, {
     skip: process.platform === "win32" ||
       !isInteractiveZshCompletionAvailable(),
+    timeout: ZSH_PTY_TEST_TIMEOUT,
   }, () => {
     if (
       process.platform === "win32" || !isInteractiveZshCompletionAvailable()
@@ -11476,51 +11794,60 @@ for (const includeHidden of [false, true]) {
   );
 }
 
-it("zsh fixed glob retains regular files and ordered tag fallback", {
-  skip: !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo"),
-  timeout: 10000,
-}, () => {
-  if (!isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo")) {
-    return;
-  }
-  const directive = Array.from(zsh.encodeSuggestions([{
-    kind: "file",
-    type: "file",
-    pattern: "*.txt",
-  }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
-  for (const firstTag of [undefined, "files", "directories"]) {
-    const output = testInteractiveZshCompletion(
-      zsh.generateScript("extapp"),
-      directive,
-      [
-        { path: "report.txt" },
-        { path: "report.json" },
-        { path: "report-link.txt", type: "symlink", target: "report.txt" },
-        { path: "report-pipe.txt", type: "fifo" },
-        { path: "reports", type: "directory" },
-      ],
-      {
-        prefix: "re",
-        setup: firstTag == null
-          ? ""
-          : `zstyle ':completion:*' tag-order '${firstTag}' '${
-            firstTag === "files" ? "directories" : "files"
-          }'`,
-      },
-    );
-    ok(!output.includes("report.json"), output);
-    ok(!output.includes("report-pipe.txt"), output);
-    if (firstTag === "directories") {
-      ok(output.includes("reports/"), output);
-      ok(!output.includes("report.txt"), output);
-    } else {
-      ok(output.includes("report.txt"), output);
-      ok(output.includes("report-link.txt"), output);
-      if (firstTag == null) ok(output.includes("reports/"), output);
-      else ok(!output.includes("reports/"), output);
-    }
-  }
-});
+for (const firstTag of [undefined, "files", "directories"]) {
+  it(
+    `zsh fixed glob retains regular files and ordered tag fallback (${
+      firstTag ?? "default"
+    })`,
+    {
+      skip: !isInteractiveZshCompletionAvailable() ||
+        !isShellAvailable("mkfifo"),
+      timeout: 10000,
+    },
+    () => {
+      if (
+        !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo")
+      ) {
+        return;
+      }
+      const directive = Array.from(zsh.encodeSuggestions([{
+        kind: "file",
+        type: "file",
+        pattern: "*.txt",
+      }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        directive,
+        [
+          { path: "report.txt" },
+          { path: "report.json" },
+          { path: "report-link.txt", type: "symlink", target: "report.txt" },
+          { path: "report-pipe.txt", type: "fifo" },
+          { path: "reports", type: "directory" },
+        ],
+        {
+          prefix: "re",
+          setup: firstTag == null
+            ? ""
+            : `zstyle ':completion:*' tag-order '${firstTag}' '${
+              firstTag === "files" ? "directories" : "files"
+            }'`,
+        },
+      );
+      ok(!output.includes("report.json"), output);
+      ok(!output.includes("report-pipe.txt"), output);
+      if (firstTag === "directories") {
+        ok(output.includes("reports/"), output);
+        ok(!output.includes("report.txt"), output);
+      } else {
+        ok(output.includes("report.txt"), output);
+        ok(output.includes("report-link.txt"), output);
+        if (firstTag == null) ok(output.includes("reports/"), output);
+        else ok(!output.includes("reports/"), output);
+      }
+    },
+  );
+}
 
 describe("zsh fixed glob fignore", () => {
   for (
