@@ -421,3 +421,35 @@ And backslash: \\path\\to\\file`,
     );
   },
 );
+
+describe("man display control compatibility", () => {
+  it("should render custom annotation text as literal roff prose", {
+    skip: !hasGroff,
+  }, () => {
+    if (!hasGroff) return;
+    const page: DocPage = {
+      sections: [{
+        entries: [{
+          term: { type: "option", names: ["--top-n"], metavar: "N" },
+          default: message`20`,
+          choices: message`10, 20`,
+        }],
+      }],
+    };
+    const source = formatDocPageAsMan(page, {
+      name: "app",
+      section: 1,
+      showDefault: { prefix: " .DEFAULT ", suffix: "\n.SH BAD" },
+      showChoices: { prefix: "\n'CHOICES ", label: "", suffix: "" },
+    });
+    const result = spawnSync("groff", ["-man", "-Tutf8", "-w", "all"], {
+      input: source,
+      encoding: "utf-8",
+      timeout: 10000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes(".DEFAULT 20"), result.stdout);
+    assert.ok(result.stdout.includes(".SH BAD"), result.stdout);
+    assert.match(result.stdout, /['\u2019]CHOICES 10, 20/, result.stdout);
+  });
+});

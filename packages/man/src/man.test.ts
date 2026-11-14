@@ -6,9 +6,15 @@ import {
   formatUsageTermAsRoff,
   type ManPageOptions,
 } from "#src/man.ts";
-import type { DocPage, DocSection } from "@optique/core/doc";
+import type { DocEntry, DocPage, DocSection } from "@optique/core/doc";
 import type { Usage, UsageTerm } from "@optique/core/usage";
-import { message, valueSet } from "@optique/core/message";
+import {
+  lineBreak,
+  message,
+  text,
+  value,
+  valueSet,
+} from "@optique/core/message";
 import { argument, command, constant } from "@optique/core/primitives";
 import { group, or } from "@optique/core/constructs";
 import { getDocPage, parse } from "@optique/core/parser";
@@ -1471,7 +1477,7 @@ describe("formatDocPageAsMan()", () => {
     const result = formatDocPageAsMan(page, minimalOptions);
     assert.ok(result.includes('.SH "OPTIONS"'));
     assert.ok(result.includes("\\fB\\-\\-mode\\fR \\fIMODE\\fR"));
-    assert.ok(result.includes("[safe]"));
+    assert.ok(result.includes("(default: safe)"));
   });
 
   it("handles entries with choices", () => {
@@ -1536,7 +1542,7 @@ describe("formatDocPageAsMan()", () => {
     const result = formatDocPageAsMan(page, minimalOptions);
 
     assert.ok(result.includes("Port to listen on."));
-    assert.ok(result.includes("[8080]"));
+    assert.ok(result.includes("(default: 8080)"));
     assert.ok(result.includes("(choices: 80, 443, 8080)"));
   });
 
@@ -1558,7 +1564,7 @@ describe("formatDocPageAsMan()", () => {
 
     const result = formatDocPageAsMan(page, minimalOptions);
     assert.ok(result.includes("\\fB\\-\\-port\\fR \\fINUM\\fR"));
-    assert.ok(result.includes("[8080] (choices: 80, 443, 8080)"));
+    assert.ok(result.includes("(default: 8080) (choices: 80, 443, 8080)"));
   });
 
   it("renders parser-generated choices without quotes", () => {
@@ -2656,3 +2662,304 @@ describe("doc-level usage term formatting (nested terms)", () => {
     assert.ok(!result.includes("A repeatable."));
   });
 });
+
+describe("formatDocPageAsMan() display controls", () => {
+  it("should label defaults for omitted, true, and empty-object settings", () => {
+    for (const showDefault of [undefined, true, {}]) {
+      assert.equal(
+        renderAnnotations({}, { showDefault }),
+        "Entries (default: 20)",
+      );
+    }
+  });
+
+  it("should hide defaults and choices independently", () => {
+    const entry = { choices: message`10, 20` };
+    assert.equal(
+      renderAnnotations(entry, { showDefault: false }),
+      "Entries (choices: 10, 20)",
+    );
+    assert.equal(
+      renderAnnotations(entry, { showChoices: false }),
+      "Entries (default: 20)",
+    );
+    assert.equal(
+      renderAnnotations(entry, { showDefault: false, showChoices: false }),
+      "Entries",
+    );
+    assert.equal(
+      renderAnnotations({ ...entry, description: undefined }, {
+        showDefault: false,
+        showChoices: false,
+      }),
+      "",
+    );
+  });
+
+  it("should customize affixes and restore the legacy bracket format", () => {
+    for (const description of [message`Entries`, undefined, []]) {
+      const lead = description?.length ? "Entries " : "";
+      assert.equal(
+        renderAnnotations({ description }, {
+          showDefault: { prefix: " [", suffix: "]" },
+        }),
+        lead + "[20]",
+      );
+      assert.equal(
+        renderAnnotations({ description }, {
+          showDefault: { prefix: "", suffix: "" },
+        }),
+        (description?.length ? "Entries" : "") + "20",
+      );
+      assert.equal(
+        renderAnnotations({ description }, { showDefault: { suffix: "!" } }),
+        lead + "(default: 20!",
+      );
+    }
+    assert.equal(
+      renderAnnotations({}, {
+        showDefault: { prefix: undefined, suffix: undefined },
+      }),
+      "Entries (default: 20)",
+    );
+  });
+
+  it("should use each annotation's prefix without inserting extra spaces", () => {
+    const controls = {
+      showDefault: { prefix: "{", suffix: "}" },
+      showChoices: { prefix: "<", label: "", suffix: ">" },
+    };
+    assert.equal(
+      renderAnnotations({ choices: message`10, 20` }, controls),
+      "Entries{20}<10, 20>",
+    );
+    assert.equal(
+      renderAnnotations(
+        { description: undefined, choices: message`10, 20` },
+        controls,
+      ),
+      "{20}<10, 20>",
+    );
+    assert.equal(
+      renderAnnotations({
+        description: undefined,
+        default: undefined,
+        choices: message`10, 20`,
+      }, { showChoices: { prefix: "", label: " choices: " } }),
+      "choices: 10, 20)",
+    );
+  });
+
+  it("should omit empty annotation arrays and treat empty descriptions as absent", () => {
+    assert.equal(renderAnnotations({ default: [], choices: [] }), "Entries");
+    for (const description of [undefined, [], [text("")]]) {
+      assert.equal(renderAnnotations({ description }), "(default: 20)");
+      assert.equal(
+        renderAnnotations({ description, default: [], choices: [] }),
+        "",
+      );
+    }
+    assert.equal(
+      renderAnnotations({ default: [value("")] }),
+      'Entries (default: "")',
+    );
+    assert.equal(
+      renderAnnotations({ default: undefined, choices: [value("")] }),
+      "Entries (choices: )",
+    );
+  });
+
+  it("should preserve alias and environment annotations when controls are disabled", () => {
+    const entry: Partial<DocEntry> = {
+      term: { type: "command", name: "list", aliases: ["ls"] },
+      choices: message`10, 20`,
+      envVars: ["APP_TOP"],
+    };
+    assert.equal(
+      renderAnnotations(entry, {
+        showAliases: true,
+        showEnvironment: true,
+        showDefault: false,
+        showChoices: false,
+      }),
+      "Entries (aliases: ls) [env: \\fBAPP_TOP\\fR]",
+    );
+    assert.equal(
+      renderAnnotations({ ...entry, description: undefined }, {
+        showAliases: true,
+        showEnvironment: true,
+        showDefault: { prefix: " [", suffix: "]" },
+      }),
+      "(aliases: ls) [20] (choices: 10, 20) [env: \\fBAPP_TOP\\fR]",
+    );
+  });
+
+  it("should keep all choices when omitted and limit explicit enabled settings to eight", () => {
+    for (const count of [8, 9]) {
+      const choices = valueSet(
+        Array.from({ length: count }, (_, i) => String(i + 1)),
+        { fallback: "", locale: "en", type: "unit" },
+      );
+      const full = Array.from({ length: count }, (_, i) => String(i + 1)).join(
+        ", ",
+      );
+      assert.equal(
+        renderAnnotations({ default: undefined, choices }),
+        `Entries (choices: ${full})`,
+      );
+      for (const showChoices of [true, {}, { maxItems: undefined }]) {
+        assert.equal(
+          renderAnnotations({ default: undefined, choices }, { showChoices }),
+          `Entries (choices: 1, 2, 3, 4, 5, 6, 7, 8${
+            count > 8 ? ", ..." : ""
+          })`,
+        );
+      }
+      assert.equal(
+        renderAnnotations({ default: undefined, choices }, {
+          showChoices: { maxItems: Infinity },
+        }),
+        `Entries (choices: ${full})`,
+      );
+    }
+  });
+
+  it("should truncate structured values without splitting commas or adding quotes", () => {
+    const choices = valueSet(["a,b", 'c"d', "tail"], {
+      fallback: "",
+      locale: "en",
+      type: "unit",
+    });
+    assert.equal(
+      renderAnnotations({ default: [value("a,b")], choices }, {
+        showChoices: {
+          maxItems: 2,
+          prefix: " {",
+          label: "pick: ",
+          suffix: "}",
+        },
+      }),
+      'Entries (default: "a,b") {pick: a,b, c"d, ...}',
+    );
+    assert.equal(
+      renderAnnotations({ choices }, { showChoices: { maxItems: 1 } }),
+      "Entries (default: 20) (choices: a,b, ...)",
+    );
+    const plain = message`1, 2, 3, 4, 5, 6, 7, 8, 9`;
+    assert.equal(
+      renderAnnotations({ default: undefined, choices: plain }, {
+        showChoices: true,
+      }),
+      "Entries (choices: 1, 2, 3, 4, 5, 6, 7, 8, 9)",
+    );
+  });
+
+  it("should validate maxItems even when the page has no entries", () => {
+    for (const maxItems of [0, -1, -Infinity]) {
+      assert.throws(
+        () =>
+          formatDocPageAsMan({ sections: [] }, {
+            name: "app",
+            section: 1,
+            showChoices: { maxItems },
+          }),
+        {
+          name: "RangeError",
+          message:
+            `showChoices.maxItems must be at least 1, but got ${maxItems}.`,
+        },
+      );
+    }
+  });
+
+  it("should escape custom roff text after trimming the first prefix", () => {
+    for (const prefix of [" .DEFAULT ", " 'DEFAULT "]) {
+      const result = renderAnnotations({ description: undefined }, {
+        showDefault: { prefix, suffix: "" },
+      });
+      assert.equal(result, "\\&" + prefix.trimStart() + "20");
+    }
+    const result = renderAnnotations({ choices: message`a` }, {
+      showDefault: { prefix: " \\fB", suffix: "\n.SH BAD" },
+      showChoices: {
+        prefix: "\n'BAD ",
+        label: "\\fI",
+        suffix: "\n.SH ALSO_BAD",
+      },
+    });
+    assert.ok(!result.includes("\n.SH BAD"), result);
+    assert.ok(!result.includes("\n'BAD"), result);
+    assert.ok(!result.includes("\n.SH ALSO_BAD"), result);
+    assert.ok(result.includes("\\\\fB"), result);
+    assert.ok(result.includes("\\\\fI"), result);
+  });
+
+  it("should preserve paragraphs and safely append annotations after line breaks", () => {
+    const result = renderAnnotations({ description: message`First\n\nSecond` });
+    assert.equal(result, "First\n.PP\nSecond (default: 20)");
+    assert.equal(
+      renderAnnotations({ description: [text("Entries"), lineBreak()] }),
+      "Entries\n(default: 20)",
+    );
+    const boundary = renderAnnotations({ default: [text("20"), lineBreak()] }, {
+      showDefault: { suffix: ".DEFAULT" },
+    });
+    assert.ok(boundary.includes("\n\\&.DEFAULT"), boundary);
+  });
+
+  it("should apply controls to explicit environment, files, and exit-status sections", () => {
+    const section: DocSection = {
+      entries: [{
+        term: { type: "literal", value: "ENTRY" },
+        description: message`Entry`,
+        default: message`20`,
+        choices: valueSet(["a", "b"], {
+          fallback: "",
+          locale: "en",
+          type: "unit",
+        }),
+      }],
+    };
+    for (const key of ["environment", "files", "exitStatus"] as const) {
+      const result = formatDocPageAsMan({ sections: [] }, {
+        name: "app",
+        section: 1,
+        [key]: section,
+        showDefault: false,
+        showChoices: { maxItems: 1 },
+      });
+      assert.ok(result.endsWith("Entry (choices: a, ...)"), result);
+      const hidden = formatDocPageAsMan({ sections: [] }, {
+        name: "app",
+        section: 1,
+        [key]: section,
+        showDefault: { prefix: " [", suffix: "]" },
+        showChoices: false,
+      });
+      assert.ok(hidden.endsWith("Entry [20]"), hidden);
+    }
+  });
+});
+
+// Helpers
+function renderAnnotations(
+  entry: Partial<DocEntry> = {},
+  controls: Partial<ManPageOptions> = {},
+): string {
+  const page: DocPage = {
+    sections: [{
+      entries: [{
+        term: { type: "option", names: ["--top-n"], metavar: "N" },
+        description: message`Entries`,
+        default: message`20`,
+        ...entry,
+      }],
+    }],
+  };
+  const result = formatDocPageAsMan(page, {
+    name: "app",
+    section: 1,
+    ...controls,
+  });
+  return result.split(".TP\n")[1].split("\n").slice(1).join("\n");
+}
