@@ -291,6 +291,14 @@ To be released.
     sections to man pages, including `--show-environment` in the generator
     CLI.  Explicit `environment` sections retain priority over generated
     sections.  [[#969], [#986]]
+ -  Added `showDefault` and `showChoices` options to `formatDocPageAsMan()`
+    and the `generateManPage*()` functions to customize or hide default-value
+    and choice annotations. Changed the default-value format from `[value]` to
+    `(default: value)`, including in the `optique-man` CLI. Restore the
+    previous format with `showDefault: { prefix: " [", suffix: "]" }`. Omitting
+    `showChoices` keeps the full list; passing `true` or `{}` limits it to
+    eight values, and `{ maxItems: Infinity }` shows all values.
+    [[#1100], [#1129]]
  -  Added the `showAliases` option to `generateManPage()`,
     `generateManPageSync()`, `generateManPageAsync()`, and
     `formatDocPageAsMan()`, and the `--show-aliases` flag to `optique-man`,
@@ -298,6 +306,9 @@ To be released.
  -  Changed the SYNOPSIS section to follow the same rule as `formatUsage()`
     when drawing `or()`, `longestMatch()`, and `multiple()` groups, so both
     show the same optional and required parts.  [[#1013], [#1015], [#1016]]
+
+[#1100]: https://github.com/dahlia/optique/issues/1100
+[#1129]: https://github.com/dahlia/optique/pull/1129
 
 ### @optique/inquirer
 

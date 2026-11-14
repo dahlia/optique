@@ -1141,3 +1141,64 @@ describe("Program-based API", () => {
     assert.ok(result.includes("Footer text."));
   });
 });
+
+describe("man generator display controls", () => {
+  it("should forward display controls through every synchronous Parser and Program entry point", async () => {
+    const parser = withDefault(
+      option("--mode", choice(["a", "b"]), { description: message`Mode` }),
+      "a",
+    );
+    const program = defineProgram({ parser, metadata: { name: "app" } });
+    for (
+      const controls of [
+        { showDefault: false, showChoices: { maxItems: 1 } },
+        { showDefault: { prefix: " [", suffix: "]" }, showChoices: false },
+      ]
+    ) {
+      const options = { name: "app", section: 1 as const, ...controls };
+      const programOptions = { section: 1 as const, ...controls };
+      const outputs = await Promise.all([
+        generateManPageSync(parser, options),
+        generateManPageSync(program, programOptions),
+        generateManPageAsync(parser, options),
+        generateManPageAsync(program, programOptions),
+        generateManPage(parser, options),
+        generateManPage(program, programOptions),
+      ]);
+      for (const output of outputs) {
+        if (controls.showDefault === false) {
+          assert.ok(output.endsWith("Mode (choices: a, ...)"), output);
+        } else {
+          assert.ok(output.endsWith('Mode ["a"]'), output);
+        }
+      }
+    }
+  });
+
+  it("should forward display controls for genuinely asynchronous parsers and programs", async () => {
+    const valueParser = choice(["a", "b"]);
+    const asyncValueParser = {
+      ...valueParser,
+      mode: "async" as const,
+      suggest: undefined,
+      parse: (input: string) => Promise.resolve(valueParser.parse(input)),
+    };
+    const parser = withDefault(
+      option("--mode", asyncValueParser, { description: message`Mode` }),
+      "a",
+    );
+    const program = defineProgram({ parser, metadata: { name: "app" } });
+    const controls = { showDefault: false, showChoices: { maxItems: 1 } };
+    const options = { name: "app", section: 1 as const, ...controls };
+    const programOptions = { section: 1 as const, ...controls };
+    const outputs = await Promise.all([
+      generateManPageAsync(parser, options),
+      generateManPageAsync(program, programOptions),
+      generateManPage(parser, options),
+      generateManPage(program, programOptions),
+    ]);
+    for (const output of outputs) {
+      assert.ok(output.endsWith("Mode (choices: a, ...)"), output);
+    }
+  });
+});

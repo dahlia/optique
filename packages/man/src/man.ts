@@ -4,6 +4,8 @@ import {
   type DocPage,
   type DocSection,
   type ShowAliasesOptions,
+  type ShowChoicesOptions,
+  type ShowDefaultOptions,
   type ShowEnvironmentOptions,
 } from "@optique/core/doc";
 import type { Message } from "@optique/core/message";
@@ -116,6 +118,27 @@ export interface ManPageOptions {
    * @since 1.4.0
    */
   readonly showAliases?: boolean | ShowAliasesOptions;
+
+  /**
+   * Whether and how to display default values. Omitted, `true`, and `{}`
+   * display `(default: value)`, with prefix `" (default: "` and suffix `")"`.
+   * Unlike help output, man pages show defaults automatically. Set to `false`
+   * to hide them, or use `{ prefix: " [", suffix: "]" }` for the old format.
+   * Explicit empty prefixes and suffixes are preserved.
+   * @since 1.4.0
+   */
+  readonly showDefault?: boolean | ShowDefaultOptions;
+
+  /**
+   * Whether and how to display choices. When omitted, displays all choices.
+   * Explicit `true` or `{}` uses prefix `" ("`, label `"choices: "`, suffix
+   * `")"`, and a limit of eight value terms, followed by `...` if truncated.
+   * Set to `false` to hide choices or set `maxItems` to `Infinity` to show all.
+   * Explicit empty prefixes, labels, and suffixes are preserved.
+   * @throws {RangeError} If `maxItems` is less than `1`.
+   * @since 1.4.0
+   */
+  readonly showChoices?: boolean | ShowChoicesOptions;
 
   /**
    * File paths to document in the FILES section.
@@ -537,17 +560,38 @@ function formatAliasesAnnotation(
   };
 }
 
+interface SectionDisplayOptions {
+  readonly showEnvironment?: boolean;
+  readonly generatedEnvironment?: boolean;
+  readonly showAliases?: boolean | ShowAliasesOptions;
+  readonly showDefault?: boolean | ShowDefaultOptions;
+  readonly showChoices?: boolean | ShowChoicesOptions;
+}
+
 /**
- * Formats a {@link DocSection} as roff markup with .TP macros.
- *
- * @param section The section to format.
- * @returns The roff-formatted section content.
+ * Limits choices by counting value terms, preserving structured messages and
+ * removing the text separator immediately before the first omitted value.
+ */
+function truncateChoices(choices: Message, maxItems: number): Message {
+  if (maxItems < Infinity) {
+    let valueCount = 0;
+    for (let i = 0; i < choices.length; i++) {
+      if (choices[i].type === "value" && ++valueCount > maxItems) {
+        const cutIndex = i > 0 && choices[i - 1].type === "text" ? i - 1 : i;
+        return [...choices.slice(0, cutIndex), { type: "text", text: ", ..." }];
+      }
+    }
+  }
+  return choices;
+}
+
+/**
+ * Formats a {@link DocSection} as roff markup with .TP macros and the
+ * requested annotations.
  */
 function formatDocSectionEntries(
   section: DocSection,
-  showEnvironment = false,
-  generatedEnvironment = false,
-  showAliases: boolean | ShowAliasesOptions = false,
+  options: SectionDisplayOptions = {},
 ): string {
   const lines: string[] = [];
 
@@ -558,7 +602,7 @@ function formatDocSectionEntries(
     lines.push(".TP");
     lines.push(termStr);
 
-    const envNames = showEnvironment
+    const envNames = options.showEnvironment
       ? [...new Set(entry.envVars ?? [])].filter((name) => name !== "")
       : [];
     const envAnnotation = envNames.length === 0
@@ -569,49 +613,56 @@ function formatDocSectionEntries(
         ).join(", ")
       }]`;
 
-    const aliases = formatAliasesAnnotation(entry, showAliases);
-
-    if (entry.description) {
-      let desc = formatMessageAsRoff(
-        entry.description,
-        generatedEnvironment ? { quotes: false } : {},
+    let body = entry.description == null ? "" : formatMessageAsRoff(
+      entry.description,
+      options.generatedEnvironment ? { quotes: false } : {},
+    );
+    // Trim before escaping: a leading separator may conceal a roff request.
+    // Keep later annotation prefixes exact, and preserve generated .PP macros
+    // by escaping only the new plain-text components.
+    const annotationPrefix = (prefix: string): string =>
+      body === "" || body.endsWith("\n")
+        ? prefix.replace(/^[^\S\r\n]+/, "")
+        : prefix;
+    const aliases = formatAliasesAnnotation(
+      entry,
+      options.showAliases ?? false,
+    );
+    if (aliases != null) {
+      body += escapeHyphens(
+        escapeRoff(annotationPrefix(aliases.prefix + aliases.body)),
       );
-      if (aliases != null) {
-        desc += escapeHyphens(escapeRoff(aliases.prefix + aliases.body));
-      }
-      if (entry.default) {
-        desc += ` [${formatMessageAsRoff(entry.default)}]`;
-      }
-      if (entry.choices) {
-        desc += ` (choices: ${
-          formatMessageAsRoff(entry.choices, { quotes: false })
-        })`;
-      }
-      const separator = desc === "" || desc.endsWith("\n") ? "" : " ";
-      const body = envAnnotation === ""
-        ? desc
-        : desc + separator + envAnnotation;
-      lines.push(generatedEnvironment && body === "" ? "\\&" : body);
-    } else if (
-      aliases != null || entry.default || entry.choices || envAnnotation !== ""
-    ) {
-      const parts: string[] = [];
-      if (aliases != null) {
-        parts.push(
-          escapeHyphens(escapeRoff(aliases.prefix.trimStart() + aliases.body)),
-        );
-      }
-      if (entry.default) {
-        parts.push(`[${formatMessageAsRoff(entry.default)}]`);
-      }
-      if (entry.choices) {
-        parts.push(
-          `(choices: ${formatMessageAsRoff(entry.choices, { quotes: false })})`,
-        );
-      }
-      if (envAnnotation !== "") parts.push(envAnnotation);
-      lines.push(parts.join(" "));
-    } else if (generatedEnvironment) {
+    }
+    if (options.showDefault !== false && entry.default?.length) {
+      const config = typeof options.showDefault === "object"
+        ? options.showDefault
+        : {};
+      body += escapeRoff(annotationPrefix(config.prefix ?? " (default: "));
+      body += formatMessageAsRoff(entry.default);
+      body += escapeRoff(config.suffix ?? ")");
+    }
+    if (options.showChoices !== false && entry.choices?.length) {
+      const config = typeof options.showChoices === "object"
+        ? options.showChoices
+        : {};
+      const maxItems = options.showChoices === undefined
+        ? Infinity
+        : config.maxItems ?? 8;
+      body += escapeRoff(annotationPrefix(
+        (config.prefix ?? " (") + (config.label ?? "choices: "),
+      ));
+      body += formatMessageAsRoff(truncateChoices(entry.choices, maxItems), {
+        quotes: false,
+      });
+      body += escapeRoff(config.suffix ?? ")");
+    }
+    if (envAnnotation !== "") {
+      const separator = body === "" || body.endsWith("\n") ? "" : " ";
+      body += separator + envAnnotation;
+    }
+    if (body !== "") {
+      lines.push(body);
+    } else if (options.generatedEnvironment) {
       lines.push("\\&");
     }
   }
@@ -649,13 +700,22 @@ function formatDocSectionEntries(
  * @throws {TypeError} If the program name is empty or a generated environment
  * section title is empty, whitespace-only, or contains control characters.
  * @throws {RangeError} If the section number or any `seeAlso` entry's section
- * number is not a valid man page section (1–8).
+ * number is not a valid man page section (1–8), or `showChoices.maxItems`
+ * is less than `1`.
  * @since 0.10.0
  */
 export function formatDocPageAsMan(
   page: DocPage,
   options: ManPageOptions,
 ): string {
+  if (
+    typeof options.showChoices === "object" &&
+    options.showChoices.maxItems != null && options.showChoices.maxItems < 1
+  ) {
+    throw new RangeError(
+      `showChoices.maxItems must be at least 1, but got ${options.showChoices.maxItems}.`,
+    );
+  }
   if (options.name === "") {
     throw new TypeError("Program name must not be empty.");
   }
@@ -751,9 +811,12 @@ export function formatDocPageAsMan(
 
     const content = formatDocSectionEntries(
       section,
-      inlineEnvironment,
-      false,
-      options.showAliases ?? false,
+      {
+        showEnvironment: inlineEnvironment,
+        showAliases: options.showAliases,
+        showDefault: options.showDefault,
+        showChoices: options.showChoices,
+      },
     );
     if (content === "") continue;
 
@@ -777,8 +840,11 @@ export function formatDocPageAsMan(
   if (environment != null && environment.entries.length > 0) {
     const content = formatDocSectionEntries(
       environment,
-      false,
-      automaticEnvironment != null,
+      {
+        generatedEnvironment: automaticEnvironment != null,
+        showDefault: options.showDefault,
+        showChoices: options.showChoices,
+      },
     );
     if (content !== "") {
       const title = automaticEnvironment == null
@@ -795,7 +861,10 @@ export function formatDocPageAsMan(
 
   // .SH FILES
   if (options.files && options.files.entries.length > 0) {
-    const content = formatDocSectionEntries(options.files);
+    const content = formatDocSectionEntries(options.files, {
+      showDefault: options.showDefault,
+      showChoices: options.showChoices,
+    });
     if (content !== "") {
       lines.push(".SH FILES");
       lines.push(content);
@@ -804,7 +873,10 @@ export function formatDocPageAsMan(
 
   // .SH EXIT STATUS
   if (options.exitStatus && options.exitStatus.entries.length > 0) {
-    const content = formatDocSectionEntries(options.exitStatus);
+    const content = formatDocSectionEntries(options.exitStatus, {
+      showDefault: options.showDefault,
+      showChoices: options.showChoices,
+    });
     if (content !== "") {
       lines.push(".SH EXIT STATUS");
       lines.push(content);

@@ -222,6 +222,8 @@ it("gives generated empty purpose bodies a safe roff placeholder", () => {
     section: 1,
     date: "September 2026",
     showEnvironment: true,
+    showDefault: {},
+    showChoices: {},
   });
   assert.match(roff, /EMPTY\n\\&\n\.TP\nNEXT/);
 });

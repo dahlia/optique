@@ -241,14 +241,14 @@ Common mistakes checklist
     `optional()` or `withDefault()` to allow no matching branch.
  -  Use `or(command(...), command(...))` for mutually exclusive subcommands.
  -  Wrap required `flag("--x")` in `optional()` or `withDefault(..., false)`.
- -  Do not expect `multiple(p)` to fail when absent; it returns `[]`. Wrap with
-    `nonEmpty()` when at least one value is required.
+ -  `multiple(p)` accepts absence as `[]`; use `nonEmpty()` to require values.
  -  Use `seq()` only for ordered grammars; most constructs use parser priority.
  -  Use structured `message` values for errors and descriptions.
  -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,
     and `bindKeyring()` in the runner's `contexts` option.
  -  Use `bindEnv().readFallback()` for env/default in error handlers.
  -  Enable `showEnvironment` for env-only help; set `documentation.description`.
+ -  Man pages label defaults; use `showDefault`/`showChoices` to format them.
  -  Keep multi-level `dependency()` graphs; avoid duplicate one-level factories.
  -  Put runtime prompt checks in `when`, with typed `otherwise`; evaluate them
     only at fallback, never eagerly during construction.
