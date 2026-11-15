@@ -999,6 +999,9 @@ describe("joined Bash option completion", () => {
   });
   it("completes thousands of files within a linear shell-command budget", {
     skip: !ptyAvailable,
+    // Creating and listing 2,000 files can exceed Bun's 5-second default
+    // when the runtimes' suites share the machine.
+    timeout: 60000,
   }, () => {
     if (!ptyAvailable) return;
     const result = tab(
@@ -1019,6 +1022,9 @@ describe("joined Bash option completion", () => {
   });
   it("completes thousands of root directories without quadratic rescans", {
     skip: !ptyAvailable,
+    // Creating and listing 2,000 directories exceeds Bun's 5-second default
+    // when the runtimes' suites share the machine.
+    timeout: 60000,
   }, () => {
     if (!ptyAvailable) return;
     const result = tab(
