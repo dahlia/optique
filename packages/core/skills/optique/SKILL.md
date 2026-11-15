@@ -243,8 +243,8 @@ Common mistakes checklist
     `withDefault(..., false)` for ordinary optional flags.
  -  Do not expect `multiple(p)` to fail when absent; it returns `[]`. Wrap with
     `nonEmpty()` when at least one value is required.
- -  Do not confuse free-order parsing with `seq()`. Most constructs let child
-    parsers compete by priority; use `seq()` only for truly ordered grammars.
+ -  For ordered grammars, use `seq()`; `object()` fields compete by priority.
+    In wrappers, require the program name before greedy `passThrough()`.
  -  Do not concatenate plain strings for errors or descriptions. Use structured
     `message` values.
  -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,

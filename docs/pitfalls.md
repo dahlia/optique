@@ -418,18 +418,28 @@ Other sharp edges
     not capture tokens that look like options (anything starting with `-`). To
     forward arbitrary trailing arguments to a sub-tool, use `passThrough()`. Its
     default format is `"equalsOnly"`, which captures only `--opt=value`; use
-    `{ format: "greedy" }` to capture every remaining token.
+    `{ format: "greedy" }` to capture all tokens once capture starts. Use
+    `seq()` to require the script name before capture starts:
 
     ~~~~ typescript twoslash
-    import { object } from "@optique/core/constructs";
+    import { seq } from "@optique/core/constructs";
+    import { map } from "@optique/core/modifiers";
     import { argument, passThrough } from "@optique/core/primitives";
     import { string } from "@optique/core/valueparser";
     // ---cut-before---
-    const parser = object({
-      script: argument(string({ metavar: "SCRIPT" })),
-      rest: passThrough({ format: "greedy" }),
-    });
+    const parser = map(
+      seq(
+        argument(string({ metavar: "SCRIPT" })),
+        passThrough({ format: "greedy" }),
+      ),
+      ([script, rest]) => ({ script, rest }),
+    );
     ~~~~
+
+    An immediate `--` after `SCRIPT` is consumed by `seq()` as an options
+    terminator before greedy capture starts. See the
+    [wrapper recipe](./cookbook.md#subcommand-specific-pass-through) for
+    examples.
 
  -  *Descriptions are `Message` objects, not plain strings.* They go in the
     trailing options object, built with the `message` template tag.
@@ -451,7 +461,12 @@ Other sharp edges
  -  *Built-in `--help`, `--version`, and `completion` are intercepted only when
     your parser leaves those tokens unconsumed.* If your own grammar accepts the
     same token (for example a positional that happens to be `help`), your parse
-    result wins and the runner does not intercept it.
+    result wins and the runner does not intercept it. A greedy `passThrough()`
+    can also consume `--help`, even if another required field is missing.
+    Putting it last in an `object()` does not prevent this. Use `seq()` to
+    require a program name before forwarding tokens, so that `--help` before
+    the name shows built-in help and `--help` after the name is forwarded. See
+    the [wrapper recipe](./cookbook.md#subcommand-specific-pass-through).
 
  -  *Command discovery is a runtime feature.* `runProgram({ dir })` from
     [*@optique/discover*](./concepts/discover.md) imports command modules

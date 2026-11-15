@@ -3881,15 +3881,28 @@ export interface PassThroughOptions {
  * // mycli --debug --foo bar
  * // → { debug: true, extra: ["--foo", "bar"] }
  *
- * // greedy format: captures all remaining tokens
- * const parser = command("exec", object({
- *   container: argument(string()),
- *   args: passThrough({ format: "greedy" }),
- * }));
+ * // greedy format: require a program name before capturing the rest
+ * const parser = command("exec", map(
+ *   seq(
+ *     argument(string({ metavar: "PROGRAM" })),
+ *     passThrough({ format: "greedy" }),
+ *   ),
+ *   ([program, args]) => ({ program, args }),
+ * ));
  *
- * // myproxy exec mycontainer --verbose -it bash
- * // → { container: "mycontainer", args: ["--verbose", "-it", "bash"] }
+ * // myproxy exec my-program --help
+ * // → { program: "my-program", args: ["--help"] }
  * ```
+ *
+ * With built-in help enabled, `myproxy exec --help` displays help because `seq()`
+ * does not reach pass-through until the program name is parsed. After the
+ * program name, greedy capture can consume remaining tokens, including
+ * `--help`, so they can be forwarded. Putting this parser last in an `object()`
+ * does not establish the same boundary: fields are tried by priority, not
+ * declaration order.
+ * An immediate `--` after the program name is consumed by `seq()` as an
+ * options terminator before greedy capture starts. Once capture starts,
+ * subsequent `--` tokens are kept.
  *
  * @since 0.8.0
  */
