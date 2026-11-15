@@ -122,6 +122,8 @@ function extractParserAndOptions<M extends Mode>(
         environment: programOptions.environment,
         showEnvironment: programOptions.showEnvironment,
         showAliases: programOptions.showAliases,
+        showDefault: programOptions.showDefault,
+        showChoices: programOptions.showChoices,
         files: programOptions.files,
         exitStatus: programOptions.exitStatus,
       },
@@ -164,6 +166,8 @@ function extractParserAndOptions<M extends Mode>(
  * @param options The man page generation options.
  * @returns The complete man page in roff format.
  * @throws {TypeError} If the input is not a valid Parser or Program.
+ * @throws {RangeError} If `showChoices.maxItems` is less than `1` or a man
+ * page section number is invalid.
  * @since 0.10.0
  */
 export function generateManPageSync<T>(
@@ -219,6 +223,8 @@ export function generateManPageSync(
  * @param options The man page generation options.
  * @returns A promise that resolves to the complete man page in roff format.
  * @throws {TypeError} If the input is not a valid Parser or Program.
+ * @throws {RangeError} If `showChoices.maxItems` is less than `1` or a man
+ * page section number is invalid.
  * @since 0.10.0
  */
 export async function generateManPageAsync<M extends Mode, T>(
@@ -305,6 +311,8 @@ export async function generateManPageAsync<M extends Mode>(
  * @param options The man page generation options.
  * @returns The complete man page in roff format, or a Promise for async parsers.
  * @throws {TypeError} If the input is not a valid Parser or Program.
+ * @throws {RangeError} If `showChoices.maxItems` is less than `1` or a man
+ * page section number is invalid.
  * @since 0.10.0
  */
 // Overload: Program with sync parser

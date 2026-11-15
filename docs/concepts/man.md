@@ -209,6 +209,61 @@ the generated man page:
     documentation.
 
 
+Defaults and choices
+--------------------
+
+*This feature is available since Optique 1.4.0.*
+
+Man pages label default values as `(default: value)` instead of `[value]`.
+This also changes the output of the `optique-man` CLI.
+Defaults and choices are still shown automatically.
+
+The `showDefault` option accepts `false` to hide defaults, `true` to use the
+`(default: value)` format, or an object with `prefix` and `suffix` fields.
+Omitting it or passing `{}` has the same effect as `true`. To restore the
+previous bracket format, pass `showDefault: { prefix: " [", suffix: "]" }`.
+
+The `showChoices` option accepts `false` to hide choices, `true` to show up to
+eight values, or an object with `prefix`, `suffix`, `label`, and `maxItems`
+fields. An empty object uses the same settings as `true`: ` (choices: …)`
+with a limit of eight values. Omitting `showChoices` still shows all choices,
+as before. Set `maxItems: Infinity` to show all values when passing an object.
+A `maxItems` value below `1` causes a `RangeError`. The limit counts structured
+choice values. Plain text is not split on commas.
+
+These options work with `formatDocPageAsMan()` and all three
+`generateManPage*()` functions, for both parser and program inputs. They apply
+to entries in the main documentation and in explicit environment, files, and
+exit-status sections. Unspecified object fields use the man formatter's
+defaults; empty strings are used as written. Custom strings are escaped as
+literal text for roff.
+
+The option types are shared with the regular help formatter, whose default
+settings are unchanged. The help formatter hides defaults and choices unless
+requested, and its `showDefault: true` still uses `[value]`. To give help and
+man pages the same annotations, pass explicit settings to both:
+
+~~~~ typescript twoslash
+import type { DocPage } from "@optique/core/doc";
+declare const page: DocPage;
+// ---cut-before---
+import { formatDocPage } from "@optique/core/doc";
+import { formatDocPageAsMan } from "@optique/man";
+
+const displayOptions = {
+  showDefault: { prefix: " (default: ", suffix: ")" },
+  showChoices: { maxItems: Infinity },
+};
+
+const help = formatDocPage("app", page, displayOptions);
+const manPage = formatDocPageAsMan(page, {
+  name: "app",
+  section: 1,
+  ...displayOptions,
+});
+~~~~
+
+
 Complete example
 ----------------
 
