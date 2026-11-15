@@ -24,11 +24,15 @@ To be released.
     composed commands, and making `prompt()` skip mapped `optional()` or
     `withDefault()` parsers when context annotations were present.
     [[#1108], [#1109]]
+ -  Fixed the completion option form (`--completion`) leaving its internal `ARG`
+    in usage lines and help entries when hidden.  The argument now follows the
+    option's `hidden` setting.  [[#1097], [#1130]]
  -  Improved parsing performance for long lists of positional arguments and
     repeated option values, including `multiple()` state updates, while
     preserving dependency replay and isolation between parser alternatives.
     [[#1122], [#1123], [#1124], [#1128]]
 
+[#1097]: https://github.com/dahlia/optique/issues/1097
 [#1098]: https://github.com/dahlia/optique/issues/1098
 [#1101]: https://github.com/dahlia/optique/issues/1101
 [#1104]: https://github.com/dahlia/optique/pull/1104
@@ -41,6 +45,7 @@ To be released.
 [#1123]: https://github.com/dahlia/optique/issues/1123
 [#1124]: https://github.com/dahlia/optique/pull/1124
 [#1128]: https://github.com/dahlia/optique/issues/1128
+[#1130]: https://github.com/dahlia/optique/pull/1130
 
 
 Version 1.0.15
