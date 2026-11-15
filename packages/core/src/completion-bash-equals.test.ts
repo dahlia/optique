@@ -282,7 +282,7 @@ if pid == 0:
     os.execvp('bash', ['bash', '--noprofile', '--rcfile', sys.argv[1], '-i'])
 def until(pattern):
     output = b''
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + float(sys.argv[4])
     while time.monotonic() < deadline:
         if select.select([fd], [], [], 0.1)[0]:
             try:
@@ -317,6 +317,10 @@ function tab(
   commandBudget = 0,
   fixedGlobPattern?: string,
   fixedGlobType: "file" | "directory" = "file",
+  timeouts: {
+    readonly pty: number;
+    readonly subprocess: number;
+  } = { pty: 10000, subprocess: 15000 },
 ): {
   readonly line: string;
   readonly replies: readonly string[];
@@ -419,8 +423,15 @@ bind -x '\"\\C-x\\C-r\":printf "\\n__LINE__%s\\n" "$READLINE_LINE"'
     const line: unknown = JSON.parse(
       execFileSync(
         "python3",
-        ["-c", ptyDriver, join(dir, "init.bash"), input, String(cursorLeft)],
-        { cwd: dir, encoding: "utf8", timeout: 15000 },
+        [
+          "-c",
+          ptyDriver,
+          join(dir, "init.bash"),
+          input,
+          String(cursorLeft),
+          String(timeouts.pty / 1000),
+        ],
+        { cwd: dir, encoding: "utf8", timeout: timeouts.subprocess },
       ),
     );
     assert.equal(typeof line, "string");
@@ -1016,6 +1027,9 @@ describe("joined Bash option completion", () => {
       false,
       false,
       100000,
+      undefined,
+      "file",
+      { pty: 45000, subprocess: 55000 },
     );
     assert.equal(result.replies.length, 2000);
     assert.equal(result.line, "eqapp --config=bulk/file-");
@@ -1039,6 +1053,9 @@ describe("joined Bash option completion", () => {
       false,
       false,
       120000,
+      undefined,
+      "file",
+      { pty: 45000, subprocess: 55000 },
     );
     assert.equal(
       result.replies.filter((reply) => reply.endsWith("/")).length,
