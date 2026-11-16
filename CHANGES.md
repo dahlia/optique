@@ -6,7 +6,7 @@ Optique changelog
 Version 1.0.16
 --------------
 
-To be released.
+Released on November 17, 2026.
 
 ### @optique/core
 
@@ -44,7 +44,7 @@ To be released.
 [#1122]: https://github.com/dahlia/optique/issues/1122
 [#1123]: https://github.com/dahlia/optique/issues/1123
 [#1124]: https://github.com/dahlia/optique/pull/1124
-[#1128]: https://github.com/dahlia/optique/issues/1128
+[#1128]: https://github.com/dahlia/optique/pull/1128
 [#1130]: https://github.com/dahlia/optique/pull/1130
 
 
