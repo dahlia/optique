@@ -1,5 +1,45 @@
 import type { DocFragments } from "../doc.ts";
 import type { Message } from "../message.ts";
+import {
+  type CommandUsageId,
+  type CommandUsageScope,
+  scopeCommandUsageId,
+} from "./command-usage.ts";
+
+const selectedCommandUsage = new WeakMap<
+  CommandDocMetadata,
+  readonly CommandUsageId[]
+>();
+
+/** Reads command occurrences selected by final parser state. @internal */
+export function getSelectedCommandUsage(
+  metadata: CommandDocMetadata | undefined,
+): readonly CommandUsageId[] {
+  return metadata == null ? [] : selectedCommandUsage.get(metadata) ?? [];
+}
+
+/** Attaches selection without adding public metadata properties. @internal */
+export function withSelectedCommandUsage(
+  metadata: CommandDocMetadata | undefined,
+  selected: readonly CommandUsageId[],
+): CommandDocMetadata {
+  const result = withOrigin(metadata ?? {}, metadata?.origin ?? "entry");
+  selectedCommandUsage.set(result, selected);
+  return result;
+}
+
+/** Maps selected commands to the same child scope as its usage. @internal */
+export function scopeCommandDocMetadata(
+  metadata: CommandDocMetadata | undefined,
+  scope: CommandUsageScope,
+): CommandDocMetadata | undefined {
+  return metadata == null ? undefined : withSelectedCommandUsage(
+    metadata,
+    getSelectedCommandUsage(metadata).map((id) =>
+      scopeCommandUsageId(scope, id)
+    ),
+  );
+}
 
 /**
  * Page metadata from a selected command, rather than an option entry.
@@ -20,6 +60,7 @@ function withOrigin(
   origin: NonNullable<CommandDocMetadata["origin"]>,
 ): CommandDocMetadata {
   const result = { ...metadata };
+  selectedCommandUsage.set(result, getSelectedCommandUsage(metadata));
   Object.defineProperty(result, "origin", { value: origin, enumerable: false });
   return result;
 }
@@ -70,11 +111,14 @@ export function getCommandDocMetadata(
     const footer = docs.footer === carrier.footer
       ? carrier.metadata.footer
       : docs.footer;
-    return withOrigin({
-      ...(brief == null ? {} : { brief }),
-      ...(description == null ? {} : { description }),
-      ...(footer == null ? {} : { footer }),
-    }, customPage ? "custom" : origin);
+    return withSelectedCommandUsage(
+      withOrigin({
+        ...(brief == null ? {} : { brief }),
+        ...(description == null ? {} : { description }),
+        ...(footer == null ? {} : { footer }),
+      }, customPage ? "custom" : origin),
+      getSelectedCommandUsage(carrier.metadata),
+    );
   }
   const metadata = (docs as CommandDocFragments)[commandDocMetadata];
   if (metadata != null) return metadata;
@@ -122,7 +166,7 @@ export function withCommandDocMetadata(
  * @param includeCustom Whether to retain custom page fields inside merge().
  * @returns The first defined value from children with the same origin.
  */
-export function collectCommandDocMetadata(
+function collectCommandPageMetadata(
   current: CommandDocMetadata | undefined,
   docs: DocFragments,
   includeCustom = false,
@@ -145,4 +189,25 @@ export function collectCommandDocMetadata(
     ...(description == null ? {} : { description }),
     ...(footer == null ? {} : { footer }),
   }, origin);
+}
+
+/** Collects page fields and all selected command occurrences. @internal */
+export function collectCommandDocMetadata(
+  current: CommandDocMetadata | undefined,
+  docs: DocFragments,
+  includeCustom = false,
+  scope?: CommandUsageScope,
+): CommandDocMetadata | undefined {
+  const next = getCommandDocMetadata(docs);
+  const selected = getSelectedCommandUsage(next);
+  const result = collectCommandPageMetadata(current, docs, includeCustom);
+  const combined = [
+    ...getSelectedCommandUsage(current),
+    ...(scope == null
+      ? selected
+      : selected.map((id) => scopeCommandUsageId(scope, id))),
+  ];
+  return combined.length === 0
+    ? result
+    : withSelectedCommandUsage(result, combined);
 }

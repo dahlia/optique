@@ -930,28 +930,42 @@ This format covers most CLI styles while still being reasonably predictable.
 #### `"greedy"`
 
 Captures *all remaining tokens* from the first unrecognized token onwards,
-regardless of whether they would match other parsers:
+regardless of whether they would match other parsers. Use
+[`seq()`](./constructs.md#seq-parser) to require a program name before capture
+can start:
 
 ~~~~ typescript twoslash
-import { object } from "@optique/core/constructs";
+import { seq } from "@optique/core/constructs";
+import { map } from "@optique/core/modifiers";
 import { argument, command, passThrough } from "@optique/core/primitives";
 import { string } from "@optique/core/valueparser";
 
-const parser = command("exec", object({
-  container: argument(string()),
-  args: passThrough({ format: "greedy" }),
-}));
+const parser = command("exec", map(
+  seq(
+    argument(string({ metavar: "PROGRAM" })),
+    passThrough({ format: "greedy" }),
+  ),
+  ([program, args]) => ({ program, args }),
+));
 
-// myproxy exec mycontainer --verbose -it bash
-// → { container: "mycontainer", args: ["--verbose", "-it", "bash"] }
+// myproxy exec my-program --help
+// → { program: "my-program", args: ["--help"] }
 ~~~~
 
+With built-in help enabled, `myproxy exec --help` displays the wrapper's help,
+while `myproxy exec my-program --help` forwards `--help` to the program.
+See the [wrapper recipe](../cookbook.md#subcommand-specific-pass-through) for
+a complete example with wrapper options and help enabled.
+
+An immediate `--` after `PROGRAM` is consumed by `seq()` as an options
+terminator before greedy capture starts. A `--` after capture has started is
+included in `args`.
+
 > [!CAUTION]
-> The `"greedy"` format requires careful use because it can shadow explicit
-> parsers. Once greedy mode triggers, all remaining tokens are consumed.
-> Typically used only when you have *no other options to parse* after the
-> pass-through point, or in subcommand-specific contexts where the entire
-> subcommand is pass-through.
+> Once greedy capture starts, all remaining tokens are consumed, including
+> `--help`. Built-in help does not reinterpret consumed tokens. Field order
+> in `object()` does not delay capture; use `seq()` to require another parser
+> to match before capture starts.
 
 ### Priority
 

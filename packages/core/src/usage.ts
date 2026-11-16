@@ -11,6 +11,7 @@ import {
   serializeTokens,
   type TerminalToken,
 } from "./terminal-internal.ts";
+import { copyCommandUsageId } from "./internal/command-usage.ts";
 import { getDisplayWidth } from "./displaywidth.ts";
 import { forgetEmptyInput, resolveUsageForDisplay } from "./internal/usage.ts";
 import type { NonEmptyString } from "./nonempty.ts";
@@ -814,9 +815,12 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
       return { ...term, names: [...term.names] };
     } else if (term.type === "command") {
       if (term.usageLine == null || typeof term.usageLine === "function") {
-        return { ...term };
+        return copyCommandUsageId(term, { ...term });
       }
-      return { ...term, usageLine: cloneUsage(term.usageLine) };
+      return copyCommandUsageId(term, {
+        ...term,
+        usageLine: cloneUsage(term.usageLine),
+      });
     }
     return { ...term };
   }
@@ -888,22 +892,22 @@ export function cloneUsageTerm(term: UsageTerm): UsageTerm {
       return { ...term, names: [...term.names] };
     case "command": {
       if (term.usageLine == null || typeof term.usageLine === "function") {
-        return {
+        return copyCommandUsageId(term, {
           ...term,
           ...(term.aliases != null ? { aliases: [...term.aliases] } : {}),
           ...(term.hiddenAliases != null
             ? { hiddenAliases: [...term.hiddenAliases] }
             : {}),
-        };
+        });
       }
-      return {
+      return copyCommandUsageId(term, {
         ...term,
         ...(term.aliases != null ? { aliases: [...term.aliases] } : {}),
         ...(term.hiddenAliases != null
           ? { hiddenAliases: [...term.hiddenAliases] }
           : {}),
         usageLine: term.usageLine.map(cloneUsageTerm),
-      };
+      });
     }
     case "optional":
       return { type: "optional", terms: term.terms.map(cloneUsageTerm) };

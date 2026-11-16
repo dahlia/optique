@@ -61,6 +61,12 @@ type ServerConfig = InferValue<typeof serverConfig>;
 // Type automatically inferred as above.
 ~~~~
 
+> [!TIP]
+> `object()` matches its fields by parser priority, not declaration order.
+> If one parser must consume input before another becomes active, use
+> [`seq()`](#seq-parser). For example, a wrapper command can require a program
+> name before forwarding the remaining arguments with `passThrough()`.
+
 ### Labeled objects
 
 You can provide a label for documentation and error reporting purposes.

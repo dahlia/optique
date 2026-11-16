@@ -6342,6 +6342,192 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       assert.ok(completionOutput.includes("function _myapp"));
     });
 
+    describe("completion option visibility", () => {
+      const parser = command(
+        "deploy",
+        object({ target: option("--target", string()) }),
+      );
+
+      for (
+        const { hidden, usageVisible, docVisible } of [
+          { hidden: true, usageVisible: false, docVisible: false },
+          { hidden: "help", usageVisible: false, docVisible: false },
+          { hidden: "doc", usageVisible: true, docVisible: false },
+          { hidden: "usage", usageVisible: false, docVisible: true },
+          { hidden: undefined, usageVisible: true, docVisible: true },
+          { hidden: false, usageVisible: true, docVisible: true },
+        ] as const
+      ) {
+        it(`should apply hidden=${hidden} to the option and its arguments`, () => {
+          let output = "";
+          const result = runParser(parser, "example", ["--help"], {
+            colors: false,
+            help: { option: true, onShow: () => "help-shown" },
+            completion: { option: { hidden } },
+            stdout: (text) => {
+              output += text;
+            },
+          });
+
+          assert.equal(result, "help-shown");
+          const separator = output.indexOf("\n\n");
+          assert.ok(separator > 0, output);
+          const usage = output.slice(0, separator);
+          const entries = output.slice(separator + 2);
+          for (const term of ["--completion", "ARG"]) {
+            assert.equal(usage.includes(term), usageVisible, usage);
+            assert.equal(entries.includes(term), docVisible, entries);
+          }
+          assert.match(usage, /deploy --target STRING/);
+          assert.match(usage, /--help/);
+          assert.match(entries, /^\s+deploy\s*$/m);
+          assert.match(entries, /^\s+--help\s+Show help information\./m);
+          assert.doesNotMatch(usage, /\[\]|\(\s*\||\|\s*\)/);
+        });
+      }
+
+      for (const hidden of [true, "help", "doc"] as const) {
+        it(`should apply hidden=${hidden} to grouped completion option aliases`, () => {
+          let output = "";
+          runParser(parser, "example", ["--help"], {
+            colors: false,
+            help: { option: true },
+            completion: {
+              option: {
+                names: ["--completion", "--completions"],
+                group: "Shell Completion",
+                hidden,
+              },
+            },
+            stdout: (text) => {
+              output += text;
+            },
+          });
+
+          const separator = output.indexOf("\n\n");
+          assert.ok(separator > 0, output);
+          const usage = output.slice(0, separator);
+          const entries = output.slice(separator + 2);
+          for (
+            const term of ["--completion SHELL", "--completions SHELL", "ARG"]
+          ) {
+            assert.equal(usage.includes(term), hidden === "doc", usage);
+            assert.ok(!entries.includes(term), entries);
+          }
+          assert.ok(!entries.includes("Shell Completion"), entries);
+          assert.match(entries, /deploy/);
+          assert.match(entries, /--help/);
+          assert.doesNotMatch(usage, /\[\]|\(\s*\||\|\s*\)/);
+        });
+      }
+
+      it("should hide completion arguments in missing-shell help without changing the error", () => {
+        let stderr = "";
+        const result = runParser(parser, "example", ["--completion"], {
+          colors: false,
+          completion: { option: { hidden: true } },
+          onError: (exitCode) => exitCode,
+          stderr: (text) => {
+            stderr += text;
+          },
+        });
+
+        assert.equal(result, 1);
+        assert.match(stderr, /Missing shell name for completion\./);
+        assert.match(stderr, /Usage: example/);
+        assert.doesNotMatch(stderr, /ARG|\[\]/);
+      });
+
+      for (
+        const args of [["--completion", "bash"], ["--completion=bash"]] as const
+      ) {
+        it(`should generate a script through hidden ${args[0]}`, () => {
+          let stdout = "";
+          const result = runParser(parser, "example", args, {
+            completion: {
+              option: { hidden: true },
+              onShow: (exitCode) => exitCode,
+            },
+            stdout: (text) => {
+              stdout += text;
+            },
+          });
+
+          assert.equal(result, 0);
+          assert.match(stdout, /function _example/);
+          assert.match(stdout, /complete -F _example -- example/);
+        });
+      }
+
+      it("should provide suggestions through a hidden completion option", () => {
+        let stdout = "";
+        const result = runParser(
+          parser,
+          "example",
+          ["--completion", "bash", "--", "dep"],
+          {
+            completion: {
+              option: { hidden: true },
+              onShow: (exitCode) => exitCode,
+            },
+            stdout: (text) => {
+              stdout += text;
+            },
+          },
+        );
+
+        assert.equal(result, 0);
+        assert.deepEqual(stdout.trim().split("\n"), ["deploy"]);
+      });
+
+      it("should retain command-form argument documentation when the option is hidden", () => {
+        let output = "";
+        runParser(parser, "example", ["completion", "--help"], {
+          colors: false,
+          help: { option: true },
+          completion: { command: true, option: { hidden: true } },
+          stdout: (text) => {
+            output += text;
+          },
+        });
+
+        assert.match(
+          output,
+          /Usage: example completion \[SHELL\] \[ARG\.\.\.\]/,
+        );
+        assert.match(output, /^\s+SHELL\s+Shell type/m);
+        assert.match(output, /^\s+ARG\s+Command line arguments/m);
+      });
+
+      it("should hide completion arguments with an async parser", async () => {
+        const target: ValueParser<"async", string> = {
+          mode: "async",
+          metavar: "STRING",
+          placeholder: "",
+          parse: (input) => Promise.resolve({ success: true, value: input }),
+          format: (value) => value,
+        };
+        const asyncParser = command(
+          "deploy",
+          object({ target: option("--target", target) }),
+        );
+        let output = "";
+        const result = await runParser(asyncParser, "example", ["--help"], {
+          colors: false,
+          help: { option: true, onShow: () => "help-shown" },
+          completion: { option: { hidden: true } },
+          stdout: (text) => {
+            output += text;
+          },
+        });
+
+        assert.equal(result, "help-shown");
+        assert.doesNotMatch(output, /--completion|ARG/);
+        assert.match(output, /deploy --target STRING/);
+        assert.match(output, /--help/);
+      });
+    });
+
     it("should hide both completion command names in help when helpVisibility is 'none'", () => {
       const parser = object({
         foo: option("--foo"),

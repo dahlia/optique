@@ -1,4 +1,8 @@
 import { captureDocParser } from "./internal/doc-metadata.ts";
+import {
+  identifyCommandUsage,
+  scopeCommandUsage,
+} from "./internal/command-usage.ts";
 import { joinedFileSuggestion } from "./internal/joined-file-suggestion.ts";
 import {
   defineBareCommandDocPolicy,
@@ -15,7 +19,10 @@ import {
 } from "./short-option.ts";
 import {
   getCommandDocMetadata,
+  getSelectedCommandUsage,
+  scopeCommandDocMetadata,
   withCommandDocMetadata,
+  withSelectedCommandUsage,
 } from "./internal/command-doc-metadata.ts";
 import {
   defineKnownCompletion,
@@ -3418,6 +3425,8 @@ export function command<M extends Mode, T, TState>(
   const commandScope = selectableOptionScope(() => new Set<string>());
   const enteredScope = combinedOptionScope([parser], [name]);
 
+  const commandUsageId = {};
+  const childUsageScope = new WeakMap<object, object>();
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
     [Symbol.for("@optique/core/commandParser")]: true,
@@ -3426,15 +3435,15 @@ export function command<M extends Mode, T, TState>(
     $stateType: [],
     priority: 15, // Higher than options to match commands first
     usage: [
-      {
-        type: "command",
+      identifyCommandUsage({
+        type: "command" as const,
         name,
         ...(aliases.length > 0 && { aliases }),
         ...(hiddenAliases.length > 0 && { hiddenAliases }),
         ...(options.usageLine != null && { usageLine: options.usageLine }),
         ...(options.hidden != null && { hidden: options.hidden }),
-      },
-      ...parser.usage,
+      }, commandUsageId),
+      ...scopeCommandUsage(parser.usage, childUsageScope),
     ],
     leadingNames: new Set(commandNames),
     acceptingAnyToken: false,
@@ -3841,19 +3850,28 @@ export function command<M extends Mode, T, TState>(
       // can supply page fields through the public DocFragments contract.
       const innerMetadata = getCommandDocMetadata(innerFragments) ??
         innerFragments;
-      return withCommandDocMetadata({
-        ...innerFragments,
-        brief: innerFragments.brief ?? options.brief,
-        description: innerFragments.description ?? options.description,
-        footer: innerFragments.footer ?? options.footer,
-      }, {
-        origin: "command",
-        // Composite parents must not promote descriptions from ordinary entries
-        // or unselected subcommands into this command's page metadata.
-        brief: innerMetadata?.brief ?? options.brief,
-        description: innerMetadata?.description ?? options.description,
-        footer: innerMetadata?.footer ?? options.footer,
-      });
+      return withCommandDocMetadata(
+        {
+          ...innerFragments,
+          brief: innerFragments.brief ?? options.brief,
+          description: innerFragments.description ?? options.description,
+          footer: innerFragments.footer ?? options.footer,
+        },
+        withSelectedCommandUsage({
+          origin: "command",
+          // Composite parents must not promote descriptions from ordinary entries
+          // or unselected subcommands into this command's page metadata.
+          brief: innerMetadata?.brief ?? options.brief,
+          description: innerMetadata?.description ?? options.description,
+          footer: innerMetadata?.footer ?? options.footer,
+        }, [
+          commandUsageId,
+          ...getSelectedCommandUsage(scopeCommandDocMetadata(
+            getCommandDocMetadata(innerFragments),
+            childUsageScope,
+          )),
+        ]),
+      );
     },
     [Symbol.for("Deno.customInspect")]() {
       return `command(${JSON.stringify(name)})`;
@@ -4043,15 +4061,28 @@ export interface PassThroughOptions {
  * // mycli --debug --foo bar
  * // → { debug: true, extra: ["--foo", "bar"] }
  *
- * // greedy format: captures all remaining tokens
- * const parser = command("exec", object({
- *   container: argument(string()),
- *   args: passThrough({ format: "greedy" }),
- * }));
+ * // greedy format: require a program name before capturing the rest
+ * const parser = command("exec", map(
+ *   seq(
+ *     argument(string({ metavar: "PROGRAM" })),
+ *     passThrough({ format: "greedy" }),
+ *   ),
+ *   ([program, args]) => ({ program, args }),
+ * ));
  *
- * // myproxy exec mycontainer --verbose -it bash
- * // → { container: "mycontainer", args: ["--verbose", "-it", "bash"] }
+ * // myproxy exec my-program --help
+ * // → { program: "my-program", args: ["--help"] }
  * ```
+ *
+ * With built-in help enabled, `myproxy exec --help` displays help because `seq()`
+ * does not reach pass-through until the program name is parsed. After the
+ * program name, greedy capture can consume remaining tokens, including
+ * `--help`, so they can be forwarded. Putting this parser last in an `object()`
+ * does not establish the same boundary: fields are tried by priority, not
+ * declaration order.
+ * An immediate `--` after the program name is consumed by `seq()` as an
+ * options terminator before greedy capture starts. Once capture starts,
+ * subsequent `--` tokens are kept.
  *
  * @since 0.8.0
  */

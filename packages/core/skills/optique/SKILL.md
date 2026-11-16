@@ -232,8 +232,7 @@ const parser = logLevel();
 Common mistakes checklist
 -------------------------
 
- -  Pass parsers to `run()` for apps; use explicit argument arrays with
-    `parse()` in tests and embedded use. Do not pre-parse `process.argv`.
+ -  Use `run()` for apps; pass args to `parse()`. Do not pre-parse argv.
  -  Declare only static facts with `defineEmptyInputBehavior()` in
     `@optique/core/extension`; use `inheritEmptyInputBehavior()` for
     transparent wrappers. See [extension APIs].
@@ -243,6 +242,7 @@ Common mistakes checklist
  -  Wrap required `flag("--x")` in `optional()` or `withDefault(..., false)`.
  -  `multiple(p)` accepts absence as `[]`; use `nonEmpty()` to require values.
  -  Use `seq()` only for ordered grammars; most constructs use parser priority.
+    In wrappers, require the program name before greedy `passThrough()`.
  -  Use structured `message` values for errors and descriptions.
  -  Register contexts for `bindEnv()`, `bindConfig()`, `bindDerivedDefault()`,
     and `bindKeyring()` in the runner's `contexts` option.

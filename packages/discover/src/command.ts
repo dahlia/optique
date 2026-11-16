@@ -4,11 +4,11 @@ import type { Mode, Parser } from "@optique/core/parser";
 const commandBrand = Symbol.for("@optique/discover/command");
 
 /**
- * Metadata shown for a discovered command.
+ * Command aliases and display metadata for a discovered command.
  *
  * This uses the same shape as Optique's `command()` options so discovered
- * commands can provide descriptions, usage overrides, visibility, and custom
- * command-level errors.
+ * commands can provide alternative names, descriptions, usage overrides,
+ * visibility, and custom command-level errors.
  *
  * @since 1.1.0
  */
@@ -206,7 +206,11 @@ export interface CommandDefinition<M extends Mode, T, R = unknown> {
   readonly parser: Parser<M, T, unknown>;
 
   /**
-   * Metadata used in help output and shell completion.
+   * Settings for command aliases, help output, shell completion, and
+   * command-level errors.
+   *
+   * Set `aliases` to accept alternative names for the final command path
+   * segment, whether commands are passed manually or discovered from files.
    */
   readonly metadata?: CommandMetadata;
 
