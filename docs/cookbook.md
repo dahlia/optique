@@ -1296,10 +1296,13 @@ are captured in the pass-through array.
 
 #### Subcommand-specific pass-through
 
-For tools that delegate entire subcommands to other processes:
+Use [`seq()`](./concepts/constructs.md#seq-parser) to require a program name
+before forwarding the remaining tokens. This wrapper accepts its own `--sudo`
+option before the program name:
 
 ~~~~ typescript twoslash
-import { object, or } from "@optique/core/constructs";
+import { object, or, seq } from "@optique/core/constructs";
+import { map } from "@optique/core/modifiers";
 import { argument, command, constant, option, passThrough } from "@optique/core/primitives";
 import { integer, string } from "@optique/core/valueparser";
 import { run } from "@optique/run";
@@ -1311,24 +1314,51 @@ const parser = or(
     port: option("-p", "--port", integer()),
     host: option("-h", "--host", string()),
   })),
-  // Exec command passes everything through
-  command("exec", object({
-    action: constant("exec"),
-    container: argument(string({ metavar: "CONTAINER" })),
-    args: passThrough({ format: "greedy" }),
-  })),
+  command("exec", map(
+    seq(
+      object({
+        action: constant("exec"),
+        sudo: option("-s", "--sudo"),
+      }),
+      argument(string({ metavar: "PROGRAM" })),
+      passThrough({ format: "greedy" }),
+    ),
+    ([options, program, args]) => ({ ...options, program, args }),
+  )),
 );
 
-const result = run(parser);
+const result = run(parser, { help: "both" });
 
 if (result.action === "exec") {
   // result.args contains all remaining tokens
-  // Pass them to the container: ["--verbose", "-it", "bash"]
+  // Run result.program with result.args; result.sudo is the wrapper's own option
 }
 ~~~~
 
-The `"greedy"` format is crucial here: once the container name is captured, all
-remaining tokens (including those that look like options) go into `args`.
+Once greedy capture starts, every remaining token goes into `args`, including
+tokens that match the wrapper's own options, such as
+`--sudo` and `--help`. `map()` converts the tuple returned by `seq()` into an
+object with named fields.
+
+~~~~ bash
+demo exec --help                      # Show the exec command's help
+demo exec --sudo my-program arg1      # Enable sudo; forward arg1
+demo exec my-program --help           # Forward --help to my-program
+demo exec my-program --sudo           # Forward --sudo to my-program
+~~~~
+
+In an `object()`, placing `argument()` before `passThrough()` does not require
+the argument to match first. `argument()` rejects option-like tokens such as
+`--help`, so the greedy parser can consume `--help` instead. Built-in help only
+handles tokens left unconsumed by your parser. `seq()` keeps pass-through
+inactive until the program name is parsed, so `demo exec --help` displays help
+even though `PROGRAM` is missing.
+
+An options terminator (`--`) immediately after `PROGRAM` is consumed by `seq()`
+before greedy capture starts: `demo exec my-program -- --help` puts only
+`["--help"]` in `args`. A `--` encountered after capture has started is kept,
+so `demo exec my-program arg1 -- --help` puts `["arg1", "--", "--help"]` in
+`args`.
 
 #### Choosing the right format
 
@@ -1370,8 +1400,10 @@ The `passThrough()` parser supports three capture formats:
     ~~~~
 
 > [!CAUTION]
-> The `"greedy"` format can shadow explicit parsers. Place it carefully,
-> typically as the last field in a subcommand-specific `object()`.
+> Once greedy capture starts, it consumes all remaining tokens. Putting
+> `passThrough()` last in an `object()` does not determine where capture starts.
+> Use `seq()` when a required argument must precede pass-through, as in the
+> [wrapper example](#subcommand-specific-pass-through) above.
 
 ### “Did you mean?” for value typos
 
