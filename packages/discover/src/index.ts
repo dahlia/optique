@@ -5,6 +5,7 @@ import type {
 } from "@optique/core/context";
 import type { DocState } from "@optique/core/parser";
 import type { DocFragments } from "@optique/core/doc";
+import { unwrapInjectedAnnotationState } from "@optique/core/extension";
 import { map } from "@optique/core/modifiers";
 import type { Message } from "@optique/core/message";
 import type { Mode, Parser } from "@optique/core/parser";
@@ -702,7 +703,8 @@ function withRootDocs(
     ): DocFragments {
       if (
         state.kind === "unavailable" ||
-        (state.kind === "available" && Object.is(state.state, rootState))
+        (state.kind === "available" &&
+          Object.is(unwrapInjectedAnnotationState(state.state), rootState))
       ) {
         return rootDocs();
       }
