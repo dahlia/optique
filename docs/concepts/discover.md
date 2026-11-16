@@ -101,9 +101,63 @@ File-based discovery accepts the same `metadata.aliases` setting.  In
 No duplicate *b.ts* or *compile.ts* files are needed.
 
 Command aliases are accepted during parsing and suggested by shell completion,
-while help and usage show the canonical name.  See
+while help and usage show only the canonical name by default.  See
 [command aliases](./primitives.md#command-aliases) for the shared behavior and
 name collision rules.
+
+#### Showing aliases in help
+
+*Showing aliases in command lists is available since Optique 1.4.0.*
+
+Set `metadata.showAliases` to show a command's aliases in help command lists.
+For example, *commands/build.ts* can export:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { message } from "@optique/core/message";
+import { defineCommand } from "@optique/discover";
+
+export default defineCommand({
+  metadata: {
+    aliases: ["b", "compile"],
+    showAliases: true,
+    brief: message`Build the project.`,
+  },
+  parser: object({}),
+  handler() {
+    console.log("Building.");
+  },
+});
+~~~~
+
+Its help entry includes an annotation:
+
+~~~~ text
+  build                       Build the project. (aliases: b, compile)
+~~~~
+
+To show aliases for all commands by default, set `showAliases` on
+`runProgram()` instead:
+
+~~~~ typescript twoslash
+import { runProgram } from "@optique/discover";
+
+await runProgram({
+  dir: new URL("./commands/", import.meta.url),
+  metadata: { name: "admin" },
+  showAliases: true,
+});
+~~~~
+
+A command's `metadata.showAliases` takes precedence over the program setting.
+Set it to `false` to hide that command's aliases even when the program shows
+the others.  The command setting applies only to its own entry, not to its
+subcommands.  Usage lines always show canonical command names.
+
+These settings control help display, not which names can be invoked.
+`metadata.aliases` works without `showAliases`, including in Optique 1.3.
+See [alias display](./runners.md#alias-display) for custom annotation
+formatting.
 
 
 Running a discovered program
