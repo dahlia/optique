@@ -16,7 +16,7 @@ import {
 import { type Annotations, getAnnotations } from "@optique/core/annotations";
 import type { SourceContextRequest } from "@optique/core/context";
 import { dependency } from "@optique/core/dependency";
-import { injectAnnotations } from "@optique/core/extension";
+import { getTraits, injectAnnotations } from "@optique/core/extension";
 import { map, multiple, optional, withDefault } from "@optique/core/modifiers";
 import {
   argument,
@@ -3214,7 +3214,14 @@ describe("createConfigContext error paths", () => {
     assert.ok(descriptor != null);
     if (descriptor == null) return;
     assert.ok(!descriptor.enumerable);
-    assert.notEqual(Reflect.get(map(parser, (value) => value), marker), true);
+    assert.notEqual(Reflect.get({ ...parser }, marker), true);
+
+    const mapped = map(parser, (value) => value);
+    assert.deepEqual(getTraits(mapped), getTraits(parser));
+    const mappedDescriptor = Object.getOwnPropertyDescriptor(mapped, marker);
+    assert.ok(mappedDescriptor != null);
+    if (mappedDescriptor == null) return;
+    assert.ok(!mappedDescriptor.enumerable);
   });
 
   test("bindConfig suggest unwraps zero-consumption cliState", () => {

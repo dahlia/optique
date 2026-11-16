@@ -902,6 +902,7 @@ function createCompletionParser(
         argument(string({ metavar: "ARG" }), {
           description:
             message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+          hidden: optionConfig.hidden,
         }),
       ),
       [] as readonly string[],

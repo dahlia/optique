@@ -10,6 +10,7 @@ import {
   dispatchByMode,
   inheritAnnotations,
   mapModeValue,
+  unwrapInjectedAnnotationState,
   wrapForMode,
 } from "@optique/core/extension";
 import { fluent, type FluentParser } from "@optique/core/fluent";
@@ -1876,7 +1877,8 @@ function withRootDocs(
     ): DocFragments {
       if (
         state.kind === "unavailable" ||
-        (state.kind === "available" && Object.is(state.state, rootState))
+        (state.kind === "available" &&
+          Object.is(unwrapInjectedAnnotationState(state.state), rootState))
       ) {
         return rootDocs();
       }

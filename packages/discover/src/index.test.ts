@@ -1,5 +1,5 @@
-import { object } from "@optique/core/constructs";
 import { getAnnotations } from "@optique/core/annotations";
+import { object } from "@optique/core/constructs";
 import { dependency } from "@optique/core/dependency";
 import { formatDocPage } from "@optique/core/doc";
 import {
@@ -1970,6 +1970,44 @@ describe("createProgramParser()", () => {
     }
   });
 
+  it("should preserve annotations in selected command documentation", async () => {
+    const key = Symbol("documentation-context");
+    const leaf = object({});
+    let documented = false;
+    const annotatedLeaf: typeof leaf = {
+      ...leaf,
+      getDocFragments(state, defaultValue) {
+        documented = true;
+        assert.equal(state.kind, "available");
+        if (state.kind === "available") {
+          assert.equal(getAnnotations(state.state)?.[key], "context value");
+        }
+        return leaf.getDocFragments(state, defaultValue);
+      },
+    };
+    const parser = createProgramParser([
+      {
+        path: ["one"],
+        command: defineCommand({
+          parser: annotatedLeaf,
+          handler() {},
+        }),
+      },
+      {
+        path: ["two"],
+        command: defineCommand({ parser: object({}), handler() {} }),
+      },
+    ]);
+
+    const page = await getDocPageAsync(parser, ["one"], {
+      annotations: { [key]: "context value" },
+    });
+
+    assert.ok(page != null);
+    assert.match(formatDocPage("tool", page), /Usage: tool one/);
+    assert.ok(documented);
+  });
+
   it("rejects duplicate command paths", () => {
     const makeCommand = () =>
       defineCommand({
@@ -2288,6 +2326,90 @@ describe("runProgram()", () => {
     assert.doesNotMatch(rootStdout, /user remove/);
     assert.match(userStdout, /add\s+Add a user\./);
     assert.match(userStdout, /remove\s+Remove a user\./);
+  });
+
+  for (
+    const { label, paths } of [
+      { label: "multiple root commands", paths: [["one"], ["two"]] },
+      { label: "a shared root command", paths: [["grp", "a"], ["grp", "b"]] },
+    ] as const
+  ) {
+    it(`should show complete root help for an unknown command with contexts and ${label}`, async () => {
+      const calls: string[] = [];
+      const commands = paths.map((path) =>
+        defineCommand({
+          path,
+          parser: object({}),
+          metadata: { brief: message`Run this command.` },
+          handler() {
+            calls.push(path.join(" "));
+          },
+        })
+      );
+      const key = Symbol("help-context");
+      const context: SourceContext = {
+        id: key,
+        phase: "single-pass",
+        getAnnotations: () => ({ [key]: "context value" }),
+      };
+
+      const expected = await captureProgramHelp(commands, [
+        "missing",
+        "--help",
+      ]);
+      const actual = await captureProgramHelp(commands, ["missing", "--help"], [
+        context,
+      ]);
+
+      assert.deepEqual(actual, expected);
+      assert.equal(actual.stderr, "");
+      assert.match(actual.stdout, /Usage: tool /);
+      for (const path of paths) {
+        assert.ok(actual.stdout.includes(`  ${path.join(" ")} `));
+      }
+      assert.deepEqual(calls, []);
+    });
+  }
+
+  it("should preserve selected command help with source contexts", async () => {
+    const calls: string[] = [];
+    const commands = [
+      defineCommand({
+        path: ["one"],
+        parser: object({ name: option("--name", string()) }),
+        metadata: { brief: message`First command.` },
+        handler() {
+          calls.push("one");
+        },
+      }),
+      defineCommand({
+        path: ["two"],
+        parser: object({}),
+        metadata: { brief: message`Second command.` },
+        handler() {
+          calls.push("two");
+        },
+      }),
+    ];
+    const key = Symbol("help-context");
+    const context: SourceContext = {
+      id: key,
+      phase: "single-pass",
+      getAnnotations: () => ({ [key]: "context value" }),
+    };
+
+    const expected = await captureProgramHelp(commands, ["one", "--help"]);
+    const actual = await captureProgramHelp(commands, ["one", "--help"], [
+      context,
+    ]);
+
+    assert.deepEqual(actual, expected);
+    assert.equal(actual.stderr, "");
+    assert.match(actual.stdout, /Usage: tool one/);
+    assert.match(actual.stdout, /--name/);
+    assert.match(actual.stdout, /First command\./);
+    assert.ok(!actual.stdout.includes("Second command."));
+    assert.deepEqual(calls, []);
   });
 
   it("passes static command values to phase-two source contexts", async () => {
@@ -3155,6 +3277,39 @@ describe("runProgram() lifecycle hooks", () => {
     assert.deepEqual(commandPaths, [undefined]);
   });
 });
+
+async function captureProgramHelp(
+  commands: readonly AnyStaticCommand[],
+  args: readonly string[],
+  contexts: readonly SourceContext[] = [],
+): Promise<{ readonly stdout: string; readonly stderr: string }> {
+  let stdout = "";
+  let stderr = "";
+  await assert.rejects(
+    () =>
+      runProgram({
+        commands,
+        metadata: { name: "tool" },
+        args,
+        contexts,
+        stdout(text) {
+          stdout += `${text}\n`;
+        },
+        stderr(text) {
+          stderr += `${text}\n`;
+        },
+        onExit(exitCode): never {
+          throw new ExitSignal(exitCode);
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ExitSignal, String(error));
+      assert.equal(error.exitCode, 0);
+      return true;
+    },
+  );
+  return { stdout, stderr };
+}
 
 class ExitSignal extends Error {
   readonly exitCode: number;

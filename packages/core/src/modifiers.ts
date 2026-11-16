@@ -1,7 +1,9 @@
 import { mergeJoinedFileSuggestions } from "./internal/joined-file-suggestion.ts";
 import {
   getCommandDocMetadata,
+  getSelectedCommandUsage,
   withCommandDocMetadata,
+  withSelectedCommandUsage,
 } from "./internal/command-doc-metadata.ts";
 import {
   defineKnownCompletionLookup,
@@ -19,6 +21,7 @@ import {
   normalizeNestedDelegatedAnnotationState,
 } from "./annotation-state.ts";
 import { composeDependencyMetadata } from "./dependency-metadata.ts";
+import { defineTraits, getTraits } from "./extension.ts";
 import { formatMessage, type Message, message, text } from "./message.ts";
 import {
   annotateFreshArray,
@@ -65,6 +68,10 @@ import type {
   Suggestion,
 } from "./parser.ts";
 import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
+
+// Small states keep the original spread append.  Native copying is faster
+// for larger states; spread first preserves custom iteration and dense arrays.
+const MULTIPLE_NATIVE_APPEND_THRESHOLD = 256;
 
 function isTerminalMultipleItemState(state: unknown): boolean {
   const unwrapped = unwrapMultipleItemState(state).value;
@@ -1796,6 +1803,9 @@ export function map<M extends Mode, T, U, TState>(
     },
   } as Parser<M, U, TState>;
   defineParseLanes(mappedParser, getOwnParseLanes(parser));
+  // map() keeps the inner state unchanged, so preserve its annotation and
+  // source traits even though output-dependent hooks are stripped below.
+  defineTraits(mappedParser, getTraits(parser));
   // Strip any normalizeValue inherited from the inner parser via ...parser
   // spread.  The inner normalizer operates on type T, not the mapped type U,
   // so keeping it would corrupt mapped defaults.
@@ -2552,10 +2562,16 @@ export function multiple<M extends Mode, TValue, TState>(
       ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
-        state: annotateFreshArray(context.state, [
-          ...(added ? context.state : context.state.slice(0, -1)),
-          nextItemState,
-        ]),
+        state: annotateFreshArray(
+          context.state,
+          itemIndex < MULTIPLE_NATIVE_APPEND_THRESHOLD
+            ? [
+              ...(added ? context.state : context.state.slice(0, -1)),
+              nextItemState,
+            ]
+            : [...(added ? context.state : context.state.slice(0, -1))]
+              .toSpliced(Infinity, 0, nextItemState),
+        ),
         ...(mergedExec != null
           ? {
             trace: mergedExec.trace,
@@ -2719,10 +2735,16 @@ export function multiple<M extends Mode, TValue, TState>(
       ...(result.provisional ? { provisional: true as const } : {}),
       next: {
         ...result.next,
-        state: annotateFreshArray(context.state, [
-          ...(added ? context.state : context.state.slice(0, -1)),
-          nextItemState,
-        ]),
+        state: annotateFreshArray(
+          context.state,
+          itemIndex < MULTIPLE_NATIVE_APPEND_THRESHOLD
+            ? [
+              ...(added ? context.state : context.state.slice(0, -1)),
+              nextItemState,
+            ]
+            : [...(added ? context.state : context.state.slice(0, -1))]
+              .toSpliced(Infinity, 0, nextItemState),
+        ),
         ...(mergedExec != null
           ? {
             trace: mergedExec.trace,
@@ -3132,11 +3154,37 @@ export function multiple<M extends Mode, TValue, TState>(
         : latestInnerState !== undefined
         ? { kind: "available", state: latestInnerState as TState }
         : { kind: "unavailable" };
-      return syncParser.getDocFragments(
+      const docs = syncParser.getDocFragments(
         innerState,
         defaultValue != null && defaultValue.length > 0
           ? defaultValue[0]
           : undefined,
+      );
+      if (state.kind === "unavailable" || state.state.length < 2) return docs;
+      // The page describes the latest item, but its repeated usage pattern
+      // must retain commands selected by every completed item as well.
+      const metadata = getCommandDocMetadata(docs);
+      const selected = [...getSelectedCommandUsage(metadata)];
+      for (const itemState of state.state.slice(0, -1)) {
+        const itemInnerState = itemState != null &&
+            isInjectedAnnotationWrapper(itemState)
+          ? unwrapInjectedWrapper(itemState)
+          : itemState;
+        const itemDocs = syncParser.getDocFragments(
+          itemInnerState === undefined
+            ? { kind: "unavailable" }
+            : { kind: "available", state: itemInnerState as TState },
+          defaultValue != null && defaultValue.length > 0
+            ? defaultValue[0]
+            : undefined,
+        );
+        selected.push(
+          ...getSelectedCommandUsage(getCommandDocMetadata(itemDocs)),
+        );
+      }
+      return withCommandDocMetadata(
+        docs,
+        withSelectedCommandUsage(metadata, selected),
       );
     },
     // Type assertion needed because TypeScript cannot verify ModeValue<M, T>

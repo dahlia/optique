@@ -8,6 +8,10 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { pwsh } from "./completion.ts";
 
+// Cold PowerShell processes and multiple completion contexts can exceed Bun's
+// default five-second test timeout.
+const pwshTestTimeout = 30_000;
+
 function available(command: string): boolean {
   try {
     execFileSync(command, ["--version"], { stdio: "ignore" });
@@ -183,6 +187,7 @@ ConvertTo-Json -InputObject $results -Depth 7 -Compress
 describe("PowerShell quoted current value completion", () => {
   it("completes closed, unfinished, empty and smart quoted constants", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     const inputs = [
@@ -228,6 +233,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("keeps quoted joined option suggestions in one literal argument", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     const values = ["a b", "a'b", 'a"b', "a$b", "a`b", "a$(touch marker)"];
@@ -251,6 +257,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("keeps later arguments outside quoted completion context", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     for (const joined of [false, true]) {
@@ -283,6 +290,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("preserves leading and whitespace-only literal suggestions", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     const values = [" alpha", "  ", " alpha "];
@@ -305,6 +313,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("skips empty transported literals without losing following candidates", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     const records = Array.from(pwsh.encodeSuggestions([
@@ -328,6 +337,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("quotes literal values that resemble file transport directives", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     const values = [
@@ -361,6 +371,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("retains legacy trimming for unquoted literal candidates", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     const records = Array.from(pwsh.encodeSuggestions([
@@ -378,6 +389,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("expands a parser-provided home pattern for empty quoted prefixes", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     for (const pattern of ["~/cfg/", "~/cfg/../cfg/"]) {
@@ -428,6 +440,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("keeps parser-provided literal tilde directory patterns relative", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     for (const pattern of ["~cfg/", "./~/cfg/"]) {
@@ -465,6 +478,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("keeps completion output when the home comparison uses filesystem root", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     for (
@@ -487,6 +501,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("round-trips quote characters, dollars and backticks as literal values", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     const values = [
@@ -534,6 +549,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("keeps quoted option-name prefixes literal", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     for (
@@ -549,6 +565,7 @@ describe("PowerShell quoted current value completion", () => {
 
   it("quotes filtered file results and keeps quoted tilde paths literal", {
     skip: !shellAvailable,
+    timeout: pwshTestTimeout,
   }, () => {
     if (!shellAvailable) return;
     for (const prefix of ["dir with spaces/a", "~/a"]) {
