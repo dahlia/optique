@@ -1,8 +1,15 @@
 import {
+  copyCommandUsageId,
+  scopeCommandUsage,
+} from "./internal/command-usage.ts";
+import {
   collectCommandDocMetadata,
   type CommandDocMetadata,
   getCommandDocMetadata,
+  getSelectedCommandUsage,
+  scopeCommandDocMetadata,
   withCommandDocMetadata,
+  withSelectedCommandUsage,
 } from "./internal/command-doc-metadata.ts";
 import {
   combineOptionMatches,
@@ -861,10 +868,10 @@ function applyHiddenToUsageTerm(
     term.type === "command" ||
     term.type === "passthrough"
   ) {
-    return {
+    return copyCommandUsageId(term, {
       ...term,
       hidden: mergeHidden(term.hidden, hidden),
-    };
+    });
   }
   return term;
 }
@@ -4221,12 +4228,18 @@ export function or(
     return { ...error, success: false };
   };
 
+  const commandUsageScopes = parsers.map(() => new WeakMap<object, object>());
   const singleResult = {
     mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
-    usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    usage: [{
+      type: "exclusive",
+      terms: parsers.map((p, i) =>
+        scopeCommandUsage(p.usage, commandUsageScopes[i])
+      ),
+    }],
     leadingNames: unionLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,
@@ -4290,7 +4303,10 @@ export function or(
           innerState,
           undefined,
         );
-        commandMetadata = getCommandDocMetadata(docFragments);
+        commandMetadata = scopeCommandDocMetadata(
+          getCommandDocMetadata(docFragments),
+          commandUsageScopes[index],
+        );
         brief = docFragments.brief;
         description = docFragments.description;
         footer = docFragments.footer;
@@ -5008,12 +5024,18 @@ function createLongestMatch(
     return { ...error, success: false };
   };
 
+  const commandUsageScopes = parsers.map(() => new WeakMap<object, object>());
   const multiResult = {
     mode: combinedMode,
     $valueType: [],
     $stateType: [],
     priority: Math.max(...parsers.map((p) => p.priority)),
-    usage: [{ type: "exclusive", terms: parsers.map((p) => p.usage) }],
+    usage: [{
+      type: "exclusive",
+      terms: parsers.map((p, i) =>
+        scopeCommandUsage(p.usage, commandUsageScopes[i])
+      ),
+    }],
     leadingNames: unionLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState: undefined,
@@ -5063,7 +5085,10 @@ function createLongestMatch(
           const docResult = parsers[i].getDocFragments(
             { kind: "available", state: result.next.state },
           );
-          commandMetadata = getCommandDocMetadata(docResult);
+          commandMetadata = scopeCommandDocMetadata(
+            getCommandDocMetadata(docResult),
+            commandUsageScopes[i],
+          );
           brief = docResult.brief;
           description = docResult.description;
           footer = docResult.footer;
@@ -6899,6 +6924,9 @@ export function object<
     return { ...error, success: false };
   };
 
+  const commandUsageScopes = new Map(
+    parserPairs.map(([field]) => [field, new WeakMap<object, object>()]),
+  );
   const objectParser = {
     mode: combinedMode,
     $valueType: [],
@@ -6906,7 +6934,9 @@ export function object<
     [fieldParsersKey]: parserPairs,
     priority: Math.max(...parserKeys.map((k) => parsers[k].priority)),
     usage: applyHiddenToUsage(
-      parserPairs.flatMap(([_, p]) => p.usage),
+      parserPairs.flatMap(([field, p]) =>
+        scopeCommandUsage(p.usage, commandUsageScopes.get(field)!)
+      ),
       options.hidden,
     ),
     leadingNames: sharedBufferLeadingNames(parserPairs.map(([_, p]) => p)),
@@ -7512,7 +7542,12 @@ export function object<
         // Only selected commands supply page metadata.  Primitive descriptions
         // belong to their entries.  First-defined values follow the same
         // priority order as the fragments (stable field order for ties).
-        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        commandMetadata = collectCommandDocMetadata(
+          commandMetadata,
+          docs,
+          false,
+          commandUsageScopes.get(field)!,
+        );
         return docs.fragments;
       });
       const hiddenAwareFragments = applyHiddenToDocFragments(
@@ -9383,6 +9418,7 @@ export function tuple<
     };
   };
 
+  const commandUsageScopes = parsers.map(() => new WeakMap<object, object>());
   const tupleParser = {
     mode: combinedMode,
     $valueType: [],
@@ -9395,8 +9431,9 @@ export function tuple<
         ],
     ),
     usage: parsers
-      .toSorted((a, b) => b.priority - a.priority)
-      .flatMap((p) => p.usage),
+      .map((p, i) => ({ p, i }))
+      .toSorted((a, b) => b.p.priority - a.p.priority)
+      .flatMap(({ p, i }) => scopeCommandUsage(p.usage, commandUsageScopes[i])),
     leadingNames: sharedBufferLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     priority: parsers.length > 0
@@ -9815,7 +9852,12 @@ export function tuple<
             state: (state.state as readonly unknown[])[i],
           };
         const docs = p.getDocFragments(indexState, defaultValue?.[i]);
-        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        commandMetadata = collectCommandDocMetadata(
+          commandMetadata,
+          docs,
+          false,
+          commandUsageScopes[i],
+        );
         return docs.fragments;
       });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
@@ -10214,6 +10256,7 @@ export function seq<
   };
 
   const leadingNames = sequenceLeadingNames(parsers);
+  const commandUsageScopes = parsers.map(() => new WeakMap<object, object>());
   const seqParser = {
     mode: combinedMode,
     $valueType: [],
@@ -10227,7 +10270,9 @@ export function seq<
     ),
     usage: [{
       type: "sequence" as const,
-      terms: parsers.flatMap((parser) => parser.usage),
+      terms: parsers.flatMap((parser, index) =>
+        scopeCommandUsage(parser.usage, commandUsageScopes[index])
+      ),
     }],
     leadingNames,
     acceptingAnyToken: sequenceAcceptingAnyToken(parsers),
@@ -10572,6 +10617,7 @@ export function seq<
       state: DocState<SeqState>,
       defaultValue?: readonly unknown[],
     ) {
+      let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((parser, index) => {
         const indexState: DocState<unknown> = state.kind === "unavailable"
           ? { kind: "unavailable" }
@@ -10579,8 +10625,14 @@ export function seq<
             kind: "available",
             state: state.state.states[index],
           };
-        return parser.getDocFragments(indexState, defaultValue?.[index])
-          .fragments;
+        const docs = parser.getDocFragments(indexState, defaultValue?.[index]);
+        commandMetadata = collectCommandDocMetadata(
+          commandMetadata,
+          docs,
+          false,
+          commandUsageScopes[index],
+        );
+        return docs.fragments;
       });
       const entries: DocEntry[] = fragments.filter((d) => d.type === "entry");
       const sections: DocSection[] = [];
@@ -10593,7 +10645,10 @@ export function seq<
         }
       }
       sections.push({ title: label, entries });
-      return { fragments: sections.map((s) => ({ ...s, type: "section" })) };
+      return withCommandDocMetadata({
+        ...commandMetadata,
+        fragments: sections.map((s) => ({ ...s, type: "section" })),
+      }, commandMetadata);
     },
     [Symbol.for("Deno.customInspect")]() {
       const parsersStr = parsers.length === 1
@@ -11638,6 +11693,7 @@ export function merge(
     };
   };
 
+  const commandUsageScopes = parsers.map(() => new WeakMap<object, object>());
   const mergeParser = {
     mode: combinedMode,
     $valueType: [],
@@ -11645,7 +11701,9 @@ export function merge(
     [fieldParsersKey]: mergedFieldParsers,
     priority: Math.max(...mergeParseLanes.map((lane) => lane.priority)),
     usage: applyHiddenToUsage(
-      parsers.flatMap((p) => p.usage),
+      parsers.flatMap((p, i) =>
+        scopeCommandUsage(p.usage, commandUsageScopes[i])
+      ),
       options.hidden,
     ),
     leadingNames: sharedBufferLeadingNames(mergeParseLanes),
@@ -12608,6 +12666,7 @@ export function merge(
           commandMetadata,
           docFragments,
           true,
+          commandUsageScopes[i],
         );
         brief ??= docFragments.brief;
         description ??= docFragments.description;
@@ -13909,6 +13968,7 @@ export function concat(
     };
   };
 
+  const commandUsageScopes = parsers.map(() => new WeakMap<object, object>());
   const concatParser = {
     mode: combinedMode,
     $valueType: [],
@@ -13916,7 +13976,9 @@ export function concat(
     priority: parsers.length > 0
       ? Math.max(...parsers.map((p) => p.priority))
       : 0,
-    usage: parsers.flatMap((p) => p.usage),
+    usage: parsers.flatMap((p, i) =>
+      scopeCommandUsage(p.usage, commandUsageScopes[i])
+    ),
     leadingNames: sharedBufferLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
     initialState,
@@ -14167,7 +14229,12 @@ export function concat(
           ? { kind: "unavailable" }
           : { kind: "available", state: state.state[index] };
         const docs = p.getDocFragments(indexState, undefined);
-        commandMetadata = collectCommandDocMetadata(commandMetadata, docs);
+        commandMetadata = collectCommandDocMetadata(
+          commandMetadata,
+          docs,
+          false,
+          commandUsageScopes[index],
+        );
         return docs.fragments;
       });
       const entries: DocEntry[] = fragments.filter((f) => f.type === "entry");
@@ -14758,13 +14825,27 @@ export function conditional(
     return result;
   }
 
+  // Scope each occurrence, including a discriminator repeated in each branch.
+  const discriminatorUsageScope = new WeakMap<object, object>();
+  const branchUsageScope = new WeakMap<object, object>();
+  const commandUsageScopes = new Map(
+    branchParsers.map(([key]) => [key, new WeakMap<object, object>()]),
+  );
+  const defaultUsageScope = new WeakMap<object, object>();
   // Build usage: discriminator (with literal value) + exclusive branches
-  const branchUsages: Usage[] = branchParsers.map(([key, p]) => [
-    ...appendLiteralToUsage(discriminator.usage, key),
-    ...p.usage,
-  ]);
+  const branchUsages: Usage[] = branchParsers.map(([key, p]) =>
+    scopeCommandUsage([
+      ...appendLiteralToUsage(
+        scopeCommandUsage(discriminator.usage, discriminatorUsageScope),
+        key,
+      ),
+      ...scopeCommandUsage(p.usage, branchUsageScope),
+    ], commandUsageScopes.get(key)!)
+  );
   if (defaultBranch) {
-    branchUsages.push(defaultBranch.usage);
+    branchUsages.push(
+      scopeCommandUsage(defaultBranch.usage, defaultUsageScope),
+    );
   }
 
   const usage: Usage = branchUsages.length > 1
@@ -16864,7 +16945,7 @@ export function conditional(
       return suggestSync(context, prefix);
     },
 
-    getDocFragments(_state, _defaultValue?) {
+    getDocFragments(state, _defaultValue?) {
       const fragments: DocFragment[] = [];
 
       // Add discriminator documentation
@@ -16925,7 +17006,55 @@ export function conditional(
         }
       }
 
-      return { fragments };
+      let selected = getSelectedCommandUsage(undefined);
+      if (state.kind === "available" && state.state.selectedBranch != null) {
+        const selection = state.state.selectedBranch;
+        const branch = selection.kind === "default"
+          ? defaultBranch
+          : branches[selection.key];
+        if (branch != null) {
+          const docs = branch.getDocFragments({
+            kind: "available",
+            state: getAnnotatedChildState(
+              state.state,
+              state.state.branchState,
+              branch,
+            ),
+          }, undefined);
+          if (selection.kind === "default") {
+            selected = getSelectedCommandUsage(scopeCommandDocMetadata(
+              getCommandDocMetadata(docs),
+              defaultUsageScope,
+            ));
+          } else {
+            const discriminatorDocs = discriminator.getDocFragments({
+              kind: "available",
+              state: getAnnotatedChildState(
+                state.state,
+                state.state.discriminatorState,
+                discriminator,
+              ),
+            }, undefined);
+            const metadata = collectCommandDocMetadata(
+              scopeCommandDocMetadata(
+                getCommandDocMetadata(discriminatorDocs),
+                discriminatorUsageScope,
+              ),
+              docs,
+              false,
+              branchUsageScope,
+            );
+            selected = getSelectedCommandUsage(scopeCommandDocMetadata(
+              metadata,
+              commandUsageScopes.get(selection.key)!,
+            ));
+          }
+        }
+      }
+      return withCommandDocMetadata(
+        { fragments },
+        withSelectedCommandUsage({}, selected),
+      );
     },
   } as Parser<
     Mode,

@@ -52,6 +52,7 @@ fi
 function completeInFish(
   commandLine: string,
   options: {
+    readonly args?: readonly string[];
     readonly mode?: "choice" | "file";
     readonly files?: readonly string[];
     readonly homeFiles?: readonly string[];
@@ -85,16 +86,20 @@ function completeInFish(
     const scriptPath = join(dir, "completion.fish");
     writeFileSync(
       scriptPath,
-      fish.generateScript("probecli", ["completion", "fish"]),
+      fish.generateScript("probecli", options.args ?? ["completion", "fish"]),
     );
+    execFileSync("fish", ["--no-config", "--no-execute", scriptPath], {
+      timeout: 10_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     const driverPath = join(dir, "driver.fish");
     writeFileSync(
       driverPath,
       options.currentToken == null
-        ? "source $argv[1]\ncomplete -C $argv[2]\n"
+        ? "source $argv[1]; or exit $status\ncomplete -C $argv[2]\n"
         : `set -g __probe_line $argv[2]
 set -g __probe_token $argv[3]
-source $argv[1]
+source $argv[1]; or exit $status
 function commandline
     switch $argv[1]
         case -poc
@@ -110,6 +115,7 @@ __probecli_complete
     const stdout = execFileSync(
       "fish",
       [
+        "--no-config",
         driverPath,
         scriptPath,
         commandLine,
@@ -142,6 +148,56 @@ __probecli_complete
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+describe("fish completion of fixed arguments", () => {
+  for (
+    const value of [
+      "normal",
+      "",
+      "two words",
+      "it's",
+      "\\",
+      "a\\",
+      "a\\b",
+      "a\\\\b",
+      "a\\\\\\b",
+      "a\\\\\\\\b",
+      "a\\'b",
+      "'\\",
+      "C:\\Users\\name\\",
+      "\\\\server\\share\\",
+      "\\$HOME; * ? [draft]",
+      "a\\\nb",
+      "a\\' (printf injected) \\'b",
+    ]
+  ) {
+    it(`preserves ${JSON.stringify(value)} in a fixed argument`, {
+      skip: !fishAvailable,
+    }, () => {
+      if (!fishAvailable) return;
+      const args = ["completion", "fish", value, "after"];
+      const result = completeInFish("probecli --format tw", { args });
+      deepStrictEqual(result.args, [...args, "--format", "tw"]);
+      deepStrictEqual(result.completions, ["two words", "two worlds"]);
+    });
+  }
+
+  for (
+    const args of [
+      ["completion", "fish", "a\\"],
+      ["completion", "fish", "a\\", "b\\", "after"],
+    ]
+  ) {
+    it(`preserves fixed argument boundaries in ${JSON.stringify(args)}`, {
+      skip: !fishAvailable,
+    }, () => {
+      if (!fishAvailable) return;
+      const result = completeInFish("probecli --format tw", { args });
+      deepStrictEqual(result.args, [...args, "--format", "tw"]);
+      deepStrictEqual(result.completions, ["two words", "two worlds"]);
+    });
+  }
+});
 
 describe("fish completion of quoted and escaped current tokens", () => {
   it("passes an unquoted prefix through unchanged", {

@@ -1,7 +1,14 @@
+import {
+  identifyCommandUsage,
+  scopeCommandUsage,
+} from "./internal/command-usage.ts";
 import { joinedFileSuggestion } from "./internal/joined-file-suggestion.ts";
 import {
   getCommandDocMetadata,
+  getSelectedCommandUsage,
+  scopeCommandDocMetadata,
   withCommandDocMetadata,
+  withSelectedCommandUsage,
 } from "./internal/command-doc-metadata.ts";
 import {
   defineKnownCompletion,
@@ -3202,6 +3209,8 @@ export function command<M extends Mode, T, TState>(
   const syncInnerParser = parser as Parser<"sync", T, TState>;
   const asyncInnerParser = parser as Parser<"async", T, TState>;
 
+  const commandUsageId = {};
+  const childUsageScope = new WeakMap<object, object>();
   // Use type assertion to allow both sync and async returns from parse method
   const result = {
     [Symbol.for("@optique/core/commandParser")]: true,
@@ -3210,15 +3219,15 @@ export function command<M extends Mode, T, TState>(
     $stateType: [],
     priority: 15, // Higher than options to match commands first
     usage: [
-      {
-        type: "command",
+      identifyCommandUsage({
+        type: "command" as const,
         name,
         ...(aliases.length > 0 && { aliases }),
         ...(hiddenAliases.length > 0 && { hiddenAliases }),
         ...(options.usageLine != null && { usageLine: options.usageLine }),
         ...(options.hidden != null && { hidden: options.hidden }),
-      },
-      ...parser.usage,
+      }, commandUsageId),
+      ...scopeCommandUsage(parser.usage, childUsageScope),
     ],
     leadingNames: new Set(commandNames),
     acceptingAnyToken: false,
@@ -3624,19 +3633,28 @@ export function command<M extends Mode, T, TState>(
       // can supply page fields through the public DocFragments contract.
       const innerMetadata = getCommandDocMetadata(innerFragments) ??
         innerFragments;
-      return withCommandDocMetadata({
-        ...innerFragments,
-        brief: innerFragments.brief ?? options.brief,
-        description: innerFragments.description ?? options.description,
-        footer: innerFragments.footer ?? options.footer,
-      }, {
-        origin: "command",
-        // Composite parents must not promote descriptions from ordinary entries
-        // or unselected subcommands into this command's page metadata.
-        brief: innerMetadata?.brief ?? options.brief,
-        description: innerMetadata?.description ?? options.description,
-        footer: innerMetadata?.footer ?? options.footer,
-      });
+      return withCommandDocMetadata(
+        {
+          ...innerFragments,
+          brief: innerFragments.brief ?? options.brief,
+          description: innerFragments.description ?? options.description,
+          footer: innerFragments.footer ?? options.footer,
+        },
+        withSelectedCommandUsage({
+          origin: "command",
+          // Composite parents must not promote descriptions from ordinary entries
+          // or unselected subcommands into this command's page metadata.
+          brief: innerMetadata?.brief ?? options.brief,
+          description: innerMetadata?.description ?? options.description,
+          footer: innerMetadata?.footer ?? options.footer,
+        }, [
+          commandUsageId,
+          ...getSelectedCommandUsage(scopeCommandDocMetadata(
+            getCommandDocMetadata(innerFragments),
+            childUsageScope,
+          )),
+        ]),
+      );
     },
     [Symbol.for("Deno.customInspect")]() {
       return `command(${JSON.stringify(name)})`;
