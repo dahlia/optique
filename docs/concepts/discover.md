@@ -33,7 +33,8 @@ Command modules
 
 A command module default-exports a value created with `defineCommand()`.
 The parser describes the command-specific arguments and options, `metadata`
-feeds help and completion output, and `handler` receives the parsed value.
+sets command aliases and controls help and completion output, and `handler`
+receives the parsed value.
 
 ~~~~ typescript twoslash
 import { defineCommand } from "@optique/discover/command";
@@ -61,6 +62,48 @@ When commands are passed manually to `runProgram()`, add a `path` field to the
 command definition.  File-based discovery can omit `path`; if it is present,
 it must match the path derived from the file name.  An empty path (`[]`)
 defines the root command when commands are passed manually.
+
+### Command aliases
+
+Set `metadata.aliases` to accept alternative names for a command:
+
+~~~~ typescript twoslash
+import { object } from "@optique/core/constructs";
+import { defineCommand, runProgram } from "@optique/discover";
+
+const buildCommand = defineCommand({
+  path: ["build"],
+  metadata: { aliases: ["b", "compile"] },
+  parser: object({}),
+  handler() {
+    console.log("Building.");
+  },
+});
+
+await runProgram({
+  commands: [buildCommand],
+  metadata: { name: "admin" },
+});
+~~~~
+
+`admin build`, `admin b`, and `admin compile` invoke the same handler.
+The resolved invocation path remains `["build"]`, including when an alias
+is used.
+
+The `path` array describes a command hierarchy, not a list of alternative
+names: `path: ["a", "b"]` defines the nested command `a b`.
+`metadata.aliases` supplies alternative names for the final segment, so adding
+`aliases: ["c"]` to that command also accepts `a c`, not `c` on its own.
+
+File-based discovery accepts the same `metadata.aliases` setting.  In
+*commands/build.ts*, define and default-export `buildCommand` without calling
+`runProgram()` in that file.  Omit `path` or keep `path: ["build"]`.
+No duplicate *b.ts* or *compile.ts* files are needed.
+
+Command aliases are accepted during parsing and suggested by shell completion,
+while help and usage show the canonical name.  See
+[command aliases](./primitives.md#command-aliases) for the shared behavior and
+name collision rules.
 
 
 Running a discovered program
