@@ -3,6 +3,12 @@
 Optique changelog
 =================
 
+Version 1.2.15
+--------------
+
+To be released.
+
+
 Version 1.2.14
 --------------
 
