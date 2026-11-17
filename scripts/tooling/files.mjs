@@ -34,6 +34,13 @@ export function ownedFiles(root, kind) {
   function visit(directory) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const file = join(directory, entry.name);
+      const local = relative(root, file).replaceAll("\\", "/");
+      // Match the bounded generated report trees in the root .gitignore,
+      // without excluding production directories such as src/coverage/.
+      if (
+        entry.isDirectory() &&
+        (local === "coverage" || /^packages\/[^/]+\/coverage$/.test(local))
+      ) continue;
       const excluded = rules.some(({ directory: base, config: data }) => {
         const local = relative(base, file).replaceAll("\\", "/");
         if (local.startsWith("../")) return false;

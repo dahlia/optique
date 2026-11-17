@@ -22,6 +22,9 @@ test("lint and format ownership preserve member, docs and fixture exclusions", (
     "packages/a/fixture/data.json": "{}",
     "packages/a/fixture/code.ts": "",
     "packages/a/dist/out.js": "",
+    "coverage/raw/report.json": "{}",
+    "packages/a/coverage/report.ts": "",
+    "packages/a/src/coverage/value.ts": "",
     "docs/test.ts": "",
     "README.md": "",
     "mise.toml": "",
@@ -38,6 +41,7 @@ test("lint and format ownership preserve member, docs and fixture exclusions", (
     }
     assert.deepEqual(ownedFiles(root, "lint"), [
       "packages/a/fixture/code.ts",
+      "packages/a/src/coverage/value.ts",
       "packages/a/src/index.ts",
       "scripts/tooling/check.mjs",
       "scripts/types/temporal.d.ts",
@@ -46,6 +50,7 @@ test("lint and format ownership preserve member, docs and fixture exclusions", (
       "deno.json",
       "packages/a/deno.json",
       "packages/a/fixture/code.ts",
+      "packages/a/src/coverage/value.ts",
       "packages/a/src/index.ts",
       "root.jsonc",
       "scripts/tooling/check.mjs",
