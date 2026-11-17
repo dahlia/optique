@@ -11,13 +11,39 @@ import {
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolveExecutable } from "./executable.ts";
+import { resolveExecutable, resolveRuntimeExecutable } from "./executable.ts";
 
 const testRoot = fileURLToPath(
   new URL("../../tmp/startup-tests/", import.meta.url),
 );
 
 describe("resolveExecutable", () => {
+  it(
+    "should resolve task-local runtimes from PATH without consulting mise",
+    {
+      skip: process.platform === "win32",
+    },
+    () => {
+      if (process.platform === "win32") return;
+      mkdirSync(testRoot, { recursive: true });
+      const root = mkdtempSync(join(testRoot, "runtime-"));
+      try {
+        symlinkSync(process.execPath, join(root, "deno"));
+        assert.equal(resolveRuntimeExecutable("deno", root), process.execPath);
+        writeFileSync(join(root, "mise"), "#!/bin/sh\nexit 1\n");
+        chmodSync(join(root, "mise"), 0o755);
+        assert.equal(resolveRuntimeExecutable("deno", root), process.execPath);
+        writeFileSync(join(root, "wrapper"), "#!/bin/sh\nexit 0\n");
+        chmodSync(join(root, "wrapper"), 0o755);
+        assert.throws(
+          () => resolveRuntimeExecutable("wrapper", root),
+          /real executable/,
+        );
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
   it(
     "should find an executable wrapper outside system directories",
     {

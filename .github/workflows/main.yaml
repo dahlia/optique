@@ -130,7 +130,8 @@ jobs:
     - name: Isolate tool installations and the Deno cache
       shell: pwsh
       run: |
-        "MISE_DATA_DIR=$env:RUNNER_TEMP/mise-deno-free" >> $env:GITHUB_ENV
+        # Keep mise-action's extraction and install paths on the same volume.
+        "MISE_DATA_DIR=$([IO.Path]::GetTempPath())optique-mise-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_ENV
         "DENO_DIR=$env:RUNNER_TEMP/deno-empty" >> $env:GITHUB_ENV
         "DENO_SENTINEL_LOG=$env:RUNNER_TEMP/deno-attempts.log" >> $env:GITHUB_ENV
     - uses: jdx/mise-action@v4

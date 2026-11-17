@@ -99,6 +99,9 @@ test("fresh Linux and Windows bootstrap exercises routine tasks under an audited
   assert.match(text, /os: \[ubuntu-latest, windows-latest\]/);
   assert.match(text, /cache: false/);
   assert.match(text, /install: false/);
+  // mise-action extracts through the OS temp directory and renames mise.exe.
+  // RUNNER_TEMP can be on D: while the extraction directory is on C:.
+  assert.match(text, /MISE_DATA_DIR=\$\(\[IO\.Path\]::GetTempPath\(\)\)/);
   assert.match(text, /MISE_AUTO_INSTALL: "0"/);
   assert.match(text, /MISE_TASK_RUN_AUTO_INSTALL: "false"/);
   assert.match(text, /DENO_DIR=.*RUNNER_TEMP/);
@@ -132,6 +135,153 @@ test("auxiliary compatibility workflows explicitly install Deno 2.9", () => {
     assert.match(text, /mise install deno@2\.9/);
     assert.match(text, /MISE_AUTO_INSTALL: "0"/);
     assert.match(text, /MISE_TASK_RUN_AUTO_INSTALL: "false"/);
+  }
+});
+
+test("canonical fixtures and Sacho inputs retain LF with autocrlf enabled", () => {
+  const tmp = fileURLToPath(new URL("tmp/", root));
+  mkdirSync(tmp, { recursive: true });
+  const directory = mkdtempSync(join(tmp, "sacho-checkout-"));
+  const files = [
+    "CHANGES.md",
+    "changes.d/next",
+    "changes.d/core/entry.md",
+    "packages/man/test/fixtures/markdown-reference/reference.expected.txt",
+  ];
+  function git(...args: string[]): string {
+    const result = spawnSync("git", ["-c", "core.autocrlf=true", ...args], {
+      cwd: directory,
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    return result.stdout;
+  }
+  try {
+    git("init", "-q");
+    writeFileSync(
+      join(directory, ".gitattributes"),
+      readFileSync(new URL(".gitattributes", root)),
+    );
+    mkdirSync(join(directory, "changes.d/core"), { recursive: true });
+    mkdirSync(
+      join(directory, "packages/man/test/fixtures/markdown-reference"),
+      {
+        recursive: true,
+      },
+    );
+    for (const file of files) writeFileSync(join(directory, file), "content\n");
+    git("add", "--", ".gitattributes", ...files);
+    for (const file of files) rmSync(join(directory, file));
+    git("checkout-index", "--all", "--force");
+    for (const file of files) {
+      assert.equal(
+        readFileSync(join(directory, file), "utf8"),
+        "content\n",
+        file,
+      );
+    }
+    assert.match(
+      git("check-attr", "merge", "--", "CHANGES.md"),
+      /merge: sacho/,
+    );
+    assert.match(
+      git("check-attr", "merge", "--", "changes.d/next"),
+      /merge: ours/,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("build selection uses portable quoting and cannot silently match no projects", () => {
+  const config = readFileSync(new URL("mise.toml", root), "utf8");
+  const build = config.split("[tasks.build]")[1].split("\n[tasks.")[0];
+  const command = build.match(
+    /run = 'pnpm --filter "([^"]+)" --fail-if-no-match -r build'/,
+  );
+  assert.ok(
+    command,
+    "Build must use double-quoted shell arguments and reject empty selection.",
+  );
+  const docs = JSON.parse(
+    readFileSync(new URL("docs/package.json", root), "utf8"),
+  );
+  assert.equal(
+    docs.scripts["build:packages"],
+    `cd ../ && pnpm --filter "${command[1]}" --fail-if-no-match -r build`,
+  );
+  const result = spawnSync(
+    "pnpm",
+    [
+      "--filter",
+      command[1],
+      "--fail-if-no-match",
+      "-r",
+      "list",
+      "--depth",
+      "-1",
+      "--json",
+    ],
+    { cwd: fileURLToPath(root), encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const projects: readonly { readonly path: string }[] = JSON.parse(
+    result.stdout,
+  );
+  assert.ok(projects.length > 0);
+  assert.ok(
+    projects.some((project) =>
+      project.path.replaceAll("\\", "/").endsWith("/packages/core"),
+    ),
+  );
+  assert.ok(
+    !projects.some((project) =>
+      project.path.replaceAll("\\", "/").endsWith("/docs"),
+    ),
+  );
+});
+
+test("Node workspace tests preserve POSIX-quoted globs on Windows", () => {
+  const config = readFileSync(new URL("mise.toml", root), "utf8");
+  const task = config.split('[tasks."test:node"]')[1].split("\n[tasks.")[0];
+  assert.match(
+    task,
+    /pnpm --config\.shell-emulator=true --no-bail run -r test/,
+  );
+  const tmp = fileURLToPath(new URL("tmp/", root));
+  mkdirSync(tmp, { recursive: true });
+  const directory = mkdtempSync(join(tmp, "quoted-tests-"));
+  try {
+    writeFileSync(join(directory, "pnpm-workspace.yaml"), "packages: []\n");
+    writeFileSync(
+      join(directory, "package.json"),
+      JSON.stringify({
+        private: true,
+        scripts: { test: "node --test 'probe.test.mjs'" },
+      }),
+    );
+    writeFileSync(
+      join(directory, "probe.test.mjs"),
+      'import { test } from "node:test";\ntest("quoted glob probe", () => {});\n',
+    );
+    const result = spawnSync(
+      "pnpm",
+      ["--config.shell-emulator=true", "run", "test"],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        timeout: 30_000,
+        env: Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([key]) => key !== "NODE_TEST_CONTEXT",
+          ),
+        ),
+      },
+    );
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /quoted glob probe/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 

@@ -73,8 +73,8 @@ stdout/stderr in each report's output table. Commands preserve argument
 boundaries and use `${REPO_ROOT}`, `${NODE_BIN}`, `${DENO_BIN}`, `${BUN_BIN}`,
 `${PNPM_BIN}`, `${CONSUMERS_ROOT}` and corresponding `*_DIR` tokens. Set the
 checkout root and the consumer root recorded in *consumer-root.json*. Resolve
-each binary with `mise which`, and use its directory for the matching `*_DIR`
-token.
+each runtime from the benchmark task's `PATH`, follow symlinks to its real
+executable, and use its directory for the matching `*_DIR` token.
 `expandCommand()` in *contract.ts* performs this substitution without a shell.
 Git is resolved from the invoking environment's `PATH` and uses that
 environment to read the checkout's revision before timing. Actual runtime

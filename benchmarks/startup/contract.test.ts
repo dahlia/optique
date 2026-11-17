@@ -84,7 +84,7 @@ describe("runChecked", () => {
     assert.throws(
       () =>
         runChecked(command("process.kill(process.pid, 'SIGTERM')"), expected),
-      /SIGTERM/,
+      process.platform === "win32" ? /"status":1,"signal":null/ : /SIGTERM/,
     );
     assert.throws(
       () =>
@@ -114,7 +114,7 @@ describe("portableCommand", () => {
 });
 
 describe("inputIdentity", () => {
-  it("should include untracked licenses and executable bits, excluding results and docs", () => {
+  it("should include untracked licenses, excluding results and docs", () => {
     mkdirSync(testRoot, { recursive: true });
     const root = mkdtempSync(join(testRoot, "identity-"));
     try {
@@ -135,12 +135,32 @@ describe("inputIdentity", () => {
       writeFileSync(join(root, "packages/core/LICENSE"), "override");
       const third = inputIdentity(root);
       assert.notEqual(third.hash, second.hash);
-      chmodSync(join(root, "benchmarks/startup/main.ts"), 0o755);
-      assert.notEqual(inputIdentity(root).hash, third.hash);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
+  it(
+    "should include executable bits on POSIX filesystems",
+    {
+      skip: process.platform === "win32",
+    },
+    () => {
+      if (process.platform === "win32") return;
+      mkdirSync(testRoot, { recursive: true });
+      const root = mkdtempSync(join(testRoot, "identity-mode-"));
+      try {
+        mkdirSync(join(root, "benchmarks/startup"), { recursive: true });
+        const source = join(root, "benchmarks/startup/main.ts");
+        writeFileSync(source, "source");
+        chmodSync(source, 0o644);
+        const before = inputIdentity(root);
+        chmodSync(source, 0o755);
+        assert.notEqual(inputIdentity(root).hash, before.hash);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("validateDenoGraph", () => {

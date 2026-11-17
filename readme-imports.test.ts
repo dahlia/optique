@@ -1,4 +1,12 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
@@ -36,11 +44,32 @@ const MOVED_SYMBOLS = new Map<string, string>([
 const IMPORT_RE =
   /import\s+\{([^}]+)\}\s+from\s+["']@optique\/core\/parser["']/g;
 
+it("README discovery ignores disposable fixtures and coverage reports", async () => {
+  const tmp = fileURLToPath(new URL("tmp/", import.meta.url));
+  await mkdir(tmp, { recursive: true });
+  const root = await mkdtemp(join(tmp, "readme-discovery-"));
+  try {
+    for (const directory of [
+      "tmp/fixture",
+      "coverage/report",
+      "packages/example",
+    ]) {
+      await mkdir(join(root, directory), { recursive: true });
+      await writeFile(join(root, directory, "README.md"), "");
+    }
+    assert.deepEqual(await findReadmeFiles(root), [
+      join(root, "packages/example/README.md"),
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function findReadmeFiles(dir: string): Promise<string[]> {
   const results: string[] = [];
   const entries = await readdir(dir);
   for (const entry of entries) {
-    if (entry === "node_modules" || entry === "dist" || entry === ".git") {
+    if (["node_modules", "dist", ".git", "tmp", "coverage"].includes(entry)) {
       continue;
     }
     const full = join(dir, entry);

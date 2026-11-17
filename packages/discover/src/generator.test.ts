@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import process from "node:process";
 import { describe, it } from "node:test";
 import {
   generateCommandsModule,
@@ -159,66 +160,80 @@ export default commandsFromModules(
     }
   });
 
-  it("should statically import URL-significant paths with encoded specifiers", async () => {
-    const dir = await makeTempDir();
-    try {
-      const commandsDir = join(dir, "src", "commands");
-      const outputFile = join(dir, "src", "generated.ts");
-      const queryPath = join(commandsDir, "build?fast.ts");
-      const fragmentPath = join(commandsDir, "user#name", "build%fast.ts");
-      await writeText(queryPath, "");
-      await writeText(fragmentPath, "");
+  for (const queryName of ["build#fast.ts", "build?fast.ts"]) {
+    it(
+      `should statically import URL-significant paths with encoded specifiers (${queryName})`,
+      {
+        skip: process.platform === "win32" && queryName.includes("?"),
+      },
+      async () => {
+        if (process.platform === "win32" && queryName.includes("?")) return;
+        const dir = await makeTempDir();
+        try {
+          const commandsDir = join(dir, "src", "commands");
+          const outputFile = join(dir, "src", "generated.ts");
+          const querySpecifier = `./commands/${encodeURIComponent(queryName)}`;
+          const queryModule = `./commands/${queryName}`;
+          const queryPath = join(commandsDir, queryName);
+          const fragmentPath = join(commandsDir, "user#name", "build%fast.ts");
+          await writeText(queryPath, "");
+          await writeText(fragmentPath, "");
 
-      const result = await generateCommandsModule({
-        dir: commandsDir,
-        outputFile,
-        extensions: [".ts"],
-      });
+          const result = await generateCommandsModule({
+            dir: commandsDir,
+            outputFile,
+            extensions: [".ts"],
+          });
 
-      assert.deepEqual(
-        result.files.map((file) => ({
-          importSpecifier: file.importSpecifier,
-          modulePath: file.modulePath,
-        })),
-        [
-          {
-            importSpecifier: "./commands/build%3Ffast.ts",
-            modulePath: "./commands/build?fast.ts",
-          },
-          {
-            importSpecifier: "./commands/user%23name/build%25fast.ts",
-            modulePath: "./commands/user#name/build%fast.ts",
-          },
-        ],
-      );
-      assert.match(
-        result.code,
-        new RegExp(
-          `// @ts-ignore: Percent-encoded import preserves ` +
-            `URL-significant command paths\\.\\nimport \\* as cmd0 ` +
-            `from "${escapeRegExp("./commands/build%3Ffast.ts")}";`,
-        ),
-      );
-      assert.match(
-        result.code,
-        new RegExp(
-          `// @ts-ignore: Percent-encoded import preserves ` +
-            `URL-significant command paths\\.\\nimport \\* as cmd1 ` +
-            `from "${escapeRegExp("./commands/user%23name/build%25fast.ts")}";`,
-        ),
-      );
-      assert.doesNotMatch(result.code, /await import/);
-      assert.doesNotMatch(result.code, /file:/);
-      assert.doesNotMatch(result.code, new RegExp(escapeRegExp(dir)));
-      assert.match(result.code, /"\.\/commands\/build\?fast\.ts": cmd0/);
-      assert.match(
-        result.code,
-        /"\.\/commands\/user#name\/build%fast\.ts": cmd1/,
-      );
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
+          assert.deepEqual(
+            result.files.map((file) => ({
+              importSpecifier: file.importSpecifier,
+              modulePath: file.modulePath,
+            })),
+            [
+              {
+                importSpecifier: querySpecifier,
+                modulePath: queryModule,
+              },
+              {
+                importSpecifier: "./commands/user%23name/build%25fast.ts",
+                modulePath: "./commands/user#name/build%fast.ts",
+              },
+            ],
+          );
+          assert.match(
+            result.code,
+            new RegExp(
+              `// @ts-ignore: Percent-encoded import preserves ` +
+                `URL-significant command paths\\.\\nimport \\* as cmd0 ` +
+                `from "${escapeRegExp(querySpecifier)}";`,
+            ),
+          );
+          assert.match(
+            result.code,
+            new RegExp(
+              `// @ts-ignore: Percent-encoded import preserves ` +
+                `URL-significant command paths\\.\\nimport \\* as cmd1 ` +
+                `from "${escapeRegExp("./commands/user%23name/build%25fast.ts")}";`,
+            ),
+          );
+          assert.doesNotMatch(result.code, /await import/);
+          assert.doesNotMatch(result.code, /file:/);
+          assert.doesNotMatch(result.code, new RegExp(escapeRegExp(dir)));
+          assert.match(
+            result.code,
+            new RegExp(escapeRegExp(`"${queryModule}": cmd0`)),
+          );
+          assert.match(
+            result.code,
+            /"\.\/commands\/user#name\/build%fast\.ts": cmd1/,
+          );
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  }
 
   it("should exclude the generated output file from the module map", async () => {
     const dir = await makeTempDir();

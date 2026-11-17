@@ -109,7 +109,10 @@ run = "deno task test"
 [tasks."test:node"]
 description = "Run the test suite using Node.js"
 depends = ["build"]
-run = ["pnpm run -r test", "pnpm run test"]
+run = [
+  "pnpm --config.shell-emulator=true --no-bail run -r test",
+  "pnpm run test",
+]
 
 [tasks."test:bun"]
 description = "Run the test suite using Bun"
@@ -146,7 +149,7 @@ run = "node scripts/tooling/format.mjs --write"
 
 [tasks.build]
 description = "Build all packages for npm publishing"
-run = "pnpm run --filter '!{docs}' -r build"
+run = 'pnpm --filter "!{docs}" --fail-if-no-match -r build'
 
 [tasks."docs:build"]
 description = "Build production documentation and check Twoslash examples"

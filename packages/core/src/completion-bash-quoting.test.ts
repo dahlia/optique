@@ -24,6 +24,10 @@ function hasBash(): boolean {
 
 const bashAvailable = hasBash();
 
+function supportsFilename(name: string): boolean {
+  return process.platform !== "win32" || !/[\\:*?"<>|]/.test(name);
+}
+
 function hasCompopt(): boolean {
   if (!bashAvailable) return false;
   try {
@@ -124,7 +128,13 @@ exit
     return {
       args: stdout.slice(0, -1).split("\0"),
       marker: existsSync(join(cwd, "marker")),
-      home,
+      home:
+        process.platform === "win32"
+          ? execFileSync("bash", ["-c", 'printf "%s" "$HOME"'], {
+              encoding: "utf8",
+              env: { ...process.env, HOME: home },
+            })
+          : home,
     };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -140,13 +150,14 @@ describe("Bash Readline file completion quoting", () => {
     "name\\slash.toml",
     "name[glob]*.toml",
   ]) {
+    const available = bashAvailable && supportsFilename(file);
     it(
       `inserts ${JSON.stringify(file)} as one literal argument`,
       {
-        skip: !bashAvailable,
+        skip: !available,
       },
       () => {
-        if (!bashAvailable) return;
+        if (!available) return;
         const result = completeAndExecute("probecli --config ./name\t", [file]);
         deepStrictEqual(result.args, ["--config", `./${file}`]);
         ok(!result.marker);
@@ -234,13 +245,14 @@ describe("Bash Readline file completion quoting", () => {
     "name`touch marker`.toml",
     "name\\$(touch marker).toml",
   ]) {
+    const available = bashAvailable && supportsFilename(file);
     it(
       `keeps ${JSON.stringify(file)} literal inside double quotes`,
       {
-        skip: !bashAvailable,
+        skip: !available,
       },
       () => {
-        if (!bashAvailable) return;
+        if (!available) return;
         const result = completeAndExecute('probecli "./name\t', [file]);
         deepStrictEqual(result.args, [`./${file}`]);
         ok(!result.marker);
@@ -251,10 +263,10 @@ describe("Bash Readline file completion quoting", () => {
   it(
     "keeps an embedded double quote literal inside double quotes",
     {
-      skip: !bashAvailable,
+      skip: !bashAvailable || !supportsFilename('name"quote.toml'),
     },
     () => {
-      if (!bashAvailable) return;
+      if (!bashAvailable || !supportsFilename('name"quote.toml')) return;
       const file = 'name"quote.toml';
       const result = completeAndExecute('probecli "./name\t', [file]);
       deepStrictEqual(result.args, [`./${file}`]);
@@ -264,10 +276,10 @@ describe("Bash Readline file completion quoting", () => {
   it(
     "keeps a backslash literal inside double quotes",
     {
-      skip: !bashAvailable,
+      skip: !bashAvailable || !supportsFilename("name\\slash.toml"),
     },
     () => {
-      if (!bashAvailable) return;
+      if (!bashAvailable || !supportsFilename("name\\slash.toml")) return;
       const file = "name\\slash.toml";
       const result = completeAndExecute('probecli "./name\t', [file]);
       deepStrictEqual(result.args, [`./${file}`]);

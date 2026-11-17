@@ -31,18 +31,20 @@ export function parseTestScript(script, docs = false) {
 
 /** Select every existing root/workspace Node script without running pnpm. */
 export function testPlans(root) {
-  const manifests = new Set([
-    "package.json",
-    ...globSync(
-      [
-        "packages/*/package.json",
-        "examples/*/package.json",
-        "docs/package.json",
-        "benchmarks/startup/package.json",
-      ],
-      { cwd: root },
-    ),
-  ]);
+  const manifests = new Set(
+    [
+      "package.json",
+      ...globSync(
+        [
+          "packages/*/package.json",
+          "examples/*/package.json",
+          "docs/package.json",
+          "benchmarks/startup/package.json",
+        ],
+        { cwd: root },
+      ),
+    ].map((file) => file.replaceAll("\\", "/")),
+  );
   return [...manifests].sort().flatMap((file) => {
     const manifest = JSON.parse(readFileSync(resolve(root, file), "utf8"));
     if (!manifest.scripts?.test) return [];

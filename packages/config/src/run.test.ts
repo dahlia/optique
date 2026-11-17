@@ -912,7 +912,7 @@ describe("run with config context", { concurrency: false }, () => {
       args: [],
     });
 
-    assert.equal(result, "project:/workspace/cache");
+    assert.equal(result, `project:${resolve("/workspace", "cache")}`);
   });
 
   test("custom load mode keeps default ConfigMeta type", async () => {
@@ -945,7 +945,7 @@ describe("run with config context", { concurrency: false }, () => {
       args: [],
     });
 
-    assert.equal(result, "/repo/build");
+    assert.equal(result, resolve("/repo", "build"));
   });
 
   describe("help/version/completion support", () => {

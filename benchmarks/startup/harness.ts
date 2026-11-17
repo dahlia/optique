@@ -31,7 +31,7 @@ import {
   verifyPreparedMap,
   withStableInputs,
 } from "./contract.ts";
-import { resolveExecutable } from "./executable.ts";
+import { resolveExecutable, resolveRuntimeExecutable } from "./executable.ts";
 import {
   consumerRoot,
   createConsumerRoot,
@@ -179,17 +179,7 @@ function manifest(): Manifest {
 }
 
 function binary(name: string): string {
-  const result = spawnSync("mise", ["which", name], { encoding: "utf8" });
-  if (result.status !== 0) {
-    throw new TypeError(`Cannot resolve runtime ${name}: ${result.stderr}`);
-  }
-  const path = realpathSync(result.stdout.trim());
-  if (
-    path.includes(`${sep}shims${sep}`) ||
-    readFileSync(path).subarray(0, 2).toString() === "#!"
-  )
-    throw new TypeError(`Runtime must be a real executable: ${path}`);
-  return path;
+  return resolveRuntimeExecutable(name);
 }
 function environment(
   binaries: Readonly<Record<string, string>>,
@@ -1149,7 +1139,7 @@ function measureCases(
       portableCommand(command, replacements),
     ),
     commandTokens:
-      "REPO_ROOT=checkout; CONSUMERS_ROOT=owned external directory from consumer-root.json; *_BIN=mise which runtime; *_DIR=dirname of that binary",
+      "REPO_ROOT=checkout; CONSUMERS_ROOT=owned external directory from consumer-root.json; *_BIN=real runtime from task PATH; *_DIR=dirname of that binary",
   };
   const sanitized = record(
     portableEvidence(metadata, root, consumerRoot(work)),

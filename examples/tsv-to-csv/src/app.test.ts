@@ -321,11 +321,12 @@ describe("program", () => {
     inTemporaryDirectory(async (directory) => {
       const result = await captureRun(program, {
         ...formatting,
+        maxWidth: 12,
         args: [join(directory, "missing.tsv")],
       });
       assert.equal(result.kind, "exited");
       assert.equal(result.exitCode, 1);
-      assert.match(result.stderr, /does not exist/);
+      assert.match(result.stderr, /does\s+not\s+exist/);
     }));
 
   it("returns the parsed options", () =>

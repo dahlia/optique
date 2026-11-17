@@ -33,6 +33,13 @@ const ZSH_PTY_TEST_TIMEOUT = 10_000;
 // default five-second test timeout.
 const pwshTestTimeout = 30_000;
 
+function bashPath(path: string): string {
+  if (process.platform !== "win32") return path;
+  return execFileSync("bash", ["-c", 'cygpath -u "$1"', "optique-path", path], {
+    encoding: "utf8",
+  }).replace(/\r?\n$/, "");
+}
+
 // Helper functions for shell availability and testing
 function getStdoutFromExecError(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null) return undefined;
@@ -69,13 +76,34 @@ function runCommand(
     readonly timeout?: number;
   } = {},
 ): string {
+  // Avoid Windows' command-line length limit for generated Bash scripts.
+  const bashInput =
+    command === "bash" &&
+    args[0] === "-c" &&
+    args.length === 2 &&
+    options.input == null
+      ? args[1]
+      : undefined;
+  const input =
+    bashInput == null
+      ? options.input
+      : process.platform === "win32"
+        ? bashInput.replaceAll(
+            /export PATH="([^"\n]+):\$PATH"/g,
+            (_match, directory: string) =>
+              `export PATH="$(cygpath -u '${directory.replaceAll("'", "'\\''")}'):$PATH"`,
+          )
+        : bashInput;
   try {
     return (
-      execFileSync(command, [...args], {
+      execFileSync(command, bashInput == null ? [...args] : ["-s"], {
         encoding: "utf8",
         cwd: options.cwd,
-        input: options.input,
-        stdio: options.stdio,
+        input,
+        stdio:
+          bashInput != null && options.stdio === "ignore"
+            ? ["pipe", "ignore", "ignore"]
+            : options.stdio,
         env:
           options.env == null ? undefined : { ...process.env, ...options.env },
         timeout: options.timeout,
@@ -87,6 +115,25 @@ function runCommand(
     throw error;
   }
 }
+
+it(
+  "runs large Bash fixture scripts without putting them on the command line",
+  {
+    skip: !isShellAvailable("bash"),
+  },
+  () => {
+    if (!isShellAvailable("bash")) return;
+    const script = "# fixture padding\n".repeat(3000) + "printf 'ok\\n'\n";
+    deepStrictEqual(runCommand("bash", ["-c", script]), "ok\n");
+    deepStrictEqual(
+      runCommand("bash", ["-c", "read -r value; printf '%s\\n' \"$value\""], {
+        input: "fixture input\n",
+      }),
+      "fixture input\n",
+    );
+    throws(() => runCommand("bash", ["-c", "exit 7"], { stdio: "ignore" }));
+  },
+);
 
 function isShellAvailable(shell: string): boolean {
   try {
@@ -731,6 +778,12 @@ ${scenario.setup}`,
 });
 
 function createTestCli(tempDir: string): string {
+  if (process.platform === "win32") {
+    writeFileSync(
+      join(tempDir, "test-cli.cmd"),
+      '@echo off\r\nif not "%~1"=="completion" exit /b 1\r\necho git\tGit operations\r\necho docker\tDocker container operations\r\n',
+    );
+  }
   const cliScript = `#!/bin/bash
 case "$1" in
   "completion")
@@ -953,8 +1006,8 @@ function testNuCompletion(
     const functionName = `nu-complete-${safeName}`;
     // Add cliDir to PATH so the program can be found
     const testScript = `
-$env.PATH = ($env.PATH | prepend "${cliDir}")
-source ${scriptPath}
+$env.PATH = ($env.PATH | prepend ${JSON.stringify(cliDir)})
+source ${JSON.stringify(scriptPath)}
 
 # Call the completion function with the command context using 'do'
 do { ${functionName} "${programName} " }
@@ -2042,7 +2095,7 @@ fi
 
       try {
         // Compute the tilde-relative path for the pattern
-        const tildeDir = tempDir.replace(home, "~") + "/";
+        const tildeDir = tempDir.replace(home, "~").replaceAll("\\", "/") + "/";
         // CLI emits __FILE__ with a tilde-prefixed pattern
         const cliScript = `#!/bin/bash
 printf '__FILE__:file::${tildeDir}:0\\n'
@@ -2104,7 +2157,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         writeFileSync(join(absSrcDir, "app.ts"), "");
 
         const cliScript = `#!/bin/bash
-printf '__FILE__:file::${absSrcDir}/:0\\n'
+printf '__FILE__:file::${bashPath(absSrcDir)}/:0\\n'
 `;
         const cliPath = join(tempDir, "abs-pat-cli");
         writeFileSync(cliPath, cliScript, { mode: 0o755 });
@@ -2733,35 +2786,42 @@ fi
       }
     });
 
-    it("should complete non-regular files in any mode", (t) => {
-      if (!isShellAvailable("bash")) {
-        t.skip("bash not available");
-        return;
-      }
+    it(
+      "should complete non-regular files in any mode",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Windows does not provide POSIX FIFO filesystem nodes.
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("bash")) {
+          t.skip("bash not available");
+          return;
+        }
 
-      // Skip on platforms without mkfifo
-      try {
-        runCommand("which", ["mkfifo"], { stdio: "pipe" });
-      } catch {
-        t.skip("mkfifo not available");
-        return;
-      }
+        // Skip on platforms without mkfifo
+        try {
+          runCommand("which", ["mkfifo"], { stdio: "pipe" });
+        } catch {
+          t.skip("mkfifo not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(join(tmpdir(), "bash-any-fifo-"));
+        const tempDir = mkdtempSync(join(tmpdir(), "bash-any-fifo-"));
 
-      try {
-        // CLI that emits __FILE__:any (complete all filesystem entries)
-        const cliScript = `#!/bin/bash
+        try {
+          // CLI that emits __FILE__:any (complete all filesystem entries)
+          const cliScript = `#!/bin/bash
 printf '__FILE__:any:::0\\n'
 `;
-        const cliPath = join(tempDir, "any-cli");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
-        writeFileSync(join(tempDir, "regular.txt"), "");
-        runCommand("mkfifo", [join(tempDir, "myfifo")]);
+          const cliPath = join(tempDir, "any-cli");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
+          writeFileSync(join(tempDir, "regular.txt"), "");
+          runCommand("mkfifo", [join(tempDir, "myfifo")]);
 
-        const script = bash.generateScript("any-cli");
+          const script = bash.generateScript("any-cli");
 
-        const testScript = `
+          const testScript = `
 export PATH="${tempDir}:$PATH"
 source /dev/stdin <<'COMPLETION_SCRIPT'
 ${script}
@@ -2773,20 +2833,21 @@ _any-cli 2>/dev/null
 printf "%s\\n" "\${COMPREPLY[@]}"
 `;
 
-        const result = runCommand("bash", ["-c", testScript], {
-          cwd: tempDir,
-        });
+          const result = runCommand("bash", ["-c", testScript], {
+            cwd: tempDir,
+          });
 
-        const completions = result
-          .trim()
-          .split("\n")
-          .filter((l) => l.length > 0);
-        ok(completions.some((c) => c.includes("regular.txt")));
-        ok(completions.some((c) => c.includes("myfifo")));
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          const completions = result
+            .trim()
+            .split("\n")
+            .filter((l) => l.length > 0);
+          ok(completions.some((c) => c.includes("regular.txt")));
+          ok(completions.some((c) => c.includes("myfifo")));
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should expand tilde prefix in file completion", (t) => {
       if (!isShellAvailable("bash")) {
@@ -2814,7 +2875,7 @@ printf '__FILE__:file:::0\\n'
         const script = bash.generateScript("tilde-cli");
 
         // Compute the tilde-relative path prefix
-        const relDir = tempDir.replace(home, "~");
+        const relDir = tempDir.replace(home, "~").replaceAll("\\", "/");
         const testScript = `
 export PATH="${tempDir}:$PATH"
 source /dev/stdin <<'COMPLETION_SCRIPT'
@@ -2872,7 +2933,7 @@ printf '__FILE__:file:::0\\n'
         const script = bash.generateScript("tilde-dot-cli");
 
         // Complete with ~/.optique-tilde-dot-test/ prefix
-        const relDir = hiddenDir.replace(home, "~");
+        const relDir = hiddenDir.replace(home, "~").replaceAll("\\", "/");
         const testScript = `
 export PATH="${hiddenDir}:$PATH"
 source /dev/stdin <<'COMPLETION_SCRIPT'
@@ -8000,7 +8061,7 @@ printf '__FILE__:file::src/:0\\n'
             `$env:PATH = "${tempDir};" + $env:PATH\n` +
               `. "${scriptPath}"\n` +
               `$result = TabExpansion2 -inputScript 'nested-cli src\\' ` +
-              `-cursorColumn 16\n` +
+              `-cursorColumn ${"nested-cli src\\".length}\n` +
               `$result.CompletionMatches | ` +
               `ForEach-Object { $_.CompletionText }\n`,
           );
@@ -9467,7 +9528,8 @@ __globapp_complete
 
       try {
         const cliPath = createTestCli(tempDir);
-        const programName = "test-cli";
+        const programName =
+          process.platform === "win32" ? "test-cli.cmd" : "test-cli";
         const script = nu.generateScript(programName, ["completion", "nu"]);
         const completions = testNuCompletion(
           script,

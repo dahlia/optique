@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import { resolve } from "node:path";
 import { test } from "node:test";
 import {
   parseTestScript,
@@ -29,18 +32,19 @@ test("direct runner preserves known flags/globs and rejects unsupported scripts"
   ]) {
     assert.throws(() => parseTestScript(script), /Unsupported/);
   }
+  const root = resolve("tmp/coverage-command-root");
   const command = testCommand(
-    "/repo",
+    root,
     {
       directory: "packages/a",
       script: "node --test src/*.test.ts",
     },
     3,
   );
-  assert.equal(command.cwd, "/repo/packages/a");
+  assert.equal(command.cwd, resolve(root, "packages/a"));
   assert.ok(
     command.args.includes(
-      "--test-reporter-destination=/repo/coverage/junit/3.xml",
+      `--test-reporter-destination=${resolve(root, "coverage/junit/3.xml")}`,
     ),
   );
   assert.equal(command.args.at(-1), "src/*.test.ts");
@@ -65,6 +69,29 @@ test("discovery retains root, skills, docs, examples and benchmark assertions", 
     plans.find((plan) => plan.directory === "packages/core/").script,
     "node --test",
   );
+});
+
+test("discovery accepts Windows manifest separators for docs scripts", (t) => {
+  const read = fs.readFileSync;
+  t.mock.method(fs, "globSync", () => ["docs\\package.json"]);
+  t.mock.method(fs, "readFileSync", (file, ...options) =>
+    read(
+      typeof file === "string" ? file.replaceAll("\\", "/") : file,
+      ...options,
+    ),
+  );
+  syncBuiltinESMExports();
+  try {
+    const plans = testPlans(process.cwd());
+    const docs = plans.find((plan) => plan.directory === "docs/");
+    assert.ok(docs);
+    assert.deepEqual(testCommand(process.cwd(), docs, 0).args.slice(-1), [
+      ".vitepress/*.test.mts",
+    ]);
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
 });
 
 test("direct child preserves cwd/env, propagates failure and cancels", async () => {
