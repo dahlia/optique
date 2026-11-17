@@ -1,4 +1,5 @@
 import { z } from "zod";
+import process from "node:process";
 import { bindConfig, createConfigContext } from "@optique/config";
 import { bindEnv, createEnvContext } from "@optique/env";
 import { object } from "@optique/core/constructs";
@@ -18,10 +19,10 @@ import { print, runAsync } from "@optique/run";
 //   bindEnv(bindConfig(option(...)))  →  CLI > Env > Config > Default
 //
 // Usage:
-//   deno run -A examples/patterns/env-config-composition.ts --host example.com
-//   deno run -A examples/patterns/env-config-composition.ts -c config.json
-//   MYAPP_HOST=env.example.com deno run -A examples/patterns/env-config-composition.ts
-//   MYAPP_PORT=9090 deno run -A examples/patterns/env-config-composition.ts -c config.json
+//   node examples/patterns/env-config-composition.ts --host example.com
+//   node examples/patterns/env-config-composition.ts -c config.json
+//   MYAPP_HOST=env.example.com node examples/patterns/env-config-composition.ts
+//   MYAPP_PORT=9090 node examples/patterns/env-config-composition.ts -c config.json
 
 // Define the config file schema using Zod
 const configSchema = z.object({
@@ -83,7 +84,7 @@ const result = await runAsync(parser, {
   contextOptions: {
     getConfigPath: (parsed) => parsed.config,
   },
-  args: Deno.args,
+  args: process.argv.slice(2),
 });
 
 print(message`Server configuration:`);
@@ -102,16 +103,16 @@ if (result.config) {
 // Examples:
 //
 //   # All defaults (localhost:3000)
-//   $ deno run -A examples/patterns/env-config-composition.ts
+//   $ node examples/patterns/env-config-composition.ts
 //
 //   # Config file provides values
-//   $ deno run -A examples/patterns/env-config-composition.ts -c config.json
+//   $ node examples/patterns/env-config-composition.ts -c config.json
 //   Host: config.example.com, Port: 8080
 //
 //   # Env overrides config
-//   $ MYAPP_HOST=env.example.com deno run -A examples/patterns/env-config-composition.ts -c config.json
+//   $ MYAPP_HOST=env.example.com node examples/patterns/env-config-composition.ts -c config.json
 //   Host: env.example.com, Port: 8080
 //
 //   # CLI overrides everything
-//   $ MYAPP_HOST=env.example.com deno run -A examples/patterns/env-config-composition.ts -c config.json --host cli.example.com
+//   $ MYAPP_HOST=env.example.com node examples/patterns/env-config-composition.ts -c config.json --host cli.example.com
 //   Host: cli.example.com, Port: 8080

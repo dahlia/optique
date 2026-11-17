@@ -1,4 +1,5 @@
 import { z } from "zod";
+import process from "node:process";
 import { bindConfig, createConfigContext } from "@optique/config";
 import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
@@ -11,9 +12,9 @@ import { print, runAsync } from "@optique/run";
 // configuration file integration with automatic validation.
 //
 // Usage:
-//   deno run -A examples/patterns/config-file-context.ts --host example.com
-//   deno run -A examples/patterns/config-file-context.ts --config config.json
-//   deno run -A examples/patterns/config-file-context.ts --config config.json --port 8080
+//   node examples/patterns/config-file-context.ts --host example.com
+//   node examples/patterns/config-file-context.ts --config config.json
+//   node examples/patterns/config-file-context.ts --config config.json --port 8080
 //
 // For custom SourceContext implementation, see custom-source-context.ts
 
@@ -63,7 +64,7 @@ const result = await runAsync(parser, {
   contextOptions: {
     getConfigPath: (parsed) => parsed.config,
   },
-  args: Deno.args,
+  args: process.argv.slice(2),
 });
 
 print(message`Configuration loaded:`);

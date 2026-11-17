@@ -38,8 +38,8 @@ Use [mise] to manage runtime versions and run development tasks.
 
 ### Package manager
 
-This project uses Deno as the primary development tool and pnpm for
-npm-related tasks (building for npm publishing).
+This project uses Node.js and pnpm for dependency installation and repository
+scripts.  Tasks that still need Deno select it explicitly.
 
 > [!IMPORTANT]
 > Do *not* use npm or Yarn as package managers in this project.  Always use
@@ -48,23 +48,26 @@ npm-related tasks (building for npm publishing).
 ### Installation
 
 ~~~~ bash
-mise install  # Install runtime tools (Deno, Node.js, Bun, pnpm)
-mise deps     # Install project dependencies
+mise install          # Install Node.js, Bun, and development tools
+mise deps             # Install workspace dependencies with pnpm
+mise run setup:deno   # Prepare Deno compatibility dependencies (optional)
 ~~~~
+
+When a task needs Deno, mise installs and selects its task-local version.
 
 ### Quality checks
 
 ~~~~ bash
 mise check       # Type check, lint, format check, and dry-run publish
-deno fmt         # Format code
-deno lint        # Run linter
+mise run fmt     # Format code and Markdown
+mise check:lint  # Run the linter
 ~~~~
 
 ### Testing
 
 ~~~~ bash
-mise test:deno   # Run tests with Deno (primary test environment)
 mise test:node   # Run tests with Node.js
+mise test:deno   # Run Deno compatibility tests
 mise test:bun    # Run tests with Bun
 mise test        # Run all checks and tests across all runtimes
 ~~~~

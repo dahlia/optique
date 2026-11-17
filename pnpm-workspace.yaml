@@ -30,7 +30,7 @@ allowBuilds:
   workerd: true
 
 engineStrict: true
-nodeVersion: 24.15.0
+nodeVersion: 26.13.1
 # Temporary popup compilation fix from shikijs/shiki#1349 at
 # a5afc63679578b5d197665a8286ada283e76347b. Remove after verifying that
 # the installed release contains the fix and documentation checks pass.

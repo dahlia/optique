@@ -1,4 +1,6 @@
 import { object } from "@optique/core/constructs";
+import { readFile } from "node:fs/promises";
+import process from "node:process";
 import type {
   Annotations,
   ParserValuePlaceholder,
@@ -22,9 +24,9 @@ import { print } from "@optique/run";
 // - Complex transformation logic before annotation injection
 //
 // Usage:
-//   deno run -A examples/patterns/custom-source-context.ts --host example.com
-//   deno run -A examples/patterns/custom-source-context.ts --config config.json
-//   deno run -A examples/patterns/custom-source-context.ts --config config.json --port 8080
+//   node examples/patterns/custom-source-context.ts --host example.com
+//   node examples/patterns/custom-source-context.ts --config config.json
+//   node examples/patterns/custom-source-context.ts --config config.json --port 8080
 
 // Symbol for our config context annotations
 const configKey = Symbol.for("@example/config");
@@ -63,7 +65,7 @@ function createConfigContext(): ConfigContext {
 
       try {
         // Read and parse the config file
-        const content = await Deno.readTextFile(configPath);
+        const content = await readFile(configPath, "utf8");
         const data: ConfigData = JSON.parse(content);
 
         // Custom validation (this is where you'd add logic
@@ -116,7 +118,7 @@ const result = await runWith(
   "custom-context-example",
   [configContext],
   {
-    args: Deno.args,
+    args: process.argv.slice(2),
     help: { option: true },
     contextOptions: {
       // getConfigPath is required because configContext declares ConfigContextOptions.

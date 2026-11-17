@@ -60,6 +60,108 @@ patchedDependencies:
 
 importers:
 
+  .:
+    devDependencies:
+      '@clack/prompts':
+        specifier: 'catalog:'
+        version: 1.6.0
+      '@inquirer/prompts':
+        specifier: 'catalog:'
+        version: 8.3.0(@types/node@24.12.4)
+      '@jellybrick/dbus-next':
+        specifier: 'catalog:'
+        version: 0.11.3
+      '@logtape/file':
+        specifier: 'catalog:'
+        version: 2.2.2(@logtape/logtape@2.2.2)
+      '@logtape/logtape':
+        specifier: 'catalog:'
+        version: 2.2.2
+      '@napi-rs/keyring':
+        specifier: 'catalog:'
+        version: 2.0.0
+      '@optique/clack':
+        specifier: 'workspace:'
+        version: link:packages/clack
+      '@optique/config':
+        specifier: 'workspace:'
+        version: link:packages/config
+      '@optique/core':
+        specifier: 'workspace:'
+        version: link:packages/core
+      '@optique/derived-defaults':
+        specifier: 'workspace:'
+        version: link:packages/derived-defaults
+      '@optique/discover':
+        specifier: 'workspace:'
+        version: link:packages/discover
+      '@optique/env':
+        specifier: 'workspace:'
+        version: link:packages/env
+      '@optique/git':
+        specifier: 'workspace:'
+        version: link:packages/git
+      '@optique/inquirer':
+        specifier: 'workspace:'
+        version: link:packages/inquirer
+      '@optique/keyring':
+        specifier: 'workspace:'
+        version: link:packages/keyring
+      '@optique/logtape':
+        specifier: 'workspace:'
+        version: link:packages/logtape
+      '@optique/man':
+        specifier: 'workspace:'
+        version: link:packages/man
+      '@optique/prompt':
+        specifier: 'workspace:'
+        version: link:packages/prompt
+      '@optique/run':
+        specifier: 'workspace:'
+        version: link:packages/run
+      '@optique/standard-schema':
+        specifier: 'workspace:'
+        version: link:packages/standard-schema
+      '@optique/temporal':
+        specifier: 'workspace:'
+        version: link:packages/temporal
+      '@optique/testing':
+        specifier: 'workspace:'
+        version: link:packages/testing
+      '@optique/valibot':
+        specifier: 'workspace:'
+        version: link:packages/valibot
+      '@optique/zod':
+        specifier: 'workspace:'
+        version: link:packages/zod
+      '@standard-schema/spec':
+        specifier: 'catalog:'
+        version: 1.1.0
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.12.4
+      fast-check:
+        specifier: 'catalog:'
+        version: 4.7.0
+      isomorphic-git:
+        specifier: 'catalog:'
+        version: 1.36.1
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.13.0(supports-color@10.2.2)(typescript@5.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      valibot:
+        specifier: 'catalog:'
+        version: 1.2.0(typescript@5.8.3)
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
+
   benchmarks/startup:
     devDependencies:
       '@types/node':

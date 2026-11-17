@@ -13,9 +13,9 @@ import { print, run } from "@optique/run";
 // deployment branch.  Run without --deploy and the prompt never happens.
 //
 // Usage:
-//   deno run -A examples/patterns/deferred-values.ts --service-name api
-//   deno run -A examples/patterns/deferred-values.ts --deploy --service-name api
-//   deno run -A examples/patterns/deferred-values.ts \
+//   node examples/patterns/deferred-values.ts --service-name api
+//   node examples/patterns/deferred-values.ts --deploy --service-name api
+//   node examples/patterns/deferred-values.ts \
 //     --deploy --service-name api --api-token sekret
 
 // A stand-in for an interactive prompt or a credential lookup.  It runs only
@@ -72,19 +72,19 @@ if (result.deploy) {
 
 // Examples:
 //
-//   $ deno run -A examples/patterns/deferred-values.ts --service-name api
+//   $ node examples/patterns/deferred-values.ts --service-name api
 //   Service: api.
 //   API token source: fallback.
 //   Skipping deployment; the API token was never resolved.
 //
-//   $ deno run -A examples/patterns/deferred-values.ts --deploy --service-name api
+//   $ node examples/patterns/deferred-values.ts --deploy --service-name api
 //   Service: api.
 //   API token source: fallback.
 //   Prompting for an API token for api…
 //   Authenticating and deploying api…
 //   Deployed api.
 //
-//   $ deno run -A examples/patterns/deferred-values.ts \
+//   $ node examples/patterns/deferred-values.ts \
 //       --deploy --service-name api --api-token sekret
 //   Service: api.
 //   API token source: specified.

@@ -40,7 +40,7 @@ jobs:
         experimental: true
         install: true
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
-    - run: deno task test --coverage --junit-path=junit.xml
+    - run: mise exec deno@2.9 -- deno task test --coverage --junit-path=junit.xml
     - if: ${{ !cancelled() }}
       uses: codecov/codecov-action@v6
       with:
@@ -139,7 +139,7 @@ jobs:
         # jsr.io is flaky these days; deno publish often hangs until it
         # times out, but eventually succeeds after enough retries.
         for attempt in $(seq 1 30); do
-          if timeout 60 deno publish --allow-dirty; then
+          if timeout 60 mise exec deno@2.9 -- deno publish --allow-dirty; then
             break
           elif [[ "$attempt" -eq 30 ]]; then
             echo "deno publish failed after $attempt attempts." >&2

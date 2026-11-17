@@ -7,9 +7,9 @@ import process from "node:process";
 // defineCommand() result with its parser, metadata, and handler.
 //
 // Usage:
-//   deno run -A examples/patterns/command-discovery.ts build --target web
-//   deno run -A examples/patterns/command-discovery.ts deploy --env staging
-//   deno run -A examples/patterns/command-discovery.ts --help
+//   node examples/patterns/command-discovery.ts build --target web
+//   node examples/patterns/command-discovery.ts deploy --env staging
+//   node examples/patterns/command-discovery.ts --help
 
 await runProgram({
   dir: new URL("./command-discovery/", import.meta.url),
