@@ -105,9 +105,11 @@ function getJsDocFor(sourceText: string, functionName: string): string {
 }
 
 function applyCasing(input: string, uppercaseAt: readonly boolean[]): string {
-  return [...input].map((character, index) =>
-    uppercaseAt[index] ? character.toUpperCase() : character.toLowerCase()
-  ).join("");
+  return [...input]
+    .map((character, index) =>
+      uppercaseAt[index] ? character.toUpperCase() : character.toLowerCase(),
+    )
+    .join("");
 }
 
 function getSyncAnnotations(context: {
@@ -144,15 +146,7 @@ describe("bool()", () => {
 
     it("parses false literals", () => {
       const parser = bool();
-      const falseLiterals = [
-        "false",
-        "FALSE",
-        "0",
-        "no",
-        "NO",
-        "off",
-        "OFF",
-      ];
+      const falseLiterals = ["false", "FALSE", "0", "no", "NO", "off", "OFF"];
 
       for (const literal of falseLiterals) {
         const result = parser.parse(literal);
@@ -195,7 +189,7 @@ describe("bool()", () => {
                 minLength: literal.length,
                 maxLength: literal.length,
               }),
-            )
+            ),
           ),
           fc.stringMatching(/^\s*$/u),
           fc.stringMatching(/^\s*$/u),
@@ -205,10 +199,7 @@ describe("bool()", () => {
             const result = parser.parse(`${leading}${casedLiteral}${trailing}`);
 
             assert.ok(result.success);
-            assert.equal(
-              result.value,
-              trueBoolLiteralSet.has(literal),
-            );
+            assert.equal(result.value, trueBoolLiteralSet.has(literal));
           },
         ),
         propertyParameters,
@@ -220,9 +211,9 @@ describe("bool()", () => {
 
       fc.assert(
         fc.property(
-          fc.string().filter((input) =>
-            !boolLiteralSet.has(input.trim().toLowerCase())
-          ),
+          fc
+            .string()
+            .filter((input) => !boolLiteralSet.has(input.trim().toLowerCase())),
           (input) => {
             const result = parser.parse(input);
 
@@ -280,43 +271,51 @@ describe("bool()", () => {
 
     it("suggests all accepted literals for empty prefix", () => {
       const parser = bool();
-      assert.deepEqual([...parser.suggest?.("") ?? []], [
-        { kind: "literal", text: "true" },
-        { kind: "literal", text: "1" },
-        { kind: "literal", text: "yes" },
-        { kind: "literal", text: "on" },
-        { kind: "literal", text: "false" },
-        { kind: "literal", text: "0" },
-        { kind: "literal", text: "no" },
-        { kind: "literal", text: "off" },
-      ]);
+      assert.deepEqual(
+        [...(parser.suggest?.("") ?? [])],
+        [
+          { kind: "literal", text: "true" },
+          { kind: "literal", text: "1" },
+          { kind: "literal", text: "yes" },
+          { kind: "literal", text: "on" },
+          { kind: "literal", text: "false" },
+          { kind: "literal", text: "0" },
+          { kind: "literal", text: "no" },
+          { kind: "literal", text: "off" },
+        ],
+      );
     });
 
     it("filters suggestions by prefix", () => {
       const parser = bool();
-      assert.deepEqual([...parser.suggest?.("t") ?? []], [
-        { kind: "literal", text: "true" },
-      ]);
+      assert.deepEqual(
+        [...(parser.suggest?.("t") ?? [])],
+        [{ kind: "literal", text: "true" }],
+      );
     });
 
     it("filters suggestions case-insensitively", () => {
       const parser = bool();
-      assert.deepEqual([...parser.suggest?.("T") ?? []], [
-        { kind: "literal", text: "true" },
-      ]);
+      assert.deepEqual(
+        [...(parser.suggest?.("T") ?? [])],
+        [{ kind: "literal", text: "true" }],
+      );
     });
 
     it("matches multiple suggestions with shared prefix", () => {
       const parser = bool();
-      assert.deepEqual([...parser.suggest?.("o") ?? []], [
-        { kind: "literal", text: "on" },
-        { kind: "literal", text: "off" },
-      ]);
+      assert.deepEqual(
+        [...(parser.suggest?.("o") ?? [])],
+        [
+          { kind: "literal", text: "on" },
+          { kind: "literal", text: "off" },
+        ],
+      );
     });
 
     it("returns empty array for unmatched prefix", () => {
       const parser = bool();
-      assert.deepEqual([...parser.suggest?.("xyz") ?? []], []);
+      assert.deepEqual([...(parser.suggest?.("xyz") ?? [])], []);
     });
 
     it("should only suggest accepted literals matching the prefix", () => {
@@ -324,16 +323,18 @@ describe("bool()", () => {
 
       fc.assert(
         fc.property(
-          fc.constantFrom(...boolLiterals).chain((literal) =>
-            fc.integer({ min: 0, max: literal.length }).map((length) =>
-              literal.slice(0, length)
-            )
-          ),
+          fc
+            .constantFrom(...boolLiterals)
+            .chain((literal) =>
+              fc
+                .integer({ min: 0, max: literal.length })
+                .map((length) => literal.slice(0, length)),
+            ),
           fc.boolean(),
           (prefix, uppercase) => {
             const query = uppercase ? prefix.toUpperCase() : prefix;
 
-            const suggestions = [...parser.suggest?.(query) ?? []];
+            const suggestions = [...(parser.suggest?.(query) ?? [])];
 
             assert.deepEqual(
               suggestions,
@@ -406,7 +407,7 @@ describe("bindEnv()", () => {
       const levels = ["error", "warn", "debug"] as const;
       const context = createEnvContext({
         prefix: "APP_",
-        source: (key) => key === "APP_LOG_LEVEL" ? "error" : undefined,
+        source: (key) => (key === "APP_LOG_LEVEL" ? "error" : undefined),
       });
       const logLevel = bindEnv(option("--log-level", choice(levels)), {
         context,
@@ -512,8 +513,8 @@ describe("bindEnv()", () => {
         key: "LEVEL",
         parser: valueParser,
       });
-      const result: Promise<ValueParserResult<"error" | "warn">> = parser
-        .readFallback();
+      const result: Promise<ValueParserResult<"error" | "warn">> =
+        parser.readFallback();
       assert.deepEqual(await result, { success: true, value: "error" });
       const throwingContext = createEnvContext({
         source: () => {
@@ -922,7 +923,7 @@ describe("bindEnv()", () => {
 
   it("preserves source-bound values through deferredValue()", () => {
     const context = createEnvContext({
-      source: (key) => key === "APP_TOKEN" ? "env-token" : undefined,
+      source: (key) => (key === "APP_TOKEN" ? "env-token" : undefined),
       prefix: "APP_",
     });
     const parser = object({
@@ -1013,7 +1014,7 @@ describe("bindEnv()", () => {
 
   it("lets seq skip env-bound positional values before commands", () => {
     const context = createEnvContext({
-      source: (key) => key === "PROFILE" ? "env-profile" : undefined,
+      source: (key) => (key === "PROFILE" ? "env-profile" : undefined),
     });
     const parser = seq(
       bindEnv(argument(string()), {
@@ -1122,7 +1123,7 @@ describe("bindEnv()", () => {
         fc.integer(),
         (cliValue, envValue, defaultValue) => {
           const context = createEnvContext({
-            source: (key) => key === "PORT" ? String(envValue) : undefined,
+            source: (key) => (key === "PORT" ? String(envValue) : undefined),
           });
           const parser = bindEnv(option("--port", integer()), {
             context,
@@ -1147,7 +1148,7 @@ describe("bindEnv()", () => {
     fc.assert(
       fc.property(fc.integer(), fc.integer(), (envValue, defaultValue) => {
         const context = createEnvContext({
-          source: (key) => key === "PORT" ? String(envValue) : undefined,
+          source: (key) => (key === "PORT" ? String(envValue) : undefined),
         });
         const parser = bindEnv(option("--port", integer()), {
           context,
@@ -1288,15 +1289,12 @@ describe("bindEnv()", () => {
       const context = createEnvContext({
         source: (key) => ({ PORT: "80" })[key],
       });
-      const parser = bindEnv(
-        option("--port", integer({ min: 1024 })),
-        {
-          context,
-          key: "PORT",
-          parser: integer(),
-          default: 8080,
-        },
-      );
+      const parser = bindEnv(option("--port", integer({ min: 1024 })), {
+        context,
+        key: "PORT",
+        parser: integer(),
+        default: 8080,
+      });
       const annotations = context.getAnnotations();
       if (annotations instanceof Promise) {
         throw new TypeError("Expected synchronous annotations.");
@@ -1420,15 +1418,12 @@ describe("bindEnv()", () => {
       const context = createEnvContext({
         source: () => undefined,
       });
-      const parser = bindEnv(
-        option("--name", asyncStringWithPattern),
-        {
-          context,
-          key: "NAME",
-          parser: asyncStringWithPattern,
-          default: "abc" as never,
-        },
-      );
+      const parser = bindEnv(option("--name", asyncStringWithPattern), {
+        context,
+        key: "NAME",
+        parser: asyncStringWithPattern,
+        default: "abc" as never,
+      });
       const result = await parseAsync(parser, []);
       assert.ok(!result.success);
     });
@@ -1438,10 +1433,7 @@ describe("bindEnv()", () => {
         source: () => undefined,
       });
       const parser = bindEnv(
-        group(
-          "Server",
-          option("--name", string({ pattern: /^[A-Z]+$/ })),
-        ),
+        group("Server", option("--name", string({ pattern: /^[A-Z]+$/ }))),
         {
           context,
           key: "NAME",
@@ -1474,8 +1466,10 @@ describe("bindEnv()", () => {
         usage: portParser.usage,
       });
       assert.ok(parseResult.success);
-      const extracted = portParser.dependencyMetadata?.source
-        ?.extractSourceValue(parseResult.next.state);
+      const extracted =
+        portParser.dependencyMetadata?.source?.extractSourceValue(
+          parseResult.next.state,
+        );
       assert.ok(extracted != null && !(extracted instanceof Promise));
       assert.ok(!extracted.success);
     });
@@ -1502,8 +1496,10 @@ describe("bindEnv()", () => {
       });
       assert.ok(parseResult.success);
 
-      const extracted = portParser.dependencyMetadata?.source
-        ?.extractSourceValue(parseResult.next.state);
+      const extracted =
+        portParser.dependencyMetadata?.source?.extractSourceValue(
+          parseResult.next.state,
+        );
 
       assert.ok(extracted != null && !(extracted instanceof Promise));
       assert.ok(!extracted.success);
@@ -1532,8 +1528,8 @@ describe("bindEnv()", () => {
         usage: portParser.usage,
       });
       assert.ok(parseResult.success);
-      const getMissing = portParser.dependencyMetadata?.source
-        ?.getMissingSourceValue;
+      const getMissing =
+        portParser.dependencyMetadata?.source?.getMissingSourceValue;
       assert.ok(typeof getMissing === "function");
       const missing = getMissing!();
       assert.ok(missing != null && !(missing instanceof Promise));
@@ -1642,7 +1638,7 @@ describe("bindEnv()", () => {
     // Should show the specific "requires <METAVAR>" error, not a generic
     // "Unexpected option or argument" message:
     const errorText = result.error
-      .map((s) => "text" in s ? s.text : "")
+      .map((s) => ("text" in s ? s.text : ""))
       .join("");
     assert.ok(
       errorText.includes("requires"),
@@ -1731,7 +1727,7 @@ describe("bindEnv()", () => {
       },
     };
     const context = createEnvContext({
-      source: (key) => key === "MODE" ? "prod" : undefined,
+      source: (key) => (key === "MODE" ? "prod" : undefined),
     });
     const parser = tuple([
       bindEnv(option("--mode", source), {
@@ -1769,7 +1765,7 @@ describe("bindEnv()", () => {
       },
     };
     const context = createEnvContext({
-      source: (key) => key === "MODE" ? "prod" : undefined,
+      source: (key) => (key === "MODE" ? "prod" : undefined),
     });
     const parser = concat(
       tuple([
@@ -1813,7 +1809,7 @@ describe("bindEnv()", () => {
       },
     };
     const context = createEnvContext({
-      source: (key) => key === "MODE" ? "prod" : undefined,
+      source: (key) => (key === "MODE" ? "prod" : undefined),
     });
     const binding = bindEnv(option("--mode", source), {
       context,
@@ -1877,7 +1873,7 @@ describe("bindEnv()", () => {
       },
     };
     const context = createEnvContext({
-      source: (key) => key === "FW" ? "fresh" : undefined,
+      source: (key) => (key === "FW" ? "fresh" : undefined),
     });
     const parser = object({
       consumer: option("--pm", pm),
@@ -2081,9 +2077,9 @@ describe("bindEnv()", () => {
   });
 
   it("preserves raw inner state when env fallback delegates complete()", () => {
-    const configContext = createConfigContext<
-      { readonly mode?: "dev" | "prod" }
-    >({
+    const configContext = createConfigContext<{
+      readonly mode?: "dev" | "prod";
+    }>({
       schema: {
         "~standard": {
           version: 1,
@@ -2404,8 +2400,8 @@ describe("bindEnv()", () => {
     assert.equal(nodes.at(-1)?.state, parsed.next.state);
     assert.ok(nodes.some((node) => node.parser === inner));
     assert.ok(
-      nodes.some((node) =>
-        JSON.stringify(node.path) === JSON.stringify(["mode", 0])
+      nodes.some(
+        (node) => JSON.stringify(node.path) === JSON.stringify(["mode", 0]),
       ),
     );
   });
@@ -2421,9 +2417,9 @@ describe("bindEnv()", () => {
     if (envAnnotations instanceof Promise) {
       throw new TypeError("Expected synchronous env annotations.");
     }
-    const configContext = createConfigContext<
-      { readonly mode?: "dev" | "prod" }
-    >({
+    const configContext = createConfigContext<{
+      readonly mode?: "dev" | "prod";
+    }>({
       schema: {
         "~standard": {
           version: 1,
@@ -2765,7 +2761,7 @@ describe("bindEnv()", () => {
   describe("non-string EnvSource value validation", () => {
     it("fails when EnvSource returns an object", () => {
       const context = createEnvContext({
-        source: () => ({ bad: true } as never),
+        source: () => ({ bad: true }) as never,
       });
       const parser = bindEnv(option("--name", string()), {
         context,
@@ -2780,17 +2776,14 @@ describe("bindEnv()", () => {
       const result = parse(parser, [], { annotations });
       assert.ok(!result.success);
       const errorText = result.error
-        .map((s) => s.type === "text" ? s.text : "")
+        .map((s) => (s.type === "text" ? s.text : ""))
         .join("");
-      assert.match(
-        errorText,
-        /must be a string, but got: /u,
-      );
+      assert.match(errorText, /must be a string, but got: /u);
     });
 
     it("fails when EnvSource returns a number", () => {
       const context = createEnvContext({
-        source: () => (123 as never),
+        source: () => 123 as never,
       });
       const parser = bindEnv(option("--port", integer()), {
         context,
@@ -2805,12 +2798,9 @@ describe("bindEnv()", () => {
       const result = parse(parser, [], { annotations });
       assert.ok(!result.success);
       const errorText = result.error
-        .map((s) => s.type === "text" ? s.text : "")
+        .map((s) => (s.type === "text" ? s.text : ""))
         .join("");
-      assert.match(
-        errorText,
-        /must be a string, but got: /u,
-      );
+      assert.match(errorText, /must be a string, but got: /u);
     });
 
     it("reports null EnvSource values with their concrete type", () => {
@@ -2870,12 +2860,9 @@ describe("bindEnv()", () => {
       const result = parse(parser, [], { annotations });
       assert.ok(!result.success);
       const errorText = result.error
-        .map((s) => s.type === "text" ? s.text : "")
+        .map((s) => (s.type === "text" ? s.text : ""))
         .join("");
-      assert.match(
-        errorText,
-        /must be a string, but got: /u,
-      );
+      assert.match(errorText, /must be a string, but got: /u);
     });
 
     it("validates non-string dependency source env values before extraction", () => {
@@ -2897,8 +2884,9 @@ describe("bindEnv()", () => {
       });
       assert.ok(parseResult.success);
 
-      const extracted = parser.dependencyMetadata?.source
-        ?.extractSourceValue(parseResult.next.state);
+      const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
+        parseResult.next.state,
+      );
       assert.ok(extracted != null && !(extracted instanceof Promise));
       assert.ok(!extracted.success);
       assert.equal(
@@ -2935,8 +2923,9 @@ describe("bindEnv()", () => {
         });
         assert.ok(parseResult.success);
 
-        const extracted = parser.dependencyMetadata?.source
-          ?.extractSourceValue(parseResult.next.state);
+        const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
+          parseResult.next.state,
+        );
 
         assert.ok(extracted != null && !(extracted instanceof Promise));
         assert.ok(!extracted.success);
@@ -3003,10 +2992,10 @@ describe("bindEnv()", () => {
       throw new TypeError("Expected synchronous annotations.");
     }
 
-    assert.deepEqual(
-      parse(parser, [], { annotations }),
-      { success: true, value: 8080 },
-    );
+    assert.deepEqual(parse(parser, [], { annotations }), {
+      success: true,
+      value: 8080,
+    });
 
     try {
       const result = parse(parser, []);
@@ -3086,10 +3075,10 @@ describe("createEnvContext defaults", () => {
 
     context[Symbol.dispose]?.();
 
-    assert.deepEqual(
-      parse(parser, [], { annotations }),
-      { success: true, value: 8080 },
-    );
+    assert.deepEqual(parse(parser, [], { annotations }), {
+      success: true,
+      value: 8080,
+    });
   });
 
   it("uses Deno.env.get by default when available", () => {
@@ -3109,72 +3098,45 @@ describe("createEnvContext defaults", () => {
   });
 
   it("throws TypeError when source is not a function", () => {
-    assert.throws(
-      () => createEnvContext({ source: "nope" as never }),
-      {
-        name: "TypeError",
-        message: "Expected source to be a function, but got: string.",
-      },
-    );
-    assert.throws(
-      () => createEnvContext({ source: null as never }),
-      {
-        name: "TypeError",
-        message: "Expected source to be a function, but got: null.",
-      },
-    );
-    assert.throws(
-      () => createEnvContext({ source: [] as never }),
-      {
-        name: "TypeError",
-        message: "Expected source to be a function, but got: array.",
-      },
-    );
+    assert.throws(() => createEnvContext({ source: "nope" as never }), {
+      name: "TypeError",
+      message: "Expected source to be a function, but got: string.",
+    });
+    assert.throws(() => createEnvContext({ source: null as never }), {
+      name: "TypeError",
+      message: "Expected source to be a function, but got: null.",
+    });
+    assert.throws(() => createEnvContext({ source: [] as never }), {
+      name: "TypeError",
+      message: "Expected source to be a function, but got: array.",
+    });
   });
 
   it("throws TypeError when prefix is not a string", () => {
-    assert.throws(
-      () => createEnvContext({ prefix: 123 as never }),
-      {
-        name: "TypeError",
-        message: "Expected prefix to be a string, but got: number.",
-      },
-    );
-    assert.throws(
-      () => createEnvContext({ prefix: false as never }),
-      {
-        name: "TypeError",
-        message: "Expected prefix to be a string, but got: boolean.",
-      },
-    );
-    assert.throws(
-      () => createEnvContext({ prefix: { x: 1 } as never }),
-      {
-        name: "TypeError",
-        message: "Expected prefix to be a string, but got: object.",
-      },
-    );
-    assert.throws(
-      () => createEnvContext({ prefix: Symbol("P") as never }),
-      {
-        name: "TypeError",
-        message: "Expected prefix to be a string, but got: symbol.",
-      },
-    );
-    assert.throws(
-      () => createEnvContext({ prefix: null as never }),
-      {
-        name: "TypeError",
-        message: "Expected prefix to be a string, but got: null.",
-      },
-    );
-    assert.throws(
-      () => createEnvContext({ prefix: [] as never }),
-      {
-        name: "TypeError",
-        message: "Expected prefix to be a string, but got: array.",
-      },
-    );
+    assert.throws(() => createEnvContext({ prefix: 123 as never }), {
+      name: "TypeError",
+      message: "Expected prefix to be a string, but got: number.",
+    });
+    assert.throws(() => createEnvContext({ prefix: false as never }), {
+      name: "TypeError",
+      message: "Expected prefix to be a string, but got: boolean.",
+    });
+    assert.throws(() => createEnvContext({ prefix: { x: 1 } as never }), {
+      name: "TypeError",
+      message: "Expected prefix to be a string, but got: object.",
+    });
+    assert.throws(() => createEnvContext({ prefix: Symbol("P") as never }), {
+      name: "TypeError",
+      message: "Expected prefix to be a string, but got: symbol.",
+    });
+    assert.throws(() => createEnvContext({ prefix: null as never }), {
+      name: "TypeError",
+      message: "Expected prefix to be a string, but got: null.",
+    });
+    assert.throws(() => createEnvContext({ prefix: [] as never }), {
+      name: "TypeError",
+      message: "Expected prefix to be a string, but got: array.",
+    });
   });
 
   it("falls back to process.env when Deno.env.get is unavailable", () => {
@@ -3267,7 +3229,7 @@ describe("createEnvContext defaults", () => {
       const context = createEnvContext({
         envFile: envPath,
         prefix: "APP_",
-        source: (key) => key === "APP_HOST" ? "source" : undefined,
+        source: (key) => (key === "APP_HOST" ? "source" : undefined),
       });
 
       assert.equal(context.source("APP_HOST"), "source");
@@ -3365,14 +3327,10 @@ describe("createEnvContext defaults", () => {
       const envPath = join(dir, ".env");
       writeFileSync(envPath, "APP_ONE=1\rnot valid\r", "utf8");
 
-      assert.throws(
-        () => createEnvContext({ envFile: envPath }),
-        {
-          name: "SyntaxError",
-          message:
-            `Invalid .env syntax in ${envPath} at line 2: expected KEY=VALUE.`,
-        },
-      );
+      assert.throws(() => createEnvContext({ envFile: envPath }), {
+        name: "SyntaxError",
+        message: `Invalid .env syntax in ${envPath} at line 2: expected KEY=VALUE.`,
+      });
     }));
 
   it("expands variables from source first and envFile values second", () =>
@@ -3394,8 +3352,8 @@ describe("createEnvContext defaults", () => {
           key === "APP_ROOT"
             ? "/source"
             : key === "APP_SCHEME"
-            ? "https"
-            : undefined,
+              ? "https"
+              : undefined,
       });
 
       assert.equal(context.source("APP_BIN"), "/source/bin");
@@ -3409,10 +3367,7 @@ describe("createEnvContext defaults", () => {
       const localPath = join(dir, ".env.local");
       writeFileSync(
         basePath,
-        [
-          "APP_ROOT=/base",
-          "APP_CACHE=$APP_ROOT/cache",
-        ].join("\n"),
+        ["APP_ROOT=/base", "APP_CACHE=$APP_ROOT/cache"].join("\n"),
         "utf8",
       );
       writeFileSync(
@@ -3475,7 +3430,7 @@ describe("createEnvContext defaults", () => {
           paths: envPath,
           substitute: () => "substituted",
         },
-        source: (key) => key === "APP_NAME" ? "source" : undefined,
+        source: (key) => (key === "APP_NAME" ? "source" : undefined),
       });
 
       assert.equal(
@@ -3533,25 +3488,18 @@ describe("createEnvContext defaults", () => {
       const envPath = join(dir, ".env");
       writeFileSync(envPath, "APP_OK=1\nnot valid\n", "utf8");
 
-      assert.throws(
-        () => createEnvContext({ envFile: envPath }),
-        {
-          name: "SyntaxError",
-          message:
-            `Invalid .env syntax in ${envPath} at line 2: expected KEY=VALUE.`,
-        },
-      );
+      assert.throws(() => createEnvContext({ envFile: envPath }), {
+        name: "SyntaxError",
+        message: `Invalid .env syntax in ${envPath} at line 2: expected KEY=VALUE.`,
+      });
     }));
 
   it("throws TypeError for invalid envFile options", () => {
-    assert.throws(
-      () => createEnvContext({ envFile: 123 as never }),
-      {
-        name: "TypeError",
-        message:
-          "Expected envFile to be a boolean, string, array, or object, but got: number.",
-      },
-    );
+    assert.throws(() => createEnvContext({ envFile: 123 as never }), {
+      name: "TypeError",
+      message:
+        "Expected envFile to be a boolean, string, array, or object, but got: number.",
+    });
     assert.throws(
       () => createEnvContext({ envFile: { paths: 123 } as never }),
       {
@@ -3694,9 +3642,9 @@ describe("bindEnv() with dependency sources", () => {
         return value === "dev" || value === "prod"
           ? { success: true as const, value }
           : {
-            success: false as const,
-            error: message`Invalid mode default.`,
-          };
+              success: false as const,
+              error: message`Invalid mode default.`,
+            };
       },
       dependencyMetadata: {
         source: {
@@ -3739,7 +3687,7 @@ describe("bindEnv() with dependency sources", () => {
       (key) => ({ APP_MODE: "prod" })[key],
     );
     const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("silent"));
     assert.ok(texts.includes("strict"));
     assert.ok(!texts.includes("debug"));
@@ -4090,20 +4038,22 @@ describe("bindEnv() with dependency sources", () => {
           },
         },
       },
-    } as const satisfies
-      & Parser<"sync", "prod", typeof innerState | undefined>
-      & {
-        readonly dependencyMetadata: {
-          readonly source: {
-            readonly kind: "source";
-            readonly sourceId: typeof sourceId;
-            readonly preservesSourceValue: true;
-            readonly extractSourceValue: (
-              state: unknown,
-            ) => ValueParserResult<unknown> | undefined;
-          };
+    } as const satisfies Parser<
+      "sync",
+      "prod",
+      typeof innerState | undefined
+    > & {
+      readonly dependencyMetadata: {
+        readonly source: {
+          readonly kind: "source";
+          readonly sourceId: typeof sourceId;
+          readonly preservesSourceValue: true;
+          readonly extractSourceValue: (
+            state: unknown,
+          ) => ValueParserResult<unknown> | undefined;
         };
       };
+    };
     const parser = bindEnv(innerParser, {
       context: createEnvContext({ source: () => undefined }),
       key: "MODE",
@@ -4178,8 +4128,8 @@ describe("bindEnv() with dependency sources", () => {
       default: "prod" as const,
     });
 
-    const missing = parser.dependencyMetadata?.source
-      ?.getMissingSourceValue?.();
+    const missing =
+      parser.dependencyMetadata?.source?.getMissingSourceValue?.();
 
     assert.deepEqual(missing, { success: true, value: "prod" });
   });
@@ -4242,9 +4192,8 @@ describe("bindEnv() with dependency sources", () => {
       parser: choice(["development", "production"] as const),
     });
 
-    const extracted = parser.dependencyMetadata?.source?.extractSourceValue(
-      rawState,
-    );
+    const extracted =
+      parser.dependencyMetadata?.source?.extractSourceValue(rawState);
 
     assert.deepEqual(extracted, { success: true, value: "production" });
   });
@@ -4303,9 +4252,9 @@ describe("bindEnv() with dependency sources", () => {
   });
 
   it("preserves outer annotations when no-CLI fallback delegates source extraction", () => {
-    const configContext = createConfigContext<
-      { readonly mode?: "dev" | "prod" }
-    >({
+    const configContext = createConfigContext<{
+      readonly mode?: "dev" | "prod";
+    }>({
       schema: {
         "~standard": {
           version: 1,
@@ -4439,9 +4388,8 @@ describe("bindEnv() with dependency sources", () => {
       source: (key) => ({ APP_MODE: "production" })[key],
     });
     const parser = bindEnv(
-      map(
-        option("--mode", source),
-        (value) => value === "dev" ? "development" : "production",
+      map(option("--mode", source), (value) =>
+        value === "dev" ? "development" : "production",
       ),
       {
         context: envContext,
@@ -4520,11 +4468,7 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
     const { parser, annotations } = createMergedParser(
       (key) => ({ APP_MODE: "prod" })[key],
     );
-    const suggestions = suggestSync(
-      parser,
-      ["--level", "s"],
-      { annotations },
-    );
+    const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
     const texts = suggestions
       .filter((s) => s.kind === "literal")
       .map((s) => s.text);
@@ -4551,11 +4495,9 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
       (key) => ({ APP_MODE: "dev" })[key],
     );
     // CLI --mode overrides env value
-    const result = parse(
-      parser,
-      ["--mode", "prod", "--level", "silent"],
-      { annotations },
-    );
+    const result = parse(parser, ["--mode", "prod", "--level", "silent"], {
+      annotations,
+    });
     assert.ok(result.success);
     assert.equal(result.value.mode, "prod");
     assert.equal(result.value.level, "silent");
@@ -4565,11 +4507,9 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
     const { parser, annotations } = createMergedParser(
       (key) => ({ APP_MODE: "prod" })[key],
     );
-    const texts = suggestSync(
-      parser,
-      ["--mode", "dev", "--level", ""],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--mode", "dev", "--level", ""], {
+      annotations,
+    })
       .filter((s) => s.kind === "literal")
       .map((s) => s.text);
     assert.ok(
@@ -4613,11 +4553,9 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
         level: option("--level", level),
       }),
     );
-    const result = parse(
-      parser,
-      ["--extra", "foo", "--level", "silent"],
-      { annotations },
-    );
+    const result = parse(parser, ["--extra", "foo", "--level", "silent"], {
+      annotations,
+    });
     assert.ok(result.success);
     assert.equal(result.value.mode, "prod");
     assert.equal(result.value.level, "silent");
@@ -4644,11 +4582,7 @@ describe("bindEnv() with dependency sources across merge() boundaries", () => {
         level: option("--level", level),
       }),
     );
-    const result = parse(
-      parser,
-      ["--level", "silent"],
-      { annotations },
-    );
+    const result = parse(parser, ["--level", "silent"], { annotations });
     assert.ok(result.success);
     assert.equal(result.value.mode, "prod");
     assert.equal(result.value.level, "silent");
@@ -4749,9 +4683,7 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
           parser: choice(["dev", "prod"] as const),
         }),
       ]),
-      tuple([
-        option("--level", level),
-      ]),
+      tuple([option("--level", level)]),
     );
     return { parser, annotations };
   }
@@ -4766,11 +4698,7 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
 
   it("tuple() suggest uses env-backed dependency source", () => {
     const { parser, annotations } = createTupleParser();
-    const texts = suggestSync(
-      parser,
-      ["--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--level", "s"], { annotations })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -4794,11 +4722,9 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
 
   it("tuple() suggest does not override invalid CLI source with env", () => {
     const { parser, annotations } = createTupleParser();
-    const texts = suggestSync(
-      parser,
-      ["--mode", "invalid", "--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--mode", "invalid", "--level", "s"], {
+      annotations,
+    })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -4816,11 +4742,7 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
 
   it("concat() suggest uses env-backed dependency source", () => {
     const { parser, annotations } = createConcatParser();
-    const texts = suggestSync(
-      parser,
-      ["--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--level", "s"], { annotations })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -4844,11 +4766,9 @@ describe("bindEnv() with dependency sources across tuple()/concat() boundaries",
 
   it("concat() suggest does not override invalid CLI source with env", () => {
     const { parser, annotations } = createConcatParser();
-    const texts = suggestSync(
-      parser,
-      ["--mode", "invalid", "--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--mode", "invalid", "--level", "s"], {
+      annotations,
+    })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -5216,8 +5136,10 @@ describe("source fallbacks through mapped commands", () => {
           vendor: "optique-test",
           validate(input: unknown) {
             if (
-              input != null && typeof input === "object" &&
-              "value" in input && typeof input.value === "string"
+              input != null &&
+              typeof input === "object" &&
+              "value" in input &&
+              typeof input.value === "string"
             ) {
               return { value: { value: input.value } };
             }

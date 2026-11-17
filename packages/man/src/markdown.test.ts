@@ -23,13 +23,18 @@ const options: MarkdownReferenceOptions = {
 const empty: DocPage = { sections: [] };
 
 it("escapes terminal controls in usage while preserving line breaks", () => {
-  const rendered = formatCommandReference([{
-    path: [],
-    page: {
-      sections: [],
-      usage: [{ type: "literal", value: "first\n\u001b[2J\u0085second" }],
-    },
-  }], options);
+  const rendered = formatCommandReference(
+    [
+      {
+        path: [],
+        page: {
+          sections: [],
+          usage: [{ type: "literal", value: "first\n\u001b[2J\u0085second" }],
+        },
+      },
+    ],
+    options,
+  );
   assert.ok(!rendered.includes("\u001b"));
   assert.ok(!rendered.includes("\u0085"));
   assert.ok(rendered.includes("first\n\\u001b[2J\\u0085second"));
@@ -37,20 +42,26 @@ it("escapes terminal controls in usage while preserving line breaks", () => {
 
 it("rejects C1 controls in tokens and renders controls in text visibly", () => {
   assert.throws(() => getCommandReferenceAnchor(["\u0085"]), TypeError);
-  assert.throws(() =>
-    formatCommandReference([
-      root("serve"),
-      { path: ["serve"], page: empty, aliases: ["\u0085"] },
-    ], options), TypeError);
-  const rendered = formatCommandReference([
-    {
-      path: [],
-      page: {
-        sections: [],
-        description: [{ type: "text", text: "NEL\u0085" }],
+  assert.throws(
+    () =>
+      formatCommandReference(
+        [root("serve"), { path: ["serve"], page: empty, aliases: ["\u0085"] }],
+        options,
+      ),
+    TypeError,
+  );
+  const rendered = formatCommandReference(
+    [
+      {
+        path: [],
+        page: {
+          sections: [],
+          description: [{ type: "text", text: "NEL\u0085" }],
+        },
       },
-    },
-  ], options);
+    ],
+    options,
+  );
   assert.ok(!rendered.includes("\u0085"));
   assert.ok(rendered.includes("0085"));
 });
@@ -58,12 +69,15 @@ it("rejects C1 controls in tokens and renders controls in text visibly", () => {
 it("rejects malformed omission scope from JavaScript callers", () => {
   const gap = { path: [], scope: "page" as const, reason: "missing" };
   Reflect.set(gap, "scope", "<img src=x onerror=alert(1)>");
-  assert.throws(() =>
-    formatCommandReference([root()], {
-      ...options,
-      coverage: { ...options.coverage, commands: "partial" },
-      unresolved: [gap],
-    }), /scope/i);
+  assert.throws(
+    () =>
+      formatCommandReference([root()], {
+        ...options,
+        coverage: { ...options.coverage, commands: "partial" },
+        unresolved: [gap],
+      }),
+    /scope/i,
+  );
 });
 const command = (name: string): Extract<UsageTerm, { type: "command" }> => ({
   type: "command",
@@ -72,10 +86,12 @@ const command = (name: string): Extract<UsageTerm, { type: "command" }> => ({
 const root = (...names: string[]): MarkdownCommandEntry => ({
   path: [],
   page: {
-    sections: [{
-      title: "Commands",
-      entries: names.map((name) => ({ term: command(name) })),
-    }],
+    sections: [
+      {
+        title: "Commands",
+        entries: names.map((name) => ({ term: command(name) })),
+      },
+    ],
   },
 });
 
@@ -128,9 +144,11 @@ describe("formatCommandReference()", () => {
       {
         path: ["config"],
         page: {
-          sections: [{
-            entries: [{ term: command("get") }, { term: command("set") }],
-          }],
+          sections: [
+            {
+              entries: [{ term: command("get") }, { term: command("set") }],
+            },
+          ],
         },
       },
       {
@@ -139,35 +157,54 @@ describe("formatCommandReference()", () => {
         page: {
           brief: message`Read a setting.`,
           description: message`Reads the current setting.`,
-          usage: [command("config"), command("get"), {
-            type: "optional",
-            terms: [verbose],
-          }, {
-            type: "multiple",
-            terms: [{ type: "argument", metavar: "KEY" }],
-            min: 1,
-          }],
-          sections: [{
-            title: "Shared options",
-            entries: [{
-              term: verbose,
-              description: message`Detailed output.`,
-            }],
-          }, {
-            title: "Settings",
-            entries: [{
-              term: { type: "option", names: ["--format"], metavar: "FORMAT" },
-              default: message`json`,
-              choices: message`json, text`,
-              envVars: ["TOOL_FORMAT"],
-              description: message`Output format.`,
-            }],
-          }],
+          usage: [
+            command("config"),
+            command("get"),
+            {
+              type: "optional",
+              terms: [verbose],
+            },
+            {
+              type: "multiple",
+              terms: [{ type: "argument", metavar: "KEY" }],
+              min: 1,
+            },
+          ],
+          sections: [
+            {
+              title: "Shared options",
+              entries: [
+                {
+                  term: verbose,
+                  description: message`Detailed output.`,
+                },
+              ],
+            },
+            {
+              title: "Settings",
+              entries: [
+                {
+                  term: {
+                    type: "option",
+                    names: ["--format"],
+                    metavar: "FORMAT",
+                  },
+                  default: message`json`,
+                  choices: message`json, text`,
+                  envVars: ["TOOL_FORMAT"],
+                  description: message`Output format.`,
+                },
+              ],
+            },
+          ],
           examples: message`tool config get theme`,
-          environmentBindings: [{
-            name: "TOOL_HOME",
-            description: message`Settings directory.`,
-          }, { name: "HIDDEN_BINDING", hidden: "doc" }],
+          environmentBindings: [
+            {
+              name: "TOOL_HOME",
+              description: message`Settings directory.`,
+            },
+            { name: "HIDDEN_BINDING", hidden: "doc" },
+          ],
           author: message`Maintainers`,
           bugs: message`Report a problem.`,
           footer: message`Read only.`,
@@ -181,27 +218,26 @@ describe("formatCommandReference()", () => {
       showAliases: true,
       examples: message`tool docs`,
     });
-    for (
-      const content of [
-        "Read a setting",
-        "Reads the current setting",
-        "Shared options",
-        "Settings",
-        "Detailed output",
-        "Output format",
-        "json",
-        "text",
-        "TOOL_FORMAT",
-        "TOOL_HOME",
-        "Settings directory",
-        "tool config get theme",
-        "Maintainers",
-        "Report a problem",
-        "Read only",
-        "1.2.3",
-        "tool docs",
-      ]
-    ) assert.ok(rendered.includes(content), content);
+    for (const content of [
+      "Read a setting",
+      "Reads the current setting",
+      "Shared options",
+      "Settings",
+      "Detailed output",
+      "Output format",
+      "json",
+      "text",
+      "TOOL_FORMAT",
+      "TOOL_HOME",
+      "Settings directory",
+      "tool config get theme",
+      "Maintainers",
+      "Report a problem",
+      "Read only",
+      "1.2.3",
+      "tool docs",
+    ])
+      assert.ok(rendered.includes(content), content);
     assert.ok(rendered.includes("tool config get [-v/--verbose] KEY..."));
     assert.ok(!rendered.includes("tool config get config get"));
     assert.ok(!rendered.includes("HIDDEN_BINDING"));
@@ -239,25 +275,28 @@ describe("formatCommandReference()", () => {
   it("filters hidden sections and descendants while retaining doc-hidden usage terms", () => {
     const hidden: readonly HiddenVisibility[] = [true, "doc", "help"];
     for (const visibility of hidden) {
-      const rendered = formatCommandReference([
-        {
-          ...root("secret", "visible"),
-          page: {
-            ...root("secret", "visible").page,
-            usage: [
-              { ...command("secret"), hidden: "doc" },
-              command("visible"),
-            ],
+      const rendered = formatCommandReference(
+        [
+          {
+            ...root("secret", "visible"),
+            page: {
+              ...root("secret", "visible").page,
+              usage: [
+                { ...command("secret"), hidden: "doc" },
+                command("visible"),
+              ],
+            },
           },
-        },
-        {
-          path: ["secret"],
-          hidden: visibility,
-          page: { sections: [{ entries: [{ term: command("missing") }] }] },
-        },
-        { path: ["secret", "child"], page: empty },
-        { path: ["visible"], page: empty },
-      ], options);
+          {
+            path: ["secret"],
+            hidden: visibility,
+            page: { sections: [{ entries: [{ term: command("missing") }] }] },
+          },
+          { path: ["secret", "child"], page: empty },
+          { path: ["visible"], page: empty },
+        ],
+        options,
+      );
       assert.ok(rendered.includes("tool secret visible"));
       assert.ok(
         !rendered.includes(`href="#${getCommandReferenceAnchor(["secret"])}"`),
@@ -268,18 +307,23 @@ describe("formatCommandReference()", () => {
   });
 
   it("retains usage-hidden command sections and documentation entries", () => {
-    const rendered = formatCommandReference([
-      {
-        path: [],
-        page: {
-          usage: [{ ...command("quiet"), hidden: "usage" }],
-          sections: [{
-            entries: [{ term: { ...command("quiet"), hidden: "usage" } }],
-          }],
+    const rendered = formatCommandReference(
+      [
+        {
+          path: [],
+          page: {
+            usage: [{ ...command("quiet"), hidden: "usage" }],
+            sections: [
+              {
+                entries: [{ term: { ...command("quiet"), hidden: "usage" } }],
+              },
+            ],
+          },
         },
-      },
-      { path: ["quiet"], hidden: "usage", page: empty },
-    ], options);
+        { path: ["quiet"], hidden: "usage", page: empty },
+      ],
+      options,
+    );
     assert.ok(rendered.includes("## `tool quiet`"));
     assert.ok(
       rendered.includes(`href="#${getCommandReferenceAnchor(["quiet"])}"`),
@@ -288,16 +332,20 @@ describe("formatCommandReference()", () => {
   });
 
   it("honors page/formatter showUsage and never calls usage callbacks", () => {
-    const usage: readonly UsageTerm[] = [{
-      ...command("shown"),
-      usageLine() {
-        throw new Error("Do not call.");
+    const usage: readonly UsageTerm[] = [
+      {
+        ...command("shown"),
+        usageLine() {
+          throw new Error("Do not call.");
+        },
       },
-    }];
-    const entries = [{
-      path: [],
-      page: { usage, showUsage: false, sections: [] },
-    }];
+    ];
+    const entries = [
+      {
+        path: [],
+        page: { usage, showUsage: false, sections: [] },
+      },
+    ];
     assert.ok(!formatCommandReference(entries, options).includes("### Usage"));
     assert.ok(
       formatCommandReference(entries, { ...options, showUsage: true }).includes(
@@ -317,12 +365,16 @@ describe("formatCommandReference()", () => {
       {
         path: [],
         page: {
-          sections: [{
-            entries: [{
-              term: { ...command("get"), aliases: ["wrong"] },
-              showAliases: true,
-            }],
-          }],
+          sections: [
+            {
+              entries: [
+                {
+                  term: { ...command("get"), aliases: ["wrong"] },
+                  showAliases: true,
+                },
+              ],
+            },
+          ],
         },
       },
       {
@@ -351,28 +403,47 @@ describe("formatCommandReference()", () => {
       /Duplicate command path/,
     );
     for (const hidden of [undefined, "doc"] as const) {
-      assert.throws(() =>
-        formatCommandReference([
-          root("add", "audit"),
-          { path: ["add"], aliases: ["a"], page: empty },
-          { path: ["audit"], aliases: ["a"], hidden, page: empty },
-        ], options), /Ambiguous command spelling/);
+      assert.throws(
+        () =>
+          formatCommandReference(
+            [
+              root("add", "audit"),
+              { path: ["add"], aliases: ["a"], page: empty },
+              { path: ["audit"], aliases: ["a"], hidden, page: empty },
+            ],
+            options,
+          ),
+        /Ambiguous command spelling/,
+      );
     }
     assert.throws(
       () =>
-        formatCommandReference([root("a", "b"), {
-          path: ["a"],
-          hiddenAliases: ["b"],
-          page: empty,
-        }, { path: ["b"], page: empty }], options),
+        formatCommandReference(
+          [
+            root("a", "b"),
+            {
+              path: ["a"],
+              hiddenAliases: ["b"],
+              page: empty,
+            },
+            { path: ["b"], page: empty },
+          ],
+          options,
+        ),
       /Ambiguous command spelling/,
     );
     assert.doesNotThrow(() =>
-      formatCommandReference([root("a"), {
-        path: ["a"],
-        aliases: ["a", "a"],
-        page: empty,
-      }], options)
+      formatCommandReference(
+        [
+          root("a"),
+          {
+            path: ["a"],
+            aliases: ["a", "a"],
+            page: empty,
+          },
+        ],
+        options,
+      ),
     );
   });
 
@@ -389,13 +460,23 @@ describe("formatCommandReference()", () => {
         ),
       /Missing command pages/,
     );
-    const rendered = formatCommandReference([root("missing"), {
-      path: ["config", "get"],
-      page: empty,
-    }], {
-      ...options,
-      coverage: { ...options.coverage, commands: "partial", help: "included" },
-    });
+    const rendered = formatCommandReference(
+      [
+        root("missing"),
+        {
+          path: ["config", "get"],
+          page: empty,
+        },
+      ],
+      {
+        ...options,
+        coverage: {
+          ...options.coverage,
+          commands: "partial",
+          help: "included",
+        },
+      },
+    );
     assert.match(rendered, /partial/);
     assert.match(rendered, /Missing command pages/);
     assert.ok(rendered.includes("tool missing"));
@@ -407,14 +488,21 @@ describe("formatCommandReference()", () => {
 
   it("skips doc-hidden references before coverage checks", () => {
     assert.doesNotThrow(() =>
-      formatCommandReference([{
-        path: [],
-        page: {
-          sections: [{
-            entries: [{ term: { ...command("secret"), hidden: "doc" } }],
-          }],
-        },
-      }], options)
+      formatCommandReference(
+        [
+          {
+            path: [],
+            page: {
+              sections: [
+                {
+                  entries: [{ term: { ...command("secret"), hidden: "doc" } }],
+                },
+              ],
+            },
+          },
+        ],
+        options,
+      ),
     );
   });
 
@@ -432,20 +520,31 @@ describe("formatCommandReference()", () => {
     );
     assert.throws(
       () =>
-        formatCommandReference([{
-          path: [],
-          aliases: ["root-alias"],
-          page: empty,
-        }], options),
+        formatCommandReference(
+          [
+            {
+              path: [],
+              aliases: ["root-alias"],
+              page: empty,
+            },
+          ],
+          options,
+        ),
       /root/i,
     );
     assert.throws(
       () =>
-        formatCommandReference([root(), {
-          path: ["a"],
-          aliases: ["bad alias"],
-          page: empty,
-        }], options),
+        formatCommandReference(
+          [
+            root(),
+            {
+              path: ["a"],
+              aliases: ["bad alias"],
+              page: empty,
+            },
+          ],
+          options,
+        ),
       TypeError,
     );
     assert.throws(
@@ -455,11 +554,13 @@ describe("formatCommandReference()", () => {
   });
   it("prints supplied collection omissions and rejects a complete claim", () => {
     const entries = [root("dynamic"), { path: ["dynamic"], page: empty }];
-    const unresolved = [{
-      path: ["dynamic"],
-      scope: "page" as const,
-      reason: "functional-usage",
-    }];
+    const unresolved = [
+      {
+        path: ["dynamic"],
+        scope: "page" as const,
+        reason: "functional-usage",
+      },
+    ];
     assert.throws(
       () => formatCommandReference(entries, { ...options, unresolved }),
       /Unresolved/,
@@ -473,11 +574,17 @@ describe("formatCommandReference()", () => {
     assert.ok(rendered.includes("functional-usage"));
     assert.ok(rendered.includes("tool dynamic"));
     assert.doesNotThrow(() =>
-      formatCommandReference([root("dynamic"), {
-        path: ["dynamic"],
-        hidden: "doc",
-        page: empty,
-      }], { ...options, unresolved })
+      formatCommandReference(
+        [
+          root("dynamic"),
+          {
+            path: ["dynamic"],
+            hidden: "doc",
+            page: empty,
+          },
+        ],
+        { ...options, unresolved },
+      ),
     );
   });
 });

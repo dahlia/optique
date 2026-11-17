@@ -57,9 +57,11 @@ function encodeFilePrefix(
 ): string {
   const prefix = suggestion.prefix ?? "";
   if (
-    prefix === "" || !(suggestion.pattern ?? "").startsWith(prefix) ||
+    prefix === "" ||
+    !(suggestion.pattern ?? "").startsWith(prefix) ||
     sanitizeForTransport(prefix) !== prefix
-  ) return "";
+  )
+    return "";
   return `:${encodePattern(prefix)}`;
 }
 
@@ -71,9 +73,7 @@ function encodeBashLiteral(value: string): string {
     : text;
 }
 
-function encodeExtensions(
-  extensions: readonly string[] | undefined,
-): string {
+function encodeExtensions(extensions: readonly string[] | undefined): string {
   return extensions?.map((ext) => ext.replace(/^\./, "")).join(",") ?? "";
 }
 
@@ -100,7 +100,7 @@ function sanitizeForTransport(text: string): string {
 function encodeLiteral(text: string): string {
   const sanitized = sanitizeForTransport(text);
   return sanitized.startsWith("__FILE__:") ||
-      sanitized.startsWith("__LITERAL__:")
+    sanitized.startsWith("__LITERAL__:")
     ? `__LITERAL__:${sanitized}`
     : sanitized;
 }
@@ -141,7 +141,8 @@ export const bash: ShellCompletion = {
   name: "bash",
   generateScript(programName: string, args: readonly string[] = []): string {
     validateProgramName(programName);
-    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
+    const escapedArgs = args
+      .map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
       .join(" ");
     return `
 function _${programName} () {
@@ -874,9 +875,9 @@ fi
         }
         for (const [index, { prefix, file }] of joined.files.entries()) {
           if (index > 0) yield "\n";
-          yield `__JOINED_FILE__:${encodePattern(prefix)}:${file.type}:${
-            encodeExtensions(file.extensions)
-          }:${encodePattern(sanitizeForTransport(file.pattern ?? ""))}:${
+          yield `__JOINED_FILE__:${encodePattern(prefix)}:${file.type}:${encodeExtensions(
+            file.extensions,
+          )}:${encodePattern(sanitizeForTransport(file.pattern ?? ""))}:${
             file.includeHidden ? "1" : "0"
           }${encodeFilePrefix(file)}`;
         }
@@ -887,9 +888,9 @@ fi
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
-          encodeFilePrefix(suggestion)
-        }`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${encodeFilePrefix(
+          suggestion,
+        )}`;
       }
       i++;
     }
@@ -904,7 +905,8 @@ export const zsh: ShellCompletion = {
   name: "zsh",
   generateScript(programName: string, args: readonly string[] = []): string {
     validateProgramName(programName);
-    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
+    const escapedArgs = args
+      .map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
       .join(" ");
     // Keep existing plain-name helpers available to aliases.  Names with
     // punctuation need a separate namespace: a colon cannot occur in another
@@ -914,10 +916,10 @@ export const zsh: ShellCompletion = {
       : `_${programName}`;
     // Keep the private glob predicate distinct from primary completion names
     // and from predicates for other accepted program names.
-    const fixedGlobFunction = "__optique-fixed-glob-" +
-      Array.from(
-        programName,
-        (character) => character.charCodeAt(0).toString(16).padStart(2, "0"),
+    const fixedGlobFunction =
+      "__optique-fixed-glob-" +
+      Array.from(programName, (character) =>
+        character.charCodeAt(0).toString(16).padStart(2, "0"),
       ).join("");
     return `#compdef ${programName}
 function ${functionName} () {
@@ -1566,25 +1568,27 @@ fi
   *encodeSuggestions(suggestions: readonly Suggestion[]): Iterable<string> {
     for (const suggestion of suggestions) {
       if (suggestion.kind === "literal") {
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         yield `${encodeLiteral(suggestion.text)}\0${description}\0`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
-          encodeFilePrefix(suggestion)
-        }\0${description}\0`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${encodeFilePrefix(
+          suggestion,
+        )}\0${description}\0`;
       }
     }
   },
@@ -1600,9 +1604,9 @@ export const fish: ShellCompletion = {
     validateProgramName(programName);
     // fish single quotes interpret both \\ and \'. Escape original
     // backslashes before adding the escapes for apostrophes.
-    const escapedArgs = args.map((arg) =>
-      `'${arg.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
-    ).join(" ");
+    const escapedArgs = args
+      .map((arg) => `'${arg.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`)
+      .join(" ");
     const functionName = `__${programName}_complete`;
     return `
 function ${functionName}
@@ -1641,10 +1645,10 @@ function ${functionName}
 
     # Call completion command and capture output
 ${
-      escapedArgs
-        ? `    set -l output (${programName} ${escapedArgs} $prev $current 2>/dev/null)\n`
-        : `    set -l output (${programName} $prev $current 2>/dev/null)\n`
-    }
+  escapedArgs
+    ? `    set -l output (${programName} ${escapedArgs} $prev $current 2>/dev/null)\n`
+    : `    set -l output (${programName} $prev $current 2>/dev/null)\n`
+}
     # Process each line of output
     for line in $output
         set -l literal 0
@@ -1965,26 +1969,28 @@ complete -c ${programName} -f -a '(${functionName})'
     for (const suggestion of suggestions) {
       if (i > 0) yield "\n";
       if (suggestion.kind === "literal") {
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         // Format: value\tdescription
         yield `${encodeLiteral(suggestion.text)}\t${description}`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
-          encodeFilePrefix(suggestion)
-        }\t${description}`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${encodeFilePrefix(
+          suggestion,
+        )}\t${description}`;
       }
       i++;
     }
@@ -2216,10 +2222,10 @@ export def "${functionName}" [context: string] {
 
   let output = try {
 ${
-      escapedArgs
-        ? `    ^${programName} ${escapedArgs} ...$final_args | complete | get stdout\n`
-        : `    ^${programName} ...$final_args | complete | get stdout\n`
-    }  } catch {
+  escapedArgs
+    ? `    ^${programName} ${escapedArgs} ...$final_args | complete | get stdout\n`
+    : `    ^${programName} ...$final_args | complete | get stdout\n`
+}  } catch {
     ""
   }
 
@@ -2546,26 +2552,28 @@ ${functionName}-external
     for (const suggestion of suggestions) {
       if (i > 0) yield "\n";
       if (suggestion.kind === "literal") {
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         // Format: value\tdescription
         yield `${encodeLiteral(suggestion.text)}\t${description}`;
       } else {
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
-          encodeFilePrefix(suggestion)
-        }\t${description}`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${encodeFilePrefix(
+          suggestion,
+        )}\t${description}`;
       }
       i++;
     }
@@ -2580,7 +2588,8 @@ export const pwsh: ShellCompletion = {
   name: "pwsh",
   generateScript(programName: string, args: readonly string[] = []): string {
     validateProgramName(programName);
-    const escapedArgs = args.map((arg) => `'${arg.replace(/'/g, "''")}'`)
+    const escapedArgs = args
+      .map((arg) => `'${arg.replace(/'/g, "''")}'`)
       .join(", ");
     return `
 Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
@@ -2652,11 +2661,11 @@ Register-ArgumentCompleter -Native -CommandName ${programName} -ScriptBlock {
     # Build arguments array for completion command
     \$completionArgs = @()
 ${
-      escapedArgs
-        ? `    \$completionArgs += @(${escapedArgs})
+  escapedArgs
+    ? `    \$completionArgs += @(${escapedArgs})
 `
-        : ""
-    }    \$completionArgs += \$arguments
+    : ""
+}    \$completionArgs += \$arguments
 
     # Call completion command and capture output
     try {
@@ -2894,11 +2903,12 @@ ${
     for (const suggestion of suggestions) {
       if (i > 0) yield "\n";
       if (suggestion.kind === "literal") {
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         // Format: text\tlistItemText\tdescription
         const text = sanitizeForTransport(suggestion.text);
         yield `${encodeLiteral(suggestion.text)}\t${text}\t${description}`;
@@ -2906,15 +2916,16 @@ ${
         // Emit special marker for native file completion
         const extensions = encodeExtensions(suggestion.extensions);
         const hidden = suggestion.includeHidden ? "1" : "0";
-        const description = suggestion.description == null
-          ? ""
-          : sanitizeForTransport(
-            formatMessage(suggestion.description, { colors: false }),
-          );
+        const description =
+          suggestion.description == null
+            ? ""
+            : sanitizeForTransport(
+                formatMessage(suggestion.description, { colors: false }),
+              );
         const pattern = encodePattern(suggestion.pattern ?? "");
-        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${
-          encodeFilePrefix(suggestion)
-        }\t[file]\t${description}`;
+        yield `__FILE__:${suggestion.type}:${extensions}:${pattern}:${hidden}${encodeFilePrefix(
+          suggestion,
+        )}\t[file]\t${description}`;
       }
       i++;
     }

@@ -156,23 +156,29 @@ function getTypeName(value: unknown): string {
 }
 
 function defaultEnvSource(key: string): string | undefined {
-  const denoGlobal = (globalThis as {
-    readonly Deno?: { readonly env?: { readonly get?: EnvSource } };
-  }).Deno;
+  const denoGlobal = (
+    globalThis as {
+      readonly Deno?: { readonly env?: { readonly get?: EnvSource } };
+    }
+  ).Deno;
   if (typeof denoGlobal?.env?.get === "function") {
     return denoGlobal.env.get(key);
   }
-  const processGlobal = (globalThis as {
-    readonly process?: { readonly env?: Record<string, string | undefined> };
-  }).process;
+  const processGlobal = (
+    globalThis as {
+      readonly process?: { readonly env?: Record<string, string | undefined> };
+    }
+  ).process;
   return processGlobal?.env?.[key];
 }
 
 function isErrnoException(error: unknown): error is { readonly code: string } {
-  return error != null &&
+  return (
+    error != null &&
     typeof error === "object" &&
     "code" in error &&
-    typeof (error as { readonly code?: unknown }).code === "string";
+    typeof (error as { readonly code?: unknown }).code === "string"
+  );
 }
 
 function normalizeEnvFilePaths(paths: EnvFilePaths): readonly string[] {
@@ -183,18 +189,18 @@ function normalizeEnvFilePaths(paths: EnvFilePaths): readonly string[] {
     for (const path of paths) {
       if (typeof path !== "string") {
         throw new TypeError(
-          `Expected envFile paths to be strings, but got: ${
-            getTypeName(path)
-          }.`,
+          `Expected envFile paths to be strings, but got: ${getTypeName(
+            path,
+          )}.`,
         );
       }
     }
     return paths;
   }
   throw new TypeError(
-    `Expected envFile.paths to be a boolean, string, array, or undefined, but got: ${
-      getTypeName(paths)
-    }.`,
+    `Expected envFile.paths to be a boolean, string, array, or undefined, but got: ${getTypeName(
+      paths,
+    )}.`,
   );
 }
 
@@ -218,18 +224,18 @@ function normalizeEnvFileOptions(
   }
   if (envFile == null || typeof envFile !== "object") {
     throw new TypeError(
-      `Expected envFile to be a boolean, string, array, or object, but got: ${
-        getTypeName(envFile)
-      }.`,
+      `Expected envFile to be a boolean, string, array, or object, but got: ${getTypeName(
+        envFile,
+      )}.`,
     );
   }
   const options = envFile as EnvFileOptions;
   const rawSubstitute = options.substitute;
   if (rawSubstitute !== undefined && typeof rawSubstitute !== "function") {
     throw new TypeError(
-      `Expected envFile.substitute to be a function or undefined, but got: ${
-        getTypeName(rawSubstitute)
-      }.`,
+      `Expected envFile.substitute to be a function or undefined, but got: ${getTypeName(
+        rawSubstitute,
+      )}.`,
     );
   }
   return {
@@ -406,14 +412,15 @@ function parseQuotedEnvValue(
       const rawValue = input.slice(valueStart, cursor);
       const nextIndex = cursor + 1;
       return {
-        value: quote === "'"
-          ? rawValue
-          : expandEnvValue(rawValue, lookup, substitute, {
-            path,
-            startLine: line,
-            interpretEscapes: true,
-            allowSubstitution: true,
-          }),
+        value:
+          quote === "'"
+            ? rawValue
+            : expandEnvValue(rawValue, lookup, substitute, {
+                path,
+                startLine: line,
+                interpretEscapes: true,
+                allowSubstitution: true,
+              }),
         nextIndex,
       };
     }
@@ -496,20 +503,26 @@ function parseEnvFile(
     }
     index = skipHorizontalWhitespace(input, index + 1);
     const lineLookup: EnvSource = (lookupKey) =>
-      lookup(lookupKey) ??
-        values.get(lookupKey) ??
-        outerValues.get(lookupKey);
-    const parsed = input[index] === "'" || input[index] === '"'
-      ? parseQuotedEnvValue(
-        input,
-        index,
-        input[index] as "'" | '"',
-        path,
-        line,
-        lineLookup,
-        substitute,
-      )
-      : parseUnquotedEnvValue(input, index, path, line, lineLookup, substitute);
+      lookup(lookupKey) ?? values.get(lookupKey) ?? outerValues.get(lookupKey);
+    const parsed =
+      input[index] === "'" || input[index] === '"'
+        ? parseQuotedEnvValue(
+            input,
+            index,
+            input[index] as "'" | '"',
+            path,
+            line,
+            lineLookup,
+            substitute,
+          )
+        : parseUnquotedEnvValue(
+            input,
+            index,
+            path,
+            line,
+            lineLookup,
+            substitute,
+          );
     values.set(key, parsed.value);
     index = skipHorizontalWhitespace(input, parsed.nextIndex);
     if (input[index] === "#") {
@@ -598,9 +611,9 @@ export function createEnvContext(options: EnvContextOptions = {}): EnvContext {
   const envFileValues = loadEnvFileValues(envFileOptions, baseSource);
   const source: EnvSource = (key) => {
     const value = baseSource(key) as unknown;
-    return value === undefined ? envFileValues.get(key) : value as
-      | string
-      | undefined;
+    return value === undefined
+      ? envFileValues.get(key)
+      : (value as string | undefined);
   };
 
   return {
@@ -675,23 +688,25 @@ export interface BindEnvOptions<M extends Mode, TValue> {
  * @template TState The parser state.
  * @since 1.4.0
  */
-export type EnvBoundParser<M extends Mode, TValue, TState> =
-  & FluentParser<M, TValue, TState>
-  & {
-    /**
-     * Reads this binding's environment value or configured default without
-     * reading CLI input or completing the wrapped parser.
-     *
-     * @returns A parsed fallback result, or a failure if the value is invalid
-     *          or neither the environment nor a default supplies a value.
-     *          Async bindings return a promise.
-     * @throws {Error} If the environment source, value parser, or wrapped
-     *                 parser's validation hook throws. Async bindings reject
-     *                 their promise instead.
-     * @since 1.4.0
-     */
-    readonly readFallback: () => ModeValue<M, ValueParserResult<TValue>>;
-  };
+export type EnvBoundParser<M extends Mode, TValue, TState> = FluentParser<
+  M,
+  TValue,
+  TState
+> & {
+  /**
+   * Reads this binding's environment value or configured default without
+   * reading CLI input or completing the wrapped parser.
+   *
+   * @returns A parsed fallback result, or a failure if the value is invalid
+   *          or neither the environment nor a default supplies a value.
+   *          Async bindings return a promise.
+   * @throws {Error} If the environment source, value parser, or wrapped
+   *                 parser's validation hook throws. Async bindings reject
+   *                 their promise instead.
+   * @since 1.4.0
+   */
+  readonly readFallback: () => ModeValue<M, ValueParserResult<TValue>>;
+};
 
 /**
  * Binds a parser to environment variables with fallback behavior.
@@ -737,11 +752,7 @@ export type EnvBoundParser<M extends Mode, TValue, TState> =
  *                 CLI tokens are parsed (see issue #414).
  * @since 1.0.0
  */
-export function bindEnv<
-  M extends Mode,
-  TValue,
-  TState,
->(
+export function bindEnv<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   options: BindEnvOptions<M, TValue>,
 ): EnvBoundParser<M, TValue, TState> {
@@ -751,8 +762,8 @@ export function bindEnv<
         options.key === null
           ? "null"
           : Array.isArray(options.key)
-          ? "array"
-          : typeof options.key
+            ? "array"
+            : typeof options.key
       }.`,
     );
   }
@@ -763,27 +774,25 @@ export function bindEnv<
         options.parser === null
           ? "null"
           : Array.isArray(options.parser)
-          ? "array"
-          : typeof options.parser
+            ? "array"
+            : typeof options.parser
       }.`,
     );
   }
 
   const envBindStateKey: unique symbol = Symbol("@optique/env/bindState");
 
-  type EnvBindState =
-    & {
-      readonly [K in typeof envBindStateKey]: true;
-    }
-    & {
-      readonly hasCliValue: boolean;
-      readonly cliState?: TState;
-    };
+  type EnvBindState = {
+    readonly [K in typeof envBindStateKey]: true;
+  } & {
+    readonly hasCliValue: boolean;
+    readonly cliState?: TState;
+  };
 
   function isEnvBindState(value: unknown): value is EnvBindState {
-    return value != null &&
-      typeof value === "object" &&
-      envBindStateKey in value;
+    return (
+      value != null && typeof value === "object" && envBindStateKey in value
+    );
   }
 
   const deferPromptUntilConfigResolves = parser.shouldDeferCompletion;
@@ -800,15 +809,16 @@ export function bindEnv<
       | EnvSourceData
       | undefined;
     if (sourceData == null) return false;
-    return sourceData.source(`${sourceData.prefix}${options.key}`) !==
-      undefined;
+    return (
+      sourceData.source(`${sourceData.prefix}${options.key}`) !== undefined
+    );
   }
 
   function getInnerState(state: TState): TState {
     if (!isEnvBindState(state)) return state;
     return state.cliState === undefined
       ? inheritAnnotations(state, parser.initialState)
-      : state.cliState as TState;
+      : (state.cliState as TState);
   }
 
   const boundParser: Parser<M, TValue, TState> = {
@@ -816,9 +826,10 @@ export function bindEnv<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    usage: options.default !== undefined
-      ? [{ type: "optional", terms: parser.usage }]
-      : parser.usage,
+    usage:
+      options.default !== undefined
+        ? [{ type: "optional", terms: parser.usage }]
+        : parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
@@ -835,19 +846,13 @@ export function bindEnv<
     },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       const innerState = getInnerState(state);
-      return delegateSuggestNodes(
-        parser,
-        boundParser,
-        state,
-        path,
-        innerState,
-      );
+      return delegateSuggestNodes(parser, boundParser, state, path, innerState);
     },
 
     parse: (context) => {
       const annotations = getAnnotations(context.state);
-      const hadCliValue = isEnvBindState(context.state) &&
-        context.state.hasCliValue;
+      const hadCliValue =
+        isEnvBindState(context.state) && context.state.hasCliValue;
 
       // Unwrap state from a previous parse() call.  After a successful
       // parse, object() stores the wrapped { hasCliValue, cliState }
@@ -855,9 +860,10 @@ export function bindEnv<
       // parser expects its own native state, so we unwrap cliState
       // before delegating.
       const innerState = getInnerState(context.state);
-      const innerContext = innerState !== context.state
-        ? { ...context, state: innerState }
-        : context;
+      const innerContext =
+        innerState !== context.state
+          ? { ...context, state: innerState }
+          : context;
 
       const processResult = (
         result: ParserResult<TState>,
@@ -867,16 +873,21 @@ export function bindEnv<
           // updates; the binding owns cumulative CLI provenance.  A re-parse
           // must retain earlier input, while an initially empty parse must
           // still allow the fallback source.
-          const terminatorOnly = result.consumed.length === 1 &&
-            result.consumed[0] === "--" && !context.optionsTerminated &&
+          const terminatorOnly =
+            result.consumed.length === 1 &&
+            result.consumed[0] === "--" &&
+            !context.optionsTerminated &&
             result.next.optionsTerminated;
-          const cliConsumed = hadCliValue ||
-            (result.consumed.length > 0 && !terminatorOnly);
-          const nextState = injectAnnotations({
-            [envBindStateKey]: true as const,
-            hasCliValue: cliConsumed,
-            cliState: result.next.state,
-          }, annotations);
+          const cliConsumed =
+            hadCliValue || (result.consumed.length > 0 && !terminatorOnly);
+          const nextState = injectAnnotations(
+            {
+              [envBindStateKey]: true as const,
+              hasCliValue: cliConsumed,
+              cliState: result.next.state,
+            },
+            annotations,
+          );
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
@@ -898,10 +909,13 @@ export function bindEnv<
           return { success: true, next: context, consumed: [] };
         }
 
-        const nextState = injectAnnotations({
-          [envBindStateKey]: true as const,
-          hasCliValue: false,
-        }, annotations);
+        const nextState = injectAnnotations(
+          {
+            [envBindStateKey]: true as const,
+            hasCliValue: false,
+          },
+          annotations,
+        );
         return {
           success: true,
           next: { ...innerContext, state: nextState as TState },
@@ -929,8 +943,8 @@ export function bindEnv<
         isEnvBindState(state)
           ? state.cliState
           : isInjectedAnnotationState(state)
-          ? undefined
-          : state,
+            ? undefined
+            : state,
         exec,
       );
     },
@@ -938,11 +952,9 @@ export function bindEnv<
     suggest: parser.suggest,
     ...(typeof deferPromptUntilConfigResolves === "function"
       ? {
-        shouldDeferCompletion: (
-          state: TState,
-          exec?: ExecutionContext,
-        ) => deferPromptUntilConfigResolves.call(parser, state, exec),
-      }
+          shouldDeferCompletion: (state: TState, exec?: ExecutionContext) =>
+            deferPromptUntilConfigResolves.call(parser, state, exec),
+        }
       : {}),
     getDocFragments(state, upperDefaultValue?) {
       const defaultValue = upperDefaultValue ?? options.default;
@@ -950,20 +962,18 @@ export function bindEnv<
       const name = `${options.context.prefix}${options.key}`;
       const hidden = isDocHidden(options.documentation?.hidden);
       const visibleEntry = docs.fragments.some((fragment) =>
-        (fragment.type === "entry" ? [fragment] : fragment.entries).some((
-          entry,
-        ) =>
-          !isDocEntryHidden(entry) &&
-          formatUsageTerm(entry.term, { context: "doc" }).trim() !== ""
-        )
+        (fragment.type === "entry" ? [fragment] : fragment.entries).some(
+          (entry) =>
+            !isDocEntryHidden(entry) &&
+            formatUsageTerm(entry.term, { context: "doc" }).trim() !== "",
+        ),
       );
       const ownBindings: readonly EnvironmentBindingDoc[] =
         docs.sourceOnly === true ||
-          ((options.documentation?.description?.length ?? 0) > 0 &&
-            visibleEntry)
+        ((options.documentation?.description?.length ?? 0) > 0 && visibleEntry)
           ? [{ name, ...options.documentation }]
           : [];
-      const bindings = [...ownBindings, ...docs.environmentBindings ?? []];
+      const bindings = [...ownBindings, ...(docs.environmentBindings ?? [])];
       const attach = (entry: DocEntry) => ({
         ...entry,
         envVars: [
@@ -976,7 +986,7 @@ export function bindEnv<
         fragments: docs.fragments.map((fragment) =>
           fragment.type === "entry"
             ? { ...attach(fragment), type: "entry" as const }
-            : { ...fragment, entries: fragment.entries.map(attach) }
+            : { ...fragment, entries: fragment.entries.map(attach) },
         ),
       };
     },
@@ -1021,19 +1031,20 @@ export function bindEnv<
     parser,
     (sourceMetadata: ParserSourceMetadata<M, TValue, TState>) => ({
       ...sourceMetadata,
-      getMissingSourceValue: sourceMetadata.preservesSourceValue !== false &&
-          options.default !== undefined
-        ? () => {
-          // Route the default through the inner parser's validateValue so that
-          // CLI constraints cannot be bypassed via bindEnv defaults (#414).
-          if (typeof parser.validateValue === "function") {
-            return parser.validateValue(options.default!) as
-              | ValueParserResult<unknown>
-              | Promise<ValueParserResult<unknown>>;
-          }
-          return { success: true as const, value: options.default };
-        }
-        : undefined,
+      getMissingSourceValue:
+        sourceMetadata.preservesSourceValue !== false &&
+        options.default !== undefined
+          ? () => {
+              // Route the default through the inner parser's validateValue so that
+              // CLI constraints cannot be bypassed via bindEnv defaults (#414).
+              if (typeof parser.validateValue === "function") {
+                return parser.validateValue(options.default!) as
+                  | ValueParserResult<unknown>
+                  | Promise<ValueParserResult<unknown>>;
+              }
+              return { success: true as const, value: options.default };
+            }
+          : undefined,
       extractSourceValue: (state: unknown) => {
         if (!isEnvBindState(state)) {
           if (sourceMetadata.preservesSourceValue) {
@@ -1048,9 +1059,7 @@ export function bindEnv<
           return sourceMetadata.extractSourceValue(state);
         }
         if (state.hasCliValue) {
-          return sourceMetadata.extractSourceValue(
-            state.cliState,
-          );
+          return sourceMetadata.extractSourceValue(state.cliState);
         }
         const innerState = state.cliState ?? state;
         if (!sourceMetadata.preservesSourceValue) {
@@ -1071,13 +1080,14 @@ export function bindEnv<
       // wrapped parser transforms the source value, this wrapper's
       // completion lives in the transformed domain and must never
       // register under the raw source ID, so no completion is exposed.
-      completeSource: sourceMetadata.completeSource == null ||
-          sourceMetadata.preservesSourceValue === false
-        ? undefined
-        : (state: unknown, exec) =>
-          Promise.resolve(
-            boundParser.complete(state as TState, exec),
-          ) as Promise<ValueParserResult<unknown> | undefined>,
+      completeSource:
+        sourceMetadata.completeSource == null ||
+        sourceMetadata.preservesSourceValue === false
+          ? undefined
+          : (state: unknown, exec) =>
+              Promise.resolve(
+                boundParser.complete(state as TState, exec),
+              ) as Promise<ValueParserResult<unknown> | undefined>,
     }),
   );
   if (dependencyMetadata != null) {
@@ -1095,9 +1105,9 @@ export function bindEnv<
       };
       const missing: ValueParserResult<TValue> = {
         success: false,
-        error: message`Missing required environment variable: ${
-          envVar(`${sourceData.prefix}${options.key}`)
-        }`,
+        error: message`Missing required environment variable: ${envVar(
+          `${sourceData.prefix}${options.key}`,
+        )}`,
       };
       return dispatchByMode(
         parser.mode,
@@ -1119,7 +1129,7 @@ export function bindEnv<
             parser,
           );
           // Generic ModeValue<M, T> is not narrowed in the async branch.
-          const awaited = await result as
+          const awaited = (await result) as
             | ValueParserResult<TValue>
             | undefined;
           return awaited ?? missing;
@@ -1134,9 +1144,11 @@ export function bindEnv<
   // The empty step preserves success/provisional or accepts a non-match.
   const emptyStep = getEmptyInputBehavior(parser).step;
   defineEmptyInputBehavior(boundParser, {
-    ...(emptyStep === undefined ? {} : {
-      step: emptyStep === "failure" ? "success" : emptyStep,
-    }),
+    ...(emptyStep === undefined
+      ? {}
+      : {
+          step: emptyStep === "failure" ? "success" : emptyStep,
+        }),
   });
   return fluent(boundParser) as EnvBoundParser<M, TValue, TState>;
 }
@@ -1162,20 +1174,20 @@ function getEnvFallback<M extends Mode, TValue>(
   ): ValueParserResult<TValue> => {
     if (!parsed.success) return parsed;
     if (
-      innerParser == null || typeof innerParser.validateValue !== "function"
+      innerParser == null ||
+      typeof innerParser.validateValue !== "function"
     ) {
       return parsed;
     }
-    return innerParser.validateValue(
-      parsed.value,
-    ) as ValueParserResult<TValue>;
+    return innerParser.validateValue(parsed.value) as ValueParserResult<TValue>;
   };
   const validateAsync = async (
     parsed: ValueParserResult<TValue>,
   ): Promise<ValueParserResult<TValue>> => {
     if (!parsed.success) return parsed;
     if (
-      innerParser == null || typeof innerParser.validateValue !== "function"
+      innerParser == null ||
+      typeof innerParser.validateValue !== "function"
     ) {
       return parsed;
     }
@@ -1184,23 +1196,25 @@ function getEnvFallback<M extends Mode, TValue>(
 
   if (rawValue !== undefined) {
     if (typeof rawValue !== "string") {
-      const type = rawValue === null
-        ? "null"
-        : Array.isArray(rawValue)
-        ? "array"
-        : typeof rawValue;
+      const type =
+        rawValue === null
+          ? "null"
+          : Array.isArray(rawValue)
+            ? "array"
+            : typeof rawValue;
       return wrapForMode(mode, {
         success: false as const,
-        error: message`Environment variable ${
-          envVar(fullKey)
-        } must be a string, but got: ${type}.`,
+        error: message`Environment variable ${envVar(
+          fullKey,
+        )} must be a string, but got: ${type}.`,
       });
     }
     return dispatchByMode(
       mode,
       () => {
-        const parsed = (options.parser as ValueParser<"sync", TValue>)
-          .parse(rawValue);
+        const parsed = (options.parser as ValueParser<"sync", TValue>).parse(
+          rawValue,
+        );
         return validateSync(parsed);
       },
       async () => {
@@ -1288,30 +1302,29 @@ function getEnvOrDefault<M extends Mode, TValue>(
   // call without any annotations, or run() without any contexts), we cannot
   // distinguish "context forgotten" from "no contexts at all", so we preserve
   // the inner parser's own error to avoid misleading low-level callers.
-  const envContextAbsent = annotations != null &&
-    !(options.context.id in annotations);
+  const envContextAbsent =
+    annotations != null && !(options.context.id in annotations);
   const fullKey = `${
     sourceData?.prefix ?? options.context.prefix
   }${options.key}`;
   if (innerParser != null) {
-    const completeState = innerState ??
+    const completeState =
+      innerState ??
       (annotations != null &&
-          innerParser.initialState == null &&
-          getTraits(innerParser).inheritsAnnotations === true
+      innerParser.initialState == null &&
+      getTraits(innerParser).inheritsAnnotations === true
         ? injectAnnotations(innerParser.initialState, annotations)
         : innerParser.initialState);
     const innerResult = innerParser.complete(completeState, exec);
     if (envContextAbsent) {
       const unregisteredError: Result<TValue> = {
         success: false,
-        error: message`Environment variable ${
-          envVar(fullKey)
-        } could not be read: the env context was not passed to run()'s contexts option.`,
+        error: message`Environment variable ${envVar(
+          fullKey,
+        )} could not be read: the env context was not passed to run()'s contexts option.`,
       };
-      return mapModeValue(
-        mode,
-        innerResult,
-        (r) => (r.success ? r : unregisteredError),
+      return mapModeValue(mode, innerResult, (r) =>
+        r.success ? r : unregisteredError,
       );
     }
     return wrapForMode(mode, innerResult);
@@ -1320,9 +1333,9 @@ function getEnvOrDefault<M extends Mode, TValue>(
   if (envContextAbsent) {
     return wrapForMode(mode, {
       success: false as const,
-      error: message`Environment variable ${
-        envVar(fullKey)
-      } could not be read: the env context was not passed to run()'s contexts option.`,
+      error: message`Environment variable ${envVar(
+        fullKey,
+      )} could not be read: the env context was not passed to run()'s contexts option.`,
     });
   }
 
@@ -1391,12 +1404,11 @@ function getEnvSourceValue<M extends Mode, TValue>(
   // value type matches TValue so validation is type-safe (#414).
   const validateFallback = (
     parsed: ValueParserResult<TValue>,
-  ):
-    | ValueParserResult<unknown>
-    | Promise<ValueParserResult<unknown>> => {
+  ): ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> => {
     if (!parsed.success) return parsed;
     if (
-      innerParser == null || typeof innerParser.validateValue !== "function"
+      innerParser == null ||
+      typeof innerParser.validateValue !== "function"
     ) {
       return parsed;
     }
@@ -1407,16 +1419,17 @@ function getEnvSourceValue<M extends Mode, TValue>(
 
   if (rawValue !== undefined) {
     if (typeof rawValue !== "string") {
-      const type = rawValue === null
-        ? "null"
-        : Array.isArray(rawValue)
-        ? "array"
-        : typeof rawValue;
+      const type =
+        rawValue === null
+          ? "null"
+          : Array.isArray(rawValue)
+            ? "array"
+            : typeof rawValue;
       return {
         success: false as const,
-        error: message`Environment variable ${
-          envVar(fullKey)
-        } must be a string, but got: ${type}.`,
+        error: message`Environment variable ${envVar(
+          fullKey,
+        )} must be a string, but got: ${type}.`,
       };
     }
     // Route both sync and async env-parse results through the inner
@@ -1502,9 +1515,7 @@ export function bool(options: BoolOptions = {}): ValueParser<"sync", boolean> {
       }
 
       if (
-        FALSE_LITERALS.includes(
-          normalized as (typeof FALSE_LITERALS)[number],
-        )
+        FALSE_LITERALS.includes(normalized as (typeof FALSE_LITERALS)[number])
       ) {
         return { success: true, value: false };
       }
@@ -1512,15 +1523,16 @@ export function bool(options: BoolOptions = {}): ValueParser<"sync", boolean> {
       return {
         success: false,
         error: options.errors?.invalidFormat
-          ? (typeof options.errors.invalidFormat === "function"
+          ? typeof options.errors.invalidFormat === "function"
             ? options.errors.invalidFormat(input)
-            : options.errors.invalidFormat)
-          : message`Invalid Boolean value: ${input}. Expected one of ${
-            valueSet([...TRUE_LITERALS, ...FALSE_LITERALS], {
-              fallback: "",
-              locale: "en-US",
-            })
-          }`,
+            : options.errors.invalidFormat
+          : message`Invalid Boolean value: ${input}. Expected one of ${valueSet(
+              [...TRUE_LITERALS, ...FALSE_LITERALS],
+              {
+                fallback: "",
+                locale: "en-US",
+              },
+            )}`,
       };
     },
     format(value: boolean): string {

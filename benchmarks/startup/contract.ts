@@ -51,33 +51,29 @@ export function runChecked(
   });
   const wallMs = Number(process.hrtime.bigint() - start) / 1e6;
   if (
-    result.error != null || result.signal != null ||
+    result.error != null ||
+    result.signal != null ||
     result.status !== expected.status
   ) {
-    const code = result.error != null && "code" in result.error
-      ? result.error.code
-      : null;
+    const code =
+      result.error != null && "code" in result.error ? result.error.code : null;
     throw new TypeError(
-      `Invalid process status: ${
-        JSON.stringify({
-          status: result.status,
-          signal: result.signal,
-          error: code,
-          stdout: result.stdout,
-          stderr: result.stderr,
-        })
-      }`,
+      `Invalid process status: ${JSON.stringify({
+        status: result.status,
+        signal: result.signal,
+        error: code,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      })}`,
     );
   }
   if (result.stdout !== expected.stdout || result.stderr !== expected.stderr) {
     throw new TypeError(
-      `Unexpected process output: ${
-        JSON.stringify({
-          expected,
-          stdout: result.stdout,
-          stderr: result.stderr,
-        })
-      }`,
+      `Unexpected process output: ${JSON.stringify({
+        expected,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      })}`,
     );
   }
   return {
@@ -99,12 +95,12 @@ export function summarize(samples: readonly number[]) {
   const middle = Math.floor(sorted.length / 2);
   return {
     count: sorted.length,
-    medianMs: sorted.length % 2 === 1
-      ? sorted[middle]
-      : sorted[middle - 1] / 2 + sorted[middle] / 2,
-    p95Ms: sorted.length < 100
-      ? null
-      : sorted[Math.ceil(sorted.length * 0.95) - 1],
+    medianMs:
+      sorted.length % 2 === 1
+        ? sorted[middle]
+        : sorted[middle - 1] / 2 + sorted[middle] / 2,
+    p95Ms:
+      sorted.length < 100 ? null : sorted[Math.ceil(sorted.length * 0.95) - 1],
   };
 }
 
@@ -126,8 +122,8 @@ export function portableCommand(
   command: Command,
   tokens: Readonly<Record<string, string>>,
 ): Command {
-  const replacements = Object.entries(tokens).toSorted((a, b) =>
-    b[1].length - a[1].length
+  const replacements = Object.entries(tokens).toSorted(
+    (a, b) => b[1].length - a[1].length,
   );
   return mapCommand(command, (text) => {
     for (const [name, value] of replacements) {
@@ -142,16 +138,14 @@ export function expandCommand(
   command: Command,
   tokens: Readonly<Record<string, string>>,
 ): Command {
-  return mapCommand(
-    command,
-    (text) =>
-      text.replace(/\$\{([A-Z_]+)\}/g, (_, name: string) => {
-        const value = tokens[name];
-        if (value == null) {
-          throw new TypeError(`Unresolved command token: ${name}`);
-        }
-        return value;
-      }),
+  return mapCommand(command, (text) =>
+    text.replace(/\$\{([A-Z_]+)\}/g, (_, name: string) => {
+      const value = tokens[name];
+      if (value == null) {
+        throw new TypeError(`Unresolved command token: ${name}`);
+      }
+      return value;
+    }),
   );
 }
 
@@ -164,9 +158,10 @@ function mapCommand(
     args: command.args.map(transform),
     cwd: transform(command.cwd),
     env: Object.fromEntries(
-      Object.entries(command.env).map((
-        [key, value],
-      ) => [key, transform(value)]),
+      Object.entries(command.env).map(([key, value]) => [
+        key,
+        transform(value),
+      ]),
     ),
   };
 }
@@ -179,35 +174,33 @@ export function inputIdentity(root: string) {
   };
   const walk = (path: string, include: (path: string) => boolean) => {
     if (!existsSync(join(root, path))) return;
-    for (
-      const entry of readdirSync(join(root, path), { withFileTypes: true })
-    ) {
+    for (const entry of readdirSync(join(root, path), {
+      withFileTypes: true,
+    })) {
       const child = `${path}/${entry.name}`;
       if (entry.isDirectory()) walk(child, include);
       else if (entry.isFile() && include(child)) paths.push(child);
     }
   };
-  for (
-    const path of [
-      "LICENSE",
-      "package.json",
-      "pnpm-workspace.yaml",
-      "pnpm-lock.yaml",
-      "deno.json",
-      "deno.lock",
-      "mise.toml",
-    ]
-  ) add(path);
+  for (const path of [
+    "LICENSE",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "deno.json",
+    "deno.lock",
+    "mise.toml",
+  ])
+    add(path);
   for (const name of ["core", "run", "discover"]) {
     const base = `packages/${name}`;
-    for (
-      const path of [
-        "package.json",
-        "deno.json",
-        "tsdown.config.ts",
-        "README.md",
-      ]
-    ) add(`${base}/${path}`);
+    for (const path of [
+      "package.json",
+      "deno.json",
+      "tsdown.config.ts",
+      "README.md",
+    ])
+      add(`${base}/${path}`);
     if (existsSync(join(root, base))) {
       for (const file of readdirSync(join(root, base))) {
         if (/^(license|licence|copying)(\..*)?$/i.test(file)) {
@@ -221,8 +214,10 @@ export function inputIdentity(root: string) {
   walk(
     "benchmarks/startup",
     (path) =>
-      !path.includes("/results/") && !path.includes("/node_modules/") &&
-      !path.endsWith(".test.ts") && !path.endsWith(".md"),
+      !path.includes("/results/") &&
+      !path.includes("/node_modules/") &&
+      !path.endsWith(".test.ts") &&
+      !path.endsWith(".md"),
   );
   const files = [...new Set(paths)].sort().map((path) => ({
     path,
@@ -249,7 +244,8 @@ export function validateDenoGraph(
     if (
       item.specifier.startsWith("node:") &&
       builtinModules.includes(item.specifier.slice(5))
-    ) continue;
+    )
+      continue;
     if (!item.specifier.startsWith("file:")) {
       throw new TypeError(`Unexpected Deno module: ${item.specifier}`);
     }
@@ -263,9 +259,12 @@ export function validateDenoGraph(
 /** Includes the root itself, without prefix-confusing sibling paths. */
 export function isInside(path: string, root: string): boolean {
   const rel = relative(resolve(root), resolve(path));
-  return rel === "" ||
-    (rel !== ".." && !rel.startsWith(`..${sep}`) &&
-      !resolve(root, rel).startsWith(`${root}${sep}..`));
+  return (
+    rel === "" ||
+    (rel !== ".." &&
+      !rel.startsWith(`..${sep}`) &&
+      !resolve(root, rel).startsWith(`${root}${sep}..`))
+  );
 }
 
 /** Fingerprints release-pack inputs and benchmark preparation sources. */
@@ -329,9 +328,10 @@ export function portableArtifact(
   }
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map((
-        [key, item],
-      ) => [key, portableArtifact(item, prefix, token)]),
+      Object.entries(value).map(([key, item]) => [
+        key,
+        portableArtifact(item, prefix, token),
+      ]),
     );
   }
   return value;
@@ -350,7 +350,8 @@ export function portableEvidence(
   return Object.entries({
     "${REPO_ROOT}": repoRoot.replace(/[\\/]+$/, ""),
     "${CONSUMERS_ROOT}": consumersRoot.replace(/[\\/]+$/, ""),
-  }).sort(([, left], [, right]) => right.length - left.length)
+  })
+    .sort(([, left], [, right]) => right.length - left.length)
     .reduce<unknown>(
       (artifact, [token, prefix]) => portableArtifact(artifact, prefix, token),
       value,

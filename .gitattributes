@@ -1,2 +1,4 @@
-CHANGES.md merge=sacho
+CHANGES.md merge=sacho text eol=lf
+changes.d/** text eol=lf
 changes.d/next merge=ours
+packages/man/test/fixtures/markdown-reference/*.expected.txt text eol=lf

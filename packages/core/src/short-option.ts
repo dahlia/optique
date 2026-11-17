@@ -149,10 +149,7 @@ export function combinedOptionScope(
 ): ScopeSource {
   return (selections, arities, context, path = []) =>
     new Set(
-      parsers.flatMap((
-        parser,
-        index,
-      ) => [
+      parsers.flatMap((parser, index) => [
         ...parserScope(parser)(
           selections,
           arities,
@@ -186,9 +183,7 @@ export function repeatedOptionScope(
     // own the token. Later items keep earlier committed routes reserved.
     if (indices.size === 0) indices.add(0);
     return new Set(
-      [...indices].flatMap((
-        index,
-      ) => [
+      [...indices].flatMap((index) => [
         ...parserScope(parser)(selections, arities, context, [...path, index]),
       ]),
     );
@@ -225,24 +220,33 @@ export function conditionalOptionScope(
   candidates: readonly Parser<Mode, unknown, unknown>[] = [],
 ) {
   const scope = selectableOptionScope((selections, arities, context, path) => {
-    const canSkip = discriminator.canSkip?.(
-      context == null
-        ? discriminator.initialState
-        : inheritAnnotations(context.state, discriminator.initialState),
-      context?.exec == null ? undefined : withChildExecPath({
-        ...context.exec,
-        path: path ?? scopePath(context),
-      }, "_discriminator"),
-    ) === true;
-    return combinedOptionScope([
-      discriminator,
-      ...(canSkip ? candidates : []),
-      ...(fallback == null ? [] : [fallback]),
-    ], [
-      "_discriminator",
-      ...(canSkip ? candidates.map(() => "_branch") : []),
-      ...(fallback == null ? [] : ["_branch"]),
-    ])(selections, arities, context, path);
+    const canSkip =
+      discriminator.canSkip?.(
+        context == null
+          ? discriminator.initialState
+          : inheritAnnotations(context.state, discriminator.initialState),
+        context?.exec == null
+          ? undefined
+          : withChildExecPath(
+              {
+                ...context.exec,
+                path: path ?? scopePath(context),
+              },
+              "_discriminator",
+            ),
+      ) === true;
+    return combinedOptionScope(
+      [
+        discriminator,
+        ...(canSkip ? candidates : []),
+        ...(fallback == null ? [] : [fallback]),
+      ],
+      [
+        "_discriminator",
+        ...(canSkip ? candidates.map(() => "_branch") : []),
+        ...(fallback == null ? [] : ["_branch"]),
+      ],
+    )(selections, arities, context, path);
   });
   return {
     source: scope.source,
@@ -252,10 +256,10 @@ export function conditionalOptionScope(
     ): void {
       scope.select(
         context,
-        combinedOptionScope([discriminator, branch], [
-          "_discriminator",
-          "_branch",
-        ]),
+        combinedOptionScope(
+          [discriminator, branch],
+          ["_discriminator", "_branch"],
+        ),
       );
     },
   };
@@ -266,14 +270,15 @@ export function getOptionScope(
   context: ParserContext<unknown>,
 ): ReadonlySet<string> {
   const scoped = (context as ScopedContext)[optionScopeKey];
-  const names = scoped == null
-    ? extractOptionNames(context.usage, true)
-    : new Set([
-      ...scoped.names,
-      ...[...scoped.sources].flatMap((
-        source,
-      ) => [...source(scoped.selections.map, undefined, context)]),
-    ]);
+  const names =
+    scoped == null
+      ? extractOptionNames(context.usage, true)
+      : new Set([
+          ...scoped.names,
+          ...[...scoped.sources].flatMap((source) => [
+            ...source(scoped.selections.map, undefined, context),
+          ]),
+        ]);
   return names;
 }
 
@@ -332,9 +337,10 @@ export function withParserOptionScope<S>(
     selections.map,
   );
   if (inherited?.sources.has(source)) return context;
-  const sources = inherited == null
-    ? new Set([source])
-    : withScopeSource(inherited.sources, source);
+  const sources =
+    inherited == null
+      ? new Set([source])
+      : withScopeSource(inherited.sources, source);
   return {
     ...context,
     [optionScopeKey]: {
@@ -367,7 +373,9 @@ export function adoptOptionScope<S>(
   const own = (context as ScopedContext)[optionScopeKey];
   const child = (next as ScopedContext)[optionScopeKey];
   if (
-    own != null && child != null && own.selections.map !== child.selections.map
+    own != null &&
+    child != null &&
+    own.selections.map !== child.selections.map
   ) {
     for (const [source, selected] of child.selections.map) {
       setSelection(own.selections, source, selected);
@@ -384,14 +392,16 @@ export function restoreOptionScope<S>(
   adoptOptionScope(parent, next);
   const own = (parent as ScopedContext)[optionScopeKey];
   const child = (next as ScopedContext)[optionScopeKey];
-  return own == null || child == null ? next : {
-    ...next,
-    [optionScopeKey]: {
-      ...child,
-      names: own.names,
-      selections: own.selections,
-    },
-  };
+  return own == null || child == null
+    ? next
+    : {
+        ...next,
+        [optionScopeKey]: {
+          ...child,
+          names: own.names,
+          selections: own.selections,
+        },
+      };
 }
 
 /** Decorates construct entry points while retaining internal metadata. @internal */
@@ -462,10 +472,13 @@ export function fullNameOwnsToken(
   if (!/^-[^-]/.test(token)) return false;
   for (const name of getOptionScope(context)) {
     if (
-      name.startsWith("-") && !name.startsWith("--") &&
-      name.length > 2 && !/^-[^-]$/u.test(name) &&
+      name.startsWith("-") &&
+      !name.startsWith("--") &&
+      name.length > 2 &&
+      !/^-[^-]$/u.test(name) &&
       (token === name || token.startsWith(`${name}=`))
-    ) return true;
+    )
+      return true;
   }
   return false;
 }
@@ -493,10 +506,13 @@ export function attachedValuePrefix(
     const remainder = `-${prefix.slice(index)}`;
     for (const name of scope) {
       if (
-        name.startsWith("-") && !name.startsWith("--") &&
-        name.length > 2 && !/^-[^-]$/u.test(name) &&
+        name.startsWith("-") &&
+        !name.startsWith("--") &&
+        name.length > 2 &&
+        !/^-[^-]$/u.test(name) &&
         (name.startsWith(remainder) || remainder.startsWith(`${name}=`))
-      ) return undefined;
+      )
+        return undefined;
     }
     const short = `-${character}`;
     if (optionNames.includes(short)) {

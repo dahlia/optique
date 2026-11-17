@@ -86,11 +86,14 @@ describe("command documentation inside object", () => {
           import.meta.url,
         ).href
       );
-    const docs = other.withCommandDocMetadata({ fragments: [] }, {
-      brief,
-      description,
-      footer,
-    });
+    const docs = other.withCommandDocMetadata(
+      { fragments: [] },
+      {
+        brief,
+        description,
+        footer,
+      },
+    );
     const inner = {
       ...constant("build"),
       getDocFragments: () => ({ ...docs }),
@@ -180,10 +183,12 @@ describe("command documentation inside object", () => {
         };
         const builtIn = object({ verbose: option("--verbose") });
         const inner = customFirst
-          ? labeled ? merge("Options", custom, builtIn) : merge(custom, builtIn)
+          ? labeled
+            ? merge("Options", custom, builtIn)
+            : merge(custom, builtIn)
           : labeled
-          ? merge("Options", builtIn, custom)
-          : merge(builtIn, custom);
+            ? merge("Options", builtIn, custom)
+            : merge(builtIn, custom);
         const cmd = command("build", inner, { description: message`Fallback` });
         for (const parser of [cmd, object({ cmd })]) {
           const page = getDocPage(parser, ["build"]);
@@ -226,11 +231,12 @@ describe("command documentation inside object", () => {
         }),
       };
       const cmd = command("build", constant([]), { brief });
-      const parser = composite === "object"
-        ? object({ sibling, cmd })
-        : composite === "tuple"
-        ? tuple([sibling, cmd])
-        : concat(sibling, cmd);
+      const parser =
+        composite === "object"
+          ? object({ sibling, cmd })
+          : composite === "tuple"
+            ? tuple([sibling, cmd])
+            : concat(sibling, cmd);
       const page = getDocPage(parser, ["build"]);
       assert.ok(page);
       assert.deepEqual(page.brief, brief);
@@ -250,11 +256,15 @@ describe("command documentation inside object", () => {
         }),
       };
       const cmd = command("build", constant([]), { description });
-      const parser = composite === "object"
-        ? object({ sibling, cmd })
-        : composite === "tuple"
-        ? tuple([sibling, cmd])
-        : concat(map(sibling, () => []), cmd);
+      const parser =
+        composite === "object"
+          ? object({ sibling, cmd })
+          : composite === "tuple"
+            ? tuple([sibling, cmd])
+            : concat(
+                map(sibling, () => []),
+                cmd,
+              );
       const page = getDocPage(parser, ["build"]);
       assert.ok(page);
       assert.deepEqual(page.description, description);
@@ -273,11 +283,12 @@ describe("command documentation inside object", () => {
           }),
         };
       }
-      const decorated = composite === "object"
-        ? decorate(object({ cmd }))
-        : composite === "tuple"
-        ? decorate(tuple([cmd]))
-        : decorate(concat(cmd));
+      const decorated =
+        composite === "object"
+          ? decorate(object({ cmd }))
+          : composite === "tuple"
+            ? decorate(tuple([cmd]))
+            : decorate(concat(cmd));
       const page = getDocPage(object({ decorated }), ["build"]);
       assert.ok(page);
       assert.deepEqual(page.description, description);
@@ -306,9 +317,9 @@ describe("command documentation inside object", () => {
         const inner = {
           ...constant("build"),
           getDocFragments: () => ({
-            fragments:
-              option("--verbose", { description: message`Verbose output` })
-                .getDocFragments({ kind: "unavailable" }).fragments,
+            fragments: option("--verbose", {
+              description: message`Verbose output`,
+            }).getDocFragments({ kind: "unavailable" }).fragments,
             brief,
             description,
             footer,
@@ -319,10 +330,10 @@ describe("command documentation inside object", () => {
           inner,
           withOptions
             ? {
-              brief: message`Fallback brief`,
-              description: message`Fallback description`,
-              footer: message`Fallback footer`,
-            }
+                brief: message`Fallback brief`,
+                description: message`Fallback description`,
+                footer: message`Fallback footer`,
+              }
             : {},
         );
         const parser = composite === "object" ? object({ cmd }) : tuple([cmd]);
@@ -347,18 +358,19 @@ describe("command documentation inside object", () => {
       assert.deepEqual(page.description, description);
       assert.deepEqual(page.footer, footer);
       const help = formatDocPage("optique-demo", page, { colors: false });
-      for (
-        const text of [
-          "Compile the code",
-          "Run all the compilation tools.",
-          "See the build guide.",
-          "Rebuild on change",
-        ]
-      ) assert.ok(help.includes(text), help);
+      for (const text of [
+        "Compile the code",
+        "Run all the compilation tools.",
+        "See the build guide.",
+        "Rebuild on change",
+      ])
+        assert.ok(help.includes(text), help);
       const entries = page.sections.flatMap((section) => section.entries);
       assert.ok(
-        entries.some((entry) =>
-          entry.term.type === "option" && entry.term.names.includes("--watch")
+        entries.some(
+          (entry) =>
+            entry.term.type === "option" &&
+            entry.term.names.includes("--watch"),
         ),
       );
       assert.ok(!entries.some((entry) => entry.term.type === "command"));
@@ -392,8 +404,8 @@ describe("command documentation inside object", () => {
     assert.equal(page.description, undefined);
     assert.equal(page.footer, undefined);
     const entries = page.sections.flatMap((section) => section.entries);
-    const build = entries.find((entry) =>
-      entry.term.type === "command" && entry.term.name === "build"
+    const build = entries.find(
+      (entry) => entry.term.type === "command" && entry.term.name === "build",
     );
     assert.ok(build);
     assert.deepEqual(build.description, brief);
@@ -448,9 +460,13 @@ describe("command documentation inside object", () => {
     optional: () => optional(commands()),
     withDefault: () => withDefault(commands(), { action: "test" }),
     withDefaultMessage: () =>
-      withDefault(commands(), { action: "test" }, {
-        message: message`Test by default`,
-      }),
+      withDefault(
+        commands(),
+        { action: "test" },
+        {
+          message: message`Test by default`,
+        },
+      ),
     labeledMerge: () =>
       merge(
         "Options",

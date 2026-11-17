@@ -31,10 +31,10 @@ import { textFormatter } from "./textformatter.ts";
 export type LogOutput =
   | { readonly type: "console"; readonly formatter?: TextFormatter }
   | {
-    readonly type: "file";
-    readonly path: string;
-    readonly formatter?: TextFormatter;
-  };
+      readonly type: "file";
+      readonly path: string;
+      readonly formatter?: TextFormatter;
+    };
 
 /**
  * Options for configuring console sink creation.
@@ -183,8 +183,8 @@ function logOutputValueParser(
         kind: "file",
         type: "file",
         pattern: prefix,
-        includeHidden: basename(prefix).startsWith(".") &&
-          basename(prefix) !== "..",
+        includeHidden:
+          basename(prefix).startsWith(".") && basename(prefix) !== "..",
       };
     },
   };
@@ -220,7 +220,8 @@ export function logOutput(
 ): FluentParser<"sync", LogOutput | undefined, unknown> {
   const long = (options.long ?? "--log-output") as OptionName;
   const valueParser = logOutputValueParser(options);
-  const description = options.description ??
+  const description =
+    options.description ??
     message`Log output destination. Use ${"-"} for console.`;
 
   if (options.short) {
@@ -230,9 +231,7 @@ export function logOutput(
     );
     return withFormatter(outputParser, options.formatter);
   }
-  const outputParser = optional(
-    option(long, valueParser, { description }),
-  );
+  const outputParser = optional(option(long, valueParser, { description }));
   return withFormatter(outputParser, options.formatter);
 }
 
@@ -243,7 +242,7 @@ function withFormatter(
   if (formatter == null) return outputParser;
   if (typeof formatter !== "string") {
     return outputParser.map((output) =>
-      output == null ? undefined : { ...output, formatter }
+      output == null ? undefined : { ...output, formatter },
     );
   }
 
@@ -333,7 +332,9 @@ export function createConsoleSink(options: ConsoleSinkOptions = {}): Sink {
   };
 
   if (
-    !streamResolver && defaultStream !== "stdout" && defaultStream !== "stderr"
+    !streamResolver &&
+    defaultStream !== "stdout" &&
+    defaultStream !== "stderr"
   ) {
     throw invalidStreamError(defaultStream);
   }
@@ -442,8 +443,10 @@ export async function createSink(
   }
   return getFileSink(
     output.path,
-    output.formatter == null ? undefined : {
-      formatter: output.formatter,
-    },
+    output.formatter == null
+      ? undefined
+      : {
+          formatter: output.formatter,
+        },
   );
 }

@@ -144,19 +144,21 @@ type SuppressedErrorConstructor = new (
 
 // Polyfill for runtimes that lack SuppressedError (Node < 24):
 const SuppressedErrorCtor: SuppressedErrorConstructor =
-  typeof SuppressedError === "function" ? SuppressedError : (() => {
-    class SuppressedErrorPolyfill extends Error {
-      readonly error: unknown;
-      readonly suppressed: unknown;
-      constructor(error: unknown, suppressed: unknown, message?: string) {
-        super(message);
-        this.name = "SuppressedError";
-        this.error = error;
-        this.suppressed = suppressed;
-      }
-    }
-    return SuppressedErrorPolyfill;
-  })();
+  typeof SuppressedError === "function"
+    ? SuppressedError
+    : (() => {
+        class SuppressedErrorPolyfill extends Error {
+          readonly error: unknown;
+          readonly suppressed: unknown;
+          constructor(error: unknown, suppressed: unknown, message?: string) {
+            super(message);
+            this.name = "SuppressedError";
+            this.error = error;
+            this.suppressed = suppressed;
+          }
+        }
+        return SuppressedErrorPolyfill;
+      })();
 
 function isPlainObject(value: object): boolean {
   const proto = Object.getPrototypeOf(value);
@@ -174,8 +176,10 @@ function prepareParsedForContexts(
   // distinguish them from opaque structured deferred values from map()
   // (which have no deferredKeys at all).
   if (
-    deferredKeys != null && deferredKeys.size === 0 &&
-    parsed != null && typeof parsed === "object"
+    deferredKeys != null &&
+    deferredKeys.size === 0 &&
+    parsed != null &&
+    typeof parsed === "object"
   ) {
     return undefined;
   }
@@ -186,15 +190,20 @@ function prepareParsedForContexts(
   // objects (Set, Map, class instances with deferredKeys) are leaf
   // deferred from prompt() and should be treated as fully deferred.
   if (
-    deferredKeys != null && deferredKeys.size > 0 &&
-    parsed != null && typeof parsed === "object" &&
-    !isPlainObject(parsed) && !Array.isArray(parsed)
+    deferredKeys != null &&
+    deferredKeys.size > 0 &&
+    parsed != null &&
+    typeof parsed === "object" &&
+    !isPlainObject(parsed) &&
+    !Array.isArray(parsed)
   ) {
     return undefined;
   }
   if (
-    deferredKeys != null && deferredKeys.size > 0 &&
-    parsed != null && typeof parsed === "object" &&
+    deferredKeys != null &&
+    deferredKeys.size > 0 &&
+    parsed != null &&
+    typeof parsed === "object" &&
     (isPlainObject(parsed) || Array.isArray(parsed))
   ) {
     // Check that at least one deferredKey matches an own property of the
@@ -235,7 +244,9 @@ function prepareParsedForContexts(
         if (isArray && key === "length") continue;
         const desc = Object.getOwnPropertyDescriptor(parsed as object, key);
         if (
-          desc != null && "value" in desc && getDeferredEntry(key) === undefined
+          desc != null &&
+          "value" in desc &&
+          getDeferredEntry(key) === undefined
         ) {
           allDeferred = false;
           break;
@@ -308,9 +319,11 @@ const effectfulSessionOptionsKey: unique symbol = Symbol(
 function getEffectfulSessionOption(
   options: object,
 ): EffectfulCompletionSession | undefined {
-  return (options as {
-    readonly [effectfulSessionOptionsKey]?: EffectfulCompletionSession;
-  })[effectfulSessionOptionsKey];
+  return (
+    options as {
+      readonly [effectfulSessionOptionsKey]?: EffectfulCompletionSession;
+    }
+  )[effectfulSessionOptionsKey];
 }
 
 function withEffectfulSessionOption<T extends object>(
@@ -468,9 +481,11 @@ interface HelpParsers {
 }
 
 interface VersionParsers {
-  readonly versionCommand:
-    | Parser<"sync", Record<PropertyKey, never>, unknown>
-    | null;
+  readonly versionCommand: Parser<
+    "sync",
+    Record<PropertyKey, never>,
+    unknown
+  > | null;
   readonly versionOption: Parser<"sync", boolean, unknown> | null;
 }
 
@@ -492,8 +507,9 @@ function createHelpParser(
   let helpOption: HelpParsers["helpOption"] = null;
 
   if (commandConfig) {
-    const names: readonly [string, ...string[]] = commandConfig.names ??
-      ["help"];
+    const names: readonly [string, ...string[]] = commandConfig.names ?? [
+      "help",
+    ];
     const innerParser = multiple(
       argument(string({ metavar: "COMMAND" }), {
         description: message`Command name to show help for.`,
@@ -529,8 +545,9 @@ function createVersionParser(
   let versionOption: VersionParsers["versionOption"] = null;
 
   if (commandConfig) {
-    const names: readonly [string, ...string[]] = commandConfig.names ??
-      ["version"];
+    const names: readonly [string, ...string[]] = commandConfig.names ?? [
+      "version",
+    ];
     const innerParser = object({});
     const aliases = getMetaCommandAliases(names);
     versionCommand = command(names[0], innerParser, {
@@ -552,24 +569,21 @@ function createVersionParser(
 }
 
 interface CompletionParsers {
-  readonly completionCommand:
-    | Parser<
-      "sync",
-      { shell: string | undefined; args: readonly string[] },
-      unknown
-    >
-    | null;
-  readonly completionOption:
-    | Parser<
-      "sync",
-      { shell: string; args: readonly string[] },
-      unknown
-    >
-    | null;
+  readonly completionCommand: Parser<
+    "sync",
+    { shell: string | undefined; args: readonly string[] },
+    unknown
+  > | null;
+  readonly completionOption: Parser<
+    "sync",
+    { shell: string; args: readonly string[] },
+    unknown
+  > | null;
 }
 
 const metaResultBrand: unique symbol = Symbol("@optique/core/facade/meta");
 
+/* oxlint-disable-next-line no-unused-vars -- Keep the facade result-shape documentation. */
 interface MetaParseResult {
   readonly [metaResultBrand]: true;
   readonly help: boolean;
@@ -690,42 +704,36 @@ function createCompletionParser(
   const completionInner = object({
     shell: optional(
       argument(string({ metavar: "SHELL" }), {
-        description:
-          message`Shell type (${shellList}). Generate completion script when used alone, or provide completions when followed by arguments.`,
+        description: message`Shell type (${shellList}). Generate completion script when used alone, or provide completions when followed by arguments.`,
       }),
     ),
     args: multiple(
       argument(string({ metavar: "ARG" }), {
-        description:
-          message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+        description: message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
       }),
     ),
   });
 
   if (commandConfig) {
-    const names: readonly [string, ...string[]] = commandConfig.names ??
-      ["completion"];
+    const names: readonly [string, ...string[]] = commandConfig.names ?? [
+      "completion",
+    ];
     const displayName = names[0];
 
     const completionCommandConfig = {
       brief: message`Generate shell completion script or provide completions.`,
-      description:
-        message`Generate shell completion script or provide completions.`,
-      footer: message`Examples:${lineBreak()}  Bash:       ${
-        commandLine(`eval "$(${programName} ${displayName} bash)"`)
-      }${lineBreak()}  zsh:        ${
-        commandLine(`eval "$(${programName} ${displayName} zsh)"`)
-      }${lineBreak()}  fish:       ${
-        commandLine(`eval "$(${programName} ${displayName} fish)"`)
-      }${lineBreak()}  PowerShell: ${
-        commandLine(
-          `${programName} ${displayName} pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
-        )
-      }${lineBreak()}  Nushell:    ${
-        commandLine(
-          `${programName} ${displayName} nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
-        )
-      }`,
+      description: message`Generate shell completion script or provide completions.`,
+      footer: message`Examples:${lineBreak()}  Bash:       ${commandLine(
+        `eval "$(${programName} ${displayName} bash)"`,
+      )}${lineBreak()}  zsh:        ${commandLine(
+        `eval "$(${programName} ${displayName} zsh)"`,
+      )}${lineBreak()}  fish:       ${commandLine(
+        `eval "$(${programName} ${displayName} fish)"`,
+      )}${lineBreak()}  PowerShell: ${commandLine(
+        `${programName} ${displayName} pwsh > ${programName}-completion.ps1; . ./${programName}-completion.ps1`,
+      )}${lineBreak()}  Nushell:    ${commandLine(
+        `${programName} ${displayName} nu | save ${programName}-completion.nu; source ./${programName}-completion.nu`,
+      )}`,
     };
 
     const aliases = getMetaCommandAliases(names);
@@ -749,15 +757,15 @@ function createCompletionParser(
       );
     }
 
-    const completionOptionParser = completionOptions.length === 1
-      ? completionOptions[0]
-      : longestMatch(...completionOptions);
+    const completionOptionParser =
+      completionOptions.length === 1
+        ? completionOptions[0]
+        : longestMatch(...completionOptions);
 
     const argsParser = withDefault(
       multiple(
         argument(string({ metavar: "ARG" }), {
-          description:
-            message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
+          description: message`Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).`,
           hidden: optionConfig.hidden,
         }),
       ),
@@ -767,11 +775,7 @@ function createCompletionParser(
     completionOption = object({
       shell: completionOptionParser,
       args: argsParser,
-    }) as Parser<
-      "sync",
-      { shell: string; args: readonly string[] },
-      unknown
-    >;
+    }) as Parser<"sync", { shell: string; args: readonly string[] }, unknown>;
   }
 
   return { completionCommand, completionOption };
@@ -783,23 +787,23 @@ function createCompletionParser(
 type ParsedResult =
   | { readonly type: "success"; readonly value: unknown }
   | {
-    readonly type: "help";
-    readonly commands: readonly string[];
-    readonly preferUserCommandDocs?: boolean;
-  }
+      readonly type: "help";
+      readonly commands: readonly string[];
+      readonly preferUserCommandDocs?: boolean;
+    }
   | { readonly type: "version" }
   | {
-    readonly type: "completion";
-    readonly source: "command" | "option";
-    readonly shell: string;
-    readonly commandPath?: readonly string[];
-    readonly args: readonly string[];
-  }
+      readonly type: "completion";
+      readonly source: "command" | "option";
+      readonly shell: string;
+      readonly commandPath?: readonly string[];
+      readonly args: readonly string[];
+    }
   | {
-    readonly type: "error";
-    readonly error: Message;
-    readonly commandPath: readonly string[];
-  };
+      readonly type: "error";
+      readonly error: Message;
+      readonly commandPath: readonly string[];
+    };
 
 /**
  * Systematically combines the original parser with help, version, and completion parsers.
@@ -938,13 +942,15 @@ function combineWithHelpVersion(
   // in help text via the help generation code in `handleResult()`.
 
   // Add main parser LAST - it's the most general
-  parsers.push(object({
-    [metaResultBrand]: constant(true),
-    help: constant(false),
-    version: constant(false),
-    completion: constant(false),
-    result: originalParser,
-  }));
+  parsers.push(
+    object({
+      [metaResultBrand]: constant(true),
+      help: constant(false),
+      version: constant(false),
+      completion: constant(false),
+      result: originalParser,
+    }),
+  );
 
   // Track where the main parser is before building longestMatch
   const mainParserIndex = parsers.length - 1;
@@ -968,8 +974,8 @@ function combineWithHelpVersion(
     const [mainTerm] = terms.splice(mainParserIndex, 1);
     // Insert main parser usage right after the lenient option parsers
     // (which occupy the first slots) but before meta commands.
-    const lenientCount = (helpParsers.helpOption ? 1 : 0) +
-      (versionParsers.versionOption ? 1 : 0);
+    const lenientCount =
+      (helpParsers.helpOption ? 1 : 0) + (versionParsers.versionOption ? 1 : 0);
     terms.splice(lenientCount, 0, mainTerm);
     combined = {
       ...combined,
@@ -1012,7 +1018,7 @@ function classifyOptionMeta(
     }
 
     const equalsMatch = completionOptionNames.find((name) =>
-      arg.startsWith(name + "=")
+      arg.startsWith(name + "="),
     );
     if (equalsMatch != null) {
       return {
@@ -1075,10 +1081,7 @@ function classifyParseFailure(
   const hasConsumedPrefix = failure.consumedCount > 0;
   const firstArg = failure.remainingArgs[0];
 
-  if (
-    !hasConsumedPrefix &&
-    completionCommandNames.includes(firstArg)
-  ) {
+  if (!hasConsumedPrefix && completionCommandNames.includes(firstArg)) {
     const secondArg = failure.remainingArgs[1];
     if (helpOptionNames.includes(secondArg)) {
       return { type: "help", commands: [firstArg] };
@@ -1091,12 +1094,14 @@ function classifyParseFailure(
     };
   }
 
-  const optionArgs = failure.optionsTerminated ? [] : (() => {
-    const terminatorIndex = failure.remainingArgs.indexOf("--");
-    return terminatorIndex >= 0
-      ? failure.remainingArgs.slice(0, terminatorIndex)
-      : failure.remainingArgs;
-  })();
+  const optionArgs = failure.optionsTerminated
+    ? []
+    : (() => {
+        const terminatorIndex = failure.remainingArgs.indexOf("--");
+        return terminatorIndex >= 0
+          ? failure.remainingArgs.slice(0, terminatorIndex)
+          : failure.remainingArgs;
+      })();
   const { lastHelpVersion, completion } = classifyOptionMeta(
     optionArgs,
     failure.remainingArgs,
@@ -1130,11 +1135,12 @@ function classifyParseFailure(
     commandAction = { index: 0, kind: "help" };
   }
 
-  const winner = lastHelpVersion == null
-    ? commandAction
-    : commandAction == null || lastHelpVersion.index >= commandAction.index
-    ? lastHelpVersion
-    : commandAction;
+  const winner =
+    lastHelpVersion == null
+      ? commandAction
+      : commandAction == null || lastHelpVersion.index >= commandAction.index
+        ? lastHelpVersion
+        : commandAction;
 
   if (winner?.kind === "help") {
     if (winner === commandAction) {
@@ -1340,32 +1346,30 @@ export interface RunOptions<THelp, TError> {
    *
    * @since 1.0.0
    */
-  readonly help?:
-    & {
-      /**
-       * Callback invoked after help output, with the exit code and the final
-       * page passed to {@link formatDocPage}. Treat the page as read-only.
-       * It includes runner-provided entries and root usage customization.
-       * Subcommand and meta-command help use the selected command's docs,
-       * with the run-level footer as a fallback. The resolved `showUsage`
-       * default is included in the page; other formatting options remain separate.
-       *
-       * Handlers may ignore either argument. Wrappers that invoke this
-       * callback themselves must forward both arguments.
-       * @since 1.3.0 Added the `page` parameter.
-       */
-      readonly onShow?: (exitCode: number, page: DocPage) => THelp;
-    }
-    & (
-      | {
+  readonly help?: {
+    /**
+     * Callback invoked after help output, with the exit code and the final
+     * page passed to {@link formatDocPage}. Treat the page as read-only.
+     * It includes runner-provided entries and root usage customization.
+     * Subcommand and meta-command help use the selected command's docs,
+     * with the run-level footer as a fallback. The resolved `showUsage`
+     * default is included in the page; other formatting options remain separate.
+     *
+     * Handlers may ignore either argument. Wrappers that invoke this
+     * callback themselves must forward both arguments.
+     * @since 1.3.0 Added the `page` parameter.
+     */
+    readonly onShow?: (exitCode: number, page: DocPage) => THelp;
+  } & (
+    | {
         readonly command: true | CommandSubConfig;
         readonly option?: true | OptionSubConfig;
       }
-      | {
+    | {
         readonly option: true | OptionSubConfig;
         readonly command?: true | CommandSubConfig;
       }
-    );
+  );
 
   /**
    * Version configuration.  When provided, enables version functionality.
@@ -1373,23 +1377,21 @@ export interface RunOptions<THelp, TError> {
    *
    * @since 1.0.0
    */
-  readonly version?:
-    & {
-      /** The version string to display when version is requested. */
-      readonly value: string;
-      /** Callback invoked when version is requested. */
-      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-    }
-    & (
-      | {
+  readonly version?: {
+    /** The version string to display when version is requested. */
+    readonly value: string;
+    /** Callback invoked when version is requested. */
+    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+  } & (
+    | {
         readonly command: true | CommandSubConfig;
         readonly option?: true | OptionSubConfig;
       }
-      | {
+    | {
         readonly option: true | OptionSubConfig;
         readonly command?: true | CommandSubConfig;
       }
-    );
+  );
 
   /**
    * Completion configuration.  When provided, enables shell completion.
@@ -1397,48 +1399,46 @@ export interface RunOptions<THelp, TError> {
    *
    * @since 1.0.0
    */
-  readonly completion?:
-    & {
+  readonly completion?: {
+    /**
+     * Available shell completions.  By default, includes `bash`, `fish`,
+     * `nu`, `pwsh`, and `zsh`.
+     *
+     * @default `{ bash, fish, nu, pwsh, zsh }`
+     */
+    readonly shells?: Record<string, ShellCompletion>;
+    /**
+     * Custom messages for completion shell errors.  Unspecified errors use
+     * the default messages.
+     * @since 1.4.0
+     */
+    readonly errors?: {
       /**
-       * Available shell completions.  By default, includes `bash`, `fish`,
-       * `nu`, `pwsh`, and `zsh`.
-       *
-       * @default `{ bash, fish, nu, pwsh, zsh }`
-       */
-      readonly shells?: Record<string, ShellCompletion>;
-      /**
-       * Custom messages for completion shell errors.  Unspecified errors use
-       * the default messages.
+       * Message shown when no shell name is provided.
        * @since 1.4.0
        */
-      readonly errors?: {
-        /**
-         * Message shown when no shell name is provided.
-         * @since 1.4.0
-         */
-        readonly missingShell?: Message;
-        /**
-         * Message shown for an unsupported shell.  A callback receives the
-         * shell name and the available shell names, including custom shells.
-         * @since 1.4.0
-         */
-        readonly unsupportedShell?:
-          | Message
-          | ((shell: string, availableShells: readonly string[]) => Message);
-      };
-      /** Callback invoked when completion is requested. */
-      readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
-    }
-    & (
-      | {
+      readonly missingShell?: Message;
+      /**
+       * Message shown for an unsupported shell.  A callback receives the
+       * shell name and the available shell names, including custom shells.
+       * @since 1.4.0
+       */
+      readonly unsupportedShell?:
+        | Message
+        | ((shell: string, availableShells: readonly string[]) => Message);
+    };
+    /** Callback invoked when completion is requested. */
+    readonly onShow?: (() => THelp) | ((exitCode: number) => THelp);
+  } & (
+    | {
         readonly command: true | CommandSubConfig;
         readonly option?: true | OptionSubConfig;
       }
-      | {
+    | {
         readonly option: true | OptionSubConfig;
         readonly command?: true | CommandSubConfig;
       }
-    );
+  );
 
   /**
    * What to display above error messages:
@@ -1570,8 +1570,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
   const errorOptions = <T extends object>(format: T): T =>
     automaticWidth
       ? withAutomaticWidth(format, (width) => {
-        maxWidth = width;
-      })
+          maxWidth = width;
+        })
       : format;
   const shellName = completionArgs[0] || "";
   const args = completionArgs.slice(1);
@@ -1583,8 +1583,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
   // Check if shell name is empty
   if (!shellName) {
-    const error = errors?.missingShell ??
-      message`Missing shell name for completion.`;
+    const error =
+      errors?.missingShell ?? message`Missing shell name for completion.`;
     const writeError = () =>
       stderr(
         renderErrorMessage(
@@ -1604,10 +1604,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
     const completionDocOptions = (format: DocPageFormatOptions) =>
       automaticWidth
         ? withAutomaticWidth(format, (width) => {
-          maxWidth = width;
-          writeError();
-          wroteError = true;
-        })
+            maxWidth = width;
+            writeError();
+            wroteError = true;
+          })
         : format;
     // Show help for completion command if parser is available
     if (completionParser) {
@@ -1644,8 +1644,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
       async () => callOnError(1, error),
+      /* oxlint-enable require-await */
     );
   }
 
@@ -1660,20 +1662,23 @@ function handleCompletion<M extends Mode, THelp, TError>(
       available.push(value(name));
     }
     const unsupportedShell = errors?.unsupportedShell;
-    const error = typeof unsupportedShell === "function"
-      ? unsupportedShell(shellName, Object.keys(availableShells))
-      : unsupportedShell ??
-        message`Unsupported shell ${shellName}. Available shells: ${available}.`;
-    stderr(renderErrorMessage(
-      error,
-      errorOptions({
-        messageFormatter,
-        theme,
-        colors,
-        quotes: !colors,
-        maxWidth,
-      }),
-    ));
+    const error =
+      typeof unsupportedShell === "function"
+        ? unsupportedShell(shellName, Object.keys(availableShells))
+        : (unsupportedShell ??
+          message`Unsupported shell ${shellName}. Available shells: ${available}.`);
+    stderr(
+      renderErrorMessage(
+        error,
+        errorOptions({
+          messageFormatter,
+          theme,
+          colors,
+          quotes: !colors,
+          maxWidth,
+        }),
+      ),
+    );
     return dispatchByMode(
       parser.mode,
       () => {
@@ -1683,8 +1688,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
       async () => callOnError(1, error),
+      /* oxlint-enable require-await */
     );
   }
 
@@ -1708,8 +1715,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
       async () => callOnCompletion(0),
+      /* oxlint-enable require-await */
     );
   }
 
@@ -1745,16 +1754,14 @@ function handleCompletion<M extends Mode, THelp, TError>(
         args,
         rootOptionSuggestions,
       );
-      for (
-        const chunk of shell.encodeSuggestions(
-          withRootOptionSuggestions(
-            completionSuggestions.suggestions,
-            args,
-            rootOptionSuggestions,
-            completionSuggestions.argumentContext,
-          ),
-        )
-      ) {
+      for (const chunk of shell.encodeSuggestions(
+        withRootOptionSuggestions(
+          completionSuggestions.suggestions,
+          args,
+          rootOptionSuggestions,
+          completionSuggestions.argumentContext,
+        ),
+      )) {
         stdout(chunk);
       }
       return callOnCompletion(0);
@@ -1783,15 +1790,20 @@ function withRootOptionSuggestions(
     return suggestions;
   }
   if (
-    !(prefix === "" || prefix.startsWith("--") || prefix.startsWith("-") ||
-      prefix.startsWith("/") || prefix.startsWith("+"))
+    !(
+      prefix === "" ||
+      prefix.startsWith("--") ||
+      prefix.startsWith("-") ||
+      prefix.startsWith("/") ||
+      prefix.startsWith("+")
+    )
   ) {
     return suggestions;
   }
 
   const seen = new Set(
     suggestions.flatMap((suggestion) =>
-      suggestion.kind === "literal" ? [suggestion.text] : []
+      suggestion.kind === "literal" ? [suggestion.text] : [],
     ),
   );
   const combined = [...suggestions];
@@ -1969,10 +1981,10 @@ function addCompletionSuggestRuntime<TState>(
     dependencyRegistry: runtime.registry,
     exec: context.exec
       ? {
-        ...context.exec,
-        dependencyRuntime: runtime,
-        dependencyRegistry: runtime.registry,
-      }
+          ...context.exec,
+          dependencyRuntime: runtime,
+          dependencyRegistry: runtime.registry,
+        }
       : undefined,
   };
 }
@@ -2022,10 +2034,11 @@ function getFailedCompletionArgumentContext(
   );
   const token = context.buffer[0];
   return {
-    completingOptionValue: (result.consumed === 0 || result.consumed === 1) &&
+    completingOptionValue:
+      (result.consumed === 0 || result.consumed === 1) &&
       activeValueOptionNames.has(token),
-    completedRootOption: result.consumed === 0 &&
-      isRootOptionToken(token, rootOptionSuggestions),
+    completedRootOption:
+      result.consumed === 0 && isRootOptionToken(token, rootOptionSuggestions),
     optionsTerminated: context.optionsTerminated,
   };
 }
@@ -2034,8 +2047,10 @@ function isCompletionBufferUnchanged(
   before: readonly string[],
   after: readonly string[],
 ): boolean {
-  return before.length === after.length &&
-    before.every((arg, index) => arg === after[index]);
+  return (
+    before.length === after.length &&
+    before.every((arg, index) => arg === after[index])
+  );
 }
 
 function collectActiveValueOptionNames(
@@ -2071,10 +2086,13 @@ function isRootOptionToken(
   token: string | undefined,
   rootOptionSuggestions: readonly LiteralSuggestion[],
 ): boolean {
-  return token != null &&
-    rootOptionSuggestions.some((suggestion) =>
-      token === suggestion.text || token.startsWith(`${suggestion.text}=`)
-    );
+  return (
+    token != null &&
+    rootOptionSuggestions.some(
+      (suggestion) =>
+        token === suggestion.text || token.startsWith(`${suggestion.text}=`),
+    )
+  );
 }
 
 function getRootMetaOptionSuggestions(
@@ -2085,7 +2103,8 @@ function getRootMetaOptionSuggestions(
 ): readonly LiteralSuggestion[] {
   const suggestions: LiteralSuggestion[] = [];
   if (
-    helpOptionConfig != null && !isSuggestionHidden(helpOptionConfig.hidden)
+    helpOptionConfig != null &&
+    !isSuggestionHidden(helpOptionConfig.hidden)
   ) {
     suggestions.push(
       ...helpOptionNames.map((name): LiteralSuggestion => ({
@@ -2126,11 +2145,11 @@ function validateVersionValue(value: unknown): string {
   if (value === "") {
     throw new TypeError("Version value must not be empty.");
   }
+  /* oxlint-disable no-control-regex -- Match control characters. */
   // deno-lint-ignore no-control-regex
   if (/[\x00-\x1f\x7f]/.test(value)) {
-    throw new TypeError(
-      "Version value must not contain control characters.",
-    );
+    /* oxlint-enable no-control-regex */
+    throw new TypeError("Version value must not contain control characters.");
   }
   return value;
 }
@@ -2313,12 +2332,13 @@ export function runParser<
   const formatOptions = <T extends object>(format: T): T =>
     automaticWidth
       ? withAutomaticWidth(format, (width) => {
-        maxWidth = width;
-      })
+          maxWidth = width;
+        })
       : format;
   const resolveUsageWidth = (usage: Usage) => {
     if (
-      automaticWidth && maxWidth != null &&
+      automaticWidth &&
+      maxWidth != null &&
       maxWidth < minimumUsageWidth(programName, usage, usageLabel(), theme)
     ) {
       maxWidth = undefined;
@@ -2326,10 +2346,12 @@ export function runParser<
   };
   let usagePrefix: string | undefined;
   const usageLabel = () =>
-    usagePrefix ??= spaceAfterLabel(renderTerminalTerm(
-      { type: "label", label: "Usage:", kind: "usageSummary" },
-      theme,
-      colors,
+    (usagePrefix ??= spaceAfterLabel(
+      renderTerminalTerm(
+        { type: "label", label: "Usage:", kind: "usageSummary" },
+        theme,
+        colors,
+      ),
     ));
   const usageLabelWidth = () => measureText(usageLabel()).lastLineWidth;
 
@@ -2340,7 +2362,7 @@ export function runParser<
   // Extract help configuration
   const helpCommandConfig = norm<CommandSubConfig>(options.help?.command);
   const helpOptionConfig = norm<OptionSubConfig>(options.help?.option);
-  const onHelp = options.help?.onShow ?? (() => ({} as THelp));
+  const onHelp = options.help?.onShow ?? (() => ({}) as THelp);
 
   // Extract version configuration
   const versionCommandConfig = norm<CommandSubConfig>(options.version?.command);
@@ -2348,7 +2370,7 @@ export function runParser<
   const versionValue = options.version
     ? validateVersionValue(options.version.value)
     : undefined;
-  const onVersion = options.version?.onShow ?? (() => ({} as THelp));
+  const onVersion = options.version?.onShow ?? (() => ({}) as THelp);
 
   // Extract completion configuration
   const completionCommandConfig = norm<CommandSubConfig>(
@@ -2357,7 +2379,7 @@ export function runParser<
   const completionOptionConfig = norm<OptionSubConfig>(
     options.completion?.option,
   );
-  const onCompletion = options.completion?.onShow ?? (() => ({} as THelp));
+  const onCompletion = options.completion?.onShow ?? (() => ({}) as THelp);
   const onCompletionResult = (code: number): InferValue<TParser> =>
     onCompletion(code) as InferValue<TParser>;
   const onErrorResult = (code: number, error: Message): InferValue<TParser> =>
@@ -2387,14 +2409,17 @@ export function runParser<
   }
 
   // Resolved name arrays for matching
-  const helpOptionNames: readonly string[] = helpOptionConfig?.names ??
-    ["--help"];
-  const helpCommandNames: readonly string[] = helpCommandConfig?.names ??
-    ["help"];
-  const versionOptionNames: readonly string[] = versionOptionConfig?.names ??
-    ["--version"];
-  const versionCommandNames: readonly string[] = versionCommandConfig?.names ??
-    ["version"];
+  const helpOptionNames: readonly string[] = helpOptionConfig?.names ?? [
+    "--help",
+  ];
+  const helpCommandNames: readonly string[] = helpCommandConfig?.names ?? [
+    "help",
+  ];
+  const versionOptionNames: readonly string[] = versionOptionConfig?.names ?? [
+    "--version",
+  ];
+  const versionCommandNames: readonly string[] =
+    versionCommandConfig?.names ?? ["version"];
   const completionCommandNames: readonly string[] =
     completionCommandConfig?.names ?? ["completion"];
   const completionOptionNames: readonly string[] =
@@ -2419,11 +2444,7 @@ export function runParser<
     activeMetaEntries.push(["option", "version option", versionOptionNames]);
   }
   if (options.version && versionCommandConfig) {
-    activeMetaEntries.push([
-      "command",
-      "version command",
-      versionCommandNames,
-    ]);
+    activeMetaEntries.push(["command", "version command", versionCommandNames]);
   }
   if (options.completion && completionOptionConfig) {
     activeMetaEntries.push([
@@ -2465,31 +2486,31 @@ export function runParser<
 
   const completionParsers = options.completion
     ? createCompletionParser(
-      programName,
-      availableShells,
-      completionCommandConfig,
-      completionOptionConfig,
-    )
+        programName,
+        availableShells,
+        completionCommandConfig,
+        completionOptionConfig,
+      )
     : { completionCommand: null, completionOption: null };
 
   // Build augmented parser with help, version, and completion functionality
-  const augmentedParser = !options.help && !options.version &&
-      !options.completion
-    ? parser
-    : combineWithHelpVersion(
-      parser,
-      helpParsers,
-      versionParsers,
-      completionParsers,
-      {
-        helpCommandGroup: helpCommandConfig?.group,
-        helpOptionGroup: helpOptionConfig?.group,
-        versionCommandGroup: versionCommandConfig?.group,
-        versionOptionGroup: versionOptionConfig?.group,
-        completionCommandGroup: completionCommandConfig?.group,
-        completionOptionGroup: completionOptionConfig?.group,
-      },
-    );
+  const augmentedParser =
+    !options.help && !options.version && !options.completion
+      ? parser
+      : combineWithHelpVersion(
+          parser,
+          helpParsers,
+          versionParsers,
+          completionParsers,
+          {
+            helpCommandGroup: helpCommandConfig?.group,
+            helpOptionGroup: helpOptionConfig?.group,
+            versionCommandGroup: versionCommandConfig?.group,
+            versionOptionGroup: versionOptionConfig?.group,
+            completionCommandGroup: completionCommandConfig?.group,
+            completionOptionGroup: completionOptionConfig?.group,
+          },
+        );
 
   const helpAsCommand = helpCommandConfig != null;
   const versionAsCommand = versionCommandConfig != null;
@@ -2497,9 +2518,7 @@ export function runParser<
   const helpAsOption = helpOptionConfig != null;
   const versionAsOption = versionOptionConfig != null;
   const completionAsOption = completionOptionConfig != null;
-  let cachedRootHelpGeneratorParser:
-    | Parser<Mode, unknown, unknown>
-    | undefined;
+  let cachedRootHelpGeneratorParser: Parser<Mode, unknown, unknown> | undefined;
 
   const getRootHelpGeneratorParser = (): Parser<Mode, unknown, unknown> => {
     if (cachedRootHelpGeneratorParser != null) {
@@ -2510,10 +2529,7 @@ export function runParser<
 
     // Group meta-commands by their group label so that commands sharing the
     // same group name appear under a single section.
-    const groupedMeta: Record<
-      string,
-      Parser<Mode, unknown, unknown>[]
-    > = {};
+    const groupedMeta: Record<string, Parser<Mode, unknown, unknown>[]> = {};
     const ungroupedMeta: Parser<Mode, unknown, unknown>[] = [];
     const addMeta = (
       metaParser: Parser<Mode, unknown, unknown>,
@@ -2551,10 +2567,8 @@ export function runParser<
 
     // Include meta options so they appear in the root usage line and options
     // list.  See https://github.com/dahlia/optique/issues/127
-    const groupedMetaOptions: Record<
-      string,
-      Parser<Mode, unknown, unknown>[]
-    > = {};
+    const groupedMetaOptions: Record<string, Parser<Mode, unknown, unknown>[]> =
+      {};
     const ungroupedMetaOptions: Parser<Mode, unknown, unknown>[] = [];
     const addMetaOption = (
       metaParser: Parser<Mode, unknown, unknown>,
@@ -2590,9 +2604,10 @@ export function runParser<
       );
     }
 
-    cachedRootHelpGeneratorParser = commandParsers.length === 1
-      ? commandParsers[0]
-      : longestMatchForMetaCommands(...commandParsers);
+    cachedRootHelpGeneratorParser =
+      commandParsers.length === 1
+        ? commandParsers[0]
+        : longestMatchForMetaCommands(...commandParsers);
     return cachedRootHelpGeneratorParser;
   };
 
@@ -2690,9 +2705,8 @@ export function runParser<
         } else {
           // General help or help for user-defined commands
           helpGeneratorParser = getRootHelpGeneratorParser();
-          docGeneratorParser = classified.commands.length > 0
-            ? parser
-            : helpGeneratorParser;
+          docGeneratorParser =
+            classified.commands.length > 0 ? parser : helpGeneratorParser;
         }
 
         // Helper function to report invalid commands before --help
@@ -2701,30 +2715,29 @@ export function runParser<
         ): InferValue<TParser> => {
           resolveUsageWidth(augmentedParser.usage);
           stderr(
-            `${usageLabel()}${
-              indentLines(
-                formatUsage(programName, augmentedParser.usage, {
-                  theme,
-                  colors,
-                  maxWidth: maxWidth == null
-                    ? undefined
-                    : maxWidth - usageLabelWidth(),
-                  expandCommands: true,
-                }),
-                usageLabelWidth(),
-              )
-            }`,
+            `${usageLabel()}${indentLines(
+              formatUsage(programName, augmentedParser.usage, {
+                theme,
+                colors,
+                maxWidth:
+                  maxWidth == null ? undefined : maxWidth - usageLabelWidth(),
+                expandCommands: true,
+              }),
+              usageLabelWidth(),
+            )}`,
           );
-          stderr(renderErrorMessage(
-            validationError,
-            formatOptions({
-              messageFormatter,
-              theme,
-              colors,
-              quotes: !colors,
-              maxWidth,
-            }),
-          ));
+          stderr(
+            renderErrorMessage(
+              validationError,
+              formatOptions({
+                messageFormatter,
+                theme,
+                colors,
+                quotes: !colors,
+                maxWidth,
+              }),
+            ),
+          );
           return onError(1, validationError);
         };
 
@@ -2734,8 +2747,9 @@ export function runParser<
             // Augment the doc page with provided options
             // But if showing help for a specific meta-command or subcommand,
             // don't override its description with run-level docs
-            const isMetaCommandHelp = (requestedCommand != null &&
-              completionCommandNames.includes(requestedCommand)) ||
+            const isMetaCommandHelp =
+              (requestedCommand != null &&
+                completionCommandNames.includes(requestedCommand)) ||
               (requestedCommand != null &&
                 helpCommandNames.includes(requestedCommand)) ||
               (requestedCommand != null &&
@@ -2762,15 +2776,18 @@ export function runParser<
                   ? (description ?? doc.description)
                   : doc.description,
                 // Only show examples, author, and bugs for top-level help
-                examples: isTopLevel && !isMetaCommandHelp
-                  ? (examples ?? doc.examples)
-                  : undefined,
-                author: isTopLevel && !isMetaCommandHelp
-                  ? (author ?? doc.author)
-                  : undefined,
-                bugs: isTopLevel && !isMetaCommandHelp
-                  ? (bugs ?? doc.bugs)
-                  : undefined,
+                examples:
+                  isTopLevel && !isMetaCommandHelp
+                    ? (examples ?? doc.examples)
+                    : undefined,
+                author:
+                  isTopLevel && !isMetaCommandHelp
+                    ? (author ?? doc.author)
+                    : undefined,
+                bugs:
+                  isTopLevel && !isMetaCommandHelp
+                    ? (bugs ?? doc.bugs)
+                    : undefined,
                 footer: shouldOverride
                   ? (footer ?? doc.footer)
                   : (doc.footer ?? footer),
@@ -2785,22 +2802,24 @@ export function runParser<
                 : groupedDoc,
               showUsage,
             );
-            stdout(formatDocPage(
-              programName,
-              renderedDoc,
-              formatOptions({
-                messageFormatter,
-                theme,
-                colors,
-                maxWidth,
-                termWidth,
-                showDefault,
-                showChoices,
-                showAliases,
-                showEnvironment,
-                sectionOrder,
-              }),
-            ));
+            stdout(
+              formatDocPage(
+                programName,
+                renderedDoc,
+                formatOptions({
+                  messageFormatter,
+                  theme,
+                  colors,
+                  maxWidth,
+                  termWidth,
+                  showDefault,
+                  showChoices,
+                  showAliases,
+                  showEnvironment,
+                  sectionOrder,
+                }),
+              ),
+            );
             return onHelp(0, renderedDoc);
           }
           throw new RunParserError("Failed to generate help page.");
@@ -2830,9 +2849,9 @@ export function runParser<
             if (stepResult.consumed.length < 1) {
               // Parser succeeded but didn't consume any input;
               // this means the remaining tokens aren't recognized
-              return message`Unexpected option or subcommand: ${
-                optionName(validationContext.buffer[0])
-              }.`;
+              return message`Unexpected option or subcommand: ${optionName(
+                validationContext.buffer[0],
+              )}.`;
             }
             validationContext = {
               ...validationContext,
@@ -2916,10 +2935,11 @@ export function runParser<
                 commandList,
                 isTopLevel,
               );
-              const defaultRootUsage = typeof usageLine === "function" &&
-                  (options.help || options.version || options.completion)
-                ? normalizeUsage(getRootHelpGeneratorParser().usage)
-                : augmentedDoc.usage ?? [];
+              const defaultRootUsage =
+                typeof usageLine === "function" &&
+                (options.help || options.version || options.completion)
+                  ? normalizeUsage(getRootHelpGeneratorParser().usage)
+                  : (augmentedDoc.usage ?? []);
               const groupedDoc = applyHelpSections(augmentedDoc, helpSections);
               const renderedDoc = withDocShowUsage(
                 isTopLevel && usageLine != null
@@ -2927,70 +2947,73 @@ export function runParser<
                   : groupedDoc,
                 showUsage,
               );
-              stderr(formatDocPage(
-                programName,
-                renderedDoc,
-                formatOptions({
-                  messageFormatter,
-                  theme,
-                  colors,
-                  maxWidth,
-                  termWidth,
-                  showDefault,
-                  showChoices,
-                  showAliases,
-                  showEnvironment,
-                  sectionOrder,
-                }),
-              ));
+              stderr(
+                formatDocPage(
+                  programName,
+                  renderedDoc,
+                  formatOptions({
+                    messageFormatter,
+                    theme,
+                    colors,
+                    maxWidth,
+                    termWidth,
+                    showDefault,
+                    showChoices,
+                    showAliases,
+                    showEnvironment,
+                    sectionOrder,
+                  }),
+                ),
+              );
             }
           }
           if (effectiveAboveError === "usage") {
             const rootUsage = augmentedParser.usage;
-            const optionCount = Number(helpParsers.helpOption != null) +
+            const optionCount =
+              Number(helpParsers.helpOption != null) +
               Number(versionParsers.versionOption != null);
-            const alternativeCount = optionCount +
+            const alternativeCount =
+              optionCount +
               Number(helpParsers.helpCommand != null) +
               Number(versionParsers.versionCommand != null) +
               Number(completionParsers.completionCommand != null);
-            const errorUsageTerms = aboveError === "usage" &&
-                errorUsage === "command"
-              ? projectCommandUsage(
-                rootUsage,
-                classified.commandPath,
-                alternativeCount === 0
-                  ? undefined
-                  : { optionCount, alternativeCount },
-              ) ?? rootUsage
-              : rootUsage;
+            const errorUsageTerms =
+              aboveError === "usage" && errorUsage === "command"
+                ? (projectCommandUsage(
+                    rootUsage,
+                    classified.commandPath,
+                    alternativeCount === 0
+                      ? undefined
+                      : { optionCount, alternativeCount },
+                  ) ?? rootUsage)
+                : rootUsage;
             resolveUsageWidth(errorUsageTerms);
             stderr(
-              `${usageLabel()}${
-                indentLines(
-                  formatUsage(programName, errorUsageTerms, {
-                    theme,
-                    colors,
-                    maxWidth: maxWidth == null
-                      ? undefined
-                      : maxWidth - usageLabelWidth(),
-                    expandCommands: true,
-                  }),
-                  usageLabelWidth(),
-                )
-              }`,
+              `${usageLabel()}${indentLines(
+                formatUsage(programName, errorUsageTerms, {
+                  theme,
+                  colors,
+                  maxWidth:
+                    maxWidth == null ? undefined : maxWidth - usageLabelWidth(),
+                  expandCommands: true,
+                }),
+                usageLabelWidth(),
+              )}`,
             );
           }
           // classified.error is now typed as Message
-          stderr(renderErrorMessage(
-            classified.error,
-            formatOptions({
-              messageFormatter,
-              theme,
-              colors,
-              quotes: !colors,
-              maxWidth,
-            }),
-          ));
+          stderr(
+            renderErrorMessage(
+              classified.error,
+              formatOptions({
+                messageFormatter,
+                theme,
+                colors,
+                quotes: !colors,
+                maxWidth,
+              }),
+            ),
+          );
           return onError(1, classified.error);
         };
 
@@ -3047,17 +3070,18 @@ export function runParser<
           session: getEffectfulSessionOption(options),
         },
       );
-      const classified: ParsedResult = attempted.kind === "success"
-        ? { type: "success", value: attempted.result.value }
-        : classifyParseFailure(
-          attempted,
-          helpOptionConfig ? [...helpOptionNames] : [],
-          helpCommandConfig ? [...helpCommandNames] : [],
-          versionOptionConfig ? [...versionOptionNames] : [],
-          versionCommandConfig ? [...versionCommandNames] : [],
-          completionOptionConfig ? [...completionOptionNames] : [],
-          completionCommandConfig ? [...completionCommandNames] : [],
-        );
+      const classified: ParsedResult =
+        attempted.kind === "success"
+          ? { type: "success", value: attempted.result.value }
+          : classifyParseFailure(
+              attempted,
+              helpOptionConfig ? [...helpOptionNames] : [],
+              helpCommandConfig ? [...helpCommandNames] : [],
+              versionOptionConfig ? [...versionOptionNames] : [],
+              versionCommandConfig ? [...versionCommandNames] : [],
+              completionOptionConfig ? [...completionOptionNames] : [],
+              completionCommandConfig ? [...completionCommandNames] : [],
+            );
       const handled = handleResult(classified);
       if (handled instanceof Promise) {
         throw new RunParserError("Synchronous parser returned async result.");
@@ -3065,25 +3089,22 @@ export function runParser<
       return handled;
     },
     async () => {
-      const attempted = await attemptParseAsync(
-        parser,
-        args,
-        {
-          mode: "complete",
-          session: getEffectfulSessionOption(options),
-        },
-      );
-      const classified: ParsedResult = attempted.kind === "success"
-        ? { type: "success", value: attempted.result.value }
-        : classifyParseFailure(
-          attempted,
-          helpOptionConfig ? [...helpOptionNames] : [],
-          helpCommandConfig ? [...helpCommandNames] : [],
-          versionOptionConfig ? [...versionOptionNames] : [],
-          versionCommandConfig ? [...versionCommandNames] : [],
-          completionOptionConfig ? [...completionOptionNames] : [],
-          completionCommandConfig ? [...completionCommandNames] : [],
-        );
+      const attempted = await attemptParseAsync(parser, args, {
+        mode: "complete",
+        session: getEffectfulSessionOption(options),
+      });
+      const classified: ParsedResult =
+        attempted.kind === "success"
+          ? { type: "success", value: attempted.result.value }
+          : classifyParseFailure(
+              attempted,
+              helpOptionConfig ? [...helpOptionNames] : [],
+              helpCommandConfig ? [...helpCommandNames] : [],
+              versionOptionConfig ? [...versionOptionNames] : [],
+              versionCommandConfig ? [...versionCommandNames] : [],
+              completionOptionConfig ? [...completionOptionNames] : [],
+              completionCommandConfig ? [...completionCommandNames] : [],
+            );
       const handled = handleResult(classified);
       return handled instanceof Promise ? await handled : handled;
     },
@@ -3178,9 +3199,10 @@ function applyUsageLine(
   usageLine: Usage | ((defaultUsageLine: Usage) => Usage),
   defaultUsageLine: Usage = doc.usage ?? [],
 ): DocPage {
-  const customUsageLine = typeof usageLine === "function"
-    ? usageLine(cloneUsage(defaultUsageLine))
-    : usageLine;
+  const customUsageLine =
+    typeof usageLine === "function"
+      ? usageLine(cloneUsage(defaultUsageLine))
+      : usageLine;
   return {
     ...doc,
     usage: normalizeUsage(customUsageLine),
@@ -3200,15 +3222,16 @@ function applyHelpSections(
     formatUsageTerm(entry.term, { context: "doc" }).trim() !== "";
   if (
     !doc.sections.some((section) =>
-      section.entries.some((entry) =>
-        entry.term.type === "command" && visible(entry)
-      )
+      section.entries.some(
+        (entry) => entry.term.type === "command" && visible(entry),
+      ),
     )
-  ) return doc;
+  )
+    return doc;
 
   const existingTitles = new Set(
     doc.sections.flatMap((section) =>
-      section.title == null ? [] : [section.title]
+      section.title == null ? [] : [section.title],
     ),
   );
   const additions = new Map<string, DocEntry[]>();
@@ -3221,24 +3244,25 @@ function applyHelpSections(
     const remaining: DocEntry[] = [];
     for (const entry of section.entries) {
       if (
-        entry.term.type === "command" && labels.commands != null &&
+        entry.term.type === "command" &&
+        labels.commands != null &&
         visible(entry)
       ) {
         commands.push(entry);
       } else if (
-        entry.term.type === "option" && labels.options != null && visible(entry)
+        entry.term.type === "option" &&
+        labels.options != null &&
+        visible(entry)
       ) {
         options.push(entry);
       } else remaining.push(entry);
     }
     if (commands.length === 0 && options.length === 0) continue;
     residuals.set(section, remaining);
-    for (
-      const [label, entries] of [[labels.commands, commands], [
-        labels.options,
-        options,
-      ]] as const
-    ) {
+    for (const [label, entries] of [
+      [labels.commands, commands],
+      [labels.options, options],
+    ] as const) {
       if (label == null || entries.length === 0) continue;
       const previous = additions.get(label);
       if (previous != null) previous.push(...entries);
@@ -3259,10 +3283,12 @@ function applyHelpSections(
     if (section.title != null) {
       const entries = additions.get(section.title);
       sections.push(
-        entries == null ? section : {
-          ...section,
-          entries: [...section.entries, ...entries],
-        },
+        entries == null
+          ? section
+          : {
+              ...section,
+              entries: [...section.entries, ...entries],
+            },
       );
       continue;
     }
@@ -3308,10 +3334,12 @@ function collapseTopLevelCommandEntries(
     if (existingIndex == null) {
       commandIndexes.set(topLevelName, collapsed.length);
       collapsed.push(
-        isTopLevel ? entry : {
-          // A synthesized parent must not inherit the child's aliases:
-          term: omitCommandAliases({ ...entry.term, name: topLevelName }),
-        },
+        isTopLevel
+          ? entry
+          : {
+              // A synthesized parent must not inherit the child's aliases:
+              term: omitCommandAliases({ ...entry.term, name: topLevelName }),
+            },
       );
       continue;
     }
@@ -3348,9 +3376,11 @@ function indentLines(text: string, indent: number): string {
 }
 
 function isMetaEarlyExit(classified: ParsedResult): boolean {
-  return classified.type === "help" ||
+  return (
+    classified.type === "help" ||
     classified.type === "version" ||
-    classified.type === "completion";
+    classified.type === "completion"
+  );
 }
 
 function classifyEarlyExitFailure<THelp, TError>(
@@ -3362,9 +3392,7 @@ function classifyEarlyExitFailure<THelp, TError>(
   const helpOptionConfig = norm<OptionSubConfig>(options.help?.option);
   const helpCommandConfig = norm<CommandSubConfig>(options.help?.command);
   const versionOptionConfig = norm<OptionSubConfig>(options.version?.option);
-  const versionCommandConfig = norm<CommandSubConfig>(
-    options.version?.command,
-  );
+  const versionCommandConfig = norm<CommandSubConfig>(options.version?.command);
   const completionOptionConfig = norm<OptionSubConfig>(
     options.completion?.option,
   );
@@ -3395,10 +3423,12 @@ function shouldProbeEarlyExit<THelp, TError>(
   options: RunWithOptions<THelp, TError>,
   needsTwoPhase: boolean,
 ): boolean {
-  return needsTwoPhase &&
+  return (
+    needsTwoPhase &&
     (options.help != null ||
       options.version != null ||
-      options.completion != null);
+      options.completion != null)
+  );
 }
 
 /**
@@ -3499,9 +3529,10 @@ async function collectPhase1Annotations(
       request,
       annotations,
     );
-    const snapshot = internalAnnotations == null
-      ? annotations
-      : mergeAnnotations([annotations, internalAnnotations]);
+    const snapshot =
+      internalAnnotations == null
+        ? annotations
+        : mergeAnnotations([annotations, internalAnnotations]);
     annotationsList.push(snapshot);
     if (snapshots != null) {
       snapshots.push(snapshot);
@@ -3562,9 +3593,10 @@ async function collectFinalAnnotations(
       request,
       annotations,
     );
-    const mergedAnnotations = internalAnnotations == null
-      ? annotations
-      : mergeAnnotations([annotations, internalAnnotations]);
+    const mergedAnnotations =
+      internalAnnotations == null
+        ? annotations
+        : mergeAnnotations([annotations, internalAnnotations]);
     annotationsList.push(mergedAnnotations);
   }
 
@@ -3602,9 +3634,10 @@ function collectPhase1AnnotationsSync(
       request,
       result,
     );
-    const snapshot = internalAnnotations == null
-      ? result
-      : mergeAnnotations([result, internalAnnotations]);
+    const snapshot =
+      internalAnnotations == null
+        ? result
+        : mergeAnnotations([result, internalAnnotations]);
     annotationsList.push(snapshot);
     if (snapshots != null) {
       snapshots.push(snapshot);
@@ -3671,9 +3704,10 @@ function collectFinalAnnotationsSync(
       request,
       result,
     );
-    const mergedAnnotations = internalAnnotations == null
-      ? result
-      : mergeAnnotations([result, internalAnnotations]);
+    const mergedAnnotations =
+      internalAnnotations == null
+        ? result
+        : mergeAnnotations([result, internalAnnotations]);
     annotationsList.push(mergedAnnotations);
   }
 
@@ -3752,9 +3786,9 @@ function disposeContextsSync(
           typeof result.then === "function"
         ) {
           throw new TypeError(
-            `Context ${
-              String(context.id)
-            } returned a Promise from Symbol.asyncDispose in sync mode. ` +
+            `Context ${String(
+              context.id,
+            )} returned a Promise from Symbol.asyncDispose in sync mode. ` +
               "Use runWith() or runWithAsync() for async disposal.",
           );
         }
@@ -3788,11 +3822,13 @@ function disposeContextsSync(
  */
 export type SubstituteParserValue<T, TValue> = T extends ParserValuePlaceholder
   ? TValue
-  : T extends (...args: infer A) => infer R ? (
-      ...args: { [K in keyof A]: SubstituteParserValue<A[K], TValue> }
-    ) => SubstituteParserValue<R, TValue>
-  : T extends object ? { [K in keyof T]: SubstituteParserValue<T[K], TValue> }
-  : T;
+  : T extends (...args: infer A) => infer R
+    ? (
+        ...args: { [K in keyof A]: SubstituteParserValue<A[K], TValue> }
+      ) => SubstituteParserValue<R, TValue>
+    : T extends object
+      ? { [K in keyof T]: SubstituteParserValue<T[K], TValue> }
+      : T;
 
 /**
  * Converts a union type to an intersection type.
@@ -3800,7 +3836,8 @@ export type SubstituteParserValue<T, TValue> = T extends ParserValuePlaceholder
  */
 type UnionToIntersection<U> = (
   U extends unknown ? (k: U) => void : never
-) extends (k: infer I) => void ? I
+) extends (k: infer I) => void
+  ? I
   : never;
 
 /**
@@ -3818,15 +3855,20 @@ export type ExtractRequiredOptions<
   TContexts extends readonly SourceContext<unknown>[],
   TValue,
 > = [
-  TContexts[number] extends SourceContext<infer O> ? O extends void ? never
-    : SubstituteParserValue<O, TValue>
-    : never,
-] extends [never] ? unknown
-  : UnionToIntersection<
-    TContexts[number] extends SourceContext<infer O> ? O extends void ? never
+  TContexts[number] extends SourceContext<infer O>
+    ? O extends void
+      ? never
       : SubstituteParserValue<O, TValue>
-      : never
-  >;
+    : never,
+] extends [never]
+  ? unknown
+  : UnionToIntersection<
+      TContexts[number] extends SourceContext<infer O>
+        ? O extends void
+          ? never
+          : SubstituteParserValue<O, TValue>
+        : never
+    >;
 
 /**
  * Options for runWith functions.
@@ -3836,8 +3878,10 @@ export type ExtractRequiredOptions<
  * @template TError The return type when an error occurs.
  * @since 0.10.0
  */
-export interface RunWithOptions<THelp, TError>
-  extends RunOptions<THelp, TError> {
+export interface RunWithOptions<THelp, TError> extends RunOptions<
+  THelp,
+  TError
+> {
   /**
    * Command-line arguments to parse. If not provided, defaults to
    * `process.argv.slice(2)` on Node.js/Bun or `Deno.args` on Deno.
@@ -3869,10 +3913,11 @@ export interface RunWithOptions<THelp, TError>
 export type ContextOptionsParam<
   TContexts extends readonly SourceContext<unknown>[],
   TValue,
-> = keyof ExtractRequiredOptions<TContexts, TValue> extends never ? unknown
+> = keyof ExtractRequiredOptions<TContexts, TValue> extends never
+  ? unknown
   : Record<string, never> extends ExtractRequiredOptions<TContexts, TValue>
     ? { readonly contextOptions?: ExtractRequiredOptions<TContexts, TValue> }
-  : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
+    : { readonly contextOptions: ExtractRequiredOptions<TContexts, TValue> };
 
 /**
  * Body of {@link runWith}, extracted so that the caller can handle
@@ -3936,17 +3981,17 @@ async function runWithBody<
   if (!needsTwoPhase) {
     // All contexts are single-pass.
     if (parser.mode === "async") {
-      return runParser(
+      return runParser(augmentedParser1, programName, args, options) as Promise<
+        InferValue<TParser>
+      >;
+    }
+    return Promise.resolve(
+      runParser(
         augmentedParser1,
         programName,
         args,
         options,
-      ) as Promise<InferValue<TParser>>;
-    }
-    return Promise.resolve(
-      runParser(augmentedParser1, programName, args, options) as InferValue<
-        TParser
-      >,
+      ) as InferValue<TParser>,
     );
   }
 
@@ -3979,9 +4024,7 @@ async function runWithBody<
         programName,
         args,
         sessionOptions,
-      ) as Promise<
-        InferValue<TParser>
-      >;
+      ) as Promise<InferValue<TParser>>;
     }
     return Promise.resolve(
       runParser(
@@ -3989,9 +4032,7 @@ async function runWithBody<
         programName,
         args,
         sessionOptions,
-      ) as InferValue<
-        TParser
-      >,
+      ) as InferValue<TParser>,
     );
   }
 
@@ -4017,9 +4058,7 @@ async function runWithBody<
       programName,
       args,
       sessionOptions,
-    ) as Promise<
-      InferValue<TParser>
-    >;
+    ) as Promise<InferValue<TParser>>;
   }
   return Promise.resolve(
     runParser(
@@ -4027,9 +4066,7 @@ async function runWithBody<
       programName,
       args,
       sessionOptions,
-    ) as InferValue<
-      TParser
-    >,
+    ) as InferValue<TParser>,
   );
 }
 
@@ -4110,9 +4147,8 @@ export async function runWith<
   parser: TParser,
   programName: string,
   contexts: TContexts,
-  options:
-    & RunWithOptions<THelp, TError>
-    & ContextOptionsParam<TContexts, InferValue<TParser>>,
+  options: RunWithOptions<THelp, TError> &
+    ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): Promise<InferValue<TParser>> {
   const args = options?.args ?? [];
 
@@ -4286,9 +4322,8 @@ export function runWithSync<
   parser: TParser,
   programName: string,
   contexts: TContexts,
-  options:
-    & RunWithOptions<THelp, TError>
-    & ContextOptionsParam<TContexts, InferValue<TParser>>,
+  options: RunWithOptions<THelp, TError> &
+    ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): InferValue<TParser> {
   if (parser.mode !== "sync") {
     throw new TypeError(
@@ -4367,9 +4402,8 @@ export function runWithAsync<
   parser: TParser,
   programName: string,
   contexts: TContexts,
-  options:
-    & RunWithOptions<THelp, TError>
-    & ContextOptionsParam<TContexts, InferValue<TParser>>,
+  options: RunWithOptions<THelp, TError> &
+    ContextOptionsParam<TContexts, InferValue<TParser>>,
 ): Promise<InferValue<TParser>> {
   return runWith(parser, programName, contexts, options);
 }
@@ -4381,11 +4415,7 @@ export function runWithAsync<
  * @param annotations Annotations to inject.
  * @returns A new parser with annotations in its initial state.
  */
-function injectAnnotationsIntoParser<
-  M extends Mode,
-  TValue,
-  TState,
->(
+function injectAnnotationsIntoParser<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   annotations: Annotations,
 ): Parser<M, TValue, TState> {
@@ -4397,28 +4427,30 @@ function injectAnnotationsIntoParser<
     ...Object.getOwnPropertyDescriptors(parser),
   };
   const initialState = descriptors.initialState;
-  descriptors.initialState = initialState == null
-    ? {
-      value: newInitialState,
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    }
-    : "get" in initialState || "set" in initialState
-    ? {
-      value: newInitialState,
-      writable: true,
-      enumerable: initialState.enumerable ?? true,
-      configurable: initialState.configurable ?? true,
-    }
-    : {
-      value: newInitialState,
-      writable: initialState.writable ?? true,
-      enumerable: initialState.enumerable ?? true,
-      configurable: initialState.configurable ?? true,
-    };
-  return Object.create(
-    Object.getPrototypeOf(parser),
-    descriptors,
-  ) as Parser<M, TValue, TState>;
+  descriptors.initialState =
+    initialState == null
+      ? {
+          value: newInitialState,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        }
+      : "get" in initialState || "set" in initialState
+        ? {
+            value: newInitialState,
+            writable: true,
+            enumerable: initialState.enumerable ?? true,
+            configurable: initialState.configurable ?? true,
+          }
+        : {
+            value: newInitialState,
+            writable: initialState.writable ?? true,
+            enumerable: initialState.enumerable ?? true,
+            configurable: initialState.configurable ?? true,
+          };
+  return Object.create(Object.getPrototypeOf(parser), descriptors) as Parser<
+    M,
+    TValue,
+    TState
+  >;
 }

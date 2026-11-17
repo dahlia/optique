@@ -88,14 +88,14 @@ describe("defineCommand()", () => {
   });
 
   it("should reject non-object command definitions", () => {
-    assert.throws(
-      () => defineCommand([] as never),
-      { name: "TypeError", message: "Expected object, got array." },
-    );
-    assert.throws(
-      () => defineCommand(null as never),
-      { name: "TypeError", message: "Expected object." },
-    );
+    assert.throws(() => defineCommand([] as never), {
+      name: "TypeError",
+      message: "Expected object, got array.",
+    });
+    assert.throws(() => defineCommand(null as never), {
+      name: "TypeError",
+      message: "Expected object.",
+    });
   });
 
   it("rejects malformed command definitions", () => {
@@ -282,10 +282,7 @@ describe("runProgram() hook resource types", () => {
     const command = defineCommand({
       path: ["show"],
       parser: object({}),
-      handler(
-        _value,
-        context?: ProgramHookContext<OtherResource>,
-      ) {
+      handler(_value, context?: ProgramHookContext<OtherResource>) {
         assert.equal(context?.resource?.count, 1);
       },
     });
@@ -336,10 +333,7 @@ describe("runProgram() hook resource types", () => {
     const programCommand = defineCommand({
       path: ["list"],
       parser: object({}),
-      handler(
-        _value,
-        context?: ProgramHookContext<AppResource>,
-      ) {
+      handler(_value, context?: ProgramHookContext<AppResource>) {
         assert.equal(context?.resource?.label, "program");
       },
     });
@@ -432,10 +426,10 @@ describe("discoverCommands()", () => {
         extensions: [".cmd.ts"],
       });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["build"],
-        ["user", "add"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["build"], ["user", "add"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -452,10 +446,10 @@ describe("discoverCommands()", () => {
         extensions: [".cmd.ts", ".ts"],
       });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["a"],
-        ["a-zzz"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["a"], ["a-zzz"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -488,10 +482,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["user"],
-        ["user", "add"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["user"], ["user", "add"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -507,12 +501,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        [],
-        ["build"],
-        ["stash"],
-        ["stash", "list"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [[], ["build"], ["stash"], ["stash", "list"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -530,10 +522,10 @@ describe("discoverCommands()", () => {
         entryFileName: "mod",
       });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        [],
-        ["stash"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [[], ["stash"]],
+      );
     } finally {
       await rm(modDir, { recursive: true, force: true });
     }
@@ -549,10 +541,10 @@ describe("discoverCommands()", () => {
         entryFileName: false,
       });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["index"],
-        ["stash", "index"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["index"], ["stash", "index"]],
+      );
     } finally {
       await rm(indexDir, { recursive: true, force: true });
     }
@@ -628,10 +620,13 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["foo bar", "c"],
-        ["foo", "bar c"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [
+          ["foo bar", "c"],
+          ["foo", "bar c"],
+        ],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -674,7 +669,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".cjs"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["build"]],
+      );
       assert.equal(commands[0]?.command, globalCommand);
     } finally {
       delete testGlobal.__optiqueDiscoverDefaultWrappedCommand;
@@ -688,22 +686,22 @@ describe("discoverCommands()", () => {
       const targetDir = join(dir, "targets");
       await writeCommand(targetDir, ["build.ts"], "build");
       await writeCommand(targetDir, ["deploy.ts"], "deploy");
-      await symlink(
-        join(targetDir, "build.ts"),
-        join(dir, "linked-build.ts"),
-      );
+      await symlink(join(targetDir, "build.ts"), join(dir, "linked-build.ts"));
       await symlink(targetDir, join(dir, "linked"));
       await symlink(dir, join(targetDir, "loop"));
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["linked-build"],
-        ["linked", "build"],
-        ["linked", "deploy"],
-        ["targets", "build"],
-        ["targets", "deploy"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [
+          ["linked-build"],
+          ["linked", "build"],
+          ["linked", "deploy"],
+          ["targets", "build"],
+          ["targets", "deploy"],
+        ],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -717,15 +715,14 @@ describe("discoverCommands()", () => {
         ["build.ts"],
         "build",
         `
-          import { defineCommand } from "${
-          runtimeModuleUrl("command.ts", "../dist/command.js")
-        }";
-          import { object } from "${
-          runtimeModuleUrl(
+          import { defineCommand } from "${runtimeModuleUrl(
+            "command.ts",
+            "../dist/command.js",
+          )}";
+          import { object } from "${runtimeModuleUrl(
             "../../core/src/constructs.ts",
             "../../core/dist/constructs.js",
-          )
-        }";
+          )}";
 
           export default defineCommand({
             path: ["deploy"],
@@ -752,15 +749,14 @@ describe("discoverCommands()", () => {
         ["user", "add.ts"],
         "add",
         `
-          import { defineCommand } from "${
-          runtimeModuleUrl("command.ts", "../dist/command.js")
-        }";
-          import { object } from "${
-          runtimeModuleUrl(
+          import { defineCommand } from "${runtimeModuleUrl(
+            "command.ts",
+            "../dist/command.js",
+          )}";
+          import { object } from "${runtimeModuleUrl(
             "../../core/src/constructs.ts",
             "../../core/dist/constructs.js",
-          )
-        }";
+          )}";
 
           export default defineCommand({
             path: ["user", "add"],
@@ -772,9 +768,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["user", "add"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["user", "add"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -788,15 +785,14 @@ describe("discoverCommands()", () => {
         ["index.ts"],
         "root",
         `
-          import { defineCommand } from "${
-          runtimeModuleUrl("command.ts", "../dist/command.js")
-        }";
-          import { object } from "${
-          runtimeModuleUrl(
+          import { defineCommand } from "${runtimeModuleUrl(
+            "command.ts",
+            "../dist/command.js",
+          )}";
+          import { object } from "${runtimeModuleUrl(
             "../../core/src/constructs.ts",
             "../../core/dist/constructs.js",
-          )
-        }";
+          )}";
 
           export default defineCommand({
             path: [],
@@ -808,9 +804,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        [],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [[]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -824,7 +821,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["build"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -839,7 +839,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["build"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -853,7 +856,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [["greet"]]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["greet"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -868,7 +874,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".js"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["build"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -884,12 +893,10 @@ describe("discoverCommands()", () => {
 
       const commands = await discoverCommands({ dir, extensions: [".ts"] });
 
-      assert.deepEqual(commands.map((command) => command.path), [
-        ["latest"],
-        ["manifest"],
-        ["spec"],
-        ["test"],
-      ]);
+      assert.deepEqual(
+        commands.map((command) => command.path),
+        [["latest"], ["manifest"], ["spec"], ["test"]],
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -941,32 +948,35 @@ describe("discoverCommands()", () => {
 
 describe("commandsFromModules()", () => {
   it("should reject non-object module maps", () => {
-    assert.throws(
-      () => commandsFromModules([] as never),
-      { name: "TypeError", message: "Expected object, got array." },
-    );
-    assert.throws(
-      () => commandsFromModules(null as never),
-      { name: "TypeError", message: "Expected object." },
-    );
+    assert.throws(() => commandsFromModules([] as never), {
+      name: "TypeError",
+      message: "Expected object, got array.",
+    });
+    assert.throws(() => commandsFromModules(null as never), {
+      name: "TypeError",
+      message: "Expected object.",
+    });
   });
 
   it("derives command paths from static module map keys", () => {
     const buildCommand = makeCommand();
     const addCommand = makeCommand();
 
-    const commands = commandsFromModules({
-      "./commands/user/add.ts": { default: addCommand },
-      "./commands/build.ts": { default: buildCommand },
-    }, {
-      base: "./commands",
-      extensions: [".ts"],
-    });
+    const commands = commandsFromModules(
+      {
+        "./commands/user/add.ts": { default: addCommand },
+        "./commands/build.ts": { default: buildCommand },
+      },
+      {
+        base: "./commands",
+        extensions: [".ts"],
+      },
+    );
 
-    assert.deepEqual(commands.map((command) => command.path), [
-      ["build"],
-      ["user", "add"],
-    ]);
+    assert.deepEqual(
+      commands.map((command) => command.path),
+      [["build"], ["user", "add"]],
+    );
     assert.equal(commands[0]?.command, buildCommand);
     assert.equal(commands[1]?.command, addCommand);
   });
@@ -976,20 +986,22 @@ describe("commandsFromModules()", () => {
     const stashCommand = makeCommand();
     const listCommand = makeCommand();
 
-    const commands = commandsFromModules({
-      "./commands/stash/list.ts": { default: listCommand },
-      "./commands/index.ts": { default: rootCommand },
-      "./commands/stash/index.ts": { default: stashCommand },
-    }, {
-      base: "./commands",
-      extensions: [".ts"],
-    });
+    const commands = commandsFromModules(
+      {
+        "./commands/stash/list.ts": { default: listCommand },
+        "./commands/index.ts": { default: rootCommand },
+        "./commands/stash/index.ts": { default: stashCommand },
+      },
+      {
+        base: "./commands",
+        extensions: [".ts"],
+      },
+    );
 
-    assert.deepEqual(commands.map((command) => command.path), [
-      [],
-      ["stash"],
-      ["stash", "list"],
-    ]);
+    assert.deepEqual(
+      commands.map((command) => command.path),
+      [[], ["stash"], ["stash", "list"]],
+    );
     assert.equal(commands[0]?.command, rootCommand);
     assert.equal(commands[1]?.command, stashCommand);
     assert.equal(commands[2]?.command, listCommand);
@@ -999,19 +1011,22 @@ describe("commandsFromModules()", () => {
     const commandCommand = makeCommand();
     const zzzCommand = makeCommand();
 
-    const commands = commandsFromModules({
-      "./commands/a.d.ts": { default: makeCommand() },
-      "./commands/a.cmd.ts": { default: commandCommand },
-      "./commands/a-zzz.ts": { default: zzzCommand },
-    }, {
-      base: "./commands",
-      extensions: [".ts", ".cmd.ts"],
-    });
+    const commands = commandsFromModules(
+      {
+        "./commands/a.d.ts": { default: makeCommand() },
+        "./commands/a.cmd.ts": { default: commandCommand },
+        "./commands/a-zzz.ts": { default: zzzCommand },
+      },
+      {
+        base: "./commands",
+        extensions: [".ts", ".cmd.ts"],
+      },
+    );
 
-    assert.deepEqual(commands.map((command) => command.path), [
-      ["a"],
-      ["a-zzz"],
-    ]);
+    assert.deepEqual(
+      commands.map((command) => command.path),
+      [["a"], ["a-zzz"]],
+    );
     assert.equal(commands[0]?.command, commandCommand);
     assert.equal(commands[1]?.command, zzzCommand);
   });
@@ -1019,59 +1034,74 @@ describe("commandsFromModules()", () => {
   it("ignores co-located test and spec module keys", () => {
     const buildCommand = makeCommand();
 
-    const commands = commandsFromModules({
-      "./commands/build.ts": { default: buildCommand },
-      "./commands/build.test.ts": { default: makeCommand() },
-      "./commands/build.spec.ts": { default: makeCommand() },
-    }, {
-      base: "./commands",
-      extensions: [".ts"],
-    });
+    const commands = commandsFromModules(
+      {
+        "./commands/build.ts": { default: buildCommand },
+        "./commands/build.test.ts": { default: makeCommand() },
+        "./commands/build.spec.ts": { default: makeCommand() },
+      },
+      {
+        base: "./commands",
+        extensions: [".ts"],
+      },
+    );
 
-    assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+    assert.deepEqual(
+      commands.map((command) => command.path),
+      [["build"]],
+    );
     assert.equal(commands[0]?.command, buildCommand);
   });
 
   it("supports custom and disabled entry file names", () => {
-    const modCommands = commandsFromModules({
-      "./commands/mod.ts": { default: makeCommand() },
-      "./commands/stash/mod.ts": { default: makeCommand() },
-    }, {
-      base: "./commands",
-      extensions: [".ts"],
-      entryFileName: "mod",
-    });
+    const modCommands = commandsFromModules(
+      {
+        "./commands/mod.ts": { default: makeCommand() },
+        "./commands/stash/mod.ts": { default: makeCommand() },
+      },
+      {
+        base: "./commands",
+        extensions: [".ts"],
+        entryFileName: "mod",
+      },
+    );
 
-    assert.deepEqual(modCommands.map((command) => command.path), [
-      [],
-      ["stash"],
-    ]);
+    assert.deepEqual(
+      modCommands.map((command) => command.path),
+      [[], ["stash"]],
+    );
 
-    const indexCommands = commandsFromModules({
-      "./commands/index.ts": { default: makeCommand() },
-      "./commands/stash/index.ts": { default: makeCommand() },
-    }, {
-      base: "./commands",
-      extensions: [".ts"],
-      entryFileName: false,
-    });
+    const indexCommands = commandsFromModules(
+      {
+        "./commands/index.ts": { default: makeCommand() },
+        "./commands/stash/index.ts": { default: makeCommand() },
+      },
+      {
+        base: "./commands",
+        extensions: [".ts"],
+        entryFileName: false,
+      },
+    );
 
-    assert.deepEqual(indexCommands.map((command) => command.path), [
-      ["index"],
-      ["stash", "index"],
-    ]);
+    assert.deepEqual(
+      indexCommands.map((command) => command.path),
+      [["index"], ["stash", "index"]],
+    );
   });
 
   it("rejects duplicate command paths", () => {
     assert.throws(
       () =>
-        commandsFromModules({
-          "./commands/build.ts": { default: makeCommand() },
-          "./commands/build.cmd.ts": { default: makeCommand() },
-        }, {
-          base: "./commands",
-          extensions: [".cmd.ts", ".ts"],
-        }),
+        commandsFromModules(
+          {
+            "./commands/build.ts": { default: makeCommand() },
+            "./commands/build.cmd.ts": { default: makeCommand() },
+          },
+          {
+            base: "./commands",
+            extensions: [".cmd.ts", ".ts"],
+          },
+        ),
       /Duplicate command path "build" from \.\/commands\/build\.cmd\.ts and \.\/commands\/build\.ts\./,
     );
   });
@@ -1079,12 +1109,15 @@ describe("commandsFromModules()", () => {
   it("rejects modules whose default export is not a command", () => {
     assert.throws(
       () =>
-        commandsFromModules({
-          "./commands/bad.ts": {},
-        }, {
-          base: "./commands",
-          extensions: [".ts"],
-        }),
+        commandsFromModules(
+          {
+            "./commands/bad.ts": {},
+          },
+          {
+            base: "./commands",
+            extensions: [".ts"],
+          },
+        ),
       {
         name: "TypeError",
         message:
@@ -1096,63 +1129,75 @@ describe("commandsFromModules()", () => {
   it("unwraps CommonJS default-wrapped command exports", () => {
     const buildCommand = makeCommand();
 
-    const commands = commandsFromModules({
-      "./commands/build.cjs": { default: { default: buildCommand } },
-    }, {
-      base: "./commands",
-      extensions: [".cjs"],
-    });
+    const commands = commandsFromModules(
+      {
+        "./commands/build.cjs": { default: { default: buildCommand } },
+      },
+      {
+        base: "./commands",
+        extensions: [".cjs"],
+      },
+    );
 
-    assert.deepEqual(commands.map((command) => command.path), [["build"]]);
+    assert.deepEqual(
+      commands.map((command) => command.path),
+      [["build"]],
+    );
     assert.equal(commands[0]?.command, buildCommand);
   });
 
   it("rejects declared paths that do not match module-derived paths", () => {
     assert.throws(
       () =>
-        commandsFromModules({
-          "./commands/build.ts": {
-            default: defineCommand({
-              path: ["deploy"],
-              parser: object({}),
-              handler() {},
-            }),
+        commandsFromModules(
+          {
+            "./commands/build.ts": {
+              default: defineCommand({
+                path: ["deploy"],
+                parser: object({}),
+                handler() {},
+              }),
+            },
           },
-        }, {
-          base: "./commands",
-          extensions: [".ts"],
-        }),
+          {
+            base: "./commands",
+            extensions: [".ts"],
+          },
+        ),
       /declares command path "deploy" but module path defines "build"\./,
     );
   });
 
   it("works with createProgramParser() for help and dispatch", async () => {
     const calls: unknown[] = [];
-    const commands = commandsFromModules({
-      "./commands/index.ts": {
-        default: defineCommand({
-          parser: object({
-            name: option("--name", string()),
+    const commands = commandsFromModules(
+      {
+        "./commands/index.ts": {
+          default: defineCommand({
+            parser: object({
+              name: option("--name", string()),
+            }),
+            metadata: { brief: message`Create an app.` },
+            handler(value) {
+              calls.push(["root", value]);
+            },
           }),
-          metadata: { brief: message`Create an app.` },
-          handler(value) {
-            calls.push(["root", value]);
-          },
-        }),
+        },
+        "./commands/build.ts": {
+          default: defineCommand({
+            parser: object({}),
+            metadata: { brief: message`Build the app.` },
+            handler(value) {
+              calls.push(["build", value]);
+            },
+          }),
+        },
       },
-      "./commands/build.ts": {
-        default: defineCommand({
-          parser: object({}),
-          metadata: { brief: message`Build the app.` },
-          handler(value) {
-            calls.push(["build", value]);
-          },
-        }),
+      {
+        base: "./commands",
+        extensions: [".ts"],
       },
-    }, {
-      base: "./commands",
-      extensions: [".ts"],
-    });
+    );
     const parser = createProgramParser(commands);
 
     const page = await getDocPageAsync(parser);
@@ -1373,34 +1418,37 @@ describe("createProgramParser()", () => {
   });
 
   it("lists only top-level commands in root docs when commandList is top-level", async () => {
-    const parser = createProgramParser([
+    const parser = createProgramParser(
+      [
+        {
+          path: ["user"],
+          command: defineCommand({
+            parser: object({}),
+            metadata: { brief: message`Manage users.` },
+            handler() {},
+          }),
+        },
+        {
+          path: ["user", "add"],
+          command: defineCommand({
+            parser: object({}),
+            metadata: { brief: message`Add a user.` },
+            handler() {},
+          }),
+        },
+        {
+          path: ["user", "remove"],
+          command: defineCommand({
+            parser: object({}),
+            metadata: { brief: message`Remove a user.` },
+            handler() {},
+          }),
+        },
+      ],
       {
-        path: ["user"],
-        command: defineCommand({
-          parser: object({}),
-          metadata: { brief: message`Manage users.` },
-          handler() {},
-        }),
+        commandList: "top-level",
       },
-      {
-        path: ["user", "add"],
-        command: defineCommand({
-          parser: object({}),
-          metadata: { brief: message`Add a user.` },
-          handler() {},
-        }),
-      },
-      {
-        path: ["user", "remove"],
-        command: defineCommand({
-          parser: object({}),
-          metadata: { brief: message`Remove a user.` },
-          handler() {},
-        }),
-      },
-    ], {
-      commandList: "top-level",
-    });
+    );
 
     const page = await getDocPageAsync(parser);
     assert.ok(page);
@@ -1486,10 +1534,10 @@ describe("createProgramParser()", () => {
       getAnnotations(request) {
         if (request?.phase !== "phase2") return {};
         phase2Values.push(request.parsed);
-        const config = request.parsed != null &&
-            typeof request.parsed === "object"
-          ? (request.parsed as { readonly config?: unknown }).config
-          : undefined;
+        const config =
+          request.parsed != null && typeof request.parsed === "object"
+            ? (request.parsed as { readonly config?: unknown }).config
+            : undefined;
         return typeof config === "string"
           ? { [sourceId]: `loaded:${config}` }
           : {};
@@ -1527,10 +1575,7 @@ describe("createProgramParser()", () => {
     });
 
     assert.deepEqual(calls, [
-      [
-        "stash",
-        { config: "stash.json", source: "loaded:stash.json" },
-      ],
+      ["stash", { config: "stash.json", source: "loaded:stash.json" }],
     ]);
     assert.equal(phase2Values.length, 1);
     assert.equal(
@@ -1629,33 +1674,36 @@ describe("createProgramParser()", () => {
     ]);
 
     const state = await parseAll(parser, ["stash"]);
-    const sourceNode = parser.getSuggestRuntimeNodes?.(state, [])?.find(
-      (node) => node.parser.dependencyMetadata?.source != null,
-    );
+    const sourceNode = parser
+      .getSuggestRuntimeNodes?.(state, [])
+      ?.find((node) => node.parser.dependencyMetadata?.source != null);
 
     assert.ok(sourceNode);
     assert.deepEqual(sourceNode.path, ["stash", 1, "mode"]);
   });
 
   it("shows leaf command paths in root help", async () => {
-    const parser = createProgramParser([
-      {
-        path: ["build"],
-        command: defineCommand({
-          parser: object({}),
-          metadata: { brief: message`Build the project.` },
-          handler() {},
-        }),
-      },
-      {
-        path: ["user", "add"],
-        command: defineCommand({
-          parser: object({}),
-          metadata: { brief: message`Add a user.` },
-          handler() {},
-        }),
-      },
-    ], { brief: message`Project tool.` });
+    const parser = createProgramParser(
+      [
+        {
+          path: ["build"],
+          command: defineCommand({
+            parser: object({}),
+            metadata: { brief: message`Build the project.` },
+            handler() {},
+          }),
+        },
+        {
+          path: ["user", "add"],
+          command: defineCommand({
+            parser: object({}),
+            metadata: { brief: message`Add a user.` },
+            handler() {},
+          }),
+        },
+      ],
+      { brief: message`Project tool.` },
+    );
 
     const page = await getDocPageAsync(parser);
     assert.ok(page != null);
@@ -1668,26 +1716,29 @@ describe("createProgramParser()", () => {
   });
 
   it("shows root command options and nested commands in root help", async () => {
-    const parser = createProgramParser([
-      {
-        path: [],
-        command: defineCommand({
-          parser: object({
-            name: option("--name", string()),
+    const parser = createProgramParser(
+      [
+        {
+          path: [],
+          command: defineCommand({
+            parser: object({
+              name: option("--name", string()),
+            }),
+            metadata: { brief: message`Create an app.` },
+            handler() {},
           }),
-          metadata: { brief: message`Create an app.` },
-          handler() {},
-        }),
-      },
-      {
-        path: ["build"],
-        command: defineCommand({
-          parser: object({}),
-          metadata: { brief: message`Build the app.` },
-          handler() {},
-        }),
-      },
-    ], { brief: message`Project tool.` });
+        },
+        {
+          path: ["build"],
+          command: defineCommand({
+            parser: object({}),
+            metadata: { brief: message`Build the app.` },
+            handler() {},
+          }),
+        },
+      ],
+      { brief: message`Project tool.` },
+    );
 
     const page = await getDocPageAsync(parser);
     assert.ok(page != null);
@@ -1823,16 +1874,13 @@ describe("createProgramParser()", () => {
 
     const suggestions = await suggestAsync(parser, ["repo", ""]);
     assert.ok(
-      !suggestions.some((suggestion) =>
-        suggestion.kind === "literal" && suggestion.text === "remote"
+      !suggestions.some(
+        (suggestion) =>
+          suggestion.kind === "literal" && suggestion.text === "remote",
       ),
     );
 
-    const childPage = await getDocPageAsync(parser, [
-      "repo",
-      "remote",
-      "add",
-    ]);
+    const childPage = await getDocPageAsync(parser, ["repo", "remote", "add"]);
     assert.ok(childPage != null);
     const childText = formatDocPage("git", childPage);
 
@@ -1840,31 +1888,34 @@ describe("createProgramParser()", () => {
   });
 
   it("wraps executable parent completion with async mode", async () => {
-    const asyncChildParser: Parser<"async", Record<string, never>, undefined> =
-      {
-        $valueType: [],
-        $stateType: [],
-        mode: "async",
-        priority: 0,
-        usage: [],
-        leadingNames: new Set(),
-        acceptingAnyToken: false,
-        initialState: undefined,
-        parse(context) {
-          return Promise.resolve({
-            success: true,
-            consumed: [],
-            next: context,
-          });
-        },
-        complete() {
-          return Promise.resolve({ success: true, value: {} });
-        },
-        async *suggest() {},
-        getDocFragments() {
-          return { fragments: [] };
-        },
-      };
+    const asyncChildParser: Parser<
+      "async",
+      Record<string, never>,
+      undefined
+    > = {
+      $valueType: [],
+      $stateType: [],
+      mode: "async",
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return Promise.resolve({
+          success: true,
+          consumed: [],
+          next: context,
+        });
+      },
+      complete() {
+        return Promise.resolve({ success: true, value: {} });
+      },
+      async *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
     const parser = createProgramParser([
       {
         path: ["stash"],
@@ -2092,14 +2143,14 @@ describe("runProgram()", () => {
   });
 
   it("should reject non-object options", async () => {
-    await assert.rejects(
-      () => runProgram([] as never),
-      { name: "TypeError", message: "Expected object, got array." },
-    );
-    await assert.rejects(
-      () => runProgram(null as never),
-      { name: "TypeError", message: "Expected object." },
-    );
+    await assert.rejects(() => runProgram([] as never), {
+      name: "TypeError",
+      message: "Expected object, got array.",
+    });
+    await assert.rejects(() => runProgram(null as never), {
+      name: "TypeError",
+      message: "Expected object.",
+    });
   });
 
   it("runs statically registered commands and waits for async handlers", async () => {
@@ -2131,21 +2182,24 @@ describe("runProgram()", () => {
 
   it("runs commands converted from a static module map", async () => {
     const calls: unknown[] = [];
-    const commands = commandsFromModules({
-      "./commands/write.ts": {
-        default: defineCommand({
-          parser: object({
-            value: option("--value", string()),
+    const commands = commandsFromModules(
+      {
+        "./commands/write.ts": {
+          default: defineCommand({
+            parser: object({
+              value: option("--value", string()),
+            }),
+            handler(value) {
+              calls.push(value);
+            },
           }),
-          handler(value) {
-            calls.push(value);
-          },
-        }),
+        },
       },
-    }, {
-      base: "./commands",
-      extensions: [".ts"],
-    });
+      {
+        base: "./commands",
+        extensions: [".ts"],
+      },
+    );
 
     await runProgram({
       commands,
@@ -2367,12 +2421,16 @@ describe("runProgram()", () => {
     assert.match(userStdout, /remove\s+Remove a user\./);
   });
 
-  for (
-    const { label, paths } of [
-      { label: "multiple root commands", paths: [["one"], ["two"]] },
-      { label: "a shared root command", paths: [["grp", "a"], ["grp", "b"]] },
-    ] as const
-  ) {
+  for (const { label, paths } of [
+    { label: "multiple root commands", paths: [["one"], ["two"]] },
+    {
+      label: "a shared root command",
+      paths: [
+        ["grp", "a"],
+        ["grp", "b"],
+      ],
+    },
+  ] as const) {
     it(`should show complete root help for an unknown command with contexts and ${label}`, async () => {
       const calls: string[] = [];
       const commands = paths.map((path) =>
@@ -2383,7 +2441,7 @@ describe("runProgram()", () => {
           handler() {
             calls.push(path.join(" "));
           },
-        })
+        }),
       );
       const key = Symbol("help-context");
       const context: SourceContext = {
@@ -2396,9 +2454,11 @@ describe("runProgram()", () => {
         "missing",
         "--help",
       ]);
-      const actual = await captureProgramHelp(commands, ["missing", "--help"], [
-        context,
-      ]);
+      const actual = await captureProgramHelp(
+        commands,
+        ["missing", "--help"],
+        [context],
+      );
 
       assert.deepEqual(actual, expected);
       assert.equal(actual.stderr, "");
@@ -2438,9 +2498,11 @@ describe("runProgram()", () => {
     };
 
     const expected = await captureProgramHelp(commands, ["one", "--help"]);
-    const actual = await captureProgramHelp(commands, ["one", "--help"], [
-      context,
-    ]);
+    const actual = await captureProgramHelp(
+      commands,
+      ["one", "--help"],
+      [context],
+    );
 
     assert.deepEqual(actual, expected);
     assert.equal(actual.stderr, "");
@@ -2510,11 +2572,13 @@ describe("runProgram()", () => {
     await assert.rejects(
       () =>
         runProgram({
-          commands: [{
-            path: ["build"],
-            parser: object({}),
-            handler() {},
-          }] as never,
+          commands: [
+            {
+              path: ["build"],
+              parser: object({}),
+              handler() {},
+            },
+          ] as never,
           metadata: { name: "tool" },
           args: ["build"],
           stdout() {},
@@ -2565,27 +2629,22 @@ describe("runProgram()", () => {
         "write",
         `
           import { writeFile } from "node:fs/promises";
-          import { defineCommand } from "${
-          runtimeModuleUrl("command.ts", "../dist/command.js")
-        }";
-          import { object } from "${
-          runtimeModuleUrl(
+          import { defineCommand } from "${runtimeModuleUrl(
+            "command.ts",
+            "../dist/command.js",
+          )}";
+          import { object } from "${runtimeModuleUrl(
             "../../core/src/constructs.ts",
             "../../core/dist/constructs.js",
-          )
-        }";
-          import { option } from "${
-          runtimeModuleUrl(
+          )}";
+          import { option } from "${runtimeModuleUrl(
             "../../core/src/primitives.ts",
             "../../core/dist/primitives.js",
-          )
-        }";
-          import { string } from "${
-          runtimeModuleUrl(
+          )}";
+          import { string } from "${runtimeModuleUrl(
             "../../core/src/valueparser.ts",
             "../../core/dist/valueparser.js",
-          )
-        }";
+          )}";
 
           export default defineCommand({
             parser: object({ value: option("--value", string()) }),
@@ -2697,33 +2756,26 @@ describe("runProgram()", () => {
         ["show.ts"],
         "show",
         `
-          import { defineCommand } from "${
-          runtimeModuleUrl("command.ts", "../dist/command.js")
-        }";
-          import { object } from "${
-          runtimeModuleUrl(
+          import { defineCommand } from "${runtimeModuleUrl(
+            "command.ts",
+            "../dist/command.js",
+          )}";
+          import { object } from "${runtimeModuleUrl(
             "../../core/src/constructs.ts",
             "../../core/dist/constructs.js",
-          )
-        }";
-          import { multiple, withDefault } from "${
-          runtimeModuleUrl(
+          )}";
+          import { multiple, withDefault } from "${runtimeModuleUrl(
             "../../core/src/modifiers.ts",
             "../../core/dist/modifiers.js",
-          )
-        }";
-          import { option } from "${
-          runtimeModuleUrl(
+          )}";
+          import { option } from "${runtimeModuleUrl(
             "../../core/src/primitives.ts",
             "../../core/dist/primitives.js",
-          )
-        }";
-          import { string } from "${
-          runtimeModuleUrl(
+          )}";
+          import { string } from "${runtimeModuleUrl(
             "../../core/src/valueparser.ts",
             "../../core/dist/valueparser.js",
-          )
-        }";
+          )}";
 
           export default defineCommand({
             parser: object({
@@ -3233,17 +3285,14 @@ describe("runProgram() lifecycle hooks", () => {
       handler() {},
     });
 
-    await assert.rejects(
-      () => runHooked([greet], ["greet"], "nope" as never),
-      { name: "TypeError", message: "Program hooks must be an object." },
-    );
-    await assert.rejects(
-      () => runHooked([greet], ["greet"], [] as never),
-      {
-        name: "TypeError",
-        message: "Program hooks must be an object, not an array.",
-      },
-    );
+    await assert.rejects(() => runHooked([greet], ["greet"], "nope" as never), {
+      name: "TypeError",
+      message: "Program hooks must be an object.",
+    });
+    await assert.rejects(() => runHooked([greet], ["greet"], [] as never), {
+      name: "TypeError",
+      message: "Program hooks must be an object, not an array.",
+    });
     await assert.rejects(
       () => runHooked([greet], ["greet"], { afterEach: "nope" as never }),
       {
@@ -3283,14 +3332,17 @@ describe("runProgram() lifecycle hooks", () => {
     // commandsFromModules derives the path from the module key while the
     // command definition omits an explicit path, mirroring file-based
     // discovery.
-    const commands = commandsFromModules({
-      "./commands/user/add.ts": {
-        default: defineCommand({
-          parser: object({}),
-          handler() {},
-        }),
+    const commands = commandsFromModules(
+      {
+        "./commands/user/add.ts": {
+          default: defineCommand({
+            parser: object({}),
+            handler() {},
+          }),
+        },
       },
-    }, { base: "./commands", extensions: [".ts"] });
+      { base: "./commands", extensions: [".ts"] },
+    );
 
     await runProgram({
       commands,
@@ -3369,18 +3421,18 @@ async function writeCommand(
   path: readonly string[],
   label: string,
   body = `
-    import { defineCommand } from "${
-    runtimeModuleUrl("command.ts", "../dist/command.js")
-  }";
-    import { object } from "${
-    runtimeModuleUrl(
+    import { defineCommand } from "${runtimeModuleUrl(
+      "command.ts",
+      "../dist/command.js",
+    )}";
+    import { object } from "${runtimeModuleUrl(
       "../../core/src/constructs.ts",
       "../../core/dist/constructs.js",
-    )
-  }";
-    import { message } from "${
-    runtimeModuleUrl("../../core/src/message.ts", "../../core/dist/message.js")
-  }";
+    )}";
+    import { message } from "${runtimeModuleUrl(
+      "../../core/src/message.ts",
+      "../../core/dist/message.js",
+    )}";
 
     export default defineCommand({
       parser: object({}),
@@ -3409,7 +3461,8 @@ function runtimeModuleUrl(
     readonly Deno?: unknown;
     readonly process?: { readonly release?: { readonly name?: string } };
   };
-  const isNode = runtime.process?.release?.name === "node" &&
+  const isNode =
+    runtime.process?.release?.name === "node" &&
     runtime.Bun === undefined &&
     runtime.Deno === undefined;
   return moduleUrl(isNode ? nodeRelative : sourceRelative);
@@ -3441,10 +3494,7 @@ async function parseAll(
   return context.state;
 }
 
-function createStringSourceContext(
-  id: symbol,
-  value: string,
-): SourceContext {
+function createStringSourceContext(id: symbol, value: string): SourceContext {
   return {
     id,
     phase: "single-pass",
@@ -3501,10 +3551,12 @@ interface SourceBackedOptionState {
 function isSourceBackedOptionState(
   value: unknown,
 ): value is SourceBackedOptionState {
-  return value != null &&
+  return (
+    value != null &&
     typeof value === "object" &&
     typeof (value as { readonly hasCliValue?: unknown }).hasCliValue ===
-      "boolean";
+      "boolean"
+  );
 }
 
 function createSourceBackedOptionParser(
@@ -3523,7 +3575,7 @@ function createSourceBackedOptionParser(
     initialState: undefined,
     parse(context) {
       const currentState = isSourceBackedOptionState(context.state)
-        ? context.state.cliState ?? cliParser.initialState
+        ? (context.state.cliState ?? cliParser.initialState)
         : cliParser.initialState;
       const result = cliParser.parse({ ...context, state: currentState });
       if (result.success) {
@@ -3554,22 +3606,26 @@ function createSourceBackedOptionParser(
         : { success: false, error: message`Missing source value.` };
     },
     suggest(context, prefix) {
-      return cliParser.suggest({
-        ...context,
-        state: cliParser.initialState,
-      }, prefix);
+      return cliParser.suggest(
+        {
+          ...context,
+          state: cliParser.initialState,
+        },
+        prefix,
+      );
     },
     getDocFragments(state, defaultValue) {
       return cliParser.getDocFragments(
-        state.kind === "available" && isSourceBackedOptionState(state.state) &&
+        state.kind === "available" &&
+          isSourceBackedOptionState(state.state) &&
           state.state.hasCliValue
           ? {
-            kind: "available",
-            state: inheritAnnotations(
-              state.state,
-              state.state.cliState ?? cliParser.initialState,
-            ),
-          }
+              kind: "available",
+              state: inheritAnnotations(
+                state.state,
+                state.state.cliState ?? cliParser.initialState,
+              ),
+            }
           : { kind: "unavailable" },
         defaultValue,
       );
@@ -3587,9 +3643,10 @@ function wrapSourceBackedOptionParseResult(
   result: ParserResult<ValueParserResult<string> | undefined>,
 ): ParserResult<SourceBackedOptionState | undefined> {
   if (!result.success) return result;
-  const state: SourceBackedOptionState = result.consumed.length > 0
-    ? { hasCliValue: true, cliState: result.next.state }
-    : { hasCliValue: false };
+  const state: SourceBackedOptionState =
+    result.consumed.length > 0
+      ? { hasCliValue: true, cliState: result.next.state }
+      : { hasCliValue: false };
   return {
     success: true,
     ...(result.provisional ? { provisional: true as const } : {}),
@@ -3612,20 +3669,23 @@ describe("runProgram terminal presentation", () => {
         assert.fail("The invalid command must not run.");
       },
     });
-    await assert.rejects(() =>
-      runProgram({
-        commands: [command],
-        metadata: { name: "app" },
-        args: ["write"],
-        colors: false,
-        theme: { errorLabel: () => ({ type: "text", text: "Failure:" }) },
-        messageFormatter: () => "CUSTOM",
-        stdout: (s) => output.push(s),
-        stderr: (s) => output.push(s),
-        onExit: () => {
-          throw exited;
-        },
-      }), (error) => error === exited);
+    await assert.rejects(
+      () =>
+        runProgram({
+          commands: [command],
+          metadata: { name: "app" },
+          args: ["write"],
+          colors: false,
+          theme: { errorLabel: () => ({ type: "text", text: "Failure:" }) },
+          messageFormatter: () => "CUSTOM",
+          stdout: (s) => output.push(s),
+          stderr: (s) => output.push(s),
+          onExit: () => {
+            throw exited;
+          },
+        }),
+      (error) => error === exited,
+    );
     assert.ok(output.some((s) => s.includes("Failure: CUSTOM")));
   });
 });
@@ -3643,30 +3703,39 @@ describe("runProgram completion errors", () => {
           handlerCalls++;
         },
       });
-      await assert.rejects(() =>
-        runProgram({
-          commands: [command],
-          metadata: { name: "test" },
-          args,
-          colors: false,
-          completion: {
-            command: true,
-            option: true,
-            errors: {
-              missingShell: message`Select a shell.`,
-              unsupportedShell: (shell, shells) => {
-                assert.equal(shell, "unknown");
-                assert.deepEqual(shells, ["bash", "fish", "nu", "pwsh", "zsh"]);
-                return message`Cannot complete for ${shell}.`;
+      await assert.rejects(
+        () =>
+          runProgram({
+            commands: [command],
+            metadata: { name: "test" },
+            args,
+            colors: false,
+            completion: {
+              command: true,
+              option: true,
+              errors: {
+                missingShell: message`Select a shell.`,
+                unsupportedShell: (shell, shells) => {
+                  assert.equal(shell, "unknown");
+                  assert.deepEqual(shells, [
+                    "bash",
+                    "fish",
+                    "nu",
+                    "pwsh",
+                    "zsh",
+                  ]);
+                  return message`Cannot complete for ${shell}.`;
+                },
               },
             },
-          },
-          stderr: (chunk) => chunks.push(chunk),
-          onExit: (code): never => {
-            assert.equal(code, 1);
-            throw exit;
-          },
-        }), (error) => error === exit);
+            stderr: (chunk) => chunks.push(chunk),
+            onExit: (code): never => {
+              assert.equal(code, 1);
+              throw exit;
+            },
+          }),
+        (error) => error === exit,
+      );
       assert.equal(
         chunks[0],
         args.length === 1
@@ -3685,24 +3754,27 @@ describe("helpSections forwarding", () => {
         path: [name],
         parser: object({ verbose: option("--verbose") }),
         handler() {},
-      })
+      }),
     );
     for (const args of [["--help"], ["list", "--help"]]) {
       const chunks: string[] = [];
-      await assert.rejects(() =>
-        runProgram({
-          commands,
-          metadata: { name: "demo", version: "1.0" },
-          args,
-          help: "option",
-          completion: false,
-          helpSections: { commands: "Commands", options: "Options" },
-          colors: false,
-          stdout: (text) => chunks.push(text),
-          onExit(code): never {
-            throw new ExitSignal(code);
-          },
-        }), ExitSignal);
+      await assert.rejects(
+        () =>
+          runProgram({
+            commands,
+            metadata: { name: "demo", version: "1.0" },
+            args,
+            help: "option",
+            completion: false,
+            helpSections: { commands: "Commands", options: "Options" },
+            colors: false,
+            stdout: (text) => chunks.push(text),
+            onExit(code): never {
+              throw new ExitSignal(code);
+            },
+          }),
+        ExitSignal,
+      );
       const output = chunks.join("");
       if (args.length === 1) {
         assert.match(output, /^Commands:$/m);
@@ -3781,18 +3853,18 @@ describe("command alias display", () => {
     const commands = createAliasCommands().map((entry) =>
       entry.path.join(" ") === "remote"
         ? {
-          path: entry.path,
-          command: defineCommand({
-            parser: object({}),
-            metadata: {
-              brief: message`Manage remotes.`,
-              aliases: ["r"],
-              showAliases: true,
-            },
-            handler() {},
-          }),
-        }
-        : entry
+            path: entry.path,
+            command: defineCommand({
+              parser: object({}),
+              metadata: {
+                brief: message`Manage remotes.`,
+                aliases: ["r"],
+                showAliases: true,
+              },
+              handler() {},
+            }),
+          }
+        : entry,
     );
     const parser = createProgramParser(commands, { commandList: "top-level" });
     const page = await getDocPageAsync(parser);
@@ -3808,7 +3880,7 @@ describe("command alias display", () => {
       () =>
         runProgram({
           commands: createAliasCommands().map((entry) =>
-            defineCommand({ ...entry.command, path: entry.path })
+            defineCommand({ ...entry.command, path: entry.path }),
           ),
           metadata: { name: "tool" },
           args: ["remote", "--help"],
@@ -3867,20 +3939,23 @@ describe("command alias display", () => {
   });
 
   it("does not attach descendant aliases to synthetic namespaces", async () => {
-    const parser = createProgramParser([
-      {
-        path: ["remote", "add"],
-        command: defineCommand({
-          parser: object({}),
-          metadata: {
-            brief: message`Add a remote.`,
-            aliases: ["a"],
-            showAliases: true,
-          },
-          handler() {},
-        }),
-      },
-    ], { commandList: "top-level" });
+    const parser = createProgramParser(
+      [
+        {
+          path: ["remote", "add"],
+          command: defineCommand({
+            parser: object({}),
+            metadata: {
+              brief: message`Add a remote.`,
+              aliases: ["a"],
+              showAliases: true,
+            },
+            handler() {},
+          }),
+        },
+      ],
+      { commandList: "top-level" },
+    );
     const page = await getDocPageAsync(parser);
     assert.ok(page);
     const output = formatDocPage("tool", page, {
@@ -3894,14 +3969,16 @@ describe("command alias display", () => {
 
 describe("empty-input behavior", () => {
   it("should preserve root failure facts through documentation wrappers", () => {
-    const parser = createProgramParser([{
-      path: [],
-      command: defineCommand({
-        parser: fail<string>(),
-        handler() {},
-        metadata: { brief: message`Root command.` },
-      }),
-    }]);
+    const parser = createProgramParser([
+      {
+        path: [],
+        command: defineCommand({
+          parser: fail<string>(),
+          handler() {},
+          metadata: { brief: message`Root command.` },
+        }),
+      },
+    ]);
     assert.deepEqual(getEmptyInputBehavior(parser), {
       step: "failure",
       fromInitial: false,

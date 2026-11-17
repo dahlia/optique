@@ -250,24 +250,27 @@ describe("findSimilar()", () => {
   });
 
   it("should not produce duplicate suggestions for duplicate candidates", () => {
-    const result = findSimilar("--verbos", [
-      "--verbose",
-      "--verbose",
-      "--version",
-      "--verbose",
-      "--version",
-      "--help",
-    ], { maxSuggestions: 10 });
+    const result = findSimilar(
+      "--verbos",
+      [
+        "--verbose",
+        "--verbose",
+        "--version",
+        "--verbose",
+        "--version",
+        "--help",
+      ],
+      { maxSuggestions: 10 },
+    );
     assert.deepEqual(result, [...new Set(result)]);
     assert.equal(result.filter((s) => s === "--verbose").length, 1);
     assert.equal(result.filter((s) => s === "--version").length, 1);
   });
 
   it("should preserve case-distinct candidates", () => {
-    const result = findSimilar("--verbos", [
-      "--Verbose",
-      "--verbose",
-    ], { maxSuggestions: 10 });
+    const result = findSimilar("--verbos", ["--Verbose", "--verbose"], {
+      maxSuggestions: 10,
+    });
     assert.equal(result.length, 2);
     assert.ok(result.includes("--Verbose"));
     assert.ok(result.includes("--verbose"));
@@ -298,11 +301,7 @@ describe("createSuggestionMessage()", () => {
   });
 
   it("should format multiple suggestions", () => {
-    const msg = createSuggestionMessage([
-      "--verbose",
-      "--version",
-      "--verify",
-    ]);
+    const msg = createSuggestionMessage(["--verbose", "--version", "--verify"]);
     const formatted = formatMessage(msg, { quotes: true, colors: false });
     assert.match(formatted, /Did you mean one of these\?/);
     assert.match(formatted, /`--verbose`/);
@@ -391,10 +390,7 @@ describe("expandCommandAliasSuggestions()", () => {
     ];
 
     assert.deepEqual(expandCommandAliasSuggestions(usage, ["run"]), ["run"]);
-    assert.deepEqual(expandCommandAliasSuggestions(usage, ["r"]), [
-      "run",
-      "r",
-    ]);
+    assert.deepEqual(expandCommandAliasSuggestions(usage, ["r"]), ["run", "r"]);
   });
 
   it("should continue after required multiple terms with skippable children", () => {
@@ -534,9 +530,9 @@ describe("integration: findSimilar + createSuggestionMessage", () => {
       const suggestions = findSimilar(input, candidates);
       assert.ok(
         suggestions.includes(expected),
-        `Expected ${expected} in suggestions for ${input}, got: ${
-          suggestions.join(", ")
-        }`,
+        `Expected ${expected} in suggestions for ${input}, got: ${suggestions.join(
+          ", ",
+        )}`,
       );
     }
   });
@@ -598,8 +594,7 @@ describe("createErrorWithSuggestions()", () => {
       { type: "command", name: "clone" },
     ];
 
-    const baseError =
-      message`Expected command ${"commit"}, but got ${"comit"}.`;
+    const baseError = message`Expected command ${"commit"}, but got ${"comit"}.`;
     const error = createErrorWithSuggestions(
       baseError,
       "comit",
@@ -630,9 +625,7 @@ describe("createErrorWithSuggestions()", () => {
     const formatted = formatMessage(error);
     assert.ok(formatted.includes("Did you mean"));
     // Should suggest both --verbose and version
-    assert.ok(
-      formatted.includes("version") || formatted.includes("--verbose"),
-    );
+    assert.ok(formatted.includes("version") || formatted.includes("--verbose"));
   });
 
   it("should return base error when no suggestions found", () => {
@@ -695,7 +688,7 @@ describe("createErrorWithSuggestions()", () => {
     // Count suggestions (should be at most 3)
     const lines = formatted.split("\n");
     const suggestionLines = lines.filter((line) =>
-      line.trim().startsWith("--")
+      line.trim().startsWith("--"),
     );
     assert.ok(suggestionLines.length <= 3);
   });
@@ -1017,8 +1010,8 @@ describe("property-based tests", () => {
           let previousIndex = -1;
           for (const suggestion of deduplicated) {
             const key = keyOf(suggestion);
-            const firstIndex = suggestions.findIndex((candidate: Suggestion) =>
-              keyOf(candidate) === key
+            const firstIndex = suggestions.findIndex(
+              (candidate: Suggestion) => keyOf(candidate) === key,
             );
             assert.ok(firstIndex >= 0);
             assert.ok(firstIndex > previousIndex);
@@ -1032,7 +1025,8 @@ describe("property-based tests", () => {
             const key = keyOf(suggestion);
             const anyHidden = suggestions.some(
               (s) =>
-                keyOf(s) === key && s.kind === "file" &&
+                keyOf(s) === key &&
+                s.kind === "file" &&
                 s.includeHidden === true,
             );
             if (anyHidden) {
@@ -1155,14 +1149,14 @@ function referenceFindSimilar(
   options: FindSimilarOptions = {},
 ): string[] {
   // Apply defaults
-  const maxDistance = options.maxDistance ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance;
-  const maxDistanceRatio = options.maxDistanceRatio ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio;
-  const maxSuggestions = options.maxSuggestions ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions;
-  const caseSensitive = options.caseSensitive ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.caseSensitive;
+  const maxDistance =
+    options.maxDistance ?? DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance;
+  const maxDistanceRatio =
+    options.maxDistanceRatio ?? DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio;
+  const maxSuggestions =
+    options.maxSuggestions ?? DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions;
+  const caseSensitive =
+    options.caseSensitive ?? DEFAULT_FIND_SIMILAR_OPTIONS.caseSensitive;
 
   // Return empty if input is empty
   if (input.length === 0) return [];
@@ -1233,33 +1227,29 @@ describe("findSimilar compatibility", () => {
 
   it("preserves results and iterable consumption with custom thresholds", () => {
     for (const [input, candidates] of cases) {
-      for (
-        const maxDistance of [
+      for (const maxDistance of [
+        undefined,
+        -1,
+        0,
+        0.5,
+        1,
+        2.5,
+        3,
+        1e6,
+        Infinity,
+        NaN,
+      ]) {
+        for (const maxDistanceRatio of [
           undefined,
-          -1,
+          -0.1,
           0,
+          0.3,
           0.5,
           1,
-          2.5,
-          3,
-          1e6,
+          2,
           Infinity,
           NaN,
-        ]
-      ) {
-        for (
-          const maxDistanceRatio of [
-            undefined,
-            -0.1,
-            0,
-            0.3,
-            0.5,
-            1,
-            2,
-            Infinity,
-            NaN,
-          ]
-        ) {
+        ]) {
           for (const maxSuggestions of [undefined, -1, 0, 1, 3, 10]) {
             for (const caseSensitive of [false, true]) {
               const options = {

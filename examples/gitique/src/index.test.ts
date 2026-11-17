@@ -95,12 +95,7 @@ describe("gitique CLI", () => {
   });
 
   it("parses add command staging and output options", () => {
-    const result = parseGitique([
-      "add",
-      "--all",
-      "--force",
-      "--verbose",
-    ]);
+    const result = parseGitique(["add", "--all", "--force", "--verbose"]);
 
     assert.deepEqual(result, {
       command: "add",
@@ -191,10 +186,7 @@ describe("gitique CLI", () => {
     const result = await runGitique(["diff", "HEAD~2", "HEAD~1", "HEAD"]);
 
     assert.equal(result.exitCode, 1);
-    assert.match(
-      result.stderr,
-      /Unexpected option or subcommand: `HEAD`\./,
-    );
+    assert.match(result.stderr, /Unexpected option or subcommand: `HEAD`\./);
   });
 
   it("parses log filters and shorthand format", () => {
@@ -248,10 +240,7 @@ describe("gitique CLI", () => {
     const result = await runGitique(["log", "--until", "yesterday"]);
 
     assert.equal(result.exitCode, 1);
-    assert.match(
-      result.stderr,
-      /Invalid date "yesterday"\. Use YYYY-MM-DD\./,
-    );
+    assert.match(result.stderr, /Invalid date "yesterday"\. Use YYYY-MM-DD\./);
   });
 
   it("parses status shorthand formats", () => {

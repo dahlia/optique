@@ -46,8 +46,7 @@ const displayOptions = group(
       description: message`Show diffstat instead of patch`,
     }),
     numstat: option("--numstat", {
-      description:
-        message`Show number of added/deleted lines in decimal notation`,
+      description: message`Show number of added/deleted lines in decimal notation`,
     }),
     nameOnly: option("--name-only", {
       description: message`Show only names of changed files`,
@@ -67,9 +66,9 @@ const contextOptions = group(
   object({
     unified: withDefault(
       option("-U", "--unified", integer({ metavar: "LINES", min: 0 }), {
-        description: message`Generate diffs with ${
-          metavar("LINES")
-        } lines of context`,
+        description: message`Generate diffs with ${metavar(
+          "LINES",
+        )} lines of context`,
       }),
       3,
     ),
@@ -80,9 +79,9 @@ const contextOptions = group(
           metavar: "ALGORITHM",
           errors: {
             invalidChoice: (input, choices) =>
-              message`Unknown diff algorithm ${input}. Choose ${
-                choiceList(choices)
-              }.`,
+              message`Unknown diff algorithm ${input}. Choose ${choiceList(
+                choices,
+              )}.`,
           },
         }),
         {
@@ -137,9 +136,9 @@ const diffOptionsParser = map(
           max: 2,
           errors: {
             tooMany: (count, max) =>
-              message`Expected at most ${
-                text(String(max))
-              } commit references, got ${text(String(count))}.`,
+              message`Expected at most ${text(
+                String(max),
+              )} commit references, got ${text(String(count))}.`,
           },
         },
       ),
@@ -167,26 +166,25 @@ const diffOptionsParser = map(
  */
 export const diffCommand = command("diff", diffOptionsParser, {
   brief: message`Show changes between commits`,
-  description:
-    message`Show changes between commits, commit and working tree, etc. Use ${
-      optionName("--cached")
-    } to view staged changes.`,
+  description: message`Show changes between commits, commit and working tree, etc. Use ${optionName(
+    "--cached",
+  )} to view staged changes.`,
   footer: message`Examples:${lineBreak()}
-  ${
-    commandLine("gitique diff")
-  }                    Show unstaged changes${lineBreak()}
-  ${
-    commandLine("gitique diff --cached")
-  }           Show staged changes${lineBreak()}
-  ${
-    commandLine("gitique diff HEAD~1")
-  }             Compare with previous commit${lineBreak()}
-  ${
-    commandLine("gitique diff --stat")
-  }             Show change statistics${lineBreak()}
-  ${
-    commandLine("gitique diff --name-only")
-  }        Show only changed file names`,
+  ${commandLine(
+    "gitique diff",
+  )}                    Show unstaged changes${lineBreak()}
+  ${commandLine(
+    "gitique diff --cached",
+  )}           Show staged changes${lineBreak()}
+  ${commandLine(
+    "gitique diff HEAD~1",
+  )}             Compare with previous commit${lineBreak()}
+  ${commandLine(
+    "gitique diff --stat",
+  )}             Show change statistics${lineBreak()}
+  ${commandLine(
+    "gitique diff --name-only",
+  )}        Show only changed file names`,
 });
 
 /**
@@ -331,11 +329,12 @@ export async function executeDiff(config: DiffConfig): Promise<void> {
         }
         console.log("");
         console.log(
-          "(approximate) " + formatDiffStats(
-            diffResult.stats.filesChanged,
-            diffResult.stats.insertions,
-            diffResult.stats.deletions,
-          ),
+          "(approximate) " +
+            formatDiffStats(
+              diffResult.stats.filesChanged,
+              diffResult.stats.insertions,
+              diffResult.stats.deletions,
+            ),
         );
         break;
       }

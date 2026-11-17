@@ -37,8 +37,7 @@ const parser = or(
       }),
     }),
     {
-      description:
-        message`Execute a command in a container, passing all remaining arguments.`,
+      description: message`Execute a command in a container, passing all remaining arguments.`,
     },
   ),
   command(

@@ -7,9 +7,9 @@
  * any candidate set that cannot be known at parser-construction time.
  *
  * Usage:
- *   deno run -A examples/patterns/async-completion.ts --tag latest
- *   deno run -A examples/patterns/async-completion.ts --help
- *   deno run -A examples/patterns/async-completion.ts completion bash
+ *   node examples/patterns/async-completion.ts --tag latest
+ *   node examples/patterns/async-completion.ts --help
+ *   node examples/patterns/async-completion.ts completion bash
  */
 import { object } from "@optique/core/constructs";
 import { optional } from "@optique/core/modifiers";

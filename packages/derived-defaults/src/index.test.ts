@@ -40,14 +40,16 @@ function asyncString(): ValueParser<"async", string> {
   };
 }
 
-function dependencySourceParser(options: {
-  readonly validateValue?: () =>
-    | ValueParserResult<string>
-    | Promise<ValueParserResult<string>>;
-  readonly extractSourceValue?: (
-    state: unknown,
-  ) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>>;
-} = {}): Parser<"sync", string, unknown> {
+function dependencySourceParser(
+  options: {
+    readonly validateValue?: () =>
+      | ValueParserResult<string>
+      | Promise<ValueParserResult<string>>;
+    readonly extractSourceValue?: (
+      state: unknown,
+    ) => ValueParserResult<unknown> | Promise<ValueParserResult<unknown>>;
+  } = {},
+): Parser<"sync", string, unknown> {
   const sourceId = Symbol("@optique/derived-defaults/test-source");
   const parser: Parser<"sync", string, unknown> = {
     mode: "sync",
@@ -79,7 +81,8 @@ function dependencySourceParser(options: {
         kind: "source",
         sourceId,
         preservesSourceValue: true,
-        extractSourceValue: options.extractSourceValue ??
+        extractSourceValue:
+          options.extractSourceValue ??
           (() => ({ success: true as const, value: "source" })),
       },
     },
@@ -188,7 +191,7 @@ describe("createDerivedDefaults()", () => {
         args: [],
         contexts: [derived.context],
         ...options,
-      })
+      }),
     );
 
     assert.ok(!called);
@@ -216,9 +219,9 @@ describe("createDerivedDefaults()", () => {
   it("passes undefined to default-parameter resolvers for null seeds", () => {
     let called = false;
     const derived = createDerivedDefaults({
-      workspaceRoot: (
-        { serviceRoot }: { readonly serviceRoot?: string } = {},
-      ) => {
+      workspaceRoot: ({
+        serviceRoot,
+      }: { readonly serviceRoot?: string } = {}) => {
         called = true;
         return serviceRoot == null ? undefined : `${serviceRoot}/workspace`;
       },
@@ -282,7 +285,7 @@ describe("bindDerivedDefault()", () => {
         args: ["--port", "invalid"],
         contexts: [derived.context],
         ...options,
-      })
+      }),
     );
 
     assert.match(failure.stderr, /Expected a valid integer/u);
@@ -333,7 +336,7 @@ describe("bindDerivedDefault()", () => {
   it("preserves inner fallback errors after derived fallback misses", () => {
     const env = createEnvContext({
       prefix: "APP_",
-      source: (key) => key === "APP_PORT" ? "invalid" : undefined,
+      source: (key) => (key === "APP_PORT" ? "invalid" : undefined),
     });
     const derived = createDerivedDefaults({
       port: () => undefined,
@@ -371,10 +374,7 @@ describe("bindDerivedDefault()", () => {
     assert.ok(!result.success);
     const error = formatMessage(result.error);
     assert.match(error, /Expected a valid integer/u);
-    assert.doesNotMatch(
-      error,
-      /Missing required derived default value/u,
-    );
+    assert.doesNotMatch(error, /Missing required derived default value/u);
   });
 
   it("fails when no CLI, derived, or static default value exists", async () => {
@@ -393,7 +393,7 @@ describe("bindDerivedDefault()", () => {
         args: [],
         contexts: [derived.context],
         ...options,
-      })
+      }),
     );
 
     assert.match(failure.stderr, /No matching option found\./u);
@@ -482,7 +482,7 @@ describe("bindDerivedDefault()", () => {
         args: [],
         contexts: [other],
         ...options,
-      })
+      }),
     );
 
     assert.match(failure.stderr, /No matching option found\./u);
@@ -506,7 +506,7 @@ describe("bindDerivedDefault()", () => {
         args: ["--service", "api"],
         contexts: [derived.context],
         ...options,
-      })
+      }),
     );
 
     assert.match(failure.stderr, /Expected a value less than or equal to/u);
@@ -577,8 +577,8 @@ describe("bindDerivedDefault()", () => {
         default: "default",
       },
     );
-    const getMissingSourceValue = parser.dependencyMetadata?.source
-      ?.getMissingSourceValue;
+    const getMissingSourceValue =
+      parser.dependencyMetadata?.source?.getMissingSourceValue;
     assert.ok(getMissingSourceValue != null);
 
     assert.throws(
@@ -606,8 +606,8 @@ describe("bindDerivedDefault()", () => {
         key: "token",
       },
     );
-    const extractSourceValue = parser.dependencyMetadata?.source
-      ?.extractSourceValue;
+    const extractSourceValue =
+      parser.dependencyMetadata?.source?.extractSourceValue;
     assert.ok(extractSourceValue != null);
 
     assert.throws(
@@ -635,8 +635,8 @@ describe("bindDerivedDefault()", () => {
         key: "token",
       },
     );
-    const extractSourceValue = parser.dependencyMetadata?.source
-      ?.extractSourceValue;
+    const extractSourceValue =
+      parser.dependencyMetadata?.source?.extractSourceValue;
     assert.ok(extractSourceValue != null);
 
     assert.throws(
@@ -658,9 +658,11 @@ describe("bindDerivedDefault()", () => {
       context: derived.context,
       key: "token",
     });
-    const extractor = (parser as typeof parser & {
-      readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
-    })[extractPhase2SeedKey];
+    const extractor = (
+      parser as typeof parser & {
+        readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
+      }
+    )[extractPhase2SeedKey];
 
     assert.deepEqual(extractor(parser.initialState), { value: "inner" });
   });
@@ -678,9 +680,11 @@ describe("bindDerivedDefault()", () => {
       context: derived.context,
       key: "token",
     });
-    const extractor = (parser as typeof parser & {
-      readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
-    })[extractPhase2SeedKey];
+    const extractor = (
+      parser as typeof parser & {
+        readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
+      }
+    )[extractPhase2SeedKey];
 
     assert.throws(
       () => extractor(parser.initialState),
@@ -696,9 +700,11 @@ describe("bindDerivedDefault()", () => {
       context: derived.context,
       key: "token",
     });
-    const extractor = (parser as typeof parser & {
-      readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
-    })[extractPhase2SeedKey];
+    const extractor = (
+      parser as typeof parser & {
+        readonly [extractPhase2SeedKey]: (state: unknown) => unknown;
+      }
+    )[extractPhase2SeedKey];
 
     const emptySeed = extractor(parser.initialState);
     assert.ok(emptySeed instanceof Promise);
@@ -729,9 +735,9 @@ describe("bindDerivedDefault()", () => {
       workspaceRoot: bindDerivedDefault(option("--workspace-root", string()), {
         context: derived.context,
         key: "workspaceRoot",
-        defaultDescription: message`derived from ${
-          optionName("--service-root")
-        }`,
+        defaultDescription: message`derived from ${optionName(
+          "--service-root",
+        )}`,
       }),
     });
 
@@ -748,7 +754,7 @@ describe("bindDerivedDefault()", () => {
   it("lets wrapper nesting define source priority", async () => {
     const env = createEnvContext({
       prefix: "APP_",
-      source: (key) => key === "APP_VERBOSE" ? "true" : undefined,
+      source: (key) => (key === "APP_VERBOSE" ? "true" : undefined),
     });
     const config = createConfigContext({
       schema: {

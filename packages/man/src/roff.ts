@@ -101,10 +101,10 @@ export function escapeQuotedValue(text: string): string {
  * @since 1.0.0
  */
 export function escapeRequestArg(text: string): string {
-  return text.replace(/\r\n|\r|\n/g, " ").replace(/\\/g, "\\(rs").replace(
-    /"/g,
-    "\\(dq",
-  );
+  return text
+    .replace(/\r\n|\r|\n/g, " ")
+    .replace(/\\/g, "\\(rs")
+    .replace(/"/g, "\\(dq");
 }
 
 /**
@@ -170,9 +170,7 @@ function formatTermAsRoff(
       if (options?.quotes === false) {
         return term.values.map((v) => escapeBackslashes(v)).join(" ");
       }
-      return term.values
-        .map((v) => `"${escapeQuotedValue(v)}"`)
-        .join(" ");
+      return term.values.map((v) => `"${escapeQuotedValue(v)}"`).join(" ");
 
     case "envVar":
       // Bold for environment variables

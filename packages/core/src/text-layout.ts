@@ -63,22 +63,27 @@ export function placeText(
   const room = lines.length === 1 ? trailingRoom : 0;
   // An empty/zero-width boundary cannot make an already overflowing atom
   // worse. In particular, do not add a break before an existing leading LF.
-  const breaks = maxWidth != null && (cursor.column > 0 || room > 0) &&
+  const breaks =
+    maxWidth != null &&
+    (cursor.column > 0 || room > 0) &&
     (joinedWidth > cursor.column || room > 0) &&
     joinedWidth + room > maxWidth;
   const lastLine = lines[lines.length - 1];
   return {
     text: breaks ? "\n" + text : text,
-    cursor: lines.length > 1 || breaks
-      ? { line: lastLine, column: getDisplayWidth(lastLine) }
-      : { line: cursor.line + plain, column: joinedWidth },
+    cursor:
+      lines.length > 1 || breaks
+        ? { line: lastLine, column: getDisplayWidth(lastLine) }
+        : { line: cursor.line + plain, column: joinedWidth },
   };
 }
 
 // Escape sequences (CSI and OSC) followed by the whitespace that begins the
 // first line, excluding line feeds, which are hard breaks.
+/* oxlint-disable no-control-regex -- Match control characters. */
 const leadingSpacePattern = // deno-lint-ignore no-control-regex
   /^((?:\x1B(?:\[[0-9;:]*[@-~]|\][^\x1B\x07]*(?:\x1B\\|\x07)))*)[^\S\n]+/;
+/* oxlint-enable no-control-regex */
 
 /**
  * Removes the whitespace that begins a text's first line, keeping any

@@ -1,58 +1,89 @@
 {
-  "lsp": {
-    "deno": {
-      "settings": {
-        "deno": {
-          "enable": true
-        }
-      }
-    }
-  },
   "ensure_final_newline_on_save": true,
-  "format_on_save": "on",
-  "formatter": "language_server",
+  "format_on_save": "off",
+  "formatter": "none",
   "languages": {
     "JavaScript": {
       "language_servers": [
-        "deno",
-        "!typescript-language-server",
-        "!vtsls",
-        "!eslint",
-        "!biome",
+        "!deno",
         "..."
-      ]
-    },
-    "JSON": {
-      "language_servers": [
-        "json-language-server",
-        "..."
-      ]
-    },
-    "JSONC": {
-      "language_servers": [
-        "json-language-server",
-        "..."
-      ]
+      ],
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "pnpm",
+          "arguments": [
+            "exec",
+            "oxfmt",
+            "--stdin-filepath",
+            "{buffer_path}"
+          ]
+        }
+      }
     },
     "TypeScript": {
       "language_servers": [
-        "deno",
-        "!typescript-language-server",
-        "!vtsls",
-        "!eslint",
-        "!biome",
+        "!deno",
         "..."
-      ]
+      ],
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "pnpm",
+          "arguments": [
+            "exec",
+            "oxfmt",
+            "--stdin-filepath",
+            "{buffer_path}"
+          ]
+        }
+      }
     },
     "TSX": {
       "language_servers": [
-        "deno",
-        "!typescript-language-server",
-        "!vtsls",
-        "!eslint",
-        "!biome",
+        "!deno",
         "..."
-      ]
+      ],
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "pnpm",
+          "arguments": [
+            "exec",
+            "oxfmt",
+            "--stdin-filepath",
+            "{buffer_path}"
+          ]
+        }
+      }
+    },
+    "JSON": {
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "pnpm",
+          "arguments": [
+            "exec",
+            "oxfmt",
+            "--stdin-filepath",
+            "{buffer_path}"
+          ]
+        }
+      }
+    },
+    "JSONC": {
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "pnpm",
+          "arguments": [
+            "exec",
+            "oxfmt",
+            "--stdin-filepath",
+            "{buffer_path}"
+          ]
+        }
+      }
     },
     "YAML": {
       "language_servers": [

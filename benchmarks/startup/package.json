@@ -6,5 +6,8 @@
     "test": "node --test *.test.ts",
     "test:bun": "bun test *.test.ts"
   },
-  "devDependencies": { "@types/node": "catalog:", "yaml": "catalog:" }
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "yaml": "catalog:"
+  }
 }

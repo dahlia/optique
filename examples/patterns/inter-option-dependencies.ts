@@ -72,13 +72,11 @@ const serverParser = deriveFrom({
       return choice(["localhost", "127.0.0.1"] as const);
     }
     // Generate server names based on environment and region
-    return choice(
-      [
-        `${env}-${region}-1`,
-        `${env}-${region}-2`,
-        `${env}-${region}-3`,
-      ] as const,
-    );
+    return choice([
+      `${env}-${region}-1`,
+      `${env}-${region}-2`,
+      `${env}-${region}-3`,
+    ] as const);
   },
   defaultValues: () => ["local", "us-east"] as const,
 });

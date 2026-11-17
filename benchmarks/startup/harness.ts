@@ -31,7 +31,7 @@ import {
   verifyPreparedMap,
   withStableInputs,
 } from "./contract.ts";
-import { resolveExecutable } from "./executable.ts";
+import { resolveExecutable, resolveRuntimeExecutable } from "./executable.ts";
 import {
   consumerRoot,
   createConsumerRoot,
@@ -155,14 +155,18 @@ function manifest(): Manifest {
   });
   if (
     JSON.stringify(consumers) !==
-      JSON.stringify([{
+    JSON.stringify([
+      {
         id: "core-run",
         packages: ["@optique/core", "@optique/run"],
-      }, {
+      },
+      {
         id: "discover",
         packages: ["@optique/core", "@optique/run", "@optique/discover"],
-      }])
-  ) throw new TypeError("Unexpected measured package graph.");
+      },
+    ])
+  )
+    throw new TypeError("Unexpected measured package graph.");
   return {
     schemaVersion: 1,
     pnpmVersion: text(value.pnpmVersion),
@@ -175,24 +179,18 @@ function manifest(): Manifest {
 }
 
 function binary(name: string): string {
-  const result = spawnSync("mise", ["which", name], { encoding: "utf8" });
-  if (result.status !== 0) {
-    throw new TypeError(`Cannot resolve runtime ${name}: ${result.stderr}`);
-  }
-  const path = realpathSync(result.stdout.trim());
-  if (
-    path.includes(`${sep}shims${sep}`) ||
-    readFileSync(path).subarray(0, 2).toString() === "#!"
-  ) throw new TypeError(`Runtime must be a real executable: ${path}`);
-  return path;
+  return resolveRuntimeExecutable(name);
 }
 function environment(
   binaries: Readonly<Record<string, string>>,
   extra: Readonly<Record<string, string>> = {},
 ): Record<string, string> {
   return {
-    PATH: [...new Set(Object.values(binaries).map(dirname)), "/usr/bin", "/bin"]
-      .join(":"),
+    PATH: [
+      ...new Set(Object.values(binaries).map(dirname)),
+      "/usr/bin",
+      "/bin",
+    ].join(":"),
     HOME: join(work, "home"),
     PNPM_CONFIG_NPMRC_AUTH_FILE: join(work, "empty.npmrc"),
     XDG_CONFIG_HOME: join(work, "config"),
@@ -235,16 +233,14 @@ function invoke(command: Command, commands?: Command[]): string {
   });
   if (result.error != null || result.status !== 0 || result.signal != null) {
     throw new TypeError(
-      `Preparation failed: ${
-        JSON.stringify({
-          command,
-          status: result.status,
-          signal: result.signal,
-          error: result.error?.message,
-          stdout: result.stdout,
-          stderr: result.stderr,
-        })
-      }`,
+      `Preparation failed: ${JSON.stringify({
+        command,
+        status: result.status,
+        signal: result.signal,
+        error: result.error?.message,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      })}`,
     );
   }
   return result.stdout;
@@ -253,17 +249,20 @@ function json(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 function listFiles(base: string): readonly string[] {
-  return readdirSync(base, { withFileTypes: true }).flatMap((entry) =>
-    entry.isDirectory()
-      ? listFiles(join(base, entry.name)).map((path) => `${entry.name}/${path}`)
-      : [entry.name]
-  ).sort();
+  return readdirSync(base, { withFileTypes: true })
+    .flatMap((entry) =>
+      entry.isDirectory()
+        ? listFiles(join(base, entry.name)).map(
+            (path) => `${entry.name}/${path}`,
+          )
+        : [entry.name],
+    )
+    .sort();
 }
 
 function prepare(): void {
-  const state = withStableInputs(
-    root,
-    (identity) => prepareConsumers(identity.hash),
+  const state = withStableInputs(root, (identity) =>
+    prepareConsumers(identity.hash),
   );
   json(join(work, "prepared.json"), state);
   console.log(
@@ -289,19 +288,18 @@ function prepareConsumers(initialHash: string): Prepared {
     removeConsumerRoot(work);
     rmSync(work, { recursive: true });
   }
-  for (
-    const path of [
-      "",
-      "home",
-      "config",
-      "temporary",
-      "tarballs",
-      "store",
-      "deno-cache",
-      "bun-cache",
-      "node-cache",
-    ]
-  ) mkdirSync(join(work, path), { recursive: true });
+  for (const path of [
+    "",
+    "home",
+    "config",
+    "temporary",
+    "tarballs",
+    "store",
+    "deno-cache",
+    "bun-cache",
+    "node-cache",
+  ])
+    mkdirSync(join(work, path), { recursive: true });
   writeFileSync(join(work, ".owned"), marker);
   createConsumerRoot(work);
   mkdirSync(join(consumerRoot(work), "tarballs"));
@@ -309,12 +307,12 @@ function prepareConsumers(initialHash: string): Prepared {
   const env = environment(binaries);
   const commands: Command[] = [];
   const runtimes = Object.fromEntries(
-    Object.entries(binaries).map((
-      [name, executable],
-    ) => [
+    Object.entries(binaries).map(([name, executable]) => [
       name,
-      invoke({ executable, args: ["--version"], cwd: root, env }, commands)
-        .trim(),
+      invoke(
+        { executable, args: ["--version"], cwd: root, env },
+        commands,
+      ).trim(),
     ]),
   );
   if (runtimes.pnpm !== definition.pnpmVersion) {
@@ -325,19 +323,18 @@ function prepareConsumers(initialHash: string): Prepared {
   const archives: Archive[] = [];
   for (const name of packages) {
     const file = join(work, `tarballs/${name}.tgz`);
-    const output = invoke({
-      executable: binaries.pnpm,
-      args: [
-        "pack",
-        "--out",
-        file,
-        "--json",
-      ],
-      cwd: join(root, `packages/${name}`),
-      env,
-    }, commands);
+    const output = invoke(
+      {
+        executable: binaries.pnpm,
+        args: ["pack", "--out", file, "--json"],
+        cwd: join(root, `packages/${name}`),
+        env,
+      },
+      commands,
+    );
     writeFileSync(join(work, `tarballs/${name}-pack.json`), output);
-    const bytes = readFileSync(file), files = readTar(bytes);
+    const bytes = readFileSync(file),
+      files = readTar(bytes);
     copyFileSync(file, join(consumerRoot(work), `tarballs/${name}.tgz`));
     const structuredStart = output.lastIndexOf("\n{") + 1;
     verifyPackList(
@@ -354,11 +351,11 @@ function prepareConsumers(initialHash: string): Prepared {
     if (JSON.stringify(packed).includes("workspace:")) {
       throw new TypeError("Packed manifest retained a workspace dependency.");
     }
-    const localLicense = readdirSync(join(root, `packages/${name}`)).find((
-      path,
-    ) => /^licen[cs]e(\..*)?$/i.test(path));
+    const localLicense = readdirSync(join(root, `packages/${name}`)).find(
+      (path) => /^licen[cs]e(\..*)?$/i.test(path),
+    );
     const license = files.find((file) =>
-      /^licen[cs]e(\..*)?$/i.test(file.path)
+      /^licen[cs]e(\..*)?$/i.test(file.path),
     );
     const expectedLicense = readFileSync(
       join(
@@ -404,7 +401,7 @@ function prepareConsumers(initialHash: string): Prepared {
       recursive: true,
     });
     const selected = archives.filter((archive) =>
-      consumer.packages.includes(archive.name)
+      consumer.packages.includes(archive.name),
     );
     const overrides = Object.fromEntries(
       selected.map((archive) => [archive.name, archive.specifier]),
@@ -453,18 +450,15 @@ function prepareConsumers(initialHash: string): Prepared {
       );
     }
     const graph = JSON.parse(
-      invoke({
-        executable: binaries.pnpm,
-        args: [
-          "list",
-          "--json",
-          "--depth",
-          "Infinity",
-          "--prod",
-        ],
-        cwd,
-        env,
-      }, commands),
+      invoke(
+        {
+          executable: binaries.pnpm,
+          args: ["list", "--json", "--depth", "Infinity", "--prod"],
+          cwd,
+          env,
+        },
+        commands,
+      ),
     );
     for (const archive of selected) {
       const path = realpathSync(join(cwd, `node_modules/${archive.name}`));
@@ -474,11 +468,15 @@ function prepareConsumers(initialHash: string): Prepared {
       const files = readTar(
         readFileSync(join(work, `tarballs/${archive.name.slice(9)}.tgz`)),
       );
-      const actual = listFiles(path).filter((file) =>
-        !file.startsWith("node_modules/")
+      const actual = listFiles(path).filter(
+        (file) => !file.startsWith("node_modules/"),
       );
       if (
-        actual.join("\0") !== files.map((file) => file.path).sort().join("\0")
+        actual.join("\0") !==
+        files
+          .map((file) => file.path)
+          .sort()
+          .join("\0")
       ) {
         throw new TypeError(
           `Installed package file list differs from archive: ${archive.name}`,
@@ -499,9 +497,11 @@ function prepareConsumers(initialHash: string): Prepared {
     const inventory = inventoryTree(join(cwd, "node_modules"), exclusions);
     for (const file of inventory.files) {
       if (
-        file.path.startsWith(".") && !file.path.startsWith(".pnpm/") &&
+        file.path.startsWith(".") &&
+        !file.path.startsWith(".pnpm/") &&
         !file.path.startsWith(".bin/")
-      ) throw new TypeError(`Unknown installation metadata: ${file.path}`);
+      )
+        throw new TypeError(`Unknown installation metadata: ${file.path}`);
     }
     consumers.push({
       id: consumer.id,
@@ -541,25 +541,11 @@ function prepareConsumers(initialHash: string): Prepared {
   const mapFile = join(work, "deno-import-map.json");
   json(mapFile, { imports });
   const fixture = join(consumerRoot(work), "core-run/fixtures/three.js");
-  invoke({
-    executable: binaries.deno,
-    args: [
-      "cache",
-      "--no-config",
-      "--no-lock",
-      "--import-map",
-      mapFile,
-      fixture,
-    ],
-    cwd: work,
-    env,
-  }, commands);
-  const denoGraph = JSON.parse(
-    invoke({
+  invoke(
+    {
       executable: binaries.deno,
       args: [
-        "info",
-        "--json",
+        "cache",
         "--no-config",
         "--no-lock",
         "--import-map",
@@ -568,7 +554,27 @@ function prepareConsumers(initialHash: string): Prepared {
       ],
       cwd: work,
       env,
-    }, commands),
+    },
+    commands,
+  );
+  const denoGraph = JSON.parse(
+    invoke(
+      {
+        executable: binaries.deno,
+        args: [
+          "info",
+          "--json",
+          "--no-config",
+          "--no-lock",
+          "--import-map",
+          mapFile,
+          fixture,
+        ],
+        cwd: work,
+        env,
+      },
+      commands,
+    ),
   );
   validateDenoGraph(denoGraph, [
     join(root, "packages/core/src"),
@@ -607,13 +613,15 @@ function prepared(): Prepared {
     const copied = join(consumerRoot(work), `${consumer.id}/fixtures`);
     if (
       listFiles(copied).join("\0") !==
-        listFiles(join(directory, "fixtures")).join("\0")
-    ) throw new TypeError("Prepared fixture file list changed.");
+      listFiles(join(directory, "fixtures")).join("\0")
+    )
+      throw new TypeError("Prepared fixture file list changed.");
     for (const path of listFiles(copied)) {
       if (
         sha256(readFileSync(join(copied, path))) !==
-          sha256(readFileSync(join(directory, "fixtures", path)))
-      ) throw new TypeError("Prepared fixture changed; prepare again.");
+        sha256(readFileSync(join(directory, "fixtures", path)))
+      )
+        throw new TypeError("Prepared fixture changed; prepare again.");
     }
     const expected = value.consumers.find((item) => item.id === consumer.id);
     if (
@@ -624,7 +632,8 @@ function prepared(): Prepared {
             join(consumerRoot(work), `${consumer.id}/pnpm-lock.yaml`),
           ),
         )
-    ) throw new TypeError("Prepared consumer lock changed.");
+    )
+      throw new TypeError("Prepared consumer lock changed.");
     verifyInventory(
       inventoryTree(
         join(consumerRoot(work), `${consumer.id}/node_modules`),
@@ -636,10 +645,11 @@ function prepared(): Prepared {
   for (const archive of value.archives) {
     if (
       archive.integrity !==
-        archiveIntegrity(
-          readFileSync(join(work, `tarballs/${archive.name.slice(9)}.tgz`)),
-        )
-    ) throw new TypeError("Prepared tarball changed.");
+      archiveIntegrity(
+        readFileSync(join(work, `tarballs/${archive.name.slice(9)}.tgz`)),
+      )
+    )
+      throw new TypeError("Prepared tarball changed.");
   }
   return value;
 }
@@ -666,7 +676,8 @@ function expectation(
   };
 }
 function cases(state: Prepared, audit = false): readonly Case[] {
-  const definition = manifest(), env = environment(state.binaries);
+  const definition = manifest(),
+    env = environment(state.binaries);
   const result: Case[] = [];
   const add = (
     id: string,
@@ -755,11 +766,9 @@ function cases(state: Prepared, audit = false): readonly Case[] {
       );
     }
   }
-  for (
-    const request of definition.requests.filter((request) =>
-      ["root-help", "dispatch"].includes(request.id)
-    )
-  ) {
+  for (const request of definition.requests.filter((request) =>
+    ["root-help", "dispatch"].includes(request.id),
+  )) {
     add(
       `cjs-three-${request.id}`,
       "node",
@@ -850,37 +859,46 @@ function validate(state: Prepared): void {
       env: { ...item.command.env, STARTUP_TRACE: trace },
     };
     runChecked(command, item.expected);
-    const loaded = readFileSync(trace, "utf8").trim().split("\n").filter(
-      Boolean,
-    ).map((line) => record(JSON.parse(line)));
+    const loaded = readFileSync(trace, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => record(JSON.parse(line)));
     for (const entry of loaded) {
       const path = fileURLToPath(text(entry.url));
       if (path.includes(`${sep}node_modules${sep}`)) {
         if (
           !isInside(realpathSync(path), join(item.command.cwd, "node_modules"))
-        ) throw new TypeError("Runtime loaded a package outside its consumer.");
+        )
+          throw new TypeError("Runtime loaded a package outside its consumer.");
         if (!path.includes(`${sep}@optique${sep}`)) continue;
         if (
           item.id.startsWith("cjs-")
             ? !path.endsWith(".cjs")
             : !/\.(js|mjs)$/.test(path)
-        ) throw new TypeError(`Wrong module condition loaded: ${path}`);
+        )
+          throw new TypeError(`Wrong module condition loaded: ${path}`);
       }
     }
     if (item.fixture === "discovery") {
       const fixtureRoot = join(item.command.cwd, "fixtures");
-      const imports = loaded.map((entry) =>
-        relative(fixtureRoot, fileURLToPath(text(entry.url))).replaceAll(
-          "\\",
-          "/",
+      const imports = loaded
+        .map((entry) =>
+          relative(fixtureRoot, fileURLToPath(text(entry.url))).replaceAll(
+            "\\",
+            "/",
+          ),
         )
-      ).filter((path) =>
-        path.startsWith("commands/") || path.startsWith("handlers/")
-      ).sort();
+        .filter(
+          (path) =>
+            path.startsWith("commands/") || path.startsWith("handlers/"),
+        )
+        .sort();
       if (
         JSON.stringify(imports) !==
-          JSON.stringify([...manifest().discoveryImports].sort())
-      ) throw new TypeError("Discovery eager-import expectations changed.");
+        JSON.stringify([...manifest().discoveryImports].sort())
+      )
+        throw new TypeError("Discovery eager-import expectations changed.");
       observations.push({
         id: item.id,
         imports,
@@ -904,7 +922,8 @@ function validate(state: Prepared): void {
   if (
     !isInside(realpathSync(bunResolution), join(core, "node_modules")) ||
     !bunResolution.endsWith(".js")
-  ) throw new TypeError("Bun resolved an unexpected installation.");
+  )
+    throw new TypeError("Bun resolved an unexpected installation.");
   json(
     join(work, "validation.json"),
     portableEvidence(
@@ -913,8 +932,7 @@ function validate(state: Prepared): void {
         observations,
         bunResolution,
         denoGraph: state.denoGraph,
-        note:
-          "Separate instrumented validation; no traced process contributes a timing sample.",
+        note: "Separate instrumented validation; no traced process contributes a timing sample.",
       },
       root,
       consumerRoot(work),
@@ -928,12 +946,12 @@ function validate(state: Prepared): void {
 }
 
 function audit(state: Prepared): void {
-  for (
-    const item of cases(state, true).filter((item) =>
+  for (const item of cases(state, true).filter(
+    (item) =>
       item.id.startsWith("node-minimal-") ||
-      item.id.startsWith("node-three-") || item.id.startsWith("node-discovery-")
-    )
-  ) {
+      item.id.startsWith("node-three-") ||
+      item.id.startsWith("node-discovery-"),
+  )) {
     const result = spawnSync(item.command.executable, [...item.command.args], {
       cwd: item.command.cwd,
       env: item.command.env,
@@ -942,9 +960,11 @@ function audit(state: Prepared): void {
       maxBuffer: 1024 * 1024,
     });
     if (
-      result.status !== item.expected.status || result.error != null ||
+      result.status !== item.expected.status ||
+      result.error != null ||
       result.signal != null
-    ) throw new TypeError(`Golden audit failed: ${JSON.stringify(result)}`);
+    )
+      throw new TypeError(`Golden audit failed: ${JSON.stringify(result)}`);
     writeFileSync(
       join(directory, `golden/${item.fixture}-${item.request}.stdout`),
       result.stdout,
@@ -996,9 +1016,10 @@ function measure(
   );
   writeReport(path, report);
   console.log(
-    `${mode}: ${report.cases.length} cases × ${report.sampleCount} samples -> ${
-      relative(root, path)
-    }`,
+    `${mode}: ${report.cases.length} cases × ${report.sampleCount} samples -> ${relative(
+      root,
+      path,
+    )}`,
   );
   return report;
 }
@@ -1024,11 +1045,10 @@ function measureCases(
   rmSync(join(work, "node-cache"), { recursive: true, force: true });
   mkdirSync(join(work, "node-cache"));
   const probe = cacheProbe(state);
-  for (
-    const item of definitions.filter((item) =>
-      item.id.startsWith("node-cache-")
-    )
-  ) runChecked(item.command, item.expected);
+  for (const item of definitions.filter((item) =>
+    item.id.startsWith("node-cache-"),
+  ))
+    runChecked(item.command, item.expected);
   const outputs: Record<string, { stdout: string; stderr: string }> = {};
   const samples = new Map<string, RawSample[]>(),
     warmups = new Map<string, RawSample[]>();
@@ -1040,9 +1060,9 @@ function measureCases(
   const beforeLoad = loadavg();
   for (let round = 0; round < warmupCount; round++) {
     for (const item of definitions) {
-      warmups.get(item.id)!.push(
-        rawSample(runChecked(item.command, item.expected), outputs),
-      );
+      warmups
+        .get(item.id)!
+        .push(rawSample(runChecked(item.command, item.expected), outputs));
     }
   }
   const order: string[][] = [];
@@ -1053,9 +1073,9 @@ function measureCases(
     ];
     order.push(interleaved.map((item) => item.id));
     for (const item of interleaved) {
-      samples.get(item.id)!.push(
-        rawSample(runChecked(item.command, item.expected), outputs),
-      );
+      samples
+        .get(item.id)!
+        .push(rawSample(runChecked(item.command, item.expected), outputs));
     }
   }
   const results: CaseResult[] = definitions.map((item) => ({
@@ -1082,9 +1102,10 @@ function measureCases(
     manifestHash: sha256(readFileSync(join(directory, "manifest.json"))),
     runtimes: state.runtimes,
     lockfiles: Object.fromEntries(
-      ["pnpm-lock.yaml", "deno.lock"].map((
+      ["pnpm-lock.yaml", "deno.lock"].map((path) => [
         path,
-      ) => [path, sha256(readFileSync(join(root, path)))]),
+        sha256(readFileSync(join(root, path))),
+      ]),
     ),
     importMapHash: state.importMapHash,
     archives: state.archives,
@@ -1107,20 +1128,18 @@ function measureCases(
     caches: {
       node: "disabled except two explicitly prepopulated cases",
       probe,
-      deno:
-        "owned DENO_DIR; transpile dependencies prewarmed, V8 code cache disabled",
-      bun:
-        "owned runtime transpiler cache; only sufficiently large files use it",
+      deno: "owned DENO_DIR; transpile dependencies prewarmed, V8 code cache disabled",
+      bun: "owned runtime transpiler cache; only sufficiently large files use it",
       clearing:
         "prepare recreates marked tmp/startup-baseline and its owned external consumers; each run clears own node-cache before untimed prepopulation",
       filesystem:
         "warm/unspecified OS filesystem cache; fresh processes are not cold filesystem cache",
     },
     preparationCommands: state.preparationCommands.map((command) =>
-      portableCommand(command, replacements)
+      portableCommand(command, replacements),
     ),
     commandTokens:
-      "REPO_ROOT=checkout; CONSUMERS_ROOT=owned external directory from consumer-root.json; *_BIN=mise which runtime; *_DIR=dirname of that binary",
+      "REPO_ROOT=checkout; CONSUMERS_ROOT=owned external directory from consumer-root.json; *_BIN=real runtime from task PATH; *_DIR=dirname of that binary",
   };
   const sanitized = record(
     portableEvidence(metadata, root, consumerRoot(work)),
@@ -1156,7 +1175,7 @@ function main(): void {
   if (operation === "baseline") {
     validate(state);
     const reports = [1, 2, 3].map((index) =>
-      measure(state, "baseline", join(work, `run-${index}.json`))
+      measure(state, "baseline", join(work, `run-${index}.json`)),
     );
     const identities = reports.map((report) =>
       JSON.stringify([
@@ -1164,7 +1183,7 @@ function main(): void {
         report.metadata.runtimes,
         report.metadata.archives,
         report.metadata.consumers,
-      ])
+      ]),
     );
     if (new Set(identities).size !== 1) {
       throw new TypeError(
@@ -1174,15 +1193,17 @@ function main(): void {
     json(
       join(work, "spread.json"),
       reports[0].cases.map((item) => {
-        const medians = reports.map((report) =>
-          report.cases.find((candidate) => candidate.id === item.id)!.summary
-            .medianMs
+        const medians = reports.map(
+          (report) =>
+            report.cases.find((candidate) => candidate.id === item.id)!.summary
+              .medianMs,
         );
         return {
           id: item.id,
           medians,
           spreadMs: Math.max(...medians) - Math.min(...medians),
-          spreadPercent: 100 * (Math.max(...medians) - Math.min(...medians)) /
+          spreadPercent:
+            (100 * (Math.max(...medians) - Math.min(...medians))) /
             summarize(medians).medianMs,
         };
       }),
@@ -1196,4 +1217,5 @@ function main(): void {
 if (
   process.argv[1] != null &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) main();
+)
+  main();

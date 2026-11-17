@@ -50,9 +50,7 @@ export const annotationWrapperKey: unique symbol = Symbol.for(
  * wrapper shape.
  * @internal
  */
-const annotationWrapperKeys: ReadonlySet<PropertyKey> = new Set<
-  PropertyKey
->([
+const annotationWrapperKeys: ReadonlySet<PropertyKey> = new Set<PropertyKey>([
   annotationKey,
   annotationStateValueKey,
   annotationWrapperKey,
@@ -80,7 +78,8 @@ function hasInjectedAnnotationWrapperShape(
     annotationStateValueKey,
   );
   const wrapper = Object.getOwnPropertyDescriptor(value, annotationWrapperKey);
-  return annotations?.enumerable === true &&
+  return (
+    annotations?.enumerable === true &&
     annotations.writable === true &&
     annotations.configurable === true &&
     annotations.value != null &&
@@ -91,7 +90,8 @@ function hasInjectedAnnotationWrapperShape(
     wrapper?.enumerable === false &&
     wrapper.writable === true &&
     wrapper.configurable === true &&
-    wrapper.value === true;
+    wrapper.value === true
+  );
 }
 
 /**
@@ -269,8 +269,9 @@ export function inheritAnnotations<T>(source: unknown, target: T): T {
 export function hasMeaningfulAnnotations(
   annotations: Annotations | null | undefined,
 ): annotations is Annotations {
-  return annotations != null &&
-    Object.getOwnPropertySymbols(annotations).length > 0;
+  return (
+    annotations != null && Object.getOwnPropertySymbols(annotations).length > 0
+  );
 }
 
 /**
@@ -416,10 +417,12 @@ export function unwrapInjectedAnnotationWrapper<T>(value: T): T {
  * @internal
  */
 export function isInjectedAnnotationWrapper(value: unknown): boolean {
-  return value != null &&
+  return (
+    value != null &&
     typeof value === "object" &&
     (injectedAnnotationWrappers.has(value) ||
-      hasInjectedAnnotationWrapperShape(value));
+      hasInjectedAnnotationWrapperShape(value))
+  );
 }
 
 /**

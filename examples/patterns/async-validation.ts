@@ -47,8 +47,7 @@ function reachableUrl(): ValueParser<"async", URL> {
       } catch {
         return {
           success: false,
-          error:
-            message`Could not reach URL ${input}. Check network connection or DNS resolution.`,
+          error: message`Could not reach URL ${input}. Check network connection or DNS resolution.`,
         };
       }
 
@@ -97,15 +96,13 @@ function apiKey(validationEndpoint: string): ValueParser<"async", string> {
         if (!response.ok) {
           return {
             success: false,
-            error:
-              message`API validation failed with status ${response.status.toString()}.`,
+            error: message`API validation failed with status ${response.status.toString()}.`,
           };
         }
       } catch {
         return {
           success: false,
-          error:
-            message`Could not validate API key. Check your network connection.`,
+          error: message`Could not validate API key. Check your network connection.`,
         };
       }
 

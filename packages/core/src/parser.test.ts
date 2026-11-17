@@ -153,9 +153,10 @@ describe("parse", () => {
           consumed: [context.buffer[0] ?? ""],
           next: {
             ...context,
-            exec: context.exec == null
-              ? undefined
-              : { ...context.exec, commandPath: ["canonical"] },
+            exec:
+              context.exec == null
+                ? undefined
+                : { ...context.exec, commandPath: ["canonical"] },
           },
         };
       },
@@ -293,7 +294,7 @@ describe("parse", () => {
       defaultValues: () => ["dev"] as const,
       factory: (currentMode) =>
         choice(
-          currentMode === "dev" ? ["debug"] as const : ["strict"] as const,
+          currentMode === "dev" ? (["debug"] as const) : (["strict"] as const),
         ),
     });
     const inner = object({
@@ -521,15 +522,9 @@ describe("Integration tests", () => {
   });
 
   it("should handle nested or combinations", () => {
-    const innerOr = or(
-      option("-a"),
-      option("-b"),
-    );
+    const innerOr = or(option("-a"), option("-b"));
 
-    const outerOr = or(
-      innerOr,
-      option("-c"),
-    );
+    const outerOr = or(innerOr, option("-c"));
 
     const resultA = parse(outerOr, ["-a"]);
     assert.ok(resultA.success);
@@ -724,7 +719,8 @@ describe("Integration tests", () => {
     const group1Result = parse(parser, ["-a", "-v", "123", "myfile.txt"]);
     assert.ok(group1Result.success);
     if (
-      group1Result.success && "type" in group1Result.value &&
+      group1Result.success &&
+      "type" in group1Result.value &&
       group1Result.value.type === "group1"
     ) {
       assert.equal(group1Result.value.allow, true);
@@ -735,7 +731,8 @@ describe("Integration tests", () => {
     const group2Result = parse(parser, ["-f", "-b", "hello"]);
     assert.ok(group2Result.success);
     if (
-      group2Result.success && "type" in group2Result.value &&
+      group2Result.success &&
+      "type" in group2Result.value &&
       group2Result.value.type === "group2"
     ) {
       assert.equal(group2Result.value.foo, true);
@@ -829,45 +826,57 @@ describe("Parser usage field", () => {
   describe("option parser", () => {
     it("should have correct usage for boolean flag", () => {
       const parser = option("-v", "--verbose");
-      const expected = [{
-        type: "optional",
-        terms: [{
-          type: "option",
-          names: ["-v", "--verbose"],
-        }],
-      }];
+      const expected = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "option",
+              names: ["-v", "--verbose"],
+            },
+          ],
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
     it("should have correct usage for option with value", () => {
       const parser = option("-p", "--port", integer());
-      const expected = [{
-        type: "option",
-        names: ["-p", "--port"],
-        metavar: "INTEGER",
-      }];
+      const expected = [
+        {
+          type: "option",
+          names: ["-p", "--port"],
+          metavar: "INTEGER",
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
     it("should have correct usage for single option name", () => {
       const parser = option("--debug");
-      const expected = [{
-        type: "optional",
-        terms: [{
-          type: "option",
-          names: ["--debug"],
-        }],
-      }];
+      const expected = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "option",
+              names: ["--debug"],
+            },
+          ],
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
     it("should have correct usage for multiple option names", () => {
       const parser = option("-o", "--output", "--out", string());
-      const expected = [{
-        type: "option",
-        names: ["-o", "--output", "--out"],
-        metavar: "STRING",
-      }];
+      const expected = [
+        {
+          type: "option",
+          names: ["-o", "--output", "--out"],
+          metavar: "STRING",
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
   });
@@ -875,19 +884,23 @@ describe("Parser usage field", () => {
   describe("argument parser", () => {
     it("should have correct usage", () => {
       const parser = argument(string());
-      const expected = [{
-        type: "argument",
-        metavar: "STRING",
-      }];
+      const expected = [
+        {
+          type: "argument",
+          metavar: "STRING",
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
     it("should have correct usage with integer", () => {
       const parser = argument(integer());
-      const expected = [{
-        type: "argument",
-        metavar: "INTEGER",
-      }];
+      const expected = [
+        {
+          type: "argument",
+          metavar: "INTEGER",
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
   });
@@ -896,29 +909,39 @@ describe("Parser usage field", () => {
     it("should wrap inner parser usage in optional term", () => {
       const innerParser = option("-v", "--verbose");
       const parser = optional(innerParser);
-      const expected = [{
-        type: "optional",
-        terms: [{
+      const expected = [
+        {
           type: "optional",
-          terms: [{
-            type: "option",
-            names: ["-v", "--verbose"],
-          }],
-        }],
-      }];
+          terms: [
+            {
+              type: "optional",
+              terms: [
+                {
+                  type: "option",
+                  names: ["-v", "--verbose"],
+                },
+              ],
+            },
+          ],
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
     it("should work with argument parser", () => {
       const innerParser = argument(string());
       const parser = optional(innerParser);
-      const expected = [{
-        type: "optional",
-        terms: [{
-          type: "argument",
-          metavar: "STRING",
-        }],
-      }];
+      const expected = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "argument",
+              metavar: "STRING",
+            },
+          ],
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
@@ -926,19 +949,27 @@ describe("Parser usage field", () => {
       const baseParser = option("-d", "--debug");
       const innerOptional = optional(baseParser);
       const outerOptional = optional(innerOptional);
-      const expected = [{
-        type: "optional",
-        terms: [{
+      const expected = [
+        {
           type: "optional",
-          terms: [{
-            type: "optional",
-            terms: [{
-              type: "option",
-              names: ["-d", "--debug"],
-            }],
-          }],
-        }],
-      }];
+          terms: [
+            {
+              type: "optional",
+              terms: [
+                {
+                  type: "optional",
+                  terms: [
+                    {
+                      type: "option",
+                      names: ["-d", "--debug"],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ];
       assert.deepEqual(outerOptional.usage, expected);
     });
   });
@@ -947,14 +978,18 @@ describe("Parser usage field", () => {
     it("should wrap inner parser usage in optional term", () => {
       const innerParser = option("-p", "--port", integer());
       const parser = withDefault(innerParser, 3000);
-      const expected = [{
-        type: "optional",
-        terms: [{
-          type: "option",
-          names: ["-p", "--port"],
-          metavar: "INTEGER",
-        }],
-      }];
+      const expected = [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "option",
+              names: ["-p", "--port"],
+              metavar: "INTEGER",
+            },
+          ],
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
   });
@@ -963,46 +998,58 @@ describe("Parser usage field", () => {
     it("should wrap inner parser usage in multiple term with min 0", () => {
       const innerParser = argument(string());
       const parser = multiple(innerParser);
-      const expected = [{
-        type: "multiple",
-        terms: [{
-          type: "argument",
-          metavar: "STRING",
-        }],
-        min: 0,
-        acceptsEmpty: true,
-      }];
+      const expected = [
+        {
+          type: "multiple",
+          terms: [
+            {
+              type: "argument",
+              metavar: "STRING",
+            },
+          ],
+          min: 0,
+          acceptsEmpty: true,
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
     it("should wrap inner parser usage in multiple term with custom min", () => {
       const innerParser = argument(string());
       const parser = multiple(innerParser, { min: 2 });
-      const expected = [{
-        type: "multiple",
-        terms: [{
-          type: "argument",
-          metavar: "STRING",
-        }],
-        min: 2,
-        acceptsEmpty: false,
-      }];
+      const expected = [
+        {
+          type: "multiple",
+          terms: [
+            {
+              type: "argument",
+              metavar: "STRING",
+            },
+          ],
+          min: 2,
+          acceptsEmpty: false,
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
     it("should work with option parser", () => {
       const innerParser = option("-I", "--include", string());
       const parser = multiple(innerParser, { min: 1 });
-      const expected = [{
-        type: "multiple",
-        terms: [{
-          type: "option",
-          names: ["-I", "--include"],
-          metavar: "STRING",
-        }],
-        min: 1,
-        acceptsEmpty: false,
-      }];
+      const expected = [
+        {
+          type: "multiple",
+          terms: [
+            {
+              type: "option",
+              names: ["-I", "--include"],
+              metavar: "STRING",
+            },
+          ],
+          min: 1,
+          acceptsEmpty: false,
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
   });
@@ -1033,8 +1080,8 @@ describe("Parser usage field", () => {
       assert.deepEqual(verboseOption.names, ["-v", "--verbose"]);
 
       // Find the option term (output option with value)
-      const outputOption = parser.usage.find((u) =>
-        u.type === "option" && "names" in u && u.names.includes("-o")
+      const outputOption = parser.usage.find(
+        (u) => u.type === "option" && "names" in u && u.names.includes("-o"),
       );
       assert.ok(outputOption);
       if (outputOption?.type === "option") {
@@ -1110,28 +1157,38 @@ describe("Parser usage field", () => {
       const parserB = option("-q", "--quiet");
       const parser = or(parserA, parserB);
 
-      const expected = [{
-        type: "exclusive",
-        terms: [
-          [{
-            type: "optional",
-            terms: [{
-              type: "option",
-              names: ["-v", "--verbose"],
-            }],
-          }],
-          [{
-            type: "optional",
-            terms: [{
-              type: "option",
-              names: ["-q", "--quiet"],
-            }],
-          }],
-        ],
-        // Neither branch can be chosen without input, since both match
-        // option names, so or() rejects an empty argument list.
-        acceptsEmpty: false,
-      }];
+      const expected = [
+        {
+          type: "exclusive",
+          terms: [
+            [
+              {
+                type: "optional",
+                terms: [
+                  {
+                    type: "option",
+                    names: ["-v", "--verbose"],
+                  },
+                ],
+              },
+            ],
+            [
+              {
+                type: "optional",
+                terms: [
+                  {
+                    type: "option",
+                    names: ["-q", "--quiet"],
+                  },
+                ],
+              },
+            ],
+          ],
+          // Neither branch can be chosen without input, since both match
+          // option names, so or() rejects an empty argument list.
+          acceptsEmpty: false,
+        },
+      ];
       assert.deepEqual(parser.usage, expected);
     });
 
@@ -1146,24 +1203,34 @@ describe("Parser usage field", () => {
 
       if (parser.usage[0].type === "exclusive") {
         assert.equal(parser.usage[0].terms.length, 3);
-        assert.deepEqual(parser.usage[0].terms[0], [{
-          type: "optional",
-          terms: [{
-            type: "option",
-            names: ["-v", "--verbose"],
-          }],
-        }]);
-        assert.deepEqual(parser.usage[0].terms[1], [{
-          type: "optional",
-          terms: [{
-            type: "option",
-            names: ["-q", "--quiet"],
-          }],
-        }]);
-        assert.deepEqual(parser.usage[0].terms[2], [{
-          type: "argument",
-          metavar: "STRING",
-        }]);
+        assert.deepEqual(parser.usage[0].terms[0], [
+          {
+            type: "optional",
+            terms: [
+              {
+                type: "option",
+                names: ["-v", "--verbose"],
+              },
+            ],
+          },
+        ]);
+        assert.deepEqual(parser.usage[0].terms[1], [
+          {
+            type: "optional",
+            terms: [
+              {
+                type: "option",
+                names: ["-q", "--quiet"],
+              },
+            ],
+          },
+        ]);
+        assert.deepEqual(parser.usage[0].terms[2], [
+          {
+            type: "argument",
+            metavar: "STRING",
+          },
+        ]);
       }
     });
 
@@ -1343,10 +1410,12 @@ describe("Parser usage field", () => {
 
       const suggestions = suggestSync(parser, ["deploy", "prod", ""]);
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "prod-only",
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "prod-only",
+        },
+      ]);
     });
 
     it("should seed top-level suggest runtime through async command wrappers", async () => {
@@ -1420,10 +1489,12 @@ describe("Parser usage field", () => {
 
       const suggestions = await suggestAsync(parser, ["deploy", "prod", ""]);
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "prod-only",
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "prod-only",
+        },
+      ]);
     });
 
     it("should seed top-level suggest runtime through or() wrappers", () => {
@@ -1515,10 +1586,12 @@ describe("Parser usage field", () => {
 
       const suggestions = suggestSync(parser, ["prod", ""]);
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "prod-only",
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "prod-only",
+        },
+      ]);
     });
 
     it("should seed top-level suggest runtime through async longestMatch() wrappers", async () => {
@@ -1613,10 +1686,12 @@ describe("Parser usage field", () => {
 
       const suggestions = await suggestAsync(parser, ["prod", ""]);
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "prod-only",
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "prod-only",
+        },
+      ]);
     });
   });
 });
@@ -1651,8 +1726,8 @@ describe("Parser usage field integration", () => {
     assert.equal(optionalTerms.length, 1);
 
     // Find exclusive subcommands
-    const exclusiveTerms = gitParser.usage.filter((u) =>
-      u.type === "exclusive"
+    const exclusiveTerms = gitParser.usage.filter(
+      (u) => u.type === "exclusive",
     );
     assert.equal(exclusiveTerms.length, 1);
 
@@ -1660,13 +1735,13 @@ describe("Parser usage field integration", () => {
       assert.equal(exclusiveTerms[0].terms.length, 2);
       // Each subcommand should start with a command term
       assert.ok(
-        exclusiveTerms[0].terms[0].some((term) =>
-          term.type === "command" && term.name === "commit"
+        exclusiveTerms[0].terms[0].some(
+          (term) => term.type === "command" && term.name === "commit",
         ),
       );
       assert.ok(
-        exclusiveTerms[0].terms[1].some((term) =>
-          term.type === "command" && term.name === "add"
+        exclusiveTerms[0].terms[1].some(
+          (term) => term.type === "command" && term.name === "add",
         ),
       );
     }
@@ -1756,13 +1831,13 @@ describe("nested command help", () => {
     const nestEntries = nestAllEntries.filter((e) => e.term.type === "command");
     assert.equal(nestEntries.length, 2);
     assert.ok(
-      nestEntries.some((e) =>
-        e.term.type === "command" && e.term.name === "foo"
+      nestEntries.some(
+        (e) => e.term.type === "command" && e.term.name === "foo",
       ),
     );
     assert.ok(
-      nestEntries.some((e) =>
-        e.term.type === "command" && e.term.name === "bar"
+      nestEntries.some(
+        (e) => e.term.type === "command" && e.term.name === "bar",
       ),
     );
 
@@ -1770,16 +1845,22 @@ describe("nested command help", () => {
     const fooDocFragments = parser.getDocFragments(
       {
         kind: "available" as const,
-        state: ["parsing", [0, {
-          success: true,
-          next: {
-            buffer: [],
-            optionsTerminated: false,
-            state: ["matched", "foo"],
-            usage: [],
-          },
-          consumed: ["foo"],
-        }]],
+        state: [
+          "parsing",
+          [
+            0,
+            {
+              success: true,
+              next: {
+                buffer: [],
+                optionsTerminated: false,
+                state: ["matched", "foo"],
+                usage: [],
+              },
+              consumed: ["foo"],
+            },
+          ],
+        ],
       },
       undefined,
     );
@@ -1787,29 +1868,39 @@ describe("nested command help", () => {
       formatMessage(fooDocFragments.description!),
       "Foo subcommand description.",
     );
-    const fooEntries = fooDocFragments.fragments
-      .flatMap((f) => f.type === "section" ? f.entries : []);
-    assert.ok(fooEntries.some((e) =>
-      e.term.type === "option" &&
-      e.term.names.includes("-a") &&
-      e.description &&
-      formatMessage(e.description).includes("Allow something in foo")
-    ));
+    const fooEntries = fooDocFragments.fragments.flatMap((f) =>
+      f.type === "section" ? f.entries : [],
+    );
+    assert.ok(
+      fooEntries.some(
+        (e) =>
+          e.term.type === "option" &&
+          e.term.names.includes("-a") &&
+          e.description &&
+          formatMessage(e.description).includes("Allow something in foo"),
+      ),
+    );
 
     // Test help for "nest bar" shows bar options
     const barDocFragments = parser.getDocFragments(
       {
         kind: "available" as const,
-        state: ["parsing", [1, {
-          success: true,
-          next: {
-            buffer: [],
-            optionsTerminated: false,
-            state: ["matched", "bar"],
-            usage: [],
-          },
-          consumed: ["bar"],
-        }]],
+        state: [
+          "parsing",
+          [
+            1,
+            {
+              success: true,
+              next: {
+                buffer: [],
+                optionsTerminated: false,
+                state: ["matched", "bar"],
+                usage: [],
+              },
+              consumed: ["bar"],
+            },
+          ],
+        ],
       },
       undefined,
     );
@@ -1817,14 +1908,18 @@ describe("nested command help", () => {
       formatMessage(barDocFragments.description!),
       "Bar subcommand description.",
     );
-    const barEntries = barDocFragments.fragments
-      .flatMap((f) => f.type === "section" ? f.entries : []);
-    assert.ok(barEntries.some((e) =>
-      e.term.type === "option" &&
-      e.term.names.includes("-f") &&
-      e.description &&
-      formatMessage(e.description).includes("Foo option in bar")
-    ));
+    const barEntries = barDocFragments.fragments.flatMap((f) =>
+      f.type === "section" ? f.entries : [],
+    );
+    assert.ok(
+      barEntries.some(
+        (e) =>
+          e.term.type === "option" &&
+          e.term.names.includes("-f") &&
+          e.description &&
+          formatMessage(e.description).includes("Foo option in bar"),
+      ),
+    );
   });
 });
 
@@ -1864,8 +1959,8 @@ describe("getDocPage", () => {
     assert.equal(optionEntries.length, 2);
 
     // Check for argument entry
-    const argumentEntries = allEntries.filter((e) =>
-      e.term.type === "argument"
+    const argumentEntries = allEntries.filter(
+      (e) => e.term.type === "argument",
     );
     assert.equal(argumentEntries.length, 1);
     assert.equal(argumentEntries[0].term.metavar, "FILE");
@@ -1884,8 +1979,8 @@ describe("getDocPage", () => {
     assert.ok(docPage.sections.length > 0);
 
     // Should have section with title
-    const labeledSection = docPage.sections.find((s) =>
-      s.title === "Test Parser"
+    const labeledSection = docPage.sections.find(
+      (s) => s.title === "Test Parser",
     );
     assert.ok(labeledSection);
     assert.equal(labeledSection.entries.length, 1);
@@ -2139,13 +2234,13 @@ describe("getDocPage", () => {
     );
     const allEntries = docPage.sections.flatMap((s) => s.entries);
     assert.ok(
-      allEntries.some((e) =>
-        e.term.type === "option" && e.term.names.includes("--force")
+      allEntries.some(
+        (e) => e.term.type === "option" && e.term.names.includes("--force"),
       ),
     );
     assert.ok(
-      !allEntries.some((e) =>
-        e.term.type === "option" && e.term.names.includes("--clean")
+      !allEntries.some(
+        (e) => e.term.type === "option" && e.term.names.includes("--clean"),
       ),
     );
   });
@@ -2225,8 +2320,8 @@ describe("getDocPage", () => {
     );
     const allEntries = docPage.sections.flatMap((s) => s.entries);
     assert.ok(
-      !allEntries.some((e) =>
-        e.term.type === "option" && e.term.names.includes("--force")
+      !allEntries.some(
+        (e) => e.term.type === "option" && e.term.names.includes("--force"),
       ),
     );
   });
@@ -2249,8 +2344,8 @@ describe("getDocPage", () => {
     );
     const allEntries = docPage.sections.flatMap((s) => s.entries);
     assert.ok(
-      !allEntries.some((e) =>
-        e.term.type === "option" && e.term.names.includes("--force")
+      !allEntries.some(
+        (e) => e.term.type === "option" && e.term.names.includes("--force"),
       ),
     );
   });
@@ -2362,8 +2457,8 @@ describe("getDocPage", () => {
     // Should have entries for both multiple files and verbose option
     assert.ok(allEntries.length >= 2);
 
-    const fileEntry = allEntries.find((e) =>
-      e.term.type === "argument" && e.term.metavar === "FILE"
+    const fileEntry = allEntries.find(
+      (e) => e.term.type === "argument" && e.term.metavar === "FILE",
     );
     assert.ok(fileEntry);
   });
@@ -2382,9 +2477,11 @@ describe("getDocPage", () => {
     // Should have entries for both verbose and optional output
     assert.ok(allEntries.length >= 2);
 
-    const outputEntry = allEntries.find((e) =>
-      e.term.type === "option" &&
-      e.term.names && e.term.names.includes("--output")
+    const outputEntry = allEntries.find(
+      (e) =>
+        e.term.type === "option" &&
+        e.term.names &&
+        e.term.names.includes("--output"),
     );
     assert.ok(outputEntry);
   });
@@ -2400,9 +2497,11 @@ describe("getDocPage", () => {
     assert.ok(docPage);
     const allEntries = docPage.sections.flatMap((s) => s.entries);
 
-    const portEntry = allEntries.find((e) =>
-      e.term.type === "option" &&
-      e.term.names && e.term.names.includes("--port")
+    const portEntry = allEntries.find(
+      (e) =>
+        e.term.type === "option" &&
+        e.term.names &&
+        e.term.names.includes("--port"),
     );
     assert.ok(portEntry);
     assert.deepEqual(portEntry.default, message`${"8080"}`);
@@ -2423,15 +2522,17 @@ describe("getDocPage", () => {
     // Should have entries for all tuple elements
     assert.ok(allEntries.length >= 3);
 
-    const inputEntry = allEntries.find((e) =>
-      e.term.type === "argument" && e.term.metavar === "INPUT"
+    const inputEntry = allEntries.find(
+      (e) => e.term.type === "argument" && e.term.metavar === "INPUT",
     );
-    const outputEntry = allEntries.find((e) =>
-      e.term.type === "argument" && e.term.metavar === "OUTPUT"
+    const outputEntry = allEntries.find(
+      (e) => e.term.type === "argument" && e.term.metavar === "OUTPUT",
     );
-    const verboseEntry = allEntries.find((e) =>
-      e.term.type === "option" &&
-      e.term.names && e.term.names.includes("--verbose")
+    const verboseEntry = allEntries.find(
+      (e) =>
+        e.term.type === "option" &&
+        e.term.names &&
+        e.term.names.includes("--verbose"),
     );
 
     assert.ok(inputEntry);
@@ -2525,14 +2626,14 @@ describe("getDocPage", () => {
     // Should contain --fooflag but not --barflag
     const optionTerms = doc.usage.filter((t) => t.type === "option");
     assert.ok(
-      optionTerms.some((t) =>
-        t.type === "option" && t.names.includes("--fooflag")
+      optionTerms.some(
+        (t) => t.type === "option" && t.names.includes("--fooflag"),
       ),
       "Usage should contain --fooflag",
     );
     assert.ok(
-      !optionTerms.some((t) =>
-        t.type === "option" && t.names.includes("--barflag")
+      !optionTerms.some(
+        (t) => t.type === "option" && t.names.includes("--barflag"),
       ),
       "Usage should NOT contain --barflag",
     );
@@ -2562,10 +2663,7 @@ describe("getDocPage", () => {
     const parser = merge(globalOptions, or(addCommand, listCommand));
 
     // Simulate what facade.ts does - combine with help command via longestMatch
-    const helpCommand = command(
-      "help",
-      multiple(argument(string())),
-    );
+    const helpCommand = command("help", multiple(argument(string())));
 
     const combinedParser = longestMatch(parser, helpCommand);
 
@@ -2625,13 +2723,13 @@ describe("getDocPage", () => {
       }
     }
     assert.ok(
-      doc.usage.some((term) =>
-        term.type === "option" && term.names.includes("--name")
+      doc.usage.some(
+        (term) => term.type === "option" && term.names.includes("--name"),
       ),
     );
     assert.ok(
-      !doc.usage.some((term) =>
-        term.type === "option" && term.names.includes("--verbose")
+      !doc.usage.some(
+        (term) => term.type === "option" && term.names.includes("--verbose"),
       ),
     );
   });
@@ -2662,18 +2760,18 @@ describe("getDocPage", () => {
     assert.ok(doc.usage && doc.usage.length > 0);
 
     assert.ok(
-      doc.usage.some((term) =>
-        term.type === "literal" && term.value === "install-usage"
+      doc.usage.some(
+        (term) => term.type === "literal" && term.value === "install-usage",
       ),
     );
     assert.ok(
-      !doc.usage.some((term) =>
-        term.type === "option" && term.names.includes("--name")
+      !doc.usage.some(
+        (term) => term.type === "option" && term.names.includes("--name"),
       ),
     );
     assert.ok(
-      !doc.usage.some((term) =>
-        term.type === "option" && term.names.includes("--verbose")
+      !doc.usage.some(
+        (term) => term.type === "option" && term.names.includes("--verbose"),
       ),
     );
   });
@@ -2736,10 +2834,7 @@ describe("getDocPage", () => {
     // Verify order: default before choices
     const defaultIdx = formatted.indexOf('["json"]');
     const choicesIdx = formatted.indexOf("(choices:");
-    assert.ok(
-      defaultIdx < choicesIdx,
-      "Default should appear before choices",
-    );
+    assert.ok(defaultIdx < choicesIdx, "Default should appear before choices");
   });
 
   it("should not show choices when showChoices is disabled", () => {
@@ -2889,9 +2984,8 @@ describe("Annotations system", () => {
   });
 
   it("should extract annotations using getAnnotations()", async () => {
-    const { getAnnotations, annotationKey } = await import(
-      "./internal/annotations.ts"
-    );
+    const { getAnnotations, annotationKey } =
+      await import("./internal/annotations.ts");
     const testKey = Symbol.for("@test/key");
     const testData = { foo: "bar" };
 
@@ -2992,9 +3086,7 @@ describe("Annotations system", () => {
       ...baseParser,
       complete: (state: unknown) => {
         capturedState = state;
-        return baseParser.complete(
-          state as { readonly value: "ok" },
-        );
+        return baseParser.complete(state as { readonly value: "ok" });
       },
     };
 
@@ -3023,9 +3115,7 @@ describe("Annotations system", () => {
       ...baseParser,
       complete: (state: unknown) => {
         capturedState = state;
-        return baseParser.complete(
-          state as { readonly value: "ok" },
-        );
+        return baseParser.complete(state as { readonly value: "ok" });
       },
     };
 
@@ -3105,9 +3195,8 @@ describe("Annotations system", () => {
   });
 
   it("should not unwrap regular objects that contain only internal value key", async () => {
-    const { annotationStateValueKey } = await import(
-      "./internal/annotations.ts"
-    );
+    const { annotationStateValueKey } =
+      await import("./internal/annotations.ts");
     const value = {
       ok: true,
       [annotationStateValueKey]: "not-wrapper",
@@ -3122,10 +3211,8 @@ describe("Annotations system", () => {
 
   it("should not unwrap objects without wrapper marker", async () => {
     const testKey = Symbol.for("@test/unwrap-guard");
-    const {
-      annotationKey,
-      annotationStateValueKey,
-    } = await import("#src/internal/annotations.ts");
+    const { annotationKey, annotationStateValueKey } =
+      await import("#src/internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -3143,11 +3230,8 @@ describe("Annotations system", () => {
 
   it("should not unwrap objects when wrapper marker is not true", async () => {
     const testKey = Symbol.for("@test/unwrap-marker");
-    const {
-      annotationKey,
-      annotationStateValueKey,
-      annotationWrapperKey,
-    } = await import("#src/internal/annotations.ts");
+    const { annotationKey, annotationStateValueKey, annotationWrapperKey } =
+      await import("#src/internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -3166,11 +3250,8 @@ describe("Annotations system", () => {
 
   it("should not unwrap user-defined wrapper shape with annotations", async () => {
     const testKey = Symbol.for("@test/user-wrapper-shape");
-    const {
-      annotationKey,
-      annotationStateValueKey,
-      annotationWrapperKey,
-    } = await import("#src/internal/annotations.ts");
+    const { annotationKey, annotationStateValueKey, annotationWrapperKey } =
+      await import("#src/internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: { [testKey]: "value" },
@@ -3188,11 +3269,8 @@ describe("Annotations system", () => {
   });
 
   it("should not unwrap wrapper-shaped objects without annotations", async () => {
-    const {
-      annotationKey,
-      annotationStateValueKey,
-      annotationWrapperKey,
-    } = await import("#src/internal/annotations.ts");
+    const { annotationKey, annotationStateValueKey, annotationWrapperKey } =
+      await import("#src/internal/annotations.ts");
     const value = {
       ok: true,
       [annotationKey]: {},
@@ -3254,10 +3332,8 @@ describe("Annotations system", () => {
   });
 
   it("should not unwrap wrapper state mutated in place", async () => {
-    const {
-      annotationWrapperKey,
-      annotationStateValueKey,
-    } = await import("#src/internal/annotations.ts");
+    const { annotationWrapperKey, annotationStateValueKey } =
+      await import("#src/internal/annotations.ts");
     const parser: Parser<"sync", unknown, unknown> = {
       mode: "sync",
       $stateType: [] as const,
@@ -3426,15 +3502,16 @@ describe("Annotations system", () => {
       },
       *suggest() {},
       getDocFragments(state) {
-        const ann = state.kind === "available"
-          ? getAnnotations(state.state)
-          : undefined;
+        const ann =
+          state.kind === "available" ? getAnnotations(state.state) : undefined;
         return {
           fragments: [],
-          footer: [{
-            type: "text" as const,
-            text: String(ann?.[testKey] ?? "none"),
-          }],
+          footer: [
+            {
+              type: "text" as const,
+              text: String(ann?.[testKey] ?? "none"),
+            },
+          ],
         };
       },
     };
@@ -3467,15 +3544,16 @@ describe("Annotations system", () => {
       },
       *suggest() {},
       getDocFragments(state) {
-        const annotations = state.kind === "available"
-          ? getAnnotations(state.state)
-          : undefined;
+        const annotations =
+          state.kind === "available" ? getAnnotations(state.state) : undefined;
         return {
           fragments: [],
-          footer: [{
-            type: "text" as const,
-            text: String(annotations?.[testKey] ?? "none"),
-          }],
+          footer: [
+            {
+              type: "text" as const,
+              text: String(annotations?.[testKey] ?? "none"),
+            },
+          ],
         };
       },
     });
@@ -3508,15 +3586,16 @@ describe("Annotations system", () => {
       },
       *suggest() {},
       getDocFragments(state) {
-        const ann = state.kind === "available"
-          ? getAnnotations(state.state)
-          : undefined;
+        const ann =
+          state.kind === "available" ? getAnnotations(state.state) : undefined;
         return {
           fragments: [],
-          footer: [{
-            type: "text" as const,
-            text: String(ann?.[testKey] ?? "none"),
-          }],
+          footer: [
+            {
+              type: "text" as const,
+              text: String(ann?.[testKey] ?? "none"),
+            },
+          ],
         };
       },
     };
@@ -3555,15 +3634,16 @@ describe("Annotations system", () => {
       },
       async *suggest() {},
       getDocFragments(state) {
-        const ann = state.kind === "available"
-          ? getAnnotations(state.state)
-          : undefined;
+        const ann =
+          state.kind === "available" ? getAnnotations(state.state) : undefined;
         return {
           fragments: [],
-          footer: [{
-            type: "text" as const,
-            text: String(ann?.[testKey] ?? "none"),
-          }],
+          footer: [
+            {
+              type: "text" as const,
+              text: String(ann?.[testKey] ?? "none"),
+            },
+          ],
         };
       },
     };
@@ -3598,15 +3678,16 @@ describe("Annotations system", () => {
       },
       *suggest() {},
       getDocFragments(state) {
-        const ann = state.kind === "available"
-          ? getAnnotations(state.state)
-          : undefined;
+        const ann =
+          state.kind === "available" ? getAnnotations(state.state) : undefined;
         return {
           fragments: [],
-          footer: [{
-            type: "text" as const,
-            text: String(ann?.[testKey] ?? "none"),
-          }],
+          footer: [
+            {
+              type: "text" as const,
+              text: String(ann?.[testKey] ?? "none"),
+            },
+          ],
         };
       },
     };
@@ -3641,15 +3722,16 @@ describe("Annotations system", () => {
       },
       *suggest() {},
       getDocFragments(state) {
-        const ann = state.kind === "available"
-          ? getAnnotations(state.state)
-          : undefined;
+        const ann =
+          state.kind === "available" ? getAnnotations(state.state) : undefined;
         return {
           fragments: [],
-          footer: [{
-            type: "text" as const,
-            text: String(ann?.[testKey] ?? "none"),
-          }],
+          footer: [
+            {
+              type: "text" as const,
+              text: String(ann?.[testKey] ?? "none"),
+            },
+          ],
         };
       },
     };
@@ -3688,15 +3770,16 @@ describe("Annotations system", () => {
       },
       async *suggest() {},
       getDocFragments(state) {
-        const ann = state.kind === "available"
-          ? getAnnotations(state.state)
-          : undefined;
+        const ann =
+          state.kind === "available" ? getAnnotations(state.state) : undefined;
         return {
           fragments: [],
-          footer: [{
-            type: "text" as const,
-            text: String(ann?.[testKey] ?? "none"),
-          }],
+          footer: [
+            {
+              type: "text" as const,
+              text: String(ann?.[testKey] ?? "none"),
+            },
+          ],
         };
       },
     };
@@ -4175,27 +4258,27 @@ describe("getDocPage regression: meta commands with withDefault(or(...))", () =>
 
     assert.ok(
       commandNames.includes("help"),
-      `"help" should appear in the command list, got: [${
-        commandNames.join(", ")
-      }]`,
+      `"help" should appear in the command list, got: [${commandNames.join(
+        ", ",
+      )}]`,
     );
     assert.ok(
       commandNames.includes("version"),
-      `"version" should appear in the command list, got: [${
-        commandNames.join(", ")
-      }]`,
+      `"version" should appear in the command list, got: [${commandNames.join(
+        ", ",
+      )}]`,
     );
     assert.ok(
       commandNames.includes("foo"),
-      `"foo" should appear in the command list, got: [${
-        commandNames.join(", ")
-      }]`,
+      `"foo" should appear in the command list, got: [${commandNames.join(
+        ", ",
+      )}]`,
     );
     assert.ok(
       commandNames.includes("bar"),
-      `"bar" should appear in the command list, got: [${
-        commandNames.join(", ")
-      }]`,
+      `"bar" should appear in the command list, got: [${commandNames.join(
+        ", ",
+      )}]`,
     );
   });
 
@@ -4205,16 +4288,10 @@ describe("getDocPage regression: meta commands with withDefault(or(...))", () =>
     });
     const parser = or(
       merge(
-        or(
-          command("foo", object({})),
-          command("bar", object({})),
-        ),
+        or(command("foo", object({})), command("bar", object({}))),
         globalOption,
       ),
-      merge(
-        command("baz", object({})),
-        globalOption,
-      ),
+      merge(command("baz", object({})), globalOption),
     );
 
     const doc = getDocPage(parser, ["foo"]);
@@ -4334,8 +4411,9 @@ describe("getDocPage reference isolation", () => {
     // Mutate the returned page's usage terms, brief, and entry description
     (page1.usage[0] as Record<string, unknown>).name = "MUTATED";
     (page1.brief[0] as Record<string, unknown>).text = "MUTATED";
-    (page1.sections[0].entries[0]
-      .description[0] as Record<string, unknown>).text = "MUTATED";
+    (
+      page1.sections[0].entries[0].description[0] as Record<string, unknown>
+    ).text = "MUTATED";
 
     // Second call should return the original values
     const page2 = getDocPageSync(parser as Parser<"sync", unknown, unknown>);
@@ -4370,10 +4448,7 @@ describe("getDocPage reference isolation", () => {
 
     // Parser's own usage terms should not be corrupted by the callback
     for (const term of parser.usage) {
-      assert.notEqual(
-        (term as Record<string, unknown>).type,
-        "MUTATED",
-      );
+      assert.notEqual((term as Record<string, unknown>).type, "MUTATED");
     }
   });
 

@@ -41,13 +41,15 @@ describe("captureProgramRun()", () => {
         Promise.resolve({ success: true as const, value: value.toUpperCase() }),
     });
     const result = await captureProgramRun({
-      commands: [defineCommand({
-        path: [],
-        parser,
-        handler(value) {
-          values.push(value);
-        },
-      })],
+      commands: [
+        defineCommand({
+          path: [],
+          parser,
+          handler(value) {
+            values.push(value);
+          },
+        }),
+      ],
       metadata: { name: "tool" },
       args: ["Ada"],
       contexts: [context],
@@ -60,27 +62,30 @@ describe("captureProgramRun()", () => {
 
   it("should dispatch nested command entries and await handlers and hooks", async () => {
     const events: string[] = [];
-    const commands = commandsFromModules<string>({
-      "./tasks/show.mjs": {
-        default: defineCommand({
-          parser: argument(string()),
-          hooks: {
-            beforeEach() {
-              events.push("command before");
-              return { resource: "command resource" };
+    const commands = commandsFromModules<string>(
+      {
+        "./tasks/show.mjs": {
+          default: defineCommand({
+            parser: argument(string()),
+            hooks: {
+              beforeEach() {
+                events.push("command before");
+                return { resource: "command resource" };
+              },
+              async afterEach(context) {
+                await Promise.resolve();
+                events.push(`command after:${context.resource}`);
+              },
             },
-            async afterEach(context) {
+            async handler(value, context) {
               await Promise.resolve();
-              events.push(`command after:${context.resource}`);
+              events.push(`handler:${value}:${context?.resource}`);
             },
-          },
-          async handler(value, context) {
-            await Promise.resolve();
-            events.push(`handler:${value}:${context?.resource}`);
-          },
-        }),
+          }),
+        },
       },
-    }, { extensions: [".mjs"] });
+      { extensions: [".mjs"] },
+    );
     const promise = captureProgramRun({
       commands,
       metadata: { name: "tool" },
@@ -231,22 +236,22 @@ describe("captureProgramRun()", () => {
   });
 
   it("should preserve handler and lifecycle failures including primitive values", async () => {
-    for (
-      const failure of [
-        new RangeError("Handler failed."),
-        { exitCode: 0 },
-        undefined,
-      ]
-    ) {
+    for (const failure of [
+      new RangeError("Handler failed."),
+      { exitCode: 0 },
+      undefined,
+    ]) {
       for (const phase of ["handler", "beforeEach", "afterEach"] as const) {
         const observed: unknown[] = [];
         const options = {
-          commands: [defineCommand({
-            path: [],
-            parser: constant("value"),
-            handler: () =>
-              phase === "handler" ? Promise.reject(failure) : undefined,
-          })],
+          commands: [
+            defineCommand({
+              path: [],
+              parser: constant("value"),
+              handler: () =>
+                phase === "handler" ? Promise.reject(failure) : undefined,
+            }),
+          ],
           metadata: { name: "tool" },
           args: [],
           ...formatting,
@@ -298,18 +303,16 @@ describe("captureProgramRun()", () => {
         throw failure;
       },
     };
-    for (
-      const overrides of [
-        { args: ["value"] },
-        { args: [], contexts: [context] },
-        {
-          args: ["--help"],
-          usageLine() {
-            throw failure;
-          },
+    for (const overrides of [
+      { args: ["value"] },
+      { args: [], contexts: [context] },
+      {
+        args: ["--help"],
+        usageLine() {
+          throw failure;
         },
-      ]
-    ) {
+      },
+    ]) {
       await assert.rejects(
         captureProgramRun({ ...options, ...overrides }),
         (error) => {

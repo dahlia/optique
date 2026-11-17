@@ -19,17 +19,15 @@ import { string } from "#src/valueparser.ts";
 
 interface NoOptionsContext extends SourceContext {}
 
-interface ConfigPathContext extends
-  SourceContext<{
-    readonly getConfigPath: (
-      parsed: ParserValuePlaceholder,
-    ) => string | undefined;
-  }> {}
+interface ConfigPathContext extends SourceContext<{
+  readonly getConfigPath: (
+    parsed: ParserValuePlaceholder,
+  ) => string | undefined;
+}> {}
 
-interface LocaleContext extends
-  SourceContext<{
-    readonly locale: string;
-  }> {}
+interface LocaleContext extends SourceContext<{
+  readonly locale: string;
+}> {}
 
 test("ExtractRequiredOptions keeps required options with void contexts", () => {
   type Required = ExtractRequiredOptions<
@@ -126,8 +124,10 @@ test("Structured error callbacks preserve runner return inference", async () => 
     ["value"],
     options,
   );
-  type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
-    (<T>() => T extends B ? 1 : 2) ? true : false;
+  type Equal<A, B> =
+    (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+      ? true
+      : false;
   const types: [
     Equal<typeof inferred, string>,
     Equal<typeof sync, string>,
@@ -217,8 +217,10 @@ test("Help page callbacks preserve runner return inference", async () => {
     options.args,
     options,
   );
-  type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
-    (<T>() => T extends B ? 1 : 2) ? true : false;
+  type Equal<A, B> =
+    (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+      ? true
+      : false;
   const types: [
     Equal<typeof inferred, string>,
     Equal<typeof sync, string>,

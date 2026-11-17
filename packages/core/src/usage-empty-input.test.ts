@@ -201,16 +201,15 @@ describe("usage of empty-input behavior", () => {
   });
 
   it("keeps the record through group() visibility changes", () => {
-    const parser = group(
-      "Group",
-      or(optional(FILE()), optional(DIR())),
-      { hidden: "doc" },
-    );
+    const parser = group("Group", or(optional(FILE()), optional(DIR())), {
+      hidden: "doc",
+    });
     assert.equal(render(parser), "app (FILE | DIR)");
   });
 });
 
 /** Formats a usage to plain notation, as the formatters see it. */
+/* oxlint-disable-next-line no-unused-vars -- Keep the recursive usage normalization fixture. */
 function stripRecords(term: UsageTerm): UsageTerm {
   switch (term.type) {
     case "optional":
@@ -236,28 +235,26 @@ function stripRecords(term: UsageTerm): UsageTerm {
 type Spec =
   | { readonly kind: "constant"; readonly value: unknown }
   | {
-    readonly kind:
-      | "fail"
-      | "argument"
-      | "option"
-      | "booleanOption"
-      | "flag"
-      | "hiddenFlag"
-      | "command";
-  }
+      readonly kind:
+        | "fail"
+        | "argument"
+        | "option"
+        | "booleanOption"
+        | "flag"
+        | "hiddenFlag"
+        | "command";
+    }
   | {
-    readonly kind: "optional" | "withDefault" | "map" | "nonEmpty";
-    readonly child: Spec;
-  }
+      readonly kind: "optional" | "withDefault" | "map" | "nonEmpty";
+      readonly child: Spec;
+    }
   | { readonly kind: "multiple"; readonly child: Spec; readonly min: number }
   | {
-    readonly kind: "or" | "longestMatch" | "tuple" | "object";
-    readonly children: readonly Spec[];
-  };
+      readonly kind: "or" | "longestMatch" | "tuple" | "object";
+      readonly children: readonly Spec[];
+    };
 
-const specArbitrary: fc.Arbitrary<Spec> = fc.letrec<{ spec: Spec }>((
-  tie,
-) => ({
+const specArbitrary: fc.Arbitrary<Spec> = fc.letrec<{ spec: Spec }>((tie) => ({
   spec: fc.oneof(
     { depthSize: "small", withCrossShrink: true },
     fc.constantFrom<Spec>(
@@ -377,18 +374,23 @@ function hidesRequired(usage: Usage): boolean {
 function isUnrepresentable(term: UsageTerm): boolean {
   const isSingleOptional = (terms: Usage) => {
     const visible = terms.filter((t) => hasVisibleTerm([t]));
-    return !hidesRequired(terms) && visible.length === 1 &&
+    return (
+      !hidesRequired(terms) &&
+      visible.length === 1 &&
       visible[0].type === "optional" &&
       !hidesRequired(visible[0].terms) &&
-      !notationAdmitsEmpty(visible[0].terms);
+      !notationAdmitsEmpty(visible[0].terms)
+    );
   };
   if (term.type === "multiple") {
     return term.min < 1 || !isSingleOptional(term.terms);
   }
   if (term.type === "exclusive") {
-    return term.terms.some((branch) =>
-      hasVisibleTerm(branch) && notationAdmitsEmpty(branch) &&
-      !isSingleOptional(branch)
+    return term.terms.some(
+      (branch) =>
+        hasVisibleTerm(branch) &&
+        notationAdmitsEmpty(branch) &&
+        !isSingleOptional(branch),
     );
   }
   return false;
@@ -409,9 +411,10 @@ describe("usage of empty-input behavior (property)", () => {
           min: fc.integer({ min: 0, max: 2 }),
         }),
         ({ kind, children, min }) => {
-          const spec: Spec = kind === "multiple"
-            ? { kind, child: children[0], min }
-            : { kind, children };
+          const spec: Spec =
+            kind === "multiple"
+              ? { kind, child: children[0], min }
+              : { kind, children };
           let parser: AnyParser;
           try {
             parser = build(spec, { n: 0 });

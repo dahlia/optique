@@ -48,7 +48,5 @@ if (commandResult.action === "build") {
     message`Deploying ${commandResult.environment} with ${profileName} with force.`,
   );
 } else {
-  print(
-    message`Deploying ${commandResult.environment} with ${profileName}.`,
-  );
+  print(message`Deploying ${commandResult.environment} with ${profileName}.`);
 }

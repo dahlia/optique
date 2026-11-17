@@ -69,8 +69,10 @@ export function isMainModule(options: MainModuleOptions): boolean {
   if (options.importMetaMain != null) return options.importMetaMain;
   if (options.argvEntry == null) return false;
   const realpath = options.realpath ?? realpathSync;
-  return realpathOrOriginal(options.argvEntry, realpath) ===
-    realpathOrOriginal(options.modulePath, realpath);
+  return (
+    realpathOrOriginal(options.argvEntry, realpath) ===
+    realpathOrOriginal(options.modulePath, realpath)
+  );
 }
 
 /**

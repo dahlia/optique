@@ -27,29 +27,37 @@ interface DenoChild {
   readonly stdin: WritableStream<Uint8Array>;
   readonly stdout: ReadableStream<Uint8Array>;
   readonly stderr: ReadableStream<Uint8Array>;
-  readonly status: Promise<
-    { readonly code: number; readonly signal: string | null }
-  >;
+  readonly status: Promise<{
+    readonly code: number;
+    readonly signal: string | null;
+  }>;
   kill(signal: string): void;
   unref(): void;
 }
 
 interface DenoRuntime {
-  readonly Command: new (command: string, options: {
-    readonly args: readonly string[];
-    readonly cwd: string;
-    readonly env: Readonly<Record<string, string>>;
-    readonly clearEnv: boolean;
-    readonly stdin: "piped";
-    readonly stdout: "piped";
-    readonly stderr: "piped";
-    readonly windowsHide: boolean;
-  }) => { spawn(): DenoChild };
+  readonly Command: new (
+    command: string,
+    options: {
+      readonly args: readonly string[];
+      readonly cwd: string;
+      readonly env: Readonly<Record<string, string>>;
+      readonly clearEnv: boolean;
+      readonly stdin: "piped";
+      readonly stdout: "piped";
+      readonly stderr: "piped";
+      readonly windowsHide: boolean;
+    },
+  ) => { spawn(): DenoChild };
 }
 
 function isDenoRuntime(value: unknown): value is DenoRuntime {
-  return typeof value === "object" && value !== null && "Command" in value &&
-    typeof value.Command === "function";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "Command" in value &&
+    typeof value.Command === "function"
+  );
 }
 
 /**
@@ -110,20 +118,23 @@ export function spawnDenoProcess(
     });
   }
   queueMicrotask(() => child.emit("spawn"));
-  native.status.then((status) => {
-    exited = true;
-    child.emit(
-      "exit",
-      status.signal === null ? status.code : null,
-      status.signal,
-    );
-    stdin.destroy();
-    maybeClose();
-  }, (error: unknown) => {
-    exited = true;
-    child.emit("error", error);
-    maybeClose();
-  });
+  native.status.then(
+    (status) => {
+      exited = true;
+      child.emit(
+        "exit",
+        status.signal === null ? status.code : null,
+        status.signal,
+      );
+      stdin.destroy();
+      maybeClose();
+    },
+    (error: unknown) => {
+      exited = true;
+      child.emit("error", error);
+      maybeClose();
+    },
+  );
   return child;
 }
 

@@ -7,13 +7,9 @@ import { print } from "@optique/run";
 
 export default defineCommand({
   parser: object({
-    environment: option(
-      "--env",
-      choice(["staging", "production"] as const),
-      {
-        description: message`Deployment environment`,
-      },
-    ),
+    environment: option("--env", choice(["staging", "production"] as const), {
+      description: message`Deployment environment`,
+    }),
     dryRun: flag("--dry-run", {
       description: message`Show the deployment plan without applying it`,
     }),

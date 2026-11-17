@@ -60,7 +60,10 @@ describe("fluent", () => {
     });
 
     const decorated = fluent(parser);
-    const result = parse(decorated.map((value) => value.toUpperCase()), []);
+    const result = parse(
+      decorated.map((value) => value.toUpperCase()),
+      [],
+    );
 
     assert.deepEqual(result, { success: true, value: "VALUE" });
   });
@@ -101,21 +104,22 @@ describe("fluent", () => {
 
   it("should type structural combinators as fluent parsers", () => {
     const parsers = [
-      or(option("--name", string()), option("--fallback", string())).map((
-        value,
-      ) => value),
-      longestMatch(option("--name", string()), option("--fallback", string()))
-        .map((value) => value),
+      or(option("--name", string()), option("--fallback", string())).map(
+        (value) => value,
+      ),
+      longestMatch(
+        option("--name", string()),
+        option("--fallback", string()),
+      ).map((value) => value),
       tuple([argument(string())]).map((value) => value[0]),
       seq(argument(string())).map((value) => value[0]),
       merge(
         object({ name: option("--name", string()) }),
         object({ count: option("--count", integer()) }),
       ).map((value) => value.name),
-      concat(
-        tuple([argument(string())]),
-        tuple([argument(integer())]),
-      ).map((value) => value[0]),
+      concat(tuple([argument(string())]), tuple([argument(integer())])).map(
+        (value) => value[0],
+      ),
       group("group", option("--name", string())).map((value) => value),
       nonEmptyModifier(option("--name", string())).map((value) => value),
     ];

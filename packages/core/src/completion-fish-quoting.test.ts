@@ -70,12 +70,10 @@ function completeInFish(
     mkdirSync(cwd);
     mkdirSync(home);
     mkdirSync(bin);
-    for (
-      const [root, files] of [
-        [cwd, options.files ?? []],
-        [home, options.homeFiles ?? []],
-      ] as const
-    ) {
+    for (const [root, files] of [
+      [cwd, options.files ?? []],
+      [home, options.homeFiles ?? []],
+    ] as const) {
       for (const file of files) {
         const path = join(root, file);
         mkdirSync(dirname(path), { recursive: true });
@@ -141,7 +139,9 @@ __probecli_complete
     ok(log.endsWith("\0"), "The completion command must log its arguments.");
     return {
       args: log.slice(0, -1).split("\0"),
-      completions: stdout.split("\n").filter((line) => line.length > 0)
+      completions: stdout
+        .split("\n")
+        .filter((line) => line.length > 0)
         .map((line) => line.split("\t")[0]),
     };
   } finally {
@@ -150,115 +150,137 @@ __probecli_complete
 }
 
 describe("fish completion of fixed arguments", () => {
-  for (
-    const value of [
-      "normal",
-      "",
-      "two words",
-      "it's",
-      "\\",
-      "a\\",
-      "a\\b",
-      "a\\\\b",
-      "a\\\\\\b",
-      "a\\\\\\\\b",
-      "a\\'b",
-      "'\\",
-      "C:\\Users\\name\\",
-      "\\\\server\\share\\",
-      "\\$HOME; * ? [draft]",
-      "a\\\nb",
-      "a\\' (printf injected) \\'b",
-    ]
-  ) {
-    it(`preserves ${JSON.stringify(value)} in a fixed argument`, {
-      skip: !fishAvailable,
-    }, () => {
-      if (!fishAvailable) return;
-      const args = ["completion", "fish", value, "after"];
-      const result = completeInFish("probecli --format tw", { args });
-      deepStrictEqual(result.args, [...args, "--format", "tw"]);
-      deepStrictEqual(result.completions, ["two words", "two worlds"]);
-    });
+  for (const value of [
+    "normal",
+    "",
+    "two words",
+    "it's",
+    "\\",
+    "a\\",
+    "a\\b",
+    "a\\\\b",
+    "a\\\\\\b",
+    "a\\\\\\\\b",
+    "a\\'b",
+    "'\\",
+    "C:\\Users\\name\\",
+    "\\\\server\\share\\",
+    "\\$HOME; * ? [draft]",
+    "a\\\nb",
+    "a\\' (printf injected) \\'b",
+  ]) {
+    it(
+      `preserves ${JSON.stringify(value)} in a fixed argument`,
+      {
+        skip: !fishAvailable,
+      },
+      () => {
+        if (!fishAvailable) return;
+        const args = ["completion", "fish", value, "after"];
+        const result = completeInFish("probecli --format tw", { args });
+        deepStrictEqual(result.args, [...args, "--format", "tw"]);
+        deepStrictEqual(result.completions, ["two words", "two worlds"]);
+      },
+    );
   }
 
-  for (
-    const args of [
-      ["completion", "fish", "a\\"],
-      ["completion", "fish", "a\\", "b\\", "after"],
-    ]
-  ) {
-    it(`preserves fixed argument boundaries in ${JSON.stringify(args)}`, {
-      skip: !fishAvailable,
-    }, () => {
-      if (!fishAvailable) return;
-      const result = completeInFish("probecli --format tw", { args });
-      deepStrictEqual(result.args, [...args, "--format", "tw"]);
-      deepStrictEqual(result.completions, ["two words", "two worlds"]);
-    });
+  for (const args of [
+    ["completion", "fish", "a\\"],
+    ["completion", "fish", "a\\", "b\\", "after"],
+  ]) {
+    it(
+      `preserves fixed argument boundaries in ${JSON.stringify(args)}`,
+      {
+        skip: !fishAvailable,
+      },
+      () => {
+        if (!fishAvailable) return;
+        const result = completeInFish("probecli --format tw", { args });
+        deepStrictEqual(result.args, [...args, "--format", "tw"]);
+        deepStrictEqual(result.completions, ["two words", "two worlds"]);
+      },
+    );
   }
 });
 
 describe("fish completion of quoted and escaped current tokens", () => {
-  it("passes an unquoted prefix through unchanged", {
-    skip: !fishAvailable,
-  }, () => {
-    if (!fishAvailable) return;
-    const result = completeInFish("probecli --format tw");
-    deepStrictEqual(result.args, ["completion", "fish", "--format", "tw"]);
-    deepStrictEqual(result.completions, ["two words", "two worlds"]);
-  });
-
-  for (
-    const [input, value] of [
-      ['"tw', "tw"],
-      ["'tw", "tw"],
-      ["two\\ ", "two "],
-      ['"two w', "two w"],
-    ]
-  ) {
-    it(`decodes ${input} to ${JSON.stringify(value)}`, {
+  it(
+    "passes an unquoted prefix through unchanged",
+    {
       skip: !fishAvailable,
-    }, () => {
+    },
+    () => {
       if (!fishAvailable) return;
-      const result = completeInFish(`probecli --format ${input}`);
-      deepStrictEqual(result.args, ["completion", "fish", "--format", value]);
-      deepStrictEqual([...result.completions].sort(), [
-        "two words",
-        "two worlds",
-      ]);
-    });
+      const result = completeInFish("probecli --format tw");
+      deepStrictEqual(result.args, ["completion", "fish", "--format", "tw"]);
+      deepStrictEqual(result.completions, ["two words", "two worlds"]);
+    },
+  );
+
+  for (const [input, value] of [
+    ['"tw', "tw"],
+    ["'tw", "tw"],
+    ["two\\ ", "two "],
+    ['"two w', "two w"],
+  ]) {
+    it(
+      `decodes ${input} to ${JSON.stringify(value)}`,
+      {
+        skip: !fishAvailable,
+      },
+      () => {
+        if (!fishAvailable) return;
+        const result = completeInFish(`probecli --format ${input}`);
+        deepStrictEqual(result.args, ["completion", "fish", "--format", value]);
+        deepStrictEqual([...result.completions].sort(), [
+          "two words",
+          "two worlds",
+        ]);
+      },
+    );
   }
 
-  it("drops an unfinished trailing backslash", {
-    skip: !fishAvailable,
-  }, () => {
-    if (!fishAvailable) return;
-    const result = completeInFish("probecli --format two\\");
-    deepStrictEqual(result.args, ["completion", "fish", "--format", "two"]);
-  });
+  it(
+    "drops an unfinished trailing backslash",
+    {
+      skip: !fishAvailable,
+    },
+    () => {
+      if (!fishAvailable) return;
+      const result = completeInFish("probecli --format two\\");
+      deepStrictEqual(result.args, ["completion", "fish", "--format", "two"]);
+    },
+  );
 
-  it("keeps a trailing backslash inside single quotes", {
-    skip: !fishAvailable,
-  }, () => {
-    if (!fishAvailable) return;
-    const result = completeInFish("probecli --file 'two\\", {
-      mode: "file",
-      files: ["two/other.txt", "two\\file.txt"],
-    });
-    deepStrictEqual(result.args.at(-1), "two\\");
-    deepStrictEqual(result.completions, ["two\\file.txt"]);
-  });
+  it(
+    "keeps a trailing backslash inside single quotes",
+    {
+      skip: !fishAvailable,
+    },
+    () => {
+      if (!fishAvailable) return;
+      const result = completeInFish("probecli --file 'two\\", {
+        mode: "file",
+        files: ["two/other.txt", "two\\file.txt"],
+      });
+      deepStrictEqual(result.args.at(-1), "two\\");
+      deepStrictEqual(result.completions, ["two\\file.txt"]);
+    },
+  );
 
   for (const input of ["", '""', "''"]) {
-    it(`passes ${JSON.stringify(input)} as one empty argument`, {
-      skip: !fishAvailable,
-    }, () => {
-      if (!fishAvailable) return;
-      const result = completeInFish(`probecli --format ${input}`);
-      deepStrictEqual(result.args, ["completion", "fish", "--format", ""]);
-      deepStrictEqual(result.completions, ["two words", "two worlds"]);
-    });
+    it(
+      `passes ${JSON.stringify(input)} as one empty argument`,
+      {
+        skip: !fishAvailable,
+      },
+      () => {
+        if (!fishAvailable) return;
+        const result = completeInFish(`probecli --format ${input}`);
+        deepStrictEqual(result.args, ["completion", "fish", "--format", ""]);
+        deepStrictEqual(result.completions, ["two words", "two worlds"]);
+      },
+    );
   }
 
   // These decode to characters that completion output cannot carry, so the
@@ -281,39 +303,45 @@ describe("fish completion of quoted and escaped current tokens", () => {
     deepStrictEqual(result.args, ["completion", "fish", "--format", "a\\x"]);
   });
 
-  for (
-    const [input, value] of [
-      ['"files/tw', "files/tw"],
-      ["'files/tw", "files/tw"],
-      ["files/two\\ ", "files/two "],
-    ]
-  ) {
-    it(`completes file names with spaces from ${input}`, {
-      skip: !fishAvailable,
-    }, () => {
-      if (!fishAvailable) return;
-      const result = completeInFish(`probecli --file ${input}`, {
-        mode: "file",
-        files: ["files/two words.txt", "files/two worlds.txt", "other.txt"],
-      });
-      deepStrictEqual(result.args.at(-1), value);
-      deepStrictEqual([...result.completions].sort(), [
-        "files/two words.txt",
-        "files/two worlds.txt",
-      ]);
-    });
+  for (const [input, value] of [
+    ['"files/tw', "files/tw"],
+    ["'files/tw", "files/tw"],
+    ["files/two\\ ", "files/two "],
+  ]) {
+    it(
+      `completes file names with spaces from ${input}`,
+      {
+        skip: !fishAvailable,
+      },
+      () => {
+        if (!fishAvailable) return;
+        const result = completeInFish(`probecli --file ${input}`, {
+          mode: "file",
+          files: ["files/two words.txt", "files/two worlds.txt", "other.txt"],
+        });
+        deepStrictEqual(result.args.at(-1), value);
+        deepStrictEqual([...result.completions].sort(), [
+          "files/two words.txt",
+          "files/two worlds.txt",
+        ]);
+      },
+    );
   }
 
-  it("completes a quoted hidden file prefix", {
-    skip: !fishAvailable,
-  }, () => {
-    if (!fishAvailable) return;
-    const result = completeInFish('probecli --file "files/.hid', {
-      mode: "file",
-      files: ["files/.hidden.txt", "files/visible.txt"],
-    });
-    deepStrictEqual(result.completions, ["files/.hidden.txt"]);
-  });
+  it(
+    "completes a quoted hidden file prefix",
+    {
+      skip: !fishAvailable,
+    },
+    () => {
+      if (!fishAvailable) return;
+      const result = completeInFish('probecli --file "files/.hid', {
+        mode: "file",
+        files: ["files/.hidden.txt", "files/visible.txt"],
+      });
+      deepStrictEqual(result.completions, ["files/.hidden.txt"]);
+    },
+  );
 
   it("keeps a quoted tilde literal", { skip: !fishAvailable }, () => {
     if (!fishAvailable) return;
@@ -346,15 +374,19 @@ describe("fish completion of quoted and escaped current tokens", () => {
     deepStrictEqual(result.completions, ["~/tilde-home.txt"]);
   });
 
-  it("expands a tilde after an unquoted tilde and an escape", {
-    skip: !fishAvailable,
-  }, () => {
-    if (!fishAvailable) return;
-    const result = completeInFish("probecli --file ~/two\\ w", {
-      mode: "file",
-      homeFiles: ["two words.txt"],
-    });
-    deepStrictEqual(result.args.at(-1), "~/two w");
-    deepStrictEqual(result.completions, ["~/two words.txt"]);
-  });
+  it(
+    "expands a tilde after an unquoted tilde and an escape",
+    {
+      skip: !fishAvailable,
+    },
+    () => {
+      if (!fishAvailable) return;
+      const result = completeInFish("probecli --file ~/two\\ w", {
+        mode: "file",
+        homeFiles: ["two words.txt"],
+      });
+      deepStrictEqual(result.args.at(-1), "~/two w");
+      deepStrictEqual(result.completions, ["~/two words.txt"]);
+    },
+  );
 });

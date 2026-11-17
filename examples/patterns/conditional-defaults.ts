@@ -15,20 +15,22 @@ import { print, run } from "@optique/run";
 // 0 tokens with all defaults.
 
 // activeParser: Requires at least one option to be provided
-const activeParser = nonEmpty(object({
-  mode: constant("active" as const),
-  cwd: withDefault(
-    option("--cwd", string(), {
-      description: message`Working directory`,
-    }),
-    "./",
-  ),
-  key: optional(
-    option("--key", string(), {
-      description: message`API key for the service`,
-    }),
-  ),
-}));
+const activeParser = nonEmpty(
+  object({
+    mode: constant("active" as const),
+    cwd: withDefault(
+      option("--cwd", string(), {
+        description: message`Working directory`,
+      }),
+      "./",
+    ),
+    key: optional(
+      option("--key", string(), {
+        description: message`API key for the service`,
+      }),
+    ),
+  }),
+);
 
 // helpParser: Falls back to help mode when no options are provided
 const helpParser = object({

@@ -866,9 +866,8 @@ describe("parser.ts coverage branches", () => {
       },
       *suggest(): Generator<Suggestion> {},
       getDocFragments(stateArg) {
-        capturedState = stateArg.kind === "available"
-          ? stateArg.state
-          : undefined;
+        capturedState =
+          stateArg.kind === "available" ? stateArg.state : undefined;
         return { fragments: [] };
       },
     };
@@ -916,9 +915,8 @@ describe("parser.ts coverage branches", () => {
         };
       },
       getDocFragments(stateArg) {
-        capturedState = stateArg.kind === "available"
-          ? stateArg.state
-          : undefined;
+        capturedState =
+          stateArg.kind === "available" ? stateArg.state : undefined;
         return { fragments: [] };
       },
     };
@@ -959,9 +957,8 @@ describe("parser.ts coverage branches", () => {
         return [] as readonly Suggestion[];
       },
       getDocFragments(stateArg) {
-        docSyncState = stateArg.kind === "available"
-          ? stateArg.state
-          : undefined;
+        docSyncState =
+          stateArg.kind === "available" ? stateArg.state : undefined;
         return { fragments: [] };
       },
     };
@@ -995,9 +992,8 @@ describe("parser.ts coverage branches", () => {
         };
       },
       getDocFragments(stateArg) {
-        docAsyncState = stateArg.kind === "available"
-          ? stateArg.state
-          : undefined;
+        docAsyncState =
+          stateArg.kind === "available" ? stateArg.state : undefined;
         return { fragments: [] };
       },
     };
@@ -1058,9 +1054,8 @@ describe("parser.ts coverage branches", () => {
         return [] as readonly Suggestion[];
       },
       getDocFragments(stateArg) {
-        syncDocState = stateArg.kind === "available"
-          ? stateArg.state
-          : undefined;
+        syncDocState =
+          stateArg.kind === "available" ? stateArg.state : undefined;
         return { fragments: [] };
       },
     };
@@ -1094,9 +1089,8 @@ describe("parser.ts coverage branches", () => {
         };
       },
       getDocFragments(stateArg) {
-        asyncDocState = stateArg.kind === "available"
-          ? stateArg.state
-          : undefined;
+        asyncDocState =
+          stateArg.kind === "available" ? stateArg.state : undefined;
         return { fragments: [] };
       },
     };
@@ -1161,8 +1155,8 @@ describe("parser.ts coverage branches", () => {
     assert.ok(doc);
     assert.ok(doc.usage);
     assert.ok(
-      doc.usage.some((term) =>
-        term.type === "command" && term.name === "inner"
+      doc.usage.some(
+        (term) => term.type === "command" && term.name === "inner",
       ),
     );
   });
@@ -1194,10 +1188,7 @@ describe("parser.ts coverage branches", () => {
   it("getDocPage applies command usageLine with ellipsis for command-only help", () => {
     const parser = command(
       "config",
-      or(
-        command("get", constant("get")),
-        command("set", constant("set")),
-      ),
+      or(command("get", constant("get")), command("set", constant("set"))),
       {
         usageLine: [{ type: "ellipsis" }],
       },
@@ -1218,22 +1209,17 @@ describe("parser.ts coverage branches", () => {
     assert.ok(subcommandDoc.usage);
     const subcommandUsage = subcommandDoc.usage;
     assert.ok(
-      subcommandUsage.some((term) =>
-        term.type === "command" && term.name === "get"
+      subcommandUsage.some(
+        (term) => term.type === "command" && term.name === "get",
       ),
     );
-    assert.ok(
-      !subcommandUsage.some((term) => term.type === "ellipsis"),
-    );
+    assert.ok(!subcommandUsage.some((term) => term.type === "ellipsis"));
   });
 
   it("getDocPage applies command usageLine callback", () => {
     const parser = command(
       "config",
-      or(
-        command("get", constant("get")),
-        command("set", constant("set")),
-      ),
+      or(command("get", constant("get")), command("set", constant("set"))),
       {
         usageLine: (_defaultUsageLine) => [{ type: "ellipsis" }],
       },
@@ -1252,10 +1238,7 @@ describe("parser.ts coverage branches", () => {
   it("getDocPage applies command usageLine for top-level command without args", async () => {
     const parser = command(
       "config",
-      or(
-        command("get", constant("get")),
-        command("set", constant("set")),
-      ),
+      or(command("get", constant("get")), command("set", constant("set"))),
       {
         usageLine: [{ type: "ellipsis" }],
       },

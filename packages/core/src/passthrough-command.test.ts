@@ -30,11 +30,12 @@ for (const mode of ["sync", "async"] as const) {
     it(`${mode} ${outer} preserves selected command option errors`, async () => {
       const cmd = command("run", optional(option("-m", value)));
       const extra = passThrough({ format: "nextToken" });
-      const parser = outer === "object"
-        ? object({ cmd, extra })
-        : outer === "tuple"
-        ? tuple([cmd, extra])
-        : concat(tuple([cmd]), tuple([extra]));
+      const parser =
+        outer === "object"
+          ? object({ cmd, extra })
+          : outer === "tuple"
+            ? tuple([cmd, extra])
+            : concat(tuple([cmd]), tuple([extra]));
       const expected = await parseAsync<unknown>(cmd, ["run", "-m"]);
       assert.ok(!expected.success);
       assert.deepEqual(
@@ -45,28 +46,27 @@ for (const mode of ["sync", "async"] as const) {
         (await parseAsync<unknown>(parser, ["run", "-m", "hello", "--unknown"]))
           .success,
       );
-      for (
-        const wrapped of [
-          optional(cmd),
-          withDefault(cmd, undefined),
-          map(cmd, (value) => value),
-          group("Command", cmd),
-          multiple(cmd),
-          // A tuple with only optional children can complete after the command
-          // name. Keep this repeated item open until its value is supplied.
-          multiple(tuple([command("run", option("-m", value))])),
-          multiple(multiple(cmd, { max: 1 }), { max: 1 }),
-          object({ cmd }),
-          tuple([cmd]),
-          concat(tuple([cmd])),
-        ]
-      ) {
+      for (const wrapped of [
+        optional(cmd),
+        withDefault(cmd, undefined),
+        map(cmd, (value) => value),
+        group("Command", cmd),
+        multiple(cmd),
+        // A tuple with only optional children can complete after the command
+        // name. Keep this repeated item open until its value is supplied.
+        multiple(tuple([command("run", option("-m", value))])),
+        multiple(multiple(cmd, { max: 1 }), { max: 1 }),
+        object({ cmd }),
+        tuple([cmd]),
+        concat(tuple([cmd])),
+      ]) {
         const rest = passThrough({ format: "greedy" });
-        const nested = outer === "object"
-          ? object({ cmd: wrapped, rest })
-          : outer === "tuple"
-          ? tuple([wrapped, rest])
-          : concat(tuple([wrapped]), tuple([rest]));
+        const nested =
+          outer === "object"
+            ? object({ cmd: wrapped, rest })
+            : outer === "tuple"
+              ? tuple([wrapped, rest])
+              : concat(tuple([wrapped]), tuple([rest]));
         assert.deepEqual(
           await parseAsync<unknown>(nested, ["run", "-m"]),
           expected,
@@ -85,18 +85,18 @@ for (const mode of ["sync", "async"] as const) {
     it(`${mode} ${outer} tries a known option before selected command capture`, async () => {
       const extra = command("run", passThrough({ format: "nextToken" }));
       const known = optional(option("-m", value));
-      const parser = outer === "object"
-        ? object({ extra, known })
-        : outer === "tuple"
-        ? tuple([extra, known])
-        : concat(tuple([extra]), tuple([known]));
+      const parser =
+        outer === "object"
+          ? object({ extra, known })
+          : outer === "tuple"
+            ? tuple([extra, known])
+            : concat(tuple([extra]), tuple([known]));
       assert.deepEqual(
         await parseAsync<unknown>(parser, ["run", "-m", "hello"]),
         {
           success: true,
-          value: outer === "object"
-            ? { extra: [], known: "hello" }
-            : [[], "hello"],
+          value:
+            outer === "object" ? { extra: [], known: "hello" } : [[], "hello"],
         },
       );
       assert.deepEqual(
@@ -111,23 +111,26 @@ for (const mode of ["sync", "async"] as const) {
         cmd: optional(command("run", constant(undefined))),
         message: optional(option("-m", value)),
       });
-      const parser = outer === "object"
-        ? object({ extra, known })
-        : outer === "tuple"
-        ? tuple([extra, known])
-        : concat(tuple([extra]), tuple([known]));
+      const parser =
+        outer === "object"
+          ? object({ extra, known })
+          : outer === "tuple"
+            ? tuple([extra, known])
+            : concat(tuple([extra]), tuple([known]));
       assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), {
         success: true,
-        value: outer === "object"
-          ? { extra: ["-m"], known: { cmd: undefined, message: undefined } }
-          : [["-m"], { cmd: undefined, message: undefined }],
+        value:
+          outer === "object"
+            ? { extra: ["-m"], known: { cmd: undefined, message: undefined } }
+            : [["-m"], { cmd: undefined, message: undefined }],
       });
       const overridden = { ...known, priority: 13 };
-      const overrideParser = outer === "object"
-        ? object({ extra, known: overridden })
-        : outer === "tuple"
-        ? tuple([extra, overridden])
-        : concat(tuple([extra]), tuple([overridden]));
+      const overrideParser =
+        outer === "object"
+          ? object({ extra, known: overridden })
+          : outer === "tuple"
+            ? tuple([extra, overridden])
+            : concat(tuple([extra]), tuple([overridden]));
       assert.deepEqual(
         await parseAsync<unknown>(overrideParser, ["-m"]),
         await parseAsync<unknown>(known, ["-m"]),
@@ -143,47 +146,52 @@ for (const mode of ["sync", "async"] as const) {
       assert.ok(!expected.success);
       for (const format of ["nextToken", "greedy"] as const) {
         const rest = passThrough({ format });
-        const parser = outer === "object"
-          ? object({ cond, rest })
-          : outer === "tuple"
-          ? tuple([cond, rest])
-          : concat(tuple([cond]), tuple([rest]));
+        const parser =
+          outer === "object"
+            ? object({ cond, rest })
+            : outer === "tuple"
+              ? tuple([cond, rest])
+              : concat(tuple([cond]), tuple([rest]));
         assert.deepEqual(await parseAsync<unknown>(parser, ["-m"]), expected);
         assert.deepEqual(await parseAsync<unknown>(parser, ["-m", "hello"]), {
           success: true,
-          value: outer === "object"
-            ? { cond: ["run", "hello"], rest: [] }
-            : [["run", "hello"], []],
+          value:
+            outer === "object"
+              ? { cond: ["run", "hello"], rest: [] }
+              : [["run", "hello"], []],
         });
         // A declared option in an inactive branch still belongs to forwarding.
         assert.deepEqual(await parseAsync<unknown>(parser, ["--other"]), {
           success: true,
-          value: outer === "object"
-            ? { cond: ["run", undefined], rest: ["--other"] }
-            : [["run", undefined], ["--other"]],
+          value:
+            outer === "object"
+              ? { cond: ["run", undefined], rest: ["--other"] }
+              : [["run", undefined], ["--other"]],
         });
       }
     });
 
     it(`${mode} ${outer} preserves conditional capture priority`, async () => {
-      const extra = conditional({ ...constant("run"), priority: 15 }, {
-        run: passThrough({ format: "nextToken" }),
-      });
-      const known = optional(option("-m", value));
-      const parser = outer === "object"
-        ? object({ extra, known })
-        : outer === "tuple"
-        ? tuple([extra, known])
-        : concat(tuple([extra]), tuple([known]));
-      assert.deepEqual(
-        await parseAsync<unknown>(parser, ["-m", "hello"]),
+      const extra = conditional(
+        { ...constant("run"), priority: 15 },
         {
-          success: true,
-          value: outer === "object"
-            ? { extra: ["run", []], known: "hello" }
-            : [["run", []], "hello"],
+          run: passThrough({ format: "nextToken" }),
         },
       );
+      const known = optional(option("-m", value));
+      const parser =
+        outer === "object"
+          ? object({ extra, known })
+          : outer === "tuple"
+            ? tuple([extra, known])
+            : concat(tuple([extra]), tuple([known]));
+      assert.deepEqual(await parseAsync<unknown>(parser, ["-m", "hello"]), {
+        success: true,
+        value:
+          outer === "object"
+            ? { extra: ["run", []], known: "hello" }
+            : [["run", []], "hello"],
+      });
       assert.deepEqual(
         await parseAsync<unknown>(parser, ["-m"]),
         await parseAsync<unknown>(known, ["-m"]),

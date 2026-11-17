@@ -62,21 +62,24 @@ export function readEnvironmentVariable(
     // permission query does not reflect that exemption, so only query the
     // other variables. Reading a prompt-state variable could otherwise prompt.
     if (name === "NODE_DISABLE_COLORS" || name === "COLUMNS") {
-      const deno = (globalThis as {
-        readonly Deno?: {
-          readonly permissions?: {
-            querySync?(descriptor: {
-              readonly name: "env";
-              readonly variable: string;
-            }): { readonly state: string };
+      const deno = (
+        globalThis as {
+          readonly Deno?: {
+            readonly permissions?: {
+              querySync?(descriptor: {
+                readonly name: "env";
+                readonly variable: string;
+              }): { readonly state: string };
+            };
           };
-        };
-      }).Deno;
+        }
+      ).Deno;
       if (
         deno != null &&
         deno.permissions?.querySync?.({ name: "env", variable: name }).state !==
           "granted"
-      ) return undefined;
+      )
+        return undefined;
     }
     return process.env[name];
   } catch {

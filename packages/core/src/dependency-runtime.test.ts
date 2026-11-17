@@ -242,22 +242,19 @@ describe("DependencyRuntimeContext", () => {
     const packageManager = Symbol("package-manager");
     const runtime = createDependencyRuntimeContext();
     runtime.registerSourceMetadata(framework, "FRAMEWORK");
-    runtime.registerSourceMetadata(
-      packageManager,
-      "PACKAGE_MANAGER",
-      [framework],
-    );
+    runtime.registerSourceMetadata(packageManager, "PACKAGE_MANAGER", [
+      framework,
+    ]);
 
     runtime.markSourceFailed(framework);
-    assert.ok(runtime.propagateSourceFailure(
-      [framework],
-      "PACKAGE_MANAGER",
-      packageManager,
-    ));
-    assert.ok(runtime.propagateSourceFailure(
-      [packageManager],
-      "STORAGE",
-    ));
+    assert.ok(
+      runtime.propagateSourceFailure(
+        [framework],
+        "PACKAGE_MANAGER",
+        packageManager,
+      ),
+    );
+    assert.ok(runtime.propagateSourceFailure([packageManager], "STORAGE"));
 
     assert.deepEqual(runtime.getSourceFailureChain(framework), [
       "FRAMEWORK",
@@ -419,9 +416,7 @@ describe("createReplayKey", () => {
 // =============================================================================
 
 /** Helper: creates a bare extractSourceValue for tests. */
-function bareExtract(
-  state: unknown,
-): ValueParserResult<unknown> | undefined {
+function bareExtract(state: unknown): ValueParserResult<unknown> | undefined {
   if (!isDependencySourceState(state)) return undefined;
   return state.result;
 }
@@ -482,20 +477,22 @@ describe("collectExplicitSourceValues", () => {
       { success: true, value: "prod" } as ValueParserResult<string>,
       sourceId,
     );
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+            },
           },
         },
+        state: sourceState,
       },
-      state: sourceState,
-    }];
+    ];
     collectExplicitSourceValues(nodes, runtime);
     assert.ok(runtime.hasSource(sourceId));
     assert.equal(runtime.getSource(sourceId), "prod");
@@ -516,20 +513,22 @@ describe("collectExplicitSourceValues", () => {
         resolveExtract = resolve;
       },
     );
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: (_state: unknown) => extractPromise,
-            preservesSourceValue: true,
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: (_state: unknown) => extractPromise,
+              preservesSourceValue: true,
+            },
           },
         },
+        state: sourceState,
       },
-      state: sourceState,
-    }];
+    ];
 
     assert.throws(() => collectExplicitSourceValues(nodes, runtime), {
       name: "TypeError",
@@ -557,26 +556,26 @@ describe("collectExplicitSourceValues", () => {
       sourceId,
     );
     const thenable = {
-      then(
-        resolve: (value: ValueParserResult<unknown> | undefined) => void,
-      ) {
+      then(resolve: (value: ValueParserResult<unknown> | undefined) => void) {
         resolve(bareExtract(sourceState));
       },
     };
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: (_state: unknown) => thenable as never,
-            preservesSourceValue: true,
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: (_state: unknown) => thenable as never,
+              preservesSourceValue: true,
+            },
           },
         },
+        state: sourceState,
       },
-      state: sourceState,
-    }];
+    ];
 
     assert.throws(() => collectExplicitSourceValues(nodes, runtime), {
       name: "TypeError",
@@ -600,20 +599,22 @@ describe("collectExplicitSourceValues", () => {
       { success: true, value: "prod" } as ValueParserResult<string>,
       sourceId,
     );
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: unwrappingExtract,
-            preservesSourceValue: true,
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: unwrappingExtract,
+              preservesSourceValue: true,
+            },
           },
         },
+        state: [sourceState], // optional() wraps in [state]
       },
-      state: [sourceState], // optional() wraps in [state]
-    }];
+    ];
     collectExplicitSourceValues(nodes, runtime);
     assert.ok(runtime.hasSource(sourceId));
     assert.equal(runtime.getSource(sourceId), "prod");
@@ -621,11 +622,13 @@ describe("collectExplicitSourceValues", () => {
 
   test("skips nodes without source metadata", () => {
     const runtime = createDependencyRuntimeContext();
-    const nodes: RuntimeNode[] = [{
-      path: ["file"],
-      parser: { dependencyMetadata: undefined },
-      state: { success: true, value: "test.txt" },
-    }];
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["file"],
+        parser: { dependencyMetadata: undefined },
+        state: { success: true, value: "test.txt" },
+      },
+    ];
     collectExplicitSourceValues(nodes, runtime);
     // Nothing registered—no error
   });
@@ -633,19 +636,21 @@ describe("collectExplicitSourceValues", () => {
   test("skips nodes without extractSourceValue", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            preservesSourceValue: true,
-          } as ParserDependencyMetadata["source"] & { kind: "source" },
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              preservesSourceValue: true,
+            } as ParserDependencyMetadata["source"] & { kind: "source" },
+          },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
     collectExplicitSourceValues(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
   });
@@ -659,20 +664,22 @@ describe("collectExplicitSourceValues—failed sources", () => {
       { success: false, error: undefined! } as ValueParserResult<string>,
       sourceId,
     );
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+            },
           },
         },
+        state: sourceState,
       },
-      state: sourceState,
-    }];
+    ];
     collectExplicitSourceValues(nodes, runtime);
     // Source failed—should NOT be registered as a value.
     assert.ok(!runtime.hasSource(sourceId));
@@ -784,24 +791,26 @@ describe("fillMissingSourceDefaults", () => {
   test("fills default for missing source", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () => ({
-              success: true as const,
-              value: "dev",
-            }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () => ({
+                success: true as const,
+                value: "dev",
+              }),
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
     fillMissingSourceDefaults(nodes, runtime);
     assert.ok(runtime.hasSource(sourceId));
     assert.equal(runtime.getSource(sourceId), "dev");
@@ -811,24 +820,26 @@ describe("fillMissingSourceDefaults", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
     runtime.registerSource(sourceId, "prod");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () => ({
-              success: true as const,
-              value: "dev",
-            }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () => ({
+                success: true as const,
+                value: "dev",
+              }),
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
     fillMissingSourceDefaults(nodes, runtime);
     assert.equal(runtime.getSource(sourceId), "prod");
   });
@@ -836,25 +847,27 @@ describe("fillMissingSourceDefaults", () => {
   test("does not fill default when node matched explicit input", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () => ({
-              success: true as const,
-              value: "dev",
-            }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () => ({
+                success: true as const,
+                value: "dev",
+              }),
+            },
           },
         },
+        state: { success: false, error: "invalid value" },
+        matched: true,
       },
-      state: { success: false, error: "invalid value" },
-      matched: true,
-    }];
+    ];
     fillMissingSourceDefaults(nodes, runtime);
     // The source had explicit input that failed—default must not be applied.
     assert.ok(!runtime.hasSource(sourceId));
@@ -863,25 +876,27 @@ describe("fillMissingSourceDefaults", () => {
   test("skips defaults when preservesSourceValue is false (map())", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: false,
-            getMissingSourceValue: () => ({
-              success: true as const,
-              value: "dev",
-            }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: false,
+              getMissingSourceValue: () => ({
+                success: true as const,
+                value: "dev",
+              }),
+            },
+            transform: { transformsSourceValue: true },
           },
-          transform: { transformsSourceValue: true },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
     fillMissingSourceDefaults(nodes, runtime);
     // map() breaks source identity—default must not be registered.
     assert.ok(!runtime.hasSource(sourceId));
@@ -906,10 +921,9 @@ describe("fillMissingSourceDefaults", () => {
         },
       },
     };
-    const nodes = buildRuntimeNodesFromPairs(
-      [["env", parser]],
-      { env: [{ hasCliValue: false, cliState: undefined }] },
-    );
+    const nodes = buildRuntimeNodesFromPairs([["env", parser]], {
+      env: [{ hasCliValue: false, cliState: undefined }],
+    });
 
     fillMissingSourceDefaults(nodes, runtime);
 
@@ -920,23 +934,25 @@ describe("fillMissingSourceDefaults", () => {
   test("handles throwing default thunks gracefully", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () => {
-              throw new Error("env not configured");
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () => {
+                throw new Error("env not configured");
+              },
             },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
     // Should not throw—returns the failure so the caller can propagate it.
     const failures = fillMissingSourceDefaults(nodes, runtime);
     assert.ok(!runtime.hasSource(sourceId));
@@ -948,30 +964,29 @@ describe("fillMissingSourceDefaults", () => {
   test("throws when sync default seeding receives a thenable", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () => ({ then() {} }) as never,
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () => ({ then() {} }) as never,
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
 
-    assert.throws(
-      () => fillMissingSourceDefaults(nodes, runtime),
-      {
-        name: "TypeError",
-        message:
-          /fillMissingSourceDefaults\(\) received an async getMissingSourceValue\(\) result/i,
-      },
-    );
+    assert.throws(() => fillMissingSourceDefaults(nodes, runtime), {
+      name: "TypeError",
+      message:
+        /fillMissingSourceDefaults\(\) received an async getMissingSourceValue\(\) result/i,
+    });
     assert.ok(!runtime.hasSource(sourceId));
   });
 });
@@ -980,25 +995,27 @@ describe("fillMissingSourceDefaultsAsync", () => {
   test("awaits async getMissingSourceValue", async () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () =>
-              Promise.resolve({
-                success: true as const,
-                value: "async-dev",
-              }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () =>
+                Promise.resolve({
+                  success: true as const,
+                  value: "async-dev",
+                }),
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
     const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
     assert.equal(failures.length, 0);
     assert.ok(runtime.hasSource(sourceId));
@@ -1008,25 +1025,27 @@ describe("fillMissingSourceDefaultsAsync", () => {
   test("propagates async default failure", async () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () =>
-              Promise.resolve({
-                success: false as const,
-                error: undefined!,
-              }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () =>
+                Promise.resolve({
+                  success: false as const,
+                  error: undefined!,
+                }),
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
     const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
     assert.equal(failures.length, 1);
     assert.ok(!runtime.hasSource(sourceId));
@@ -1052,10 +1071,9 @@ describe("fillMissingSourceDefaultsAsync", () => {
         },
       },
     };
-    const nodes = buildRuntimeNodesFromPairs(
-      [["env", parser]],
-      { env: [{ hasCliValue: false, cliState: undefined }] },
-    );
+    const nodes = buildRuntimeNodesFromPairs([["env", parser]], {
+      env: [{ hasCliValue: false, cliState: undefined }],
+    });
 
     const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
 
@@ -1104,16 +1122,21 @@ describe("fillMissingSourceDefaultsAsync", () => {
       matched,
     });
 
-    const failures = await fillMissingSourceDefaultsAsync([
-      { path: ["plain"], parser: {}, state: undefined },
-      sourceNode(existingId, "existing"),
-      sourceNode(failedId, "failed"),
-      sourceNode(matchedId, "matched", {}, true),
-      sourceNode(transformedId, "transformed", { preservesSourceValue: false }),
-      sourceNode(missingGetterId, "missing-getter", {
-        getMissingSourceValue: undefined,
-      }),
-    ], runtime);
+    const failures = await fillMissingSourceDefaultsAsync(
+      [
+        { path: ["plain"], parser: {}, state: undefined },
+        sourceNode(existingId, "existing"),
+        sourceNode(failedId, "failed"),
+        sourceNode(matchedId, "matched", {}, true),
+        sourceNode(transformedId, "transformed", {
+          preservesSourceValue: false,
+        }),
+        sourceNode(missingGetterId, "missing-getter", {
+          getMissingSourceValue: undefined,
+        }),
+      ],
+      runtime,
+    );
 
     assert.deepEqual(failures, []);
     assert.deepEqual(calls, []);
@@ -1126,23 +1149,25 @@ describe("fillMissingSourceDefaultsAsync", () => {
   test("reports async default thunks that throw non-Error values", async () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () => {
-              throw "missing env";
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () => {
+                throw "missing env";
+              },
             },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
 
     const failures = await fillMissingSourceDefaultsAsync(nodes, runtime);
 
@@ -1321,25 +1346,25 @@ describe("extractRawInputFromState", () => {
         success: true as const,
         value: undefined,
       }),
+      /* oxlint-disable no-explicit-any -- Keep unchecked input. */
       // deno-lint-ignore no-explicit-any
     } as any;
+    /* oxlint-enable no-explicit-any */
   }
 
   test("extracts rawInput from DeferredParseState", () => {
-    const deferred = createDeferredParseState(
-      "hello",
-      makeDerivedVpMock(),
-      { success: true, value: "hello" },
-    );
+    const deferred = createDeferredParseState("hello", makeDerivedVpMock(), {
+      success: true,
+      value: "hello",
+    });
     assert.equal(extractRawInputFromState(deferred), "hello");
   });
 
   test("extracts rawInput from [DeferredParseState] (array-wrapped)", () => {
-    const deferred = createDeferredParseState(
-      "world",
-      makeDerivedVpMock(),
-      { success: true, value: "world" },
-    );
+    const deferred = createDeferredParseState("world", makeDerivedVpMock(), {
+      success: true,
+      value: "world",
+    });
     assert.equal(extractRawInputFromState([deferred]), "world");
   });
 
@@ -1525,9 +1550,7 @@ describe("resolveStateWithRuntime", () => {
       {
         [dependencyId]: depId,
         [parseWithDependency]: () =>
-          ({ then() {} }) as PromiseLike<
-            ValueParserResult<unknown>
-          >,
+          ({ then() {} }) as PromiseLike<ValueParserResult<unknown>>,
       } as never,
       {
         success: false,
@@ -1537,14 +1560,11 @@ describe("resolveStateWithRuntime", () => {
     const runtime = createDependencyRuntimeContext();
     runtime.registerSource(depId, "prod");
 
-    assert.throws(
-      () => resolveStateWithRuntime(deferred, runtime),
-      {
-        name: "TypeError",
-        message:
-          /resolveStateWithRuntime\(\) received an async parseWithDependency\(\) result/i,
-      },
-    );
+    assert.throws(() => resolveStateWithRuntime(deferred, runtime), {
+      name: "TypeError",
+      message:
+        /resolveStateWithRuntime\(\) received an async parseWithDependency\(\) result/i,
+    });
   });
 });
 
@@ -1558,13 +1578,11 @@ describe("resolveStateWithRuntimeAsync", () => {
     const state = [
       createDeferredParseState(
         "warn",
-        makeDerivedValueParser(
-          explicitId,
-          (raw, dependency) =>
-            Promise.resolve({
-              success: true,
-              value: `${raw}:${dependency}`,
-            }),
+        makeDerivedValueParser(explicitId, (raw, dependency) =>
+          Promise.resolve({
+            success: true,
+            value: `${raw}:${dependency}`,
+          }),
         ),
         { success: false, error: message`pending` },
       ),
@@ -1598,13 +1616,11 @@ describe("resolveStateWithRuntimeAsync", () => {
     const state = {
       value: createDeferredParseState(
         "warn",
-        makeDerivedValueParser(
-          sourceId,
-          () =>
-            Promise.resolve({
-              success: true,
-              value: "unreachable",
-            }),
+        makeDerivedValueParser(sourceId, () =>
+          Promise.resolve({
+            success: true,
+            value: "unreachable",
+          }),
         ),
         preliminary,
       ),
@@ -1621,13 +1637,11 @@ describe("resolveStateWithRuntimeAsync", () => {
     runtime.registerSource(sourceId, "prod");
     const deferred = createDeferredParseState(
       "warn",
-      makeDerivedValueParser(
-        sourceId,
-        (raw, dependency) =>
-          Promise.resolve({
-            success: true,
-            value: `${raw}:${dependency}`,
-          }),
+      makeDerivedValueParser(sourceId, (raw, dependency) =>
+        Promise.resolve({
+          success: true,
+          value: `${raw}:${dependency}`,
+        }),
       ),
       { success: false, error: message`pending` },
     );
@@ -1656,10 +1670,7 @@ describe("resolveStateWithRuntimeAsync", () => {
 });
 
 describe("buildRuntimeNodesFromPairs", () => {
-  function makeParser(
-    meta?: ParserDependencyMetadata,
-    initialState?: unknown,
-  ) {
+  function makeParser(meta?: ParserDependencyMetadata, initialState?: unknown) {
     return {
       dependencyMetadata: meta,
       initialState,
@@ -1708,9 +1719,7 @@ describe("buildRuntimeNodesFromPairs", () => {
     const pairs: [
       PropertyKey,
       { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
-    ][] = [
-      ["name", parser],
-    ];
+    ][] = [["name", parser]];
     const state: Record<string | symbol, unknown> = {};
 
     const nodes = buildRuntimeNodesFromPairs(pairs, state);
@@ -1724,9 +1733,7 @@ describe("buildRuntimeNodesFromPairs", () => {
     const pairs: [
       PropertyKey,
       { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
-    ][] = [
-      ["env", parser],
-    ];
+    ][] = [["env", parser]];
     const state: Record<string | symbol, unknown> = {};
 
     const nodes = buildRuntimeNodesFromPairs(pairs, state);
@@ -1738,9 +1745,7 @@ describe("buildRuntimeNodesFromPairs", () => {
     const pairs: [
       PropertyKey,
       { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
-    ][] = [
-      ["name", parser],
-    ];
+    ][] = [["name", parser]];
     const state: Record<string | symbol, unknown> = { name: "hi" };
 
     const nodes = buildRuntimeNodesFromPairs(pairs, state, ["root", 0]);
@@ -1761,9 +1766,7 @@ describe("buildRuntimeNodesFromPairs", () => {
     const pairs: [
       PropertyKey,
       { dependencyMetadata?: ParserDependencyMetadata; initialState?: unknown },
-    ][] = [
-      ["level", parser],
-    ];
+    ][] = [["level", parser]];
     const state: Record<string | symbol, unknown> = { level: "info" };
 
     // defaultDependencyValues is deferred to the replay path,
@@ -1785,16 +1788,13 @@ describe("buildRuntimeNodesFromPairs", () => {
     assert.doesNotThrow(() =>
       buildRuntimeNodesFromPairs([["value", parser]], {
         value: parserState,
-      })
+      }),
     );
   });
 });
 
 describe("buildRuntimeNodesFromArray", () => {
-  function makeParser(
-    meta?: ParserDependencyMetadata,
-    initialState?: unknown,
-  ) {
+  function makeParser(meta?: ParserDependencyMetadata, initialState?: unknown) {
     return {
       dependencyMetadata: meta,
       initialState,
@@ -1841,7 +1841,7 @@ describe("buildRuntimeNodesFromArray", () => {
     };
 
     assert.doesNotThrow(() =>
-      buildRuntimeNodesFromArray([parser], [parserState])
+      buildRuntimeNodesFromArray([parser], [parserState]),
     );
   });
 });
@@ -1857,21 +1857,23 @@ describe("collectExplicitSourceValues—undefined return from extractSourceValue
     // a source result yet (unpopulated/initial state).
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            // Always returns undefined—state is unpopulated
-            extractSourceValue: (_state: unknown) => undefined,
-            preservesSourceValue: true,
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              // Always returns undefined—state is unpopulated
+              extractSourceValue: (_state: unknown) => undefined,
+              preservesSourceValue: true,
+            },
           },
         },
+        state: { some: "initial-state" },
       },
-      state: { some: "initial-state" },
-    }];
+    ];
 
     collectExplicitSourceValues(nodes, runtime);
 
@@ -2088,24 +2090,26 @@ describe("fillMissingSourceDefaults—failure result", () => {
     const runtime = createDependencyRuntimeContext();
     const sourceId = Symbol("env");
     const errorMsg = message`env is required`;
-    const nodes: RuntimeNode[] = [{
-      path: ["env"],
-      parser: {
-        dependencyMetadata: {
-          source: {
-            kind: "source",
-            sourceId,
-            extractSourceValue: bareExtract,
-            preservesSourceValue: true,
-            getMissingSourceValue: () => ({
-              success: false as const,
-              error: errorMsg,
-            }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["env"],
+        parser: {
+          dependencyMetadata: {
+            source: {
+              kind: "source",
+              sourceId,
+              extractSourceValue: bareExtract,
+              preservesSourceValue: true,
+              getMissingSourceValue: () => ({
+                success: false as const,
+                error: errorMsg,
+              }),
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
 
     const failures = fillMissingSourceDefaults(nodes, runtime);
 
@@ -2234,11 +2238,10 @@ describe("completeEffectfulSourcesAsync", () => {
         Promise.resolve({
           success: false,
           error: [{ type: "text", text: "Upstream failed." }],
-        })),
-      occurrence(
-        "second",
-        otherUpstream,
-        () => Promise.resolve({ success: true, value: "unreached" }),
+        }),
+      ),
+      occurrence("second", otherUpstream, () =>
+        Promise.resolve({ success: true, value: "unreached" }),
       ),
     ];
 
@@ -2281,14 +2284,11 @@ describe("completeEffectfulSourcesAsync", () => {
       },
       state: undefined,
     };
-    const cancelled = createEffectfulSourceNode(
-      "b",
-      idB,
-      () =>
-        Promise.resolve({
-          success: false,
-          error: [{ type: "text", text: "Prompt cancelled." }],
-        }),
+    const cancelled = createEffectfulSourceNode("b", idB, () =>
+      Promise.resolve({
+        success: false,
+        error: [{ type: "text", text: "Prompt cancelled." }],
+      }),
     );
 
     const result = await completeEffectfulSourcesAsync(
@@ -2337,126 +2337,120 @@ describe("completeEffectfulSourcesAsync", () => {
     );
   });
 
-  test(
-    "completes an occurrence despite another occurrence's registered value",
-    async () => {
-      const runtime = createDependencyRuntimeContext();
-      const id = Symbol("a");
-      // Registered by another occurrence of the shared source (e.g., a
-      // command-line value for a sibling field).  The effectful
-      // occurrence's own field still needs a value, so its completion
-      // runs and re-registers, and the last occurrence wins.
-      runtime.registerSource(id, "cli");
-      let calls = 0;
-      const nodes: RuntimeNode[] = [
-        createEffectfulSourceNode("a", id, () => {
-          calls++;
-          return Promise.resolve({ success: true, value: "prompted" });
-        }),
-      ];
+  test("completes an occurrence despite another occurrence's registered value", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("a");
+    // Registered by another occurrence of the shared source (e.g., a
+    // command-line value for a sibling field).  The effectful
+    // occurrence's own field still needs a value, so its completion
+    // runs and re-registers, and the last occurrence wins.
+    runtime.registerSource(id, "cli");
+    let calls = 0;
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", id, () => {
+        calls++;
+        return Promise.resolve({ success: true, value: "prompted" });
+      }),
+    ];
 
-      const result = await completeEffectfulSourcesAsync(
-        nodes,
-        undefined,
-        runtime,
-        createCompleteExecFixture(),
-      );
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
 
-      assert.ok(result.success);
-      assert.equal(calls, 1);
-      assert.equal(runtime.getSource(id), "prompted");
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(calls, 1);
+    assert.equal(runtime.getSource(id), "prompted");
+  });
 
-  test(
-    "re-registers a later structural occurrence over an earlier effect",
-    async () => {
-      const runtime = createDependencyRuntimeContext();
-      const id = Symbol("shared");
-      // A structural occurrence declared after an effectful one: its
-      // extracted value must register after the effectful result so
-      // registration order follows declaration order.
-      const structuralNode: RuntimeNode = {
-        path: ["b"],
-        parser: {
-          dependencyMetadata: {
-            source: {
-              kind: "source",
-              sourceId: id,
-              extractSourceValue: () => ({
-                success: true,
-                value: "structural",
-              }),
-              preservesSourceValue: true,
-            },
+  test("re-registers a later structural occurrence over an earlier effect", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("shared");
+    // A structural occurrence declared after an effectful one: its
+    // extracted value must register after the effectful result so
+    // registration order follows declaration order.
+    const structuralNode: RuntimeNode = {
+      path: ["b"],
+      parser: {
+        dependencyMetadata: {
+          source: {
+            kind: "source",
+            sourceId: id,
+            extractSourceValue: () => ({
+              success: true,
+              value: "structural",
+            }),
+            preservesSourceValue: true,
           },
         },
-        state: undefined,
-      };
-      const nodes: RuntimeNode[] = [
-        createEffectfulSourceNode(
-          "a",
-          id,
-          () => Promise.resolve({ success: true, value: "prompted" }),
-        ),
-        structuralNode,
-      ];
+      },
+      state: undefined,
+    };
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", id, () =>
+        Promise.resolve({ success: true, value: "prompted" }),
+      ),
+      structuralNode,
+    ];
 
-      const result = await completeEffectfulSourcesAsync(
-        nodes,
-        undefined,
-        runtime,
-        createCompleteExecFixture(),
-      );
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
 
-      assert.ok(result.success);
-      assert.equal(runtime.getSource(id), "structural");
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(runtime.getSource(id), "structural");
+  });
 
-  test(
-    "completes every occurrence of a shared source, last one winning",
-    async () => {
-      const runtime = createDependencyRuntimeContext();
-      const id = Symbol("shared");
-      const order: string[] = [];
-      const nodes: RuntimeNode[] = [
-        createEffectfulSourceNode("a", id, () => {
-          order.push("a");
-          return Promise.resolve({ success: true, value: "first" });
-        }),
-        createEffectfulSourceNode("b", id, () => {
-          order.push("b");
-          return Promise.resolve({ success: true, value: "second" });
-        }),
-      ];
+  test("completes every occurrence of a shared source, last one winning", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("shared");
+    const order: string[] = [];
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode("a", id, () => {
+        order.push("a");
+        return Promise.resolve({ success: true, value: "first" });
+      }),
+      createEffectfulSourceNode("b", id, () => {
+        order.push("b");
+        return Promise.resolve({ success: true, value: "second" });
+      }),
+    ];
 
-      // A value registered by an earlier effectful occurrence within the
-      // same pass must not suppress later occurrences: each occurrence
-      // completes and re-registers, matching how repeated command-line
-      // source occurrences overwrite earlier ones.
-      const result = await completeEffectfulSourcesAsync(
-        nodes,
-        undefined,
-        runtime,
-        createCompleteExecFixture(),
-      );
+    // A value registered by an earlier effectful occurrence within the
+    // same pass must not suppress later occurrences: each occurrence
+    // completes and re-registers, matching how repeated command-line
+    // source occurrences overwrite earlier ones.
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(),
+    );
 
-      assert.ok(result.success);
-      assert.deepEqual(order, ["a", "b"]);
-      assert.equal(runtime.getSource(id), "second");
-    },
-  );
+    assert.ok(result.success);
+    assert.deepEqual(order, ["a", "b"]);
+    assert.equal(runtime.getSource(id), "second");
+  });
 
   test("skips non-reusable sources when no session is available", async () => {
     const runtime = createDependencyRuntimeContext();
     const id = Symbol("a");
     let calls = 0;
     const nodes: RuntimeNode[] = [
-      createEffectfulSourceNode("a", id, () => {
-        calls++;
-        return Promise.resolve({ success: true, value: "prompted" });
-      }, { preservesSourceValue: false }),
+      createEffectfulSourceNode(
+        "a",
+        id,
+        () => {
+          calls++;
+          return Promise.resolve({ success: true, value: "prompted" });
+        },
+        { preservesSourceValue: false },
+      ),
     ];
 
     // Without a run-scoped session, a non-reusable completion cannot be
@@ -2474,44 +2468,44 @@ describe("completeEffectfulSourcesAsync", () => {
     assert.ok(!runtime.hasSource(id));
   });
 
-  test(
-    "registers pre-transform values for non-preserved sources with a session",
-    async () => {
-      const runtime = createDependencyRuntimeContext();
-      const id = Symbol("a");
-      let calls = 0;
-      const nodes: RuntimeNode[] = [
-        createEffectfulSourceNode("a", id, () => {
+  test("registers pre-transform values for non-preserved sources with a session", async () => {
+    const runtime = createDependencyRuntimeContext();
+    const id = Symbol("a");
+    let calls = 0;
+    const nodes: RuntimeNode[] = [
+      createEffectfulSourceNode(
+        "a",
+        id,
+        () => {
           calls++;
           return Promise.resolve({ success: true, value: "prompted" });
-        }, { preservesSourceValue: false }),
-      ];
+        },
+        { preservesSourceValue: false },
+      ),
+    ];
 
-      // With a session, the completion runs and registers the source
-      // value, but the result is not cached for the owning construct
-      // because the field's final value differs from the source value.
-      const result = await completeEffectfulSourcesAsync(
-        nodes,
-        undefined,
-        runtime,
-        createCompleteExecFixture(createEffectfulCompletionSession()),
-      );
+    // With a session, the completion runs and registers the source
+    // value, but the result is not cached for the owning construct
+    // because the field's final value differs from the source value.
+    const result = await completeEffectfulSourcesAsync(
+      nodes,
+      undefined,
+      runtime,
+      createCompleteExecFixture(createEffectfulCompletionSession()),
+    );
 
-      assert.ok(result.success);
-      assert.equal(calls, 1);
-      assert.equal(runtime.getSource(id), "prompted");
-      assert.deepEqual(result.completed, []);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(calls, 1);
+    assert.equal(runtime.getSource(id), "prompted");
+    assert.deepEqual(result.completed, []);
+  });
 
   test("treats expanded nodes as non-reusable via isReusable", async () => {
     const runtime = createDependencyRuntimeContext();
     const id = Symbol("a");
     const nodes: RuntimeNode[] = [
-      createEffectfulSourceNode(
-        "a",
-        id,
-        () => Promise.resolve({ success: true, value: "prompted" }),
+      createEffectfulSourceNode("a", id, () =>
+        Promise.resolve({ success: true, value: "prompted" }),
       ),
     ];
 
@@ -2560,7 +2554,8 @@ describe("completeEffectfulSourcesAsync", () => {
         Promise.resolve({
           success: false,
           error: message`Prompt cancelled.`,
-        })),
+        }),
+      ),
       createEffectfulSourceNode("b", idB, () => {
         laterCalls++;
         return Promise.resolve({ success: true, value: "B" });
@@ -2592,7 +2587,8 @@ describe("completeEffectfulSourcesAsync", () => {
           success: true,
           value: "placeholder",
           deferred: true,
-        })),
+        }),
+      ),
     ];
 
     const result = await completeEffectfulSourcesAsync(
@@ -2612,10 +2608,8 @@ describe("completeEffectfulSourcesAsync", () => {
     const runtime = createDependencyRuntimeContext();
     const id = Symbol("a");
     const nodes: RuntimeNode[] = [
-      createEffectfulSourceNode(
-        "a",
-        id,
-        () => Promise.resolve({ success: true, value: undefined }),
+      createEffectfulSourceNode("a", id, () =>
+        Promise.resolve({ success: true, value: undefined }),
       ),
     ];
 
@@ -2655,10 +2649,8 @@ describe("completeEffectfulSourcesAsync", () => {
       state: undefined,
     };
     const nodes: RuntimeNode[] = [
-      createEffectfulSourceNode(
-        "mode",
-        sourceId,
-        () => Promise.resolve({ success: true, value: "prod" }),
+      createEffectfulSourceNode("mode", sourceId, () =>
+        Promise.resolve({ success: true, value: "prod" }),
       ),
       consumerNode,
     ];
@@ -2704,10 +2696,12 @@ describe("completeEffectfulSourcesAsync", () => {
       providesSourceIds: new Set([consumerId]),
       barrierCompletionDependencies: {
         orderingDependencyIds: [prerequisiteId],
-        demandEdges: [{
-          consumerSourceId: consumerId,
-          dependencyIds: [prerequisiteId],
-        }],
+        demandEdges: [
+          {
+            consumerSourceId: consumerId,
+            dependencyIds: [prerequisiteId],
+          },
+        ],
       },
     });
     // The flat rule chains onward: the demanded prerequisite's own
@@ -2748,10 +2742,12 @@ describe("completeEffectfulSourcesAsync", () => {
       providesSourceIds: new Set([consumerId, otherBranchId]),
       barrierCompletionDependencies: {
         orderingDependencyIds: [prerequisiteId],
-        demandEdges: [{
-          consumerSourceId: consumerId,
-          dependencyIds: [prerequisiteId],
-        }],
+        demandEdges: [
+          {
+            consumerSourceId: consumerId,
+            dependencyIds: [prerequisiteId],
+          },
+        ],
       },
     });
 
@@ -2806,20 +2802,24 @@ describe("completeEffectfulSourcesAsync", () => {
       providesSourceIds: new Set([consumerId]),
       barrierCompletionDependencies: {
         orderingDependencyIds: [prerequisiteId],
-        demandEdges: [{
-          consumerSourceId: consumerId,
-          dependencyIds: [prerequisiteId],
-        }],
+        demandEdges: [
+          {
+            consumerSourceId: consumerId,
+            dependencyIds: [prerequisiteId],
+          },
+        ],
       },
       barrierDemandActivation: "after-resolution",
       resolveBarrier: () =>
         Promise.resolve({
           orderingDependencyIds: [prerequisiteId],
           activeProvidesSourceIds: new Set([consumerId]),
-          demandEdges: [{
-            consumerSourceId: consumerId,
-            dependencyIds: [prerequisiteId],
-          }],
+          demandEdges: [
+            {
+              consumerSourceId: consumerId,
+              dependencyIds: [prerequisiteId],
+            },
+          ],
         }),
       prepare: () => {
         order.push("barrier");
@@ -2882,10 +2882,12 @@ describe("completeEffectfulSourcesAsync", () => {
       providesSourceIds: new Set([consumerId]),
       barrierCompletionDependencies: {
         orderingDependencyIds: [prerequisiteId],
-        demandEdges: [{
-          consumerSourceId: consumerId,
-          dependencyIds: [prerequisiteId],
-        }],
+        demandEdges: [
+          {
+            consumerSourceId: consumerId,
+            dependencyIds: [prerequisiteId],
+          },
+        ],
       },
       barrierDemandActivation: "after-resolution",
       resolveBarrier: () =>
@@ -3120,14 +3122,10 @@ describe("completeEffectfulSourcesAsync", () => {
       state: undefined,
       rawInput: "x",
     };
-    const provider = createEffectfulSourceNode(
-      "provider",
-      providerId,
-      () => {
-        order.push("provider");
-        return Promise.resolve({ success: true, value: "p" });
-      },
-    );
+    const provider = createEffectfulSourceNode("provider", providerId, () => {
+      order.push("provider");
+      return Promise.resolve({ success: true, value: "p" });
+    });
     const discriminator = createEffectfulSourceNode(
       "discriminator",
       discriminatorId,
@@ -3144,20 +3142,24 @@ describe("completeEffectfulSourcesAsync", () => {
       providesSourceIds: new Set([consumerId]),
       barrierCompletionDependencies: {
         orderingDependencyIds: [providerId],
-        demandEdges: [{
-          consumerSourceId: consumerId,
-          dependencyIds: [providerId],
-        }],
+        demandEdges: [
+          {
+            consumerSourceId: consumerId,
+            dependencyIds: [providerId],
+          },
+        ],
       },
       barrierDemandActivation: "after-resolution",
       resolveBarrier: () =>
         Promise.resolve({
           orderingDependencyIds: [providerId],
           activeProvidesSourceIds: new Set([consumerId]),
-          demandEdges: [{
-            consumerSourceId: consumerId,
-            dependencyIds: [providerId],
-          }],
+          demandEdges: [
+            {
+              consumerSourceId: consumerId,
+              dependencyIds: [providerId],
+            },
+          ],
         }),
       prepare: () => {
         order.push("barrier");
@@ -3313,10 +3315,8 @@ describe("completeEffectfulSourcesAsync", () => {
     const runtime = createDependencyRuntimeContext();
     const session = createEffectfulCompletionSession();
     const sourceId = Symbol("framework");
-    const branchProvider = createEffectfulSourceNode(
-      "branch",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "branch" }),
+    const branchProvider = createEffectfulSourceNode("branch", sourceId, () =>
+      Promise.resolve({ success: true, value: "branch" }),
     );
     // The ordering dependency ranks the later provider ahead of the
     // barrier, so the branch publish lands on top of the later value.
@@ -3331,10 +3331,8 @@ describe("completeEffectfulSourcesAsync", () => {
       },
       prepare: (ctx) => ctx.schedule([branchProvider]),
     };
-    const later = createEffectfulSourceNode(
-      "later",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "later" }),
+    const later = createEffectfulSourceNode("later", sourceId, () =>
+      Promise.resolve({ success: true, value: "later" }),
     );
 
     const result = await completeEffectfulSourcesAsync(
@@ -3352,15 +3350,11 @@ describe("completeEffectfulSourcesAsync", () => {
     const runtime = createDependencyRuntimeContext();
     const session = createEffectfulCompletionSession();
     const sourceId = Symbol("framework");
-    const earlier = createEffectfulSourceNode(
-      "earlier",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "earlier" }),
+    const earlier = createEffectfulSourceNode("earlier", sourceId, () =>
+      Promise.resolve({ success: true, value: "earlier" }),
     );
-    const branchProvider = createEffectfulSourceNode(
-      "branch",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "branch" }),
+    const branchProvider = createEffectfulSourceNode("branch", sourceId, () =>
+      Promise.resolve({ success: true, value: "branch" }),
     );
     const barrier: RuntimeNode = {
       path: ["barrier"],
@@ -3402,10 +3396,8 @@ describe("completeEffectfulSourcesAsync", () => {
       },
       prepare: (ctx) => ctx.schedule([]),
     };
-    const later = createEffectfulSourceNode(
-      "later",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "later" }),
+    const later = createEffectfulSourceNode("later", sourceId, () =>
+      Promise.resolve({ success: true, value: "later" }),
     );
 
     const result = await completeEffectfulSourcesAsync(
@@ -3431,10 +3423,8 @@ describe("completeEffectfulSourcesAsync", () => {
       writes.push(value);
       originalRegister(id, value);
     };
-    const branchProvider = createEffectfulSourceNode(
-      "branch",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "branch" }),
+    const branchProvider = createEffectfulSourceNode("branch", sourceId, () =>
+      Promise.resolve({ success: true, value: "branch" }),
     );
     const failing = createEffectfulSourceNode(
       "failing",
@@ -3456,14 +3446,10 @@ describe("completeEffectfulSourcesAsync", () => {
       },
       prepare: (ctx) => ctx.schedule([branchProvider, failing]),
     };
-    const later = createEffectfulSourceNode(
-      "later",
-      sourceId,
-      () => {
-        laterExecuted.push("later");
-        return Promise.resolve({ success: true, value: "later" });
-      },
-    );
+    const later = createEffectfulSourceNode("later", sourceId, () => {
+      laterExecuted.push("later");
+      return Promise.resolve({ success: true, value: "later" });
+    });
     const trailing = createEffectfulSourceNode(
       "trailing",
       Symbol("trailing"),
@@ -3492,10 +3478,8 @@ describe("completeEffectfulSourcesAsync", () => {
     const session = createEffectfulCompletionSession();
     const sourceId = Symbol("framework");
     const prerequisiteId = Symbol("prerequisite");
-    const firstBranch = createEffectfulSourceNode(
-      "firstBranch",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "first" }),
+    const firstBranch = createEffectfulSourceNode("firstBranch", sourceId, () =>
+      Promise.resolve({ success: true, value: "first" }),
     );
     const secondBranch = createEffectfulSourceNode(
       "secondBranch",
@@ -3551,10 +3535,8 @@ describe("completeEffectfulSourcesAsync", () => {
       writes.push(value);
       originalRegister(id, value);
     };
-    const branchProvider = createEffectfulSourceNode(
-      "branch",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "branch" }),
+    const branchProvider = createEffectfulSourceNode("branch", sourceId, () =>
+      Promise.resolve({ success: true, value: "branch" }),
     );
     const barrier: RuntimeNode = {
       path: ["barrier"],
@@ -3602,10 +3584,8 @@ describe("completeEffectfulSourcesAsync", () => {
     const session = createEffectfulCompletionSession();
     const sourceId = Symbol("framework");
     const executed: string[] = [];
-    const branchProvider = createEffectfulSourceNode(
-      "branch",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "branch" }),
+    const branchProvider = createEffectfulSourceNode("branch", sourceId, () =>
+      Promise.resolve({ success: true, value: "branch" }),
     );
     const barrier: RuntimeNode = {
       path: ["barrier"],
@@ -3614,18 +3594,14 @@ describe("completeEffectfulSourcesAsync", () => {
       providesSourceIds: new Set([sourceId]),
       prepare: (ctx) => ctx.schedule([branchProvider]),
     };
-    const cached = createEffectfulSourceNode(
-      "cached",
-      sourceId,
-      () => {
-        executed.push("cached");
-        return Promise.resolve({ success: true, value: "cached" });
-      },
-    );
-    session.completedByPath.set(
-      serializeSchedulingPath(cached.path),
-      { success: true, value: "cached" },
-    );
+    const cached = createEffectfulSourceNode("cached", sourceId, () => {
+      executed.push("cached");
+      return Promise.resolve({ success: true, value: "cached" });
+    });
+    session.completedByPath.set(serializeSchedulingPath(cached.path), {
+      success: true,
+      value: "cached",
+    });
 
     const result = await completeEffectfulSourcesAsync(
       [barrier, cached],
@@ -3658,10 +3634,8 @@ describe("completeEffectfulSourcesAsync", () => {
       writes.push(value);
       originalRegister(id, value);
     };
-    const branchProvider = createEffectfulSourceNode(
-      "branch",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "branch" }),
+    const branchProvider = createEffectfulSourceNode("branch", sourceId, () =>
+      Promise.resolve({ success: true, value: "branch" }),
     );
     const barrier: RuntimeNode = {
       path: ["barrier"],
@@ -3670,18 +3644,14 @@ describe("completeEffectfulSourcesAsync", () => {
       providesSourceIds: new Set([sourceId]),
       prepare: (ctx) => ctx.schedule([branchProvider]),
     };
-    const cached = createEffectfulSourceNode(
-      "cached",
-      sourceId,
-      () => {
-        executed.push("cached");
-        return Promise.resolve({ success: true, value: "cached" });
-      },
-    );
-    session.completedByPath.set(
-      serializeSchedulingPath(cached.path),
-      { success: true, value: "cached" },
-    );
+    const cached = createEffectfulSourceNode("cached", sourceId, () => {
+      executed.push("cached");
+      return Promise.resolve({ success: true, value: "cached" });
+    });
+    session.completedByPath.set(serializeSchedulingPath(cached.path), {
+      success: true,
+      value: "cached",
+    });
 
     const result = await completeEffectfulSourcesAsync(
       [barrier, cached],
@@ -3709,19 +3679,15 @@ describe("completeEffectfulSourcesAsync", () => {
       writes.push(value);
       originalRegister(id, value);
     };
-    const cached = createEffectfulSourceNode(
-      "cached",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "cached" }),
+    const cached = createEffectfulSourceNode("cached", sourceId, () =>
+      Promise.resolve({ success: true, value: "cached" }),
     );
-    session.completedByPath.set(
-      serializeSchedulingPath(cached.path),
-      { success: true, value: "cached" },
-    );
-    const later = createEffectfulSourceNode(
-      "later",
-      sourceId,
-      () => Promise.resolve({ success: true, value: "later" }),
+    session.completedByPath.set(serializeSchedulingPath(cached.path), {
+      success: true,
+      value: "cached",
+    });
+    const later = createEffectfulSourceNode("later", sourceId, () =>
+      Promise.resolve({ success: true, value: "later" }),
     );
 
     const result = await completeEffectfulSourcesAsync(
@@ -3749,15 +3715,13 @@ describe("completeEffectfulSourcesAsync", () => {
       writes.push(value);
       originalRegister(id, value);
     };
-    const cached = createEffectfulSourceNode(
-      "cached",
-      sourceId,
-      () => Promise.resolve({ success: true, value: undefined }),
+    const cached = createEffectfulSourceNode("cached", sourceId, () =>
+      Promise.resolve({ success: true, value: undefined }),
     );
-    session.completedByPath.set(
-      serializeSchedulingPath(cached.path),
-      { success: true, value: undefined },
-    );
+    session.completedByPath.set(serializeSchedulingPath(cached.path), {
+      success: true,
+      value: undefined,
+    });
 
     const result = await completeEffectfulSourcesAsync(
       [cached],
@@ -3787,18 +3751,14 @@ describe("completeEffectfulSourcesAsync", () => {
       writes.push(value);
       originalRegister(id, value);
     };
-    const branchProvider = createEffectfulSourceNode(
-      "branch",
-      sourceId,
-      () => {
-        executed.push("branch");
-        return Promise.resolve({ success: true, value: "branch" });
-      },
-    );
-    session.completedByPath.set(
-      serializeSchedulingPath(branchProvider.path),
-      { success: true, value: "branch" },
-    );
+    const branchProvider = createEffectfulSourceNode("branch", sourceId, () => {
+      executed.push("branch");
+      return Promise.resolve({ success: true, value: "branch" });
+    });
+    session.completedByPath.set(serializeSchedulingPath(branchProvider.path), {
+      success: true,
+      value: "branch",
+    });
     const barrier: RuntimeNode = {
       path: ["barrier"],
       parser: {},
@@ -3844,19 +3804,21 @@ describe("collectDemandedDependencyIds", () => {
       rawInput: "debug",
       consumed: ["--level", "debug"],
     });
-    const nodes: RuntimeNode[] = [{
-      path: ["level"],
-      parser: {
-        dependencyMetadata: {
-          derived: {
-            kind: "derived",
-            dependencyIds: [sourceId],
-            replayParse: () => ({ success: true, value: "debug" }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["level"],
+        parser: {
+          dependencyMetadata: {
+            derived: {
+              kind: "derived",
+              dependencyIds: [sourceId],
+              replayParse: () => ({ success: true, value: "debug" }),
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
 
     const demanded = collectDemandedDependencyIds(nodes, undefined, trace);
 
@@ -3865,19 +3827,21 @@ describe("collectDemandedDependencyIds", () => {
 
   test("ignores derived nodes without raw input evidence", () => {
     const sourceId = Symbol("mode");
-    const nodes: RuntimeNode[] = [{
-      path: ["level"],
-      parser: {
-        dependencyMetadata: {
-          derived: {
-            kind: "derived",
-            dependencyIds: [sourceId],
-            replayParse: () => ({ success: true, value: "debug" }),
+    const nodes: RuntimeNode[] = [
+      {
+        path: ["level"],
+        parser: {
+          dependencyMetadata: {
+            derived: {
+              kind: "derived",
+              dependencyIds: [sourceId],
+              replayParse: () => ({ success: true, value: "debug" }),
+            },
           },
         },
+        state: undefined,
       },
-      state: undefined,
-    }];
+    ];
 
     const demanded = collectDemandedDependencyIds(
       nodes,
@@ -3890,15 +3854,14 @@ describe("collectDemandedDependencyIds", () => {
 
   test("collects ids from legacy deferred states in the state tree", () => {
     const sourceId = Symbol("mode");
-    const derivedParser = makeDerivedValueParser(
-      sourceId,
-      (rawInput) => ({ success: true, value: rawInput }),
-    );
-    const deferred = createDeferredParseState(
-      "debug",
-      derivedParser,
-      { success: true, value: "debug" } as ValueParserResult<unknown>,
-    );
+    const derivedParser = makeDerivedValueParser(sourceId, (rawInput) => ({
+      success: true,
+      value: rawInput,
+    }));
+    const deferred = createDeferredParseState("debug", derivedParser, {
+      success: true,
+      value: "debug",
+    } as ValueParserResult<unknown>);
 
     const demanded = collectDemandedDependencyIds(
       [],
@@ -4212,8 +4175,8 @@ function createBarrierNode(options: {
       : {}),
     ...(options.barrierCompletionDependencies != null
       ? {
-        barrierCompletionDependencies: options.barrierCompletionDependencies,
-      }
+          barrierCompletionDependencies: options.barrierCompletionDependencies,
+        }
       : {}),
     ...(options.barrierResolutionState != null
       ? { barrierResolutionState: options.barrierResolutionState }
@@ -4237,16 +4200,20 @@ function createRuntimeSourceNode(options: {
     preservesSourceValue: true,
   };
   const derived: ParserDependencyMetadata["derived"] =
-    options.dependencyIds == null ? undefined : {
-      kind: "derived",
-      dependencyIds: options.dependencyIds,
-      metavar: options.metavar,
-      replayParse: (rawInput) => ({ success: true, value: rawInput }),
-    };
+    options.dependencyIds == null
+      ? undefined
+      : {
+          kind: "derived",
+          dependencyIds: options.dependencyIds,
+          metavar: options.metavar,
+          replayParse: (rawInput) => ({ success: true, value: rawInput }),
+        };
   const completion: ParserDependencyMetadata["completion"] =
-    options.completionDependencyIds == null ? undefined : {
-      dependencyIds: options.completionDependencyIds,
-    };
+    options.completionDependencyIds == null
+      ? undefined
+      : {
+          dependencyIds: options.completionDependencyIds,
+        };
   return {
     path: options.path,
     parser: {
@@ -4266,20 +4233,25 @@ describe("committed subtree source preservation", () => {
       const id = Symbol("framework");
       const runtime = createDependencyRuntimeContext();
       runtime.registerSource(id, value);
-      recordSourceScope(runtime, new Set([id]), [{
-        sourceId: id,
-        path: [],
-      }]);
+      recordSourceScope(runtime, new Set([id]), [
+        {
+          sourceId: id,
+          path: [],
+        },
+      ]);
       // A structural walk can re-assert an earlier CLI occurrence after
       // the pass's final publication. The fork must use the publication.
       runtime.registerSource(id, "fresh");
-      const fork = forkRuntimeForCommittedSubtree({
-        usage: [],
-        phase: "complete",
-        path: [],
-        dependencyRuntime: runtime,
-        dependencyRegistry: runtime.registry,
-      }, new Set([id]));
+      const fork = forkRuntimeForCommittedSubtree(
+        {
+          usage: [],
+          phase: "complete",
+          path: [],
+          dependencyRuntime: runtime,
+          dependencyRegistry: runtime.registry,
+        },
+        new Set([id]),
+      );
       fork.registry.set(id, "fresh");
       fork.registerSource(id, "fresh");
       fork.markSourceFailed(id);
@@ -4303,17 +4275,22 @@ describe("committed subtree source preservation", () => {
     const runtime = createDependencyRuntimeContext();
     runtime.registerSource(id, "hono");
     runtime.markSourceFailed(id);
-    recordSourceScope(runtime, new Set([id]), [{
-      sourceId: id,
-      path: [],
-    }]);
-    const fork = forkRuntimeForCommittedSubtree({
-      usage: [],
-      phase: "complete",
-      path: [],
-      dependencyRuntime: runtime,
-      dependencyRegistry: runtime.registry,
-    }, new Set([id]));
+    recordSourceScope(runtime, new Set([id]), [
+      {
+        sourceId: id,
+        path: [],
+      },
+    ]);
+    const fork = forkRuntimeForCommittedSubtree(
+      {
+        usage: [],
+        phase: "complete",
+        path: [],
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      },
+      new Set([id]),
+    );
     fork.registerSource(id, "fresh");
     fork.registry.set(id, "fresh");
     assert.ok(fork.isSourceFailed(id));
@@ -4325,13 +4302,16 @@ describe("committed subtree source preservation", () => {
     const other = Symbol("other");
     const runtime = createDependencyRuntimeContext();
     runtime.registerSource(other, "before");
-    const fork = forkRuntimeForCommittedSubtree({
-      usage: [],
-      phase: "complete",
-      path: [],
-      dependencyRuntime: runtime,
-      dependencyRegistry: runtime.registry,
-    }, new Set([id]));
+    const fork = forkRuntimeForCommittedSubtree(
+      {
+        usage: [],
+        phase: "complete",
+        path: [],
+        dependencyRuntime: runtime,
+        dependencyRegistry: runtime.registry,
+      },
+      new Set([id]),
+    );
     fork.registerSource(id, "fresh");
     fork.registerSource(other, "after");
     assert.equal(fork.getSource(id), "fresh");

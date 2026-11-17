@@ -29,9 +29,10 @@ export interface TarFile {
 
 /** Reads regular files from ustar/PAX archives; rejects unsupported entries. */
 export function readTar(input: Uint8Array): readonly TarFile[] {
-  const bytes = input[0] === 0x1f && input[1] === 0x8b
-    ? gunzipSync(input)
-    : Buffer.from(input);
+  const bytes =
+    input[0] === 0x1f && input[1] === 0x8b
+      ? gunzipSync(input)
+      : Buffer.from(input);
   if (bytes.length < 1024 || bytes.length % 512 !== 0) {
     throw new TypeError("Malformed tar archive length.");
   }
@@ -46,10 +47,10 @@ export function readTar(input: Uint8Array): readonly TarFile[] {
       break;
     }
     const field = (start: number, length: number) =>
-      header.subarray(start, start + length).toString("utf8").replace(
-        /\0.*$/s,
-        "",
-      );
+      header
+        .subarray(start, start + length)
+        .toString("utf8")
+        .replace(/\0.*$/s, "");
     const numeric = (start: number, length: number) => {
       const text = field(start, length).trim();
       if (!/^[0-7]+$/.test(text)) {
@@ -89,14 +90,17 @@ export function readTar(input: Uint8Array): readonly TarFile[] {
       throw new TypeError("Unsupported PAX size mismatch.");
     }
     const prefix = field(345, 155);
-    const name = pax.path ??
-      `${prefix === "" ? "" : `${prefix}/`}${field(0, 100)}`;
+    const name =
+      pax.path ?? `${prefix === "" ? "" : `${prefix}/`}${field(0, 100)}`;
     pax = {};
     if (
-      !name.startsWith("package/") || name.includes("\\") ||
-      posix.normalize(name) !== name || name.split("/").includes("..") ||
+      !name.startsWith("package/") ||
+      name.includes("\\") ||
+      posix.normalize(name) !== name ||
+      name.split("/").includes("..") ||
       seen.has(name)
-    ) throw new TypeError(`Invalid tar package path: ${name}`);
+    )
+      throw new TypeError(`Invalid tar package path: ${name}`);
     seen.add(name);
     const path = name.slice(8);
     files.push({ path, size, sha256: sha256(content), bytes: content });
@@ -113,12 +117,15 @@ function parsePax(bytes: Buffer): Record<string, string> {
     const space = bytes.indexOf(32, offset);
     const length = Number(bytes.subarray(offset, space).toString());
     if (
-      space < offset || !Number.isSafeInteger(length) || length < 4 ||
+      space < offset ||
+      !Number.isSafeInteger(length) ||
+      length < 4 ||
       offset + length > bytes.length
-    ) throw new TypeError("Malformed PAX record.");
-    const item = bytes.subarray(space + 1, offset + length - 1).toString(
-      "utf8",
-    );
+    )
+      throw new TypeError("Malformed PAX record.");
+    const item = bytes
+      .subarray(space + 1, offset + length - 1)
+      .toString("utf8");
     const equals = item.indexOf("=");
     if (equals < 1 || bytes[offset + length - 1] !== 10) {
       throw new TypeError("Malformed PAX field.");
@@ -197,7 +204,7 @@ export function verifyLock(
       throw new TypeError(`Missing local override: ${archive.name}`);
     }
     const candidates = Object.entries(packages).filter(([key]) =>
-      key.startsWith(`${archive.name}@`)
+      key.startsWith(`${archive.name}@`),
     );
     if (candidates.length !== 1) {
       throw new TypeError(`Missing or duplicate lock package: ${archive.name}`);
@@ -230,15 +237,17 @@ export function verifyInventory(
   }
   const signature = (files: readonly unknown[]) =>
     JSON.stringify(
-      files.map((value) => {
-        const file = record(value);
-        return {
-          path: file.path,
-          size: file.size,
-          sha256: file.sha256,
-          links: file.links,
-        };
-      }).sort((a, b) => String(a.path).localeCompare(String(b.path), "en")),
+      files
+        .map((value) => {
+          const file = record(value);
+          return {
+            path: file.path,
+            size: file.size,
+            sha256: file.sha256,
+            links: file.links,
+          };
+        })
+        .sort((a, b) => String(a.path).localeCompare(String(b.path), "en")),
     );
   if (signature(actual.files) !== signature(snapshot.files)) {
     throw new TypeError(

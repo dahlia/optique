@@ -96,7 +96,7 @@ describe("verifyLock", () => {
       verifyLock(
         lock({ integrity: "sha512-wrong", tarball: archive.specifier }),
         [archive],
-      )
+      ),
     );
     assert.throws(() =>
       verifyLock(
@@ -105,30 +105,42 @@ describe("verifyLock", () => {
           tarball: "https://registry.npmjs.org/core.tgz",
         }),
         [archive],
-      )
+      ),
     );
     assert.throws(() => verifyLock({ packages: {} }, [archive]));
     assert.throws(() =>
-      verifyLock({
-        ...lock({ integrity: archive.integrity, tarball: archive.specifier }),
-        packages: { "evil@1": {} },
-      }, [archive])
+      verifyLock(
+        {
+          ...lock({ integrity: archive.integrity, tarball: archive.specifier }),
+          packages: { "evil@1": {} },
+        },
+        [archive],
+      ),
     );
   });
 });
 
 describe("release archive content", () => {
   it("should count regular files and ustar prefix paths exactly", () => {
-    const archive = tarFixture([{ path: "package/a.js", content: "abc" }, {
-      path: "file.d.cts",
-      prefix: "package/nested",
-      content: "types",
-    }]);
+    const archive = tarFixture([
+      { path: "package/a.js", content: "abc" },
+      {
+        path: "file.d.cts",
+        prefix: "package/nested",
+        content: "types",
+      },
+    ]);
     const files = readTar(archive);
-    assert.deepEqual(files.map(({ path, size }) => ({ path, size })), [{
-      path: "a.js",
-      size: 3,
-    }, { path: "nested/file.d.cts", size: 5 }]);
+    assert.deepEqual(
+      files.map(({ path, size }) => ({ path, size })),
+      [
+        {
+          path: "a.js",
+          size: 3,
+        },
+        { path: "nested/file.d.cts", size: 5 },
+      ],
+    );
   });
   it("should consume directory PAX attributes before the next regular file", () => {
     const item = "path=package/" + "nested/".repeat(20) + "\n";
@@ -136,14 +148,17 @@ describe("release archive content", () => {
     while (`${length} ${item}`.length !== length) {
       length = `${length} ${item}`.length;
     }
-    const files = readTar(tarFixture([
-      { path: "PaxHeader", type: "x", content: `${length} ${item}` },
-      { path: "package/short/", type: "5", content: "" },
-      { path: "package/actual.js", content: "actual" },
-    ]));
-    assert.deepEqual(files.map(({ path, size }) => ({ path, size })), [
-      { path: "actual.js", size: 6 },
-    ]);
+    const files = readTar(
+      tarFixture([
+        { path: "PaxHeader", type: "x", content: `${length} ${item}` },
+        { path: "package/short/", type: "5", content: "" },
+        { path: "package/actual.js", content: "actual" },
+      ]),
+    );
+    assert.deepEqual(
+      files.map(({ path, size }) => ({ path, size })),
+      [{ path: "actual.js", size: 6 }],
+    );
     verifyPackList({ files: [{ path: "actual.js" }] }, [files[0].path]);
   });
   it("should honor PAX path and reject unsupported links and path traversal", () => {
@@ -153,11 +168,14 @@ describe("release archive content", () => {
       length = `${length} ${item}`.length;
     }
     const files = readTar(
-      tarFixture([{
-        path: "PaxHeader",
-        type: "x",
-        content: `${length} ${item}`,
-      }, { path: "package/short", content: "js" }]),
+      tarFixture([
+        {
+          path: "PaxHeader",
+          type: "x",
+          content: `${length} ${item}`,
+        },
+        { path: "package/short", content: "js" },
+      ]),
     );
     assert.equal(files[0].path, "long-name.js");
     assert.throws(
@@ -192,7 +210,11 @@ function tarFixture(
     header.fill(32, 148, 156);
     const checksum = header.reduce((sum, byte) => sum + byte, 0);
     header.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148);
-    chunks.push(header, bytes, Buffer.alloc((512 - bytes.length % 512) % 512));
+    chunks.push(
+      header,
+      bytes,
+      Buffer.alloc((512 - (bytes.length % 512)) % 512),
+    );
   }
   chunks.push(Buffer.alloc(1024));
   return Buffer.concat(chunks);
@@ -227,7 +249,7 @@ describe("prepared installation identity", () => {
   it("should cross-check the archive against pnpm's reported package files", () => {
     verifyPackList({ files: [{ path: "a.js" }] }, ["a.js"]);
     assert.throws(() =>
-      verifyPackList({ files: [{ path: "a.js" }] }, ["b.js"])
+      verifyPackList({ files: [{ path: "a.js" }] }, ["b.js"]),
     );
   });
 });

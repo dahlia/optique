@@ -143,8 +143,11 @@ async function readPassword(
     "vo",
   );
   if (
-    !(output instanceof Variant) || output.signature !== "ay" ||
-    !isBytes(output.value) || typeof session !== "string" || session === "/"
+    !(output instanceof Variant) ||
+    output.signature !== "ay" ||
+    !isBytes(output.value) ||
+    typeof session !== "string" ||
+    session === "/"
   ) {
     throw new TypeError("The Secret Service returned an invalid session.");
   }
@@ -162,8 +165,12 @@ async function readPassword(
     "(oayays)",
   );
   if (
-    !Array.isArray(secret) || secret.length !== 4 || secret[0] !== session ||
-    !isBytes(secret[1]) || secret[1].length !== 16 || !isBytes(secret[2]) ||
+    !Array.isArray(secret) ||
+    secret.length !== 4 ||
+    secret[0] !== session ||
+    !isBytes(secret[1]) ||
+    secret[1].length !== 16 ||
+    !isBytes(secret[2]) ||
     typeof secret[3] !== "string"
   ) {
     throw new TypeError("The Secret Service returned an invalid secret.");
@@ -181,8 +188,9 @@ async function readPassword(
 }
 
 function isPaths(value: unknown): value is readonly string[] {
-  return Array.isArray(value) &&
-    value.every((item) => typeof item === "string");
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
 }
 
 function isBytes(value: unknown): value is Uint8Array {

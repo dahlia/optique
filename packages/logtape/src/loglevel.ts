@@ -29,9 +29,9 @@ export const LOG_LEVELS: readonly LogLevel[] = [
 export function validateLogLevel(value: LogLevel, paramName: string): void {
   if (!(LOG_LEVELS as readonly string[]).includes(value)) {
     throw new TypeError(
-      `Invalid log level for ${paramName}: ${String(value)}.  Expected ${
-        LOG_LEVELS.map((l) => `"${l}"`).join(", ")
-      }.`,
+      `Invalid log level for ${paramName}: ${String(value)}.  Expected ${LOG_LEVELS.map(
+        (l) => `"${l}"`,
+      ).join(", ")}.`,
     );
   }
 }
@@ -98,13 +98,17 @@ export function logLevel(
   return choice(LOG_LEVELS, {
     metavar: options.metavar ?? "LEVEL",
     caseInsensitive: true,
-    errors: options.errors?.invalidLevel != null
-      ? {
-        invalidChoice: typeof options.errors.invalidLevel === "function"
-          ? (input: string, _choices: readonly string[]) =>
-            (options.errors!.invalidLevel as (input: string) => Message)(input)
-          : options.errors.invalidLevel,
-      }
-      : undefined,
+    errors:
+      options.errors?.invalidLevel != null
+        ? {
+            invalidChoice:
+              typeof options.errors.invalidLevel === "function"
+                ? (input: string, _choices: readonly string[]) =>
+                    (
+                      options.errors!.invalidLevel as (input: string) => Message
+                    )(input)
+                : options.errors.invalidLevel,
+          }
+        : undefined,
   });
 }

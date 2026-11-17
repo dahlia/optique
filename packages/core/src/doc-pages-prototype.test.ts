@@ -31,19 +31,17 @@ it("records the frozen documentation-only registry prototype outcome", () => {
     counters.set(name, (counters.get(name) ?? 0) + 1);
   const watch = <T extends object>(input: T): T => {
     objects.push(input);
-    for (
-      const name of [
-        "parse",
-        "complete",
-        "suggest",
-        "getDocFragments",
-        "format",
-        "normalizeValue",
-        "validateValue",
-        "normalize",
-        "validate",
-      ]
-    ) {
+    for (const name of [
+      "parse",
+      "complete",
+      "suggest",
+      "getDocFragments",
+      "format",
+      "normalizeValue",
+      "validateValue",
+      "normalize",
+      "validate",
+    ]) {
       const descriptor = Object.getOwnPropertyDescriptor(input, name);
       if (descriptor == null || typeof descriptor.value !== "function") {
         continue;
@@ -66,12 +64,14 @@ it("records the frozen documentation-only registry prototype outcome", () => {
     mode: "async" as const,
     placeholder: "",
     metavar: "VALUE" as const,
+    /* oxlint-disable require-await -- Keep the async contract. */
     // deno-lint-ignore require-await -- Any execution must reject immediately.
     async parse(
       _input: string,
     ): Promise<{ readonly success: true; readonly value: string }> {
       throw new Error("Runtime resolver.");
     },
+    /* oxlint-enable require-await */
     format(_value: string): string {
       throw new Error("Custom formatting.");
     },
@@ -81,10 +81,12 @@ it("records the frozen documentation-only registry prototype outcome", () => {
     validate(_value: string): never {
       throw new Error("Custom validation.");
     },
+    /* oxlint-disable require-yield -- Test an empty generator. */
     // deno-lint-ignore require-yield -- Any iteration must throw immediately.
     async *suggest(_prefix: string): AsyncGenerator<never> {
       throw new Error("Custom suggestions.");
     },
+    /* oxlint-enable require-yield */
   });
   const verbose = watch(
     optional(
@@ -114,16 +116,20 @@ it("records the frozen documentation-only registry prototype outcome", () => {
   const config = watch(command("config", watch(or(get, set))));
   const customParser = watch({ ...flag("--opaque-input") });
   const hiddenParser = watch({ ...flag("--hidden-input") });
-  const root = watch(object({
-    verbose,
-    action: watch(or(
-      watch(command("serve", servePort)),
-      config,
-      watch(command("async", watch(option("--value", customValue)))),
-      watch(command("opaque", customParser)),
-      watch(command("secret", hiddenParser, { hidden: "doc" })),
-    )),
-  }));
+  const root = watch(
+    object({
+      verbose,
+      action: watch(
+        or(
+          watch(command("serve", servePort)),
+          config,
+          watch(command("async", watch(option("--value", customValue)))),
+          watch(command("opaque", customParser)),
+          watch(command("secret", hiddenParser, { hidden: "doc" })),
+        ),
+      ),
+    }),
+  );
   const prefixed = watch(
     seq(
       watch(argument(watch(string({ metavar: "PROFILE" })))),
@@ -164,24 +170,22 @@ it("records the frozen documentation-only registry prototype outcome", () => {
   };
   counters.clear();
   for (const input of objects) {
-    for (
-      const name of [
-        "parse",
-        "complete",
-        "suggest",
-        "getDocFragments",
-        "format",
-        "normalizeValue",
-        "validateValue",
-        "normalize",
-        "validate",
-        "metavar",
-        "choices",
-        "usage",
-        "initialState",
-        "mode",
-      ]
-    ) {
+    for (const name of [
+      "parse",
+      "complete",
+      "suggest",
+      "getDocFragments",
+      "format",
+      "normalizeValue",
+      "validateValue",
+      "normalize",
+      "validate",
+      "metavar",
+      "choices",
+      "usage",
+      "initialState",
+      "mode",
+    ]) {
       const descriptor = Object.getOwnPropertyDescriptor(input, name);
       if (descriptor == null || !descriptor.configurable) continue;
       Object.defineProperty(
@@ -189,19 +193,19 @@ it("records the frozen documentation-only registry prototype outcome", () => {
         name,
         ["metavar", "choices", "usage", "initialState", "mode"].includes(name)
           ? {
-            configurable: true,
-            get() {
-              count(name);
-              return poison();
-            },
-          }
+              configurable: true,
+              get() {
+                count(name);
+                return poison();
+              },
+            }
           : {
-            configurable: true,
-            value() {
-              count(name);
-              return poison();
+              configurable: true,
+              value() {
+                count(name);
+                return poison();
+              },
             },
-          },
       );
     }
   }
@@ -215,25 +219,33 @@ it("records the frozen documentation-only registry prototype outcome", () => {
   assert.deepEqual(paths, oracle.expectedPaths);
   assert.ok(
     result.entries.every((entry) =>
-      entry.page.sections.flatMap((section) => section.entries).some((entry) =>
-        entry.term.type === "option" && entry.term.names.includes("--verbose")
-      )
+      entry.page.sections
+        .flatMap((section) => section.entries)
+        .some(
+          (entry) =>
+            entry.term.type === "option" &&
+            entry.term.names.includes("--verbose"),
+        ),
     ),
   );
   assert.ok(result.entries.every((entry) => !entry.path.includes("secret")));
   assert.ok(
     result.unresolved.every((report) => !report.path.includes("secret")),
   );
-  const portEntry = result.entries.find((entry) =>
-    entry.path.join("/") === "serve"
-  )?.page.sections.flatMap((section) => section.entries).find((entry) =>
-    entry.term.type === "option" && entry.term.names.includes("--port")
-  );
-  const choiceEntry = result.entries.find((entry) =>
-    entry.path.join("/") === "config/set"
-  )?.page.sections.flatMap((section) => section.entries).find((entry) =>
-    entry.term.type === "option" && entry.term.names.includes("--format")
-  );
+  const portEntry = result.entries
+    .find((entry) => entry.path.join("/") === "serve")
+    ?.page.sections.flatMap((section) => section.entries)
+    .find(
+      (entry) =>
+        entry.term.type === "option" && entry.term.names.includes("--port"),
+    );
+  const choiceEntry = result.entries
+    .find((entry) => entry.path.join("/") === "config/set")
+    ?.page.sections.flatMap((section) => section.entries)
+    .find(
+      (entry) =>
+        entry.term.type === "option" && entry.term.names.includes("--format"),
+    );
   assert.ok(portEntry != null);
   assert.ok(choiceEntry != null);
   const failures: string[] = [];
@@ -241,23 +253,28 @@ it("records the frozen documentation-only registry prototype outcome", () => {
     portEntry.default == null ||
     formatMessage(portEntry.default, { colors: false }) !==
       oracle.requiredStaticDefault.text
-  ) failures.push("static-default");
+  )
+    failures.push("static-default");
   if (
     choiceEntry.choices == null ||
     !oracle.requiredChoices.values.every((value: string) =>
       formatMessage(choiceEntry.choices ?? [], { colors: false }).includes(
         value,
-      )
+      ),
     )
-  ) failures.push("choices");
+  )
+    failures.push("choices");
   if (
     JSON.stringify(
       result.unresolved.map((report) => JSON.stringify(report)).sort(),
-    ) !== JSON.stringify(
-      oracle.expectedReports.map((report: unknown) => JSON.stringify(report))
+    ) !==
+    JSON.stringify(
+      oracle.expectedReports
+        .map((report: unknown) => JSON.stringify(report))
         .sort(),
     )
-  ) failures.push("unexpected-reports");
+  )
+    failures.push("unexpected-reports");
   assert.deepEqual(failures, []);
   assert.ok(
     prefixResult.entries.some((entry) => entry.path.join("/") === "serve"),
@@ -265,8 +282,8 @@ it("records the frozen documentation-only registry prototype outcome", () => {
   assert.ok(
     prefixResult.entries.every((entry) => !entry.path.includes("prod")),
   );
-  const prefixPage = prefixResult.entries.find((entry) =>
-    entry.path.join("/") === "serve"
+  const prefixPage = prefixResult.entries.find(
+    (entry) => entry.path.join("/") === "serve",
   )?.page;
   assert.ok(prefixPage?.usage);
   assert.equal(
@@ -274,20 +291,23 @@ it("records the frozen documentation-only registry prototype outcome", () => {
     oracle.orderedPrefix.usage,
   );
   assert.ok(
-    omitted.entries[0].page.sections.flatMap((section) => section.entries)
+    omitted.entries[0].page.sections
+      .flatMap((section) => section.entries)
       .every((entry) => entry.default == null),
   );
   assert.ok(
-    documented.entries[0].page.sections.flatMap((section) => section.entries)
-      .some((entry) =>
-        entry.default != null &&
-        formatMessage(entry.default, { colors: false }) ===
-          oracle.documentedFunctionDefault
+    documented.entries[0].page.sections
+      .flatMap((section) => section.entries)
+      .some(
+        (entry) =>
+          entry.default != null &&
+          formatMessage(entry.default, { colors: false }) ===
+            oracle.documentedFunctionDefault,
       ),
   );
   assert.ok(
-    functionalResult.unresolved.some((report) =>
-      report.reason === "functional-usage"
+    functionalResult.unresolved.some(
+      (report) => report.reason === "functional-usage",
     ),
   );
   assert.ok(

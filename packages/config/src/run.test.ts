@@ -129,52 +129,48 @@ describe("run with config context", { concurrency: false }, () => {
     }
   });
 
-  test(
-    "runWith() keeps phase two alive for config-only required values",
-    async () => {
-      await mkdir(TEST_DIR, { recursive: true });
-      const configPath = join(TEST_DIR, "test-config-issue-180.json");
+  test("runWith() keeps phase two alive for config-only required values", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-issue-180.json");
 
-      await writeFile(
-        configPath,
-        JSON.stringify({ token: "config-token" }),
-      );
+    await writeFile(configPath, JSON.stringify({ token: "config-token" }));
 
-      try {
-        const schema = z.object({
-          token: z.string(),
-        });
+    try {
+      const schema = z.object({
+        token: z.string(),
+      });
 
-        const context = createConfigContext({ schema });
-        const parser = object({
-          config: option("--config", string()),
-          token: bindConfig(fail<string>(), {
-            context,
-            key: "token",
-          }),
-        });
+      const context = createConfigContext({ schema });
+      const parser = object({
+        config: option("--config", string()),
+        token: bindConfig(fail<string>(), {
+          context,
+          key: "token",
+        }),
+      });
 
-        const result = await runWith(parser, "test", [context], {
-          contextOptions: {
-            getConfigPath: (parsed: { config: string }) => parsed.config,
-          },
-          args: ["--config", configPath],
-        });
+      const result = await runWith(parser, "test", [context], {
+        contextOptions: {
+          getConfigPath: (parsed: { config: string }) => parsed.config,
+        },
+        args: ["--config", configPath],
+      });
 
-        assert.deepEqual(result, {
-          config: configPath,
-          token: "config-token",
-        });
-      } finally {
-        await rm(configPath, { force: true });
-      }
-    },
-  );
+      assert.deepEqual(result, {
+        config: configPath,
+        token: "config-token",
+      });
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  });
 
   test("config loaders preserve parsed object identity when no scrub is needed", async () => {
-    const schema = z.object({
-      token: z.string().optional(),
-    }).optional();
+    const schema = z
+      .object({
+        token: z.string().optional(),
+      })
+      .optional();
 
     const context = createConfigContext({ schema });
     const parser = object({
@@ -637,92 +633,38 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(result, 0);
   });
 
-  for (
-    const [parserName, configValue, cliArgs, label] of [
-      [
-        "number",
-        9,
-        [] as readonly string[],
-        "0 as the initial parsed result",
-      ],
-      [
-        "boolean",
-        true,
-        [] as readonly string[],
-        "false as the initial parsed result",
-      ],
-      [
-        "string",
-        "config-name",
-        [] as readonly string[],
-        '"" as the initial parsed result',
-      ],
-    ] as const
-  ) {
-    test(
-      `runs phase-two config loading when the top-level parser returns ${label}`,
-      async () => {
-        if (parserName === "number") {
-          const schema = z.number();
-          const context = createConfigContext({ schema });
-          const parser = bindConfig(
-            withDefault(option("--count", integer()), 0),
-            {
-              context,
-              key: (config) => config,
-              default: 0,
-            },
-          );
-
-          const result = await runWith(parser, "test", [context], {
-            contextOptions: {
-              load: (parsed: number) => {
-                assert.equal(parsed, 0);
-                return { config: configValue, meta: undefined };
-              },
-            },
-            args: cliArgs,
-          });
-
-          assert.equal(result, configValue);
-          return;
-        }
-
-        if (parserName === "boolean") {
-          const schema = z.boolean();
-          const context = createConfigContext({ schema });
-          const parser = bindConfig(withDefault(flag("--enabled"), false), {
+  for (const [parserName, configValue, cliArgs, label] of [
+    ["number", 9, [] as readonly string[], "0 as the initial parsed result"],
+    [
+      "boolean",
+      true,
+      [] as readonly string[],
+      "false as the initial parsed result",
+    ],
+    [
+      "string",
+      "config-name",
+      [] as readonly string[],
+      '"" as the initial parsed result',
+    ],
+  ] as const) {
+    test(`runs phase-two config loading when the top-level parser returns ${label}`, async () => {
+      if (parserName === "number") {
+        const schema = z.number();
+        const context = createConfigContext({ schema });
+        const parser = bindConfig(
+          withDefault(option("--count", integer()), 0),
+          {
             context,
             key: (config) => config,
-            default: false,
-          });
-
-          const result = await runWith(parser, "test", [context], {
-            contextOptions: {
-              load: (parsed: boolean) => {
-                assert.equal(parsed, false);
-                return { config: configValue, meta: undefined };
-              },
-            },
-            args: cliArgs,
-          });
-
-          assert.equal(result, configValue);
-          return;
-        }
-
-        const schema = z.string();
-        const context = createConfigContext({ schema });
-        const parser = bindConfig(withDefault(option("--name", string()), ""), {
-          context,
-          key: (config) => config,
-          default: "",
-        });
+            default: 0,
+          },
+        );
 
         const result = await runWith(parser, "test", [context], {
           contextOptions: {
-            load: (parsed: string) => {
-              assert.equal(parsed, "");
+            load: (parsed: number) => {
+              assert.equal(parsed, 0);
               return { config: configValue, meta: undefined };
             },
           },
@@ -730,41 +672,82 @@ describe("run with config context", { concurrency: false }, () => {
         });
 
         assert.equal(result, configValue);
-      },
-    );
-  }
+        return;
+      }
 
-  test(
-    "runs phase-two config loading when the top-level parser returns undefined",
-    async () => {
-      const schema = z.object({
-        host: z.string(),
-      });
+      if (parserName === "boolean") {
+        const schema = z.boolean();
+        const context = createConfigContext({ schema });
+        const parser = bindConfig(withDefault(flag("--enabled"), false), {
+          context,
+          key: (config) => config,
+          default: false,
+        });
+
+        const result = await runWith(parser, "test", [context], {
+          contextOptions: {
+            load: (parsed: boolean) => {
+              assert.equal(parsed, false);
+              return { config: configValue, meta: undefined };
+            },
+          },
+          args: cliArgs,
+        });
+
+        assert.equal(result, configValue);
+        return;
+      }
+
+      const schema = z.string();
       const context = createConfigContext({ schema });
-      const parser = optional(flag("--debug"));
-
-      let loadCalls = 0;
-      let observedParsed: boolean | undefined | null = null;
+      const parser = bindConfig(withDefault(option("--name", string()), ""), {
+        context,
+        key: (config) => config,
+        default: "",
+      });
 
       const result = await runWith(parser, "test", [context], {
         contextOptions: {
-          load: (parsed: boolean | undefined) => {
-            loadCalls += 1;
-            observedParsed = parsed;
-            return {
-              config: { host: "config-host" },
-              meta: undefined,
-            };
+          load: (parsed: string) => {
+            assert.equal(parsed, "");
+            return { config: configValue, meta: undefined };
           },
         },
-        args: [],
+        args: cliArgs,
       });
 
-      assert.equal(result, undefined);
-      assert.equal(loadCalls, 1);
-      assert.equal(observedParsed, undefined);
-    },
-  );
+      assert.equal(result, configValue);
+    });
+  }
+
+  test("runs phase-two config loading when the top-level parser returns undefined", async () => {
+    const schema = z.object({
+      host: z.string(),
+    });
+    const context = createConfigContext({ schema });
+    const parser = optional(flag("--debug"));
+
+    let loadCalls = 0;
+    let observedParsed: boolean | undefined | null = null;
+
+    const result = await runWith(parser, "test", [context], {
+      contextOptions: {
+        load: (parsed: boolean | undefined) => {
+          loadCalls += 1;
+          observedParsed = parsed;
+          return {
+            config: { host: "config-host" },
+            meta: undefined,
+          };
+        },
+      },
+      args: [],
+    });
+
+    assert.equal(result, undefined);
+    assert.equal(loadCalls, 1);
+    assert.equal(observedParsed, undefined);
+  });
 
   test("works with nested config values", async () => {
     await mkdir(TEST_DIR, { recursive: true });
@@ -929,7 +912,7 @@ describe("run with config context", { concurrency: false }, () => {
       args: [],
     });
 
-    assert.equal(result, "project:/workspace/cache");
+    assert.equal(result, `project:${resolve("/workspace", "cache")}`);
   });
 
   test("custom load mode keeps default ConfigMeta type", async () => {
@@ -962,7 +945,7 @@ describe("run with config context", { concurrency: false }, () => {
       args: [],
     });
 
-    assert.equal(result, "/repo/build");
+    assert.equal(result, resolve("/repo", "build"));
   });
 
   describe("help/version/completion support", () => {
@@ -1225,10 +1208,7 @@ describe("run with config context", { concurrency: false }, () => {
   test("runWith does not leak config state into later plain parses", async () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-dispose.json");
-    await writeFile(
-      configPath,
-      JSON.stringify({ host: "dispose-test.com" }),
-    );
+    await writeFile(configPath, JSON.stringify({ host: "dispose-test.com" }));
 
     try {
       const schema = z.object({ host: z.string() });
@@ -1470,19 +1450,67 @@ describe("run with config context", { concurrency: false }, () => {
     assert.equal(result, 8080);
   });
 
-  test(
-    "shared ConfigContext stays isolated across concurrent load() runs",
-    async () => {
-      // Regression test for https://github.com/dahlia/optique/issues/270.
-      // A shared ConfigContext must snapshot phase-two annotations per run,
-      // even when another run loads a different config later while async
-      // completion keeps the first run alive.
+  test("shared ConfigContext stays isolated across concurrent load() runs", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/270.
+    // A shared ConfigContext must snapshot phase-two annotations per run,
+    // even when another run loads a different config later while async
+    // completion keeps the first run alive.
+    const schema = z.object({ host: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = object({
+      slow: createDelayedAsyncOptionParser("--slow", (value) =>
+        value === "long" ? 200 : 10,
+      ),
+      host: bindConfig(option("--host", string()), {
+        context,
+        key: "host",
+        default: "localhost",
+      }),
+    });
+
+    const [slowResult, fastResult] = await Promise.all([
+      runWith(parser, "test", [context], {
+        args: ["--slow", "long"],
+        contextOptions: {
+          load: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            return { config: { host: "A" }, meta: undefined };
+          },
+        },
+      }),
+      runWith(parser, "test", [context], {
+        args: ["--slow", "short"],
+        contextOptions: {
+          load: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            return { config: { host: "B" }, meta: undefined };
+          },
+        },
+      }),
+    ]);
+
+    assert.deepEqual(slowResult, { slow: "long", host: "A" });
+    assert.deepEqual(fastResult, { slow: "short", host: "B" });
+  });
+
+  test("shared ConfigContext stays isolated across concurrent getConfigPath() runs", async () => {
+    // Regression test for https://github.com/dahlia/optique/issues/270.
+    // Reusing one ConfigContext across concurrent file-backed runs must not
+    // let one run's config file overwrite the other's annotation snapshot.
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPathA = join(TEST_DIR, "test-config-issue-270-a.json");
+    const configPathB = join(TEST_DIR, "test-config-issue-270-b.json");
+
+    await writeFile(configPathA, JSON.stringify({ host: "A" }));
+    await writeFile(configPathB, JSON.stringify({ host: "B" }));
+
+    try {
       const schema = z.object({ host: z.string() });
       const context = createConfigContext({ schema });
       const parser = object({
-        slow: createDelayedAsyncOptionParser(
-          "--slow",
-          (value) => value === "long" ? 200 : 10,
+        config: option("--config", string()),
+        slow: createDelayedAsyncOptionParser("--slow", (value) =>
+          value === "long" ? 200 : 10,
         ),
         host: bindConfig(option("--host", string()), {
           context,
@@ -1493,90 +1521,34 @@ describe("run with config context", { concurrency: false }, () => {
 
       const [slowResult, fastResult] = await Promise.all([
         runWith(parser, "test", [context], {
-          args: ["--slow", "long"],
+          args: ["--config", configPathA, "--slow", "long"],
           contextOptions: {
-            load: async () => {
-              await new Promise((resolve) => setTimeout(resolve, 10));
-              return { config: { host: "A" }, meta: undefined };
-            },
+            getConfigPath: (parsed: { config: string }) => parsed.config,
           },
         }),
         runWith(parser, "test", [context], {
-          args: ["--slow", "short"],
+          args: ["--config", configPathB, "--slow", "short"],
           contextOptions: {
-            load: async () => {
-              await new Promise((resolve) => setTimeout(resolve, 50));
-              return { config: { host: "B" }, meta: undefined };
-            },
+            getConfigPath: (parsed: { config: string }) => parsed.config,
           },
         }),
       ]);
 
-      assert.deepEqual(slowResult, { slow: "long", host: "A" });
-      assert.deepEqual(fastResult, { slow: "short", host: "B" });
-    },
-  );
-
-  test(
-    "shared ConfigContext stays isolated across concurrent getConfigPath() runs",
-    async () => {
-      // Regression test for https://github.com/dahlia/optique/issues/270.
-      // Reusing one ConfigContext across concurrent file-backed runs must not
-      // let one run's config file overwrite the other's annotation snapshot.
-      await mkdir(TEST_DIR, { recursive: true });
-      const configPathA = join(TEST_DIR, "test-config-issue-270-a.json");
-      const configPathB = join(TEST_DIR, "test-config-issue-270-b.json");
-
-      await writeFile(configPathA, JSON.stringify({ host: "A" }));
-      await writeFile(configPathB, JSON.stringify({ host: "B" }));
-
-      try {
-        const schema = z.object({ host: z.string() });
-        const context = createConfigContext({ schema });
-        const parser = object({
-          config: option("--config", string()),
-          slow: createDelayedAsyncOptionParser(
-            "--slow",
-            (value) => value === "long" ? 200 : 10,
-          ),
-          host: bindConfig(option("--host", string()), {
-            context,
-            key: "host",
-            default: "localhost",
-          }),
-        });
-
-        const [slowResult, fastResult] = await Promise.all([
-          runWith(parser, "test", [context], {
-            args: ["--config", configPathA, "--slow", "long"],
-            contextOptions: {
-              getConfigPath: (parsed: { config: string }) => parsed.config,
-            },
-          }),
-          runWith(parser, "test", [context], {
-            args: ["--config", configPathB, "--slow", "short"],
-            contextOptions: {
-              getConfigPath: (parsed: { config: string }) => parsed.config,
-            },
-          }),
-        ]);
-
-        assert.deepEqual(slowResult, {
-          config: configPathA,
-          slow: "long",
-          host: "A",
-        });
-        assert.deepEqual(fastResult, {
-          config: configPathB,
-          slow: "short",
-          host: "B",
-        });
-      } finally {
-        await rm(configPathA, { force: true });
-        await rm(configPathB, { force: true });
-      }
-    },
-  );
+      assert.deepEqual(slowResult, {
+        config: configPathA,
+        slow: "long",
+        host: "A",
+      });
+      assert.deepEqual(fastResult, {
+        config: configPathB,
+        slow: "short",
+        host: "B",
+      });
+    } finally {
+      await rm(configPathA, { force: true });
+      await rm(configPathB, { force: true });
+    }
+  });
 
   test("supports runWithSync() with config file fallbacks", async () => {
     await mkdir(TEST_DIR, { recursive: true });
@@ -1678,45 +1650,39 @@ describe("run with config context", { concurrency: false }, () => {
     }
   });
 
-  test(
-    "runWithSync() keeps phase two alive for config-only required values",
-    async () => {
-      await mkdir(TEST_DIR, { recursive: true });
-      const configPath = join(TEST_DIR, "test-config-sync-issue-180.json");
+  test("runWithSync() keeps phase two alive for config-only required values", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const configPath = join(TEST_DIR, "test-config-sync-issue-180.json");
 
-      await writeFile(
-        configPath,
-        JSON.stringify({ token: "config-token" }),
-      );
+    await writeFile(configPath, JSON.stringify({ token: "config-token" }));
 
-      try {
-        const schema = z.object({
-          token: z.string(),
-        });
+    try {
+      const schema = z.object({
+        token: z.string(),
+      });
 
-        const context = createConfigContext({ schema });
-        const parser = object({
-          config: option("--config", string()),
-          token: bindConfig(fail<string>(), {
-            context,
-            key: "token",
-          }),
-        });
+      const context = createConfigContext({ schema });
+      const parser = object({
+        config: option("--config", string()),
+        token: bindConfig(fail<string>(), {
+          context,
+          key: "token",
+        }),
+      });
 
-        const result = runWithSync(parser, "test", [context], {
-          contextOptions: {
-            getConfigPath: (parsed: { config: string }) => parsed.config,
-          },
-          args: ["--config", configPath],
-        });
+      const result = runWithSync(parser, "test", [context], {
+        contextOptions: {
+          getConfigPath: (parsed: { config: string }) => parsed.config,
+        },
+        args: ["--config", configPath],
+      });
 
-        assert.deepEqual(result, {
-          config: configPath,
-          token: "config-token",
-        });
-      } finally {
-        await rm(configPath, { force: true });
-      }
-    },
-  );
+      assert.deepEqual(result, {
+        config: configPath,
+        token: "config-token",
+      });
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  });
 });

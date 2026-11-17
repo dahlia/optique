@@ -94,10 +94,7 @@ export function debug(
     description: options.description ?? message`Enable debug logging.`,
   });
 
-  return map(
-    optional(flagParser),
-    (value: true | undefined) => {
-      return value === true ? debugLevel : normalLevel;
-    },
-  );
+  return map(optional(flagParser), (value: true | undefined) => {
+    return value === true ? debugLevel : normalLevel;
+  });
 }

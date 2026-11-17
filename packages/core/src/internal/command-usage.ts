@@ -53,13 +53,13 @@ export function scopeCommandUsage(
   return usage.map((term): UsageTerm => {
     if (term.type === "command") {
       const id = getCommandUsageId(term);
-      return id == null ? term : identifyCommandUsage(
-        { ...term },
-        scopeCommandUsageId(scope, id),
-      );
+      return id == null
+        ? term
+        : identifyCommandUsage({ ...term }, scopeCommandUsageId(scope, id));
     }
     if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
     ) {
       return { ...term, terms: scopeCommandUsage(term.terms, scope) };

@@ -52,59 +52,47 @@ function createInheritedTestParser(): Parser<"sync", unknown, unknown> {
 }
 
 describe("annotation-state", () => {
-  it(
-    "getWrappedChildParseState() preserves nullish sentinels when inheriting annotations",
-    () => {
-      const marker = Symbol.for(
-        "@test/getWrappedChildParseState-nullish-sentinel",
+  it("getWrappedChildParseState() preserves nullish sentinels when inheriting annotations", () => {
+    const marker = Symbol.for(
+      "@test/getWrappedChildParseState-nullish-sentinel",
+    );
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const parser = createInheritedTestParser();
+
+    for (const childState of [undefined, null] as const) {
+      const wrapped = getWrappedChildParseState(
+        parentState,
+        childState,
+        parser,
       );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const parser = createInheritedTestParser();
 
-      for (const childState of [undefined, null] as const) {
-        const wrapped = getWrappedChildParseState(
-          parentState,
-          childState,
-          parser,
-        );
-
-        assert.equal(
-          normalizeInjectedAnnotationState(wrapped),
-          childState,
-          "the wrapped state should normalize back to the original sentinel",
-        );
-        assert.ok(getAnnotations(wrapped)?.[marker]);
-      }
-    },
-  );
-
-  it(
-    "getWrappedChildState() preserves nullish sentinels when inheriting annotations",
-    () => {
-      const marker = Symbol.for(
-        "@test/getWrappedChildState-nullish-sentinel",
+      assert.equal(
+        normalizeInjectedAnnotationState(wrapped),
+        childState,
+        "the wrapped state should normalize back to the original sentinel",
       );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const parser = createInheritedTestParser();
+      assert.ok(getAnnotations(wrapped)?.[marker]);
+    }
+  });
 
-      for (const childState of [undefined, null] as const) {
-        const wrapped = getWrappedChildState(
-          parentState,
-          childState,
-          parser,
-        );
+  it("getWrappedChildState() preserves nullish sentinels when inheriting annotations", () => {
+    const marker = Symbol.for("@test/getWrappedChildState-nullish-sentinel");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const parser = createInheritedTestParser();
 
-        assert.equal(
-          normalizeInjectedAnnotationState(wrapped),
-          childState,
-          "the wrapped state should normalize back to the original sentinel",
-        );
-        assert.ok(getAnnotations(wrapped)?.[marker]);
-      }
-    },
-  );
+    for (const childState of [undefined, null] as const) {
+      const wrapped = getWrappedChildState(parentState, childState, parser);
+
+      assert.equal(
+        normalizeInjectedAnnotationState(wrapped),
+        childState,
+        "the wrapped state should normalize back to the original sentinel",
+      );
+      assert.ok(getAnnotations(wrapped)?.[marker]);
+    }
+  });
 
   it("getDelegatedAnnotationState() preserves primitive sentinels", () => {
     const marker = Symbol.for("@test/getDelegatedAnnotationState-primitive");
@@ -117,1103 +105,943 @@ describe("annotation-state", () => {
     assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
   });
 
-  it(
-    "getDelegatedAnnotationState() creates a fresh wrapper from wrapped primitives",
-    () => {
-      const parentMarker = Symbol.for(
-        "@test/getDelegatedAnnotationState-parent-primitive",
-      );
-      const childMarker = Symbol.for(
-        "@test/getDelegatedAnnotationState-child-primitive",
-      );
-      const childState = injectAnnotations("seed", {
-        [childMarker]: true,
-      });
-      const parentState = injectAnnotations(undefined, {
-        [parentMarker]: true,
-      });
+  it("getDelegatedAnnotationState() creates a fresh wrapper from wrapped primitives", () => {
+    const parentMarker = Symbol.for(
+      "@test/getDelegatedAnnotationState-parent-primitive",
+    );
+    const childMarker = Symbol.for(
+      "@test/getDelegatedAnnotationState-child-primitive",
+    );
+    const childState = injectAnnotations("seed", {
+      [childMarker]: true,
+    });
+    const parentState = injectAnnotations(undefined, {
+      [parentMarker]: true,
+    });
 
-      const delegated = getDelegatedAnnotationState(parentState, childState);
+    const delegated = getDelegatedAnnotationState(parentState, childState);
 
-      assert.notStrictEqual(delegated, childState);
-      assert.ok(getAnnotations(childState)?.[childMarker]);
-      assert.ok(getAnnotations(delegated)?.[parentMarker]);
-      assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
-    },
-  );
+    assert.notStrictEqual(delegated, childState);
+    assert.ok(getAnnotations(childState)?.[childMarker]);
+    assert.ok(getAnnotations(delegated)?.[parentMarker]);
+    assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
+  });
 
-  it(
-    "getDelegatedAnnotationState() rewraps injected primitives even with identical annotations",
-    () => {
-      const marker = Symbol.for(
-        "@test/getDelegatedAnnotationState-shared-primitive",
-      );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const childState = injectAnnotations("seed", annotations);
+  it("getDelegatedAnnotationState() rewraps injected primitives even with identical annotations", () => {
+    const marker = Symbol.for(
+      "@test/getDelegatedAnnotationState-shared-primitive",
+    );
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const childState = injectAnnotations("seed", annotations);
 
-      const delegated = getDelegatedAnnotationState(parentState, childState);
+    const delegated = getDelegatedAnnotationState(parentState, childState);
 
-      assert.notStrictEqual(delegated, childState);
-      assert.ok(getAnnotations(delegated)?.[marker]);
-      assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
-    },
-  );
+    assert.notStrictEqual(delegated, childState);
+    assert.ok(getAnnotations(delegated)?.[marker]);
+    assert.equal(normalizeDelegatedAnnotationState(delegated), "seed");
+  });
 
-  it(
-    "getDelegatedAnnotationState() preserves class instances via annotation views",
-    () => {
-      class StatefulObject {
-        #secret = "private-value";
+  it("getDelegatedAnnotationState() preserves class instances via annotation views", () => {
+    class StatefulObject {
+      #secret = "private-value";
 
-        read(): string {
-          return this.#secret;
-        }
+      read(): string {
+        return this.#secret;
       }
+    }
 
-      const marker = Symbol.for("@test/getDelegatedAnnotationState-class");
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const state = new StatefulObject();
+    const marker = Symbol.for("@test/getDelegatedAnnotationState-class");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const state = new StatefulObject();
+    const delegated = getDelegatedAnnotationState(parentState, state);
+
+    assert.ok(hasDelegatedAnnotationCarrier(delegated));
+    assert.ok(getAnnotations(delegated)?.[marker]);
+    assert.equal(delegated.read(), "private-value");
+    assert.equal(getAnnotations(state), undefined);
+    assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+  });
+
+  it("getDelegatedAnnotationState() preserves built-in subclasses via annotation views", () => {
+    class StatefulMap extends Map<string, string> {
+      #secret = "private-value";
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    const marker = Symbol.for("@test/getDelegatedAnnotationState-map-subclass");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const state = new StatefulMap([["key", "value"]]);
+    const delegated = getDelegatedAnnotationState(parentState, state);
+
+    assert.ok(hasDelegatedAnnotationCarrier(delegated));
+    assert.ok(getAnnotations(delegated)?.[marker]);
+    assert.equal(delegated.get("key"), "value");
+    assert.equal(delegated.read(), "private-value");
+    assert.equal(getAnnotations(state), undefined);
+    assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+  });
+
+  it("getDelegatedAnnotationState() preserves Array subclasses via annotation views", () => {
+    class StatefulArray<T> extends Array<T> {
+      #secret = "private-value";
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    const marker = Symbol.for(
+      "@test/getDelegatedAnnotationState-array-subclass",
+    );
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const state = new StatefulArray<string>("value");
+    const delegated = getDelegatedAnnotationState(parentState, state);
+
+    assert.ok(hasDelegatedAnnotationCarrier(delegated));
+    assert.ok(getAnnotations(delegated)?.[marker]);
+    assert.ok(delegated instanceof StatefulArray);
+    assert.equal(delegated[0], "value");
+    assert.equal(delegated.read(), "private-value");
+    assert.equal(getAnnotations(state), undefined);
+    assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+  });
+
+  it("getDelegatedAnnotationState() delegates built-in objects without annotation views", () => {
+    const marker = Symbol.for("@test/getDelegatedAnnotationState-built-ins");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+
+    for (const state of [
+      [],
+      new Date(0),
+      new Map([["key", "value"]]),
+      new Set(["value"]),
+      /value/u,
+    ] as const) {
       const delegated = getDelegatedAnnotationState(parentState, state);
 
       assert.ok(hasDelegatedAnnotationCarrier(delegated));
       assert.ok(getAnnotations(delegated)?.[marker]);
-      assert.equal(delegated.read(), "private-value");
-      assert.equal(getAnnotations(state), undefined);
       assert.equal(normalizeDelegatedAnnotationState(delegated), state);
-    },
-  );
+    }
+  });
 
-  it(
-    "getDelegatedAnnotationState() preserves built-in subclasses via annotation views",
-    () => {
-      class StatefulMap extends Map<string, string> {
-        #secret = "private-value";
+  it("getDelegatedAnnotationState() tracks delegated plain-object clones", () => {
+    const marker = Symbol.for("@test/getDelegatedAnnotationState-plain-object");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const state = { value: "seed" };
 
-        read(): string {
-          return this.#secret;
-        }
+    const delegated = getDelegatedAnnotationState(parentState, state);
+
+    assert.notStrictEqual(delegated, state);
+    assert.ok(hasDelegatedAnnotationCarrier(delegated));
+    assert.ok(getAnnotations(delegated)?.[marker]);
+    assert.equal(delegated.value, "seed");
+    assert.equal(getAnnotations(state), undefined);
+    assert.equal(normalizeDelegatedAnnotationState(delegated), state);
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() unwraps nested carriers in arrays and plain objects", () => {
+    class StatefulObject {
+      #secret = "private-value";
+
+      read(): string {
+        return this.#secret;
       }
+    }
 
-      const marker = Symbol.for(
-        "@test/getDelegatedAnnotationState-map-subclass",
-      );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const state = new StatefulMap([["key", "value"]]);
-      const delegated = getDelegatedAnnotationState(parentState, state);
+    const marker = Symbol.for("@test/normalizeNestedDelegatedAnnotationState");
+    const parentState = injectAnnotations(undefined, {
+      [marker]: true,
+    });
+    const state = new StatefulObject();
+    const nested = {
+      primitive: getDelegatedAnnotationState(parentState, "seed"),
+      object: {
+        inner: getDelegatedAnnotationState(parentState, state),
+      },
+      array: [
+        getDelegatedAnnotationState(parentState, "seed-array"),
+        { inner: getDelegatedAnnotationState(parentState, state) },
+      ],
+    };
 
-      assert.ok(hasDelegatedAnnotationCarrier(delegated));
-      assert.ok(getAnnotations(delegated)?.[marker]);
-      assert.equal(delegated.get("key"), "value");
-      assert.equal(delegated.read(), "private-value");
-      assert.equal(getAnnotations(state), undefined);
-      assert.equal(normalizeDelegatedAnnotationState(delegated), state);
-    },
-  );
+    const normalized = normalizeNestedDelegatedAnnotationState(nested);
 
-  it(
-    "getDelegatedAnnotationState() preserves Array subclasses via annotation views",
-    () => {
-      class StatefulArray<T> extends Array<T> {
-        #secret = "private-value";
+    assert.notStrictEqual(normalized, nested);
+    assert.deepEqual(normalized, {
+      primitive: "seed",
+      object: { inner: state },
+      array: ["seed-array", { inner: state }],
+    });
+    assert.strictEqual(normalized.object.inner, state);
+    const arrayEntry = normalized.array[1];
+    assert.ok(
+      arrayEntry != null &&
+        typeof arrayEntry === "object" &&
+        "inner" in arrayEntry,
+    );
+    assert.strictEqual(arrayEntry.inner, state);
+  });
 
-        read(): string {
-          return this.#secret;
-        }
-      }
-
-      const marker = Symbol.for(
-        "@test/getDelegatedAnnotationState-array-subclass",
-      );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const state = new StatefulArray<string>("value");
-      const delegated = getDelegatedAnnotationState(parentState, state);
-
-      assert.ok(hasDelegatedAnnotationCarrier(delegated));
-      assert.ok(getAnnotations(delegated)?.[marker]);
-      assert.ok(delegated instanceof StatefulArray);
-      assert.equal(delegated[0], "value");
-      assert.equal(delegated.read(), "private-value");
-      assert.equal(getAnnotations(state), undefined);
-      assert.equal(normalizeDelegatedAnnotationState(delegated), state);
-    },
-  );
-
-  it(
-    "getDelegatedAnnotationState() delegates built-in objects without annotation views",
-    () => {
-      const marker = Symbol.for(
-        "@test/getDelegatedAnnotationState-built-ins",
-      );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-
-      for (
-        const state of [
-          [],
-          new Date(0),
-          new Map([["key", "value"]]),
-          new Set(["value"]),
-          /value/u,
-        ] as const
-      ) {
-        const delegated = getDelegatedAnnotationState(parentState, state);
-
-        assert.ok(hasDelegatedAnnotationCarrier(delegated));
-        assert.ok(getAnnotations(delegated)?.[marker]);
-        assert.equal(normalizeDelegatedAnnotationState(delegated), state);
-      }
-    },
-  );
-
-  it(
-    "getDelegatedAnnotationState() tracks delegated plain-object clones",
-    () => {
-      const marker = Symbol.for(
-        "@test/getDelegatedAnnotationState-plain-object",
-      );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const state = { value: "seed" };
-
-      const delegated = getDelegatedAnnotationState(parentState, state);
-
-      assert.notStrictEqual(delegated, state);
-      assert.ok(hasDelegatedAnnotationCarrier(delegated));
-      assert.ok(getAnnotations(delegated)?.[marker]);
-      assert.equal(delegated.value, "seed");
-      assert.equal(getAnnotations(state), undefined);
-      assert.equal(normalizeDelegatedAnnotationState(delegated), state);
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in arrays and plain objects",
-    () => {
-      class StatefulObject {
-        #secret = "private-value";
-
-        read(): string {
-          return this.#secret;
-        }
-      }
-
-      const marker = Symbol.for(
-        "@test/normalizeNestedDelegatedAnnotationState",
-      );
-      const parentState = injectAnnotations(undefined, {
-        [marker]: true,
-      });
-      const state = new StatefulObject();
-      const nested = {
-        primitive: getDelegatedAnnotationState(parentState, "seed"),
-        object: {
-          inner: getDelegatedAnnotationState(parentState, state),
-        },
-        array: [
-          getDelegatedAnnotationState(parentState, "seed-array"),
-          { inner: getDelegatedAnnotationState(parentState, state) },
-        ],
-      };
-
-      const normalized = normalizeNestedDelegatedAnnotationState(nested);
-
-      assert.notStrictEqual(normalized, nested);
-      assert.deepEqual(normalized, {
-        primitive: "seed",
-        object: { inner: state },
-        array: ["seed-array", { inner: state }],
-      });
-      assert.strictEqual(normalized.object.inner, state);
-      const arrayEntry = normalized.array[1];
-      assert.ok(
-        arrayEntry != null &&
-          typeof arrayEntry === "object" &&
-          "inner" in arrayEntry,
-      );
-      assert.strictEqual(arrayEntry.inner, state);
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves top-level array annotations",
-    () => {
-      const arrayMarker = Symbol.for(
-        "@test/normalizeNestedDelegatedAnnotationState-array",
-      );
-      const delegatedParent = injectAnnotations(undefined, {
-        [Symbol.for("@test/normalizeNestedDelegatedAnnotationState-delegated")]:
-          true,
-      });
-      const annotatedArray = injectAnnotations([
-        getDelegatedAnnotationState(delegatedParent, "seed"),
-      ], {
+  it("normalizeNestedDelegatedAnnotationState() preserves top-level array annotations", () => {
+    const arrayMarker = Symbol.for(
+      "@test/normalizeNestedDelegatedAnnotationState-array",
+    );
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for("@test/normalizeNestedDelegatedAnnotationState-delegated")]:
+        true,
+    });
+    const annotatedArray = injectAnnotations(
+      [getDelegatedAnnotationState(delegatedParent, "seed")],
+      {
         [arrayMarker]: true,
-      });
+      },
+    );
 
-      const normalized = normalizeNestedDelegatedAnnotationState(
-        annotatedArray,
-      );
+    const normalized = normalizeNestedDelegatedAnnotationState(annotatedArray);
 
-      assert.notStrictEqual(normalized, annotatedArray);
-      assert.equal(normalized.length, 1);
-      assert.equal(normalized[0], "seed");
-      assert.ok(getAnnotations(normalized)?.[arrayMarker]);
-    },
-  );
+    assert.notStrictEqual(normalized, annotatedArray);
+    assert.equal(normalized.length, 1);
+    assert.equal(normalized[0], "seed");
+    assert.ok(getAnnotations(normalized)?.[arrayMarker]);
+  });
 
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves Array subclasses while unwrapping entries",
-    () => {
-      class StatefulArray<T> extends Array<T> {
-        #secret = "private-value";
+  it("normalizeNestedDelegatedAnnotationState() preserves Array subclasses while unwrapping entries", () => {
+    class StatefulArray<T> extends Array<T> {
+      #secret = "private-value";
 
-        read(): string {
-          return this.#secret;
-        }
+      read(): string {
+        return this.#secret;
       }
+    }
 
-      const delegatedParent = injectAnnotations(undefined, {
-        [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-array-subclass-parent",
-          )
-        ]: true,
-      });
-      const state = new StatefulArray<unknown>();
-      state.push(
-        getDelegatedAnnotationState(delegatedParent, "seed"),
-        { inner: getDelegatedAnnotationState(delegatedParent, "value") },
-      );
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-array-subclass-parent",
+      )]: true,
+    });
+    const state = new StatefulArray<unknown>();
+    state.push(getDelegatedAnnotationState(delegatedParent, "seed"), {
+      inner: getDelegatedAnnotationState(delegatedParent, "value"),
+    });
 
-      const normalized = normalizeNestedDelegatedAnnotationState(state);
+    const normalized = normalizeNestedDelegatedAnnotationState(state);
 
-      assert.notStrictEqual(normalized, state);
-      assert.ok(normalized instanceof StatefulArray);
-      assert.equal(normalized.read(), "private-value");
-      assert.deepEqual([...normalized], [
-        "seed",
-        { inner: "value" },
-      ]);
-    },
-  );
+    assert.notStrictEqual(normalized, state);
+    assert.ok(normalized instanceof StatefulArray);
+    assert.equal(normalized.read(), "private-value");
+    assert.deepEqual([...normalized], ["seed", { inner: "value" }]);
+  });
 
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves array metadata and normalizes nested custom properties",
-    () => {
-      const arrayMarker = Symbol.for(
-        "@test/normalizeNestedDelegatedAnnotationState-array-metadata",
-      );
-      const extraKey = "extra";
-      const symbolKey = Symbol.for(
-        "@test/normalizeNestedDelegatedAnnotationState-array-symbol",
-      );
-      const delegatedParent = injectAnnotations(undefined, {
-        [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-array-metadata-parent",
-          )
-        ]: true,
-      });
-      const array = injectAnnotations([
-        getDelegatedAnnotationState(delegatedParent, "seed"),
-      ], {
+  it("normalizeNestedDelegatedAnnotationState() preserves array metadata and normalizes nested custom properties", () => {
+    const arrayMarker = Symbol.for(
+      "@test/normalizeNestedDelegatedAnnotationState-array-metadata",
+    );
+    const extraKey = "extra";
+    const symbolKey = Symbol.for(
+      "@test/normalizeNestedDelegatedAnnotationState-array-symbol",
+    );
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-array-metadata-parent",
+      )]: true,
+    });
+    const array = injectAnnotations(
+      [getDelegatedAnnotationState(delegatedParent, "seed")],
+      {
         [arrayMarker]: true,
-      });
-      Object.defineProperty(array, extraKey, {
-        value: {
-          inner: getDelegatedAnnotationState(delegatedParent, "extra"),
-        },
-        enumerable: false,
-        writable: false,
-        configurable: true,
-      });
-      Object.defineProperty(array, symbolKey, {
-        value: {
-          inner: getDelegatedAnnotationState(delegatedParent, "symbol"),
-        },
-        enumerable: false,
-        writable: true,
-        configurable: false,
-      });
+      },
+    );
+    Object.defineProperty(array, extraKey, {
+      value: {
+        inner: getDelegatedAnnotationState(delegatedParent, "extra"),
+      },
+      enumerable: false,
+      writable: false,
+      configurable: true,
+    });
+    Object.defineProperty(array, symbolKey, {
+      value: {
+        inner: getDelegatedAnnotationState(delegatedParent, "symbol"),
+      },
+      enumerable: false,
+      writable: true,
+      configurable: false,
+    });
 
-      const normalized = normalizeNestedDelegatedAnnotationState(array);
+    const normalized = normalizeNestedDelegatedAnnotationState(array);
 
-      assert.notStrictEqual(normalized, array);
-      assert.equal(normalized[0], "seed");
-      assert.ok(getAnnotations(normalized)?.[arrayMarker]);
-      assert.deepEqual(Reflect.get(normalized, extraKey), {
-        inner: "extra",
-      });
-      assert.deepEqual(
-        Object.getOwnPropertyDescriptor(normalized, extraKey),
-        {
-          value: { inner: "extra" },
-          enumerable: false,
-          writable: false,
-          configurable: true,
-        },
-      );
-      assert.deepEqual(Reflect.get(normalized, symbolKey), {
-        inner: "symbol",
-      });
-      assert.deepEqual(
-        Object.getOwnPropertyDescriptor(normalized, symbolKey),
-        {
-          value: { inner: "symbol" },
-          enumerable: false,
-          writable: true,
-          configurable: false,
-        },
-      );
-    },
-  );
+    assert.notStrictEqual(normalized, array);
+    assert.equal(normalized[0], "seed");
+    assert.ok(getAnnotations(normalized)?.[arrayMarker]);
+    assert.deepEqual(Reflect.get(normalized, extraKey), {
+      inner: "extra",
+    });
+    assert.deepEqual(Object.getOwnPropertyDescriptor(normalized, extraKey), {
+      value: { inner: "extra" },
+      enumerable: false,
+      writable: false,
+      configurable: true,
+    });
+    assert.deepEqual(Reflect.get(normalized, symbolKey), {
+      inner: "symbol",
+    });
+    assert.deepEqual(Object.getOwnPropertyDescriptor(normalized, symbolKey), {
+      value: { inner: "symbol" },
+      enumerable: false,
+      writable: true,
+      configurable: false,
+    });
+  });
 
-  it(
-    "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Map entries",
-    () => {
-      class StatefulObject {
-        #secret = "private-value";
+  it("normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Map entries", () => {
+    class StatefulObject {
+      #secret = "private-value";
 
-        read(): string {
-          return this.#secret;
-        }
+      read(): string {
+        return this.#secret;
       }
+    }
 
-      const mapMarker = Symbol.for(
-        "@test/normalizeNestedDelegatedAnnotationState-map",
-      );
-      const delegatedParent = injectAnnotations(undefined, {
-        [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-map-parent",
-          )
-        ]: true,
-      });
-      const state = new StatefulObject();
-      const map = injectAnnotations(
-        new Map<
-          string,
-          string | { inner: StatefulObject }
-        >([
-          ["plain", getDelegatedAnnotationState(delegatedParent, "value")],
-          [
-            getDelegatedAnnotationState(delegatedParent, "wrapped-key"),
-            { inner: getDelegatedAnnotationState(delegatedParent, state) },
-          ],
-        ]),
-        {
-          [mapMarker]: true,
-        },
-      );
-
-      const normalized = normalizeNestedDelegatedAnnotationState(map);
-
-      assert.notStrictEqual(normalized, map);
-      assert.ok(getAnnotations(normalized)?.[mapMarker]);
-      assert.equal(normalized.get("plain"), "value");
-      const wrappedEntry = normalized.get("wrapped-key");
-      assert.deepEqual(wrappedEntry, { inner: state });
-      if (
-        wrappedEntry == null ||
-        typeof wrappedEntry !== "object" ||
-        !("inner" in wrappedEntry)
-      ) {
-        assert.fail(
-          "Expected normalized map entry to preserve the class state.",
-        );
-      }
-      assert.strictEqual(wrappedEntry.inner, state);
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves Map subclasses while unwrapping entries",
-    () => {
-      class StatefulMap extends Map<string, unknown> {
-        #secret = "private-value";
-
-        read(): string {
-          return this.#secret;
-        }
-      }
-
-      const delegatedParent = injectAnnotations(undefined, {
-        [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-map-subclass-parent",
-          )
-        ]: true,
-      });
-      const state = new StatefulMap([
+    const mapMarker = Symbol.for(
+      "@test/normalizeNestedDelegatedAnnotationState-map",
+    );
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for("@test/normalizeNestedDelegatedAnnotationState-map-parent")]:
+        true,
+    });
+    const state = new StatefulObject();
+    const map = injectAnnotations(
+      new Map<string, string | { inner: StatefulObject }>([
         ["plain", getDelegatedAnnotationState(delegatedParent, "value")],
-        ["self", getDelegatedAnnotationState(delegatedParent, "seed")],
-      ]);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(state);
-
-      assert.notStrictEqual(normalized, state);
-      assert.ok(normalized instanceof StatefulMap);
-      assert.equal(normalized.read(), "private-value");
-      assert.equal(normalized.get("plain"), "value");
-      assert.equal(normalized.get("self"), "seed");
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() skips Map subclass clone construction when nothing changes",
-    () => {
-      class RequiredArgMap extends Map<string, string> {
-        readonly label: string;
-
-        constructor(
-          label: string,
-          entries?: Iterable<readonly [string, string]>,
-        ) {
-          if (label.length === 0) {
-            throw new TypeError("label must not be empty.");
-          }
-          super(entries);
-          this.label = label;
-        }
-      }
-
-      const state = new RequiredArgMap("required", [["key", "value"]]);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(state);
-
-      assert.strictEqual(normalized, state);
-      assert.equal(normalized.label, "required");
-      assert.equal(normalized.get("key"), "value");
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() falls back when Map subclass clone construction requires args",
-    () => {
-      class RequiredArgMap extends Map<string, unknown> {
-        readonly label: string;
-
-        constructor(
-          label: string,
-          entries?: Iterable<readonly [string, unknown]>,
-        ) {
-          if (label.length === 0) {
-            throw new TypeError("label must not be empty.");
-          }
-          super(entries);
-          this.label = label;
-        }
-      }
-
-      const delegatedParent = injectAnnotations(undefined, {
         [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-map-required-arg-parent",
-          )
-        ]: true,
-      });
-      const state = new RequiredArgMap("required", [[
-        "key",
-        getDelegatedAnnotationState(delegatedParent, "value"),
-      ]]);
+          getDelegatedAnnotationState(delegatedParent, "wrapped-key"),
+          { inner: getDelegatedAnnotationState(delegatedParent, state) },
+        ],
+      ]),
+      {
+        [mapMarker]: true,
+      },
+    );
 
-      const normalized: unknown = normalizeNestedDelegatedAnnotationState(
-        state,
-      );
+    const normalized = normalizeNestedDelegatedAnnotationState(map);
 
-      assert.notStrictEqual(normalized, state);
-      assert.ok(normalized instanceof Map);
-      assert.ok(!(normalized instanceof RequiredArgMap));
-      assert.equal(Reflect.get(normalized, "label"), "required");
-      assert.equal(normalized.get("key"), "value");
-    },
-  );
+    assert.notStrictEqual(normalized, map);
+    assert.ok(getAnnotations(normalized)?.[mapMarker]);
+    assert.equal(normalized.get("plain"), "value");
+    const wrappedEntry = normalized.get("wrapped-key");
+    assert.deepEqual(wrappedEntry, { inner: state });
+    if (
+      wrappedEntry == null ||
+      typeof wrappedEntry !== "object" ||
+      !("inner" in wrappedEntry)
+    ) {
+      assert.fail("Expected normalized map entry to preserve the class state.");
+    }
+    assert.strictEqual(wrappedEntry.inner, state);
+  });
 
-  it(
-    "normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Set entries",
-    () => {
-      class StatefulObject {
-        #secret = "private-value";
+  it("normalizeNestedDelegatedAnnotationState() preserves Map subclasses while unwrapping entries", () => {
+    class StatefulMap extends Map<string, unknown> {
+      #secret = "private-value";
 
-        read(): string {
-          return this.#secret;
-        }
+      read(): string {
+        return this.#secret;
       }
+    }
 
-      const setMarker = Symbol.for(
-        "@test/normalizeNestedDelegatedAnnotationState-set",
-      );
-      const delegatedParent = injectAnnotations(undefined, {
-        [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-set-parent",
-          )
-        ]: true,
-      });
-      const state = new StatefulObject();
-      const set = injectAnnotations(
-        new Set([
-          getDelegatedAnnotationState(delegatedParent, "seed"),
-          getDelegatedAnnotationState(delegatedParent, state),
-        ]),
-        {
-          [setMarker]: true,
-        },
-      );
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-map-subclass-parent",
+      )]: true,
+    });
+    const state = new StatefulMap([
+      ["plain", getDelegatedAnnotationState(delegatedParent, "value")],
+      ["self", getDelegatedAnnotationState(delegatedParent, "seed")],
+    ]);
 
-      const normalized = normalizeNestedDelegatedAnnotationState(set);
+    const normalized = normalizeNestedDelegatedAnnotationState(state);
 
-      assert.notStrictEqual(normalized, set);
-      assert.ok(getAnnotations(normalized)?.[setMarker]);
-      assert.ok(normalized.has("seed"));
-      const objectEntry = [...normalized].find((value) => value === state);
-      assert.strictEqual(objectEntry, state);
-    },
-  );
+    assert.notStrictEqual(normalized, state);
+    assert.ok(normalized instanceof StatefulMap);
+    assert.equal(normalized.read(), "private-value");
+    assert.equal(normalized.get("plain"), "value");
+    assert.equal(normalized.get("self"), "seed");
+  });
 
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves Set subclasses while unwrapping entries",
-    () => {
-      class StatefulSet extends Set<unknown> {
-        #secret = "private-value";
+  it("normalizeNestedDelegatedAnnotationState() skips Map subclass clone construction when nothing changes", () => {
+    class RequiredArgMap extends Map<string, string> {
+      readonly label: string;
 
-        read(): string {
-          return this.#secret;
-        }
-      }
-
-      const delegatedParent = injectAnnotations(undefined, {
-        [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-set-subclass-parent",
-          )
-        ]: true,
-      });
-      const state = new StatefulSet([
-        getDelegatedAnnotationState(delegatedParent, "seed"),
-        getDelegatedAnnotationState(delegatedParent, "value"),
-      ]);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(state);
-
-      assert.notStrictEqual(normalized, state);
-      assert.ok(normalized instanceof StatefulSet);
-      assert.equal(normalized.read(), "private-value");
-      assert.ok(normalized.has("seed"));
-      assert.ok(normalized.has("value"));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() skips Set subclass clone construction when nothing changes",
-    () => {
-      class RequiredArgSet extends Set<string> {
-        readonly label: string;
-
-        constructor(label: string, values?: Iterable<string>) {
-          if (label.length === 0) {
-            throw new TypeError("label must not be empty.");
-          }
-          super(values);
-          this.label = label;
-        }
-      }
-
-      const state = new RequiredArgSet("required", ["value"]);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(state);
-
-      assert.strictEqual(normalized, state);
-      assert.equal(normalized.label, "required");
-      assert.ok(normalized.has("value"));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() clones cyclic back-references when an ancestor changes",
-    () => {
-      const parentState = injectAnnotations(undefined, {
-        [
-          Symbol.for(
-            "@test/normalizeNestedDelegatedAnnotationState-cyclic-parent",
-          )
-        ]: true,
-      });
-      const cyclic: {
-        child?: { parent: unknown };
-        value?: unknown;
-      } = {};
-      const child = { parent: cyclic };
-      cyclic.child = child;
-      cyclic.value = getDelegatedAnnotationState(parentState, "seed");
-
-      const normalized = normalizeNestedDelegatedAnnotationState(cyclic);
-
-      assert.notStrictEqual(normalized, cyclic);
-      if (
-        normalized.child == null ||
-        typeof normalized.child !== "object" ||
-        !("parent" in normalized.child)
+      constructor(
+        label: string,
+        entries?: Iterable<readonly [string, string]>,
       ) {
-        assert.fail(
-          "Expected normalized child to preserve the cyclic parent link.",
-        );
-      }
-      assert.notStrictEqual(normalized.child, child);
-      assert.strictEqual(normalized.child.parent, normalized);
-      assert.equal(normalized.value, "seed");
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves identity for cyclic values without carriers",
-    () => {
-      const cyclic: { self?: unknown } = {};
-      cyclic.self = cyclic;
-
-      const normalized = normalizeNestedDelegatedAnnotationState(cyclic);
-
-      assert.strictEqual(normalized, cyclic);
-      assert.strictEqual(normalized.self, cyclic);
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves Map self references",
-    () => {
-      const map = new Map<unknown, unknown>();
-      map.set(map, map);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(map);
-
-      assert.strictEqual(normalized, map);
-      assert.strictEqual(normalized.get(map), map);
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves changed Map cycles",
-    () => {
-      const marker = Symbol.for("@test/map-cycle-with-carrier");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const original = { value: "seed" };
-      const delegated = getDelegatedAnnotationState(parentState, original);
-      const map = new Map<unknown, unknown>();
-      map.set(map, delegated);
-      map.set("self", map);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(map);
-
-      assert.notStrictEqual(normalized, map);
-      assert.strictEqual(normalized.get(normalized), original);
-      assert.strictEqual(normalized.get("self"), normalized);
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves Set self references",
-    () => {
-      const set = new Set<unknown>();
-      set.add(set);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(set);
-
-      assert.strictEqual(normalized, set);
-      assert.ok(normalized.has(set));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves changed Set cycles",
-    () => {
-      const marker = Symbol.for("@test/set-cycle-with-carrier");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const original = { value: "seed" };
-      const delegated = getDelegatedAnnotationState(parentState, original);
-      const set = new Set<unknown>();
-      set.add(set);
-      set.add(delegated);
-
-      const normalized = normalizeNestedDelegatedAnnotationState(set);
-
-      assert.notStrictEqual(normalized, set);
-      assert.ok(normalized.has(normalized));
-      assert.ok(normalized.has(original));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() preserves non-plain objects (Date, RegExp) as-is at the top level",
-    () => {
-      // Date and RegExp are non-plain objects whose prototype is not
-      // Object.prototype/null—they are neither Array nor Map nor Set.
-      // normalizeNestedDelegatedAnnotationState() should return them
-      // unchanged rather than treating them as structured plain objects.
-      const date = new Date(2024, 0, 1);
-      const re = /hello/g;
-
-      assert.strictEqual(normalizeNestedDelegatedAnnotationState(date), date);
-      assert.strictEqual(normalizeNestedDelegatedAnnotationState(re), re);
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() ignores phantom object keys",
-    () => {
-      const marker = Symbol.for("@test/phantom-object-key");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const source = new Proxy({
-        value: getDelegatedAnnotationState(parentState, "seed"),
-      }, {
-        ownKeys(target) {
-          return [...Reflect.ownKeys(target), "phantom"];
-        },
-        getOwnPropertyDescriptor(target, key) {
-          if (key === "phantom") return undefined;
-          return Reflect.getOwnPropertyDescriptor(target, key);
-        },
-      });
-
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
-
-      assert.notStrictEqual(normalized, source);
-      assert.deepEqual(normalized, { value: "seed" });
-      assert.ok(!Reflect.has(normalized, "phantom"));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() ignores phantom Map own keys",
-    () => {
-      const marker = Symbol.for("@test/phantom-map-key");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const map = new Map<string, unknown>([
-        ["value", getDelegatedAnnotationState(parentState, "seed")],
-      ]);
-      const source = new Proxy(map, {
-        ownKeys(target) {
-          return [...Reflect.ownKeys(target), "phantom"];
-        },
-        getOwnPropertyDescriptor(target, key) {
-          if (key === "phantom") return undefined;
-          return Reflect.getOwnPropertyDescriptor(target, key);
-        },
-        get(target, key, receiver) {
-          const value = Reflect.get(target, key, receiver);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      });
-
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
-
-      assert.notStrictEqual(normalized, source);
-      assert.equal(normalized.get("value"), "seed");
-      assert.ok(!Reflect.has(normalized, "phantom"));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() ignores disappearing Map own properties",
-    () => {
-      const marker = Symbol.for("@test/disappearing-map-property");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const delegated = getDelegatedAnnotationState(parentState, "seed");
-      let descriptorReads = 0;
-      const source = new Proxy(new Map<string, unknown>(), {
-        ownKeys(target) {
-          return [...Reflect.ownKeys(target), "meta"];
-        },
-        getOwnPropertyDescriptor(target, key) {
-          if (key !== "meta") {
-            return Reflect.getOwnPropertyDescriptor(target, key);
-          }
-          descriptorReads++;
-          return descriptorReads === 1
-            ? {
-              value: delegated,
-              enumerable: true,
-              writable: true,
-              configurable: true,
-            }
-            : undefined;
-        },
-        get(target, key, receiver) {
-          const value = Reflect.get(target, key, receiver);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      });
-
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
-
-      assert.notStrictEqual(normalized, source);
-      assert.ok(!Reflect.has(normalized, "meta"));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() ignores phantom Set own keys",
-    () => {
-      const marker = Symbol.for("@test/phantom-set-key");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const set = new Set([
-        getDelegatedAnnotationState(parentState, "seed"),
-      ]);
-      const source = new Proxy(set, {
-        ownKeys(target) {
-          return [...Reflect.ownKeys(target), "phantom"];
-        },
-        getOwnPropertyDescriptor(target, key) {
-          if (key === "phantom") return undefined;
-          return Reflect.getOwnPropertyDescriptor(target, key);
-        },
-        get(target, key, receiver) {
-          const value = Reflect.get(target, key, receiver);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      });
-
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
-
-      assert.notStrictEqual(normalized, source);
-      assert.ok(normalized.has("seed"));
-      assert.ok(!Reflect.has(normalized, "phantom"));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() ignores disappearing Set own properties",
-    () => {
-      const marker = Symbol.for("@test/disappearing-set-property");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const delegated = getDelegatedAnnotationState(parentState, "seed");
-      let descriptorReads = 0;
-      const source = new Proxy(new Set<unknown>(), {
-        ownKeys(target) {
-          return [...Reflect.ownKeys(target), "meta"];
-        },
-        getOwnPropertyDescriptor(target, key) {
-          if (key !== "meta") {
-            return Reflect.getOwnPropertyDescriptor(target, key);
-          }
-          descriptorReads++;
-          return descriptorReads === 1
-            ? {
-              value: delegated,
-              enumerable: true,
-              writable: true,
-              configurable: true,
-            }
-            : undefined;
-        },
-        get(target, key, receiver) {
-          const value = Reflect.get(target, key, receiver);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      });
-
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
-
-      assert.notStrictEqual(normalized, source);
-      assert.ok(!Reflect.has(normalized, "meta"));
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() ignores accessor-only properties",
-    () => {
-      const marker = Symbol.for("@test/accessor-only-property-parent");
-      const parentState = injectAnnotations(undefined, { [marker]: true });
-      const source = {
-        nested: getDelegatedAnnotationState(parentState, "seed"),
-        get computed() {
-          return "derived";
-        },
-      };
-
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
-
-      assert.notStrictEqual(normalized, source);
-      assert.deepEqual(normalized, {
-        nested: "seed",
-        computed: "derived",
-      });
-      assert.equal(
-        Object.getOwnPropertyDescriptor(normalized, "computed")?.get,
-        Object.getOwnPropertyDescriptor(source, "computed")?.get,
-      );
-    },
-  );
-
-  it(
-    "getWrappedChildState() falls back to annotation-view proxy when inheritance is disabled",
-    () => {
-      // When parser does NOT have inheritParentAnnotationsKey set (no
-      // defineInheritedAnnotationParser() call), getWrappedChildState() must
-      // still propagate annotations—but only via withAnnotationView(), not
-      // via injectAnnotations().  This is the branch where
-      // shouldInheritAnnotations is false and childState is an object.
-      const marker = Symbol.for(
-        "@test/getWrappedChildState-no-inherit-object",
-      );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-
-      // Plain parser that does NOT opt in to annotation inheritance.
-      const parser: Parser<"sync", unknown, unknown> = {
-        mode: "sync",
-        $valueType: [] as readonly unknown[],
-        $stateType: [] as readonly unknown[],
-        priority: 1,
-        usage: [],
-        leadingNames: new Set(),
-        acceptingAnyToken: false,
-        initialState: undefined,
-        parse(context) {
-          return {
-            success: false as const,
-            consumed: 0,
-            error: message`unused parse: ${String(context.state)}`,
-          };
-        },
-        complete() {
-          return { success: true as const, value: undefined };
-        },
-        suggest() {
-          return [];
-        },
-        getDocFragments() {
-          return { fragments: [] };
-        },
-      };
-      // Deliberately do NOT call defineInheritedAnnotationParser(parser).
-
-      const childState = { value: "seed" };
-      const wrapped = getWrappedChildState(parentState, childState, parser);
-
-      // wrapped must carry the parent annotations via annotation-view proxy
-      assert.ok(
-        getAnnotations(wrapped)?.[marker],
-        "annotations should be surfaced via the annotation-view proxy",
-      );
-      // The proxy must preserve the original object shape
-      assert.equal(
-        (wrapped as typeof childState).value,
-        "seed",
-        "wrapped child state should preserve original value",
-      );
-      // normalizeDelegatedAnnotationState must unwrap back to childState
-      assert.strictEqual(
-        normalizeDelegatedAnnotationState(wrapped),
-        childState,
-      );
-    },
-  );
-
-  it(
-    "getDelegatedAnnotationState() returns child unchanged when already a tracked carrier with same annotations",
-    () => {
-      // This exercises the short-circuit branch:
-      //   getAnnotations(childState) === annotations &&
-      //   (delegatedAnnotationCloneTargets.has(...) || annotationViewTargets.has(...))
-      const marker = Symbol.for(
-        "@test/getDelegatedAnnotationState-idempotent",
-      );
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-
-      // First delegation creates a tracked clone
-      const original = { value: "seed" };
-      const delegated = getDelegatedAnnotationState(parentState, original);
-
-      // Second delegation on the already-delegated object should be a no-op
-      const reDelegated = getDelegatedAnnotationState(parentState, delegated);
-
-      assert.strictEqual(
-        reDelegated,
-        delegated,
-        "re-delegating an already-tracked carrier with same annotations should return it unchanged",
-      );
-    },
-  );
-
-  it(
-    "normalizeNestedDelegatedAnnotationState() falls back when an array subclass slice throws",
-    () => {
-      class BrokenSliceArray<T> extends Array<T> {
-        override slice(): T[] {
-          throw new TypeError("slice disabled.");
+        if (label.length === 0) {
+          throw new TypeError("label must not be empty.");
         }
+        super(entries);
+        this.label = label;
       }
-      const marker = Symbol.for("@test/array-slice-fallback");
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const original = { value: "entry" };
-      const delegated = getDelegatedAnnotationState(parentState, original);
-      const source = new BrokenSliceArray<typeof delegated>();
-      source.push(delegated);
+    }
 
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
+    const state = new RequiredArgMap("required", [["key", "value"]]);
 
-      assert.ok(Array.isArray(normalized));
-      assert.ok(!(normalized instanceof BrokenSliceArray));
-      assert.strictEqual(normalized[0], original);
-    },
-  );
+    const normalized = normalizeNestedDelegatedAnnotationState(state);
 
-  it(
-    "normalizeNestedDelegatedAnnotationState() unwraps delegated Map own properties",
-    () => {
-      const marker = Symbol.for("@test/map-own-property");
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const original = { value: "metadata" };
-      const delegated = getDelegatedAnnotationState(parentState, original);
-      const source = new Map<string, string>([["mode", "prod"]]);
-      Object.defineProperty(source, "metadata", {
-        value: delegated,
-        enumerable: true,
-        configurable: true,
-      });
+    assert.strictEqual(normalized, state);
+    assert.equal(normalized.label, "required");
+    assert.equal(normalized.get("key"), "value");
+  });
 
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
+  it("normalizeNestedDelegatedAnnotationState() falls back when Map subclass clone construction requires args", () => {
+    class RequiredArgMap extends Map<string, unknown> {
+      readonly label: string;
 
-      assert.notStrictEqual(normalized, source);
-      assert.equal(normalized.get("mode"), "prod");
-      assert.strictEqual(
-        (normalized as Map<string, string> & { readonly metadata: unknown })
-          .metadata,
-        original,
+      constructor(
+        label: string,
+        entries?: Iterable<readonly [string, unknown]>,
+      ) {
+        if (label.length === 0) {
+          throw new TypeError("label must not be empty.");
+        }
+        super(entries);
+        this.label = label;
+      }
+    }
+
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-map-required-arg-parent",
+      )]: true,
+    });
+    const state = new RequiredArgMap("required", [
+      ["key", getDelegatedAnnotationState(delegatedParent, "value")],
+    ]);
+
+    const normalized: unknown = normalizeNestedDelegatedAnnotationState(state);
+
+    assert.notStrictEqual(normalized, state);
+    assert.ok(normalized instanceof Map);
+    assert.ok(!(normalized instanceof RequiredArgMap));
+    assert.equal(Reflect.get(normalized, "label"), "required");
+    assert.equal(normalized.get("key"), "value");
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() unwraps nested carriers in Set entries", () => {
+    class StatefulObject {
+      #secret = "private-value";
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    const setMarker = Symbol.for(
+      "@test/normalizeNestedDelegatedAnnotationState-set",
+    );
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for("@test/normalizeNestedDelegatedAnnotationState-set-parent")]:
+        true,
+    });
+    const state = new StatefulObject();
+    const set = injectAnnotations(
+      new Set([
+        getDelegatedAnnotationState(delegatedParent, "seed"),
+        getDelegatedAnnotationState(delegatedParent, state),
+      ]),
+      {
+        [setMarker]: true,
+      },
+    );
+
+    const normalized = normalizeNestedDelegatedAnnotationState(set);
+
+    assert.notStrictEqual(normalized, set);
+    assert.ok(getAnnotations(normalized)?.[setMarker]);
+    assert.ok(normalized.has("seed"));
+    const objectEntry = [...normalized].find((value) => value === state);
+    assert.strictEqual(objectEntry, state);
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() preserves Set subclasses while unwrapping entries", () => {
+    class StatefulSet extends Set<unknown> {
+      #secret = "private-value";
+
+      read(): string {
+        return this.#secret;
+      }
+    }
+
+    const delegatedParent = injectAnnotations(undefined, {
+      [Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-set-subclass-parent",
+      )]: true,
+    });
+    const state = new StatefulSet([
+      getDelegatedAnnotationState(delegatedParent, "seed"),
+      getDelegatedAnnotationState(delegatedParent, "value"),
+    ]);
+
+    const normalized = normalizeNestedDelegatedAnnotationState(state);
+
+    assert.notStrictEqual(normalized, state);
+    assert.ok(normalized instanceof StatefulSet);
+    assert.equal(normalized.read(), "private-value");
+    assert.ok(normalized.has("seed"));
+    assert.ok(normalized.has("value"));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() skips Set subclass clone construction when nothing changes", () => {
+    class RequiredArgSet extends Set<string> {
+      readonly label: string;
+
+      constructor(label: string, values?: Iterable<string>) {
+        if (label.length === 0) {
+          throw new TypeError("label must not be empty.");
+        }
+        super(values);
+        this.label = label;
+      }
+    }
+
+    const state = new RequiredArgSet("required", ["value"]);
+
+    const normalized = normalizeNestedDelegatedAnnotationState(state);
+
+    assert.strictEqual(normalized, state);
+    assert.equal(normalized.label, "required");
+    assert.ok(normalized.has("value"));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() clones cyclic back-references when an ancestor changes", () => {
+    const parentState = injectAnnotations(undefined, {
+      [Symbol.for(
+        "@test/normalizeNestedDelegatedAnnotationState-cyclic-parent",
+      )]: true,
+    });
+    const cyclic: {
+      child?: { parent: unknown };
+      value?: unknown;
+    } = {};
+    const child = { parent: cyclic };
+    cyclic.child = child;
+    cyclic.value = getDelegatedAnnotationState(parentState, "seed");
+
+    const normalized = normalizeNestedDelegatedAnnotationState(cyclic);
+
+    assert.notStrictEqual(normalized, cyclic);
+    if (
+      normalized.child == null ||
+      typeof normalized.child !== "object" ||
+      !("parent" in normalized.child)
+    ) {
+      assert.fail(
+        "Expected normalized child to preserve the cyclic parent link.",
       );
-    },
-  );
+    }
+    assert.notStrictEqual(normalized.child, child);
+    assert.strictEqual(normalized.child.parent, normalized);
+    assert.equal(normalized.value, "seed");
+  });
 
-  it(
-    "normalizeNestedDelegatedAnnotationState() unwraps delegated Set own properties",
-    () => {
-      const marker = Symbol.for("@test/set-own-property");
-      const annotations = { [marker]: true } satisfies Annotations;
-      const parentState = injectAnnotations(undefined, annotations);
-      const original = { value: "metadata" };
-      const delegated = getDelegatedAnnotationState(parentState, original);
-      const source = new Set<string>(["prod"]);
-      Object.defineProperty(source, "metadata", {
-        value: delegated,
-        enumerable: true,
-        configurable: true,
-      });
+  it("normalizeNestedDelegatedAnnotationState() preserves identity for cyclic values without carriers", () => {
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
 
-      const normalized = normalizeNestedDelegatedAnnotationState(source);
+    const normalized = normalizeNestedDelegatedAnnotationState(cyclic);
 
-      assert.notStrictEqual(normalized, source);
-      assert.ok(normalized.has("prod"));
-      assert.strictEqual(
-        (normalized as Set<string> & { readonly metadata: unknown }).metadata,
-        original,
-      );
-    },
-  );
+    assert.strictEqual(normalized, cyclic);
+    assert.strictEqual(normalized.self, cyclic);
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() preserves Map self references", () => {
+    const map = new Map<unknown, unknown>();
+    map.set(map, map);
+
+    const normalized = normalizeNestedDelegatedAnnotationState(map);
+
+    assert.strictEqual(normalized, map);
+    assert.strictEqual(normalized.get(map), map);
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() preserves changed Map cycles", () => {
+    const marker = Symbol.for("@test/map-cycle-with-carrier");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const original = { value: "seed" };
+    const delegated = getDelegatedAnnotationState(parentState, original);
+    const map = new Map<unknown, unknown>();
+    map.set(map, delegated);
+    map.set("self", map);
+
+    const normalized = normalizeNestedDelegatedAnnotationState(map);
+
+    assert.notStrictEqual(normalized, map);
+    assert.strictEqual(normalized.get(normalized), original);
+    assert.strictEqual(normalized.get("self"), normalized);
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() preserves Set self references", () => {
+    const set = new Set<unknown>();
+    set.add(set);
+
+    const normalized = normalizeNestedDelegatedAnnotationState(set);
+
+    assert.strictEqual(normalized, set);
+    assert.ok(normalized.has(set));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() preserves changed Set cycles", () => {
+    const marker = Symbol.for("@test/set-cycle-with-carrier");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const original = { value: "seed" };
+    const delegated = getDelegatedAnnotationState(parentState, original);
+    const set = new Set<unknown>();
+    set.add(set);
+    set.add(delegated);
+
+    const normalized = normalizeNestedDelegatedAnnotationState(set);
+
+    assert.notStrictEqual(normalized, set);
+    assert.ok(normalized.has(normalized));
+    assert.ok(normalized.has(original));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() preserves non-plain objects (Date, RegExp) as-is at the top level", () => {
+    // Date and RegExp are non-plain objects whose prototype is not
+    // Object.prototype/null—they are neither Array nor Map nor Set.
+    // normalizeNestedDelegatedAnnotationState() should return them
+    // unchanged rather than treating them as structured plain objects.
+    const date = new Date(2024, 0, 1);
+    const re = /hello/g;
+
+    assert.strictEqual(normalizeNestedDelegatedAnnotationState(date), date);
+    assert.strictEqual(normalizeNestedDelegatedAnnotationState(re), re);
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() ignores phantom object keys", () => {
+    const marker = Symbol.for("@test/phantom-object-key");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const source = new Proxy(
+      {
+        value: getDelegatedAnnotationState(parentState, "seed"),
+      },
+      {
+        ownKeys(target) {
+          return [...Reflect.ownKeys(target), "phantom"];
+        },
+        getOwnPropertyDescriptor(target, key) {
+          if (key === "phantom") return undefined;
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+      },
+    );
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.deepEqual(normalized, { value: "seed" });
+    assert.ok(!Reflect.has(normalized, "phantom"));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() ignores phantom Map own keys", () => {
+    const marker = Symbol.for("@test/phantom-map-key");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const map = new Map<string, unknown>([
+      ["value", getDelegatedAnnotationState(parentState, "seed")],
+    ]);
+    const source = new Proxy(map, {
+      ownKeys(target) {
+        return [...Reflect.ownKeys(target), "phantom"];
+      },
+      getOwnPropertyDescriptor(target, key) {
+        if (key === "phantom") return undefined;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      get(target, key, receiver) {
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.equal(normalized.get("value"), "seed");
+    assert.ok(!Reflect.has(normalized, "phantom"));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() ignores disappearing Map own properties", () => {
+    const marker = Symbol.for("@test/disappearing-map-property");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const delegated = getDelegatedAnnotationState(parentState, "seed");
+    let descriptorReads = 0;
+    const source = new Proxy(new Map<string, unknown>(), {
+      ownKeys(target) {
+        return [...Reflect.ownKeys(target), "meta"];
+      },
+      getOwnPropertyDescriptor(target, key) {
+        if (key !== "meta") {
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        }
+        descriptorReads++;
+        return descriptorReads === 1
+          ? {
+              value: delegated,
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            }
+          : undefined;
+      },
+      get(target, key, receiver) {
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.ok(!Reflect.has(normalized, "meta"));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() ignores phantom Set own keys", () => {
+    const marker = Symbol.for("@test/phantom-set-key");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const set = new Set([getDelegatedAnnotationState(parentState, "seed")]);
+    const source = new Proxy(set, {
+      ownKeys(target) {
+        return [...Reflect.ownKeys(target), "phantom"];
+      },
+      getOwnPropertyDescriptor(target, key) {
+        if (key === "phantom") return undefined;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      get(target, key, receiver) {
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.ok(normalized.has("seed"));
+    assert.ok(!Reflect.has(normalized, "phantom"));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() ignores disappearing Set own properties", () => {
+    const marker = Symbol.for("@test/disappearing-set-property");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const delegated = getDelegatedAnnotationState(parentState, "seed");
+    let descriptorReads = 0;
+    const source = new Proxy(new Set<unknown>(), {
+      ownKeys(target) {
+        return [...Reflect.ownKeys(target), "meta"];
+      },
+      getOwnPropertyDescriptor(target, key) {
+        if (key !== "meta") {
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        }
+        descriptorReads++;
+        return descriptorReads === 1
+          ? {
+              value: delegated,
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            }
+          : undefined;
+      },
+      get(target, key, receiver) {
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.ok(!Reflect.has(normalized, "meta"));
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() ignores accessor-only properties", () => {
+    const marker = Symbol.for("@test/accessor-only-property-parent");
+    const parentState = injectAnnotations(undefined, { [marker]: true });
+    const source = {
+      nested: getDelegatedAnnotationState(parentState, "seed"),
+      get computed() {
+        return "derived";
+      },
+    };
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.deepEqual(normalized, {
+      nested: "seed",
+      computed: "derived",
+    });
+    assert.equal(
+      Object.getOwnPropertyDescriptor(normalized, "computed")?.get,
+      Object.getOwnPropertyDescriptor(source, "computed")?.get,
+    );
+  });
+
+  it("getWrappedChildState() falls back to annotation-view proxy when inheritance is disabled", () => {
+    // When parser does NOT have inheritParentAnnotationsKey set (no
+    // defineInheritedAnnotationParser() call), getWrappedChildState() must
+    // still propagate annotations—but only via withAnnotationView(), not
+    // via injectAnnotations().  This is the branch where
+    // shouldInheritAnnotations is false and childState is an object.
+    const marker = Symbol.for("@test/getWrappedChildState-no-inherit-object");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+
+    // Plain parser that does NOT opt in to annotation inheritance.
+    const parser: Parser<"sync", unknown, unknown> = {
+      mode: "sync",
+      $valueType: [] as readonly unknown[],
+      $stateType: [] as readonly unknown[],
+      priority: 1,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(context) {
+        return {
+          success: false as const,
+          consumed: 0,
+          error: message`unused parse: ${String(context.state)}`,
+        };
+      },
+      complete() {
+        return { success: true as const, value: undefined };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    // Deliberately do NOT call defineInheritedAnnotationParser(parser).
+
+    const childState = { value: "seed" };
+    const wrapped = getWrappedChildState(parentState, childState, parser);
+
+    // wrapped must carry the parent annotations via annotation-view proxy
+    assert.ok(
+      getAnnotations(wrapped)?.[marker],
+      "annotations should be surfaced via the annotation-view proxy",
+    );
+    // The proxy must preserve the original object shape
+    assert.equal(
+      (wrapped as typeof childState).value,
+      "seed",
+      "wrapped child state should preserve original value",
+    );
+    // normalizeDelegatedAnnotationState must unwrap back to childState
+    assert.strictEqual(normalizeDelegatedAnnotationState(wrapped), childState);
+  });
+
+  it("getDelegatedAnnotationState() returns child unchanged when already a tracked carrier with same annotations", () => {
+    // This exercises the short-circuit branch:
+    //   getAnnotations(childState) === annotations &&
+    //   (delegatedAnnotationCloneTargets.has(...) || annotationViewTargets.has(...))
+    const marker = Symbol.for("@test/getDelegatedAnnotationState-idempotent");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+
+    // First delegation creates a tracked clone
+    const original = { value: "seed" };
+    const delegated = getDelegatedAnnotationState(parentState, original);
+
+    // Second delegation on the already-delegated object should be a no-op
+    const reDelegated = getDelegatedAnnotationState(parentState, delegated);
+
+    assert.strictEqual(
+      reDelegated,
+      delegated,
+      "re-delegating an already-tracked carrier with same annotations should return it unchanged",
+    );
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() falls back when an array subclass slice throws", () => {
+    class BrokenSliceArray<T> extends Array<T> {
+      override slice(): T[] {
+        throw new TypeError("slice disabled.");
+      }
+    }
+    const marker = Symbol.for("@test/array-slice-fallback");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const original = { value: "entry" };
+    const delegated = getDelegatedAnnotationState(parentState, original);
+    const source = new BrokenSliceArray<typeof delegated>();
+    source.push(delegated);
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.ok(Array.isArray(normalized));
+    assert.ok(!(normalized instanceof BrokenSliceArray));
+    assert.strictEqual(normalized[0], original);
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() unwraps delegated Map own properties", () => {
+    const marker = Symbol.for("@test/map-own-property");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const original = { value: "metadata" };
+    const delegated = getDelegatedAnnotationState(parentState, original);
+    const source = new Map<string, string>([["mode", "prod"]]);
+    Object.defineProperty(source, "metadata", {
+      value: delegated,
+      enumerable: true,
+      configurable: true,
+    });
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.equal(normalized.get("mode"), "prod");
+    assert.strictEqual(
+      (normalized as Map<string, string> & { readonly metadata: unknown })
+        .metadata,
+      original,
+    );
+  });
+
+  it("normalizeNestedDelegatedAnnotationState() unwraps delegated Set own properties", () => {
+    const marker = Symbol.for("@test/set-own-property");
+    const annotations = { [marker]: true } satisfies Annotations;
+    const parentState = injectAnnotations(undefined, annotations);
+    const original = { value: "metadata" };
+    const delegated = getDelegatedAnnotationState(parentState, original);
+    const source = new Set<string>(["prod"]);
+    Object.defineProperty(source, "metadata", {
+      value: delegated,
+      enumerable: true,
+      configurable: true,
+    });
+
+    const normalized = normalizeNestedDelegatedAnnotationState(source);
+
+    assert.notStrictEqual(normalized, source);
+    assert.ok(normalized.has("prod"));
+    assert.strictEqual(
+      (normalized as Set<string> & { readonly metadata: unknown }).metadata,
+      original,
+    );
+  });
 });

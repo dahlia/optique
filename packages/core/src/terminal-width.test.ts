@@ -9,15 +9,21 @@ import { describe, it } from "node:test";
 describe("automatic runner width", () => {
   const page: DocPage = {
     usage: [{ type: "option", names: ["--value"], metavar: "VALUE" }],
-    brief:
-      message`A description long enough to wrap at a normal terminal width.`,
-    sections: [{
-      entries: [{
-        term: { type: "option", names: ["--value"], metavar: "VALUE" },
-        description: message`Select a value.`,
-        choices: valueSet(["first", "second"], { type: "unit", fallback: "" }),
-      }],
-    }],
+    brief: message`A description long enough to wrap at a normal terminal width.`,
+    sections: [
+      {
+        entries: [
+          {
+            term: { type: "option", names: ["--value"], metavar: "VALUE" },
+            description: message`Select a value.`,
+            choices: valueSet(["first", "second"], {
+              type: "unit",
+              fallback: "",
+            }),
+          },
+        ],
+      },
+    ],
   };
 
   it("should keep direct core API width constraints strict", () => {
@@ -117,29 +123,35 @@ describe("automatic runner width", () => {
   });
 
   it("should not suppress unrelated validation or formatter errors", () => {
-    assert.throws(() =>
-      formatDocPage(
-        "test",
-        page,
-        withAutomaticWidth({
-          maxWidth: 1,
-          showChoices: { maxItems: 0 },
-        }),
-      ), /showChoices.maxItems/);
+    assert.throws(
+      () =>
+        formatDocPage(
+          "test",
+          page,
+          withAutomaticWidth({
+            maxWidth: 1,
+            showChoices: { maxItems: 0 },
+          }),
+        ),
+      /showChoices.maxItems/,
+    );
     const error = new RangeError("Custom formatter failed.");
     let calls = 0;
-    assert.throws(() =>
-      formatDocPage(
-        "test",
-        page,
-        withAutomaticWidth({
-          maxWidth: 1,
-          messageFormatter: () => {
-            calls++;
-            throw error;
-          },
-        }),
-      ), (actual) => actual === error);
+    assert.throws(
+      () =>
+        formatDocPage(
+          "test",
+          page,
+          withAutomaticWidth({
+            maxWidth: 1,
+            messageFormatter: () => {
+              calls++;
+              throw error;
+            },
+          }),
+        ),
+      (actual) => actual === error,
+    );
     assert.equal(calls, 1);
   });
 });

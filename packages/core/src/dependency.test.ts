@@ -103,10 +103,9 @@ function asyncChoice<T extends string>(
   };
 }
 
-function syncThrowingParser<
-  M extends "sync" | "async",
-  T extends string,
->(mode: M): ValueParser<M, T> {
+function syncThrowingParser<M extends "sync" | "async", T extends string>(
+  mode: M,
+): ValueParser<M, T> {
   return {
     mode: mode,
     metavar: "THROWING" as NonEmptyString,
@@ -233,10 +232,7 @@ describe("dependency()", () => {
     const source1 = dependency(parser);
     const source2 = dependency(parser);
 
-    assert.notEqual(
-      source1[dependencySourceId],
-      source2[dependencySourceId],
-    );
+    assert.notEqual(source1[dependencySourceId], source2[dependencySourceId]);
   });
 });
 
@@ -287,8 +283,8 @@ describe("derive()", () => {
         factory: (mode: "dev" | "prod") =>
           choice(
             mode === "dev"
-              ? ["debug", "verbose"] as const
-              : ["quiet", "silent"] as const,
+              ? (["debug", "verbose"] as const)
+              : (["quiet", "silent"] as const),
           ),
         defaultValue: () => "dev" as const,
       },
@@ -662,8 +658,8 @@ describe("DeferredParseState", () => {
       defaultValues: () => {
         defaultCalls++;
         return defaultCalls === 1
-          ? ["dev", "us"] as const
-          : ["prod", "eu"] as const;
+          ? (["dev", "us"] as const)
+          : (["prod", "eu"] as const);
       },
     });
 
@@ -680,236 +676,209 @@ describe("DeferredParseState", () => {
     assert.equal(defaultCalls, 1);
   });
 
-  test(
-    "createDeferredParseState reuses snapshotted single-source defaults on factory failure",
-    () => {
-      const mode = dependency(choice(["dev", "prod"] as const));
-      let defaultCalls = 0;
-      const derived = mode.derive({
-        metavar: "LEVEL",
-        mode: "sync",
-        factory: () => {
-          throw new Error("Factory exploded.");
-        },
-        defaultValue: () => {
-          defaultCalls++;
-          return defaultCalls === 1 ? "dev" : "prod";
-        },
-      });
+  test("createDeferredParseState reuses snapshotted single-source defaults on factory failure", () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    let defaultCalls = 0;
+    const derived = mode.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: () => {
+        throw new Error("Factory exploded.");
+      },
+      defaultValue: () => {
+        defaultCalls++;
+        return defaultCalls === 1 ? "dev" : "prod";
+      },
+    });
 
-      const preliminaryResult = derived.parse("warn");
-      assert.ok(!preliminaryResult.success);
-      assert.equal(defaultCalls, 1);
-      assert.deepEqual(
-        getSnapshottedDefaultDependencyValues(preliminaryResult),
-        ["dev"],
-      );
+    const preliminaryResult = derived.parse("warn");
+    assert.ok(!preliminaryResult.success);
+    assert.equal(defaultCalls, 1);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(preliminaryResult), [
+      "dev",
+    ]);
 
-      const deferred = createDeferredParseState(
-        "warn",
-        derived,
-        preliminaryResult,
-      );
+    const deferred = createDeferredParseState(
+      "warn",
+      derived,
+      preliminaryResult,
+    );
 
-      assert.deepEqual(deferred.defaultValues, ["dev"]);
-      assert.equal(defaultCalls, 1);
-    },
-  );
+    assert.deepEqual(deferred.defaultValues, ["dev"]);
+    assert.equal(defaultCalls, 1);
+  });
 
-  test(
-    "createDeferredParseState reuses snapshotted multi-source defaults on async factory failure",
-    async () => {
-      const env = dependency(choice(["dev", "prod"] as const));
-      const region = dependency(choice(["us", "eu"] as const));
-      let defaultCalls = 0;
-      const derived = deriveFromAsync({
-        metavar: "URL",
-        dependencies: [env, region] as const,
-        factory: () => {
-          throw new Error("Factory exploded.");
-        },
-        defaultValues: () => {
-          defaultCalls++;
-          return defaultCalls === 1
-            ? ["dev", "us"] as const
-            : ["prod", "eu"] as const;
-        },
-      });
+  test("createDeferredParseState reuses snapshotted multi-source defaults on async factory failure", async () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    let defaultCalls = 0;
+    const derived = deriveFromAsync({
+      metavar: "URL",
+      dependencies: [env, region] as const,
+      factory: () => {
+        throw new Error("Factory exploded.");
+      },
+      defaultValues: () => {
+        defaultCalls++;
+        return defaultCalls === 1
+          ? (["dev", "us"] as const)
+          : (["prod", "eu"] as const);
+      },
+    });
 
-      const preliminaryResult = await derived.parse(
-        "https://dev.us.example.com",
-      );
-      assert.ok(!preliminaryResult.success);
-      assert.equal(defaultCalls, 1);
-      assert.deepEqual(
-        getSnapshottedDefaultDependencyValues(preliminaryResult),
-        ["dev", "us"],
-      );
+    const preliminaryResult = await derived.parse("https://dev.us.example.com");
+    assert.ok(!preliminaryResult.success);
+    assert.equal(defaultCalls, 1);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(preliminaryResult), [
+      "dev",
+      "us",
+    ]);
 
-      const deferred = createDeferredParseState(
-        "https://dev.us.example.com",
-        derived,
-        preliminaryResult,
-      );
+    const deferred = createDeferredParseState(
+      "https://dev.us.example.com",
+      derived,
+      preliminaryResult,
+    );
 
-      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
-      assert.equal(defaultCalls, 1);
-    },
-  );
+    assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    assert.equal(defaultCalls, 1);
+  });
 
-  test(
-    "createDeferredParseState keeps single-source snapshots across later mode-mismatch parses",
-    () => {
-      let defaultCalls = 0;
-      const mode = dependency(choice(["dev", "prod"] as const));
-      const derived = mode.derive<"ok", "sync">({
-        metavar: "VALUE",
-        mode: "sync",
-        // @ts-expect-error: intentional sync/async mode mismatch coverage.
-        factory: () => {
-          return asyncChoice(["ok"] as const);
-        },
-        defaultValue: () => {
-          defaultCalls++;
-          return defaultCalls === 1 ? "dev" : "prod";
-        },
-      });
+  test("createDeferredParseState keeps single-source snapshots across later mode-mismatch parses", () => {
+    let defaultCalls = 0;
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const derived = mode.derive<"ok", "sync">({
+      metavar: "VALUE",
+      mode: "sync",
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
+      factory: () => {
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValue: () => {
+        defaultCalls++;
+        return defaultCalls === 1 ? "dev" : "prod";
+      },
+    });
 
-      const firstResult = derived.parse("ok");
-      assert.ok(!firstResult.success);
-      assert.deepEqual(
-        getSnapshottedDefaultDependencyValues(firstResult),
-        ["dev"],
-      );
+    const firstResult = derived.parse("ok");
+    assert.ok(!firstResult.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(firstResult), [
+      "dev",
+    ]);
 
-      const secondResult = derived.parse("ok");
-      assert.ok(!secondResult.success);
-      assert.deepEqual(
-        getSnapshottedDefaultDependencyValues(secondResult),
-        ["prod"],
-      );
+    const secondResult = derived.parse("ok");
+    assert.ok(!secondResult.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(secondResult), [
+      "prod",
+    ]);
 
-      const deferred = createDeferredParseState("ok", derived, firstResult);
+    const deferred = createDeferredParseState("ok", derived, firstResult);
 
-      assert.deepEqual(deferred.defaultValues, ["dev"]);
-      assert.equal(defaultCalls, 2);
-    },
-  );
+    assert.deepEqual(deferred.defaultValues, ["dev"]);
+    assert.equal(defaultCalls, 2);
+  });
 
-  test(
-    "createDeferredParseState keeps multi-source snapshots across later mode-mismatch parses",
-    () => {
-      let defaultCalls = 0;
-      const env = dependency(choice(["dev", "prod"] as const));
-      const region = dependency(choice(["us", "eu"] as const));
-      const derived = deriveFrom<
-        readonly [typeof env, typeof region],
-        "ok",
-        "sync"
-      >({
-        metavar: "VALUE",
-        mode: "sync",
-        dependencies: [env, region] as const,
-        // @ts-expect-error: intentional sync/async mode mismatch coverage.
-        factory: () => {
-          return asyncChoice(["ok"] as const);
-        },
-        defaultValues: () => {
-          defaultCalls++;
-          return defaultCalls === 1
-            ? ["dev", "us"] as const
-            : ["prod", "eu"] as const;
-        },
-      });
+  test("createDeferredParseState keeps multi-source snapshots across later mode-mismatch parses", () => {
+    let defaultCalls = 0;
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const derived = deriveFrom<
+      readonly [typeof env, typeof region],
+      "ok",
+      "sync"
+    >({
+      metavar: "VALUE",
+      mode: "sync",
+      dependencies: [env, region] as const,
+      // @ts-expect-error: intentional sync/async mode mismatch coverage.
+      factory: () => {
+        return asyncChoice(["ok"] as const);
+      },
+      defaultValues: () => {
+        defaultCalls++;
+        return defaultCalls === 1
+          ? (["dev", "us"] as const)
+          : (["prod", "eu"] as const);
+      },
+    });
 
-      const firstResult = derived.parse("ok");
-      assert.ok(!firstResult.success);
-      assert.deepEqual(
-        getSnapshottedDefaultDependencyValues(firstResult),
-        ["dev", "us"],
-      );
+    const firstResult = derived.parse("ok");
+    assert.ok(!firstResult.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(firstResult), [
+      "dev",
+      "us",
+    ]);
 
-      const secondResult = derived.parse("ok");
-      assert.ok(!secondResult.success);
-      assert.deepEqual(
-        getSnapshottedDefaultDependencyValues(secondResult),
-        ["prod", "eu"],
-      );
+    const secondResult = derived.parse("ok");
+    assert.ok(!secondResult.success);
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(secondResult), [
+      "prod",
+      "eu",
+    ]);
 
-      const deferred = createDeferredParseState("ok", derived, firstResult);
+    const deferred = createDeferredParseState("ok", derived, firstResult);
 
-      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
-      assert.equal(defaultCalls, 2);
-    },
-  );
+    assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+    assert.equal(defaultCalls, 2);
+  });
 
-  test(
-    "createDeferredParseState clones snapshotted default values",
-    () => {
-      const env = dependency(choice(["dev", "prod"] as const));
-      const region = dependency(choice(["us", "eu"] as const));
-      const parser = deriveFromSync({
-        metavar: "URL",
-        dependencies: [env, region] as const,
-        factory: (currentEnv, currentRegion) =>
-          choice(
-            [`https://${currentEnv}.${currentRegion}.example.com`] as const,
-          ),
-        defaultValues: () => ["dev", "us"] as const,
-      });
-      const preliminaryResult = snapshotDefaultDependencyValues(
-        {
-          success: false as const,
-          error: message`pending callback failed`,
-        },
-        ["dev", "us"] as const,
-      );
-      const deferred = createDeferredParseState(
-        "https://dev.us.example.com",
-        parser,
-        preliminaryResult,
-      );
-      const snapshot = getSnapshottedDefaultDependencyValues(preliminaryResult);
+  test("createDeferredParseState clones snapshotted default values", () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const parser = deriveFromSync({
+      metavar: "URL",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) =>
+        choice([`https://${currentEnv}.${currentRegion}.example.com`] as const),
+      defaultValues: () => ["dev", "us"] as const,
+    });
+    const preliminaryResult = snapshotDefaultDependencyValues(
+      {
+        success: false as const,
+        error: message`pending callback failed`,
+      },
+      ["dev", "us"] as const,
+    );
+    const deferred = createDeferredParseState(
+      "https://dev.us.example.com",
+      parser,
+      preliminaryResult,
+    );
+    const snapshot = getSnapshottedDefaultDependencyValues(preliminaryResult);
 
-      assert.ok(snapshot != null);
-      if (snapshot == null) return;
-      (snapshot as ["dev" | "prod", "us" | "eu"])[0] = "prod";
-      (snapshot as ["dev" | "prod", "us" | "eu"])[1] = "eu";
+    assert.ok(snapshot != null);
+    if (snapshot == null) return;
+    (snapshot as ["dev" | "prod", "us" | "eu"])[0] = "prod";
+    (snapshot as ["dev" | "prod", "us" | "eu"])[1] = "eu";
 
-      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
-    },
-  );
+    assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+  });
 
-  test(
-    "createDeferredParseState clones fallback default values",
-    () => {
-      const env = dependency(choice(["dev", "prod"] as const));
-      const region = dependency(choice(["us", "eu"] as const));
-      const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
-      const parser = deriveFromSync({
-        metavar: "URL",
-        dependencies: [env, region] as const,
-        factory: (currentEnv, currentRegion) =>
-          choice(
-            [`https://${currentEnv}.${currentRegion}.example.com`] as const,
-          ),
-        defaultValues: () => defaults,
-      });
-      const deferred = createDeferredParseState(
-        "https://dev.us.example.com",
-        parser,
-        {
-          success: false,
-          error: message`pending callback failed`,
-        },
-      );
+  test("createDeferredParseState clones fallback default values", () => {
+    const env = dependency(choice(["dev", "prod"] as const));
+    const region = dependency(choice(["us", "eu"] as const));
+    const defaults: ["dev" | "prod", "us" | "eu"] = ["dev", "us"];
+    const parser = deriveFromSync({
+      metavar: "URL",
+      dependencies: [env, region] as const,
+      factory: (currentEnv, currentRegion) =>
+        choice([`https://${currentEnv}.${currentRegion}.example.com`] as const),
+      defaultValues: () => defaults,
+    });
+    const deferred = createDeferredParseState(
+      "https://dev.us.example.com",
+      parser,
+      {
+        success: false,
+        error: message`pending callback failed`,
+      },
+    );
 
-      defaults[0] = "prod";
-      defaults[1] = "eu";
+    defaults[0] = "prod";
+    defaults[1] = "eu";
 
-      assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
-    },
-  );
+    assert.deepEqual(deferred.defaultValues, ["dev", "us"]);
+  });
 });
 
 describe("snapshotDefaultDependencyValues", () => {
@@ -951,9 +920,9 @@ describe("snapshotDefaultDependencyValues", () => {
           return input === `https://${currentEnv}.${currentRegion}.example.com`
             ? { success: true as const, value: input }
             : {
-              success: false as const,
-              error: message`Unexpected URL.`,
-            };
+                success: false as const,
+                error: message`Unexpected URL.`,
+              };
         },
         format(value: string): string {
           return value;
@@ -993,9 +962,9 @@ describe("snapshotDefaultDependencyValues", () => {
           return input === `https://${currentEnv}.${currentRegion}.example.com`
             ? { success: true as const, value: input }
             : {
-              success: false as const,
-              error: message`Unexpected URL.`,
-            };
+                success: false as const,
+                error: message`Unexpected URL.`,
+              };
         },
         format(value: string): string {
           return value;
@@ -1182,8 +1151,8 @@ describe("Integration: End-to-end dependency resolution", () => {
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1253,8 +1222,8 @@ describe("Integration: End-to-end dependency resolution", () => {
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1283,8 +1252,8 @@ describe("Integration: End-to-end dependency resolution", () => {
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1313,8 +1282,8 @@ describe("parseWithDependency", () => {
         factory: (mode: "dev" | "prod") =>
           choice(
             mode === "dev"
-              ? ["debug", "verbose"] as const
-              : ["quiet", "silent"] as const,
+              ? (["debug", "verbose"] as const)
+              : (["quiet", "silent"] as const),
           ),
         defaultValue: () => "dev" as const,
       },
@@ -1363,10 +1332,10 @@ describe("parseWithDependency", () => {
     assert.ok(!result2.success);
 
     // With parseWithDependency and actual values, "/custom/prod.yaml" is valid
-    const result3 = derived[parseWithDependency](
-      "/custom/prod.yaml",
-      ["/custom", "prod"] as const,
-    );
+    const result3 = derived[parseWithDependency]("/custom/prod.yaml", [
+      "/custom",
+      "prod",
+    ] as const);
     // For sync parsers, result is not a Promise
     assert.ok("success" in result3 && result3.success);
     if ("value" in result3) {
@@ -1389,8 +1358,8 @@ describe("derive() with async factory", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1408,8 +1377,8 @@ describe("derive() with async factory", () => {
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1427,8 +1396,8 @@ describe("derive() with async factory", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1445,8 +1414,8 @@ describe("derive() with async factory", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1471,8 +1440,8 @@ describe("derive() with async factory", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1589,38 +1558,35 @@ describe("derive() with async factory", () => {
     assert.equal(suggestions.length, 0);
   });
 
-  test(
-    "option suggest does not double-evaluate single-source defaults",
-    async () => {
-      let defaultCalls = 0;
-      const modeParser = dependency(choice(["dev", "prod"] as const));
-      const derived = modeParser.derive({
-        metavar: "VALUE",
-        mode: "async",
-        factory: (value: "dev" | "prod") =>
-          asyncChoice(
-            value === "dev"
-              ? ["debug", "verbose"] as const
-              : ["silent", "strict"] as const,
-          ),
-        defaultValue: () => {
-          defaultCalls++;
-          return "dev" as const;
-        },
-      });
-      const parser = object({ level: option("--level", derived) });
-
-      const suggestions = await suggestAsync(parser, ["--level", ""]);
-
-      assert.equal(defaultCalls, 1);
-      assert.deepEqual(
-        suggestions.map((suggestion) =>
-          "text" in suggestion ? suggestion.text : ""
+  test("option suggest does not double-evaluate single-source defaults", async () => {
+    let defaultCalls = 0;
+    const modeParser = dependency(choice(["dev", "prod"] as const));
+    const derived = modeParser.derive({
+      metavar: "VALUE",
+      mode: "async",
+      factory: (value: "dev" | "prod") =>
+        asyncChoice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
         ),
-        ["debug", "verbose"],
-      );
-    },
-  );
+      defaultValue: () => {
+        defaultCalls++;
+        return "dev" as const;
+      },
+    });
+    const parser = object({ level: option("--level", derived) });
+
+    const suggestions = await suggestAsync(parser, ["--level", ""]);
+
+    assert.equal(defaultCalls, 1);
+    assert.deepEqual(
+      suggestions.map((suggestion) =>
+        "text" in suggestion ? suggestion.text : "",
+      ),
+      ["debug", "verbose"],
+    );
+  });
 });
 
 describe("deriveSync()", () => {
@@ -1632,8 +1598,8 @@ describe("deriveSync()", () => {
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1649,8 +1615,8 @@ describe("deriveSync()", () => {
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1690,8 +1656,8 @@ describe("deriveSync()", () => {
       factory: (mode: "dev" | "prod") =>
         choice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1773,8 +1739,8 @@ describe("deriveAsync()", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1790,8 +1756,8 @@ describe("deriveAsync()", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1807,8 +1773,8 @@ describe("deriveAsync()", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -1959,10 +1925,10 @@ describe("deriveFrom() with async factory", () => {
       name: "TypeError",
       message: "Parser exploded.",
     });
-    const replayPromise = derived[parseWithDependency](
-      "debug",
-      ["/config", "prod"] as const,
-    );
+    const replayPromise = derived[parseWithDependency]("debug", [
+      "/config",
+      "prod",
+    ] as const);
     assert.ok(replayPromise instanceof Promise);
     await assert.rejects(replayPromise, {
       name: "TypeError",
@@ -2074,10 +2040,10 @@ describe("deriveFromSync()", () => {
       name: "TypeError",
       message: "Parser exploded.",
     });
-    const replayPromise = derived[parseWithDependency](
-      "debug",
-      ["/config", "prod"] as const,
-    );
+    const replayPromise = derived[parseWithDependency]("debug", [
+      "/config",
+      "prod",
+    ] as const);
     assert.ok(replayPromise instanceof Promise);
     await assert.rejects(replayPromise, {
       name: "TypeError",
@@ -2221,8 +2187,8 @@ describe("Integration: Async derived parser with object() and parseAsync()", () 
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2244,8 +2210,8 @@ describe("Integration: Async derived parser with object() and parseAsync()", () 
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2290,8 +2256,8 @@ describe("Integration: Async derived parser with object() and parseAsync()", () 
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2323,8 +2289,8 @@ describe("Integration: Async derived parser with object() and parseAsync()", () 
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2353,8 +2319,8 @@ describe("Integration: Async derived parser with object() and parseAsync()", () 
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2391,8 +2357,8 @@ describe("Complex combinations with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2432,8 +2398,8 @@ describe("Complex combinations with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2471,8 +2437,8 @@ describe("Complex combinations with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2505,17 +2471,16 @@ describe("Complex combinations with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
 
     const parser = object({
       mode: option("--mode", modeParser),
-      logLevel: map(
-        option("--log-level", logLevelParser),
-        (level) => level.toUpperCase(),
+      logLevel: map(option("--log-level", logLevelParser), (level) =>
+        level.toUpperCase(),
       ),
     });
 
@@ -2540,8 +2505,8 @@ describe("Complex combinations with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2582,8 +2547,8 @@ describe("Concurrency: async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
           5, // 5ms delay
         ),
       defaultValue: () => "dev" as const,
@@ -2629,8 +2594,8 @@ describe("Concurrency: async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2722,8 +2687,8 @@ describe("Error handling with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const, // Default is "dev"
     });
@@ -2749,8 +2714,8 @@ describe("Error handling with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const, // Default is "dev"
     });
@@ -2779,8 +2744,8 @@ describe("parseWithDependency with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2804,8 +2769,8 @@ describe("parseWithDependency with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2841,10 +2806,10 @@ describe("parseWithDependency with async derived parser", () => {
     assert.ok(result1.success);
 
     // With custom dependency values via parseWithDependency
-    const result2 = await derived[parseWithDependency](
-      "/custom/prod.yaml",
-      ["/custom", "prod"] as const,
-    );
+    const result2 = await derived[parseWithDependency]("/custom/prod.yaml", [
+      "/custom",
+      "prod",
+    ] as const);
     assert.ok(result2.success);
     if (result2.success) {
       assert.equal(result2.value, "/custom/prod.yaml");
@@ -2865,8 +2830,8 @@ describe("suggest() with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -2896,8 +2861,8 @@ describe("suggest() with async derived parser", () => {
       factory: (mode: "dev" | "prod") =>
         asyncChoice(
           mode === "dev"
-            ? ["debug", "verbose"] as const
-            : ["quiet", "silent"] as const,
+            ? (["debug", "verbose"] as const)
+            : (["quiet", "silent"] as const),
         ),
       defaultValue: () => "prod" as const,
     });
@@ -3884,12 +3849,10 @@ describe("suggest() advanced tests with dependencies", () => {
       mode: "sync",
       dependencies: [envParser, regionParser] as const,
       factory: (env, region) =>
-        choice(
-          [
-            `${env}-${region}-1.example.com`,
-            `${env}-${region}-2.example.com`,
-          ] as const,
-        ),
+        choice([
+          `${env}-${region}-1.example.com`,
+          `${env}-${region}-2.example.com`,
+        ] as const),
       defaultValues: () => ["dev", "us"] as const,
     });
 
@@ -4050,13 +4013,14 @@ describe("Async combinations with dependencies", () => {
             | "debug"
             | "quiet",
           async parse(input: string) {
-            return await trackOverlap(async () =>
-              await asyncChoice(
-                mode === "dev"
-                  ? (["debug", "verbose"] as const)
-                  : (["quiet", "silent"] as const),
-                50,
-              ).parse(input)
+            return await trackOverlap(
+              async () =>
+                await asyncChoice(
+                  mode === "dev"
+                    ? (["debug", "verbose"] as const)
+                    : (["quiet", "silent"] as const),
+                  50,
+                ).parse(input),
             );
           },
           format(value: "debug" | "verbose" | "quiet" | "silent") {
@@ -4077,9 +4041,11 @@ describe("Async combinations with dependencies", () => {
           metavar: "PORT" as NonEmptyString,
           placeholder: mode === "dev" ? 3000 : 80,
           async parse(input: string) {
-            return await trackOverlap(async () =>
-              await asyncInteger(mode === "dev" ? 3000 : 80, 65535, 50)
-                .parse(input)
+            return await trackOverlap(
+              async () =>
+                await asyncInteger(mode === "dev" ? 3000 : 80, 65535, 50).parse(
+                  input,
+                ),
             );
           },
           format(value: number) {
@@ -4242,12 +4208,9 @@ describe("coverage-guided dependency parser tests", () => {
       },
       defaultValues: () => ["ok"] as const,
     });
-    const syncResult = await syncDerived[parseWithDependency](
-      "value",
-      [
-        "boom",
-      ] as const,
-    );
+    const syncResult = await syncDerived[parseWithDependency]("value", [
+      "boom",
+    ] as const);
     assert.ok(!syncResult.success);
     if (!syncResult.success) {
       assert.deepEqual(
@@ -4340,19 +4303,16 @@ describe("coverage-guided dependency parser tests", () => {
       mode: "sync",
       dependencies: [modeParser, envParser] as const,
       // @ts-expect-error: intentional sync/async mode mismatch coverage.
-      factory: (
-        _mode: "sync" | "async",
-        _env: "dev" | "prod",
-      ) => {
+      factory: (_mode: "sync" | "async", _env: "dev" | "prod") => {
         return asyncChoice(["ok"] as const);
       },
       defaultValues: () => ["sync", "dev"] as const,
     });
 
-    const multiResult = await multiDerived[parseWithDependency](
-      "ok",
-      ["async", "dev"] as const,
-    );
+    const multiResult = await multiDerived[parseWithDependency]("ok", [
+      "async",
+      "dev",
+    ] as const);
     assert.ok(!multiResult.success);
     if (!multiResult.success) {
       assert.deepEqual(
@@ -4462,8 +4422,8 @@ describe("coverage-guided dependency parser tests", () => {
         metavar: "VALUE",
         placeholder: "ok" as const,
         parse(_input: string): ValueParserResult<"ok"> {
-          const thenable: (() => undefined) & { then: () => undefined } = Object
-            .assign(() => undefined, {
+          const thenable: (() => undefined) & { then: () => undefined } =
+            Object.assign(() => undefined, {
               then: () => undefined,
             });
           // @ts-expect-error: intentional function-thenable regression coverage.
@@ -4499,9 +4459,10 @@ describe("coverage-guided dependency parser tests", () => {
     assert.ok(multiSyncSuggest != null);
     assert.deepEqual(
       [
-        ...(multiSyncSuggest("v", ["prod", "remote"] as const) as Iterable<
-          Suggestion
-        >),
+        ...(multiSyncSuggest("v", [
+          "prod",
+          "remote",
+        ] as const) as Iterable<Suggestion>),
       ],
       [],
     );
@@ -4712,10 +4673,10 @@ describe("coverage-guided dependency parser tests", () => {
       },
       defaultValues: () => ["ok", "us"] as const,
     });
-    const syncResult = await syncDerived[parseWithDependency](
-      "value",
-      ["boom", "us"] as const,
-    );
+    const syncResult = await syncDerived[parseWithDependency]("value", [
+      "boom",
+      "us",
+    ] as const);
     assert.ok(!syncResult.success);
     if (!syncResult.success) {
       assert.deepEqual(
@@ -4759,10 +4720,10 @@ describe("coverage-guided dependency parser tests", () => {
       },
       defaultValues: () => ["ok", "us"] as const,
     });
-    const asyncMultiResult = await asyncMulti[parseWithDependency](
-      "value",
-      ["boom", "us"] as const,
-    );
+    const asyncMultiResult = await asyncMulti[parseWithDependency]("value", [
+      "boom",
+      "us",
+    ] as const);
     assert.ok(!asyncMultiResult.success);
     if (!asyncMultiResult.success) {
       assert.deepEqual(
@@ -4790,10 +4751,10 @@ describe("coverage-guided dependency parser tests", () => {
     });
     const syncMultiResult = syncMulti.parse("ok");
     assert.ok(!syncMultiResult.success);
-    assert.deepEqual(
-      getSnapshottedDefaultDependencyValues(syncMultiResult),
-      ["prod", "ap"],
-    );
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(syncMultiResult), [
+      "prod",
+      "ap",
+    ]);
 
     const asyncMulti = deriveFromAsync({
       metavar: "VALUE",
@@ -4808,10 +4769,10 @@ describe("coverage-guided dependency parser tests", () => {
     });
     const asyncMultiResult = await asyncMulti.parse("ok");
     assert.ok(!asyncMultiResult.success);
-    assert.deepEqual(
-      getSnapshottedDefaultDependencyValues(asyncMultiResult),
-      ["prod", "ap"],
-    );
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(asyncMultiResult), [
+      "prod",
+      "ap",
+    ]);
 
     const asyncFromSyncMulti = deriveFromSync({
       metavar: "VALUE",
@@ -4846,10 +4807,9 @@ describe("coverage-guided dependency parser tests", () => {
     });
     const singleSyncResult = singleSync.parse("ok");
     assert.ok(!singleSyncResult.success);
-    assert.deepEqual(
-      getSnapshottedDefaultDependencyValues(singleSyncResult),
-      ["prod"],
-    );
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(singleSyncResult), [
+      "prod",
+    ]);
     assert.deepEqual(
       singleSyncResult.error,
       message`Derived parser error: ${"single prod unavailable"}`,
@@ -4867,10 +4827,9 @@ describe("coverage-guided dependency parser tests", () => {
     });
     const singleAsyncResult = await singleAsync.parse("ok");
     assert.ok(!singleAsyncResult.success);
-    assert.deepEqual(
-      getSnapshottedDefaultDependencyValues(singleAsyncResult),
-      ["prod"],
-    );
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(singleAsyncResult), [
+      "prod",
+    ]);
 
     const singleAsyncFromSync = dependency(
       asyncChoice(["dev", "prod"] as const),
@@ -5018,10 +4977,7 @@ describe("coverage-guided dependency parser tests", () => {
       defaultValues: () => ["dev"] as const,
     });
 
-    const result = await derived[parseWithDependency](
-      "ok",
-      ["prod"] as const,
-    );
+    const result = await derived[parseWithDependency]("ok", ["prod"] as const);
     assert.ok(!result.success);
     if (!result.success) {
       assert.deepEqual(
@@ -5110,9 +5066,8 @@ describe("property-based tests", () => {
       fc.property(
         fc.array(operationArbitrary, { minLength: 0, maxLength: 120 }),
         (operations) => {
-          const symbols = Array.from(
-            { length: 5 },
-            (_unused, index) => Symbol(`dep-${index}`),
+          const symbols = Array.from({ length: 5 }, (_unused, index) =>
+            Symbol(`dep-${index}`),
           );
           const registry = new DependencyRegistry();
           const model = new Map<number, string>();
@@ -5269,8 +5224,10 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
             metavar: "VALUE",
             factory: () => choice(["x"] as const),
             defaultValue: () => "a" as const,
+            /* oxlint-disable no-explicit-any -- Keep unchecked input. */
             // deno-lint-ignore no-explicit-any
           } as any,
+          /* oxlint-enable no-explicit-any */
         );
       },
       (err: unknown) =>
@@ -5290,8 +5247,10 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
             dependencies: [] as const,
             factory: () => choice(["x"] as const),
             defaultValues: () => [] as const,
+            /* oxlint-disable no-explicit-any -- Keep unchecked input. */
             // deno-lint-ignore no-explicit-any
           } as any,
+          /* oxlint-enable no-explicit-any */
         );
       },
       (err: unknown) =>
@@ -5588,7 +5547,7 @@ describe("top-level option()/argument() with derived parsers", () => {
     });
     const parser = argument(level);
     const suggestions = suggestSync(parser, ["d"]);
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("debug"));
   });
 
@@ -5607,7 +5566,7 @@ describe("top-level option()/argument() with derived parsers", () => {
     });
     const parser = option("--level", level);
     const suggestions = await suggestAsync(parser, ["--level", "d"]);
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("debug"));
   });
 
@@ -5696,14 +5655,18 @@ describe("top-level option()/argument() with derived parsers", () => {
       factory: (m, f) =>
         choice(
           m === "prod"
-            ? (f === "yaml" ? ["prod.yaml"] as const : ["prod.json"] as const)
-            : (f === "yaml" ? ["dev.yaml"] as const : ["dev.json"] as const),
+            ? f === "yaml"
+              ? (["prod.yaml"] as const)
+              : (["prod.json"] as const)
+            : f === "yaml"
+              ? (["dev.yaml"] as const)
+              : (["dev.json"] as const),
         ),
       defaultValues: () => {
         defaultCallCount++;
         return [
           "prod" as const,
-          defaultCallCount === 1 ? "json" as const : "yaml" as const,
+          defaultCallCount === 1 ? ("json" as const) : ("yaml" as const),
         ] as const;
       },
     });
@@ -5729,14 +5692,18 @@ describe("top-level option()/argument() with derived parsers", () => {
       factory: (m, f) =>
         choice(
           m === "prod"
-            ? (f === "yaml" ? ["prod.yaml"] as const : ["prod.json"] as const)
-            : (f === "yaml" ? ["dev.yaml"] as const : ["dev.json"] as const),
+            ? f === "yaml"
+              ? (["prod.yaml"] as const)
+              : (["prod.json"] as const)
+            : f === "yaml"
+              ? (["dev.yaml"] as const)
+              : (["dev.json"] as const),
         ),
       defaultValues: () => {
         defaultCallCount++;
         return [
           "prod" as const,
-          defaultCallCount === 1 ? "json" as const : "yaml" as const,
+          defaultCallCount === 1 ? ("json" as const) : ("yaml" as const),
         ] as const;
       },
     });
@@ -5761,7 +5728,7 @@ describe("top-level option()/argument() with derived parsers", () => {
     const src = dependency(choice(["dev", "prod"] as const));
     const parser = option("--mode", src);
     const suggestions = suggestSync(parser, ["--mode", "d"]);
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("dev"));
   });
 
@@ -5769,7 +5736,7 @@ describe("top-level option()/argument() with derived parsers", () => {
     const src = dependency(choice(["dev", "prod"] as const));
     const parser = option("--mode", src);
     const suggestions = await suggestAsync(parser, ["--mode", "d"]);
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("dev"));
   });
 
@@ -5862,7 +5829,7 @@ describe("top-level option()/argument() with derived parsers", () => {
     });
     const parser = option("--level", level);
     const suggestions = await suggestAsync(parser, ["--level", "d"]);
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("debug"));
   });
 });

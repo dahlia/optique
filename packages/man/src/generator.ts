@@ -33,9 +33,7 @@ export interface GenerateManPageProgramOptions
 /**
  * Checks if the given value looks like a {@link Parser} at runtime.
  */
-function isParser(
-  value: unknown,
-): value is Parser<Mode, unknown, unknown> {
+function isParser(value: unknown): value is Parser<Mode, unknown, unknown> {
   try {
     if (value == null || typeof value !== "object") {
       return false;
@@ -68,10 +66,16 @@ function isProgram<M extends Mode, T>(
   value: Parser<M, T, unknown> | Program<M, T>,
 ): value is Program<M, T> {
   try {
-    return typeof value === "object" && value !== null &&
-      "parser" in value && "metadata" in value &&
-      typeof value.metadata === "object" && value.metadata !== null &&
-      "name" in value.metadata && typeof value.metadata.name === "string";
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "parser" in value &&
+      "metadata" in value &&
+      typeof value.metadata === "object" &&
+      value.metadata !== null &&
+      "name" in value.metadata &&
+      typeof value.metadata.name === "string"
+    );
   } catch {
     return false;
   }
@@ -81,15 +85,11 @@ function isProgram<M extends Mode, T>(
  * Validates that the extracted parser is a genuine Optique parser.
  * @throws {TypeError} If the value is not a valid Parser.
  */
-function validateParser(value: unknown): asserts value is Parser<
-  Mode,
-  unknown,
-  unknown
-> {
+function validateParser(
+  value: unknown,
+): asserts value is Parser<Mode, unknown, unknown> {
   if (!isParser(value)) {
-    throw new TypeError(
-      "The given value is not a valid Parser or Program.",
-    );
+    throw new TypeError("The given value is not a valid Parser or Program.");
   }
 }
 
@@ -347,9 +347,7 @@ export function generateManPage<M extends Mode>(
 
 // Implementation
 export function generateManPage(
-  parserOrProgram:
-    | Parser<Mode, unknown, unknown>
-    | Program<Mode, unknown>,
+  parserOrProgram: Parser<Mode, unknown, unknown> | Program<Mode, unknown>,
   options: GenerateManPageOptions | GenerateManPageProgramOptions,
 ): string | Promise<string> {
   const { parser, mergedOptions } = extractParserAndOptions(

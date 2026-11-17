@@ -12,10 +12,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 function valueSuggestions(prefix: string): Suggestion[] {
-  return ["alpha", "--positional"].filter((text) => text.startsWith(prefix))
-    .map(
-      (text) => ({ kind: "literal", text }),
-    );
+  return ["alpha", "--positional"]
+    .filter((text) => text.startsWith(prefix))
+    .map((text) => ({ kind: "literal", text }));
 }
 
 const syncValues: ValueParser<"sync", string> = {
@@ -40,14 +39,15 @@ async function terminatedSuggestions<T, TState>(
   buffer: readonly string[] = [],
 ): Promise<readonly Suggestion[]> {
   const suggestions: Suggestion[] = [];
-  for await (
-    const suggestion of parser.suggest({
+  for await (const suggestion of parser.suggest(
+    {
       buffer,
       state: parser.initialState,
       optionsTerminated: true,
       usage: parser.usage,
-    }, prefix)
-  ) {
+    },
+    prefix,
+  )) {
     suggestions.push(suggestion);
   }
   return suggestions;
@@ -148,12 +148,10 @@ describe("completion after the option terminator", () => {
     });
   }
 
-  for (
-    const [name, parser] of [
-      ["boolean options", option("--foo", "-f", "/foo")],
-      ["flags", flag("--foo", "-f", "/foo")],
-    ] as const
-  ) {
+  for (const [name, parser] of [
+    ["boolean options", option("--foo", "-f", "/foo")],
+    ["flags", flag("--foo", "-f", "/foo")],
+  ] as const) {
     it(`does not suggest terminated ${name}`, async () => {
       for (const prefix of ["--", "--f", "-", "-f", "/f"]) {
         assert.deepEqual(suggest(parser, ["--", prefix]), [], prefix);

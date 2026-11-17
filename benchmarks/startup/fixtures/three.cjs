@@ -6,7 +6,10 @@ const { run } = require("@optique/run");
 const { options, set, start, status } = require("./grammar.cjs");
 
 const parser = or(
-  command("start", map(start(), (value) => ({ command: "start", ...value }))),
+  command(
+    "start",
+    map(start(), (value) => ({ command: "start", ...value })),
+  ),
   command(
     "status",
     map(status(), (value) => ({ command: "status", ...value })),

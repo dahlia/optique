@@ -34,22 +34,21 @@ interface ProcessOptions {
  *
  * @since 1.3.0
  */
-export type CliRunnerOptions =
-  & ProcessOptions
-  & (
+export type CliRunnerOptions = ProcessOptions &
+  (
     | {
-      /** File path or file URL to execute with the current runtime. */
-      readonly entrypoint: string | URL;
-      /** Runtime flags before the entry point; Deno flags follow `run`. */
-      readonly runtimeArgs?: readonly string[];
-      readonly command?: never;
-    }
+        /** File path or file URL to execute with the current runtime. */
+        readonly entrypoint: string | URL;
+        /** Runtime flags before the entry point; Deno flags follow `run`. */
+        readonly runtimeArgs?: readonly string[];
+        readonly command?: never;
+      }
     | {
-      /** Executable followed by fixed arguments, passed without a shell. */
-      readonly command: readonly [string, ...string[]];
-      readonly entrypoint?: never;
-      readonly runtimeArgs?: never;
-    }
+        /** Executable followed by fixed arguments, passed without a shell. */
+        readonly command: readonly [string, ...string[]];
+        readonly entrypoint?: never;
+        readonly runtimeArgs?: never;
+      }
   );
 
 /**
@@ -163,13 +162,16 @@ function strings(value: readonly string[]): readonly string[] {
 
 function validate(options: ProcessOptions): void {
   if (
-    options == null || typeof options !== "object" || Array.isArray(options)
+    options == null ||
+    typeof options !== "object" ||
+    Array.isArray(options)
   ) {
     throw new TypeError("Expected process options.");
   }
   if (
     options.timeout !== undefined &&
-    (!Number.isInteger(options.timeout) || options.timeout < 0 ||
+    (!Number.isInteger(options.timeout) ||
+      options.timeout < 0 ||
       options.timeout > 2_147_483_647)
   ) {
     throw new RangeError(
@@ -177,23 +179,27 @@ function validate(options: ProcessOptions): void {
     );
   }
   if (
-    options.cleanup !== undefined && options.cleanup !== "child" &&
+    options.cleanup !== undefined &&
+    options.cleanup !== "child" &&
     options.cleanup !== "tree"
   ) {
     throw new TypeError("Cleanup must be child or tree.");
   }
   if (options.cwd !== undefined) filePath(options.cwd);
   if (
-    options.env !== undefined && (options.env === null ||
-      typeof options.env !== "object" || Array.isArray(options.env) ||
-      Object.values(options.env).some((v) =>
-        v !== undefined && typeof v !== "string"
+    options.env !== undefined &&
+    (options.env === null ||
+      typeof options.env !== "object" ||
+      Array.isArray(options.env) ||
+      Object.values(options.env).some(
+        (v) => v !== undefined && typeof v !== "string",
       ))
   ) {
     throw new TypeError("Environment values must be strings or undefined.");
   }
   if (
-    options.signal !== undefined && (options.signal == null ||
+    options.signal !== undefined &&
+    (options.signal == null ||
       typeof options.signal.aborted !== "boolean" ||
       typeof options.signal.addEventListener !== "function" ||
       typeof options.signal.removeEventListener !== "function")
@@ -203,8 +209,10 @@ function validate(options: ProcessOptions): void {
 }
 
 function environment(
-  ...layers:
-    readonly (Readonly<Record<string, string | undefined>> | undefined)[]
+  ...layers: readonly (
+    | Readonly<Record<string, string | undefined>>
+    | undefined
+  )[]
 ): Record<string, string> {
   const result: Record<string, string> = Object.create(null);
   const names = new Map<string, string>();
@@ -369,11 +377,13 @@ function runProcess(
     const stdout: string[] = [];
     const stderr: string[] = [];
     let settled = false;
-    let failure: {
-      readonly reason: CliInvocationError["reason"];
-      readonly message: string;
-      readonly cause?: unknown;
-    } | undefined;
+    let failure:
+      | {
+          readonly reason: CliInvocationError["reason"];
+          readonly message: string;
+          readonly cause?: unknown;
+        }
+      | undefined;
     const cleanupErrors: unknown[] = [];
     let timer: ReturnType<typeof setTimeout> | undefined;
     const waiter = createCleanupWaiter();
@@ -407,8 +417,14 @@ function runProcess(
         return;
       }
       if (
-        !failure && exited && closed && outEnd && errEnd && outClose &&
-        errClose && inClose
+        !failure &&
+        exited &&
+        closed &&
+        outEnd &&
+        errEnd &&
+        outClose &&
+        errClose &&
+        inClose
       ) {
         settled = true;
         release();
@@ -455,17 +471,19 @@ function runProcess(
       settled = true;
       release();
       reject(
-        cleanupErrors.length === 0 ? primary : new CliInvocationError(
-          "cleanup",
-          "CLI cleanup could not be completed.",
-          result,
-          {
-            cause: new AggregateError(
-              [primary, ...cleanupErrors],
-              "CLI invocation and cleanup failed.",
+        cleanupErrors.length === 0
+          ? primary
+          : new CliInvocationError(
+              "cleanup",
+              "CLI cleanup could not be completed.",
+              result,
+              {
+                cause: new AggregateError(
+                  [primary, ...cleanupErrors],
+                  "CLI invocation and cleanup failed.",
+                ),
+              },
             ),
-          },
-        ),
       );
     }
     function onOut(text: string) {
@@ -481,11 +499,7 @@ function runProcess(
           new Error("The CLI process failed during cleanup.", { cause: error }),
         );
       } else {
-        fail(
-          spawned ? "io" : "spawn",
-          "Could not execute the CLI.",
-          error,
-        );
+        fail(spawned ? "io" : "spawn", "Could not execute the CLI.", error);
       }
     }
     function onIoError(error: Error) {

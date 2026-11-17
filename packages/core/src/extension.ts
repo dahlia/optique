@@ -220,10 +220,9 @@ export function mapSourceMetadata<M extends Mode, TValue, TState>(
     source: ParserSourceMetadata<M, TValue, TState>,
   ) => ParserSourceMetadata<M, TValue, TState>,
 ): Parser<M, TValue, TState>["dependencyMetadata"] | undefined {
-  return composeWrappedSourceMetadata(
-    parser.dependencyMetadata,
-    mapSource,
-  ) as Parser<M, TValue, TState>["dependencyMetadata"] | undefined;
+  return composeWrappedSourceMetadata(parser.dependencyMetadata, mapSource) as
+    | Parser<M, TValue, TState>["dependencyMetadata"]
+    | undefined;
 }
 
 /**
@@ -242,10 +241,12 @@ export function delegateOptionParsing<TOuterState, TInnerState>(
   inner: Parser<Mode, unknown, TInnerState>,
   getInnerState: (state: TOuterState) => TInnerState,
 ): void {
-  defineReachableChildren(wrapper, [inner], (state) => [{
-    parser: inner,
-    state: getInnerState(state),
-  }]);
+  defineReachableChildren(wrapper, [inner], (state) => [
+    {
+      parser: inner,
+      state: getInnerState(state),
+    },
+  ]);
 }
 
 /**
@@ -300,8 +301,10 @@ export function defineEmptyInputBehavior(
   behavior: EmptyInputBehavior,
 ): void {
   if (
-    behavior.step !== undefined && behavior.step !== "success" &&
-    behavior.step !== "provisional" && behavior.step !== "failure"
+    behavior.step !== undefined &&
+    behavior.step !== "success" &&
+    behavior.step !== "provisional" &&
+    behavior.step !== "failure"
   ) {
     throw new TypeError("Invalid empty-input step.");
   }
@@ -319,10 +322,12 @@ export function defineEmptyInputBehavior(
   const facts = projectEmptyInputBehavior(behavior);
   defineEmptyInputFacts(
     parser,
-    Object.keys(facts).length < 1 ? {} : {
-      ...facts,
-      probe: facts.step === undefined ? {} : { step: facts.step },
-    },
+    Object.keys(facts).length < 1
+      ? {}
+      : {
+          ...facts,
+          probe: facts.step === undefined ? {} : { step: facts.step },
+        },
   );
 }
 

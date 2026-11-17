@@ -36,13 +36,17 @@ function wrap(type: "optional" | "multiple", terms: Usage): UsageTerm {
 
 describe("1.0 matched command usage traversal", () => {
   it("does not reveal a descendant of an unmatched branch", () => {
-    const usage = docUsage([{
-      type: "optional",
-      terms: [{
-        type: "exclusive",
-        terms: [[other, alpha], [alpha]],
-      }],
-    }]);
+    const usage = docUsage([
+      {
+        type: "optional",
+        terms: [
+          {
+            type: "exclusive",
+            terms: [[other, alpha], [alpha]],
+          },
+        ],
+      },
+    ]);
     const container = usage[0];
     assert.equal(container.type, "optional");
     const alternatives = container.terms[0];
@@ -78,18 +82,19 @@ describe("identified commands after an untracked mismatch", () => {
     for (const nested of [false, true]) {
       it(`${mode}: scans identified commands in a ${nested ? "nested" : "flat"} list`, async () => {
         let valueParsed = false;
-        const value: ValueParser<typeof mode, string> = mode === "sync"
-          ? string()
-          : {
-            mode: "async",
-            metavar: "STRING",
-            placeholder: "",
-            parse(input) {
-              valueParsed = true;
-              return Promise.resolve({ success: true, value: input });
-            },
-            format: (value) => value,
-          };
+        const value: ValueParser<typeof mode, string> =
+          mode === "sync"
+            ? string()
+            : {
+                mode: "async",
+                metavar: "STRING",
+                placeholder: "",
+                parse(input) {
+                  valueParsed = true;
+                  return Promise.resolve({ success: true, value: input });
+                },
+                format: (value) => value,
+              };
         const selected = command(
           "alpha",
           command("beta", option("--value", value), {

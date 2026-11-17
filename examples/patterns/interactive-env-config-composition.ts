@@ -1,4 +1,5 @@
 import { z } from "zod";
+import process from "node:process";
 import { bindConfig, createConfigContext } from "@optique/config";
 import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
@@ -16,10 +17,10 @@ import { print, runAsync } from "@optique/run";
 //   CLI argument > environment variable > config file > interactive prompt
 //
 // Usage:
-//   deno run -A examples/patterns/interactive-env-config-composition.ts
-//   deno run -A examples/patterns/interactive-env-config-composition.ts -c config.json
-//   MYAPP_HOST=env.example.com deno run -A examples/patterns/interactive-env-config-composition.ts
-//   deno run -A examples/patterns/interactive-env-config-composition.ts --host cli.example.com --api-key CLI_KEY
+//   node examples/patterns/interactive-env-config-composition.ts
+//   node examples/patterns/interactive-env-config-composition.ts -c config.json
+//   MYAPP_HOST=env.example.com node examples/patterns/interactive-env-config-composition.ts
+//   node examples/patterns/interactive-env-config-composition.ts --host cli.example.com --api-key CLI_KEY
 
 function getConfigPathFromArgs(args: readonly string[]): string | undefined {
   for (let index = 0; index < args.length; index++) {
@@ -44,7 +45,7 @@ const configSchema = z.object({
 const envContext = createEnvContext({ prefix: "MYAPP_" });
 const configContext = createConfigContext({ schema: configSchema });
 
-const args = Deno.args;
+const args = process.argv.slice(2);
 
 // Preload config annotations once and expose them through a single-pass context so
 // prompt() remains the final fallback after CLI/env/config values.

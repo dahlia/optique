@@ -46,7 +46,7 @@ function asyncString(): ValueParser<"async", string> {
   };
 }
 function texts(suggestions: readonly Suggestion[]): string[] {
-  return suggestions.flatMap((s) => s.kind === "literal" ? [s.text] : []);
+  return suggestions.flatMap((s) => (s.kind === "literal" ? [s.text] : []));
 }
 
 describe("attached short option values", () => {
@@ -118,14 +118,15 @@ describe("attached short option values", () => {
   });
   it("preserves conditional ownership through env wrappers", async () => {
     const env = createEnvContext({ source: () => undefined });
-    for (
-      const value of [choice(["a", "b"]), {
+    for (const value of [
+      choice(["a", "b"]),
+      {
         ...choice(["a", "b"]),
         mode: "async" as const,
         parse: (input: string) =>
           Promise.resolve(choice(["a", "b"]).parse(input)),
-      }]
-    ) {
+      },
+    ]) {
       const inner = conditional(withDefault(option("--mode", value), "a"), {
         a: option("-verbose"),
         b: constant("none"),
@@ -192,7 +193,8 @@ describe("attached short option values", () => {
     const child = {
       ...inner,
       canSkip: (_state: typeof inner.initialState, exec?: ExecutionContext) =>
-        exec?.path.length === 2 && exec.path[0] === "steps" &&
+        exec?.path.length === 2 &&
+        exec.path[0] === "steps" &&
         exec.path[1] === 0,
     };
     const sync = object({
@@ -360,11 +362,14 @@ describe("attached short option values", () => {
         a: option("-verbose"),
         b: option("-other"),
       });
-      const p = object({
-        first: shared,
-        second: shared,
-        v: optional(option("-v", string())),
-      }, { allowDuplicates: true });
+      const p = object(
+        {
+          first: shared,
+          second: shared,
+          v: optional(option("-v", string())),
+        },
+        { allowDuplicates: true },
+      );
       const result = await parseAsync(p, [
         "--mode",
         "a",
@@ -382,18 +387,26 @@ describe("attached short option values", () => {
   });
 
   it("keeps repeated parser routes while dropping inactive defaults", () => {
-    const branch = conditional(option("--mode", choice(["a"])), {
-      a: option("-p", string()),
-    }, option("-port"));
+    const branch = conditional(
+      option("--mode", choice(["a"])),
+      {
+        a: option("-p", string()),
+      },
+      option("-port"),
+    );
     assert.deepEqual(parseSync(multiple(branch), ["--mode", "a", "-port"]), {
       success: true,
       value: [["a", "ort"]],
     });
   });
   it("keeps repeated routes through nested constructs", () => {
-    const branch = conditional(option("--mode", choice(["a"])), {
-      a: option("-p", string()),
-    }, option("-port"));
+    const branch = conditional(
+      option("--mode", choice(["a"])),
+      {
+        a: option("-p", string()),
+      },
+      option("-port"),
+    );
     assert.deepEqual(
       parseSync(multiple(object({ branch })), ["--mode", "a", "-port"]),
       { success: true, value: [{ branch: ["a", "ort"] }] },
@@ -410,13 +423,11 @@ describe("attached short option values", () => {
       ),
       { success: true, value: ["default", "hello"] },
     );
-    for (
-      const p of [
-        option("-🙂", string()),
-        flag("-🙂"),
-        negatableFlag({ positive: "-🙂", negative: "--no-smile" }),
-      ]
-    ) {
+    for (const p of [
+      option("-🙂", string()),
+      flag("-🙂"),
+      negatableFlag({ positive: "-🙂", negative: "--no-smile" }),
+    ]) {
       assert.ok(texts(suggestSync<unknown>(p, ["-"])).includes("-🙂"));
     }
     assert.ok(
@@ -513,13 +524,11 @@ describe("attached short option values", () => {
     });
   }
   it("prefers Boolean and negatable full names to prefix flags", () => {
-    for (
-      const full of [
-        option("-verbose"),
-        optional(flag("-verbose")),
-        negatableFlag({ positive: ["-verbose"], negative: ["--no-verbose"] }),
-      ]
-    ) {
+    for (const full of [
+      option("-verbose"),
+      optional(flag("-verbose")),
+      negatableFlag({ positive: ["-verbose"], negative: ["--no-verbose"] }),
+    ]) {
       const parser = object({ short: option("-v"), full });
       assert.deepEqual(parseSync(parser, ["-verbose"]), {
         success: true,
@@ -553,12 +562,10 @@ describe("attached short option values", () => {
     );
   });
   it("reserves competing full names but not unentered commands", () => {
-    for (
-      const parser of [
-        or(option("-v"), option("-verbose", string())),
-        longestMatch(option("-v"), option("-verbose", string())),
-      ]
-    ) {
+    for (const parser of [
+      or(option("-v"), option("-verbose", string())),
+      longestMatch(option("-v"), option("-verbose", string())),
+    ]) {
       assert.deepEqual(parseSync(parser, ["-verbose", "yes"]), {
         success: true,
         value: "yes",
@@ -632,9 +639,13 @@ describe("attached short option values", () => {
     const values = choice(["erbose", "ersion"]);
     const sync = object({
       v: optional(option("-v", values)),
-      c: conditional(withDefault(option("--mode", choice(["a", "z"])), "z"), {
-        a: option("-verbose"),
-      }, option("--other")),
+      c: conditional(
+        withDefault(option("--mode", choice(["a", "z"])), "z"),
+        {
+          a: option("-verbose"),
+        },
+        option("--other"),
+      ),
     });
     const asyncValues: ValueParser<"async", string> = {
       ...values,
@@ -646,9 +657,13 @@ describe("attached short option values", () => {
     };
     const async = object({
       v: optional(option("-v", asyncValues)),
-      c: conditional(withDefault(option("--mode", asyncString()), "z"), {
-        a: option("-verbose"),
-      }, option("--other")),
+      c: conditional(
+        withDefault(option("--mode", asyncString()), "z"),
+        {
+          a: option("-verbose"),
+        },
+        option("--other"),
+      ),
     });
     const expected = {
       success: true,
@@ -685,9 +700,13 @@ describe("attached short option values", () => {
         value: ["a", "ort"],
       },
     );
-    const asyncP = conditional(option("--mode", asyncString()), {
-      a: option("-p", string()),
-    }, option("-port"));
+    const asyncP = conditional(
+      option("--mode", asyncString()),
+      {
+        a: option("-p", string()),
+      },
+      option("-port"),
+    );
     assert.deepEqual(await parseAsync(asyncP, ["--mode", "a", "-port"]), {
       success: true,
       value: ["a", "ort"],
@@ -701,17 +720,19 @@ describe("attached short option values", () => {
     );
   });
   it("preserves conditional ownership through transparent wrappers", () => {
-    const p = conditional(option("--mode", choice(["a"])), {
-      a: option("-p", string()),
-    }, option("-port"));
-    for (
-      const wrapped of [
-        optional(p),
-        withDefault(p, ["fallback", false] as const),
-        group("Branch", p),
-        map(p, (value) => value),
-      ]
-    ) {
+    const p = conditional(
+      option("--mode", choice(["a"])),
+      {
+        a: option("-p", string()),
+      },
+      option("-port"),
+    );
+    for (const wrapped of [
+      optional(p),
+      withDefault(p, ["fallback", false] as const),
+      group("Branch", p),
+      map(p, (value) => value),
+    ]) {
       assert.deepEqual(
         parseSync(object({ branch: wrapped }), ["--mode", "a", "-port"]),
         {
@@ -836,7 +857,7 @@ describe("attached short option values", () => {
   });
   it("uses registered annotations for conditional candidate eligibility", async () => {
     const env = createEnvContext({
-      source: (key) => key === "MODE" ? "a" : undefined,
+      source: (key) => (key === "MODE" ? "a" : undefined),
     });
     const p = object({
       v: optional(option("-v", string())),
@@ -973,12 +994,12 @@ describe("attached short option completion", () => {
     x: option("-x"),
     n: option("-n", choice(["json", "yaml"])),
   });
-  for (
-    const [prefix, expected] of [["-nj", ["-njson"]], ["-xnj", ["-xnjson"]], [
-      "-n",
-      ["-n", "-njson", "-nyaml"],
-    ], ["-n=j", []]] as const
-  ) {
+  for (const [prefix, expected] of [
+    ["-nj", ["-njson"]],
+    ["-xnj", ["-xnjson"]],
+    ["-n", ["-n", "-njson", "-nyaml"]],
+    ["-n=j", []],
+  ] as const) {
     it(`completes ${prefix}`, () =>
       assert.deepEqual(texts(suggestSync(parser, [prefix])), expected));
   }
@@ -1010,12 +1031,18 @@ describe("attached short option completion", () => {
   });
   it("resolves conditional scope during completion", async () => {
     assert.deepEqual(
-      texts(suggestSync(
-        conditional(constant("a"), {
-          a: option("-p", choice(["ort"])),
-        }, option("-port")),
-        ["-po"],
-      )),
+      texts(
+        suggestSync(
+          conditional(
+            constant("a"),
+            {
+              a: option("-p", choice(["ort"])),
+            },
+            option("-port"),
+          ),
+          ["-po"],
+        ),
+      ),
       ["-port"],
     );
     const inner = choice(["ort"]);
@@ -1030,9 +1057,13 @@ describe("attached short option completion", () => {
     assert.deepEqual(
       texts(
         await suggestAsync(
-          conditional(constant("a"), {
-            a: option("-p", value),
-          }, option("-port")),
+          conditional(
+            constant("a"),
+            {
+              a: option("-p", value),
+            },
+            option("-port"),
+          ),
           ["-po"],
         ),
       ),

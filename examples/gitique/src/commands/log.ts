@@ -52,14 +52,15 @@ function parseLocalDate(input: string): ValueParserResult<Date> {
   const [year, month, day] = input.split("-").map(Number);
   const date = new Date(year, month - 1, day);
   if (
-    date.getFullYear() !== year || date.getMonth() !== month - 1 ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
     date.getDate() !== day
   ) {
     return {
       success: false,
-      error: message`Invalid date ${input}. Use a real calendar date in ${
-        text("YYYY-MM-DD")
-      } format.`,
+      error: message`Invalid date ${input}. Use a real calendar date in ${text(
+        "YYYY-MM-DD",
+      )} format.`,
     };
   }
 
@@ -93,9 +94,9 @@ const displayOptions = group(
           metavar: "FORMAT",
           errors: {
             invalidChoice: (input, choices) =>
-              message`Unknown log format ${input}. Choose ${
-                formatChoicesMessage(choices)
-              }.`,
+              message`Unknown log format ${input}. Choose ${formatChoicesMessage(
+                choices,
+              )}.`,
           },
         }),
         {
@@ -134,8 +135,7 @@ const filterOptions = group(
     ),
     author: optional(
       option("--author", string({ metavar: "PATTERN" }), {
-        description:
-          message`Show commits by a specific author (partial name match)`,
+        description: message`Show commits by a specific author (partial name match)`,
       }),
     ),
     grep: optional(
@@ -179,25 +179,22 @@ const logOptionsParser = map(
  */
 export const logCommand = command("log", logOptionsParser, {
   brief: message`Show commit history`,
-  description:
-    message`Show commit history in reverse chronological order. Use ${
-      optionName("--oneline")
-    } for compact output or ${
-      optionName("--format")
-    } to customize the display.`,
+  description: message`Show commit history in reverse chronological order. Use ${optionName(
+    "--oneline",
+  )} for compact output or ${optionName("--format")} to customize the display.`,
   footer: message`Examples:${lineBreak()}
-  ${
-    commandLine("gitique log")
-  }                     Show recent commits${lineBreak()}
-  ${
-    commandLine("gitique log --oneline -n 5")
-  }      Show 5 commits in one-line format${lineBreak()}
-  ${
-    commandLine("gitique log --format=full")
-  }       Show full commit details${lineBreak()}
-  ${
-    commandLine("gitique log --author=john")
-  }       Filter by author${lineBreak()}
+  ${commandLine(
+    "gitique log",
+  )}                     Show recent commits${lineBreak()}
+  ${commandLine(
+    "gitique log --oneline -n 5",
+  )}      Show 5 commits in one-line format${lineBreak()}
+  ${commandLine(
+    "gitique log --format=full",
+  )}       Show full commit details${lineBreak()}
+  ${commandLine(
+    "gitique log --author=john",
+  )}       Filter by author${lineBreak()}
   ${commandLine('gitique log --since="2024-01-01"')}  Show commits since date`,
 });
 
@@ -262,9 +259,10 @@ function filterCommits(
 function formatCommitShort(oid: string, commit: Commit): string {
   const author = commit.author();
   const summary = commit.message().split("\n")[0];
-  return `commit ${
-    oid.substring(0, 7)
-  }\nAuthor: ${author.name}\n\n    ${summary}\n`;
+  return `commit ${oid.substring(
+    0,
+    7,
+  )}\nAuthor: ${author.name}\n\n    ${summary}\n`;
 }
 
 /**
@@ -284,7 +282,10 @@ function formatCommitFull(oid: string, commit: Commit): string {
     `Commit: ${committer.name} <${committer.email}>`,
     `CommitDate: ${committerDate.toISOString()}`,
     "",
-    ...commit.message().split("\n").map((line: string) => `    ${line}`),
+    ...commit
+      .message()
+      .split("\n")
+      .map((line: string) => `    ${line}`),
     "",
   ];
 
@@ -302,7 +303,8 @@ export async function executeLog(config: LogConfig): Promise<void> {
     // avoiding a full-history walk just to take the first N entries.
     // When filters are set we must fetch everything first because
     // matching commits may be scattered anywhere in history.
-    const hasFilters = config.since !== undefined ||
+    const hasFilters =
+      config.since !== undefined ||
       config.until !== undefined ||
       config.author !== undefined ||
       config.grep !== undefined;

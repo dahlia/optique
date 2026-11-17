@@ -77,9 +77,10 @@ function snapshotUsageTerm(term: UsageTerm): UsageTerm {
         ...(term.hiddenAliases != null && {
           hiddenAliases: Object.freeze([...term.hiddenAliases]),
         }),
-        ...(term.usageLine != null && typeof term.usageLine !== "function" && {
-          usageLine: snapshotUsage(term.usageLine),
-        }),
+        ...(term.usageLine != null &&
+          typeof term.usageLine !== "function" && {
+            usageLine: snapshotUsage(term.usageLine),
+          }),
       };
       break;
     case "optional":
@@ -123,9 +124,10 @@ export function captureDocValue<const T extends object>(
     parser,
     Object.freeze({
       ...metadata,
-      choices: metadata.choices == null
-        ? undefined
-        : Object.freeze(metadata.choices.slice()),
+      choices:
+        metadata.choices == null
+          ? undefined
+          : Object.freeze(metadata.choices.slice()),
     }),
   );
   return parser;
@@ -144,13 +146,15 @@ export function captureDocParser<T extends { readonly usage: Usage }>(
   nodes.set(parser, {
     ...metadata,
     brief: metadata.brief == null ? undefined : cloneMessage(metadata.brief),
-    description: metadata.description == null
-      ? undefined
-      : cloneMessage(metadata.description),
+    description:
+      metadata.description == null
+        ? undefined
+        : cloneMessage(metadata.description),
     footer: metadata.footer == null ? undefined : cloneMessage(metadata.footer),
-    defaultMessage: metadata.defaultMessage == null
-      ? undefined
-      : cloneMessage(metadata.defaultMessage),
+    defaultMessage:
+      metadata.defaultMessage == null
+        ? undefined
+        : cloneMessage(metadata.defaultMessage),
     usageLine:
       typeof metadata.usageLine === "function" || metadata.usageLine == null
         ? metadata.usageLine

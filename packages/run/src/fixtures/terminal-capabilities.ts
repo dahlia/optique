@@ -59,26 +59,28 @@ const context: SourceContext = {
   },
 };
 const options: RunOptions = {
-  args: scenario.request === "success"
-    ? ["--value", "ok"]
-    : scenario.request === "unsupported-shell"
-    ? ["--completion", "unknown-shell"]
-    : scenario.request === "completion-error"
-    ? ["--completion"]
-    : scenario.request === "error" || scenario.request === "error-help" ||
-        scenario.request === "error-only"
-    ? ["--invalid"]
-    : ["--help"],
+  args:
+    scenario.request === "success"
+      ? ["--value", "ok"]
+      : scenario.request === "unsupported-shell"
+        ? ["--completion", "unknown-shell"]
+        : scenario.request === "completion-error"
+          ? ["--completion"]
+          : scenario.request === "error" ||
+              scenario.request === "error-help" ||
+              scenario.request === "error-only"
+            ? ["--invalid"]
+            : ["--help"],
   programName: "test",
   help: "option",
   completion: "option",
-  aboveError: scenario.request === "error-help"
-    ? "help"
-    : scenario.request === "error-only"
-    ? "none"
-    : "usage",
-  brief:
-    message`One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty.`,
+  aboveError:
+    scenario.request === "error-help"
+      ? "help"
+      : scenario.request === "error-only"
+        ? "none"
+        : "usage",
+  brief: message`One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty.`,
   colors: scenario.colors,
   maxWidth: scenario.width === undefined ? undefined : Number(scenario.width),
   contexts: scenario.mode?.endsWith("-context") ? [context] : undefined,
@@ -101,8 +103,8 @@ const options: RunOptions = {
       ? options?.colors === undefined
         ? "UNSET"
         : options.colors
-        ? "TRUE"
-        : "FALSE"
+          ? "TRUE"
+          : "FALSE"
       : formatMessage(msg, options);
   },
 };

@@ -78,7 +78,9 @@ declare module "node:process" {
 
 function extractTypeScriptBlocks(markdown: string): string[] {
   const blocks: string[] = [];
-  const lines = markdown.replaceAll("\r\n", "\n").replaceAll("\r", "\n")
+  const lines = markdown
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
     .split("\n");
 
   for (let index = 0; index < lines.length; index++) {
@@ -101,13 +103,13 @@ function extractTypeScriptBlocks(markdown: string): string[] {
   return blocks;
 }
 
-function getFenceOpening(
-  line: string,
-): {
-  readonly marker: "`" | "~";
-  readonly length: number;
-  readonly language: string;
-} | undefined {
+function getFenceOpening(line: string):
+  | {
+      readonly marker: "`" | "~";
+      readonly length: number;
+      readonly language: string;
+    }
+  | undefined {
   const indent = countLeadingSpaces(line);
   if (indent > 3) return undefined;
 
@@ -192,9 +194,10 @@ async function readWorkspaceExports(): Promise<ReadonlyMap<string, string>> {
         );
       }
 
-      const specifier = subpath === "."
-        ? denoManifest.name
-        : `${denoManifest.name}${subpath.slice(1)}`;
+      const specifier =
+        subpath === "."
+          ? denoManifest.name
+          : `${denoManifest.name}${subpath.slice(1)}`;
       result.set(specifier, join(packageDir, target));
     }
   }
@@ -261,8 +264,7 @@ function typeCheckSnippets(
         containingFile,
         compilerOptions,
         host,
-      )
-        .resolvedModule;
+      ).resolvedModule;
     });
 
   const program = ts.createProgram([...snippets.keys()], compilerOptions, host);
@@ -354,9 +356,9 @@ describe("Optique agent skill", () => {
     assert.equal(
       diagnostics.length,
       0,
-      `Skill TypeScript examples failed to type-check:\n${
-        diagnostics.map(formatDiagnostic).join("\n")
-      }`,
+      `Skill TypeScript examples failed to type-check:\n${diagnostics
+        .map(formatDiagnostic)
+        .join("\n")}`,
     );
   });
 });

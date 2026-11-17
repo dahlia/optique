@@ -16,33 +16,37 @@ it("collects root environment records without scanning descendant commands", asy
     }),
   });
   for (const commandList of ["recursive", "top-level"] as const) {
-    const parser = createProgramParser([
-      {
-        path: [],
-        command: defineCommand({ parser: source("ROOT"), handler() {} }),
-      },
-      {
-        path: ["build"],
-        command: defineCommand({ parser: source("CHILD"), handler() {} }),
-      },
-      {
-        path: ["build", "deep"],
-        command: defineCommand({ parser: source("DEEP"), handler() {} }),
-      },
-    ], { commandList });
+    const parser = createProgramParser(
+      [
+        {
+          path: [],
+          command: defineCommand({ parser: source("ROOT"), handler() {} }),
+        },
+        {
+          path: ["build"],
+          command: defineCommand({ parser: source("CHILD"), handler() {} }),
+        },
+        {
+          path: ["build", "deep"],
+          command: defineCommand({ parser: source("DEEP"), handler() {} }),
+        },
+      ],
+      { commandList },
+    );
     assert.deepEqual(
       (await getDocPageAsync(parser))?.environmentBindings?.map((d) => d.name),
       ["ROOT"],
     );
     assert.deepEqual(
-      (await getDocPageAsync(parser, ["build"]))?.environmentBindings?.map((
-        d,
-      ) => d.name),
+      (await getDocPageAsync(parser, ["build"]))?.environmentBindings?.map(
+        (d) => d.name,
+      ),
       ["CHILD"],
     );
     assert.deepEqual(
-      (await getDocPageAsync(parser, ["build", "deep"]))?.environmentBindings
-        ?.map((d) => d.name),
+      (
+        await getDocPageAsync(parser, ["build", "deep"])
+      )?.environmentBindings?.map((d) => d.name),
       ["DEEP"],
     );
   }
@@ -53,12 +57,10 @@ it("preserves the source-only capability on root-only programs", () => {
     const parser = createProgramParser([
       { path: [], command: defineCommand({ parser: source, handler() {} }) },
     ]);
-    for (
-      const state of [
-        { kind: "unavailable" as const },
-        { kind: "available" as const, state: parser.initialState },
-      ]
-    ) {
+    for (const state of [
+      { kind: "unavailable" as const },
+      { kind: "available" as const, state: parser.initialState },
+    ]) {
       assert.ok(parser.getDocFragments(state).sourceOnly);
     }
   }
@@ -87,20 +89,26 @@ it("does not infer source-only capability from empty or unknown root documentati
 it("revokes root source-only capability when commands are listed", () => {
   for (const commandList of ["recursive", "top-level"] as const) {
     for (const hidden of [false, true]) {
-      const parser = createProgramParser([
-        {
-          path: [],
-          command: defineCommand({ parser: constant("unused"), handler() {} }),
-        },
-        {
-          path: ["build"],
-          command: defineCommand({
-            parser: constant("child"),
-            metadata: { hidden },
-            handler() {},
-          }),
-        },
-      ], { commandList });
+      const parser = createProgramParser(
+        [
+          {
+            path: [],
+            command: defineCommand({
+              parser: constant("unused"),
+              handler() {},
+            }),
+          },
+          {
+            path: ["build"],
+            command: defineCommand({
+              parser: constant("child"),
+              metadata: { hidden },
+              handler() {},
+            }),
+          },
+        ],
+        { commandList },
+      );
       assert.ok(!parser.getDocFragments({ kind: "unavailable" }).sourceOnly);
     }
   }

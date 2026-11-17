@@ -100,24 +100,30 @@ function hasParsedOptionValue<M extends Mode, T>(
   valueParser: ValueParser<M, T> | undefined,
 ): boolean {
   if (valueParser != null) {
-    return state != null &&
+    return (
+      state != null &&
       typeof state === "object" &&
       "success" in state &&
-      typeof state.success === "boolean";
+      typeof state.success === "boolean"
+    );
   }
-  return state != null &&
+  return (
+    state != null &&
     "success" in state &&
     state.success &&
-    (state as { value?: boolean }).value === true;
+    (state as { value?: boolean }).value === true
+  );
 }
 
 function isTerminalValueState<T>(
   state: ValueParserResult<T> | undefined,
 ): boolean {
-  return state != null &&
+  return (
+    state != null &&
     typeof state === "object" &&
     "success" in state &&
-    typeof state.success === "boolean";
+    typeof state.success === "boolean"
+  );
 }
 
 /**
@@ -192,7 +198,7 @@ function resolveDerivedCompletionSync<T>(
   }
   const traceEntry = exec.trace?.get(exec.path);
   if (traceEntry?.rawInput == null) {
-    return traceEntry?.preliminaryResult as ValueParserResult<T> ?? state;
+    return (traceEntry?.preliminaryResult as ValueParserResult<T>) ?? state;
   }
   if (traceEntry.preliminaryResult != null) {
     const resolution = exec.dependencyRuntime.resolveDependencies({
@@ -217,9 +223,11 @@ function resolveDerivedCompletionSync<T>(
     traceEntry.rawInput,
     exec.dependencyRuntime,
   );
-  return replayed as ValueParserResult<T> ??
-    traceEntry.preliminaryResult as ValueParserResult<T> ??
-    state;
+  return (
+    (replayed as ValueParserResult<T>) ??
+    (traceEntry.preliminaryResult as ValueParserResult<T>) ??
+    state
+  );
 }
 
 function includeDependencyFailureChain(
@@ -242,7 +250,7 @@ async function resolveDerivedCompletionAsync<T>(
   }
   const traceEntry = exec.trace?.get(exec.path);
   if (traceEntry?.rawInput == null) {
-    return traceEntry?.preliminaryResult as ValueParserResult<T> ?? state;
+    return (traceEntry?.preliminaryResult as ValueParserResult<T>) ?? state;
   }
   if (traceEntry.preliminaryResult != null) {
     const resolution = exec.dependencyRuntime.resolveDependencies({
@@ -267,9 +275,11 @@ async function resolveDerivedCompletionAsync<T>(
     traceEntry.rawInput,
     exec.dependencyRuntime,
   );
-  return replayed as ValueParserResult<T> ??
-    traceEntry.preliminaryResult as ValueParserResult<T> ??
-    state;
+  return (
+    (replayed as ValueParserResult<T>) ??
+    (traceEntry.preliminaryResult as ValueParserResult<T>) ??
+    state
+  );
 }
 
 import {
@@ -379,9 +389,8 @@ export function constant<const T>(value: T): FluentParser<"sync", T, T> {
       return { fragments: [], sourceOnly: true };
     },
   };
-  defineKnownCompletion(
-    result,
-    (state) => normalizeInjectedAnnotationState(state),
+  defineKnownCompletion(result, (state) =>
+    normalizeInjectedAnnotationState(state),
   );
   defineEmptyInputFacts(result, {
     step: "success",
@@ -551,7 +560,8 @@ function* getSuggestionsWithDependency<T>(
 
   // Check if this is a derived parser with suggestWithDependency
   if (
-    isDerivedValueParser(valueParser) && suggestWithDependency in valueParser
+    isDerivedValueParser(valueParser) &&
+    suggestWithDependency in valueParser
   ) {
     const derived = valueParser as DerivedValueParser<"sync", T, unknown>;
     const suggestWithDep = derived[suggestWithDependency];
@@ -585,9 +595,8 @@ function* getSuggestionsWithDependency<T>(
 
       // If we have at least one actual value (not just defaults), use suggestWithDependency
       if (hasAnyValue) {
-        const depValue = depIds.length === 1
-          ? dependencyValues[0]
-          : dependencyValues;
+        const depValue =
+          depIds.length === 1 ? dependencyValues[0] : dependencyValues;
         yield* suggestWithDep(prefix, depValue) as Iterable<Suggestion>;
         return;
       }
@@ -603,10 +612,13 @@ function joinedOptionPrefix(
   names: readonly string[],
   input: string,
 ): string | undefined {
-  return names.filter((name) =>
-    name.startsWith("--") || name.startsWith("/") ||
-    (name.startsWith("-") && name.length > 2)
-  )
+  return names
+    .filter(
+      (name) =>
+        name.startsWith("--") ||
+        name.startsWith("/") ||
+        (name.startsWith("-") && name.length > 2),
+    )
     .map((name) => name + (name.startsWith("/") ? ":" : "="))
     .find((prefix) => input.startsWith(prefix));
 }
@@ -620,18 +632,18 @@ function* suggestOptionSync<T>(
   valueParser: ValueParser<"sync", T> | undefined,
   hidden: boolean,
   description: Message | undefined,
-  context: ParserContext<
-    ValueParserResult<T | boolean> | undefined
-  >,
+  context: ParserContext<ValueParserResult<T | boolean> | undefined>,
   prefix: string,
 ): Generator<Suggestion> {
   if (hidden) return;
 
   if (context.optionsTerminated) return;
-  const waitingForValue = context.buffer.length > 0 &&
+  const waitingForValue =
+    context.buffer.length > 0 &&
     optionNames.includes(context.buffer[context.buffer.length - 1]);
   if (
-    valueParser != null && !waitingForValue &&
+    valueParser != null &&
+    !waitingForValue &&
     !isTerminalValueState(context.state)
   ) {
     const attached = attachedValuePrefix(context, prefix, optionNames);
@@ -644,14 +656,12 @@ function* suggestOptionSync<T>(
         };
       }
       if (valueParser.suggest != null) {
-        for (
-          const suggestion of getSuggestionsWithDependency(
-            valueParser,
-            attached.value,
-            context.dependencyRegistry,
-            context.exec,
-          )
-        ) {
+        for (const suggestion of getSuggestionsWithDependency(
+          valueParser,
+          attached.value,
+          context.dependencyRegistry,
+          context.exec,
+        )) {
           yield prefixSuggestion(attached.head, suggestion);
         }
       }
@@ -696,8 +706,10 @@ function* suggestOptionSync<T>(
     // If the prefix looks like an option prefix, suggest matching option names
     if (
       !waitingForValue &&
-      (prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/") || prefix.startsWith("+"))
+      (prefix.startsWith("--") ||
+        prefix.startsWith("-") ||
+        prefix.startsWith("/") ||
+        prefix.startsWith("+"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
@@ -730,8 +742,12 @@ function* suggestOptionSync<T>(
         isAnnotationWrappedInitialState(context.state) &&
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
-        !(prefix.startsWith("--") || prefix.startsWith("-") ||
-          prefix.startsWith("/") || prefix.startsWith("+"))
+        !(
+          prefix.startsWith("--") ||
+          prefix.startsWith("-") ||
+          prefix.startsWith("/") ||
+          prefix.startsWith("+")
+        )
       ) {
         shouldSuggestValues = true;
       }
@@ -763,7 +779,8 @@ async function* getSuggestionsWithDependencyAsync<T>(
 
   // Check if this is a derived parser with suggestWithDependency
   if (
-    isDerivedValueParser(valueParser) && suggestWithDependency in valueParser
+    isDerivedValueParser(valueParser) &&
+    suggestWithDependency in valueParser
   ) {
     const derived = valueParser as DerivedValueParser<Mode, T, unknown>;
     const suggestWithDep = derived[suggestWithDependency];
@@ -799,15 +816,12 @@ async function* getSuggestionsWithDependencyAsync<T>(
 
       // If we have at least one actual value (not just defaults), use suggestWithDependency
       if (hasAnyValue) {
-        const depValue = depIds.length === 1
-          ? dependencyValues[0]
-          : dependencyValues;
-        for await (
-          const suggestion of suggestWithDep(
-            prefix,
-            depValue,
-          ) as AsyncIterable<Suggestion>
-        ) {
+        const depValue =
+          depIds.length === 1 ? dependencyValues[0] : dependencyValues;
+        for await (const suggestion of suggestWithDep(
+          prefix,
+          depValue,
+        ) as AsyncIterable<Suggestion>) {
           yield suggestion;
         }
         return;
@@ -830,18 +844,18 @@ async function* suggestOptionAsync<T>(
   valueParser: ValueParser<Mode, T> | undefined,
   hidden: boolean,
   description: Message | undefined,
-  context: ParserContext<
-    ValueParserResult<T | boolean> | undefined
-  >,
+  context: ParserContext<ValueParserResult<T | boolean> | undefined>,
   prefix: string,
 ): AsyncGenerator<Suggestion> {
   if (hidden) return;
 
   if (context.optionsTerminated) return;
-  const waitingForValue = context.buffer.length > 0 &&
+  const waitingForValue =
+    context.buffer.length > 0 &&
     optionNames.includes(context.buffer[context.buffer.length - 1]);
   if (
-    valueParser != null && !waitingForValue &&
+    valueParser != null &&
+    !waitingForValue &&
     !isTerminalValueState(context.state)
   ) {
     const attached = attachedValuePrefix(context, prefix, optionNames);
@@ -854,14 +868,12 @@ async function* suggestOptionAsync<T>(
         };
       }
       if (valueParser.suggest != null) {
-        for await (
-          const suggestion of getSuggestionsWithDependencyAsync(
-            valueParser,
-            attached.value,
-            context.dependencyRegistry,
-            context.exec,
-          )
-        ) {
+        for await (const suggestion of getSuggestionsWithDependencyAsync(
+          valueParser,
+          attached.value,
+          context.dependencyRegistry,
+          context.exec,
+        )) {
           yield prefixSuggestion(attached.head, suggestion);
         }
       }
@@ -906,8 +918,10 @@ async function* suggestOptionAsync<T>(
     // If the prefix looks like an option prefix, suggest matching option names
     if (
       !waitingForValue &&
-      (prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/") || prefix.startsWith("+"))
+      (prefix.startsWith("--") ||
+        prefix.startsWith("-") ||
+        prefix.startsWith("/") ||
+        prefix.startsWith("+"))
     ) {
       for (const optionName of optionNames) {
         if (optionName.startsWith(prefix)) {
@@ -940,21 +954,23 @@ async function* suggestOptionAsync<T>(
         isAnnotationWrappedInitialState(context.state) &&
         context.buffer.length === 0 &&
         (context.exec?.path?.length ?? 0) === 0 &&
-        !(prefix.startsWith("--") || prefix.startsWith("-") ||
-          prefix.startsWith("/") || prefix.startsWith("+"))
+        !(
+          prefix.startsWith("--") ||
+          prefix.startsWith("-") ||
+          prefix.startsWith("/") ||
+          prefix.startsWith("+")
+        )
       ) {
         shouldSuggestValues = true;
       }
 
       if (shouldSuggestValues) {
-        for await (
-          const suggestion of getSuggestionsWithDependencyAsync(
-            valueParser,
-            prefix,
-            context.dependencyRegistry,
-            context.exec,
-          )
-        ) {
+        for await (const suggestion of getSuggestionsWithDependencyAsync(
+          valueParser,
+          prefix,
+          context.dependencyRegistry,
+          context.exec,
+        )) {
           yield suggestion;
         }
       }
@@ -1024,7 +1040,7 @@ async function* suggestArgumentAsync<T>(
  *          values.
  */
 export function option<M extends Mode, T>(
-  ...args: readonly [OptionName, ...readonly OptionName[], ValueParser<M, T>]
+  ...args: readonly [OptionName, ...(readonly OptionName[]), ValueParser<M, T>]
 ): FluentParser<M, T, ValueParserResult<T> | undefined>;
 
 /**
@@ -1043,7 +1059,7 @@ export function option<M extends Mode, T>(
 export function option<M extends Mode, T>(
   ...args: readonly [
     OptionName,
-    ...readonly OptionName[],
+    ...(readonly OptionName[]),
     ValueParser<M, T>,
     OptionOptions,
   ]
@@ -1057,7 +1073,7 @@ export function option<M extends Mode, T>(
  *         flags, producing `true` if the option is present.
  */
 export function option(
-  ...optionNames: readonly [OptionName, ...readonly OptionName[]]
+  ...optionNames: readonly [OptionName, ...(readonly OptionName[])]
 ): FluentParser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
 /**
@@ -1071,20 +1087,20 @@ export function option(
  *          values.
  */
 export function option(
-  ...args: readonly [OptionName, ...readonly OptionName[], OptionOptions]
+  ...args: readonly [OptionName, ...(readonly OptionName[]), OptionOptions]
 ): FluentParser<"sync", boolean, ValueParserResult<boolean> | undefined>;
 
 export function option<M extends Mode, T>(
   ...args:
     | readonly [
-      OptionName,
-      ...readonly OptionName[],
-      ValueParser<M, T>,
-      OptionOptions,
-    ]
-    | readonly [OptionName, ...readonly OptionName[], ValueParser<M, T>]
-    | readonly [OptionName, ...readonly OptionName[], OptionOptions]
-    | readonly [OptionName, ...readonly OptionName[]]
+        OptionName,
+        ...(readonly OptionName[]),
+        ValueParser<M, T>,
+        OptionOptions,
+      ]
+    | readonly [OptionName, ...(readonly OptionName[]), ValueParser<M, T>]
+    | readonly [OptionName, ...(readonly OptionName[]), OptionOptions]
+    | readonly [OptionName, ...(readonly OptionName[])]
 ): FluentParser<M, T | boolean, ValueParserResult<T | boolean> | undefined> {
   const lastArg = args.at(-1);
   const secondLastArg = args.at(-2);
@@ -1111,18 +1127,17 @@ export function option<M extends Mode, T>(
   const mode: M = (valueParser?.mode ?? "sync") as M;
   const isAsync = mode === "async";
   const syncValueParser = valueParser as ValueParser<"sync", T> | undefined;
-  const dependencyMetadata = valueParser != null
-    ? extractDependencyMetadata(valueParser)
-    : undefined;
+  const dependencyMetadata =
+    valueParser != null ? extractDependencyMetadata(valueParser) : undefined;
   // Shared error formatter used by both complete() and validateValue()
   // so that fallback validation errors from bindEnv()/bindConfig()
   // carry the same option-name prefix and `options.errors.invalidValue`
   // customization as CLI-sourced errors (see issue #414).
   const formatInvalidValueError = (error: Message): Message =>
     options.errors?.invalidValue
-      ? (typeof options.errors.invalidValue === "function"
+      ? typeof options.errors.invalidValue === "function"
         ? options.errors.invalidValue(error)
-        : options.errors.invalidValue)
+        : options.errors.invalidValue
       : message`${eOptionNames(optionNames)}: ${error}`;
 
   // Use 'as any' to allow both sync and async returns from parse method
@@ -1135,45 +1150,44 @@ export function option<M extends Mode, T>(
     usage: [
       valueParser == null
         ? {
-          type: "optional",
-          terms: [{
+            type: "optional",
+            terms: [
+              {
+                type: "option",
+                names: optionNames,
+                ...(options.hidden != null && { hidden: options.hidden }),
+              },
+            ],
+          }
+        : {
             type: "option",
             names: optionNames,
+            metavar: valueParser.metavar,
             ...(options.hidden != null && { hidden: options.hidden }),
-          }],
-        }
-        : {
-          type: "option",
-          names: optionNames,
-          metavar: valueParser.metavar,
-          ...(options.hidden != null && { hidden: options.hidden }),
-        },
+          },
     ],
     leadingNames: new Set<string>(optionNames),
     acceptingAnyToken: false,
-    initialState: valueParser == null
-      ? { success: true, value: false }
-      : undefined,
+    initialState:
+      valueParser == null ? { success: true, value: false } : undefined,
     canSkip(state: ValueParserResult<T | boolean> | undefined) {
       return valueParser == null || isTerminalValueState(state);
     },
-    parse(
-      context: ParserContext<
-        ValueParserResult<T | boolean> | undefined
-      >,
-    ) {
+    parse(context: ParserContext<ValueParserResult<T | boolean> | undefined>) {
       if (context.optionsTerminated) {
         return {
           success: false,
           consumed: 0,
-          error: options.errors?.optionsTerminated ??
+          error:
+            options.errors?.optionsTerminated ??
             message`No more options can be parsed.`,
         };
       } else if (context.buffer.length < 1) {
         return {
           success: false,
           consumed: 0,
-          error: options.errors?.endOfInput ??
+          error:
+            options.errors?.endOfInput ??
             message`Expected an option, but got end of input.`,
         };
       }
@@ -1201,12 +1215,12 @@ export function option<M extends Mode, T>(
             success: false,
             consumed: 1,
             error: options.errors?.duplicate
-              ? (typeof options.errors.duplicate === "function"
+              ? typeof options.errors.duplicate === "function"
                 ? options.errors.duplicate(context.buffer[0])
-                : options.errors.duplicate)
-              : message`${
-                eOptionName(context.buffer[0])
-              } cannot be used multiple times.`,
+                : options.errors.duplicate
+              : message`${eOptionName(
+                  context.buffer[0],
+                )} cannot be used multiple times.`,
           };
         }
         if (valueParser == null) {
@@ -1224,10 +1238,11 @@ export function option<M extends Mode, T>(
           return {
             success: false,
             consumed: 1,
-            error: options.errors?.endOfInput ??
-              message`${eOptionName(context.buffer[0])} requires ${
-                metavar(valueParser.metavar)
-              }.`,
+            error:
+              options.errors?.endOfInput ??
+              message`${eOptionName(context.buffer[0])} requires ${metavar(
+                valueParser.metavar,
+              )}.`,
           };
         }
         const rawInput = context.buffer[1];
@@ -1293,10 +1308,11 @@ export function option<M extends Mode, T>(
       // When the input is not split by spaces, but joined by = or :
       // E.g., `--option=value` or `/O:value`
       const prefixes = optionNames
-        .filter((name) =>
-          name.startsWith("--") ||
-          name.startsWith("/") ||
-          (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
+        .filter(
+          (name) =>
+            name.startsWith("--") ||
+            name.startsWith("/") ||
+            (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name)),
         )
         .map((name) => ({
           optionName: name,
@@ -1304,8 +1320,8 @@ export function option<M extends Mode, T>(
         }));
       if (
         valueParser != null &&
-        optionNames.some((name) =>
-          /^-[^-]$/u.test(name) && context.buffer[0].startsWith(name)
+        optionNames.some(
+          (name) => /^-[^-]$/u.test(name) && context.buffer[0].startsWith(name),
         ) &&
         !fullNameOwnsToken(context, context.buffer[0])
       ) {
@@ -1322,12 +1338,12 @@ export function option<M extends Mode, T>(
             success: false,
             consumed: 1,
             error: options.errors?.duplicate
-              ? (typeof options.errors.duplicate === "function"
+              ? typeof options.errors.duplicate === "function"
                 ? options.errors.duplicate(prefix)
-                : options.errors.duplicate)
-              : message`${
-                eOptionName(optionName)
-              } cannot be used multiple times.`,
+                : options.errors.duplicate
+              : message`${eOptionName(
+                  optionName,
+                )} cannot be used multiple times.`,
           };
         }
         const rawInput = context.buffer[0].slice(prefix.length);
@@ -1336,12 +1352,12 @@ export function option<M extends Mode, T>(
             success: false,
             consumed: 1,
             error: options.errors?.unexpectedValue
-              ? (typeof options.errors.unexpectedValue === "function"
+              ? typeof options.errors.unexpectedValue === "function"
                 ? options.errors.unexpectedValue(rawInput)
-                : options.errors.unexpectedValue)
-              : message`Option ${
-                eOptionName(optionName)
-              } is a Boolean flag, but got a value: ${rawInput}.`,
+                : options.errors.unexpectedValue
+              : message`Option ${eOptionName(
+                  optionName,
+                )} is a Boolean flag, but got a value: ${rawInput}.`,
           };
         }
         return dispatchByMode(
@@ -1405,25 +1421,26 @@ export function option<M extends Mode, T>(
 
       if (valueParser == null) {
         // When the input contains bundled options, e.g., `-abc`
-        const shortOptions = optionNames.filter(
-          (name) => name.match(/^-[^-]$/u),
+        const shortOptions = optionNames.filter((name) =>
+          name.match(/^-[^-]$/u),
         );
         for (const shortOption of shortOptions) {
           if (
             !context.buffer[0].startsWith(shortOption) ||
             fullNameOwnsToken(context, context.buffer[0])
-          ) continue;
+          )
+            continue;
           if (hasParsedOptionValue(context.state, valueParser)) {
             return {
               success: false,
               consumed: 1,
               error: options.errors?.duplicate
-                ? (typeof options.errors.duplicate === "function"
+                ? typeof options.errors.duplicate === "function"
                   ? options.errors.duplicate(shortOption)
-                  : options.errors.duplicate)
-                : message`${
-                  eOptionName(shortOption)
-                } cannot be used multiple times.`,
+                  : options.errors.duplicate
+                : message`${eOptionName(
+                    shortOption,
+                  )} cannot be used multiple times.`,
             };
           }
           return {
@@ -1452,34 +1469,39 @@ export function option<M extends Mode, T>(
       state: ValueParserResult<T | boolean> | undefined,
       exec?: ExecutionContext,
     ): ModeValue<M, ValueParserResult<T | boolean>> {
-      const missing = valueParser == null
-        ? { success: true as const, value: false }
-        : {
-          success: false as const,
-          error: options.errors?.missing
-            ? (typeof options.errors.missing === "function"
-              ? options.errors.missing(optionNames)
-              : options.errors.missing)
-            : message`Missing option ${eOptionNames(optionNames)}.`,
-        };
+      const missing =
+        valueParser == null
+          ? { success: true as const, value: false }
+          : {
+              success: false as const,
+              error: options.errors?.missing
+                ? typeof options.errors.missing === "function"
+                  ? options.errors.missing(optionNames)
+                  : options.errors.missing
+                : message`Missing option ${eOptionNames(optionNames)}.`,
+            };
       const completeSync = (): ValueParserResult<T | boolean> => {
         if (state == null) return missing;
-        const resolvedState = valueParser != null &&
-            dependencyMetadata?.derived != null
-          ? resolveDerivedCompletionSync(
-            dependencyMetadata,
-            state as ValueParserResult<T>,
-            exec,
-          ) as ValueParserResult<T | boolean>
-          : state;
-        return resolvedState.success ? resolvedState : {
-          success: false,
-          error: formatInvalidValueError(includeDependencyFailureChain(
-            resolvedState.error,
-            dependencyMetadata,
-            exec,
-          )),
-        };
+        const resolvedState =
+          valueParser != null && dependencyMetadata?.derived != null
+            ? (resolveDerivedCompletionSync(
+                dependencyMetadata,
+                state as ValueParserResult<T>,
+                exec,
+              ) as ValueParserResult<T | boolean>)
+            : state;
+        return resolvedState.success
+          ? resolvedState
+          : {
+              success: false,
+              error: formatInvalidValueError(
+                includeDependencyFailureChain(
+                  resolvedState.error,
+                  dependencyMetadata,
+                  exec,
+                ),
+              ),
+            };
       };
       const completeAsync = async (): Promise<
         ValueParserResult<T | boolean>
@@ -1493,25 +1515,23 @@ export function option<M extends Mode, T>(
           state as ValueParserResult<T>,
           exec,
         );
-        return resolved.success ? resolved : {
-          success: false,
-          error: formatInvalidValueError(includeDependencyFailureChain(
-            resolved.error,
-            dependencyMetadata,
-            exec,
-          )),
-        };
+        return resolved.success
+          ? resolved
+          : {
+              success: false,
+              error: formatInvalidValueError(
+                includeDependencyFailureChain(
+                  resolved.error,
+                  dependencyMetadata,
+                  exec,
+                ),
+              ),
+            };
       };
-      return dispatchByMode(
-        mode,
-        completeSync,
-        completeAsync,
-      );
+      return dispatchByMode(mode, completeSync, completeAsync);
     },
     suggest(
-      context: ParserContext<
-        ValueParserResult<T | boolean> | undefined
-      >,
+      context: ParserContext<ValueParserResult<T | boolean> | undefined>,
       prefix: string,
     ) {
       // For async parsers, use async generator; for sync parsers, use sync generator
@@ -1539,35 +1559,44 @@ export function option<M extends Mode, T>(
       defaultValue?: T | boolean,
     ) {
       if (isDocHidden(options.hidden)) {
-        return withCommandDocMetadata({
-          fragments: [],
-          description: options.description,
-        }, {});
+        return withCommandDocMetadata(
+          {
+            fragments: [],
+            description: options.description,
+          },
+          {},
+        );
       }
       const choicesMessage: Message | undefined =
         valueParser?.choices != null && valueParser.choices.length > 0
           ? valueSet(
-            valueParser.choices.map((c) => valueParser.format(c)),
-            { fallback: "", type: "unit" },
-          )
+              valueParser.choices.map((c) => valueParser.format(c)),
+              { fallback: "", type: "unit" },
+            )
           : undefined;
-      const fragments: readonly DocFragment[] = [{
-        type: "entry",
-        term: {
-          type: "option",
-          names: optionNames,
-          metavar: valueParser?.metavar,
+      const fragments: readonly DocFragment[] = [
+        {
+          type: "entry",
+          term: {
+            type: "option",
+            names: optionNames,
+            metavar: valueParser?.metavar,
+          },
+          description: options.description,
+          default:
+            defaultValue != null && valueParser != null
+              ? message`${valueParser.format(defaultValue as T)}`
+              : undefined,
+          choices: choicesMessage,
         },
-        description: options.description,
-        default: defaultValue != null && valueParser != null
-          ? message`${valueParser.format(defaultValue as T)}`
-          : undefined,
-        choices: choicesMessage,
-      }];
-      return withCommandDocMetadata({
-        fragments,
-        description: options.description,
-      }, {});
+      ];
+      return withCommandDocMetadata(
+        {
+          fragments,
+          description: options.description,
+        },
+        {},
+      );
     },
     [Symbol.for("Deno.customInspect")]() {
       return `option(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
@@ -1642,9 +1671,7 @@ export function option<M extends Mode, T>(
         ? parsed
         : { success: false, error: formatInvalidValueError(parsed.error) };
     Object.defineProperty(result, "validateValue", {
-      value(
-        v: T | boolean,
-      ): ModeValue<M, ValueParserResult<T | boolean>> {
+      value(v: T | boolean): ModeValue<M, ValueParserResult<T | boolean>> {
         // Prefer the value parser's own validate() hook when present:
         // combinators like firstOf() can express validation failures
         // that a generic format()+parse() round-trip cannot (e.g. values
@@ -1676,9 +1703,7 @@ export function option<M extends Mode, T>(
         return dispatchByMode(
           mode,
           () =>
-            wrapParseResult(
-              (vp as ValueParser<"sync", T>).parse(stringified),
-            ),
+            wrapParseResult((vp as ValueParser<"sync", T>).parse(stringified)),
           async () => wrapParseResult(await vp.parse(stringified)),
         );
       },
@@ -1858,15 +1883,17 @@ export interface FlagErrorOptions {
  */
 export function flag(
   ...args:
-    | readonly [OptionName, ...readonly OptionName[], FlagOptions]
-    | readonly [OptionName, ...readonly OptionName[]]
+    | readonly [OptionName, ...(readonly OptionName[]), FlagOptions]
+    | readonly [OptionName, ...(readonly OptionName[])]
 ): FluentParser<"sync", true, ValueParserResult<true> | undefined> {
   const lastArg = args.at(-1);
   let optionNames: readonly OptionName[];
   let options: FlagOptions = {};
 
   if (
-    typeof lastArg === "object" && lastArg != null && !Array.isArray(lastArg)
+    typeof lastArg === "object" &&
+    lastArg != null &&
+    !Array.isArray(lastArg)
   ) {
     options = lastArg as FlagOptions;
     optionNames = args.slice(0, -1) as OptionName[];
@@ -1880,11 +1907,13 @@ export function flag(
     $stateType: [],
     mode: "sync",
     priority: 10,
-    usage: [{
-      type: "option",
-      names: optionNames,
-      ...(options.hidden != null && { hidden: options.hidden }),
-    }],
+    usage: [
+      {
+        type: "option",
+        names: optionNames,
+        ...(options.hidden != null && { hidden: options.hidden }),
+      },
+    ],
     leadingNames: new Set<string>(optionNames),
     acceptingAnyToken: false,
     initialState: undefined,
@@ -1896,14 +1925,16 @@ export function flag(
         return {
           success: false,
           consumed: 0,
-          error: options.errors?.optionsTerminated ??
+          error:
+            options.errors?.optionsTerminated ??
             message`No more options can be parsed.`,
         };
       } else if (context.buffer.length < 1) {
         return {
           success: false,
           consumed: 0,
-          error: options.errors?.endOfInput ??
+          error:
+            options.errors?.endOfInput ??
             message`Expected an option, but got end of input.`,
         };
       }
@@ -1930,12 +1961,12 @@ export function flag(
             success: false,
             consumed: 1,
             error: options.errors?.duplicate
-              ? (typeof options.errors.duplicate === "function"
+              ? typeof options.errors.duplicate === "function"
                 ? options.errors.duplicate(context.buffer[0])
-                : options.errors.duplicate)
-              : message`${
-                eOptionName(context.buffer[0])
-              } cannot be used multiple times.`,
+                : options.errors.duplicate
+              : message`${eOptionName(
+                  context.buffer[0],
+                )} cannot be used multiple times.`,
           };
         }
         return {
@@ -1951,12 +1982,13 @@ export function flag(
 
       // Check for joined format (e.g., --flag=value) which should fail for flags
       const prefixes = optionNames
-        .filter((name) =>
-          name.startsWith("--") ||
-          name.startsWith("/") ||
-          (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))
+        .filter(
+          (name) =>
+            name.startsWith("--") ||
+            name.startsWith("/") ||
+            (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name)),
         )
-        .map((name) => name.startsWith("/") ? `${name}:` : `${name}=`);
+        .map((name) => (name.startsWith("/") ? `${name}:` : `${name}=`));
       for (const prefix of prefixes) {
         if (context.buffer[0].startsWith(prefix)) {
           const optionName = prefix.slice(0, -1);
@@ -1965,36 +1997,35 @@ export function flag(
             success: false,
             consumed: 1,
             error: options.errors?.unexpectedValue
-              ? (typeof options.errors.unexpectedValue === "function"
+              ? typeof options.errors.unexpectedValue === "function"
                 ? options.errors.unexpectedValue(optionName, value)
-                : options.errors.unexpectedValue)
-              : message`Flag ${
-                eOptionName(optionName)
-              } does not accept a value, but got: ${value}.`,
+                : options.errors.unexpectedValue
+              : message`Flag ${eOptionName(
+                  optionName,
+                )} does not accept a value, but got: ${value}.`,
           };
         }
       }
 
       // When the input contains bundled options, e.g., `-abc`
-      const shortOptions = optionNames.filter(
-        (name) => name.match(/^-[^-]$/u),
-      );
+      const shortOptions = optionNames.filter((name) => name.match(/^-[^-]$/u));
       for (const shortOption of shortOptions) {
         if (
           !context.buffer[0].startsWith(shortOption) ||
           fullNameOwnsToken(context, context.buffer[0])
-        ) continue;
+        )
+          continue;
         if (context.state?.success) {
           return {
             success: false,
             consumed: 1,
             error: options.errors?.duplicate
-              ? (typeof options.errors.duplicate === "function"
+              ? typeof options.errors.duplicate === "function"
                 ? options.errors.duplicate(shortOption)
-                : options.errors.duplicate)
-              : message`${
-                eOptionName(shortOption)
-              } cannot be used multiple times.`,
+                : options.errors.duplicate
+              : message`${eOptionName(
+                  shortOption,
+                )} cannot be used multiple times.`,
           };
         }
         return {
@@ -2023,9 +2054,9 @@ export function flag(
         return {
           success: false,
           error: options.errors?.missing
-            ? (typeof options.errors.missing === "function"
+            ? typeof options.errors.missing === "function"
               ? options.errors.missing(optionNames)
-              : options.errors.missing)
+              : options.errors.missing
             : message`Required flag ${eOptionNames(optionNames)} is missing.`,
         };
       }
@@ -2043,8 +2074,10 @@ export function flag(
 
       // If the prefix looks like an option prefix, suggest matching option names
       if (
-        prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/") || prefix.startsWith("+")
+        prefix.startsWith("--") ||
+        prefix.startsWith("-") ||
+        prefix.startsWith("/") ||
+        prefix.startsWith("+")
       ) {
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {
@@ -2070,23 +2103,31 @@ export function flag(
       _defaultValue?,
     ) {
       if (isDocHidden(options.hidden)) {
-        return withCommandDocMetadata({
-          fragments: [],
-          description: options.description,
-        }, {});
+        return withCommandDocMetadata(
+          {
+            fragments: [],
+            description: options.description,
+          },
+          {},
+        );
       }
-      const fragments: readonly DocFragment[] = [{
-        type: "entry",
-        term: {
-          type: "option",
-          names: optionNames,
+      const fragments: readonly DocFragment[] = [
+        {
+          type: "entry",
+          term: {
+            type: "option",
+            names: optionNames,
+          },
+          description: options.description,
         },
-        description: options.description,
-      }];
-      return withCommandDocMetadata({
-        fragments,
-        description: options.description,
-      }, {});
+      ];
+      return withCommandDocMetadata(
+        {
+          fragments,
+          description: options.description,
+        },
+        {},
+      );
     },
     [Symbol.for("Deno.customInspect")]() {
       return `flag(${optionNames.map((o) => JSON.stringify(o)).join(", ")})`;
@@ -2114,7 +2155,7 @@ export function flag(
  */
 export type NegatableFlagNameList =
   | OptionName
-  | readonly [OptionName, ...readonly OptionName[]];
+  | readonly [OptionName, ...(readonly OptionName[])];
 
 /**
  * Option names for the {@link negatableFlag} parser.
@@ -2171,9 +2212,9 @@ export interface NegatableFlagErrorOptions {
   readonly missing?:
     | Message
     | ((
-      positiveNames: readonly string[],
-      negativeNames: readonly string[],
-    ) => Message);
+        positiveNames: readonly string[],
+        negativeNames: readonly string[],
+      ) => Message);
 
   /**
    * Custom error message when options are terminated (after --).
@@ -2260,9 +2301,9 @@ function formatNegatableFlagDuplicateError(
   token: string,
 ): Message {
   return options.errors?.duplicate
-    ? (typeof options.errors.duplicate === "function"
+    ? typeof options.errors.duplicate === "function"
       ? options.errors.duplicate(token)
-      : options.errors.duplicate)
+      : options.errors.duplicate
     : message`${eOptionName(token)} cannot be used multiple times.`;
 }
 
@@ -2272,12 +2313,12 @@ function formatNegatableFlagConflictError(
   token: string,
 ): Message {
   return options.errors?.conflict
-    ? (typeof options.errors.conflict === "function"
+    ? typeof options.errors.conflict === "function"
       ? options.errors.conflict(previousToken, token)
-      : options.errors.conflict)
-    : message`${eOptionName(previousToken)} and ${
-      eOptionName(token)
-    } cannot be used together.`;
+      : options.errors.conflict
+    : message`${eOptionName(previousToken)} and ${eOptionName(
+        token,
+      )} cannot be used together.`;
 }
 
 function formatNegatableFlagUnexpectedValueError(
@@ -2286,12 +2327,12 @@ function formatNegatableFlagUnexpectedValueError(
   value: string,
 ): Message {
   return options.errors?.unexpectedValue
-    ? (typeof options.errors.unexpectedValue === "function"
+    ? typeof options.errors.unexpectedValue === "function"
       ? options.errors.unexpectedValue(optionName, value)
-      : options.errors.unexpectedValue)
-    : message`Flag ${
-      eOptionName(optionName)
-    } does not accept a value, but got: ${value}.`;
+      : options.errors.unexpectedValue
+    : message`Flag ${eOptionName(
+        optionName,
+      )} does not accept a value, but got: ${value}.`;
 }
 
 function parseMatchedNegatableFlag(
@@ -2307,9 +2348,14 @@ function parseMatchedNegatableFlag(
     return {
       success: false,
       consumed: consumedOnFailure,
-      error: context.state.value === value
-        ? formatNegatableFlagDuplicateError(options, token)
-        : formatNegatableFlagConflictError(options, context.state.token, token),
+      error:
+        context.state.value === value
+          ? formatNegatableFlagDuplicateError(options, token)
+          : formatNegatableFlagConflictError(
+              options,
+              context.state.token,
+              token,
+            ),
     };
   }
   return {
@@ -2362,11 +2408,13 @@ export function negatableFlag(
     $stateType: [],
     mode: "sync",
     priority: 10,
-    usage: [{
-      type: "option",
-      names: optionNames,
-      ...(options.hidden != null && { hidden: options.hidden }),
-    }],
+    usage: [
+      {
+        type: "option",
+        names: optionNames,
+        ...(options.hidden != null && { hidden: options.hidden }),
+      },
+    ],
     leadingNames: new Set<string>(optionNames),
     acceptingAnyToken: false,
     initialState: undefined,
@@ -2378,14 +2426,16 @@ export function negatableFlag(
         return {
           success: false,
           consumed: 0,
-          error: options.errors?.optionsTerminated ??
+          error:
+            options.errors?.optionsTerminated ??
             message`No more options can be parsed.`,
         };
       } else if (context.buffer.length < 1) {
         return {
           success: false,
           consumed: 0,
-          error: options.errors?.endOfInput ??
+          error:
+            options.errors?.endOfInput ??
             message`Expected an option, but got end of input.`,
         };
       }
@@ -2445,7 +2495,8 @@ export function negatableFlag(
         if (
           !context.buffer[0].startsWith(shortOption) ||
           fullNameOwnsToken(context, context.buffer[0])
-        ) continue;
+        )
+          continue;
         return parseMatchedNegatableFlag(
           context,
           shortOption,
@@ -2471,9 +2522,9 @@ export function negatableFlag(
         return {
           success: false,
           error: options.errors?.missing
-            ? (typeof options.errors.missing === "function"
+            ? typeof options.errors.missing === "function"
               ? options.errors.missing(positiveNames, negativeNames)
-              : options.errors.missing)
+              : options.errors.missing
             : message`Required flag ${eOptionNames(optionNames)} is missing.`,
         };
       }
@@ -2485,8 +2536,10 @@ export function negatableFlag(
       }
       const suggestions: Suggestion[] = [];
       if (
-        prefix.startsWith("--") || prefix.startsWith("-") ||
-        prefix.startsWith("/") || prefix.startsWith("+")
+        prefix.startsWith("--") ||
+        prefix.startsWith("-") ||
+        prefix.startsWith("/") ||
+        prefix.startsWith("+")
       ) {
         for (const optionName of optionNames) {
           if (optionName.startsWith(prefix)) {
@@ -2506,14 +2559,16 @@ export function negatableFlag(
       if (isDocHidden(options.hidden)) {
         return { fragments: [], description: options.description };
       }
-      const fragments: readonly DocFragment[] = [{
-        type: "entry",
-        term: {
-          type: "option",
-          names: optionNames,
+      const fragments: readonly DocFragment[] = [
+        {
+          type: "entry",
+          term: {
+            type: "option",
+            names: optionNames,
+          },
+          description: options.description,
         },
-        description: options.description,
-      }];
+      ];
       return { fragments, description: options.description };
     },
     [Symbol.for("Deno.customInspect")]() {
@@ -2530,9 +2585,9 @@ export function negatableFlag(
         const actualType = v === null ? "null" : typeof v;
         return {
           success: false,
-          error: message`${
-            eOptionNames(optionNames)
-          }: Expected a boolean value, but received ${actualType}.`,
+          error: message`${eOptionNames(
+            optionNames,
+          )}: Expected a boolean value, but received ${actualType}.`,
         };
       }
       return { success: true, value: v };
@@ -2627,9 +2682,9 @@ export function argument<M extends Mode, T>(
   // customization as CLI-sourced errors (see issue #414).
   const formatInvalidValueError = (error: Message): Message =>
     options.errors?.invalidValue
-      ? (typeof options.errors.invalidValue === "function"
+      ? typeof options.errors.invalidValue === "function"
         ? options.errors.invalidValue(error)
-        : options.errors.invalidValue)
+        : options.errors.invalidValue
       : message`${metavar(valueParser.metavar)}: ${error}`;
 
   const optionPattern = /^(?!--=)(--?[a-z0-9-]+)(?:=|$)/i;
@@ -2651,26 +2706,21 @@ export function argument<M extends Mode, T>(
     canSkip(state: ValueParserResult<T> | undefined) {
       return isTerminalValueState(state);
     },
-    parse(
-      context: ParserContext<
-        ValueParserResult<T> | undefined
-      >,
-    ) {
+    parse(context: ParserContext<ValueParserResult<T> | undefined>) {
       const localState = normalizeInjectedAnnotationState(context.state);
       if (context.buffer.length < 1) {
         return {
           success: false,
           consumed: 0,
-          error: options.errors?.endOfInput ??
+          error:
+            options.errors?.endOfInput ??
             message`Expected an argument, but got end of input.`,
         };
       }
 
       let i = 0;
       let optionsTerminated = context.optionsTerminated;
-      if (
-        !optionsTerminated
-      ) {
+      if (!optionsTerminated) {
         if (context.buffer[i] === "--") {
           optionsTerminated = true;
           i++;
@@ -2680,9 +2730,9 @@ export function argument<M extends Mode, T>(
             return {
               success: false,
               consumed: i,
-              error: message`Expected an argument, but got an option: ${
-                eOptionName(optionMatch[1])
-              }.`,
+              error: message`Expected an argument, but got an option: ${eOptionName(
+                optionMatch[1],
+              )}.`,
             };
           }
         }
@@ -2701,12 +2751,12 @@ export function argument<M extends Mode, T>(
           success: false,
           consumed: i,
           error: options.errors?.multiple
-            ? (typeof options.errors.multiple === "function"
+            ? typeof options.errors.multiple === "function"
               ? options.errors.multiple(valueParser.metavar)
-              : options.errors.multiple)
-            : message`The argument ${
-              metavar(valueParser.metavar)
-            } cannot be used multiple times.`,
+              : options.errors.multiple
+            : message`The argument ${metavar(
+                valueParser.metavar,
+              )} cannot be used multiple times.`,
         };
       }
 
@@ -2771,24 +2821,30 @@ export function argument<M extends Mode, T>(
     ): ModeValue<M, ValueParserResult<T>> {
       const missing = {
         success: false as const,
-        error: options.errors?.endOfInput ??
-          message`Expected a ${
-            metavar(valueParser.metavar)
-          }, but too few arguments.`,
+        error:
+          options.errors?.endOfInput ??
+          message`Expected a ${metavar(
+            valueParser.metavar,
+          )}, but too few arguments.`,
       };
       const completeSync = (): ValueParserResult<T> => {
         if (state == null) return missing;
-        const resolvedState = dependencyMetadata?.derived != null
-          ? resolveDerivedCompletionSync(dependencyMetadata, state, exec)
-          : state;
-        return resolvedState.success ? resolvedState : {
-          success: false,
-          error: formatInvalidValueError(includeDependencyFailureChain(
-            resolvedState.error,
-            dependencyMetadata,
-            exec,
-          )),
-        };
+        const resolvedState =
+          dependencyMetadata?.derived != null
+            ? resolveDerivedCompletionSync(dependencyMetadata, state, exec)
+            : state;
+        return resolvedState.success
+          ? resolvedState
+          : {
+              success: false,
+              error: formatInvalidValueError(
+                includeDependencyFailureChain(
+                  resolvedState.error,
+                  dependencyMetadata,
+                  exec,
+                ),
+              ),
+            };
       };
       const completeAsync = async (): Promise<ValueParserResult<T>> => {
         if (state == null) return missing;
@@ -2798,25 +2854,23 @@ export function argument<M extends Mode, T>(
           state,
           exec,
         );
-        return resolved.success ? resolved : {
-          success: false,
-          error: formatInvalidValueError(includeDependencyFailureChain(
-            resolved.error,
-            dependencyMetadata,
-            exec,
-          )),
-        };
+        return resolved.success
+          ? resolved
+          : {
+              success: false,
+              error: formatInvalidValueError(
+                includeDependencyFailureChain(
+                  resolved.error,
+                  dependencyMetadata,
+                  exec,
+                ),
+              ),
+            };
       };
-      return dispatchByMode(
-        valueParser.mode,
-        completeSync,
-        completeAsync,
-      );
+      return dispatchByMode(valueParser.mode, completeSync, completeAsync);
     },
     suggest(
-      context: ParserContext<
-        ValueParserResult<T> | undefined
-      >,
+      context: ParserContext<ValueParserResult<T> | undefined>,
       prefix: string,
     ) {
       if (normalizeInjectedAnnotationState(context.state) != null) {
@@ -2849,31 +2903,40 @@ export function argument<M extends Mode, T>(
       defaultValue?: T,
     ) {
       if (isDocHidden(options.hidden)) {
-        return withCommandDocMetadata({
-          fragments: [],
-          description: options.description,
-        }, {});
+        return withCommandDocMetadata(
+          {
+            fragments: [],
+            description: options.description,
+          },
+          {},
+        );
       }
       const choicesMessage: Message | undefined =
         valueParser.choices != null && valueParser.choices.length > 0
           ? valueSet(
-            valueParser.choices.map((c) => valueParser.format(c)),
-            { fallback: "", type: "unit" },
-          )
+              valueParser.choices.map((c) => valueParser.format(c)),
+              { fallback: "", type: "unit" },
+            )
           : undefined;
-      const fragments: readonly DocFragment[] = [{
-        type: "entry",
-        term,
-        description: options.description,
-        default: defaultValue == null
-          ? undefined
-          : message`${valueParser.format(defaultValue)}`,
-        choices: choicesMessage,
-      }];
-      return withCommandDocMetadata({
-        fragments,
-        description: options.description,
-      }, {});
+      const fragments: readonly DocFragment[] = [
+        {
+          type: "entry",
+          term,
+          description: options.description,
+          default:
+            defaultValue == null
+              ? undefined
+              : message`${valueParser.format(defaultValue)}`,
+          choices: choicesMessage,
+        },
+      ];
+      return withCommandDocMetadata(
+        {
+          fragments,
+          description: options.description,
+        },
+        {},
+      );
     },
     [Symbol.for("Deno.customInspect")]() {
       return `argument()`;
@@ -2984,9 +3047,7 @@ export function argument<M extends Mode, T>(
   // Type assertion via 'unknown' needed because TypeScript's conditional type
   // ModeValue<M, T> cannot be verified when M is a generic type parameter.
   return captureDocParser(
-    fluent(
-      result as unknown as Parser<M, T, ValueParserResult<T> | undefined>,
-    ),
+    fluent(result as unknown as Parser<M, T, ValueParserResult<T> | undefined>),
     {
       kind: "leaf",
       description: options.description,
@@ -3109,10 +3170,10 @@ export interface CommandErrorOptions {
   readonly notMatched?:
     | Message
     | ((
-      expected: string,
-      actual: string | null,
-      suggestions?: readonly string[],
-    ) => Message);
+        expected: string,
+        actual: string | null,
+        suggestions?: readonly string[],
+      ) => Message);
 
   /**
    * Error message when command was not matched during completion.
@@ -3163,10 +3224,7 @@ function createCommandState<TState>(
   return annotateFreshArray(
     sourceState,
     state as readonly unknown[],
-  ) as Exclude<
-    CommandState<TState>,
-    undefined
-  >;
+  ) as Exclude<CommandState<TState>, undefined>;
 }
 
 function appendCommandPath(
@@ -3191,9 +3249,7 @@ function getCommandNames(
   ];
 }
 
-function getVisibleCommandAliases(
-  options: CommandOptions,
-): readonly string[] {
+function getVisibleCommandAliases(options: CommandOptions): readonly string[] {
   const aliases: unknown = options.aliases;
   if (aliases == null) return [];
   if (!isNonEmptyStringArray(aliases)) {
@@ -3204,9 +3260,7 @@ function getVisibleCommandAliases(
   return aliases;
 }
 
-function getShowCommandAliases(
-  options: CommandOptions,
-): boolean | undefined {
+function getShowCommandAliases(options: CommandOptions): boolean | undefined {
   const showAliases: unknown = options.showAliases;
   if (showAliases == null) return undefined;
   if (typeof showAliases !== "boolean") {
@@ -3224,13 +3278,10 @@ function getShowCommandUsage(options: CommandOptions): boolean | undefined {
   return showUsage;
 }
 
-function getHiddenCommandAliases(
-  options: CommandOptions,
-): readonly string[] {
-  const hiddenAliases: unknown =
-    (options as CommandOptions & HiddenCommandAliasOptions)[
-      hiddenCommandAliasesKey
-    ];
+function getHiddenCommandAliases(options: CommandOptions): readonly string[] {
+  const hiddenAliases: unknown = (
+    options as CommandOptions & HiddenCommandAliasOptions
+  )[hiddenCommandAliasesKey];
   if (hiddenAliases == null) return [];
   if (!isNonEmptyStringArray(hiddenAliases)) {
     throw new TypeError(
@@ -3416,11 +3467,13 @@ export function command<M extends Mode, T, TState>(
     );
   const selectChild = (state: CommandState<TState>) => {
     const active = normalizeCommandState(state);
-    return active == null ? undefined : {
-      parser,
-      state: getChildState(state, active),
-      continuesCommand: true,
-    };
+    return active == null
+      ? undefined
+      : {
+          parser,
+          state: getChildState(state, active),
+          continuesCommand: true,
+        };
   };
   const commandScope = selectableOptionScope(() => new Set<string>());
   const enteredScope = combinedOptionScope([parser], [name]);
@@ -3435,14 +3488,17 @@ export function command<M extends Mode, T, TState>(
     $stateType: [],
     priority: 15, // Higher than options to match commands first
     usage: [
-      identifyCommandUsage({
-        type: "command" as const,
-        name,
-        ...(aliases.length > 0 && { aliases }),
-        ...(hiddenAliases.length > 0 && { hiddenAliases }),
-        ...(options.usageLine != null && { usageLine: options.usageLine }),
-        ...(options.hidden != null && { hidden: options.hidden }),
-      }, commandUsageId),
+      identifyCommandUsage(
+        {
+          type: "command" as const,
+          name,
+          ...(aliases.length > 0 && { aliases }),
+          ...(hiddenAliases.length > 0 && { hiddenAliases }),
+          ...(options.usageLine != null && { usageLine: options.usageLine }),
+          ...(options.hidden != null && { hidden: options.hidden }),
+        },
+        commandUsageId,
+      ),
       ...scopeCommandUsage(parser.usage, childUsageScope),
     ],
     leadingNames: new Set(commandNames),
@@ -3452,15 +3508,19 @@ export function command<M extends Mode, T, TState>(
       const normalizedState = normalizeCommandState(state);
       if (normalizedState === undefined) return false;
       if (normalizedState[0] === "matched") {
-        return parser.canSkip?.(
-          getCommandChildState(state, parser.initialState, parser),
-          withChildExecPath(exec, name),
-        ) === true;
+        return (
+          parser.canSkip?.(
+            getCommandChildState(state, parser.initialState, parser),
+            withChildExecPath(exec, name),
+          ) === true
+        );
       }
-      return parser.canSkip?.(
-        getCommandChildState(state, normalizedState[1], parser),
-        withChildExecPath(exec, name),
-      ) === true;
+      return (
+        parser.canSkip?.(
+          getCommandChildState(state, normalizedState[1], parser),
+          withChildExecPath(exec, name),
+        ) === true
+      );
     },
     getSuggestRuntimeNodes(
       state: CommandState<TState>,
@@ -3470,14 +3530,17 @@ export function command<M extends Mode, T, TState>(
       if (normalizedState === undefined) {
         return [];
       }
-      const childState = normalizedState[0] === "matched"
-        ? getCommandChildState(state, parser.initialState, parser)
-        : getCommandChildState(state, normalizedState[1], parser);
+      const childState =
+        normalizedState[0] === "matched"
+          ? getCommandChildState(state, parser.initialState, parser)
+          : getCommandChildState(state, normalizedState[1], parser);
       const childPath = [...path, name];
-      return parser.getSuggestRuntimeNodes?.(childState, childPath) ??
+      return (
+        parser.getSuggestRuntimeNodes?.(childState, childPath) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path: childPath, parser, state: childState }]
-          : []);
+          : [])
+      );
     },
     parse(context: ParserContext<CommandState<TState>>) {
       const state = normalizeCommandState(context.state);
@@ -3508,13 +3571,13 @@ export function command<M extends Mode, T, TState>(
               return notMatched(name, actual, suggestions);
             }
             if (actual == null) {
-              return message`Expected command ${
-                eOptionName(name)
-              }, but got end of input.`;
+              return message`Expected command ${eOptionName(
+                name,
+              )}, but got end of input.`;
             }
-            const baseError = message`Expected command ${
-              eOptionName(name)
-            }, but got ${actual}.`;
+            const baseError = message`Expected command ${eOptionName(
+              name,
+            )}, but got ${actual}.`;
             const suggestionMsg = createSuggestionMessage(suggestions);
             return suggestionMsg.length > 0
               ? [...baseError, text("\n\n"), ...suggestionMsg]
@@ -3528,33 +3591,28 @@ export function command<M extends Mode, T, TState>(
           next: {
             ...context,
             buffer: context.buffer.slice(1),
-            state: createCommandState(
-              context.state,
-              ["matched", name] as ["matched", string],
-            ),
+            state: createCommandState(context.state, ["matched", name] as [
+              "matched",
+              string,
+            ]),
             ...(context.exec != null
               ? {
-                exec: matchCommandDocPolicy(
-                  appendCommandPath(context.exec, name),
-                  commandId,
-                  showUsage,
-                ),
-              }
+                  exec: matchCommandDocPolicy(
+                    appendCommandPath(context.exec, name),
+                    commandId,
+                    showUsage,
+                  ),
+                }
               : {}),
           },
           consumed: context.buffer.slice(0, 1),
         };
-      } else if (
-        state[0] === "matched" ||
-        state[0] === "parsing"
-      ) {
+      } else if (state[0] === "matched" || state[0] === "parsing") {
         // "matched": command was matched, start the inner parser
         // "parsing": delegate to inner parser with existing state
         const innerState = getChildState(context.state, state);
 
-        const wrapState = (
-          parseResult: ParserResult<TState>,
-        ) => {
+        const wrapState = (parseResult: ParserResult<TState>) => {
           if (parseResult.success) {
             const mergedExec = mergeChildExec(
               context.exec,
@@ -3564,18 +3622,15 @@ export function command<M extends Mode, T, TState>(
               success: true as const,
               next: {
                 ...parseResult.next,
-                state: createCommandState(
-                  context.state,
-                  ["parsing", parseResult.next.state] as [
-                    "parsing",
-                    TState,
-                  ],
-                ),
+                state: createCommandState(context.state, [
+                  "parsing",
+                  parseResult.next.state,
+                ] as ["parsing", TState]),
                 ...(mergedExec != null
                   ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
+                      exec: mergedExec,
+                      dependencyRegistry: mergedExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: parseResult.consumed,
@@ -3628,7 +3683,8 @@ export function command<M extends Mode, T, TState>(
       if (typeof normalizedState === "undefined") {
         return {
           success: false,
-          error: options.errors?.notFound ??
+          error:
+            options.errors?.notFound ??
             message`Command ${eOptionName(name)} was not matched.`,
         };
       } else if (normalizedState[0] === "matched") {
@@ -3643,10 +3699,10 @@ export function command<M extends Mode, T, TState>(
           state: getCommandParseChildState(state, parser.initialState, parser),
           ...(childExec != null
             ? {
-              exec: childExec,
-              trace: childExec.trace,
-              dependencyRegistry: childExec.dependencyRegistry,
-            }
+                exec: childExec,
+                trace: childExec.trace,
+                dependencyRegistry: childExec.dependencyRegistry,
+              }
             : {}),
         };
         return dispatchByMode(
@@ -3660,10 +3716,10 @@ export function command<M extends Mode, T, TState>(
               parseResult.success
                 ? getCommandChildState(state, parseResult.next.state, parser)
                 : getCommandChildState(
-                  state,
-                  syncInnerParser.initialState,
-                  parser,
-                ),
+                    state,
+                    syncInnerParser.initialState,
+                    parser,
+                  ),
               nextExec,
             );
           },
@@ -3700,7 +3756,8 @@ export function command<M extends Mode, T, TState>(
       // Should never reach here
       return {
         success: false,
-        error: options.errors?.invalidState ??
+        error:
+          options.errors?.invalidState ??
           message`Invalid command state during completion.`,
       };
     },
@@ -3721,10 +3778,10 @@ export function command<M extends Mode, T, TState>(
           state: getCommandParseChildState(state, parser.initialState, parser),
           ...(childExec != null
             ? {
-              exec: childExec,
-              trace: childExec.trace,
-              dependencyRegistry: childExec.dependencyRegistry,
-            }
+                exec: childExec,
+                trace: childExec.trace,
+                dependencyRegistry: childExec.dependencyRegistry,
+              }
             : {}),
         };
         return dispatchByMode(
@@ -3739,10 +3796,10 @@ export function command<M extends Mode, T, TState>(
               parseResult.success
                 ? getCommandChildState(state, parseResult.next.state, parser)
                 : getCommandChildState(
-                  state,
-                  syncInnerParser.initialState,
-                  parser,
-                ),
+                    state,
+                    syncInnerParser.initialState,
+                    parser,
+                  ),
               nextExec,
             );
           },
@@ -3770,10 +3827,7 @@ export function command<M extends Mode, T, TState>(
       }
       return wrapForMode(parser.mode, null);
     },
-    suggest(
-      context: ParserContext<CommandState<TState>>,
-      prefix: string,
-    ) {
+    suggest(context: ParserContext<CommandState<TState>>, prefix: string) {
       if (isAsync) {
         return suggestCommandAsync(
           context,
@@ -3794,62 +3848,67 @@ export function command<M extends Mode, T, TState>(
       );
     },
     getDocFragments(state: DocState<CommandState<TState>>, defaultValue?: T) {
-      const commandState = state.kind === "available"
-        ? normalizeCommandState(state.state)
-        : undefined;
+      const commandState =
+        state.kind === "available"
+          ? normalizeCommandState(state.state)
+          : undefined;
       if (state.kind === "unavailable" || typeof commandState === "undefined") {
         // When the command is not matched (showing in a list), apply hidden option
         if (isDocHidden(options.hidden)) {
-          return withCommandDocMetadata({
-            fragments: [],
-            description: options.description,
-          }, {});
+          return withCommandDocMetadata(
+            {
+              fragments: [],
+              description: options.description,
+            },
+            {},
+          );
         }
         // When showing command in a list, use brief if available,
         // otherwise fall back to description
-        return withCommandDocMetadata({
-          description: options.description,
-          fragments: [
-            {
-              type: "entry",
-              term: {
-                type: "command",
-                name,
-                ...(aliases.length > 0 && { aliases }),
+        return withCommandDocMetadata(
+          {
+            description: options.description,
+            fragments: [
+              {
+                type: "entry",
+                term: {
+                  type: "command",
+                  name,
+                  ...(aliases.length > 0 && { aliases }),
+                },
+                description: options.brief ?? options.description,
+                ...(showAliases != null && { showAliases }),
               },
-              description: options.brief ?? options.description,
-              ...(showAliases != null && { showAliases }),
-            },
-          ],
-        }, {});
+            ],
+          },
+          {},
+        );
       }
       // When the command is matched and executing, show inner parser documentation
       // regardless of hidden status
-      const innerState: DocState<TState> = commandState[0] === "parsing"
-        ? {
-          kind: "available",
-          state: getCommandChildState(state.state, commandState[1], parser),
-        }
-        : {
-          kind: "available",
-          state: getCommandChildState(
-            state.state,
-            parser.initialState,
-            parser,
-          ),
-        };
-      const innerFragments = parser.getDocFragments(
-        innerState,
-        defaultValue,
-      );
+      const innerState: DocState<TState> =
+        commandState[0] === "parsing"
+          ? {
+              kind: "available",
+              state: getCommandChildState(state.state, commandState[1], parser),
+            }
+          : {
+              kind: "available",
+              state: getCommandChildState(
+                state.state,
+                parser.initialState,
+                parser,
+              ),
+            };
+      const innerFragments = parser.getDocFragments(innerState, defaultValue);
       // When the command is matched and we are rendering its *own* help page,
       // `brief` appears at the very top (before Usage) and `description`
       // appears below the Usage line.  Inner parsers' values take precedence
       // via the spread; this command's own values fill in any gaps.
       // Built-in entry docs carry an empty payload.  Unmarked custom parsers
       // can supply page fields through the public DocFragments contract.
-      const innerMetadata = getCommandDocMetadata(innerFragments) ??
-        innerFragments;
+      const innerMetadata =
+        getCommandDocMetadata(innerFragments) ?? innerFragments;
       return withCommandDocMetadata(
         {
           ...innerFragments,
@@ -3857,20 +3916,25 @@ export function command<M extends Mode, T, TState>(
           description: innerFragments.description ?? options.description,
           footer: innerFragments.footer ?? options.footer,
         },
-        withSelectedCommandUsage({
-          origin: "command",
-          // Composite parents must not promote descriptions from ordinary entries
-          // or unselected subcommands into this command's page metadata.
-          brief: innerMetadata?.brief ?? options.brief,
-          description: innerMetadata?.description ?? options.description,
-          footer: innerMetadata?.footer ?? options.footer,
-        }, [
-          commandUsageId,
-          ...getSelectedCommandUsage(scopeCommandDocMetadata(
-            getCommandDocMetadata(innerFragments),
-            childUsageScope,
-          )),
-        ]),
+        withSelectedCommandUsage(
+          {
+            origin: "command",
+            // Composite parents must not promote descriptions from ordinary entries
+            // or unselected subcommands into this command's page metadata.
+            brief: innerMetadata?.brief ?? options.brief,
+            description: innerMetadata?.description ?? options.description,
+            footer: innerMetadata?.footer ?? options.footer,
+          },
+          [
+            commandUsageId,
+            ...getSelectedCommandUsage(
+              scopeCommandDocMetadata(
+                getCommandDocMetadata(innerFragments),
+                childUsageScope,
+              ),
+            ),
+          ],
+        ),
       );
     },
     [Symbol.for("Deno.customInspect")]() {
@@ -3912,18 +3976,21 @@ export function command<M extends Mode, T, TState>(
       // parser has not started; scheduling then works from the inner
       // parser's initial state, mirroring the "matched" completion
       // branch below.
-      const innerState = normalizedState[0] === "parsing"
-        ? normalizedState[1]
-        : parser.initialState;
-      return [{
-        path: [...(parentPath ?? []), name],
-        parser,
-        state: getCommandChildState(
-          state as CommandState<TState>,
-          innerState,
+      const innerState =
+        normalizedState[0] === "parsing"
+          ? normalizedState[1]
+          : parser.initialState;
+      return [
+        {
+          path: [...(parentPath ?? []), name],
           parser,
-        ),
-      }];
+          state: getCommandChildState(
+            state as CommandState<TState>,
+            innerState,
+            parser,
+          ),
+        },
+      ];
     }) satisfies EffectfulSchedulingNodesFn,
     configurable: true,
     enumerable: false,
@@ -4098,10 +4165,12 @@ export function passThrough(
     $stateType: [],
     mode: "sync",
     priority: -10, // Lowest priority to be tried last
-    usage: [{
-      type: "passthrough",
-      ...(options.hidden != null && { hidden: options.hidden }),
-    }],
+    usage: [
+      {
+        type: "passthrough",
+        ...(options.hidden != null && { hidden: options.hidden }),
+      },
+    ],
     leadingNames: EMPTY_LEADING_NAMES,
     acceptingAnyToken: false,
     initialState: [],
@@ -4145,8 +4214,7 @@ export function passThrough(
         return {
           success: false,
           consumed: 0,
-          error:
-            message`Options terminated; cannot capture pass-through options.`,
+          error: message`Options terminated; cannot capture pass-through options.`,
         };
       }
 
@@ -4251,19 +4319,27 @@ export function passThrough(
 
     getDocFragments(_state, _defaultValue?) {
       if (isDocHidden(options.hidden)) {
-        return withCommandDocMetadata({
-          fragments: [],
-          description: options.description,
-        }, {});
+        return withCommandDocMetadata(
+          {
+            fragments: [],
+            description: options.description,
+          },
+          {},
+        );
       }
-      return withCommandDocMetadata({
-        fragments: [{
-          type: "entry",
-          term: { type: "passthrough" },
+      return withCommandDocMetadata(
+        {
+          fragments: [
+            {
+              type: "entry",
+              term: { type: "passthrough" },
+              description: options.description,
+            },
+          ],
           description: options.description,
-        }],
-        description: options.description,
-      }, {});
+        },
+        {},
+      );
     },
 
     [Symbol.for("Deno.customInspect")]() {
@@ -4272,9 +4348,10 @@ export function passThrough(
   };
   definePassThroughPriority(result, [result], (_state, token) => {
     if (token == null || format === "greedy") return result.priority;
-    const accepts = format === "equalsOnly"
-      ? equalsOptionPattern.test(token)
-      : format === "nextToken" && optionPattern.test(token);
+    const accepts =
+      format === "equalsOnly"
+        ? equalsOptionPattern.test(token)
+        : format === "nextToken" && optionPattern.test(token);
     return accepts ? result.priority : undefined;
   });
   defineEmptyInputFacts(result, failingStepFacts(true));

@@ -96,18 +96,16 @@ describe("environment metadata scope", () => {
   });
   it("suppresses hidden parents in either wrapper order", () => {
     for (const hidden of [true, "doc", "help"] as const) {
-      for (
-        const parser of [
-          group("Secret", bound("VALUE"), { hidden }),
-          object({ value: bound("VALUE") }, { hidden }),
-          merge(object({ value: bound("VALUE") }), { hidden }),
-          bindEnv(group("Secret", fail<string>(), { hidden }), {
-            context,
-            key: "VALUE",
-            parser: string(),
-          }),
-        ]
-      ) {
+      for (const parser of [
+        group("Secret", bound("VALUE"), { hidden }),
+        object({ value: bound("VALUE") }, { hidden }),
+        merge(object({ value: bound("VALUE") }), { hidden }),
+        bindEnv(group("Secret", fail<string>(), { hidden }), {
+          context,
+          key: "VALUE",
+          parser: string(),
+        }),
+      ]) {
         const docs = parser.getDocFragments({ kind: "unavailable" });
         assert.ok(!docs.sourceOnly);
         assert.deepEqual(docs.environmentBindings ?? [], []);
@@ -129,10 +127,12 @@ describe("binding purposes and visibility", () => {
     },
   });
   it("keeps hidden same-name purposes out of page callbacks and clones visible messages", () => {
-    const purpose = [{
-      type: "url" as const,
-      url: new URL("https://example.com/"),
-    }];
+    const purpose = [
+      {
+        type: "url" as const,
+        url: new URL("https://example.com/"),
+      },
+    ];
     const inner = bindEnv(fail<string>(), {
       context,
       key: "A",
@@ -150,10 +150,12 @@ describe("binding purposes and visibility", () => {
     });
     const page = getDocPage(outer);
     assert.ok(page);
-    assert.deepEqual(page.environmentBindings, [{
-      name: "APP_A",
-      description: purpose,
-    }]);
+    assert.deepEqual(page.environmentBindings, [
+      {
+        name: "APP_A",
+        description: purpose,
+      },
+    ]);
     assert.notStrictEqual(page.environmentBindings?.[0].description, purpose);
     const term = page.environmentBindings?.[0].description?.[0];
     assert.ok(term?.type === "url");
@@ -237,8 +239,8 @@ describe("binding purposes and visibility", () => {
     );
     assert.equal(getDocPage(cmd)?.environmentBindings?.[0].name, "APP_A");
     assert.equal(
-      getDocPage(or(cmd, command("two", source)), ["one"])?.environmentBindings
-        ?.[0].name,
+      getDocPage(or(cmd, command("two", source)), ["one"])
+        ?.environmentBindings?.[0].name,
       "APP_A",
     );
     assert.equal(
@@ -264,29 +266,35 @@ describe("state-sensitive source documentation", () => {
     const longest = longestMatch(a, b);
     const success: DocState<[1, ParserResult<string>]> = {
       kind: "available" as const,
-      state: [1, {
-        success: true as const,
-        next: {
-          buffer: [],
-          state: b.initialState,
-          optionsTerminated: false,
-          usage: [],
+      state: [
+        1,
+        {
+          success: true as const,
+          next: {
+            buffer: [],
+            state: b.initialState,
+            optionsTerminated: false,
+            usage: [],
+          },
+          consumed: [],
         },
-        consumed: [],
-      }],
+      ],
     };
     const failure: DocState<[1, ParserResult<string>]> = {
       kind: "available" as const,
-      state: [1, {
-        success: false as const,
-        error: [{ type: "text" as const, text: "Missing." }],
-        consumed: 0,
-      }],
+      state: [
+        1,
+        {
+          success: false as const,
+          error: [{ type: "text" as const, text: "Missing." }],
+          consumed: 0,
+        },
+      ],
     };
     assert.deepEqual(
-      exclusive.getDocFragments(success).environmentBindings?.map((d) =>
-        d.name
-      ),
+      exclusive
+        .getDocFragments(success)
+        .environmentBindings?.map((d) => d.name),
       ["B"],
     );
     assert.deepEqual(
@@ -294,9 +302,9 @@ describe("state-sensitive source documentation", () => {
       ["B"],
     );
     assert.deepEqual(
-      exclusive.getDocFragments(failure).environmentBindings?.map((d) =>
-        d.name
-      ),
+      exclusive
+        .getDocFragments(failure)
+        .environmentBindings?.map((d) => d.name),
       ["B"],
     );
     assert.deepEqual(
@@ -305,14 +313,18 @@ describe("state-sensitive source documentation", () => {
     );
   });
   it("keeps conditional documentation scoped to all configured branches", () => {
-    const parser = conditional(constant("a" as const), {
-      a: source("A"),
-      b: source("B"),
-    }, source("DEFAULT"));
+    const parser = conditional(
+      constant("a" as const),
+      {
+        a: source("A"),
+        b: source("B"),
+      },
+      source("DEFAULT"),
+    );
     assert.deepEqual(
-      parser.getDocFragments({ kind: "unavailable" }).environmentBindings?.map((
-        d,
-      ) => d.name),
+      parser
+        .getDocFragments({ kind: "unavailable" })
+        .environmentBindings?.map((d) => d.name),
       ["A", "B", "DEFAULT"],
     );
     assert.deepEqual(
@@ -322,7 +334,12 @@ describe("state-sensitive source documentation", () => {
   });
   it("preserves source records through transparent sync/async wrappers", async () => {
     const parser = multiple(
-      optional(withDefault(source("A").map((value) => value), "fallback")),
+      optional(
+        withDefault(
+          source("A").map((value) => value),
+          "fallback",
+        ),
+      ),
     );
     assert.equal(getDocPage(parser)?.environmentBindings?.[0].name, "A");
     assert.deepEqual(await getDocPageAsync(parser), getDocPage(parser));
@@ -378,7 +395,9 @@ it("documents async source-only bindings without running their value parser", as
       },
     },
   });
-  assert.deepEqual((await getDocPageAsync(bound))?.environmentBindings, [{
-    name: "ASYNC",
-  }]);
+  assert.deepEqual((await getDocPageAsync(bound))?.environmentBindings, [
+    {
+      name: "ASYNC",
+    },
+  ]);
 });

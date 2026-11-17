@@ -36,19 +36,22 @@ await chmod(bin, 0o755);
 const meta: {
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly outputs: Readonly<
-    Record<string, {
-      readonly imports: readonly {
-        readonly path: string;
-        readonly external?: boolean;
-      }[];
-    }>
+    Record<
+      string,
+      {
+        readonly imports: readonly {
+          readonly path: string;
+          readonly external?: boolean;
+        }[];
+      }
+    >
   >;
 } = JSON.parse(await readFile(resolve(root, "dist/bundle-meta.json"), "utf8"));
 const inputs = Object.keys(meta.inputs);
 const inputRoots = [
   root,
   ...["core", "run", "discover"].map((name) =>
-    resolve(root, `../../packages/${name}`)
+    resolve(root, `../../packages/${name}`),
   ),
 ];
 for (const input of inputs) {
@@ -108,7 +111,8 @@ function inspect(node: ts.Node): void {
         parent = parent.parent;
       }
       assert.ok(
-        parent != null && ts.isFunctionDeclaration(parent) &&
+        parent != null &&
+          ts.isFunctionDeclaration(parent) &&
           parent.name?.text === "discoverCommands",
       );
       assert.match(

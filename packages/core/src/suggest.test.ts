@@ -97,11 +97,13 @@ describe("suggest function", () => {
     it("should suggest --option=value format with matching prefix", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
       const result = suggestSync(parser, ["--format=j"]);
-      deepStrictEqual(result, [{
-        kind: "literal",
-        text: "--format=json",
-        description: undefined,
-      }]);
+      deepStrictEqual(result, [
+        {
+          kind: "literal",
+          text: "--format=json",
+          description: undefined,
+        },
+      ]);
     });
 
     it("should suggest all values for --option= format", () => {
@@ -118,10 +120,12 @@ describe("suggest function", () => {
     it("should suggest attached short option values", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
       const result = suggestSync(parser, ["-fy"]);
-      deepStrictEqual(result, [{
-        kind: "literal",
-        text: "-fyaml",
-      }]);
+      deepStrictEqual(result, [
+        {
+          kind: "literal",
+          text: "-fyaml",
+        },
+      ]);
     });
 
     it("should not suggest an equals delimiter for short options", () => {
@@ -145,11 +149,13 @@ describe("suggest function", () => {
     it("should work with exact match in --option=value format", () => {
       const parser = option("-f", "--format", choice(["json", "yaml", "xml"]));
       const result = suggestSync(parser, ["--format=xml"]);
-      deepStrictEqual(result, [{
-        kind: "literal",
-        text: "--format=xml",
-        description: undefined,
-      }]);
+      deepStrictEqual(result, [
+        {
+          kind: "literal",
+          text: "--format=xml",
+          description: undefined,
+        },
+      ]);
     });
   });
 
@@ -191,11 +197,13 @@ describe("suggest function", () => {
         description: message`Build the project`,
       });
       const result = suggestSync(parser, ["bu"]);
-      deepStrictEqual(result, [{
-        kind: "literal",
-        text: "build",
-        description: message`Build the project`,
-      }]);
+      deepStrictEqual(result, [
+        {
+          kind: "literal",
+          text: "build",
+          description: message`Build the project`,
+        },
+      ]);
     });
 
     it("should delegate to inner parser after command matched", () => {
@@ -227,10 +235,13 @@ describe("suggest function", () => {
 
     it("should remove duplicate suggestions", () => {
       // Use allowDuplicates to test suggestion deduplication logic
-      const parser = object({
-        verbose1: option("-v", "--verbose"),
-        verbose2: option("-v", "--verbose"), // Same option names
-      }, { allowDuplicates: true });
+      const parser = object(
+        {
+          verbose1: option("-v", "--verbose"),
+          verbose2: option("-v", "--verbose"), // Same option names
+        },
+        { allowDuplicates: true },
+      );
       const result = suggestSync(parser, ["--v"]);
       deepStrictEqual(result, [{ kind: "literal", text: "--verbose" }]);
     });
@@ -330,9 +341,8 @@ describe("suggest function", () => {
 
     describe("map", () => {
       it("should delegate to wrapped parser", () => {
-        const parser = map(
-          option("-n", "--number", integer()),
-          (n) => n.toString(),
+        const parser = map(option("-n", "--number", integer()), (n) =>
+          n.toString(),
         );
         const result = suggestSync(parser, ["--n"]);
         deepStrictEqual(result, [{ kind: "literal", text: "--number" }]);
@@ -820,10 +830,7 @@ describe("suggest function", () => {
       // When --mode is not provided, withDefault gives "prod",
       // so --level should suggest "silent" and "strict"
       const result = suggestSync(parser, ["--level", "s"]);
-      deepStrictEqual(
-        result.map(extractText),
-        ["silent", "strict"],
-      );
+      deepStrictEqual(result.map(extractText), ["silent", "strict"]);
     });
 
     it("should suggest values based on explicit source value", () => {
@@ -847,75 +854,60 @@ describe("suggest function", () => {
 
       // When --mode is explicitly "dev", --level should suggest "debug" and "verbose"
       const result = suggestSync(parser, ["--mode", "dev", "--level", ""]);
-      deepStrictEqual(
-        result.map(extractText),
-        ["debug", "verbose"],
-      );
+      deepStrictEqual(result.map(extractText), ["debug", "verbose"]);
     });
 
-    it(
-      "should not treat mapped defaults as dependency source values",
-      async () => {
-        const mode = dependency(asyncChoice(["dev", "prod"] as const));
-        const level = mode.derive({
-          metavar: "LEVEL",
-          mode: "async",
-          factory: (value) =>
-            asyncChoice(
-              value === "dev"
-                ? (["debug", "verbose"] as const)
-                : (["silent", "strict"] as const),
-            ),
-          defaultValue: () => "dev" as const,
-        });
-
-        // Wrapping with map() adds transformsDependencyValueMarker,
-        // which causes complete() to return a Promise for async parsers
-        const parser = object({
-          mode: withDefault(
-            map(option("--mode", mode), (v) => v),
-            "prod" as const,
+    it("should not treat mapped defaults as dependency source values", async () => {
+      const mode = dependency(asyncChoice(["dev", "prod"] as const));
+      const level = mode.derive({
+        metavar: "LEVEL",
+        mode: "async",
+        factory: (value) =>
+          asyncChoice(
+            value === "dev"
+              ? (["debug", "verbose"] as const)
+              : (["silent", "strict"] as const),
           ),
-          level: option("--level", level),
-        });
+        defaultValue: () => "dev" as const,
+      });
 
-        const result = await suggestAsync(parser, ["--level", "d"]);
-        deepStrictEqual(
-          result.map(extractText),
-          ["debug"],
-        );
-      },
-    );
+      // Wrapping with map() adds transformsDependencyValueMarker,
+      // which causes complete() to return a Promise for async parsers
+      const parser = object({
+        mode: withDefault(
+          map(option("--mode", mode), (v) => v),
+          "prod" as const,
+        ),
+        level: option("--level", level),
+      });
 
-    it(
-      "should suggest values based on withDefault() source value for async parsers",
-      async () => {
-        const mode = dependency(asyncChoice(["dev", "prod"] as const));
-        const level = mode.derive({
-          metavar: "LEVEL",
-          mode: "async",
-          factory: (value) =>
-            asyncChoice(
-              value === "dev"
-                ? (["debug", "verbose"] as const)
-                : (["silent", "strict"] as const),
-            ),
-          defaultValue: () => "dev" as const,
-        });
+      const result = await suggestAsync(parser, ["--level", "d"]);
+      deepStrictEqual(result.map(extractText), ["debug"]);
+    });
 
-        const parser = object({
-          mode: withDefault(option("--mode", mode), "prod" as const),
-          level: option("--level", level),
-        });
+    it("should suggest values based on withDefault() source value for async parsers", async () => {
+      const mode = dependency(asyncChoice(["dev", "prod"] as const));
+      const level = mode.derive({
+        metavar: "LEVEL",
+        mode: "async",
+        factory: (value) =>
+          asyncChoice(
+            value === "dev"
+              ? (["debug", "verbose"] as const)
+              : (["silent", "strict"] as const),
+          ),
+        defaultValue: () => "dev" as const,
+      });
 
-        // When --mode is not provided, withDefault gives "prod",
-        // so --level should suggest "silent" and "strict"
-        const result = await suggestAsync(parser, ["--level", "s"]);
-        deepStrictEqual(
-          result.map(extractText),
-          ["silent", "strict"],
-        );
-      },
-    );
+      const parser = object({
+        mode: withDefault(option("--mode", mode), "prod" as const),
+        level: option("--level", level),
+      });
+
+      // When --mode is not provided, withDefault gives "prod",
+      // so --level should suggest "silent" and "strict"
+      const result = await suggestAsync(parser, ["--level", "s"]);
+      deepStrictEqual(result.map(extractText), ["silent", "strict"]);
+    });
   });
 });

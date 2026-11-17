@@ -35,25 +35,29 @@ const propertyParameters = { numRuns: 200 } as const;
 const cliArgumentArbitrary = fc.string().map((value) => `arg${value}`);
 
 function isPhase1ContextRequest(request: unknown): boolean {
-  return request === undefined ||
+  return (
+    request === undefined ||
     (request != null &&
       typeof request === "object" &&
       "phase" in request &&
-      (request as { readonly phase?: unknown }).phase === "phase1");
+      (request as { readonly phase?: unknown }).phase === "phase1")
+  );
 }
 
 function isPhase2ContextRequest(
   request: unknown,
 ): request is SourceContextPhase2Request {
-  return request != null &&
+  return (
+    request != null &&
     typeof request === "object" &&
     "phase" in request &&
     (request as { readonly phase?: unknown }).phase === "phase2" &&
-    "parsed" in request;
+    "parsed" in request
+  );
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
-  return isPhase2ContextRequest(request) ? request.parsed as T : undefined;
+  return isPhase2ContextRequest(request) ? (request.parsed as T) : undefined;
 }
 
 function createPassthroughConfigSchema<T>(): Parameters<
@@ -96,31 +100,33 @@ function createFlatCommandDocParser(): Parser<"sync", undefined, undefined> {
     *suggest() {},
     getDocFragments() {
       return {
-        fragments: [{
-          type: "section",
-          entries: [
-            {
-              term: { type: "command", name: "remote" },
-              description: message`Manage remotes.`,
-            },
-            {
-              term: { type: "command", name: "remote add" },
-              description: message`Add a remote.`,
-            },
-            {
-              term: { type: "command", name: "remote remove" },
-              description: message`Remove a remote.`,
-            },
-            {
-              term: { type: "command", name: "config" },
-              description: message`Manage configuration.`,
-            },
-            {
-              term: { type: "command", name: "config get" },
-              description: message`Read configuration.`,
-            },
-          ],
-        }],
+        fragments: [
+          {
+            type: "section",
+            entries: [
+              {
+                term: { type: "command", name: "remote" },
+                description: message`Manage remotes.`,
+              },
+              {
+                term: { type: "command", name: "remote add" },
+                description: message`Add a remote.`,
+              },
+              {
+                term: { type: "command", name: "remote remove" },
+                description: message`Remove a remote.`,
+              },
+              {
+                term: { type: "command", name: "config" },
+                description: message`Manage configuration.`,
+              },
+              {
+                term: { type: "command", name: "config get" },
+                description: message`Read configuration.`,
+              },
+            ],
+          },
+        ],
       };
     },
   };
@@ -132,14 +138,13 @@ function createSyncConfigSchema(): Parameters<
   return createPassthroughConfigSchema<{ host: string; port: number }>();
 }
 
-interface ProgramPathContext extends
-  SourceContext<{
-    readonly getPath: (parsed: ParserValuePlaceholder) => string;
-  }> {}
+interface ProgramPathContext extends SourceContext<{
+  readonly getPath: (parsed: ParserValuePlaceholder) => string;
+}> {}
 
 function createIssue267Fixture() {
   const envContext = createEnvContext({
-    source: (key) => key === "HOST" ? "env-host" : undefined,
+    source: (key) => (key === "HOST" ? "env-host" : undefined),
   });
   const parser = object({
     file: argument(string()),
@@ -162,12 +167,18 @@ async function runIssue267With(
     args: ["--", token],
     programName: "test",
     contexts: [envContext],
-    help: kind === "help"
-      ? names == null ? "option" : { option: { names } }
-      : "option",
-    version: kind === "version"
-      ? names == null ? "1.0.0" : { value: "1.0.0", option: { names } }
-      : "1.0.0",
+    help:
+      kind === "help"
+        ? names == null
+          ? "option"
+          : { option: { names } }
+        : "option",
+    version:
+      kind === "version"
+        ? names == null
+          ? "1.0.0"
+          : { value: "1.0.0", option: { names } }
+        : "1.0.0",
     stdout: () => {},
     stderr: () => {},
   });
@@ -183,12 +194,18 @@ function runIssue267SyncWith(
     args: ["--", token],
     programName: "test",
     contexts: [envContext],
-    help: kind === "help"
-      ? names == null ? "option" : { option: { names } }
-      : "option",
-    version: kind === "version"
-      ? names == null ? "1.0.0" : { value: "1.0.0", option: { names } }
-      : "1.0.0",
+    help:
+      kind === "help"
+        ? names == null
+          ? "option"
+          : { option: { names } }
+        : "option",
+    version:
+      kind === "version"
+        ? names == null
+          ? "1.0.0"
+          : { value: "1.0.0", option: { names } }
+        : "1.0.0",
     stdout: () => {},
     stderr: () => {},
   });
@@ -435,22 +452,19 @@ describe("run", () => {
       let stderrOutput = "";
       let exitCode: number | undefined;
 
-      assert.throws(
-        () => {
-          run(parser, {
-            args: [],
-            programName: "test",
-            stderr: (text) => {
-              stderrOutput += `${text}\n`;
-            },
-            onExit: (code) => {
-              exitCode = code;
-              throw new Error("EXIT");
-            },
-          });
-        },
-        /EXIT/,
-      );
+      assert.throws(() => {
+        run(parser, {
+          args: [],
+          programName: "test",
+          stderr: (text) => {
+            stderrOutput += `${text}\n`;
+          },
+          onExit: (code) => {
+            exitCode = code;
+            throw new Error("EXIT");
+          },
+        });
+      }, /EXIT/);
 
       assert.equal(exitCode, 1);
       assert.ok(stderrOutput.includes("Error:"));
@@ -463,21 +477,18 @@ describe("run", () => {
 
       let exitCode: number | undefined;
 
-      assert.throws(
-        () => {
-          run(parser, {
-            args: [],
-            programName: "test",
-            errorExitCode: 7,
-            stderr: () => {},
-            onExit: (code) => {
-              exitCode = code;
-              throw new Error("EXIT");
-            },
-          });
-        },
-        /EXIT/,
-      );
+      assert.throws(() => {
+        run(parser, {
+          args: [],
+          programName: "test",
+          errorExitCode: 7,
+          stderr: () => {},
+          onExit: (code) => {
+            exitCode = code;
+            throw new Error("EXIT");
+          },
+        });
+      }, /EXIT/);
 
       assert.equal(exitCode, 7);
     });
@@ -487,23 +498,20 @@ describe("run", () => {
       let stderrOutput = "";
       let exitCode: number | undefined;
 
-      assert.throws(
-        () => {
-          run(parser, {
-            args: ["completion"],
-            programName: "test",
-            completion: "command",
-            stderr: (text) => {
-              stderrOutput += `${text}\n`;
-            },
-            onExit: (code) => {
-              exitCode = code;
-              throw new Error("EXIT");
-            },
-          });
-        },
-        /EXIT/,
-      );
+      assert.throws(() => {
+        run(parser, {
+          args: ["completion"],
+          programName: "test",
+          completion: "command",
+          stderr: (text) => {
+            stderrOutput += `${text}\n`;
+          },
+          onExit: (code) => {
+            exitCode = code;
+            throw new Error("EXIT");
+          },
+        });
+      }, /EXIT/);
 
       assert.equal(exitCode, 1);
       assert.ok(stderrOutput.includes("Missing shell name for completion"));
@@ -514,23 +522,20 @@ describe("run", () => {
       let helpOutput = "";
       let exitCode: number | undefined;
 
-      assert.throws(
-        () => {
-          run(parser, {
-            args: ["help"],
-            programName: "test",
-            help: "command",
-            stdout: (text) => {
-              helpOutput += `${text}\n`;
-            },
-            onExit: (code) => {
-              exitCode = code;
-              throw new Error("EXIT");
-            },
-          });
-        },
-        /EXIT/,
-      );
+      assert.throws(() => {
+        run(parser, {
+          args: ["help"],
+          programName: "test",
+          help: "command",
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: (code) => {
+            exitCode = code;
+            throw new Error("EXIT");
+          },
+        });
+      }, /EXIT/);
 
       assert.ok(helpOutput.includes("test"));
       assert.equal(exitCode, 0);
@@ -541,23 +546,20 @@ describe("run", () => {
       let helpOutput = "";
       let exitCode: number | undefined;
 
-      assert.throws(
-        () => {
-          run(parser, {
-            args: ["--help"],
-            programName: "test",
-            help: { option: true },
-            stdout: (text) => {
-              helpOutput += `${text}\n`;
-            },
-            onExit: (code) => {
-              exitCode = code;
-              throw new Error("EXIT");
-            },
-          });
-        },
-        /EXIT/,
-      );
+      assert.throws(() => {
+        run(parser, {
+          args: ["--help"],
+          programName: "test",
+          help: { option: true },
+          stdout: (text) => {
+            helpOutput += `${text}\n`;
+          },
+          onExit: (code) => {
+            exitCode = code;
+            throw new Error("EXIT");
+          },
+        });
+      }, /EXIT/);
 
       assert.ok(helpOutput.includes("--verbose"));
       assert.equal(exitCode, 0);
@@ -567,25 +569,22 @@ describe("run", () => {
       const parser = option("-x", { description: message`Execute.` });
       let helpOutput = "";
 
-      assert.throws(
-        () => {
-          run(parser, {
-            colors: false,
-            maxWidth: 80,
-            args: ["--help"],
-            programName: "tool",
-            help: "option",
-            termWidth: "auto",
-            stdout: (text) => {
-              helpOutput = text;
-            },
-            onExit: () => {
-              throw new Error("EXIT");
-            },
-          });
-        },
-        /EXIT/,
-      );
+      assert.throws(() => {
+        run(parser, {
+          colors: false,
+          maxWidth: 80,
+          args: ["--help"],
+          programName: "tool",
+          help: "option",
+          termWidth: "auto",
+          stdout: (text) => {
+            helpOutput = text;
+          },
+          onExit: () => {
+            throw new Error("EXIT");
+          },
+        });
+      }, /EXIT/);
 
       assert.ok(helpOutput.includes("  -x      Execute."));
       assert.ok(helpOutput.includes("  --help  Show help information."));
@@ -625,26 +624,23 @@ describe("run", () => {
 
       let output = "";
       let exitCode: number | undefined;
-      assert.throws(
-        () => {
-          run(parser, {
-            programName: "test",
-            args: ["version"],
-            version: {
-              value: "2.1.0",
-              command: true,
-            },
-            stdout: (text: string) => {
-              output += `${text}\n`;
-            },
-            onExit: (code: number) => {
-              exitCode = code;
-              throw new Error("EXIT");
-            },
-          });
-        },
-        /EXIT/,
-      );
+      assert.throws(() => {
+        run(parser, {
+          programName: "test",
+          args: ["version"],
+          version: {
+            value: "2.1.0",
+            command: true,
+          },
+          stdout: (text: string) => {
+            output += `${text}\n`;
+          },
+          onExit: (code: number) => {
+            exitCode = code;
+            throw new Error("EXIT");
+          },
+        });
+      }, /EXIT/);
 
       assert.equal(exitCode, 0);
       assert.equal(output, "2.1.0\n");
@@ -1189,10 +1185,7 @@ describe("run", () => {
 
       it("should handle nested commands with async", async () => {
         const parser = or(
-          command(
-            "add",
-            object({ name: argument(asyncString()) }),
-          ),
+          command("add", object({ name: argument(asyncString()) })),
           command(
             "remove",
             object({ name: argument(asyncString()), force: option("--force") }),
@@ -1798,13 +1791,10 @@ describe("run with contexts", () => {
       file: "--version",
       host: "env-host",
     });
-    assert.deepEqual(
-      await runIssue267With("--assist", "help", ["--assist"]),
-      {
-        file: "--assist",
-        host: "env-host",
-      },
-    );
+    assert.deepEqual(await runIssue267With("--assist", "help", ["--assist"]), {
+      file: "--assist",
+      host: "env-host",
+    });
     assert.deepEqual(await runIssue267With("--ver", "version", ["--ver"]), {
       file: "--ver",
       host: "env-host",
@@ -1841,10 +1831,7 @@ describe("run with contexts", () => {
     await mkdir(TEST_DIR, { recursive: true });
     const configPath = join(TEST_DIR, "test-config-run-issue-180.json");
 
-    await writeFile(
-      configPath,
-      JSON.stringify({ token: "config-token" }),
-    );
+    await writeFile(configPath, JSON.stringify({ token: "config-token" }));
 
     try {
       const context = createConfigContext({
@@ -1903,10 +1890,7 @@ describe("run with contexts", () => {
 
     // contextOptions should be forwarded to contexts
     assert.ok(receivedOptions != null);
-    assert.equal(
-      (receivedOptions as Record<string, unknown>).custom,
-      "value",
-    );
+    assert.equal((receivedOptions as Record<string, unknown>).custom, "value");
   });
 
   it("should forward contextOptions to contexts without collision", async () => {
@@ -2211,25 +2195,25 @@ describe("run with contexts", () => {
     const emptyResult:
       | { config: string; host: string }
       | Promise<{ config: string; host: string }> = run(program, {
-        args: [],
-        contexts: emptyContexts,
-        contextOptions: {
-          getPath: (parsed) => parsed.config,
-        },
-      });
+      args: [],
+      contexts: emptyContexts,
+      contextOptions: {
+        getPath: (parsed) => parsed.config,
+      },
+    });
     const filledResult:
       | { config: string; host: string }
       | Promise<{ config: string; host: string }> = run(program, {
-        args: [],
-        contexts: filledContexts,
-        contextOptions: {
-          getPath: (parsed) => {
-            // @ts-expect-error - parsed must not be any.
-            void parsed.nonexistent;
-            return parsed.config;
-          },
+      args: [],
+      contexts: filledContexts,
+      contextOptions: {
+        getPath: (parsed) => {
+          // @ts-expect-error - parsed must not be any.
+          void parsed.nonexistent;
+          return parsed.config;
         },
-      });
+      },
+    });
 
     assert.ok(!(emptyResult instanceof Promise));
     assert.deepEqual(emptyResult, {
@@ -2378,9 +2362,7 @@ describe("run with contexts", () => {
     const options: RunOptions & {
       readonly contexts: readonly ProgramPathContext[];
       readonly contextOptions: {
-        readonly getPath: (
-          parsed: { config: string; host: string },
-        ) => string;
+        readonly getPath: (parsed: { config: string; host: string }) => string;
       };
     } = {
       args: [],
@@ -2440,13 +2422,10 @@ describe("runSync with contexts", () => {
       file: "--version",
       host: "env-host",
     });
-    assert.deepEqual(
-      runIssue267SyncWith("--assist", "help", ["--assist"]),
-      {
-        file: "--assist",
-        host: "env-host",
-      },
-    );
+    assert.deepEqual(runIssue267SyncWith("--assist", "help", ["--assist"]), {
+      file: "--assist",
+      host: "env-host",
+    });
     assert.deepEqual(runIssue267SyncWith("--ver", "version", ["--ver"]), {
       file: "--ver",
       host: "env-host",
@@ -2568,14 +2547,11 @@ describe("runSync with contexts", () => {
       },
     };
 
-    const result = runSync(
-      prog,
-      {
-        args: [],
-        contexts: [context],
-        contextOptions: { envName: "dev" },
-      },
-    );
+    const result = runSync(prog, {
+      args: [],
+      contexts: [context],
+      contextOptions: { envName: "dev" },
+    });
 
     assert.deepEqual(result, { name: "default" });
   });
@@ -2766,9 +2742,7 @@ describe("runSync with contexts", () => {
         programName: "test",
         contexts: [context],
         contextOptions: {
-          getConfigPath: (
-            parsed: { readonly config: string },
-          ) => parsed.config,
+          getConfigPath: (parsed: { readonly config: string }) => parsed.config,
         },
       });
 
@@ -2816,9 +2790,7 @@ describe("runSync with contexts", () => {
         programName: "test",
         contexts: [context],
         contextOptions: {
-          getConfigPath: (
-            parsed: { readonly config: string },
-          ) => parsed.config,
+          getConfigPath: (parsed: { readonly config: string }) => parsed.config,
         },
       });
 
@@ -2898,15 +2870,12 @@ describe("runAsync with contexts", () => {
       name: withDefault(option("--name", string()), "default"),
     });
 
-    const result = await runAsync(
-      parser,
-      {
-        args: [],
-        programName: "test",
-        contexts: [context],
-        contextOptions: { profile: "local" },
-      },
-    );
+    const result = await runAsync(parser, {
+      args: [],
+      programName: "test",
+      contexts: [context],
+      contextOptions: { profile: "local" },
+    });
 
     assert.deepEqual(result, { name: "default" });
   });
@@ -3109,20 +3078,23 @@ describe("help callback compatibility", () => {
   it("should write help before the injected exit callback", () => {
     const events: unknown[] = [];
     const exit = new Error("Help exit.");
-    assert.throws(() =>
-      run(argument(string()), {
-        args: ["--help"],
-        programName: "test",
-        help: "option",
-        colors: false,
-        stdout: (chunk) => {
-          events.push(chunk);
-        },
-        onExit: (code) => {
-          events.push(code);
-          throw exit;
-        },
-      }), (error) => error === exit);
+    assert.throws(
+      () =>
+        run(argument(string()), {
+          args: ["--help"],
+          programName: "test",
+          help: "option",
+          colors: false,
+          stdout: (chunk) => {
+            events.push(chunk);
+          },
+          onExit: (code) => {
+            events.push(code);
+            throw exit;
+          },
+        }),
+      (error) => error === exit,
+    );
     assert.equal(events.length, 2);
     assert.equal(typeof events[0], "string");
     assert.equal(events[1], 0);
@@ -3135,20 +3107,23 @@ describe("terminal presentation options", () => {
       const output: string[] = [];
       const exited = new Error("Expected exit.");
       const parser = option("--name", string());
-      await assert.rejects(async () => {
-        await invoke(parser, {
-          programName: "app",
-          args: [],
-          colors: false,
-          theme: { errorLabel: () => ({ type: "text", text: "Failure:" }) },
-          messageFormatter: () => "CUSTOM",
-          stdout: (s) => output.push(s),
-          stderr: (s) => output.push(s),
-          onExit: () => {
-            throw exited;
-          },
-        });
-      }, (error) => error === exited);
+      await assert.rejects(
+        async () => {
+          await invoke(parser, {
+            programName: "app",
+            args: [],
+            colors: false,
+            theme: { errorLabel: () => ({ type: "text", text: "Failure:" }) },
+            messageFormatter: () => "CUSTOM",
+            stdout: (s) => output.push(s),
+            stderr: (s) => output.push(s),
+            onExit: () => {
+              throw exited;
+            },
+          });
+        },
+        (error) => error === exited,
+      );
       assert.ok(output.some((s) => s.includes("Failure: CUSTOM")));
     });
   }
@@ -3160,36 +3135,39 @@ describe("custom completion errors", () => {
       it(`should render custom errors through ${runner.name} for ${args.join(" ")}`, async () => {
         const chunks: string[] = [];
         const exit = new Error("Exit.");
-        await assert.rejects(async () => {
-          await runner(object({}), {
-            programName: "test",
-            args,
-            colors: false,
-            completion: {
-              command: true,
-              option: true,
-              errors: {
-                missingShell: message`Select a shell.`,
-                unsupportedShell: (shell, shells) => {
-                  assert.equal(shell, "unknown");
-                  assert.deepEqual(shells, [
-                    "bash",
-                    "fish",
-                    "nu",
-                    "pwsh",
-                    "zsh",
-                  ]);
-                  return message`Cannot complete for ${shell}.`;
+        await assert.rejects(
+          async () => {
+            await runner(object({}), {
+              programName: "test",
+              args,
+              colors: false,
+              completion: {
+                command: true,
+                option: true,
+                errors: {
+                  missingShell: message`Select a shell.`,
+                  unsupportedShell: (shell, shells) => {
+                    assert.equal(shell, "unknown");
+                    assert.deepEqual(shells, [
+                      "bash",
+                      "fish",
+                      "nu",
+                      "pwsh",
+                      "zsh",
+                    ]);
+                    return message`Cannot complete for ${shell}.`;
+                  },
                 },
               },
-            },
-            stderr: (chunk) => chunks.push(chunk),
-            onExit: (code): never => {
-              assert.equal(code, 1);
-              throw exit;
-            },
-          });
-        }, (error) => error === exit);
+              stderr: (chunk) => chunks.push(chunk),
+              onExit: (code): never => {
+                assert.equal(code, 1);
+                throw exit;
+              },
+            });
+          },
+          (error) => error === exit,
+        );
         assert.equal(
           chunks[0],
           args.length === 1
@@ -3208,22 +3186,25 @@ describe("custom completion errors", () => {
       phase: "single-pass",
       getAnnotations: () => ({}),
     };
-    await assert.rejects(async () => {
-      await run(object({}), {
-        programName: "test",
-        args: ["--completion", "unknown"],
-        contexts: [context],
-        colors: false,
-        completion: {
-          option: true,
-          errors: { unsupportedShell: message`Select a shell.` },
-        },
-        stderr: (chunk) => chunks.push(chunk),
-        onExit: (): never => {
-          throw exit;
-        },
-      });
-    }, (error) => error === exit);
+    await assert.rejects(
+      async () => {
+        await run(object({}), {
+          programName: "test",
+          args: ["--completion", "unknown"],
+          contexts: [context],
+          colors: false,
+          completion: {
+            option: true,
+            errors: { unsupportedShell: message`Select a shell.` },
+          },
+          stderr: (chunk) => chunks.push(chunk),
+          onExit: (): never => {
+            throw exit;
+          },
+        });
+      },
+      (error) => error === exit,
+    );
     assert.deepEqual(chunks, ["Error: Select a shell."]);
   });
 });
@@ -3281,19 +3262,22 @@ describe("helpSections forwarding", () => {
         return {};
       },
     };
-    await assert.rejects(() =>
-      runAsync(parser, {
-        args: ["--help"],
-        programName: "demo",
-        contexts: [context],
-        help: "option",
-        helpSections,
-        colors: false,
-        stdout: (text) => chunks.push(text),
-        onExit: () => {
-          throw new HelpExit();
-        },
-      }), HelpExit);
+    await assert.rejects(
+      () =>
+        runAsync(parser, {
+          args: ["--help"],
+          programName: "demo",
+          contexts: [context],
+          help: "option",
+          helpSections,
+          colors: false,
+          stdout: (text) => chunks.push(text),
+          onExit: () => {
+            throw new HelpExit();
+          },
+        }),
+      HelpExit,
+    );
     assert.match(chunks.join(""), /^Commands:$/m);
     assert.match(chunks.join(""), /^Options:$/m);
   });
@@ -3432,33 +3416,38 @@ describe("grouped command help", () => {
     });
     const output: string[] = [];
     const exit = new Error("Help displayed.");
-    assert.throws(() =>
-      run({
-        parser,
-        metadata: {
-          name: "optique-demo",
-          brief: message`A modern build tool for JavaScript projects`,
-        },
-      }, {
-        args: ["build", "--help"],
-        help: "option",
-        colors: false,
-        stdout: (text) => output.push(text),
-        onExit: (code) => {
-          assert.equal(code, 0);
-          throw exit;
-        },
-      }), (error: unknown) => error === exit);
+    assert.throws(
+      () =>
+        run(
+          {
+            parser,
+            metadata: {
+              name: "optique-demo",
+              brief: message`A modern build tool for JavaScript projects`,
+            },
+          },
+          {
+            args: ["build", "--help"],
+            help: "option",
+            colors: false,
+            stdout: (text) => output.push(text),
+            onExit: (code) => {
+              assert.equal(code, 0);
+              throw exit;
+            },
+          },
+        ),
+      (error: unknown) => error === exit,
+    );
     const help = output.join("\n");
-    for (
-      const text of [
-        "Compile the code",
-        "Run all the compilation tools.",
-        "See the build guide.",
-        "Rebuild on change",
-        "Usage: optique-demo build",
-      ]
-    ) assert.ok(help.includes(text), help);
+    for (const text of [
+      "Compile the code",
+      "Run all the compilation tools.",
+      "See the build guide.",
+      "Rebuild on change",
+      "Usage: optique-demo build",
+    ])
+      assert.ok(help.includes(text), help);
     assert.ok(!help.includes("A modern build tool for JavaScript projects"));
   });
 });

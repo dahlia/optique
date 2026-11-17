@@ -88,24 +88,34 @@ if (!process.argv.includes("--parse-only")) {
         rawInput: "new",
         consumed: ["new"],
       };
-      measure(`overwrite-${suffix}`, count, () => {
-        let trace = base;
-        for (const path of paths) trace = trace.set(path, replacement);
-        return trace;
-      }, (trace) => {
-        for (const path of paths) {
-          assert.strictEqual(trace.get(path), replacement);
-        }
-        verify(base);
-      });
-      measure(`delete-${suffix}`, count, () => {
-        let trace = base;
-        for (const path of paths) trace = trace.delete(path);
-        return trace;
-      }, (trace) => {
-        for (const path of paths) assert.equal(trace.get(path), undefined);
-        verify(base);
-      });
+      measure(
+        `overwrite-${suffix}`,
+        count,
+        () => {
+          let trace = base;
+          for (const path of paths) trace = trace.set(path, replacement);
+          return trace;
+        },
+        (trace) => {
+          for (const path of paths) {
+            assert.strictEqual(trace.get(path), replacement);
+          }
+          verify(base);
+        },
+      );
+      measure(
+        `delete-${suffix}`,
+        count,
+        () => {
+          let trace = base;
+          for (const path of paths) trace = trace.delete(path);
+          return trace;
+        },
+        (trace) => {
+          for (const path of paths) assert.equal(trace.get(path), undefined);
+          verify(base);
+        },
+      );
       measure(
         `delete-miss-${suffix}`,
         count,
@@ -169,12 +179,17 @@ if (!process.argv.includes("--store-only")) {
     "--mode",
     "dev",
   ];
-  measure("four-options", 4, () => parseSync(small, smallInput), (result) => {
-    assert.deepStrictEqual(result, {
-      success: true,
-      value: { name: "demo", host: "localhost", port: "3000", mode: "dev" },
-    });
-  });
+  measure(
+    "four-options",
+    4,
+    () => parseSync(small, smallInput),
+    (result) => {
+      assert.deepStrictEqual(result, {
+        success: true,
+        value: { name: "demo", host: "localhost", port: "3000", mode: "dev" },
+      });
+    },
+  );
   const repeated = multiple(option("--value", string()));
   for (const count of [8, 500, 2000]) {
     const values = Array.from({ length: count }, (_, i) => `v${i}`);

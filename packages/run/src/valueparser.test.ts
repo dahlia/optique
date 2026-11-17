@@ -8,21 +8,20 @@ import { describe, it } from "node:test";
 import { basename, join } from "node:path";
 
 const propertyParameters = { numRuns: 200 } as const;
-const nonWhitespacePathCharArbitrary = fc.integer({ min: 0x21, max: 0x7e })
+const nonWhitespacePathCharArbitrary = fc
+  .integer({ min: 0x21, max: 0x7e })
   .map((codePoint) => String.fromCharCode(codePoint));
-const nonBlankPathArbitrary = fc.tuple(
-  fc.string(),
-  nonWhitespacePathCharArbitrary,
-  fc.string(),
-).map((parts) => parts.join(""));
+const nonBlankPathArbitrary = fc
+  .tuple(fc.string(), nonWhitespacePathCharArbitrary, fc.string())
+  .map((parts) => parts.join(""));
 const extensionArbitrary = fc
   .stringMatching(/^[a-z][a-z0-9]*$/u)
   .map((extension) => `.${extension}`);
 
 function createTempDir() {
-  const tempDir = `/tmp/optique-test-${Date.now()}-${
-    Math.random().toString(36).substring(2)
-  }`;
+  const tempDir = `/tmp/optique-test-${Date.now()}-${Math.random()
+    .toString(36)
+    .substring(2)}`;
   mkdirSync(tempDir, { recursive: true });
   return tempDir;
 }
@@ -98,10 +97,7 @@ describe("path", () => {
       const result = parser.parse("");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(
-          formatMessage(result.error),
-          "Path must not be empty.",
-        );
+        assert.equal(formatMessage(result.error), "Path must not be empty.");
       }
     });
 
@@ -149,10 +145,7 @@ describe("path", () => {
       const result = parser.parse("");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(
-          formatMessage(result.error),
-          "Path must not be blank.",
-        );
+        assert.equal(formatMessage(result.error), "Path must not be blank.");
       }
     });
 
@@ -163,10 +156,7 @@ describe("path", () => {
       const result = parser.parse("  ");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.equal(
-          formatMessage(result.error),
-          "Please provide a path.",
-        );
+        assert.equal(formatMessage(result.error), "Please provide a path.");
       }
     });
   });
@@ -522,19 +512,15 @@ describe("path", () => {
 
     it("should accept paths ending with any configured extension", () => {
       fc.assert(
-        fc.property(
-          fc.string(),
-          extensionArbitrary,
-          (stem, extension) => {
-            const parser = path({ extensions: [extension] });
-            const input = `${stem}${extension}`;
+        fc.property(fc.string(), extensionArbitrary, (stem, extension) => {
+          const parser = path({ extensions: [extension] });
+          const input = `${stem}${extension}`;
 
-            const result = parser.parse(input);
+          const result = parser.parse(input);
 
-            assert.ok(result.success);
-            assert.equal(result.value, input);
-          },
-        ),
+          assert.ok(result.success);
+          assert.equal(result.value, input);
+        }),
         propertyParameters,
       );
     });
@@ -609,10 +595,7 @@ describe("path", () => {
       const result = parser.parse(".gitignore");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.match(
-          formatMessage(result.error),
-          /got \.gitignore/,
-        );
+        assert.match(formatMessage(result.error), /got \.gitignore/);
       }
     });
   });
@@ -654,47 +637,34 @@ describe("path", () => {
 
   describe("extensions input validation", () => {
     it("should throw on extension without leading dot", () => {
-      assert.throws(
-        () => path({ extensions: ["json"] }),
-        { name: "TypeError" },
-      );
+      assert.throws(() => path({ extensions: ["json"] }), {
+        name: "TypeError",
+      });
     });
 
     it("should throw on empty string extension", () => {
-      assert.throws(
-        () => path({ extensions: [""] }),
-        { name: "TypeError" },
-      );
+      assert.throws(() => path({ extensions: [""] }), { name: "TypeError" });
     });
 
     it("should throw on non-string extension (number)", () => {
-      assert.throws(
-        () => path({ extensions: [123 as never] }),
-        {
-          name: "TypeError",
-          message: /must start with a dot/,
-        },
-      );
+      assert.throws(() => path({ extensions: [123 as never] }), {
+        name: "TypeError",
+        message: /must start with a dot/,
+      });
     });
 
     it("should throw on non-string extension (null)", () => {
-      assert.throws(
-        () => path({ extensions: [null as never] }),
-        {
-          name: "TypeError",
-          message: /must start with a dot/,
-        },
-      );
+      assert.throws(() => path({ extensions: [null as never] }), {
+        name: "TypeError",
+        message: /must start with a dot/,
+      });
     });
 
     it("should throw on non-string extension mixed with valid entries", () => {
-      assert.throws(
-        () => path({ extensions: [".json", 456 as never] }),
-        {
-          name: "TypeError",
-          message: /must start with a dot/,
-        },
-      );
+      assert.throws(() => path({ extensions: [".json", 456 as never] }), {
+        name: "TypeError",
+        message: /must start with a dot/,
+      });
     });
   });
 
@@ -800,9 +770,9 @@ describe("path", () => {
         extensions: [".json", ".yaml"],
         errors: {
           invalidExtension: (input, extensions, actualExt) =>
-            message`File ${input} has extension ${actualExt}. Expected: ${
-              values(extensions)
-            }.`,
+            message`File ${input} has extension ${actualExt}. Expected: ${values(
+              extensions,
+            )}.`,
         },
       });
 
@@ -945,8 +915,7 @@ describe("path", () => {
         const parser = path({
           mustNotExist: true,
           errors: {
-            pathAlreadyExists:
-              message`Output file already exists. Use --force to overwrite.`,
+            pathAlreadyExists: message`Output file already exists. Use --force to overwrite.`,
           },
         });
 
@@ -1030,8 +999,7 @@ describe("path", () => {
         mustNotExist: true,
         allowCreate: true,
         errors: {
-          parentNotFound:
-            message`Static parent error for mustNotExist+allowCreate.`,
+          parentNotFound: message`Static parent error for mustNotExist+allowCreate.`,
         },
       });
 
@@ -1090,8 +1058,10 @@ describe("path", () => {
         assert.ok(!result2.success);
         // Should use default error message for notAFile
         assert.ok(
-          result2.error.some((term) =>
-            term.type === "text" && term.text.includes("Expected a file, but")
+          result2.error.some(
+            (term) =>
+              term.type === "text" &&
+              term.text.includes("Expected a file, but"),
           ),
         );
       } finally {
@@ -1106,8 +1076,9 @@ describe("path", () => {
       assert.ok(!result.success);
       // Should use default error message
       assert.ok(
-        result.error.some((term) =>
-          term.type === "text" && term.text.includes("does not exist")
+        result.error.some(
+          (term) =>
+            term.type === "text" && term.text.includes("does not exist"),
         ),
       );
     });
@@ -1149,8 +1120,10 @@ describe("path", () => {
       // All file suggestions should have .ts or .js extension (directories are allowed)
       suggestions.forEach((suggestion) => {
         if (suggestion.kind === "literal") {
-          if (!suggestion.text.endsWith("/")) { // Not a directory
-            const hasValidExtension = suggestion.text.endsWith(".ts") ||
+          if (!suggestion.text.endsWith("/")) {
+            // Not a directory
+            const hasValidExtension =
+              suggestion.text.endsWith(".ts") ||
               suggestion.text.endsWith(".js");
             assert.ok(
               hasValidExtension,
@@ -1185,29 +1158,37 @@ describe("path", () => {
     });
 
     it("should set type-specific suggestion descriptions", () => {
-      const fileSuggestion =
-        Array.from(path({ type: "file" }).suggest!("x"))[0];
+      const fileSuggestion = Array.from(
+        path({ type: "file" }).suggest!("x"),
+      )[0];
       const directorySuggestion = Array.from(
         path({ type: "directory" }).suggest!("x"),
       )[0];
-      const eitherSuggestion =
-        Array.from(path({ type: "either" }).suggest!("x"))[0];
+      const eitherSuggestion = Array.from(
+        path({ type: "either" }).suggest!("x"),
+      )[0];
 
       assert.ok(fileSuggestion.kind === "file");
       assert.ok(directorySuggestion.kind === "file");
       assert.ok(eitherSuggestion.kind === "file");
-      assert.deepEqual(fileSuggestion.description, [{
-        type: "text",
-        text: "File",
-      }]);
-      assert.deepEqual(directorySuggestion.description, [{
-        type: "text",
-        text: "Directory",
-      }]);
-      assert.deepEqual(eitherSuggestion.description, [{
-        type: "text",
-        text: "File or directory",
-      }]);
+      assert.deepEqual(fileSuggestion.description, [
+        {
+          type: "text",
+          text: "File",
+        },
+      ]);
+      assert.deepEqual(directorySuggestion.description, [
+        {
+          type: "text",
+          text: "Directory",
+        },
+      ]);
+      assert.deepEqual(eitherSuggestion.description, [
+        {
+          type: "text",
+          text: "File or directory",
+        },
+      ]);
     });
 
     it("should describe every file suggestion from parser options", () => {
@@ -1299,39 +1280,31 @@ describe("path", () => {
 
       const nestedDotdot = Array.from(parser.suggest!("src/.."))[0];
       assert.equal(nestedDotdot.kind, "file");
-      assert.ok(
-        !(nestedDotdot.kind === "file" && nestedDotdot.includeHidden),
-      );
+      assert.ok(!(nestedDotdot.kind === "file" && nestedDotdot.includeHidden));
 
       const dotdotSlash = Array.from(parser.suggest!("../"))[0];
       assert.equal(dotdotSlash.kind, "file");
-      assert.ok(
-        !(dotdotSlash.kind === "file" && dotdotSlash.includeHidden),
-      );
+      assert.ok(!(dotdotSlash.kind === "file" && dotdotSlash.includeHidden));
     });
   });
 
   describe("invalid type option", () => {
     it("should throw TypeError for unsupported type values", () => {
-      assert.throws(
-        () => path({ type: "files" as never }),
-        {
-          name: "TypeError",
-          message: 'Unsupported path type: "files". ' +
-            'Expected "file", "directory", or "either".',
-        },
-      );
+      assert.throws(() => path({ type: "files" as never }), {
+        name: "TypeError",
+        message:
+          'Unsupported path type: "files". ' +
+          'Expected "file", "directory", or "either".',
+      });
     });
 
     it("should throw TypeError for empty string type", () => {
-      assert.throws(
-        () => path({ type: "" as never }),
-        {
-          name: "TypeError",
-          message: 'Unsupported path type: "". ' +
-            'Expected "file", "directory", or "either".',
-        },
-      );
+      assert.throws(() => path({ type: "" as never }), {
+        name: "TypeError",
+        message:
+          'Unsupported path type: "". ' +
+          'Expected "file", "directory", or "either".',
+      });
     });
   });
 
@@ -1389,13 +1362,10 @@ describe("path", () => {
 
   describe("metavar validation", () => {
     it("should throw TypeError when metavar is empty string", () => {
-      assert.throws(
-        () => path({ metavar: "" as unknown as NonEmptyString }),
-        {
-          name: "TypeError",
-          message: "Expected a non-empty string.",
-        },
-      );
+      assert.throws(() => path({ metavar: "" as unknown as NonEmptyString }), {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      });
     });
 
     it("should accept non-empty metavar", () => {
@@ -1421,28 +1391,25 @@ describe("path", () => {
       // fc.anything() can produce Symbols which JSON.stringify silently
       // converts to undefined, making the type check pass unexpectedly.
       const invalidTypeArbitrary = fc.oneof(
-        fc.string().filter(
-          (v) => v !== "file" && v !== "directory" && v !== "either",
-        ),
+        fc
+          .string()
+          .filter((v) => v !== "file" && v !== "directory" && v !== "either"),
         fc.integer(),
         fc.boolean(),
         fc.constant(null),
       );
 
       fc.assert(
-        fc.property(
-          invalidTypeArbitrary,
-          (invalidType) => {
-            assert.throws(
-              // @ts-expect-error intentional runtime validation test
-              () => path({ type: invalidType }),
-              {
-                name: "TypeError",
-                message: /Expected "file", "directory", or "either"/,
-              },
-            );
-          },
-        ),
+        fc.property(invalidTypeArbitrary, (invalidType) => {
+          assert.throws(
+            // @ts-expect-error intentional runtime validation test
+            () => path({ type: invalidType }),
+            {
+              name: "TypeError",
+              message: /Expected "file", "directory", or "either"/,
+            },
+          );
+        }),
         propertyParameters,
       );
     });
@@ -1457,76 +1424,64 @@ describe("path", () => {
       );
 
       fc.assert(
-        fc.property(
-          invalidExtArbitrary,
-          (invalidExt) => {
-            assert.throws(
-              // @ts-expect-error intentional runtime validation test
-              () => path({ extensions: [invalidExt] }),
-              {
-                name: "TypeError",
-                message: /must start with a dot/,
-              },
-            );
-          },
-        ),
+        fc.property(invalidExtArbitrary, (invalidExt) => {
+          assert.throws(
+            // @ts-expect-error intentional runtime validation test
+            () => path({ extensions: [invalidExt] }),
+            {
+              name: "TypeError",
+              message: /must start with a dot/,
+            },
+          );
+        }),
         propertyParameters,
       );
     });
 
     it("should throw TypeError for any non-boolean non-undefined allowCreate value", () => {
       fc.assert(
-        fc.property(
-          nonBooleanPrimitiveArbitrary,
-          (invalidValue) => {
-            assert.throws(
-              // @ts-expect-error intentional runtime validation test
-              () => path({ allowCreate: invalidValue }),
-              {
-                name: "TypeError",
-                message: /Expected allowCreate to be a boolean/,
-              },
-            );
-          },
-        ),
+        fc.property(nonBooleanPrimitiveArbitrary, (invalidValue) => {
+          assert.throws(
+            // @ts-expect-error intentional runtime validation test
+            () => path({ allowCreate: invalidValue }),
+            {
+              name: "TypeError",
+              message: /Expected allowCreate to be a boolean/,
+            },
+          );
+        }),
         propertyParameters,
       );
     });
 
     it("should throw TypeError for any non-boolean non-undefined mustExist value", () => {
       fc.assert(
-        fc.property(
-          nonBooleanPrimitiveArbitrary,
-          (invalidValue) => {
-            assert.throws(
-              // @ts-expect-error intentional runtime validation test
-              () => path({ mustExist: invalidValue }),
-              {
-                name: "TypeError",
-                message: /Expected mustExist to be a boolean/,
-              },
-            );
-          },
-        ),
+        fc.property(nonBooleanPrimitiveArbitrary, (invalidValue) => {
+          assert.throws(
+            // @ts-expect-error intentional runtime validation test
+            () => path({ mustExist: invalidValue }),
+            {
+              name: "TypeError",
+              message: /Expected mustExist to be a boolean/,
+            },
+          );
+        }),
         propertyParameters,
       );
     });
 
     it("should throw TypeError for any non-boolean non-undefined mustNotExist value", () => {
       fc.assert(
-        fc.property(
-          nonBooleanPrimitiveArbitrary,
-          (invalidValue) => {
-            assert.throws(
-              // @ts-expect-error intentional runtime validation test
-              () => path({ mustNotExist: invalidValue }),
-              {
-                name: "TypeError",
-                message: /Expected mustNotExist to be a boolean/,
-              },
-            );
-          },
-        ),
+        fc.property(nonBooleanPrimitiveArbitrary, (invalidValue) => {
+          assert.throws(
+            // @ts-expect-error intentional runtime validation test
+            () => path({ mustNotExist: invalidValue }),
+            {
+              name: "TypeError",
+              message: /Expected mustNotExist to be a boolean/,
+            },
+          );
+        }),
         propertyParameters,
       );
     });
@@ -1543,19 +1498,16 @@ describe("path", () => {
       );
 
       fc.assert(
-        fc.property(
-          nonStringNonUndefinedArbitrary,
-          (invalidValue) => {
-            assert.throws(
-              // @ts-expect-error intentional runtime validation test
-              () => path({ placeholder: invalidValue }),
-              {
-                name: "TypeError",
-                message: /Expected placeholder to be a string/,
-              },
-            );
-          },
-        ),
+        fc.property(nonStringNonUndefinedArbitrary, (invalidValue) => {
+          assert.throws(
+            // @ts-expect-error intentional runtime validation test
+            () => path({ placeholder: invalidValue }),
+            {
+              name: "TypeError",
+              message: /Expected placeholder to be a string/,
+            },
+          );
+        }),
         propertyParameters,
       );
     });

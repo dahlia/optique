@@ -83,10 +83,7 @@ export function mergeHidden(
   if (b === false) return a;
   if (a === b) return a;
   if (a === "help" || b === "help") return "help";
-  if (
-    (a === "usage" || a === "doc") &&
-    (b === "usage" || b === "doc")
-  ) {
+  if ((a === "usage" || a === "doc") && (b === "usage" || b === "doc")) {
     return "help";
   }
   return a;
@@ -101,157 +98,157 @@ export type UsageTerm =
    * the command-line usage.
    */
   | {
-    /**
-     * The type of the term, which is always `"argument"` for this term.
-     */
-    readonly type: "argument";
-    /**
-     * The name of the argument, which is used to identify it in
-     * the command-line usage.
-     */
-    readonly metavar: NonEmptyString;
-    /**
-     * Visibility controls for this term.
-     * @since 0.9.0
-     */
-    readonly hidden?: HiddenVisibility;
-  }
+      /**
+       * The type of the term, which is always `"argument"` for this term.
+       */
+      readonly type: "argument";
+      /**
+       * The name of the argument, which is used to identify it in
+       * the command-line usage.
+       */
+      readonly metavar: NonEmptyString;
+      /**
+       * Visibility controls for this term.
+       * @since 0.9.0
+       */
+      readonly hidden?: HiddenVisibility;
+    }
   /**
    * An option term, which represents a command-line option that can
    * be specified by the user.
    */
   | {
-    /**
-     * The type of the term, which is always `"option"` for this term.
-     */
-    readonly type: "option";
-    /**
-     * The names of the option, which can include multiple
-     * short and long forms.
-     */
-    readonly names: readonly OptionName[];
-    /**
-     * An optional metavariable name for the option, which is used
-     * to indicate what value the option expects.
-     */
-    readonly metavar?: NonEmptyString;
-    /**
-     * Visibility controls for this term.
-     * @since 0.9.0
-     */
-    readonly hidden?: HiddenVisibility;
-  }
+      /**
+       * The type of the term, which is always `"option"` for this term.
+       */
+      readonly type: "option";
+      /**
+       * The names of the option, which can include multiple
+       * short and long forms.
+       */
+      readonly names: readonly OptionName[];
+      /**
+       * An optional metavariable name for the option, which is used
+       * to indicate what value the option expects.
+       */
+      readonly metavar?: NonEmptyString;
+      /**
+       * Visibility controls for this term.
+       * @since 0.9.0
+       */
+      readonly hidden?: HiddenVisibility;
+    }
   /**
    * A command term, which represents a subcommand in the command-line
    * usage.
    */
   | {
-    /**
-     * The type of the term, which is always `"command"` for this term.
-     */
-    readonly type: "command";
-    /**
-     * The name of the command, which is used to identify it
-     * in the command-line usage.
-     */
-    readonly name: string;
-    /**
-     * Additional command names that invoke the same parser.
-     * These aliases participate in parsing, completion, and typo
-     * suggestions.  They are never rendered in usage lines, and are rendered
-     * in documentation command lists only when enabled through
-     * `DocEntry.showAliases` or the `showAliases` formatting option.
-     * @since 1.1.0
-     */
-    readonly aliases?: readonly string[];
-    /**
-     * Additional command names that invoke the same parser but are not
-     * rendered or suggested.  They are still available to parsers and
-     * suggestion matchers so alias typos can resolve to the canonical command.
-     * @since 1.1.0
-     */
-    readonly hiddenAliases?: readonly string[];
-    /**
-     * Optional usage line override for this command's own help page.
-     * This affects help/documentation rendering only.
-     * @since 1.0.0
-     */
-    readonly usageLine?: Usage | ((defaultUsageLine: Usage) => Usage);
-    /**
-     * Visibility controls for this term.
-     * @since 0.9.0
-     */
-    readonly hidden?: HiddenVisibility;
-  }
+      /**
+       * The type of the term, which is always `"command"` for this term.
+       */
+      readonly type: "command";
+      /**
+       * The name of the command, which is used to identify it
+       * in the command-line usage.
+       */
+      readonly name: string;
+      /**
+       * Additional command names that invoke the same parser.
+       * These aliases participate in parsing, completion, and typo
+       * suggestions.  They are never rendered in usage lines, and are rendered
+       * in documentation command lists only when enabled through
+       * `DocEntry.showAliases` or the `showAliases` formatting option.
+       * @since 1.1.0
+       */
+      readonly aliases?: readonly string[];
+      /**
+       * Additional command names that invoke the same parser but are not
+       * rendered or suggested.  They are still available to parsers and
+       * suggestion matchers so alias typos can resolve to the canonical command.
+       * @since 1.1.0
+       */
+      readonly hiddenAliases?: readonly string[];
+      /**
+       * Optional usage line override for this command's own help page.
+       * This affects help/documentation rendering only.
+       * @since 1.0.0
+       */
+      readonly usageLine?: Usage | ((defaultUsageLine: Usage) => Usage);
+      /**
+       * Visibility controls for this term.
+       * @since 0.9.0
+       */
+      readonly hidden?: HiddenVisibility;
+    }
   /**
    * An optional term, which represents an optional component
    * in the command-line usage.
    */
   | {
-    /**
-     * The type of the term, which is always `"optional"` for this term.
-     */
-    readonly type: "optional";
-    /**
-     * The terms that are optional, which can be an argument, an option,
-     * a command, or another usage term.
-     */
-    readonly terms: Usage;
-  }
+      /**
+       * The type of the term, which is always `"optional"` for this term.
+       */
+      readonly type: "optional";
+      /**
+       * The terms that are optional, which can be an argument, an option,
+       * a command, or another usage term.
+       */
+      readonly terms: Usage;
+    }
   /**
    * A term of multiple occurrences, which allows a term to be specified
    * multiple times in the command-line usage.
    */
   | {
-    /**
-     * The type of the term, which is always `"multiple"` for this term.
-     */
-    readonly type: "multiple";
-    /**
-     * The terms that can occur multiple times, which can be an argument,
-     * an option, a command, or another usage term.
-     */
-    readonly terms: Usage;
-    /**
-     * The minimum number of times the term must occur.
-     */
-    readonly min: number;
-    /**
-     * Whether the parser that produced this group succeeds when it parses an
-     * empty argument list on its own.  Built-in combinators set this when
-     * the outcome is statically known and omit it otherwise.  Usage
-     * formatters use it to decide whether to draw the group as omissible;
-     * it is a declaration for display, not evidence about how any other
-     * parser behaves.
-     * @since 1.4.0
-     */
-    readonly acceptsEmpty?: boolean;
-  }
+      /**
+       * The type of the term, which is always `"multiple"` for this term.
+       */
+      readonly type: "multiple";
+      /**
+       * The terms that can occur multiple times, which can be an argument,
+       * an option, a command, or another usage term.
+       */
+      readonly terms: Usage;
+      /**
+       * The minimum number of times the term must occur.
+       */
+      readonly min: number;
+      /**
+       * Whether the parser that produced this group succeeds when it parses an
+       * empty argument list on its own.  Built-in combinators set this when
+       * the outcome is statically known and omit it otherwise.  Usage
+       * formatters use it to decide whether to draw the group as omissible;
+       * it is a declaration for display, not evidence about how any other
+       * parser behaves.
+       * @since 1.4.0
+       */
+      readonly acceptsEmpty?: boolean;
+    }
   | /**
-   * An exclusive term, which represents a group of terms that are mutually
-   * exclusive, meaning that only one of the terms in the group can be
-   * specified at a time.
-   */ {
-    /**
-     * The type of the term, which is always `"exclusive"` for this term.
-     */
-    readonly type: "exclusive";
-    /**
-     * The terms that are mutually exclusive, which can include
-     * arguments, options, commands, or other usage terms.
-     */
-    readonly terms: readonly Usage[];
-    /**
-     * Whether the parser that produced this group succeeds when it parses an
-     * empty argument list on its own.  Built-in combinators set this when
-     * the outcome is statically known and omit it otherwise.  Usage
-     * formatters use it to decide whether to draw the group as omissible;
-     * it is a declaration for display, not evidence about how any other
-     * parser behaves.
-     * @since 1.4.0
-     */
-    readonly acceptsEmpty?: boolean;
-  }
+     * An exclusive term, which represents a group of terms that are mutually
+     * exclusive, meaning that only one of the terms in the group can be
+     * specified at a time.
+     */ {
+      /**
+       * The type of the term, which is always `"exclusive"` for this term.
+       */
+      readonly type: "exclusive";
+      /**
+       * The terms that are mutually exclusive, which can include
+       * arguments, options, commands, or other usage terms.
+       */
+      readonly terms: readonly Usage[];
+      /**
+       * Whether the parser that produced this group succeeds when it parses an
+       * empty argument list on its own.  Built-in combinators set this when
+       * the outcome is statically known and omit it otherwise.  Usage
+       * formatters use it to decide whether to draw the group as omissible;
+       * it is a declaration for display, not evidence about how any other
+       * parser behaves.
+       * @since 1.4.0
+       */
+      readonly acceptsEmpty?: boolean;
+    }
   /**
    * A sequence term, which preserves the declaration order of its child
    * terms through usage normalization.
@@ -261,15 +258,15 @@ export type UsageTerm =
    * @since 1.1.0
    */
   | {
-    /**
-     * The type of the term, which is always `"sequence"` for this term.
-     */
-    readonly type: "sequence";
-    /**
-     * Terms that must be displayed in the given order.
-     */
-    readonly terms: Usage;
-  }
+      /**
+       * The type of the term, which is always `"sequence"` for this term.
+       */
+      readonly type: "sequence";
+      /**
+       * Terms that must be displayed in the given order.
+       */
+      readonly terms: Usage;
+    }
   /**
    * A literal term, which represents a fixed string value in the command-line
    * usage. Unlike metavars which are placeholders for user-provided values,
@@ -277,43 +274,43 @@ export type UsageTerm =
    * @since 0.8.0
    */
   | {
-    /**
-     * The type of the term, which is always `"literal"` for this term.
-     */
-    readonly type: "literal";
-    /**
-     * The literal value that must be provided exactly as written.
-     */
-    readonly value: string;
-    /**
-     * When `true`, this literal was derived from an option's metavar by
-     * `appendLiteralToUsage()` in `conditional()` and represents an option
-     * value, not a standalone positional token.
-     * {@link extractLeadingLiteralValues} and the `skipOptionValueLiterals`
-     * mode of `branchConsumesToken()` use this to distinguish option values
-     * from real positional literals.  {@link extractLeadingOptionNames} and
-     * {@link extractLeadingCommandNames} intentionally still treat these
-     * literals as positional gates.
-     * @since 1.0.0
-     */
-    readonly optionValue?: boolean;
-  }
+      /**
+       * The type of the term, which is always `"literal"` for this term.
+       */
+      readonly type: "literal";
+      /**
+       * The literal value that must be provided exactly as written.
+       */
+      readonly value: string;
+      /**
+       * When `true`, this literal was derived from an option's metavar by
+       * `appendLiteralToUsage()` in `conditional()` and represents an option
+       * value, not a standalone positional token.
+       * {@link extractLeadingLiteralValues} and the `skipOptionValueLiterals`
+       * mode of `branchConsumesToken()` use this to distinguish option values
+       * from real positional literals.  {@link extractLeadingOptionNames} and
+       * {@link extractLeadingCommandNames} intentionally still treat these
+       * literals as positional gates.
+       * @since 1.0.0
+       */
+      readonly optionValue?: boolean;
+    }
   /**
    * A pass-through term, which represents unrecognized options that are
    * collected and passed through to an underlying tool or command.
    * @since 0.8.0
    */
   | {
-    /**
-     * The type of the term, which is always `"passthrough"` for this term.
-     */
-    readonly type: "passthrough";
-    /**
-     * Visibility controls for this term.
-     * @since 0.9.0
-     */
-    readonly hidden?: HiddenVisibility;
-  }
+      /**
+       * The type of the term, which is always `"passthrough"` for this term.
+       */
+      readonly type: "passthrough";
+      /**
+       * Visibility controls for this term.
+       * @since 0.9.0
+       */
+      readonly hidden?: HiddenVisibility;
+    }
   /**
    * An ellipsis term, which represents a summary placeholder in usage output.
    * Unlike {@link passthrough}, this term has no parsing semantics and is used
@@ -321,11 +318,11 @@ export type UsageTerm =
    * @since 1.0.0
    */
   | {
-    /**
-     * The type of the term, which is always `"ellipsis"` for this term.
-     */
-    readonly type: "ellipsis";
-  };
+      /**
+       * The type of the term, which is always `"ellipsis"` for this term.
+       */
+      readonly type: "ellipsis";
+    };
 
 /**
  * Represents a command-line usage description, which is a sequence of
@@ -372,7 +369,8 @@ export function extractOptionNames(
           names.add(name);
         }
       } else if (
-        term.type === "optional" || term.type === "multiple" ||
+        term.type === "optional" ||
+        term.type === "multiple" ||
         term.type === "sequence"
       ) {
         traverseUsage(term.terms);
@@ -431,7 +429,8 @@ export function extractCommandNames(
           }
         }
       } else if (
-        term.type === "optional" || term.type === "multiple" ||
+        term.type === "optional" ||
+        term.type === "multiple" ||
         term.type === "sequence"
       ) {
         traverseUsage(term.terms);
@@ -468,7 +467,8 @@ export function extractLiteralValues(usage: Usage): Set<string> {
       if (term.type === "literal") {
         values.add(term.value);
       } else if (
-        term.type === "optional" || term.type === "multiple" ||
+        term.type === "optional" ||
+        term.type === "multiple" ||
         term.type === "sequence"
       ) {
         traverseUsage(term.terms);
@@ -515,7 +515,8 @@ export function extractArgumentMetavars(usage: Usage): Set<string> {
         if (isSuggestionHidden(term.hidden)) continue;
         metavars.add(term.metavar);
       } else if (
-        term.type === "optional" || term.type === "multiple" ||
+        term.type === "optional" ||
+        term.type === "multiple" ||
         term.type === "sequence"
       ) {
         traverseUsage(term.terms);
@@ -637,7 +638,8 @@ function formatUsageLines(
     // optional.
     if (lastTerm?.type === "optional" && declaredLast?.type === "exclusive") {
       if (
-        lastTerm.terms.length === 1 && lastTerm.terms[0].type === "exclusive"
+        lastTerm.terms.length === 1 &&
+        lastTerm.terms[0].type === "exclusive"
       ) {
         lastTerm = lastTerm.terms[0];
       } else if (lastTerm.terms[0]?.type === "command") {
@@ -650,46 +652,52 @@ function formatUsageLines(
     if (
       usage.length > 0 &&
       usage.slice(0, -1).every((t) => t.type === "command") &&
-      lastTerm.type === "exclusive" && lastTerm.terms.every((t) =>
-        t.length > 0 &&
-        (t[0].type === "command" || t[0].type === "option" ||
-          t[0].type === "argument" ||
-          t[0].type === "optional" && t[0].terms.length === 1 &&
-            (t[0].terms[0].type === "command" ||
-              t[0].terms[0].type === "option" ||
-              t[0].terms[0].type === "argument"))
+      lastTerm.type === "exclusive" &&
+      lastTerm.terms.every(
+        (t) =>
+          t.length > 0 &&
+          (t[0].type === "command" ||
+            t[0].type === "option" ||
+            t[0].type === "argument" ||
+            (t[0].type === "optional" &&
+              t[0].terms.length === 1 &&
+              (t[0].terms[0].type === "command" ||
+                t[0].terms[0].type === "option" ||
+                t[0].terms[0].type === "argument"))),
       )
     ) {
       // Declared alternatives line up with the drawn ones unless drawing
       // dropped some; then each line falls back to its drawn form.
-      const declaredBranches = declaredLast?.type === "exclusive" &&
-          declaredLast.terms.length === lastTerm.terms.length
-        ? declaredLast.terms
-        : undefined;
+      const declaredBranches =
+        declaredLast?.type === "exclusive" &&
+        declaredLast.terms.length === lastTerm.terms.length
+          ? declaredLast.terms
+          : undefined;
       const lines = [];
       for (const [index, command] of lastTerm.terms.entries()) {
         // Skip hidden commands in usage expansion
         const firstTerm = command[0];
-        if (
-          firstTerm?.type === "command" &&
-          isUsageHidden(firstTerm.hidden)
-        ) {
+        if (firstTerm?.type === "command" && isUsageHidden(firstTerm.hidden)) {
           continue;
         }
         const line = normalizeUsage(
           filterUsageForDisplay([...usage.slice(0, -1), ...command]),
         );
-        lines.push(formatUsageLines(
-          programName,
-          line,
-          declaredBranches == null ? line : normalizeUsage(
-            filterUsageForDisplay([
-              ...declared.slice(0, -1),
-              ...declaredBranches[index],
-            ]),
+        lines.push(
+          formatUsageLines(
+            programName,
+            line,
+            declaredBranches == null
+              ? line
+              : normalizeUsage(
+                  filterUsageForDisplay([
+                    ...declared.slice(0, -1),
+                    ...declaredBranches[index],
+                  ]),
+                ),
+            options,
           ),
-          options,
-        ));
+        );
       }
       if (lines.length > 0) {
         return lines.join("\n");
@@ -752,14 +760,16 @@ export function normalizeUsage(usage: Usage): Usage {
   terms.sort((a, b) => {
     const aCmd = a.type === "command";
     const bCmd = b.type === "command";
-    const aArg = a.type === "argument" ||
-      (a.type === "optional" || a.type === "multiple") &&
-        a.terms.at(-1)?.type === "argument";
-    const bArg = b.type === "argument" ||
-      (b.type === "optional" || b.type === "multiple") &&
-        b.terms.at(-1)?.type === "argument";
+    const aArg =
+      a.type === "argument" ||
+      ((a.type === "optional" || a.type === "multiple") &&
+        a.terms.at(-1)?.type === "argument");
+    const bArg =
+      b.type === "argument" ||
+      ((b.type === "optional" || b.type === "multiple") &&
+        b.terms.at(-1)?.type === "argument");
     // Sort commands first and arguments last:
-    return aCmd === bCmd ? aArg === bArg ? 0 : aArg ? 1 : -1 : aCmd ? -1 : 1;
+    return aCmd === bCmd ? (aArg === bArg ? 0 : aArg ? 1 : -1) : aCmd ? -1 : 1;
   });
   return terms;
 }
@@ -790,7 +800,8 @@ function normalizeUsageTerm(term: UsageTerm): UsageTerm {
       // An inner group that records its empty-input behavior keeps its
       // boundary, since flattening would lose that record.
       if (
-        normalized.length >= 1 && normalized[0].type === "exclusive" &&
+        normalized.length >= 1 &&
+        normalized[0].type === "exclusive" &&
         normalized[0].acceptsEmpty == null
       ) {
         const rest = normalized.slice(1);
@@ -845,8 +856,10 @@ function isNonDegenerateTerm(term: UsageTerm): boolean {
     return true;
   }
   if (
-    term.type === "optional" || term.type === "multiple" ||
-    term.type === "exclusive" || term.type === "sequence"
+    term.type === "optional" ||
+    term.type === "multiple" ||
+    term.type === "exclusive" ||
+    term.type === "sequence"
   ) {
     return term.terms.length > 0;
   }
@@ -859,7 +872,8 @@ function containsMalformedLeaf(usage: Usage): boolean {
     if (term.type === "command" && term.name === "") return true;
     if (term.type === "argument" && term.metavar.length === 0) return true;
     if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
     ) {
       if (containsMalformedLeaf(term.terms)) return true;
@@ -951,8 +965,10 @@ function filterUsageForDisplay(
   const terms: UsageTerm[] = [];
   for (const term of usage) {
     if (
-      (term.type === "argument" || term.type === "option" ||
-        term.type === "command" || term.type === "passthrough") &&
+      (term.type === "argument" ||
+        term.type === "option" ||
+        term.type === "command" ||
+        term.type === "passthrough") &&
       isHidden(term.hidden)
     ) {
       continue;
@@ -985,10 +1001,7 @@ function filterUsageForDisplay(
       const filteredBranches = term.terms
         .map((branch) => {
           const first = branch[0];
-          if (
-            first?.type === "command" &&
-            isHidden(first.hidden)
-          ) {
+          if (first?.type === "command" && isHidden(first.hidden)) {
             return [] as Usage;
           }
           return filterUsageForDisplay(branch, isHidden);
@@ -1107,10 +1120,7 @@ function wrapUsageTokens(
   input: Iterable<TerminalToken>,
   options: UsageFormatOptions,
 ): string {
-  return serializeTokens(
-    layoutUsageTokens(input, options),
-    options.colors,
-  );
+  return serializeTokens(layoutUsageTokens(input, options), options.colors);
 }
 
 /** Keeps one layout-owned space between nonempty outputs on the same line. */
@@ -1128,8 +1138,10 @@ function* normalizeUsageSeparators(
     for (const item of pending) {
       if (!item.separator) yield item;
       else if (
-        !separated && previous != null &&
-        previous.width !== -1 && token.width !== -1
+        !separated &&
+        previous != null &&
+        previous.width !== -1 &&
+        token.width !== -1
       ) {
         yield item;
         separated = true;
@@ -1155,7 +1167,8 @@ function layoutUsageTokens(
     if (token.programBoundary && options.maxWidth != null) {
       const next = tokens.find((item, i) => i > index && item.text !== "");
       if (
-        next != null && lineWidth + token.width + next.width > options.maxWidth
+        next != null &&
+        lineWidth + token.width + next.width > options.maxWidth
       ) {
         output.push({ text: "\n", width: -1, scopes: [] });
         lineWidth = 0;
@@ -1168,7 +1181,9 @@ function layoutUsageTokens(
       continue;
     }
     if (
-      options.maxWidth != null && lineWidth > 0 && token.width > 0 &&
+      options.maxWidth != null &&
+      lineWidth > 0 &&
+      token.width > 0 &&
       lineWidth + token.width > options.maxWidth
     ) {
       let lastIndex = output.length - 1;
@@ -1178,8 +1193,9 @@ function layoutUsageTokens(
       // retain the historical one-space trim, including its color exception.
       if (
         last?.text.endsWith(" ") &&
-        (last.separator || last.legacyWhitespace &&
-            (!options.colors || last.scopes.length === 0))
+        (last.separator ||
+          (last.legacyWhitespace &&
+            (!options.colors || last.scopes.length === 0)))
       ) {
         output[lastIndex] = {
           ...last,
@@ -1189,7 +1205,7 @@ function layoutUsageTokens(
       }
       output.push({ text: "\n", width: -1, scopes: [] });
       lineWidth = 0;
-      if (token.separator || token.legacyWhitespace && token.text === " ") {
+      if (token.separator || (token.legacyWhitespace && token.text === " ")) {
         continue;
       }
     }
@@ -1218,10 +1234,10 @@ function* formatUsageTermInternal(
   } else if (term.type === "option") {
     const names = options.onlyShortestOptions
       ? [
-        term.names.reduce((a, b) =>
-          getDisplayWidth(a) <= getDisplayWidth(b) ? a : b
-        ),
-      ]
+          term.names.reduce((a, b) =>
+            getDisplayWidth(a) <= getDisplayWidth(b) ? a : b,
+          ),
+        ]
       : term.names;
     for (let i = 0; i < names.length; i++) {
       if (i > 0) {

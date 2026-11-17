@@ -88,12 +88,9 @@ describe("execution-context helpers", () => {
       },
     };
 
-    const child = withChildContext(
-      context,
-      "field",
-      { current: "child" },
-      [{ type: "literal", value: "child" }],
-    );
+    const child = withChildContext(context, "field", { current: "child" }, [
+      { type: "literal", value: "child" },
+    ]);
 
     assert.deepEqual(child.state, { current: "child" });
     assert.strictEqual(child.usage[0]?.type, "literal");
@@ -111,8 +108,8 @@ describe("execution-context helpers", () => {
       exec: { usage: [], phase: "parse", path: ["root"] },
     };
     const child = withChildContext(parent, "field", null);
-    const key = Object.getOwnPropertySymbols(child).find((key) =>
-      key.description === "optionScopePath"
+    const key = Object.getOwnPropertySymbols(child).find(
+      (key) => key.description === "optionScopePath",
     );
     assert.ok(key);
     assert.strictEqual(Reflect.get(child, key), child.exec?.path);

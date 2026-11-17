@@ -14,10 +14,13 @@ export function createRunLookup<T>(): (
   path: readonly PropertyKey[] | undefined,
   lookup: () => Promise<T>,
 ) => Promise<T> {
-  const cacheByRun = new WeakMap<RunResults, {
-    readonly values: Map<string, Promise<T>>;
-    readonly symbolIds: Map<symbol, number>;
-  }>();
+  const cacheByRun = new WeakMap<
+    RunResults,
+    {
+      readonly values: Map<string, Promise<T>>;
+      readonly symbolIds: Map<symbol, number>;
+    }
+  >();
 
   return (results, path, lookup) => {
     if (results == null) return lookup();
@@ -29,20 +32,22 @@ export function createRunLookup<T>(): (
     }
 
     const { values, symbolIds } = cache;
-    const key = (path ?? []).map((segment) => {
-      if (typeof segment === "symbol") {
-        let id = symbolIds.get(segment);
-        if (id == null) {
-          id = symbolIds.size;
-          symbolIds.set(segment, id);
+    const key = (path ?? [])
+      .map((segment) => {
+        if (typeof segment === "symbol") {
+          let id = symbolIds.get(segment);
+          if (id == null) {
+            id = symbolIds.size;
+            symbolIds.set(segment, id);
+          }
+          return `y${id}:`;
         }
-        return `y${id}:`;
-      }
 
-      const tag = typeof segment === "number" ? "n" : "s";
-      const text = String(segment);
-      return `${tag}${text.length}:${text}`;
-    }).join("");
+        const tag = typeof segment === "number" ? "n" : "s";
+        const text = String(segment);
+        return `${tag}${text.length}:${text}`;
+      })
+      .join("");
 
     const cached = values.get(key);
     if (cached != null) return cached;
@@ -60,8 +65,8 @@ export function withAnnotatedInnerState<TState, TResult>(
   inheritPrimitiveAnnotations = false,
 ): TResult {
   const annotations = getAnnotations(sourceState);
-  const innerStateIsObject = innerState != null &&
-    typeof innerState === "object";
+  const innerStateIsObject =
+    innerState != null && typeof innerState === "object";
   if (
     annotations == null ||
     getAnnotations(innerState) != null ||

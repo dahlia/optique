@@ -203,9 +203,8 @@ function fakeCommit(options: {
     asObject: () => {
       throw new Error("object not needed.");
     },
-    authorWithMailmap: (
-      _mailmap: Parameters<Commit["authorWithMailmap"]>[0],
-    ) => signature,
+    authorWithMailmap: (_mailmap: Parameters<Commit["authorWithMailmap"]>[0]) =>
+      signature,
     committerWithMailmap: (
       _mailmap: Parameters<Commit["committerWithMailmap"]>[0],
     ) => signature,

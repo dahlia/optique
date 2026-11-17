@@ -56,13 +56,13 @@ import type { ValueParserResult } from "@optique/core/valueparser";
  */
 export type PromptCondition<TValue> =
   | {
-    readonly when?: never;
-    readonly otherwise?: never;
-  }
+      readonly when?: never;
+      readonly otherwise?: never;
+    }
   | {
-    readonly when: () => boolean | Promise<boolean>;
-    readonly otherwise: NoInfer<TValue>;
-  };
+      readonly when: () => boolean | Promise<boolean>;
+      readonly otherwise: NoInfer<TValue>;
+    };
 
 /**
  * Validates a value returned by a prompt adapter.
@@ -274,22 +274,20 @@ export interface DerivePromptConfigsContext<
  * @typeParam TOtherwise Value type returned when `when` skips the prompt.
  * @since 1.3.0
  */
-export type DerivePromptConfigOptions<TDefault, TOtherwise> =
-  & {
-    /**
-     * Lazily evaluated fallback used when the dependency source has not
-     * published a value.  Without it, an unresolved dependency fails the
-     * prompt instead of running the resolver.
-     */
-    readonly defaultValue?: () => TDefault;
-  }
-  & (
-    | { readonly when?: never; readonly otherwise?: never }
-    | {
+export type DerivePromptConfigOptions<TDefault, TOtherwise> = {
+  /**
+   * Lazily evaluated fallback used when the dependency source has not
+   * published a value.  Without it, an unresolved dependency fails the
+   * prompt instead of running the resolver.
+   */
+  readonly defaultValue?: () => TDefault;
+} & (
+  | { readonly when?: never; readonly otherwise?: never }
+  | {
       readonly when: () => boolean | Promise<boolean>;
       readonly otherwise: TOtherwise;
     }
-  );
+);
 
 /**
  * Options for a zero-dependency {@link derivePromptConfig} call.
@@ -300,9 +298,9 @@ export type DerivePromptConfigOptions<TDefault, TOtherwise> =
 export type DerivePromptConfigNoDepsOptions<TOtherwise> =
   | { readonly when?: never; readonly otherwise?: never }
   | {
-    readonly when: () => boolean | Promise<boolean>;
-    readonly otherwise: TOtherwise;
-  };
+      readonly when: () => boolean | Promise<boolean>;
+      readonly otherwise: TOtherwise;
+    };
 
 /**
  * Options for a multi-dependency {@link derivePromptConfig} call.
@@ -314,23 +312,21 @@ export type DerivePromptConfigNoDepsOptions<TOtherwise> =
 export type DerivePromptConfigsOptions<
   TDefaults extends readonly unknown[],
   TOtherwise,
-> =
-  & {
-    /**
-     * Lazily evaluated fallbacks used for dependency sources that have
-     * not published a value.  The thunk must return one value per
-     * dependency.  Without it, an unresolved dependency fails the prompt
-     * instead of running the resolver.
-     */
-    readonly defaultValues?: () => TDefaults;
-  }
-  & (
-    | { readonly when?: never; readonly otherwise?: never }
-    | {
+> = {
+  /**
+   * Lazily evaluated fallbacks used for dependency sources that have
+   * not published a value.  The thunk must return one value per
+   * dependency.  Without it, an unresolved dependency fails the prompt
+   * instead of running the resolver.
+   */
+  readonly defaultValues?: () => TDefaults;
+} & (
+  | { readonly when?: never; readonly otherwise?: never }
+  | {
       readonly when: () => boolean | Promise<boolean>;
       readonly otherwise: TOtherwise;
     }
-  );
+);
 
 /**
  * A prompt configuration derived from dependency source values, created
@@ -393,11 +389,14 @@ export interface DerivedPromptConfig<TConfig, TOtherwise = never> {
 export function isDerivedPromptConfig(
   config: unknown,
 ): config is DerivedPromptConfig<unknown, unknown> {
-  return config != null && typeof config === "object" &&
+  return (
+    config != null &&
+    typeof config === "object" &&
     derivedPromptConfigMarker in config &&
     (config as { readonly [derivedPromptConfigMarker]: unknown })[
-        derivedPromptConfigMarker
-      ] === true;
+      derivedPromptConfigMarker
+    ] === true
+  );
 }
 
 /**
@@ -527,30 +526,30 @@ export function derivePromptConfig(
   const defaultValues = isTuple
     ? options?.defaultValues
     : singleDefault == null
-    ? undefined
-    : () => [singleDefault()];
+      ? undefined
+      : () => [singleDefault()];
   const resolve = isTuple
     ? (
-      values: readonly unknown[],
-      usedDefaults: readonly boolean[],
-      context?: DerivePromptConfigNoDepsContext,
-    ): unknown =>
-      resolver(values as never, { usedDefaults, ...context } as never)
+        values: readonly unknown[],
+        usedDefaults: readonly boolean[],
+        context?: DerivePromptConfigNoDepsContext,
+      ): unknown =>
+        resolver(values as never, { usedDefaults, ...context } as never)
     : (
-      values: readonly unknown[],
-      usedDefaults: readonly boolean[],
-      context?: DerivePromptConfigNoDepsContext,
-    ): unknown =>
-      resolver(
-        values[0] as never,
-        { usedDefault: usedDefaults[0], ...context } as never,
-      );
+        values: readonly unknown[],
+        usedDefaults: readonly boolean[],
+        context?: DerivePromptConfigNoDepsContext,
+      ): unknown =>
+        resolver(
+          values[0] as never,
+          { usedDefault: usedDefaults[0], ...context } as never,
+        );
   return {
     [derivedPromptConfigMarker]: true,
     dependencies,
     dependencyIds: infos.map((info) => info.sourceId),
-    dependencyLabels: infos.map((info, index) =>
-      info.metavar ?? `dependency #${index + 1}`
+    dependencyLabels: infos.map(
+      (info, index) => info.metavar ?? `dependency #${index + 1}`,
     ),
     resolve: resolve as DerivedPromptConfig<unknown, unknown>["resolve"],
     ...(defaultValues == null ? {} : { defaultValues }),
@@ -614,14 +613,16 @@ async function resolveDerivedPromptConfig<TConfig>(
       // A source-backed prompt reports through the scheduler, which
       // appends the failure chain itself; a consumer-only prompt appends
       // it here.
-      const chain = ownSourceId == null
-        ? runtime.getSourceFailureChain(ids[failedIndex])
-        : undefined;
+      const chain =
+        ownSourceId == null
+          ? runtime.getSourceFailureChain(ids[failedIndex])
+          : undefined;
       return {
         ok: false,
-        error: chain == null || chain.length < 2
-          ? base
-          : message`${base} Dependency chain: ${chain.join(" -> ")}.`,
+        error:
+          chain == null || chain.length < 2
+            ? base
+            : message`${base} Dependency chain: ${chain.join(" -> ")}.`,
       };
     }
   }
@@ -640,9 +641,10 @@ async function resolveDerivedPromptConfig<TConfig>(
       );
       return {
         ok: false,
-        error: missing.length > 1
-          ? message`Cannot resolve prompt configuration: dependencies ${missingLabels} are not available and no default values are declared.`
-          : message`Cannot resolve prompt configuration: dependency ${missingLabels} is not available and no default value is declared.`,
+        error:
+          missing.length > 1
+            ? message`Cannot resolve prompt configuration: dependencies ${missingLabels} are not available and no default values are declared.`
+            : message`Cannot resolve prompt configuration: dependency ${missingLabels} is not available and no default value is declared.`,
       };
     }
     let defaults: readonly unknown[];
@@ -651,17 +653,17 @@ async function resolveDerivedPromptConfig<TConfig>(
     } catch (error) {
       return {
         ok: false,
-        error: message`Prompt configuration default evaluation failed: ${
-          describeThrown(error)
-        }`,
+        error: message`Prompt configuration default evaluation failed: ${describeThrown(
+          error,
+        )}`,
       };
     }
     if (defaults.length !== ids.length) {
       return {
         ok: false,
-        error: message`Prompt configuration declared ${
-          String(defaults.length)
-        } default values for ${String(ids.length)} dependencies.`,
+        error: message`Prompt configuration declared ${String(
+          defaults.length,
+        )} default values for ${String(ids.length)} dependencies.`,
       };
     }
     for (const index of missing) {
@@ -678,12 +680,7 @@ async function resolveDerivedPromptConfig<TConfig>(
     if (pending == null) {
       pending = racePromptWorkWithAbort(
         signal,
-        () =>
-          Promise.resolve(config.resolve(
-            values,
-            usedDefaults,
-            context,
-          )),
+        () => Promise.resolve(config.resolve(values, usedDefaults, context)),
         (dispose) => {
           disposeWork = dispose;
         },
@@ -710,9 +707,9 @@ async function resolveDerivedPromptConfig<TConfig>(
     }
     return {
       ok: false,
-      error: message`Prompt configuration resolution failed: ${
-        describeThrown(error)
-      }`,
+      error: message`Prompt configuration resolution failed: ${describeThrown(
+        error,
+      )}`,
     };
   } finally {
     // A hook may stop waiting before the resolver settles (e.g. native UI
@@ -726,8 +723,10 @@ function shouldDeferPrompt(
   state: unknown,
   exec?: ExecutionContext,
 ): boolean {
-  return typeof parser.shouldDeferCompletion === "function" &&
-    parser.shouldDeferCompletion(state, exec) === true;
+  return (
+    typeof parser.shouldDeferCompletion === "function" &&
+    parser.shouldDeferCompletion(state, exec) === true
+  );
 }
 
 function deferredPromptResult<TValue>(
@@ -763,8 +762,8 @@ function withAnnotatedInnerState<TState, TResult>(
   inheritPrimitiveAnnotations = false,
 ): TResult {
   const annotations = getAnnotations(sourceState);
-  const innerStateIsObject = innerState != null &&
-    typeof innerState === "object";
+  const innerStateIsObject =
+    innerState != null && typeof innerState === "object";
   if (
     annotations == null ||
     getAnnotations(innerState) != null ||
@@ -784,10 +783,12 @@ function withAnnotatedInnerState<TState, TResult>(
 }
 
 function hasSourceBindingMarker(state: unknown): boolean {
-  return state != null &&
+  return (
+    state != null &&
     typeof state === "object" &&
     "hasCliValue" in state &&
-    Object.getOwnPropertySymbols(state).length > 0;
+    Object.getOwnPropertySymbols(state).length > 0
+  );
 }
 
 function readDefaultValue<TConfig>(
@@ -932,19 +933,21 @@ export function createPromptAdapter<TConfig>(
       path: readonly PropertyKey[] | undefined,
     ): symbol => {
       // Length-prefix each segment so no separator escaping is needed.
-      const serialized = (path ?? []).map((segment) => {
-        if (typeof segment === "symbol") {
-          let id = completionCacheSymbolIds.get(segment);
-          if (id == null) {
-            id = completionCacheSymbolIds.size;
-            completionCacheSymbolIds.set(segment, id);
+      const serialized = (path ?? [])
+        .map((segment) => {
+          if (typeof segment === "symbol") {
+            let id = completionCacheSymbolIds.get(segment);
+            if (id == null) {
+              id = completionCacheSymbolIds.size;
+              completionCacheSymbolIds.set(segment, id);
+            }
+            return `y${id}:`;
           }
-          return `y${id}:`;
-        }
-        const tag = typeof segment === "number" ? "n" : "s";
-        const text = String(segment);
-        return `${tag}${text.length}:${text}`;
-      }).join("");
+          const tag = typeof segment === "number" ? "n" : "s";
+          const text = String(segment);
+          return `${tag}${text.length}:${text}`;
+        })
+        .join("");
       let key = completionCacheKeys.get(serialized);
       if (key == null) {
         key = Symbol("@optique/prompt/completionCache");
@@ -953,17 +956,19 @@ export function createPromptAdapter<TConfig>(
       return key;
     };
 
-    type PromptBindState =
-      & { readonly [K in typeof promptBindStateKey]: true }
-      & {
-        readonly hasCliValue: boolean;
-        readonly cliState?: TState;
-      };
+    type PromptBindState = {
+      readonly [K in typeof promptBindStateKey]: true;
+    } & {
+      readonly hasCliValue: boolean;
+      readonly cliState?: TState;
+    };
 
     function isPromptBindState(value: unknown): value is PromptBindState {
-      return value != null &&
+      return (
+        value != null &&
         typeof value === "object" &&
-        promptBindStateKey in value;
+        promptBindStateKey in value
+      );
     }
 
     function shouldAttemptInnerCompletion(
@@ -994,28 +999,29 @@ export function createPromptAdapter<TConfig>(
       cliState: unknown,
       state: unknown,
     ): boolean {
-      const cliStateIsInjectedAnnotationWrapper = cliState != null &&
+      const cliStateIsInjectedAnnotationWrapper =
+        cliState != null &&
         typeof cliState === "object" &&
         unwrapInjectedAnnotationState(cliState) !== cliState;
       const requiresSourceBindingForAnnotationWrapper =
         getTraits(parser).requiresSourceBinding === true;
-      const hasNestedSourceBinding = hasSourceBindingMarker(cliState) ||
+      const hasNestedSourceBinding =
+        hasSourceBindingMarker(cliState) ||
         (Array.isArray(cliState) &&
           cliState.length === 1 &&
           (hasSourceBindingMarker(cliState[0]) ||
-            (
-              cliState[0] != null &&
+            (cliState[0] != null &&
               typeof cliState[0] === "object" &&
-              getAnnotations(cliState[0]) != null
-            )));
+              getAnnotations(cliState[0]) != null)));
       if (
         cliStateIsInjectedAnnotationWrapper &&
         requiresSourceBindingForAnnotationWrapper
       ) {
         return hasNestedSourceBinding;
       }
-      return shouldAttemptInnerCompletion(cliState, state) ||
-        hasNestedSourceBinding;
+      return (
+        shouldAttemptInnerCompletion(cliState, state) || hasNestedSourceBinding
+      );
     }
 
     async function executePrompt(
@@ -1032,24 +1038,22 @@ export function createPromptAdapter<TConfig>(
         const source = promptedParser.dependencyMetadata?.source;
         // Stop waiting as soon as the signal aborts; the resolver receives
         // the same signal to cancel its own work.
-        const resolved = await racePromptWorkWithAbort(
-          signal,
-          () =>
-            resolveDerivedPromptConfig(
-              config as DerivedPromptConfig<TConfig, unknown>,
-              exec,
-              source?.sourceId,
-              source?.metavar,
-              signal,
-              adapter,
-            ),
+        const resolved = await racePromptWorkWithAbort(signal, () =>
+          resolveDerivedPromptConfig(
+            config as DerivedPromptConfig<TConfig, unknown>,
+            exec,
+            source?.sourceId,
+            source?.metavar,
+            signal,
+            adapter,
+          ),
         );
         if (!resolved.ok) return { success: false, error: resolved.error };
         resolvedConfig = resolved.config;
       }
 
       let previousValidationMessage: Message | undefined;
-      for (let attempt = 1;; attempt++) {
+      for (let attempt = 1; ; attempt++) {
         const context: PromptExecutionContext = {
           attempt,
           ...(previousValidationMessage === undefined
@@ -1057,14 +1061,12 @@ export function createPromptAdapter<TConfig>(
             : { previousValidationMessage }),
           ...(signal === undefined ? {} : { signal }),
         };
-        const result = await racePromptWorkWithAbort(
-          signal,
-          () => adapter.execute<TValue>(resolvedConfig, context),
+        const result = await racePromptWorkWithAbort(signal, () =>
+          adapter.execute<TValue>(resolvedConfig, context),
         );
         if (!result.success || validate == null) return result;
-        const validationMessage = await racePromptWorkWithAbort(
-          signal,
-          () => Promise.resolve(validate(result.value)),
+        const validationMessage = await racePromptWorkWithAbort(signal, () =>
+          Promise.resolve(validate(result.value)),
         );
         if (validationMessage === undefined) return result;
         if (maxAttempts !== undefined && attempt >= maxAttempts) {
@@ -1074,12 +1076,14 @@ export function createPromptAdapter<TConfig>(
       }
     }
 
-    const parserInheritsAnnotations = getTraits(parser).inheritsAnnotations ===
-      true;
+    const parserInheritsAnnotations =
+      getTraits(parser).inheritsAnnotations === true;
 
     const getCliState = (state: TState): TState =>
       isPromptBindState(state)
-        ? (state.hasCliValue ? state.cliState as TState : parser.initialState)
+        ? state.hasCliValue
+          ? (state.cliState as TState)
+          : parser.initialState
         : state;
 
     const promptedParser: Parser<"async", TValue, TState> = {
@@ -1087,9 +1091,10 @@ export function createPromptAdapter<TConfig>(
       $valueType: parser.$valueType,
       $stateType: parser.$stateType,
       priority: parser.priority,
-      usage: parser.usage.length === 1 && parser.usage[0].type === "optional"
-        ? parser.usage
-        : [{ type: "optional", terms: parser.usage }],
+      usage:
+        parser.usage.length === 1 && parser.usage[0].type === "optional"
+          ? parser.usage
+          : [{ type: "optional", terms: parser.usage }],
       leadingNames: parser.leadingNames,
       acceptingAnyToken: parser.acceptingAnyToken,
       shouldDeferCompletion(state: TState): boolean {
@@ -1097,9 +1102,9 @@ export function createPromptAdapter<TConfig>(
       },
       getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
         const innerState = isPromptBindState(state)
-          ? (state.cliState === undefined
+          ? state.cliState === undefined
             ? parser.initialState
-            : state.cliState as TState)
+            : (state.cliState as TState)
           : state;
         return delegateSuggestNodes(
           parser,
@@ -1117,43 +1122,49 @@ export function createPromptAdapter<TConfig>(
 
       parse: (context): ModeValue<"async", ParserResult<TState>> => {
         const annotations = getAnnotations(context.state);
-        const hadCliValue = isPromptBindState(context.state) &&
-          context.state.hasCliValue;
+        const hadCliValue =
+          isPromptBindState(context.state) && context.state.hasCliValue;
         const innerState = getCliState(context.state);
-        const baseInnerContext = innerState !== context.state
-          ? { ...context, state: innerState }
-          : context;
-        const effectiveInnerState = annotations != null &&
-            innerState == null &&
-            parserInheritsAnnotations
-          ? injectAnnotations(innerState, annotations)
-          : innerState;
+        const baseInnerContext =
+          innerState !== context.state
+            ? { ...context, state: innerState }
+            : context;
+        const effectiveInnerState =
+          annotations != null && innerState == null && parserInheritsAnnotations
+            ? injectAnnotations(innerState, annotations)
+            : innerState;
         const processResult = (
           result: ParserResult<TState>,
         ): ParserResult<TState> => {
           if (result.success) {
-            const cliState = annotations != null &&
-                result.next.state != null &&
-                typeof result.next.state === "object" &&
-                getAnnotations(result.next.state) !== annotations
-              ? injectAnnotations(result.next.state, annotations)
-              : result.next.state;
+            const cliState =
+              annotations != null &&
+              result.next.state != null &&
+              typeof result.next.state === "object" &&
+              getAnnotations(result.next.state) !== annotations
+                ? injectAnnotations(result.next.state, annotations)
+                : result.next.state;
             // The inner parser owns cliState, including zero-consumption
             // updates; the adapter owns cumulative CLI provenance.  A re-parse
             // must not forget earlier input, while an initially empty parse
             // (e.g., withDefault, bindConfig) must still allow prompting.
             // Consuming only the option terminator changes parsing mode,
             // but supplies no value to the wrapped parser.
-            const terminatorOnly = result.consumed.length === 1 &&
-              result.consumed[0] === "--" && !context.optionsTerminated &&
+            const terminatorOnly =
+              result.consumed.length === 1 &&
+              result.consumed[0] === "--" &&
+              !context.optionsTerminated &&
               result.next.optionsTerminated;
-            const cliConsumed = hadCliValue ||
-              (result.consumed.length > 0 && !terminatorOnly);
-            const nextState = injectAnnotations({
-              [promptBindStateKey]: true as const,
-              hasCliValue: cliConsumed,
-              cliState,
-            }, annotations);
+            const cliConsumed =
+              hadCliValue || (result.consumed.length > 0 && !terminatorOnly);
+            const nextState = injectAnnotations(
+              {
+                [promptBindStateKey]: true as const,
+                hasCliValue: cliConsumed,
+                cliState,
+              },
+              annotations,
+            );
             return {
               success: true,
               ...(result.provisional ? { provisional: true as const } : {}),
@@ -1172,10 +1183,13 @@ export function createPromptAdapter<TConfig>(
             return { success: true, next: context, consumed: [] };
           }
 
-          const nextState = injectAnnotations({
-            [promptBindStateKey]: true as const,
-            hasCliValue: false,
-          }, annotations);
+          const nextState = injectAnnotations(
+            {
+              [promptBindStateKey]: true as const,
+              hasCliValue: false,
+            },
+            annotations,
+          );
           return {
             success: true,
             next: { ...baseInnerContext, state: nextState as TState },
@@ -1187,9 +1201,10 @@ export function createPromptAdapter<TConfig>(
           context.state,
           effectiveInnerState,
           (annotatedInnerState) => {
-            const innerContext = annotatedInnerState !== context.state
-              ? { ...context, state: annotatedInnerState }
-              : context;
+            const innerContext =
+              annotatedInnerState !== context.state
+                ? { ...context, state: annotatedInnerState }
+                : context;
             return parser.parse(innerContext);
           },
           parserInheritsAnnotations,
@@ -1221,7 +1236,8 @@ export function createPromptAdapter<TConfig>(
         const isProbe = exec != null && exec.phase !== "complete";
         const annotations = getAnnotations(state);
         const innerInitialState = parser.initialState;
-        const shouldInheritInitialStateAnnotations = annotations != null &&
+        const shouldInheritInitialStateAnnotations =
+          annotations != null &&
           (innerInitialState == null ||
             typeof innerInitialState === "object" ||
             parserInheritsAnnotations);
@@ -1232,7 +1248,7 @@ export function createPromptAdapter<TConfig>(
         const readPlaceholder = (): TValue | undefined => {
           try {
             return "placeholder" in parser
-              ? parser.placeholder as TValue
+              ? (parser.placeholder as TValue)
               : undefined;
           } catch {
             return undefined;
@@ -1296,9 +1312,10 @@ export function createPromptAdapter<TConfig>(
             if (
               session.policy === "demand-only" &&
               isDerivedPromptConfig(config) &&
-              config.dependencyIds.some((id) =>
-                exec?.dependencyRuntime?.hasSource(id) !== true &&
-                exec?.dependencyRuntime?.isSourceFailed(id) !== true
+              config.dependencyIds.some(
+                (id) =>
+                  exec?.dependencyRuntime?.hasSource(id) !== true &&
+                  exec?.dependencyRuntime?.isSourceFailed(id) !== true,
               )
             ) {
               return Promise.resolve(
@@ -1342,10 +1359,12 @@ export function createPromptAdapter<TConfig>(
           const consumed = parseResult.success
             ? parseResult.consumed.length
             : 0;
-          const cliState = parseResult.success && consumed === 0
-            ? parseResult.next.state
-            : undefined;
-          const cliStateIsInjected = cliState != null &&
+          const cliState =
+            parseResult.success && consumed === 0
+              ? parseResult.next.state
+              : undefined;
+          const cliStateIsInjected =
+            cliState != null &&
             typeof cliState === "object" &&
             unwrapInjectedAnnotationState(cliState) !== cliState;
           const isSourceBinding = shouldCompleteFromSourceBinding(
@@ -1432,13 +1451,14 @@ export function createPromptAdapter<TConfig>(
 
       suggest: (context, prefix) => {
         const innerState = isPromptBindState(context.state)
-          ? (context.state.cliState === undefined
+          ? context.state.cliState === undefined
             ? parser.initialState
-            : context.state.cliState as TState)
+            : (context.state.cliState as TState)
           : context.state;
-        const innerContext = innerState !== context.state
-          ? { ...context, state: innerState }
-          : context;
+        const innerContext =
+          innerState !== context.state
+            ? { ...context, state: innerState }
+            : context;
 
         const innerResult = parser.suggest(innerContext, prefix) as
           | Iterable<unknown>
@@ -1450,8 +1470,8 @@ export function createPromptAdapter<TConfig>(
       },
 
       getDocFragments(state, upperDefaultValue?) {
-        const defaultValue = upperDefaultValue ??
-          readDefaultValue(adapter, config);
+        const defaultValue =
+          upperDefaultValue ?? readDefaultValue(adapter, config);
         return parser.getDocFragments(state, defaultValue as TValue);
       },
     };
@@ -1491,9 +1511,7 @@ export function createPromptAdapter<TConfig>(
           if (!isPromptBindState(state)) {
             return source.extractSourceValue(state);
           }
-          return source.extractSourceValue(
-            state.cliState ?? state,
-          );
+          return source.extractSourceValue(state.cliState ?? state);
         },
         // Originate the effectful completion so the scheduler can run
         // the prompt before dependency replay and register its value.
@@ -1507,13 +1525,16 @@ export function createPromptAdapter<TConfig>(
         // unrecoverable, so no effectful completion is exposed: the
         // prompt keeps running in the ordinary completion phase and
         // never registers a transformed value under the raw source ID.
-        completeSource: source.preservesSourceValue === false ? undefined : (
-          state: unknown,
-          exec?: ExecutionContext,
-        ): Promise<ValueParserResult<unknown> | undefined> =>
-          promptedParser.complete(state as TState, exec) as Promise<
-            ValueParserResult<unknown>
-          >,
+        completeSource:
+          source.preservesSourceValue === false
+            ? undefined
+            : (
+                state: unknown,
+                exec?: ExecutionContext,
+              ): Promise<ValueParserResult<unknown> | undefined> =>
+                promptedParser.complete(state as TState, exec) as Promise<
+                  ValueParserResult<unknown>
+                >,
         // Without a runtime `when` condition, the prompt always asks and
         // registers its answer, so an absent occurrence still publishes.
         // A conditioned prompt publishes its `otherwise` value when the
@@ -1523,7 +1544,8 @@ export function createPromptAdapter<TConfig>(
         // (e.g. prompt() around an optional()) keeps its explicit
         // `false`: its answer may legitimately be `undefined`.
         ...(source.preservesSourceValue !== false && {
-          completesWhenMissing: source.completesWhenMissing !== false &&
+          completesWhenMissing:
+            source.completesWhenMissing !== false &&
             (config.when == null ||
               (config as { readonly otherwise?: unknown }).otherwise !==
                 undefined),
@@ -1535,13 +1557,14 @@ export function createPromptAdapter<TConfig>(
     // run.  The completion capability adds provider edges to the
     // scheduler, propagates demand, and joins failure lineage, whether or
     // not the wrapped parser is itself a source.
-    const composedMetadata: typeof dependencyMetadata =
-      isDerivedPromptConfig(config)
-        ? {
+    const composedMetadata: typeof dependencyMetadata = isDerivedPromptConfig(
+      config,
+    )
+      ? {
           ...(dependencyMetadata ?? {}),
           completion: { dependencyIds: config.dependencyIds },
         }
-        : dependencyMetadata;
+      : dependencyMetadata;
     if (composedMetadata != null) {
       Object.defineProperty(promptedParser, "dependencyMetadata", {
         value: composedMetadata,
@@ -1555,9 +1578,11 @@ export function createPromptAdapter<TConfig>(
     // The empty step preserves success/provisional or accepts a non-match.
     const emptyStep = getEmptyInputBehavior(parser).step;
     defineEmptyInputBehavior(promptedParser, {
-      ...(emptyStep === undefined ? {} : {
-        step: emptyStep === "failure" ? "success" : emptyStep,
-      }),
+      ...(emptyStep === undefined
+        ? {}
+        : {
+            step: emptyStep === "failure" ? "success" : emptyStep,
+          }),
     });
     return fluent(promptedParser);
   };

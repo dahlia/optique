@@ -12,9 +12,11 @@ const parser = bindKeyring(fail<string>(), {
   username: "optique-test-user",
 });
 
-for (
-  const wrapped of [parser, optional(parser), withDefault(parser, "fallback")]
-) {
+for (const wrapped of [
+  parser,
+  optional(parser),
+  withDefault(parser, "fallback"),
+]) {
   await assert.rejects(parseAsync(wrapped, [], { annotations }), {
     code: "ENOENT",
   });

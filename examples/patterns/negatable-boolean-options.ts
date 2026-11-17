@@ -13,35 +13,44 @@ function detectColorSupport(): boolean {
 
 const configParser = object({
   codeFence: withDefault(
-    negatableFlag({
-      positive: "--code-fence",
-      negative: "--no-code-fence",
-    }, {
-      description: message`Enable or disable Markdown code fences.`,
-    }),
+    negatableFlag(
+      {
+        positive: "--code-fence",
+        negative: "--no-code-fence",
+      },
+      {
+        description: message`Enable or disable Markdown code fences.`,
+      },
+    ),
     true,
   ),
 
   lineNumbers: option("--line-numbers"),
 
   colors: withDefault(
-    negatableFlag({
-      positive: "--colors",
-      negative: "--no-colors",
-    }, {
-      description: message`Enable or disable colored output.`,
-    }),
+    negatableFlag(
+      {
+        positive: "--colors",
+        negative: "--no-colors",
+      },
+      {
+        description: message`Enable or disable colored output.`,
+      },
+    ),
     () => detectColorSupport(),
     { message: message`auto` },
   ),
 
   syntax: withDefault(
-    negatableFlag({
-      positive: "--syntax",
-      negative: "--no-syntax",
-    }, {
-      description: message`Enable or disable syntax highlighting.`,
-    }),
+    negatableFlag(
+      {
+        positive: "--syntax",
+        negative: "--no-syntax",
+      },
+      {
+        description: message`Enable or disable syntax highlighting.`,
+      },
+    ),
     true,
   ),
 });

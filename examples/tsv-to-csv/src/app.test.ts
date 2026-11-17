@@ -49,10 +49,13 @@ async function convert(
   const code = await convertFile(options, {
     stdout: (line) => stdout.push(line),
     stderr: (line) => stderr.push(line),
-    confirm: answer == null ? undefined : (output) => {
-      prompts.push(output);
-      return Promise.resolve(answer);
-    },
+    confirm:
+      answer == null
+        ? undefined
+        : (output) => {
+            prompts.push(output);
+            return Promise.resolve(answer);
+          },
   });
   return { code, stdout, stderr, prompts };
 }
@@ -168,24 +171,28 @@ describe("convertFile()", () => {
         ]);
       }));
 
-    it("replaces a symbolic link instead of writing through it", {
-      skip: process.platform === "win32",
-    }, () => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      return inTemporaryDirectory(async (directory) => {
-        const input = join(directory, "data.tsv");
-        const output = join(directory, "data.csv");
-        const target = join(directory, "target.csv");
-        await writeFile(input, TSV);
-        await writeFile(target, OLD);
-        await symlink(target, output);
-        const result = await convert({ input, force: true });
-        assert.equal(result.code, 0);
-        assert.equal(await readFile(output, "utf8"), CSV);
-        assert.equal(await readFile(target, "utf8"), OLD);
-      });
-    });
+    it(
+      "replaces a symbolic link instead of writing through it",
+      {
+        skip: process.platform === "win32",
+      },
+      () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        return inTemporaryDirectory(async (directory) => {
+          const input = join(directory, "data.tsv");
+          const output = join(directory, "data.csv");
+          const target = join(directory, "target.csv");
+          await writeFile(input, TSV);
+          await writeFile(target, OLD);
+          await symlink(target, output);
+          const result = await convert({ input, force: true });
+          assert.equal(result.code, 0);
+          assert.equal(await readFile(output, "utf8"), CSV);
+          assert.equal(await readFile(target, "utf8"), OLD);
+        });
+      },
+    );
 
     it("does not redirect an approved write into the input", () =>
       inTemporaryDirectory(async (directory) => {
@@ -193,17 +200,20 @@ describe("convertFile()", () => {
         const output = join(directory, "data.csv");
         await writeFile(input, TSV);
         await writeFile(output, OLD);
-        const result = await convertFile({ input, force: false }, {
-          stdout: () => {},
-          stderr: () => {},
-          async confirm() {
-            // Another process swaps the destination for a link to the input
-            // while the question is on screen:
-            await rm(output);
-            await link(input, output);
-            return true;
+        const result = await convertFile(
+          { input, force: false },
+          {
+            stdout: () => {},
+            stderr: () => {},
+            async confirm() {
+              // Another process swaps the destination for a link to the input
+              // while the question is on screen:
+              await rm(output);
+              await link(input, output);
+              return true;
+            },
           },
-        });
+        );
         assert.equal(result, 0);
         assert.equal(await readFile(input, "utf8"), TSV);
         assert.equal(await readFile(output, "utf8"), CSV);
@@ -223,26 +233,30 @@ describe("convertFile()", () => {
         assert.equal((await readdir(directory)).length, 2);
       }));
 
-    it("rejects a destination that is not a regular file", {
-      skip: process.platform === "win32",
-    }, () => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      return inTemporaryDirectory(async (directory) => {
-        const input = join(directory, "data.tsv");
-        const fifo = join(directory, "fifo.csv");
-        await writeFile(input, TSV);
-        execFileSync("mkfifo", [fifo]);
-        const subdirectory = join(directory, "dir.csv");
-        await mkdir(subdirectory);
-        for (const output of [fifo, subdirectory]) {
-          const result = await convert({ input, output, force: true }, true);
-          assert.equal(result.code, 1);
-          assert.deepEqual(result.prompts, []);
-          assert.match(result.stderr.join("\n"), /not a regular file/);
-        }
-      });
-    });
+    it(
+      "rejects a destination that is not a regular file",
+      {
+        skip: process.platform === "win32",
+      },
+      () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        return inTemporaryDirectory(async (directory) => {
+          const input = join(directory, "data.tsv");
+          const fifo = join(directory, "fifo.csv");
+          await writeFile(input, TSV);
+          execFileSync("mkfifo", [fifo]);
+          const subdirectory = join(directory, "dir.csv");
+          await mkdir(subdirectory);
+          for (const output of [fifo, subdirectory]) {
+            const result = await convert({ input, output, force: true }, true);
+            assert.equal(result.code, 1);
+            assert.deepEqual(result.prompts, []);
+            assert.match(result.stderr.join("\n"), /not a regular file/);
+          }
+        });
+      },
+    );
   });
 
   describe("same-file protection", () => {
@@ -280,19 +294,23 @@ describe("convertFile()", () => {
         await assertRejected(directory, input, output);
       }));
 
-    it("rejects a symbolic link to the input", {
-      skip: process.platform === "win32",
-    }, () => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      return inTemporaryDirectory(async (directory) => {
-        const input = join(directory, "data.tsv");
-        const output = join(directory, "data.csv");
-        await writeFile(input, TSV);
-        await symlink(input, output);
-        await assertRejected(directory, input, output);
-      });
-    });
+    it(
+      "rejects a symbolic link to the input",
+      {
+        skip: process.platform === "win32",
+      },
+      () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        return inTemporaryDirectory(async (directory) => {
+          const input = join(directory, "data.tsv");
+          const output = join(directory, "data.csv");
+          await writeFile(input, TSV);
+          await symlink(input, output);
+          await assertRejected(directory, input, output);
+        });
+      },
+    );
   });
 });
 
@@ -303,11 +321,12 @@ describe("program", () => {
     inTemporaryDirectory(async (directory) => {
       const result = await captureRun(program, {
         ...formatting,
+        maxWidth: 12,
         args: [join(directory, "missing.tsv")],
       });
       assert.equal(result.kind, "exited");
       assert.equal(result.exitCode, 1);
-      assert.match(result.stderr, /does not exist/);
+      assert.match(result.stderr, /does\s+not\s+exist/);
     }));
 
   it("returns the parsed options", () =>

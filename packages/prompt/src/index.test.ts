@@ -144,10 +144,10 @@ describe("createPromptAdapter()", () => {
       otherwise: "fallback",
     } satisfies PromptCondition<string>;
 
-    // @ts-expect-error A condition needs a value for the skipped branch.
-    const missingOtherwise = { when: () => true } satisfies PromptCondition<
-      string
-    >;
+    const missingOtherwise = {
+      when: () => true,
+      // @ts-expect-error A condition needs a value for the skipped branch.
+    } satisfies PromptCondition<string>;
     const invalidOtherwise = {
       when: () => true,
       // @ts-expect-error The skipped value must match the parser result type.
@@ -162,8 +162,9 @@ describe("createPromptAdapter()", () => {
 
   it("returns an async fluent parser", () => {
     const { prompt } = createTestPrompt();
-    const parser = prompt(option("--name", string()), { value: "prompted" })
-      .map((value) => value.toUpperCase());
+    const parser = prompt(option("--name", string()), {
+      value: "prompted",
+    }).map((value) => value.toUpperCase());
 
     assert.equal(parser.mode, "async");
     assert.equal(typeof parser.map, "function");
@@ -220,11 +221,10 @@ describe("createPromptAdapter()", () => {
 
   it("should infer shared validator values from the wrapped parser", () => {
     const { prompt } = createTestPrompt();
-    const validator =
-      ((value) =>
-        value.length > 0
-          ? undefined
-          : message`Enter a name.`) satisfies PromptValidator<string>;
+    const validator = ((value) =>
+      value.length > 0
+        ? undefined
+        : message`Enter a name.`) satisfies PromptValidator<string>;
     const options = { validate: validator } satisfies PromptOptions<string>;
 
     const parser = prompt(
@@ -232,10 +232,14 @@ describe("createPromptAdapter()", () => {
       { value: "Alice" },
       options,
     );
-    prompt(option("--name", string()), { value: "Alice" }, {
-      // @ts-expect-error The parser, not the validator, determines TValue.
-      validate: (_value: number) => undefined,
-    });
+    prompt(
+      option("--name", string()),
+      { value: "Alice" },
+      {
+        // @ts-expect-error The parser, not the validator, determines TValue.
+        validate: (_value: number) => undefined,
+      },
+    );
     // @ts-expect-error Validators reject with Message, not string.
     const invalidValidator: PromptValidator<string> = (_value: string) =>
       "Enter a name.";
@@ -251,9 +255,13 @@ describe("createPromptAdapter()", () => {
     for (const maxAttempts of [0, -1, 1.5, Number.NaN, Infinity]) {
       assert.throws(
         () =>
-          prompt(option("--name", string()), { value: "Alice" }, {
-            maxAttempts,
-          }),
+          prompt(
+            option("--name", string()),
+            { value: "Alice" },
+            {
+              maxAttempts,
+            },
+          ),
         {
           name: "RangeError",
           message: "maxAttempts must be an integer greater than or equal to 1.",
@@ -262,10 +270,14 @@ describe("createPromptAdapter()", () => {
     }
     assert.throws(
       () =>
-        prompt(option("--name", string()), { value: "Alice" }, {
-          validate: () => undefined,
-          maxAttempts: 0,
-        }),
+        prompt(
+          option("--name", string()),
+          { value: "Alice" },
+          {
+            validate: () => undefined,
+            maxAttempts: 0,
+          },
+        ),
       RangeError,
     );
     assert.deepEqual(calls, []);
@@ -274,12 +286,16 @@ describe("createPromptAdapter()", () => {
   it("should accept a synchronously validated prompt value", async () => {
     const { prompt, calls, contexts } = createTestPrompt();
     const validated: string[] = [];
-    const parser = prompt(option("--name", string()), { value: "Alice" }, {
-      validate(value) {
-        validated.push(value);
-        return undefined;
+    const parser = prompt(
+      option("--name", string()),
+      { value: "Alice" },
+      {
+        validate(value) {
+          validated.push(value);
+          return undefined;
+        },
       },
-    });
+    );
 
     const result = await parseAsync(parser, []);
 
@@ -312,14 +328,18 @@ describe("createPromptAdapter()", () => {
         });
       },
     });
-    const parser = prompt(option("--pm", string()), { values }, {
-      async validate(value) {
-        await Promise.resolve();
-        const verdict = verdicts[validationCalls];
-        validationCalls++;
-        return value === "deno" ? undefined : verdict;
+    const parser = prompt(
+      option("--pm", string()),
+      { values },
+      {
+        async validate(value) {
+          await Promise.resolve();
+          const verdict = verdicts[validationCalls];
+          validationCalls++;
+          return value === "deno" ? undefined : verdict;
+        },
       },
-    });
+    );
 
     const result = await parseAsync(parser, []);
 
@@ -339,12 +359,16 @@ describe("createPromptAdapter()", () => {
     const verdicts = [message`Try again.`, []] as const;
     let attempt = 0;
     const { prompt, contexts } = createTestPrompt();
-    const parser = prompt(option("--name", string()), { value: "Alice" }, {
-      maxAttempts: 2,
-      validate() {
-        return verdicts[attempt++];
+    const parser = prompt(
+      option("--name", string()),
+      { value: "Alice" },
+      {
+        maxAttempts: 2,
+        validate() {
+          return verdicts[attempt++];
+        },
       },
-    });
+    );
 
     const result = await parseAsync(parser, []);
 
@@ -381,21 +405,22 @@ describe("createPromptAdapter()", () => {
               });
             },
           });
-          const parser = prompt(option("--answer", string()), {}, {
-            maxAttempts,
-            validate() {
-              validationCalls++;
-              return validationCalls === acceptanceAttempt
-                ? undefined
-                : message`Try again.`;
+          const parser = prompt(
+            option("--answer", string()),
+            {},
+            {
+              maxAttempts,
+              validate() {
+                validationCalls++;
+                return validationCalls === acceptanceAttempt
+                  ? undefined
+                  : message`Try again.`;
+              },
             },
-          });
+          );
 
           const result = await parseAsync(parser, []);
-          const expectedAttempts = Math.min(
-            acceptanceAttempt,
-            maxAttempts,
-          );
+          const expectedAttempts = Math.min(acceptanceAttempt, maxAttempts);
 
           assert.deepEqual(
             attempts,
@@ -426,12 +451,16 @@ describe("createPromptAdapter()", () => {
         );
       },
     });
-    const parser = prompt(option("--name", string()), {}, {
-      validate() {
-        validationCalls++;
-        return firstRejection;
+    const parser = prompt(
+      option("--name", string()),
+      {},
+      {
+        validate() {
+          validationCalls++;
+          return firstRejection;
+        },
       },
-    });
+    );
 
     const result = await parseAsync(parser, []);
 
@@ -449,6 +478,7 @@ describe("createPromptAdapter()", () => {
     const validatorError = new TypeError("Validation failed.");
     let adapterCalls = 0;
     const throwingPrompt = createPromptAdapter<EmptyPromptConfig>({
+      /* oxlint-disable-next-line no-unused-vars -- Preserve the generic adapter method signature. */
       execute<TValue>(
         _config: EmptyPromptConfig,
         _context: PromptExecutionContext,
@@ -469,27 +499,33 @@ describe("createPromptAdapter()", () => {
     await assert.rejects(
       () =>
         parseAsync(
-          throwingPrompt(option("--name", string()), {}, {
-            validate: () => message`Unused.`,
-          }),
+          throwingPrompt(
+            option("--name", string()),
+            {},
+            {
+              validate: () => message`Unused.`,
+            },
+          ),
           [],
         ),
       (error: unknown) => error === adapterError,
     );
-    for (
-      const validate of [
-        () => {
-          throw validatorError;
-        },
-        () => Promise.reject(validatorError),
-      ]
-    ) {
+    for (const validate of [
+      () => {
+        throw validatorError;
+      },
+      () => Promise.reject(validatorError),
+    ]) {
       await assert.rejects(
         () =>
           parseAsync(
-            validatorPrompt(option("--name", string()), {}, {
-              validate,
-            }),
+            validatorPrompt(
+              option("--name", string()),
+              {},
+              {
+                validate,
+              },
+            ),
             [],
           ),
         (error: unknown) => error === validatorError,
@@ -515,13 +551,17 @@ describe("createPromptAdapter()", () => {
         },
       },
     );
-    const fromCli = prompt(option("--other", string()), { value: "Prompted" }, {
-      signal: controller.signal,
-      validate() {
-        validationCalls++;
-        return undefined;
+    const fromCli = prompt(
+      option("--other", string()),
+      { value: "Prompted" },
+      {
+        signal: controller.signal,
+        validate() {
+          validationCalls++;
+          return undefined;
+        },
       },
-    });
+    );
 
     const skippedResult = await parseAsync(skipped, []);
     const cliResult = await parseAsync(fromCli, ["--other", "CLI"]);
@@ -539,9 +579,13 @@ describe("createPromptAdapter()", () => {
     const reason = { code: "stopped" };
     controller.abort(reason);
     const { prompt, calls } = createTestPrompt();
-    const parser = prompt(option("--name", string()), { value: "Prompted" }, {
-      signal: controller.signal,
-    });
+    const parser = prompt(
+      option("--name", string()),
+      { value: "Prompted" },
+      {
+        signal: controller.signal,
+      },
+    );
 
     await assert.rejects(
       () => parseAsync(parser, []),
@@ -557,6 +601,7 @@ describe("createPromptAdapter()", () => {
     const attempt = deferred<never>();
     const contexts: PromptExecutionContext[] = [];
     const prompt = createPromptAdapter<EmptyPromptConfig>({
+      /* oxlint-disable-next-line no-unused-vars -- Preserve the generic adapter method signature. */
       execute<TValue>(
         _config: EmptyPromptConfig,
         context: PromptExecutionContext,
@@ -566,9 +611,13 @@ describe("createPromptAdapter()", () => {
         return attempt.promise;
       },
     });
-    const parser = prompt(option("--name", string()), {}, {
-      signal: controller.signal,
-    });
+    const parser = prompt(
+      option("--name", string()),
+      {},
+      {
+        signal: controller.signal,
+      },
+    );
 
     const parsing = parseAsync(parser, []);
     await started.promise;
@@ -589,13 +638,17 @@ describe("createPromptAdapter()", () => {
     const started = deferred<void>();
     const validation = deferred<undefined>();
     const { prompt, calls } = createTestPrompt();
-    const parser = prompt(option("--name", string()), { value: "Alice" }, {
-      signal: controller.signal,
-      validate() {
-        started.resolve();
-        return validation.promise;
+    const parser = prompt(
+      option("--name", string()),
+      { value: "Alice" },
+      {
+        signal: controller.signal,
+        validate() {
+          started.resolve();
+          return validation.promise;
+        },
       },
-    });
+    );
 
     const parsing = parseAsync(parser, []);
     await started.promise;
@@ -622,9 +675,13 @@ describe("createPromptAdapter()", () => {
         return Promise.resolve({ success: true, value: "Alice" as TValue });
       },
     });
-    const parser = prompt(option("--name", string()), {}, {
-      signal: controller.signal,
-    });
+    const parser = prompt(
+      option("--name", string()),
+      {},
+      {
+        signal: controller.signal,
+      },
+    );
 
     await assert.rejects(
       () => parseAsync(parser, []),
@@ -911,136 +968,124 @@ describe("createPromptAdapter()", () => {
   });
 
   // https://github.com/dahlia/optique/issues/930
-  it(
-    "supplies a config-bound prompt to a sibling dependency consumer",
-    async () => {
-      const region = dependency(choice(["us", "eu"] as const));
-      const regionDerived = region.deriveSync({
-        metavar: "REGION_DERIVED",
-        factory: (value: "us" | "eu") =>
-          choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
-        defaultValue: () => "us" as const,
-      });
-      const context = createRegionConfigContext();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        region: bindConfig(
-          prompt(option("--region", region), { value: "us" }),
-          { context, key: "region" },
-        ),
-        out: option("--out", regionDerived),
-      });
+  it("supplies a config-bound prompt to a sibling dependency consumer", async () => {
+    const region = dependency(choice(["us", "eu"] as const));
+    const regionDerived = region.deriveSync({
+      metavar: "REGION_DERIVED",
+      factory: (value: "us" | "eu") =>
+        choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
+      defaultValue: () => "us" as const,
+    });
+    const context = createRegionConfigContext();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      region: bindConfig(prompt(option("--region", region), { value: "us" }), {
+        context,
+        key: "region",
+      }),
+      out: option("--out", regionDerived),
+    });
 
-      const result = await runWith(parser, "test", [context], {
-        args: ["--out", "z2"],
-        contextOptions: {
-          load: () => ({
-            config: { region: "eu" as const },
-            meta: undefined,
-          }),
-        },
-      });
+    const result = await runWith(parser, "test", [context], {
+      args: ["--out", "z2"],
+      contextOptions: {
+        load: () => ({
+          config: { region: "eu" as const },
+          meta: undefined,
+        }),
+      },
+    });
 
-      assert.deepEqual(result, { region: "eu", out: "z2" });
-      assert.deepEqual(calls, []);
-    },
-  );
+    assert.deepEqual(result, { region: "eu", out: "z2" });
+    assert.deepEqual(calls, []);
+  });
 
-  it(
-    "prompts a config-bound dependency source when its key is absent",
-    async () => {
-      const region = dependency(choice(["us", "eu"] as const));
-      const regionDerived = region.deriveSync({
-        metavar: "REGION_DERIVED",
-        factory: (value: "us" | "eu") =>
-          choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
-        defaultValue: () => "us" as const,
-      });
-      const context = createRegionConfigContext();
-      const { prompt, calls } = createTestPrompt();
-      const promptConfig = { value: "us" as const };
-      const parser = object({
-        region: bindConfig(
-          prompt(option("--region", region), promptConfig),
-          { context, key: "region" },
-        ),
-        out: option("--out", regionDerived),
-      });
+  it("prompts a config-bound dependency source when its key is absent", async () => {
+    const region = dependency(choice(["us", "eu"] as const));
+    const regionDerived = region.deriveSync({
+      metavar: "REGION_DERIVED",
+      factory: (value: "us" | "eu") =>
+        choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
+      defaultValue: () => "us" as const,
+    });
+    const context = createRegionConfigContext();
+    const { prompt, calls } = createTestPrompt();
+    const promptConfig = { value: "us" as const };
+    const parser = object({
+      region: bindConfig(prompt(option("--region", region), promptConfig), {
+        context,
+        key: "region",
+      }),
+      out: option("--out", regionDerived),
+    });
 
-      const result = await runWith(parser, "test", [context], {
-        args: ["--out", "z1"],
+    const result = await runWith(parser, "test", [context], {
+      args: ["--out", "z1"],
+      contextOptions: {
+        load: () => ({ config: {}, meta: undefined }),
+      },
+    });
+
+    assert.deepEqual(result, { region: "us", out: "z1" });
+    assert.deepEqual(calls, [promptConfig]);
+  });
+
+  it("prompts a config-bound dependency source when no config is loaded", async () => {
+    const region = dependency(choice(["us", "eu"] as const));
+    const regionDerived = region.deriveSync({
+      metavar: "REGION_DERIVED",
+      factory: (value: "us" | "eu") =>
+        choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
+      defaultValue: () => "us" as const,
+    });
+    const context = createRegionConfigContext();
+    const { prompt, calls } = createTestPrompt();
+    const promptConfig = { value: "us" as const };
+    const parser = object({
+      region: bindConfig(prompt(option("--region", region), promptConfig), {
+        context,
+        key: "region",
+      }),
+      out: option("--out", regionDerived),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      args: ["--out", "z1"],
+      contextOptions: { load: () => undefined },
+    });
+
+    assert.deepEqual(result, { region: "us", out: "z1" });
+    assert.deepEqual(calls, [promptConfig]);
+  });
+
+  it("does not prompt when its config context is omitted from a two-pass run", async () => {
+    const boundContext = createRegionConfigContext();
+    const otherContext = createRegionConfigContext();
+    const { prompt, calls } = createTestPrompt();
+    let errorOutput = "";
+    const parser = object({
+      region: bindConfig(
+        prompt(option("--region", choice(["us", "eu"] as const)), {
+          value: "us",
+        }),
+        { context: boundContext, key: "region" },
+      ),
+    });
+
+    await assert.rejects(
+      runWith(parser, "test", [otherContext], {
+        args: [],
         contextOptions: {
           load: () => ({ config: {}, meta: undefined }),
         },
-      });
-
-      assert.deepEqual(result, { region: "us", out: "z1" });
-      assert.deepEqual(calls, [promptConfig]);
-    },
-  );
-
-  it(
-    "prompts a config-bound dependency source when no config is loaded",
-    async () => {
-      const region = dependency(choice(["us", "eu"] as const));
-      const regionDerived = region.deriveSync({
-        metavar: "REGION_DERIVED",
-        factory: (value: "us" | "eu") =>
-          choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
-        defaultValue: () => "us" as const,
-      });
-      const context = createRegionConfigContext();
-      const { prompt, calls } = createTestPrompt();
-      const promptConfig = { value: "us" as const };
-      const parser = object({
-        region: bindConfig(
-          prompt(option("--region", region), promptConfig),
-          { context, key: "region" },
-        ),
-        out: option("--out", regionDerived),
-      });
-
-      const result = await runWith(parser, "test", [context], {
-        args: ["--out", "z1"],
-        contextOptions: { load: () => undefined },
-      });
-
-      assert.deepEqual(result, { region: "us", out: "z1" });
-      assert.deepEqual(calls, [promptConfig]);
-    },
-  );
-
-  it(
-    "does not prompt when its config context is omitted from a two-pass run",
-    async () => {
-      const boundContext = createRegionConfigContext();
-      const otherContext = createRegionConfigContext();
-      const { prompt, calls } = createTestPrompt();
-      let errorOutput = "";
-      const parser = object({
-        region: bindConfig(
-          prompt(option("--region", choice(["us", "eu"] as const)), {
-            value: "us",
-          }),
-          { context: boundContext, key: "region" },
-        ),
-      });
-
-      await assert.rejects(
-        runWith(parser, "test", [otherContext], {
-          args: [],
-          contextOptions: {
-            load: () => ({ config: {}, meta: undefined }),
-          },
-          stderr: (text) => {
-            errorOutput += text;
-          },
-        }),
-      );
-      assert.match(errorOutput, /contexts option/);
-      assert.deepEqual(calls, []);
-    },
-  );
+        stderr: (text) => {
+          errorOutput += text;
+        },
+      }),
+    );
+    assert.match(errorOutput, /contexts option/);
+    assert.deepEqual(calls, []);
+  });
 
   it("does not prompt without config annotations", async () => {
     const context = createRegionConfigContext();
@@ -1063,74 +1108,62 @@ describe("createPromptAdapter()", () => {
     assert.deepEqual(calls, []);
   });
 
-  it(
-    "supplies an env-bound prompt to a sibling dependency consumer",
-    async () => {
-      const region = dependency(choice(["us", "eu"] as const));
-      const regionDerived = region.deriveSync({
-        metavar: "REGION_DERIVED",
-        factory: (value: "us" | "eu") =>
-          choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
-        defaultValue: () => "us" as const,
-      });
-      const context = createEnvContext({
-        source: (key) => key === "REGION" ? "eu" : undefined,
-      });
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        region: bindEnv(
-          prompt(option("--region", region), { value: "us" }),
-          {
-            context,
-            key: "REGION",
-            parser: choice(["us", "eu"] as const),
-          },
-        ),
-        out: option("--out", regionDerived),
-      });
+  it("supplies an env-bound prompt to a sibling dependency consumer", async () => {
+    const region = dependency(choice(["us", "eu"] as const));
+    const regionDerived = region.deriveSync({
+      metavar: "REGION_DERIVED",
+      factory: (value: "us" | "eu") =>
+        choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
+      defaultValue: () => "us" as const,
+    });
+    const context = createEnvContext({
+      source: (key) => (key === "REGION" ? "eu" : undefined),
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      region: bindEnv(prompt(option("--region", region), { value: "us" }), {
+        context,
+        key: "REGION",
+        parser: choice(["us", "eu"] as const),
+      }),
+      out: option("--out", regionDerived),
+    });
 
-      const result = await runWith(parser, "test", [context], {
-        args: ["--out", "z2"],
-      });
+    const result = await runWith(parser, "test", [context], {
+      args: ["--out", "z2"],
+    });
 
-      assert.deepEqual(result, { region: "eu", out: "z2" });
-      assert.deepEqual(calls, []);
-    },
-  );
+    assert.deepEqual(result, { region: "eu", out: "z2" });
+    assert.deepEqual(calls, []);
+  });
 
-  it(
-    "prompts an env-bound dependency source when its variable is absent",
-    async () => {
-      const region = dependency(choice(["us", "eu"] as const));
-      const regionDerived = region.deriveSync({
-        metavar: "REGION_DERIVED",
-        factory: (value: "us" | "eu") =>
-          choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
-        defaultValue: () => "us" as const,
-      });
-      const context = createEnvContext({ source: () => undefined });
-      const { prompt, calls } = createTestPrompt();
-      const promptConfig = { value: "us" as const };
-      const parser = object({
-        region: bindEnv(
-          prompt(option("--region", region), promptConfig),
-          {
-            context,
-            key: "REGION",
-            parser: choice(["us", "eu"] as const),
-          },
-        ),
-        out: option("--out", regionDerived),
-      });
+  it("prompts an env-bound dependency source when its variable is absent", async () => {
+    const region = dependency(choice(["us", "eu"] as const));
+    const regionDerived = region.deriveSync({
+      metavar: "REGION_DERIVED",
+      factory: (value: "us" | "eu") =>
+        choice(value === "us" ? (["z1"] as const) : (["z2"] as const)),
+      defaultValue: () => "us" as const,
+    });
+    const context = createEnvContext({ source: () => undefined });
+    const { prompt, calls } = createTestPrompt();
+    const promptConfig = { value: "us" as const };
+    const parser = object({
+      region: bindEnv(prompt(option("--region", region), promptConfig), {
+        context,
+        key: "REGION",
+        parser: choice(["us", "eu"] as const),
+      }),
+      out: option("--out", regionDerived),
+    });
 
-      const result = await runWith(parser, "test", [context], {
-        args: ["--out", "z1"],
-      });
+    const result = await runWith(parser, "test", [context], {
+      args: ["--out", "z1"],
+    });
 
-      assert.deepEqual(result, { region: "us", out: "z1" });
-      assert.deepEqual(calls, [promptConfig]);
-    },
-  );
+    assert.deepEqual(result, { region: "us", out: "z1" });
+    assert.deepEqual(calls, [promptConfig]);
+  });
 
   it("preserves source-completion traits through map()", () => {
     const envContext = createEnvContext({
@@ -1382,27 +1415,31 @@ function createModeFixture() {
 function isPhase2ContextRequest(
   request: unknown,
 ): request is SourceContextPhase2Request {
-  return request != null &&
+  return (
+    request != null &&
     typeof request === "object" &&
     "phase" in request &&
     (request as { readonly phase?: unknown }).phase === "phase2" &&
-    "parsed" in request;
+    "parsed" in request
+  );
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
-  return isPhase2ContextRequest(request) ? request.parsed as T : undefined;
+  return isPhase2ContextRequest(request) ? (request.parsed as T) : undefined;
 }
 
 // https://github.com/dahlia/optique/issues/870
 describe("prompted values as dependency sources", () => {
   it("resolves a prompted source before a derived source chain", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER",
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER",
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE",
       factory: (value) =>
@@ -1434,12 +1471,14 @@ describe("prompted values as dependency sources", () => {
 
   it("publishes a prompted value from a derived source", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER",
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER",
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE",
       factory: (value) =>
@@ -1449,10 +1488,9 @@ describe("prompted values as dependency sources", () => {
     const { prompt, calls } = createTestPrompt();
     const parser = object({
       storage: option("--storage", storage),
-      packageManager: prompt(
-        option("--package-manager", packageManager),
-        { value: "npm" },
-      ),
+      packageManager: prompt(option("--package-manager", packageManager), {
+        value: "npm",
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
     });
 
@@ -1469,12 +1507,14 @@ describe("prompted values as dependency sources", () => {
 
   it("resolves derived-source suggestions without prompting", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER",
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER",
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE",
       factory: (value) =>
@@ -1484,10 +1524,9 @@ describe("prompted values as dependency sources", () => {
     const { prompt, calls } = createTestPrompt();
     const parser = object({
       framework: prompt(option("--framework", framework), { value: "fresh" }),
-      packageManager: prompt(
-        option("--package-manager", packageManager),
-        { value: "deno" },
-      ),
+      packageManager: prompt(option("--package-manager", packageManager), {
+        value: "deno",
+      }),
       storage: option("--storage", storage),
     });
 
@@ -1502,7 +1541,7 @@ describe("prompted values as dependency sources", () => {
 
     assert.deepEqual(
       suggestions.flatMap((suggestion) =>
-        suggestion.kind === "literal" ? [suggestion.text] : []
+        suggestion.kind === "literal" ? [suggestion.text] : [],
       ),
       ["redis"],
     );
@@ -1511,12 +1550,14 @@ describe("prompted values as dependency sources", () => {
 
   it("uses an inactive prompted source's default for derived suggestions", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER",
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER",
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE",
       factory: (value) =>
@@ -1539,7 +1580,7 @@ describe("prompted values as dependency sources", () => {
 
     assert.deepEqual(
       suggestions.flatMap((suggestion) =>
-        suggestion.kind === "literal" ? [suggestion.text] : []
+        suggestion.kind === "literal" ? [suggestion.text] : [],
       ),
       ["kv"],
     );
@@ -1777,9 +1818,7 @@ describe("prompted values as dependency sources", () => {
     const level = mode.deriveSync({
       metavar: "LEVEL",
       factory: (value: "dev" | "prod") =>
-        choice(
-          value === "dev" ? (["debug"] as const) : (["silent"] as const),
-        ),
+        choice(value === "dev" ? (["debug"] as const) : (["silent"] as const)),
       defaultValue: () => "dev" as const,
     });
     const answers = ["dev", "prod"] as const;
@@ -1799,12 +1838,16 @@ describe("prompted values as dependency sources", () => {
       },
     });
     const parser = object({
-      mode: prompt(option("--mode", mode), { answers }, {
-        validate: (value) =>
-          value === "dev"
-            ? message`Development mode is unavailable.`
-            : undefined,
-      }),
+      mode: prompt(
+        option("--mode", mode),
+        { answers },
+        {
+          validate: (value) =>
+            value === "dev"
+              ? message`Development mode is unavailable.`
+              : undefined,
+        },
+      ),
       level: option("--level", level),
     });
 
@@ -1822,13 +1865,17 @@ describe("prompted values as dependency sources", () => {
     const { prompt, calls } = createTestPrompt();
     let validationCalls = 0;
     const parser = object({
-      a: prompt(option("--a", first.mode), { value: "dev" }, {
-        maxAttempts: 2,
-        validate() {
-          validationCalls++;
-          return rejection;
+      a: prompt(
+        option("--a", first.mode),
+        { value: "dev" },
+        {
+          maxAttempts: 2,
+          validate() {
+            validationCalls++;
+            return rejection;
+          },
         },
-      }),
+      ),
       b: prompt(option("--b", second.mode), { value: "dev" }),
       aLevel: option("--a-level", first.level),
       bLevel: option("--b-level", second.level),
@@ -1854,6 +1901,7 @@ describe("prompted values as dependency sources", () => {
     const { mode, level } = createModeFixture();
     const expected = new TypeError("Prompt library failed.");
     const prompt = createPromptAdapter<EmptyPromptConfig>({
+      /* oxlint-disable-next-line no-unused-vars -- Preserve the generic adapter method signature. */
       execute<TValue>(
         _config: EmptyPromptConfig,
         _context: PromptExecutionContext,
@@ -1863,9 +1911,13 @@ describe("prompted values as dependency sources", () => {
     });
     const later = createTestPrompt();
     const parser = object({
-      mode: prompt(option("--mode", mode), {}, {
-        validate: () => message`Unused.`,
-      }),
+      mode: prompt(
+        option("--mode", mode),
+        {},
+        {
+          validate: () => message`Unused.`,
+        },
+      ),
       level: option("--level", level),
       name: later.prompt(option("--name", string()), { value: "Alice" }),
     });
@@ -1928,146 +1980,139 @@ describe("prompted values as dependency sources", () => {
     assert.equal(calls.length, 2);
   });
 
-  it(
-    "prompts a demanded source during the phase-two seed pass exactly once",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const seenValues: string[] = [];
-      let phase2Parsed:
-        | { readonly mode?: string; readonly level?: string }
-        | undefined;
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-demanded-phase-two"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          const parsed = getPhase2ContextParsed<
-            { readonly mode?: string; readonly level?: string }
-          >(request);
-          if (parsed !== undefined) phase2Parsed = parsed;
-          return {};
-        },
-      };
-      const parser = object({
-        mode: prompt(option("--mode", mode), { value: "prod" }, {
+  it("prompts a demanded source during the phase-two seed pass exactly once", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const seenValues: string[] = [];
+    let phase2Parsed:
+      | { readonly mode?: string; readonly level?: string }
+      | undefined;
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-demanded-phase-two"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<{
+          readonly mode?: string;
+          readonly level?: string;
+        }>(request);
+        if (parsed !== undefined) phase2Parsed = parsed;
+        return {};
+      },
+    };
+    const parser = object({
+      mode: prompt(
+        option("--mode", mode),
+        { value: "prod" },
+        {
           validate(value) {
             seenValues.push(value);
             return seenValues.length === 1 ? message`Try again.` : undefined;
           },
-        }),
-        level: option("--level", level),
-      });
+        },
+      ),
+      level: option("--level", level),
+    });
 
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: ["--level", "silent"],
-      });
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--level", "silent"],
+    });
 
-      assert.deepEqual(result, { mode: "prod", level: "silent" });
-      assert.equal(phase2Parsed?.mode, "prod");
-      assert.equal(phase2Parsed?.level, "silent");
-      assert.equal(calls.length, 2);
-      assert.deepEqual(seenValues, ["prod", "prod"]);
-    },
-  );
+    assert.deepEqual(result, { mode: "prod", level: "silent" });
+    assert.equal(phase2Parsed?.mode, "prod");
+    assert.equal(phase2Parsed?.level, "silent");
+    assert.equal(calls.length, 2);
+    assert.deepEqual(seenValues, ["prod", "prod"]);
+  });
 
   // https://github.com/dahlia/optique/issues/920
-  it(
-    "should allow demanded source prompts beside two-pass configuration bindings",
-    async () => {
-      const region = dependency(choice(["us", "eu"] as const));
-      const zone = dependency(choice(["z1", "z2"] as const));
-      const zoneDerived = zone.deriveSync({
-        metavar: "ZD",
-        factory: (value: "z1" | "z2") =>
-          choice(
-            value === "z1"
-              ? (["a1", "common"] as const)
-              : (["a2", "common"] as const),
-          ),
-        defaultValue: () => "z1" as const,
-      });
-      const context = createRegionConfigContext();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        region: bindConfig(option("--region", region), {
-          context,
-          key: "region",
+  it("should allow demanded source prompts beside two-pass configuration bindings", async () => {
+    const region = dependency(choice(["us", "eu"] as const));
+    const zone = dependency(choice(["z1", "z2"] as const));
+    const zoneDerived = zone.deriveSync({
+      metavar: "ZD",
+      factory: (value: "z1" | "z2") =>
+        choice(
+          value === "z1"
+            ? (["a1", "common"] as const)
+            : (["a2", "common"] as const),
+        ),
+      defaultValue: () => "z1" as const,
+    });
+    const context = createRegionConfigContext();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      region: bindConfig(option("--region", region), {
+        context,
+        key: "region",
+      }),
+      zone: prompt(option("--zone", zone), { value: "z2" }),
+      out: option("--out", zoneDerived),
+    });
+
+    const result = await runWith(parser, "test", [context], {
+      args: ["--out", "common"],
+      contextOptions: {
+        load: () => ({
+          config: { region: "eu" as const },
+          meta: undefined,
         }),
-        zone: prompt(option("--zone", zone), { value: "z2" }),
-        out: option("--out", zoneDerived),
-      });
+      },
+    });
 
-      const result = await runWith(parser, "test", [context], {
-        args: ["--out", "common"],
-        contextOptions: {
-          load: () => ({
-            config: { region: "eu" as const },
-            meta: undefined,
-          }),
-        },
-      });
+    assert.deepEqual(result, {
+      region: "eu",
+      zone: "z2",
+      out: "common",
+    });
+    assert.deepEqual(calls, [{ value: "z2" }]);
+  });
 
-      assert.deepEqual(result, {
-        region: "eu",
-        zone: "z2",
-        out: "common",
-      });
-      assert.deepEqual(calls, [{ value: "z2" }]);
-    },
-  );
+  it("defers an undemanded source prompt to the final pass", async () => {
+    const { mode } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let phase2Mode: string | undefined = "unset";
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-undemanded-phase-two"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<
+          { readonly mode?: string } | undefined
+        >(request);
+        if (isPhase2ContextRequest(request)) phase2Mode = parsed?.mode;
+        return {};
+      },
+    };
+    const parser = object({
+      mode: prompt(option("--mode", mode), { value: "prod" }),
+    });
 
-  it(
-    "defers an undemanded source prompt to the final pass",
-    async () => {
-      const { mode } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let phase2Mode: string | undefined = "unset";
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-undemanded-phase-two"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          const parsed = getPhase2ContextParsed<
-            { readonly mode?: string } | undefined
-          >(request);
-          if (isPhase2ContextRequest(request)) phase2Mode = parsed?.mode;
-          return {};
-        },
-      };
-      const parser = object({
-        mode: prompt(option("--mode", mode), { value: "prod" }),
-      });
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: [],
+    });
 
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: [],
-      });
+    assert.deepEqual(result, { mode: "prod" });
+    assert.equal(phase2Mode, undefined);
+    assert.equal(calls.length, 1);
+  });
 
-      assert.deepEqual(result, { mode: "prod" });
-      assert.equal(phase2Mode, undefined);
-      assert.equal(calls.length, 1);
-    },
-  );
+  it("registers a prompted value nested in a concat() child tuple", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // The consumer's tuple precedes the source's tuple, so the source
+    // prompt must complete before any child tuple completes.
+    const parser = concat(
+      tuple([option("--level", level)]),
+      tuple([prompt(option("--mode", mode), { value: "prod" })]),
+    );
 
-  it(
-    "registers a prompted value nested in a concat() child tuple",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // The consumer's tuple precedes the source's tuple, so the source
-      // prompt must complete before any child tuple completes.
-      const parser = concat(
-        tuple([option("--level", level)]),
-        tuple([prompt(option("--mode", mode), { value: "prod" })]),
-      );
+    const valid = await parseAsync(parser, ["--level", "silent"]);
+    assert.ok(valid.success);
+    assert.deepEqual(valid.value, ["silent", "prod"]);
+    assert.equal(calls.length, 1);
 
-      const valid = await parseAsync(parser, ["--level", "silent"]);
-      assert.ok(valid.success);
-      assert.deepEqual(valid.value, ["silent", "prod"]);
-      assert.equal(calls.length, 1);
-
-      const invalid = await parseAsync(parser, ["--level", "debug"]);
-      assert.ok(!invalid.success);
-    },
-  );
+    const invalid = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(!invalid.success);
+  });
 
   it("registers a prompted value inside a nested concat()", async () => {
     const { mode, level } = createModeFixture();
@@ -2088,47 +2133,370 @@ describe("prompted values as dependency sources", () => {
     assert.equal(calls.length, 1);
   });
 
-  it(
-    "keeps a duplicate-field prompt local inside a nested merge()",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt } = createTestPrompt();
-      const parser = object({
-        combo: merge(
-          object({
-            mode: prompt(option("--mode-a", mode), { value: "prod" }),
-          }),
-          object({ mode: withDefault(option("--mode-b", string()), "dev") }),
+  it("keeps a duplicate-field prompt local inside a nested merge()", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt } = createTestPrompt();
+    const parser = object({
+      combo: merge(
+        object({
+          mode: prompt(option("--mode-a", mode), { value: "prod" }),
+        }),
+        object({ mode: withDefault(option("--mode-b", string()), "dev") }),
+      ),
+      level: option("--level", level),
+    });
+
+    // The first child's prompted source is behind a duplicated merge()
+    // field, so it must stay local to that child even when the merge is
+    // nested; the outer consumer falls back to its own default ("dev"),
+    // for which "debug" is valid.
+    const result = await parseAsync(parser, ["--level", "debug"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.combo.mode, "dev");
+    assert.equal(result.value.level, "debug");
+  });
+
+  it("keeps env precedence for a nested bindEnv(prompt(...)) source", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const parser = object({
+      settings: object({
+        mode: bindEnv(prompt(option("--mode", mode), { value: "dev" }), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "silent"], {
+      annotations,
+    });
+
+    assert.ok(result.success);
+    assert.equal(result.value.settings.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.deepEqual(calls, []);
+  });
+
+  it("keeps withDefault(prompt(...)) behavior identical when nested", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // At the top level, withDefault(prompt(...)) resolves to the default
+    // without prompting; nesting the field under another object() must
+    // not change that.
+    const parser = object({
+      settings: object({
+        mode: withDefault(
+          prompt(option("--mode", mode), { value: "prod" }),
+          "dev" as const,
         ),
-        level: option("--level", level),
-      });
+      }),
+      level: option("--level", level),
+    });
 
-      // The first child's prompted source is behind a duplicated merge()
-      // field, so it must stay local to that child even when the merge is
-      // nested; the outer consumer falls back to its own default ("dev"),
-      // for which "debug" is valid.
-      const result = await parseAsync(parser, ["--level", "debug"]);
+    const result = await parseAsync(parser, ["--level", "debug"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.combo.mode, "dev");
-      assert.equal(result.value.level, "debug");
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.settings.mode, "dev");
+    assert.equal(result.value.level, "debug");
+    assert.deepEqual(calls, []);
+  });
 
-  it(
-    "keeps env precedence for a nested bindEnv(prompt(...)) source",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: (key) => ({ APP_MODE: "prod" })[key],
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      const parser = object({
+  it("lets the later prompted occurrence of a shared source win", async () => {
+    const shared = dependency(choice(["dev", "prod"] as const));
+    const level = shared.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    let laterValidationCalls = 0;
+    const parser = object({
+      a: prompt(option("--a", shared), { value: "dev" }),
+      b: prompt(
+        option("--b", shared),
+        { value: "prod" },
+        {
+          validate() {
+            laterValidationCalls++;
+            return laterValidationCalls === 1
+              ? message`Confirm production mode.`
+              : undefined;
+          },
+        },
+      ),
+      level: option("--level", level),
+    });
+
+    // CLI parity: with --a dev --b prod, the later source occurrence
+    // wins, so the prompted run must behave the same way.
+    const result = await parseAsync(parser, ["--level", "silent"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.a, "dev");
+    assert.equal(result.value.b, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(laterValidationCalls, 2);
+    assert.equal(calls.length, 3);
+  });
+
+  it("prompts a later shared-source occurrence despite an earlier CLI value", async () => {
+    const shared = dependency(choice(["dev", "prod"] as const));
+    const level = shared.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      a: prompt(option("--a", shared), { value: "prod" }),
+      b: prompt(option("--b", shared), { value: "prod" }),
+      level: option("--level", level),
+    });
+
+    // CLI parity with "--a dev --b prod": a command-line value for one
+    // occurrence must not suppress the other occurrence's prompt, whose
+    // answer still registers last and wins before sibling replay.
+    const result = await parseAsync(parser, [
+      "--a",
+      "dev",
+      "--level",
+      "silent",
+    ]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.a, "dev");
+    assert.equal(result.value.b, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+
+    const invalid = await parseAsync(parser, [
+      "--a",
+      "dev",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!invalid.success);
+  });
+
+  it("lets a later conditional() CLI occurrence win over an earlier prompt", async () => {
+    const shared = dependency(choice(["dev", "prod"] as const));
+    const level = shared.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    // The conditional's branch occurrence of the shared source is
+    // declared after the prompted sibling, so its command-line value
+    // must win over the prompt's answer, exactly as a repeated
+    // command-line occurrence would.
+    const parser = object({
+      a: prompt(option("--a", shared), { value: "dev" }),
+      cond: conditional(option("--kind", choice(["k"] as const)), {
+        k: object({ b: option("--b", shared) }),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, [
+      "--kind",
+      "k",
+      "--b",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.a, "dev");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
+
+  it("does not treat a conditional source barrier as its own provider", async () => {
+    const shared = dependency(choice(["dev", "prod"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = conditional(
+      prompt(option("--mode", shared), { value: "prod" }),
+      {
+        dev: object({
+          again: withDefault(option("--again", shared), "dev"),
+        }),
+        prod: object({
+          again: withDefault(option("--again", shared), "prod"),
+        }),
+      },
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod", { again: "prod" }]);
+    assert.equal(calls.length, 1);
+  });
+
+  it("runs merge() source prompts in declaration order despite priorities", async () => {
+    const srcA = dependency(string());
+    const srcB = dependency(string());
+    const { prompt, calls } = createTestPrompt();
+    // The argument-based child has lower priority than the option-based
+    // child, so merge() sorts the option child first internally; the
+    // prompts must still run in declaration order (A before B).
+    const parser = merge(
+      object({ a: prompt(argument(srcA), { value: "A" }) }),
+      object({ b: prompt(option("--b", srcB), { value: "B" }) }),
+    );
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(calls, [{ value: "A" }, { value: "B" }]);
+  });
+
+  it("prompts once for a source nested below a merge() child", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = merge(
+      object({
+        settings: object({
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+      }),
+      object({ level: option("--level", level) }),
+    );
+
+    const result = await parseAsync(parser, ["--level", "silent"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.settings.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
+
+  it("does not register a bound wrapper around a transformed source", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    // bindEnv() around a transformed prompted source completes in the
+    // transformed domain, so nothing may register under the raw source
+    // ID even when the field is nested and scheduled by expansion; the
+    // consumer falls back to its own default ("dev").
+    const parser = object({
+      settings: object({
+        mode: bindEnv(
+          prompt(option("--mode", mode), { value: "prod" }).map((value) =>
+            value.toUpperCase(),
+          ),
+          {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["DEV", "PROD"] as const),
+          },
+        ),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "debug"], {
+      annotations,
+    });
+
+    assert.ok(result.success);
+    assert.equal(result.value.settings.mode, "PROD");
+    assert.equal(result.value.level, "debug");
+    assert.equal(calls.length, 1);
+  });
+
+  it("propagates demand into a selected command branch in two-pass runs", async () => {
+    const { mode, level } = createModeFixture();
+    const other = dependency(string());
+    const { prompt, calls } = createTestPrompt();
+    let phase2Parsed: unknown;
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-command-demand-phase-two"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase2ContextRequest(request)) phase2Parsed = request.parsed;
+        return {};
+      },
+    };
+    // The enclosing concat() has nothing schedulable itself (the or()
+    // branches wrap different sources), but its consumer's demand must
+    // still reach the prompt scheduled inside the selected command
+    // branch during the phase-two seed pass.
+    const parser = concat(
+      or(
+        command(
+          "run",
+          tuple([prompt(option("--mode", mode), { value: "prod" })]),
+        ),
+        command(
+          "stop",
+          tuple([prompt(option("--other", other), { value: "x" })]),
+        ),
+      ),
+      tuple([option("--level", level)]),
+    );
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["run", "--level", "silent"],
+    });
+
+    assert.deepEqual(result, ["prod", "silent"]);
+    assert.deepEqual(phase2Parsed, ["prod", "silent"]);
+    assert.equal(calls.length, 1);
+  });
+
+  it("keeps env precedence for a bound source nested below a merge() child", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const parser = merge(
+      object({
         settings: object({
           mode: bindEnv(prompt(option("--mode", mode), { value: "dev" }), {
             context: envContext,
@@ -2136,366 +2504,19 @@ describe("prompted values as dependency sources", () => {
             parser: choice(["dev", "prod"] as const),
           }),
         }),
-        level: option("--level", level),
-      });
+      }),
+      object({ level: option("--level", level) }),
+    );
 
-      const result = await parseAsync(parser, ["--level", "silent"], {
-        annotations,
-      });
+    const result = await parseAsync(parser, ["--level", "silent"], {
+      annotations,
+    });
 
-      assert.ok(result.success);
-      assert.equal(result.value.settings.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.deepEqual(calls, []);
-    },
-  );
-
-  it(
-    "keeps withDefault(prompt(...)) behavior identical when nested",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // At the top level, withDefault(prompt(...)) resolves to the default
-      // without prompting; nesting the field under another object() must
-      // not change that.
-      const parser = object({
-        settings: object({
-          mode: withDefault(
-            prompt(option("--mode", mode), { value: "prod" }),
-            "dev" as const,
-          ),
-        }),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, ["--level", "debug"]);
-
-      assert.ok(result.success);
-      assert.equal(result.value.settings.mode, "dev");
-      assert.equal(result.value.level, "debug");
-      assert.deepEqual(calls, []);
-    },
-  );
-
-  it(
-    "lets the later prompted occurrence of a shared source win",
-    async () => {
-      const shared = dependency(choice(["dev", "prod"] as const));
-      const level = shared.derive({
-        metavar: "LEVEL",
-        mode: "sync",
-        factory: (value: "dev" | "prod") =>
-          choice(
-            value === "dev"
-              ? (["debug", "verbose"] as const)
-              : (["silent", "strict"] as const),
-          ),
-        defaultValue: () => "dev" as const,
-      });
-      const { prompt, calls } = createTestPrompt();
-      let laterValidationCalls = 0;
-      const parser = object({
-        a: prompt(option("--a", shared), { value: "dev" }),
-        b: prompt(option("--b", shared), { value: "prod" }, {
-          validate() {
-            laterValidationCalls++;
-            return laterValidationCalls === 1
-              ? message`Confirm production mode.`
-              : undefined;
-          },
-        }),
-        level: option("--level", level),
-      });
-
-      // CLI parity: with --a dev --b prod, the later source occurrence
-      // wins, so the prompted run must behave the same way.
-      const result = await parseAsync(parser, ["--level", "silent"]);
-
-      assert.ok(result.success);
-      assert.equal(result.value.a, "dev");
-      assert.equal(result.value.b, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(laterValidationCalls, 2);
-      assert.equal(calls.length, 3);
-    },
-  );
-
-  it(
-    "prompts a later shared-source occurrence despite an earlier CLI value",
-    async () => {
-      const shared = dependency(choice(["dev", "prod"] as const));
-      const level = shared.derive({
-        metavar: "LEVEL",
-        mode: "sync",
-        factory: (value: "dev" | "prod") =>
-          choice(
-            value === "dev"
-              ? (["debug", "verbose"] as const)
-              : (["silent", "strict"] as const),
-          ),
-        defaultValue: () => "dev" as const,
-      });
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        a: prompt(option("--a", shared), { value: "prod" }),
-        b: prompt(option("--b", shared), { value: "prod" }),
-        level: option("--level", level),
-      });
-
-      // CLI parity with "--a dev --b prod": a command-line value for one
-      // occurrence must not suppress the other occurrence's prompt, whose
-      // answer still registers last and wins before sibling replay.
-      const result = await parseAsync(
-        parser,
-        ["--a", "dev", "--level", "silent"],
-      );
-
-      assert.ok(result.success);
-      assert.equal(result.value.a, "dev");
-      assert.equal(result.value.b, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-
-      const invalid = await parseAsync(
-        parser,
-        ["--a", "dev", "--level", "debug"],
-      );
-      assert.ok(!invalid.success);
-    },
-  );
-
-  it(
-    "lets a later conditional() CLI occurrence win over an earlier prompt",
-    async () => {
-      const shared = dependency(choice(["dev", "prod"] as const));
-      const level = shared.derive({
-        metavar: "LEVEL",
-        mode: "sync",
-        factory: (value: "dev" | "prod") =>
-          choice(
-            value === "dev"
-              ? (["debug", "verbose"] as const)
-              : (["silent", "strict"] as const),
-          ),
-        defaultValue: () => "dev" as const,
-      });
-      const { prompt, calls } = createTestPrompt();
-      // The conditional's branch occurrence of the shared source is
-      // declared after the prompted sibling, so its command-line value
-      // must win over the prompt's answer, exactly as a repeated
-      // command-line occurrence would.
-      const parser = object({
-        a: prompt(option("--a", shared), { value: "dev" }),
-        cond: conditional(
-          option("--kind", choice(["k"] as const)),
-          { k: object({ b: option("--b", shared) }) },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(
-        parser,
-        ["--kind", "k", "--b", "prod", "--level", "silent"],
-      );
-
-      assert.ok(result.success);
-      assert.equal(result.value.a, "dev");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "does not treat a conditional source barrier as its own provider",
-    async () => {
-      const shared = dependency(choice(["dev", "prod"] as const));
-      const { prompt, calls } = createTestPrompt();
-      const parser = conditional(
-        prompt(option("--mode", shared), { value: "prod" }),
-        {
-          dev: object({
-            again: withDefault(option("--again", shared), "dev"),
-          }),
-          prod: object({
-            again: withDefault(option("--again", shared), "prod"),
-          }),
-        },
-      );
-
-      const result = await parseAsync(parser, []);
-
-      assert.ok(result.success);
-      assert.deepEqual(result.value, ["prod", { again: "prod" }]);
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "runs merge() source prompts in declaration order despite priorities",
-    async () => {
-      const srcA = dependency(string());
-      const srcB = dependency(string());
-      const { prompt, calls } = createTestPrompt();
-      // The argument-based child has lower priority than the option-based
-      // child, so merge() sorts the option child first internally; the
-      // prompts must still run in declaration order (A before B).
-      const parser = merge(
-        object({ a: prompt(argument(srcA), { value: "A" }) }),
-        object({ b: prompt(option("--b", srcB), { value: "B" }) }),
-      );
-
-      const result = await parseAsync(parser, []);
-
-      assert.ok(result.success);
-      assert.deepEqual(calls, [{ value: "A" }, { value: "B" }]);
-    },
-  );
-
-  it(
-    "prompts once for a source nested below a merge() child",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = merge(
-        object({
-          settings: object({
-            mode: prompt(option("--mode", mode), { value: "prod" }),
-          }),
-        }),
-        object({ level: option("--level", level) }),
-      );
-
-      const result = await parseAsync(parser, ["--level", "silent"]);
-
-      assert.ok(result.success);
-      assert.equal(result.value.settings.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "does not register a bound wrapper around a transformed source",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: () => undefined,
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      // bindEnv() around a transformed prompted source completes in the
-      // transformed domain, so nothing may register under the raw source
-      // ID even when the field is nested and scheduled by expansion; the
-      // consumer falls back to its own default ("dev").
-      const parser = object({
-        settings: object({
-          mode: bindEnv(
-            prompt(option("--mode", mode), { value: "prod" })
-              .map((value) => value.toUpperCase()),
-            {
-              context: envContext,
-              key: "MODE",
-              parser: choice(["DEV", "PROD"] as const),
-            },
-          ),
-        }),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, ["--level", "debug"], {
-        annotations,
-      });
-
-      assert.ok(result.success);
-      assert.equal(result.value.settings.mode, "PROD");
-      assert.equal(result.value.level, "debug");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "propagates demand into a selected command branch in two-pass runs",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const other = dependency(string());
-      const { prompt, calls } = createTestPrompt();
-      let phase2Parsed: unknown;
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-command-demand-phase-two"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase2ContextRequest(request)) phase2Parsed = request.parsed;
-          return {};
-        },
-      };
-      // The enclosing concat() has nothing schedulable itself (the or()
-      // branches wrap different sources), but its consumer's demand must
-      // still reach the prompt scheduled inside the selected command
-      // branch during the phase-two seed pass.
-      const parser = concat(
-        or(
-          command(
-            "run",
-            tuple([prompt(option("--mode", mode), { value: "prod" })]),
-          ),
-          command(
-            "stop",
-            tuple([prompt(option("--other", other), { value: "x" })]),
-          ),
-        ),
-        tuple([option("--level", level)]),
-      );
-
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: ["run", "--level", "silent"],
-      });
-
-      assert.deepEqual(result, ["prod", "silent"]);
-      assert.deepEqual(phase2Parsed, ["prod", "silent"]);
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "keeps env precedence for a bound source nested below a merge() child",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: (key) => ({ APP_MODE: "prod" })[key],
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      const parser = merge(
-        object({
-          settings: object({
-            mode: bindEnv(prompt(option("--mode", mode), { value: "dev" }), {
-              context: envContext,
-              key: "MODE",
-              parser: choice(["dev", "prod"] as const),
-            }),
-          }),
-        }),
-        object({ level: option("--level", level) }),
-      );
-
-      const result = await parseAsync(parser, ["--level", "silent"], {
-        annotations,
-      });
-
-      assert.ok(result.success);
-      assert.equal(result.value.settings.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.deepEqual(calls, []);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.settings.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.deepEqual(calls, []);
+  });
 
   it("registers a prompted value behind nonEmpty()", async () => {
     const { mode, level } = createModeFixture();
@@ -2515,24 +2536,53 @@ describe("prompted values as dependency sources", () => {
     assert.ok(!invalid.success);
   });
 
-  it(
-    "stops later prompts when a pre-completed prompt is cancelled",
-    async () => {
-      const a = dependency(choice(["dev", "prod"] as const));
-      const b = dependency(choice(["x", "y"] as const));
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: () => undefined,
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      // Field `a` is pre-completed during Phase 1 (bindEnv() opts into
-      // pre-completion) and its prompt is cancelled there; the later
-      // source prompt `b` must not run.
-      const parser = object({
+  it("stops later prompts when a pre-completed prompt is cancelled", async () => {
+    const a = dependency(choice(["dev", "prod"] as const));
+    const b = dependency(choice(["x", "y"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    // Field `a` is pre-completed during Phase 1 (bindEnv() opts into
+    // pre-completion) and its prompt is cancelled there; the later
+    // source prompt `b` must not run.
+    const parser = object({
+      a: prompt(
+        bindEnv(option("--a", a), {
+          context: envContext,
+          key: "A",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        { value: "dev", reject: true },
+      ),
+      b: prompt(option("--b", b), { value: "x" }),
+    });
+
+    const result = await parseAsync(parser, [], { annotations });
+
+    assert.ok(!result.success);
+    assert.equal(calls.length, 1);
+  });
+
+  it("stops later prompts when a merge() child's pre-completed prompt is cancelled", async () => {
+    const a = dependency(choice(["dev", "prod"] as const));
+    const b = dependency(choice(["x", "y"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const parser = merge(
+      object({
         a: prompt(
           bindEnv(option("--a", a), {
             context: envContext,
@@ -2541,50 +2591,15 @@ describe("prompted values as dependency sources", () => {
           }),
           { value: "dev", reject: true },
         ),
-        b: prompt(option("--b", b), { value: "x" }),
-      });
+      }),
+      object({ b: prompt(option("--b", b), { value: "x" }) }),
+    );
 
-      const result = await parseAsync(parser, [], { annotations });
+    const result = await parseAsync(parser, [], { annotations });
 
-      assert.ok(!result.success);
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "stops later prompts when a merge() child's pre-completed prompt is cancelled",
-    async () => {
-      const a = dependency(choice(["dev", "prod"] as const));
-      const b = dependency(choice(["x", "y"] as const));
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: () => undefined,
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      const parser = merge(
-        object({
-          a: prompt(
-            bindEnv(option("--a", a), {
-              context: envContext,
-              key: "A",
-              parser: choice(["dev", "prod"] as const),
-            }),
-            { value: "dev", reject: true },
-          ),
-        }),
-        object({ b: prompt(option("--b", b), { value: "x" }) }),
-      );
-
-      const result = await parseAsync(parser, [], { annotations });
-
-      assert.ok(!result.success);
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.ok(!result.success);
+    assert.equal(calls.length, 1);
+  });
 
   it("prompts once for a source inside a nested merge()", async () => {
     const { mode, level } = createModeFixture();
@@ -2605,119 +2620,106 @@ describe("prompted values as dependency sources", () => {
     assert.equal(calls.length, 1);
   });
 
-  it(
-    "runs nested merge() source prompts in declaration order",
-    async () => {
-      const srcA = dependency(string());
-      const srcB = dependency(string());
-      const { prompt, calls } = createTestPrompt();
-      // The argument-based child has lower priority than the option-based
-      // child, so the nested merge() sorts the option child first
-      // internally; the prompts must still run in declaration order and
-      // exactly once each.
-      const parser = object({
-        combo: merge(
-          object({ a: prompt(argument(srcA), { value: "A" }) }),
-          object({ b: prompt(option("--b", srcB), { value: "B" }) }),
+  it("runs nested merge() source prompts in declaration order", async () => {
+    const srcA = dependency(string());
+    const srcB = dependency(string());
+    const { prompt, calls } = createTestPrompt();
+    // The argument-based child has lower priority than the option-based
+    // child, so the nested merge() sorts the option child first
+    // internally; the prompts must still run in declaration order and
+    // exactly once each.
+    const parser = object({
+      combo: merge(
+        object({ a: prompt(argument(srcA), { value: "A" }) }),
+        object({ b: prompt(option("--b", srcB), { value: "B" }) }),
+      ),
+    });
+
+    const result = await parseAsync(parser, []);
+
+    assert.ok(result.success);
+    assert.deepEqual(calls, [{ value: "A" }, { value: "B" }]);
+  });
+
+  it("does not register prompt answers for mixed or() alternatives", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      mode: prompt(or(option("--mode", mode), constant("fallback")), {
+        value: "fallback",
+      }),
+      level: option("--level", level),
+    });
+
+    // The union completes in a mixed domain, so nothing may register
+    // under the source ID; the consumer falls back to its own default
+    // ("dev"), for which "debug" is valid.
+    const result = await parseAsync(parser, ["--level", "debug"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "fallback");
+    assert.equal(result.value.level, "debug");
+    assert.equal(calls.length, 1);
+  });
+
+  it("completes a selected command branch source before sibling replay", async () => {
+    const { mode, level } = createModeFixture();
+    const other = dependency(string());
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cmd: or(
+        command(
+          "run",
+          object({
+            mode: prompt(option("--mode", mode), { value: "prod" }),
+          }),
         ),
-      });
-
-      const result = await parseAsync(parser, []);
-
-      assert.ok(result.success);
-      assert.deepEqual(calls, [{ value: "A" }, { value: "B" }]);
-    },
-  );
-
-  it(
-    "does not register prompt answers for mixed or() alternatives",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        mode: prompt(
-          or(option("--mode", mode), constant("fallback")),
-          { value: "fallback" },
+        command(
+          "stop",
+          object({
+            other: prompt(option("--other", other), { value: "x" }),
+          }),
         ),
-        level: option("--level", level),
-      });
+      ),
+      level: option("--level", level),
+    });
 
-      // The union completes in a mixed domain, so nothing may register
-      // under the source ID; the consumer falls back to its own default
-      // ("dev"), for which "debug" is valid.
-      const result = await parseAsync(parser, ["--level", "debug"]);
+    const result = await parseAsync(parser, ["run", "--level", "silent"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.mode, "fallback");
-      assert.equal(result.value.level, "debug");
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.ok(result.success);
+    assert.ok("mode" in result.value.cmd);
+    assert.equal(result.value.cmd.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "completes a selected command branch source before sibling replay",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const other = dependency(string());
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        cmd: or(
-          command(
-            "run",
-            object({
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-          ),
-          command(
-            "stop",
-            object({
-              other: prompt(option("--other", other), { value: "x" }),
-            }),
-          ),
-        ),
-        level: option("--level", level),
-      });
+  it("stops seed extraction after a demanded prompt cancellation", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-seed-cancellation"),
+      phase: "two-pass",
+      getAnnotations() {
+        return {};
+      },
+    };
+    const parser = object({
+      mode: prompt(option("--mode", mode), { value: "prod", reject: true }),
+      level: option("--level", level),
+      name: prompt(option("--name", string()), { value: "n" }),
+    });
 
-      const result = await parseAsync(parser, ["run", "--level", "silent"]);
+    // The demanded source prompt is cancelled during the seed pass; no
+    // later prompt (including the ordinary `name` prompt) may run in
+    // any pass afterwards.
+    await assert.rejects(() =>
+      runWith(parser, "test", [dynamicContext], {
+        args: ["--level", "silent"],
+      }),
+    );
 
-      assert.ok(result.success);
-      assert.ok("mode" in result.value.cmd);
-      assert.equal(result.value.cmd.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "stops seed extraction after a demanded prompt cancellation",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-seed-cancellation"),
-        phase: "two-pass",
-        getAnnotations() {
-          return {};
-        },
-      };
-      const parser = object({
-        mode: prompt(option("--mode", mode), { value: "prod", reject: true }),
-        level: option("--level", level),
-        name: prompt(option("--name", string()), { value: "n" }),
-      });
-
-      // The demanded source prompt is cancelled during the seed pass; no
-      // later prompt (including the ordinary `name` prompt) may run in
-      // any pass afterwards.
-      await assert.rejects(() =>
-        runWith(parser, "test", [dynamicContext], {
-          args: ["--level", "silent"],
-        })
-      );
-
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.equal(calls.length, 1);
+  });
 
   it("runs bound merge() prompts in declaration order", async () => {
     const srcA = dependency(string());
@@ -2758,271 +2760,241 @@ describe("prompted values as dependency sources", () => {
     assert.deepEqual(calls, [{ value: "A" }, { value: "B" }]);
   });
 
-  it(
-    "schedules through map() around a selected command branch",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const other = dependency(string());
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        cmd: or(
-          command(
-            "run",
-            object({
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-          ),
-          command(
-            "stop",
-            object({
-              other: prompt(option("--other", other), { value: "x" }),
-            }),
-          ),
-        ).map((value) => value),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, ["run", "--level", "silent"]);
-
-      assert.ok(result.success);
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "lets a later occurrence override a pre-completed prompt answer",
-    async () => {
-      const shared = dependency(choice(["dev", "prod"] as const));
-      const level = shared.derive({
-        metavar: "LEVEL",
-        mode: "sync",
-        factory: (value: "dev" | "prod") =>
-          choice(
-            value === "dev"
-              ? (["debug", "verbose"] as const)
-              : (["silent", "strict"] as const),
-          ),
-        defaultValue: () => "dev" as const,
-      });
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: () => undefined,
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      // The first occurrence is pre-completed through its source binding
-      // (prompting "dev"); the later prompted occurrence must still run
-      // and win, matching repeated command-line source occurrences.
-      const parser = object({
-        a: prompt(
-          bindEnv(option("--a", shared), {
-            context: envContext,
-            key: "A",
-            parser: choice(["dev", "prod"] as const),
-          }),
-          { value: "dev" },
-        ),
-        b: prompt(option("--b", shared), { value: "prod" }),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, ["--level", "silent"], {
-        annotations,
-      });
-
-      assert.ok(result.success);
-      assert.equal(result.value.a, "dev");
-      assert.equal(result.value.b, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 2);
-    },
-  );
-
-  it(
-    "keeps declaration order across nested and bound shared prompts",
-    async () => {
-      const shared = dependency(choice(["dev", "prod"] as const));
-      const level = shared.derive({
-        metavar: "LEVEL",
-        mode: "sync",
-        factory: (value: "dev" | "prod") =>
-          choice(
-            value === "dev"
-              ? (["debug", "verbose"] as const)
-              : (["silent", "strict"] as const),
-          ),
-        defaultValue: () => "dev" as const,
-      });
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: () => undefined,
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      // The nested prompt is declared first and the bound prompt second;
-      // both must run in declaration order and the later answer wins for
-      // the derived consumer.
-      const parser = object({
-        g: object({ a: prompt(option("--a", shared), { value: "dev" }) }),
-        b: prompt(
-          bindEnv(option("--b", shared), {
-            context: envContext,
-            key: "B",
-            parser: choice(["dev", "prod"] as const),
-          }),
-          { value: "prod" },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, ["--level", "silent"], {
-        annotations,
-      });
-
-      assert.ok(result.success);
-      assert.equal(result.value.level, "silent");
-      assert.deepEqual(calls.map((c) => c.value), ["dev", "prod"]);
-    },
-  );
-
-  it(
-    "exposes nested prompts through a matched optional(object(...))",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        g: optional(object({
-          flag: option("--g", string()),
-          mode: prompt(option("--mode", mode), { value: "prod" }),
-        })),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, [
-        "--g",
-        "x",
-        "--level",
-        "silent",
-      ]);
-
-      assert.ok(result.success);
-      assert.equal(result.value.g?.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "exposes nested prompts through withDefault(object(...))",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        g: withDefault(
+  it("schedules through map() around a selected command branch", async () => {
+    const { mode, level } = createModeFixture();
+    const other = dependency(string());
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cmd: or(
+        command(
+          "run",
           object({
-            flag: option("--g", string()),
             mode: prompt(option("--mode", mode), { value: "prod" }),
           }),
-          { flag: "d", mode: "dev" as const },
         ),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, [
-        "--g",
-        "x",
-        "--level",
-        "silent",
-      ]);
-
-      assert.ok(result.success);
-      assert.equal(result.value.g.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "keeps optional() suppression for a mapped prompted source",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        mode: optional(
-          prompt(option("--mode", mode), { value: "prod" })
-            .map((value) => value.toUpperCase()),
+        command(
+          "stop",
+          object({
+            other: prompt(option("--other", other), { value: "x" }),
+          }),
         ),
-        level: option("--level", level),
-      });
+      ).map((value) => value),
+      level: option("--level", level),
+    });
 
-      // An unmatched optional() resolves to undefined without prompting,
-      // even around a mapped source; the consumer falls back to its own
-      // default ("dev").
-      const result = await parseAsync(parser, ["--level", "debug"]);
+    const result = await parseAsync(parser, ["run", "--level", "silent"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.mode, undefined);
-      assert.equal(result.value.level, "debug");
-      assert.deepEqual(calls, []);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "schedules prompts inside a nonEmpty(object(...)) merge child",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = merge(
-        object({ level: option("--level", level) }),
-        nonEmpty(object({
+  it("lets a later occurrence override a pre-completed prompt answer", async () => {
+    const shared = dependency(choice(["dev", "prod"] as const));
+    const level = shared.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    // The first occurrence is pre-completed through its source binding
+    // (prompting "dev"); the later prompted occurrence must still run
+    // and win, matching repeated command-line source occurrences.
+    const parser = object({
+      a: prompt(
+        bindEnv(option("--a", shared), {
+          context: envContext,
+          key: "A",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        { value: "dev" },
+      ),
+      b: prompt(option("--b", shared), { value: "prod" }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "silent"], {
+      annotations,
+    });
+
+    assert.ok(result.success);
+    assert.equal(result.value.a, "dev");
+    assert.equal(result.value.b, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 2);
+  });
+
+  it("keeps declaration order across nested and bound shared prompts", async () => {
+    const shared = dependency(choice(["dev", "prod"] as const));
+    const level = shared.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") =>
+        choice(
+          value === "dev"
+            ? (["debug", "verbose"] as const)
+            : (["silent", "strict"] as const),
+        ),
+      defaultValue: () => "dev" as const,
+    });
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    // The nested prompt is declared first and the bound prompt second;
+    // both must run in declaration order and the later answer wins for
+    // the derived consumer.
+    const parser = object({
+      g: object({ a: prompt(option("--a", shared), { value: "dev" }) }),
+      b: prompt(
+        bindEnv(option("--b", shared), {
+          context: envContext,
+          key: "B",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        { value: "prod" },
+      ),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "silent"], {
+      annotations,
+    });
+
+    assert.ok(result.success);
+    assert.equal(result.value.level, "silent");
+    assert.deepEqual(
+      calls.map((c) => c.value),
+      ["dev", "prod"],
+    );
+  });
+
+  it("exposes nested prompts through a matched optional(object(...))", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      g: optional(
+        object({
+          flag: option("--g", string()),
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+      ),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--g", "x", "--level", "silent"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.g?.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
+
+  it("exposes nested prompts through withDefault(object(...))", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      g: withDefault(
+        object({
+          flag: option("--g", string()),
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+        { flag: "d", mode: "dev" as const },
+      ),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--g", "x", "--level", "silent"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.g.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
+
+  it("keeps optional() suppression for a mapped prompted source", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      mode: optional(
+        prompt(option("--mode", mode), { value: "prod" }).map((value) =>
+          value.toUpperCase(),
+        ),
+      ),
+      level: option("--level", level),
+    });
+
+    // An unmatched optional() resolves to undefined without prompting,
+    // even around a mapped source; the consumer falls back to its own
+    // default ("dev").
+    const result = await parseAsync(parser, ["--level", "debug"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
+    assert.deepEqual(calls, []);
+  });
+
+  it("schedules prompts inside a nonEmpty(object(...)) merge child", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = merge(
+      object({ level: option("--level", level) }),
+      nonEmpty(
+        object({
           enabled: flag("--enabled"),
           mode: prompt(option("--mode", mode), { value: "prod" }),
-        })),
-      );
+        }),
+      ),
+    );
 
-      const result = await parseAsync(parser, [
-        "--enabled",
-        "--level",
-        "silent",
-      ]);
+    const result = await parseAsync(parser, ["--enabled", "--level", "silent"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "does not prompt for an unmatched withDefault(object) merge child",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = merge(
-        object({ level: option("--level", level) }),
-        withDefault(
-          object({ mode: prompt(option("--mode", mode), { value: "prod" }) }),
-          { mode: "dev" as const },
-        ),
-      );
+  it("does not prompt for an unmatched withDefault(object) merge child", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = merge(
+      object({ level: option("--level", level) }),
+      withDefault(
+        object({ mode: prompt(option("--mode", mode), { value: "prod" }) }),
+        { mode: "dev" as const },
+      ),
+    );
 
-      // Nothing matches the second child, so its default applies without
-      // prompting; the consumer falls back to its own default ("dev").
-      const result = await parseAsync(parser, ["--level", "debug"]);
+    // Nothing matches the second child, so its default applies without
+    // prompting; the consumer falls back to its own default ("dev").
+    const result = await parseAsync(parser, ["--level", "debug"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.mode, "dev");
-      assert.equal(result.value.level, "debug");
-      assert.deepEqual(calls, []);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(result.value.level, "debug");
+    assert.deepEqual(calls, []);
+  });
 
   it("recovers a failed bound source through the prompt", async () => {
     const { mode, level } = createModeFixture();
@@ -3059,614 +3031,532 @@ describe("prompted values as dependency sources", () => {
     assert.equal(calls.length, 1);
   });
 
-  it(
-    "completes a prompted conditional() discriminator before sibling replay",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        selected: conditional(
-          prompt(option("--mode", mode), { value: "prod" }),
-          {
-            dev: object({
-              d: withDefault(option("--d", choice(["x"] as const)), "x"),
-            }),
-            prod: object({
-              p: withDefault(option("--p", choice(["y"] as const)), "y"),
-            }),
-          },
-        ),
-        level: option("--level", level),
-      });
+  it("completes a prompted conditional() discriminator before sibling replay", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      selected: conditional(prompt(option("--mode", mode), { value: "prod" }), {
+        dev: object({
+          d: withDefault(option("--d", choice(["x"] as const)), "x"),
+        }),
+        prod: object({
+          p: withDefault(option("--p", choice(["y"] as const)), "y"),
+        }),
+      }),
+      level: option("--level", level),
+    });
 
-      const result = await parseAsync(parser, ["--level", "silent"]);
+    const result = await parseAsync(parser, ["--level", "silent"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "schedules a prompted discriminator in a root-level conditional()",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // No parent construct invokes the scheduling hook here, so the
-      // conditional's own completion must schedule the discriminator
-      // prompt before branch replay.
-      const parser = conditional(
-        prompt(option("--mode", mode), { value: "prod" }),
-        { prod: object({ level: option("--level", level) }) },
-      );
+  it("schedules a prompted discriminator in a root-level conditional()", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // No parent construct invokes the scheduling hook here, so the
+    // conditional's own completion must schedule the discriminator
+    // prompt before branch replay.
+    const parser = conditional(
+      prompt(option("--mode", mode), { value: "prod" }),
+      { prod: object({ level: option("--level", level) }) },
+    );
 
-      const result = await parseAsync(parser, ["--level", "silent"]);
+    const result = await parseAsync(parser, ["--level", "silent"]);
 
-      assert.ok(result.success);
-      assert.deepEqual(result.value, ["prod", { level: "silent" }]);
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["prod", { level: "silent" }]);
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "does not prompt inside a mismatched speculative conditional() branch",
-    async () => {
-      const mode = dependency(choice(["dev", "prod"] as const));
-      const other = dependency(string());
-      const { prompt, calls } = createTestPrompt();
-      let branchValidationCalls = 0;
-      // "--d 1" speculatively selects the dev branch, but the prompted
-      // discriminator answers "prod": the guessed branch must produce no
-      // interactive side effects before the mismatch is verified.
-      const parser = conditional(
-        prompt(option("--mode", mode), { value: "prod" }),
-        {
-          dev: object({
-            d: option("--d", string()),
-            dp: prompt(option("--dp", other), { value: "DP" }, {
+  it("does not prompt inside a mismatched speculative conditional() branch", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const other = dependency(string());
+    const { prompt, calls } = createTestPrompt();
+    let branchValidationCalls = 0;
+    // "--d 1" speculatively selects the dev branch, but the prompted
+    // discriminator answers "prod": the guessed branch must produce no
+    // interactive side effects before the mismatch is verified.
+    const parser = conditional(
+      prompt(option("--mode", mode), { value: "prod" }),
+      {
+        dev: object({
+          d: option("--d", string()),
+          dp: prompt(
+            option("--dp", other),
+            { value: "DP" },
+            {
               validate() {
                 branchValidationCalls++;
                 return undefined;
               },
-            }),
-          }),
-          prod: object({ p: option("--p", string()) }),
+            },
+          ),
+        }),
+        prod: object({ p: option("--p", string()) }),
+      },
+    );
+
+    const result = await parseAsync(parser, ["--d", "1"]);
+
+    assert.ok(!result.success);
+    assert.deepEqual(calls, [{ value: "prod" }]);
+    assert.equal(branchValidationCalls, 0);
+  });
+
+  it("schedules the branch chosen by a prompted discriminator", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // Nothing on the command line selects the branch; the prompted
+    // discriminator answers "a", whose branch prompts a mode source
+    // consumed by an outer sibling.  Both prompts must run before
+    // the sibling's replay, once each.
+    const parser = object({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
+
+    const valid = await parseAsync(parser, ["--level", "silent"]);
+    assert.ok(valid.success);
+    assert.equal(valid.value.level, "silent");
+    assert.equal(calls.length, 2);
+
+    const invalid = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(!invalid.success);
+  });
+
+  it("schedules a nothing-parsed default branch's prompted source", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // No input at all commits a branch and the discriminator option
+    // cannot complete, so the default branch is selected; its
+    // prompted source must be scheduled before the sibling's replay.
+    const parser = object({
+      cond: conditional(
+        option("--kind", choice(["a", "b"] as const)),
+        {
+          a: object({ x: option("--x", choice(["1"] as const)) }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
         },
-      );
+        object({
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+      ),
+      level: option("--level", level),
+    });
 
-      const result = await parseAsync(parser, ["--d", "1"]);
+    const valid = await parseAsync(parser, ["--level", "silent"]);
+    assert.ok(valid.success);
+    assert.equal(valid.value.level, "silent");
+    assert.equal(calls.length, 1);
 
-      assert.ok(!result.success);
-      assert.deepEqual(calls, [{ value: "prod" }]);
-      assert.equal(branchValidationCalls, 0);
-    },
-  );
+    const invalid = await parseAsync(parser, ["--level", "debug"]);
+    assert.ok(!invalid.success);
+  });
 
-  it(
-    "schedules the branch chosen by a prompted discriminator",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // Nothing on the command line selects the branch; the prompted
-      // discriminator answers "a", whose branch prompts a mode source
-      // consumed by an outer sibling.  Both prompts must run before
-      // the sibling's replay, once each.
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a" }),
-          {
-            a: object({
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const valid = await parseAsync(parser, ["--level", "silent"]);
-      assert.ok(valid.success);
-      assert.equal(valid.value.level, "silent");
-      assert.equal(calls.length, 2);
-
-      const invalid = await parseAsync(parser, ["--level", "debug"]);
-      assert.ok(!invalid.success);
-    },
-  );
-
-  it(
-    "schedules a nothing-parsed default branch's prompted source",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // No input at all commits a branch and the discriminator option
-      // cannot complete, so the default branch is selected; its
-      // prompted source must be scheduled before the sibling's replay.
-      const parser = object({
-        cond: conditional(
+  it("reuses the prepared selection for a non-idempotent discriminator", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let defaultCalls = 0;
+    // The discriminator's lazy default yields "a" on its first two
+    // evaluations (parse-time branch probing consumes one, the
+    // scheduling pass's preparation the other) and "b" afterwards.
+    // Final completion must consume the prepared selection instead of
+    // evaluating the default a third time: a third evaluation would
+    // select branch "b", whose required --y is missing.
+    const parser = object({
+      cond: conditional(
+        withDefault(
           option("--kind", choice(["a", "b"] as const)),
-          {
-            a: object({ x: option("--x", choice(["1"] as const)) }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
+          () => (++defaultCalls <= 2 ? "a" : "b") as "a" | "b",
+        ),
+        {
+          a: object({
+            mode: prompt(option("--mode", mode), { value: "prod" }),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "silent"]);
+    assert.ok(result.success);
+    assert.equal(result.value.level, "silent");
+    assert.equal(defaultCalls, 2);
+    assert.equal(calls.length, 1);
+  });
+
+  it("stops after a cancelled prompted discriminator", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      cond: conditional(
+        prompt(option("--kind", kind), { value: "a", reject: true }),
+        {
+          a: object({
+            mode: prompt(option("--mode", mode), { value: "prod" }),
+          }),
+          b: object({ y: option("--y", choice(["2"] as const)) }),
+        },
+      ),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--level", "silent"]);
+    assert.ok(!result.success);
+    // Only the discriminator prompt ran; the branch prompt never did.
+    assert.equal(calls.length, 1);
+  });
+
+  it("schedules a confirmed speculative branch's prompted source", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // "--a x" speculatively selects branch a while the prompted
+    // discriminator defers; the answer "a" confirms the guess, so the
+    // branch's prompted source must still complete before the outer
+    // sibling's replay.
+    const parser = object({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
+
+    const valid = await parseAsync(parser, ["--a", "x", "--level", "silent"]);
+    assert.ok(valid.success);
+    assert.equal(valid.value.level, "silent");
+    assert.equal(calls.length, 2);
+
+    const invalid = await parseAsync(parser, ["--a", "x", "--level", "debug"]);
+    assert.ok(!invalid.success);
+  });
+
+  it("does not prompt a rejected speculative branch through a parent", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let branchValidationCalls = 0;
+    // "--a x" speculatively selects branch a while the prompted
+    // discriminator defers; the answer "b" rejects the guess, so the
+    // parent's scheduling pass must not run the guessed branch's
+    // prompt before the mismatch is detected.
+    const parser = object({
+      cond: conditional(prompt(option("--kind", kind), { value: "b" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          mode: prompt(
+            option("--mode", mode),
+            { value: "prod" },
+            {
+              validate() {
+                branchValidationCalls++;
+                return undefined;
+              },
+            },
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, ["--a", "x", "--level", "silent"]);
+
+    assert.ok(!result.success);
+    // Only the discriminator prompt ran.
+    assert.equal(calls.length, 1);
+    assert.equal(branchValidationCalls, 0);
+  });
+
+  it("propagates chained barrier demand across declaration order", async () => {
+    const kindA = dependency(choice(["a", "z"] as const));
+    const kindB = dependency(choice(["b", "z"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let phase2CondA: unknown;
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-chained-barrier-demand"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase2ContextRequest(request)) {
+          phase2CondA = (request.parsed as { readonly condA?: unknown })?.condA;
+        }
+        return {};
+      },
+    };
+    // Demand flows through a chain of barriers declared in the
+    // failing order: --level demands mode, which condB provides, so
+    // condB's discriminator becomes demanded; condA's branch provides
+    // that discriminator's source, so condA's discriminator must
+    // become demanded too even though condA precedes condB.
+    const parser = object({
+      condA: conditional(prompt(option("--kind-a", kindA), { value: "a" }), {
+        a: object({
+          kb: prompt(option("--kb", kindB), { value: "b" }),
+        }),
+        z: object({ za: option("--za", choice(["1"] as const)) }),
+      }),
+      condB: conditional(prompt(option("--kind-b", kindB), { value: "b" }), {
+        b: object({
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+        z: object({ zb: option("--zb", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--level", "silent"],
+    });
+
+    assert.equal((result as { readonly level: string }).level, "silent");
+    assert.ok(phase2CondA != null);
+    // Chained demand must resolve before the seed pass runs any
+    // effect, so the prompts keep declaration order (condA's
+    // discriminator and branch before condB's); a single demand scan
+    // would run condB's prompts first and only reach condA's in its
+    // own later completion.
+    assert.deepEqual(calls, [
+      { value: "a" },
+      { value: "b" },
+      { value: "b" },
+      { value: "prod" },
+    ]);
+  });
+
+  it("delivers a confirmed speculative branch's CLI source", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // The speculative branch's mode value is typed, not prompted; it
+    // must reach the sibling once the discriminator's answer confirms
+    // the branch.
+    const parser = object({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          mode: option("--mode", mode),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await parseAsync(parser, [
+      "--a",
+      "x",
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 1);
+  });
+
+  it("prepares a demanded conditional() branch across two-pass runs", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let phase2Level: string | undefined;
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-conditional-branch-demand"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase2ContextRequest(request)) {
+          phase2Level = (request.parsed as { readonly level?: string })?.level;
+        }
+        return {};
+      },
+    };
+    // --level demands the branch's mode source; the discriminator is
+    // its control dependency, so both prompts already run in the seed
+    // pass and their answers are reused in the final pass: one
+    // execution each across the whole run.
+    const parser = object({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
+
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--level", "silent"],
+    });
+
+    assert.equal(result.level, "silent");
+    assert.equal(calls.length, 2);
+    assert.equal(phase2Level, "silent");
+  });
+
+  it("demands a branch source hidden behind a command() in two-pass runs", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let phase2Level: string | undefined = "unset";
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-command-branch-demand"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase2ContextRequest(request)) {
+          phase2Level = (request.parsed as { readonly level?: string })?.level;
+        }
+        return {};
+      },
+    };
+    // The branch's mode source sits behind a command(), which exposes
+    // no field pairs; the static estimate must still see it so the
+    // seed pass demands the discriminator as a control dependency and
+    // phase-two contexts observe the sibling's value.
+    const parser = object({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: command(
+          "deploy",
           object({
             mode: prompt(option("--mode", mode), { value: "prod" }),
           }),
         ),
-        level: option("--level", level),
-      });
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
 
-      const valid = await parseAsync(parser, ["--level", "silent"]);
-      assert.ok(valid.success);
-      assert.equal(valid.value.level, "silent");
-      assert.equal(calls.length, 1);
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["deploy", "--level", "silent"],
+    });
 
-      const invalid = await parseAsync(parser, ["--level", "debug"]);
-      assert.ok(!invalid.success);
-    },
-  );
+    assert.equal((result as { readonly level: string }).level, "silent");
+    assert.equal(phase2Level, "silent");
+    assert.equal(calls.length, 2);
+  });
 
-  it(
-    "reuses the prepared selection for a non-idempotent discriminator",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let defaultCalls = 0;
-      // The discriminator's lazy default yields "a" on its first two
-      // evaluations (parse-time branch probing consumes one, the
-      // scheduling pass's preparation the other) and "b" afterwards.
-      // Final completion must consume the prepared selection instead of
-      // evaluating the default a third time: a third evaluation would
-      // select branch "b", whose required --y is missing.
-      const parser = object({
-        cond: conditional(
-          withDefault(
-            option("--kind", choice(["a", "b"] as const)),
-            () => (++defaultCalls <= 2 ? "a" : "b") as "a" | "b",
+  it("demands a branch source inside a mixed or() in two-pass runs", async () => {
+    const kind = dependency(choice(["a", "b"] as const));
+    const other = dependency(choice(["x"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let phase2Level: string | undefined = "unset";
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-mixed-or-branch-demand"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase2ContextRequest(request)) {
+          phase2Level = (request.parsed as { readonly level?: string })?.level;
+        }
+        return {};
+      },
+    };
+    // The branch is a mixed or(): the exclusive parser carries
+    // composed metadata for the direct source alternative, but the
+    // static estimate must still see mode inside the command
+    // alternative so the discriminator becomes a control dependency
+    // in the seed pass.
+    const parser = object({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: or(
+          command(
+            "deploy",
+            object({
+              mode: prompt(option("--mode", mode), { value: "prod" }),
+            }),
           ),
-          {
-            a: object({
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
+          option("--fallback", other),
         ),
-        level: option("--level", level),
-      });
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
 
-      const result = await parseAsync(parser, ["--level", "silent"]);
-      assert.ok(result.success);
-      assert.equal(result.value.level, "silent");
-      assert.equal(defaultCalls, 2);
-      assert.equal(calls.length, 1);
-    },
-  );
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["deploy", "--level", "silent"],
+    });
 
-  it(
-    "stops after a cancelled prompted discriminator",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a", reject: true }),
-          {
-            a: object({
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
+    assert.equal((result as { readonly level: string }).level, "silent");
+    assert.equal(phase2Level, "silent");
+    assert.equal(calls.length, 2);
+  });
 
-      const result = await parseAsync(parser, ["--level", "silent"]);
-      assert.ok(!result.success);
-      // Only the discriminator prompt ran; the branch prompt never did.
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "schedules a confirmed speculative branch's prompted source",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // "--a x" speculatively selects branch a while the prompted
-      // discriminator defers; the answer "a" confirms the guess, so the
-      // branch's prompted source must still complete before the outer
-      // sibling's replay.
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a" }),
-          {
-            a: object({
-              ax: option("--a", choice(["x"] as const)),
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const valid = await parseAsync(
-        parser,
-        ["--a", "x", "--level", "silent"],
-      );
-      assert.ok(valid.success);
-      assert.equal(valid.value.level, "silent");
-      assert.equal(calls.length, 2);
-
-      const invalid = await parseAsync(
-        parser,
-        ["--a", "x", "--level", "debug"],
-      );
-      assert.ok(!invalid.success);
-    },
-  );
-
-  it(
-    "does not prompt a rejected speculative branch through a parent",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let branchValidationCalls = 0;
-      // "--a x" speculatively selects branch a while the prompted
-      // discriminator defers; the answer "b" rejects the guess, so the
-      // parent's scheduling pass must not run the guessed branch's
-      // prompt before the mismatch is detected.
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "b" }),
-          {
-            a: object({
-              ax: option("--a", choice(["x"] as const)),
-              mode: prompt(option("--mode", mode), { value: "prod" }, {
-                validate() {
-                  branchValidationCalls++;
-                  return undefined;
-                },
-              }),
-            }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(
-        parser,
-        ["--a", "x", "--level", "silent"],
-      );
-
-      assert.ok(!result.success);
-      // Only the discriminator prompt ran.
-      assert.equal(calls.length, 1);
-      assert.equal(branchValidationCalls, 0);
-    },
-  );
-
-  it(
-    "propagates chained barrier demand across declaration order",
-    async () => {
-      const kindA = dependency(choice(["a", "z"] as const));
-      const kindB = dependency(choice(["b", "z"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let phase2CondA: unknown;
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-chained-barrier-demand"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase2ContextRequest(request)) {
-            phase2CondA = (request.parsed as { readonly condA?: unknown })
-              ?.condA;
-          }
-          return {};
-        },
-      };
-      // Demand flows through a chain of barriers declared in the
-      // failing order: --level demands mode, which condB provides, so
-      // condB's discriminator becomes demanded; condA's branch provides
-      // that discriminator's source, so condA's discriminator must
-      // become demanded too even though condA precedes condB.
-      const parser = object({
-        condA: conditional(
-          prompt(option("--kind-a", kindA), { value: "a" }),
-          {
-            a: object({
-              kb: prompt(option("--kb", kindB), { value: "b" }),
-            }),
-            z: object({ za: option("--za", choice(["1"] as const)) }),
-          },
-        ),
-        condB: conditional(
-          prompt(option("--kind-b", kindB), { value: "b" }),
-          {
-            b: object({
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-            z: object({ zb: option("--zb", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: ["--level", "silent"],
-      });
-
-      assert.equal((result as { readonly level: string }).level, "silent");
-      assert.ok(phase2CondA != null);
-      // Chained demand must resolve before the seed pass runs any
-      // effect, so the prompts keep declaration order (condA's
-      // discriminator and branch before condB's); a single demand scan
-      // would run condB's prompts first and only reach condA's in its
-      // own later completion.
-      assert.deepEqual(calls, [
-        { value: "a" },
-        { value: "b" },
-        { value: "b" },
-        { value: "prod" },
-      ]);
-    },
-  );
-
-  it(
-    "delivers a confirmed speculative branch's CLI source",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // The speculative branch's mode value is typed, not prompted; it
-      // must reach the sibling once the discriminator's answer confirms
-      // the branch.
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a" }),
-          {
-            a: object({
-              ax: option("--a", choice(["x"] as const)),
-              mode: option("--mode", mode),
-            }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(
-        parser,
-        ["--a", "x", "--mode", "prod", "--level", "silent"],
-      );
-
-      assert.ok(result.success);
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
-
-  it(
-    "prepares a demanded conditional() branch across two-pass runs",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let phase2Level: string | undefined;
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-conditional-branch-demand"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase2ContextRequest(request)) {
-            phase2Level = (request.parsed as { readonly level?: string })
-              ?.level;
-          }
-          return {};
-        },
-      };
-      // --level demands the branch's mode source; the discriminator is
-      // its control dependency, so both prompts already run in the seed
-      // pass and their answers are reused in the final pass: one
-      // execution each across the whole run.
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a" }),
-          {
-            a: object({
-              mode: prompt(option("--mode", mode), { value: "prod" }),
-            }),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: ["--level", "silent"],
-      });
-
-      assert.equal(result.level, "silent");
-      assert.equal(calls.length, 2);
-      assert.equal(phase2Level, "silent");
-    },
-  );
-
-  it(
-    "demands a branch source hidden behind a command() in two-pass runs",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let phase2Level: string | undefined = "unset";
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-command-branch-demand"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase2ContextRequest(request)) {
-            phase2Level = (request.parsed as { readonly level?: string })
-              ?.level;
-          }
-          return {};
-        },
-      };
-      // The branch's mode source sits behind a command(), which exposes
-      // no field pairs; the static estimate must still see it so the
-      // seed pass demands the discriminator as a control dependency and
-      // phase-two contexts observe the sibling's value.
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a" }),
-          {
-            a: command(
-              "deploy",
-              object({
-                mode: prompt(option("--mode", mode), { value: "prod" }),
-              }),
-            ),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: ["deploy", "--level", "silent"],
-      });
-
-      assert.equal((result as { readonly level: string }).level, "silent");
-      assert.equal(phase2Level, "silent");
-      assert.equal(calls.length, 2);
-    },
-  );
-
-  it(
-    "demands a branch source inside a mixed or() in two-pass runs",
-    async () => {
-      const kind = dependency(choice(["a", "b"] as const));
-      const other = dependency(choice(["x"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let phase2Level: string | undefined = "unset";
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-mixed-or-branch-demand"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase2ContextRequest(request)) {
-            phase2Level = (request.parsed as { readonly level?: string })
-              ?.level;
-          }
-          return {};
-        },
-      };
-      // The branch is a mixed or(): the exclusive parser carries
-      // composed metadata for the direct source alternative, but the
-      // static estimate must still see mode inside the command
-      // alternative so the discriminator becomes a control dependency
-      // in the seed pass.
-      const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a" }),
-          {
-            a: or(
-              command(
-                "deploy",
-                object({
-                  mode: prompt(option("--mode", mode), { value: "prod" }),
-                }),
-              ),
-              option("--fallback", other),
-            ),
-            b: object({ y: option("--y", choice(["2"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: ["deploy", "--level", "silent"],
-      });
-
-      assert.equal((result as { readonly level: string }).level, "silent");
-      assert.equal(phase2Level, "silent");
-      assert.equal(calls.length, 2);
-    },
-  );
-
-  it(
-    "prepares a nested conditional() inside a prepared branch",
-    async () => {
-      const kind = dependency(choice(["x", "z"] as const));
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        outer: conditional(
-          prompt(option("--kind", kind), { value: "x" }),
-          {
-            x: object({
-              inner: conditional(
-                prompt(option("--mode", mode), { value: "prod" }),
-                {
-                  dev: object({
-                    d: withDefault(
-                      option("--d", choice(["1"] as const)),
-                      "1" as const,
-                    ),
-                  }),
-                  prod: object({
-                    p: withDefault(
-                      option("--p", choice(["2"] as const)),
-                      "2" as const,
-                    ),
-                  }),
-                },
-              ),
-            }),
-            z: object({ y: option("--y", choice(["3"] as const)) }),
-          },
-        ),
-        level: option("--level", level),
-      });
-
-      const result = await parseAsync(parser, ["--level", "silent"]);
-
-      assert.ok(result.success);
-      assert.equal(result.value.level, "silent");
-      assert.equal(calls.length, 2);
-    },
-  );
-
-  it(
-    "evaluates a nested lazy withDefault(prompt) default exactly once",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let defaultCalls = 0;
-      const parser = object({
-        settings: object({
-          mode: withDefault(
+  it("prepares a nested conditional() inside a prepared branch", async () => {
+    const kind = dependency(choice(["x", "z"] as const));
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      outer: conditional(prompt(option("--kind", kind), { value: "x" }), {
+        x: object({
+          inner: conditional(
             prompt(option("--mode", mode), { value: "prod" }),
-            () => (++defaultCalls === 1 ? "prod" : "dev") as "dev" | "prod",
+            {
+              dev: object({
+                d: withDefault(
+                  option("--d", choice(["1"] as const)),
+                  "1" as const,
+                ),
+              }),
+              prod: object({
+                p: withDefault(
+                  option("--p", choice(["2"] as const)),
+                  "2" as const,
+                ),
+              }),
+            },
           ),
         }),
-        level: option("--level", level),
-      });
+        z: object({ y: option("--y", choice(["3"] as const)) }),
+      }),
+      level: option("--level", level),
+    });
 
-      // The registered dependency value and the returned field must come
-      // from the same single evaluation of the lazy default.
-      const result = await parseAsync(parser, ["--level", "silent"]);
+    const result = await parseAsync(parser, ["--level", "silent"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.settings.mode, "prod");
-      assert.equal(result.value.level, "silent");
-      assert.deepEqual(calls, []);
-      assert.equal(defaultCalls, 1);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.level, "silent");
+    assert.equal(calls.length, 2);
+  });
+
+  it("evaluates a nested lazy withDefault(prompt) default exactly once", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let defaultCalls = 0;
+    const parser = object({
+      settings: object({
+        mode: withDefault(
+          prompt(option("--mode", mode), { value: "prod" }),
+          () => (++defaultCalls === 1 ? "prod" : "dev") as "dev" | "prod",
+        ),
+      }),
+      level: option("--level", level),
+    });
+
+    // The registered dependency value and the returned field must come
+    // from the same single evaluation of the lazy default.
+    const result = await parseAsync(parser, ["--level", "silent"]);
+
+    assert.ok(result.success);
+    assert.equal(result.value.settings.mode, "prod");
+    assert.equal(result.value.level, "silent");
+    assert.deepEqual(calls, []);
+    assert.equal(defaultCalls, 1);
+  });
 
   it("registers a prompted value nested in an inner object()", async () => {
     const { mode, level } = createModeFixture();
@@ -3686,78 +3576,70 @@ describe("prompted values as dependency sources", () => {
     assert.equal(calls.length, 1);
   });
 
-  it(
-    "keeps optional(prompt(...)) suppression for a wrapped source",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // An unmatched optional() field resolves to `undefined` without
-      // prompting for non-source prompts; wrapping a dependency source
-      // must behave the same way, so the consumer falls back to its own
-      // default ("dev").
-      const parser = object({
-        mode: optional(prompt(option("--mode", mode), { value: "prod" })),
-        level: option("--level", level),
-      });
+  it("keeps optional(prompt(...)) suppression for a wrapped source", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // An unmatched optional() field resolves to `undefined` without
+    // prompting for non-source prompts; wrapping a dependency source
+    // must behave the same way, so the consumer falls back to its own
+    // default ("dev").
+    const parser = object({
+      mode: optional(prompt(option("--mode", mode), { value: "prod" })),
+      level: option("--level", level),
+    });
 
-      const result = await parseAsync(parser, ["--level", "debug"]);
+    const result = await parseAsync(parser, ["--level", "debug"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.mode, undefined);
-      assert.equal(result.value.level, "debug");
-      assert.deepEqual(calls, []);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, undefined);
+    assert.equal(result.value.level, "debug");
+    assert.deepEqual(calls, []);
+  });
 
-  it(
-    "does not register a prompt answer for a transformed inner source",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      // The prompt's answer lives in the mapped domain, so the
-      // pre-transform source value is unrecoverable and nothing
-      // registers; the consumer falls back to its own default ("dev").
-      const parser = object({
-        mode: prompt(
-          option("--mode", mode).map((value) => value.toUpperCase()),
-          { value: "PROD" },
-        ),
-        level: option("--level", level),
-      });
+  it("does not register a prompt answer for a transformed inner source", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    // The prompt's answer lives in the mapped domain, so the
+    // pre-transform source value is unrecoverable and nothing
+    // registers; the consumer falls back to its own default ("dev").
+    const parser = object({
+      mode: prompt(
+        option("--mode", mode).map((value) => value.toUpperCase()),
+        { value: "PROD" },
+      ),
+      level: option("--level", level),
+    });
 
-      const result = await parseAsync(parser, ["--level", "debug"]);
+    const result = await parseAsync(parser, ["--level", "debug"]);
 
-      assert.ok(result.success);
-      assert.equal(result.value.mode, "PROD");
-      assert.equal(result.value.level, "debug");
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "PROD");
+    assert.equal(result.value.level, "debug");
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "prompts once per occurrence when one instance is reused",
-    async () => {
-      const src = dependency(string());
-      const { prompt, calls } = createTestPrompt();
-      const shared = prompt(argument(src), { value: "answer" });
-      const parser = tuple([shared, shared]);
+  it("prompts once per occurrence when one instance is reused", async () => {
+    const src = dependency(string());
+    const { prompt, calls } = createTestPrompt();
+    const shared = prompt(argument(src), { value: "answer" });
+    const parser = tuple([shared, shared]);
 
-      // Each position is a separate occurrence, matching how the same
-      // non-source prompt instance behaves at two positions.
-      const result = await parseAsync(parser, []);
+    // Each position is a separate occurrence, matching how the same
+    // non-source prompt instance behaves at two positions.
+    const result = await parseAsync(parser, []);
 
-      assert.ok(result.success);
-      assert.deepEqual(result.value, ["answer", "answer"]);
-      assert.equal(calls.length, 2);
-    },
-  );
+    assert.ok(result.success);
+    assert.deepEqual(result.value, ["answer", "answer"]);
+    assert.equal(calls.length, 2);
+  });
 
   it("registers the pre-transform value of a mapped source prompt", async () => {
     const { mode, level } = createModeFixture();
     const { prompt, calls } = createTestPrompt();
     const parser = object({
-      mode: prompt(option("--mode", mode), { value: "prod" })
-        .map((value) => value.toUpperCase()),
+      mode: prompt(option("--mode", mode), { value: "prod" }).map((value) =>
+        value.toUpperCase(),
+      ),
       level: option("--level", level),
     });
 
@@ -3773,157 +3655,141 @@ describe("prompted values as dependency sources", () => {
     assert.ok(!invalid.success);
   });
 
-  it(
-    "keeps distinct prompts on one source local to duplicate merge() fields",
-    async () => {
-      const mode = dependency(choice(["dev", "prod"] as const));
-      const { prompt, calls } = createTestPrompt();
-      const parser = merge(
-        object({ mode: prompt(option("--mode-a", mode), { value: "prod" }) }),
-        object({ mode: prompt(option("--mode-b", mode), { value: "dev" }) }),
-      );
+  it("keeps distinct prompts on one source local to duplicate merge() fields", async () => {
+    const mode = dependency(choice(["dev", "prod"] as const));
+    const { prompt, calls } = createTestPrompt();
+    const parser = merge(
+      object({ mode: prompt(option("--mode-a", mode), { value: "prod" }) }),
+      object({ mode: prompt(option("--mode-b", mode), { value: "dev" }) }),
+    );
 
-      // Both prompts run in their own children, and the later duplicate
-      // field wins; the first child's result must not leak into the
-      // second child's prompt.
-      const result = await parseAsync(parser, []);
+    // Both prompts run in their own children, and the later duplicate
+    // field wins; the first child's result must not leak into the
+    // second child's prompt.
+    const result = await parseAsync(parser, []);
 
-      assert.ok(result.success);
-      assert.equal(result.value.mode, "dev");
-      assert.equal(calls.length, 2);
-    },
-  );
+    assert.ok(result.success);
+    assert.equal(result.value.mode, "dev");
+    assert.equal(calls.length, 2);
+  });
 
-  it(
-    "detects phase-one demand across merge() children in the seed pass",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      let phase2Parsed:
-        | { readonly mode?: string; readonly level?: string }
-        | undefined;
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-merge-demand-phase-two"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          const parsed = getPhase2ContextParsed<
-            { readonly mode?: string; readonly level?: string }
-          >(request);
-          if (parsed !== undefined) phase2Parsed = parsed;
-          return {};
-        },
-      };
-      const parser = merge(
-        object({ mode: prompt(option("--mode", mode), { value: "prod" }) }),
-        object({ level: option("--level", level) }),
-      );
+  it("detects phase-one demand across merge() children in the seed pass", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    let phase2Parsed:
+      | { readonly mode?: string; readonly level?: string }
+      | undefined;
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-merge-demand-phase-two"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<{
+          readonly mode?: string;
+          readonly level?: string;
+        }>(request);
+        if (parsed !== undefined) phase2Parsed = parsed;
+        return {};
+      },
+    };
+    const parser = merge(
+      object({ mode: prompt(option("--mode", mode), { value: "prod" }) }),
+      object({ level: option("--level", level) }),
+    );
 
-      const result = await runWith(parser, "test", [dynamicContext], {
-        args: ["--level", "silent"],
-      });
+    const result = await runWith(parser, "test", [dynamicContext], {
+      args: ["--level", "silent"],
+    });
 
-      assert.deepEqual(result, { mode: "prod", level: "silent" });
-      assert.equal(phase2Parsed?.mode, "prod");
-      assert.equal(phase2Parsed?.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.deepEqual(result, { mode: "prod", level: "silent" });
+    assert.equal(phase2Parsed?.mode, "prod");
+    assert.equal(phase2Parsed?.level, "silent");
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "prompts a demanded bound source during the phase-two seed pass",
-    async () => {
-      const { mode, level } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: () => undefined,
-      });
-      let phase2Parsed:
-        | { readonly mode?: string; readonly level?: string }
-        | undefined;
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-bound-demanded-phase-two"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          const parsed = getPhase2ContextParsed<
-            { readonly mode?: string; readonly level?: string }
-          >(request);
-          if (parsed !== undefined) phase2Parsed = parsed;
-          return {};
-        },
-      };
-      // The source binding pre-completes the prompt during Phase 1,
-      // before consumer demand is known; the deferred result must stay
-      // schedulable so the prompt still runs during the seed pass.
-      const parser = object({
-        mode: prompt(
-          bindEnv(option("--mode", mode), {
-            context: envContext,
-            key: "MODE",
-            parser: choice(["dev", "prod"] as const),
-          }),
-          { value: "prod" },
-        ),
-        level: option("--level", level),
-      });
+  it("prompts a demanded bound source during the phase-two seed pass", async () => {
+    const { mode, level } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    let phase2Parsed:
+      | { readonly mode?: string; readonly level?: string }
+      | undefined;
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-bound-demanded-phase-two"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        const parsed = getPhase2ContextParsed<{
+          readonly mode?: string;
+          readonly level?: string;
+        }>(request);
+        if (parsed !== undefined) phase2Parsed = parsed;
+        return {};
+      },
+    };
+    // The source binding pre-completes the prompt during Phase 1,
+    // before consumer demand is known; the deferred result must stay
+    // schedulable so the prompt still runs during the seed pass.
+    const parser = object({
+      mode: prompt(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        { value: "prod" },
+      ),
+      level: option("--level", level),
+    });
 
-      const result = await runWith(
-        parser,
-        "test",
-        [dynamicContext, envContext],
-        { args: ["--level", "silent"] },
-      );
+    const result = await runWith(parser, "test", [dynamicContext, envContext], {
+      args: ["--level", "silent"],
+    });
 
-      assert.deepEqual(result, { mode: "prod", level: "silent" });
-      assert.equal(phase2Parsed?.mode, "prod");
-      assert.equal(phase2Parsed?.level, "silent");
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.deepEqual(result, { mode: "prod", level: "silent" });
+    assert.equal(phase2Parsed?.mode, "prod");
+    assert.equal(phase2Parsed?.level, "silent");
+    assert.equal(calls.length, 1);
+  });
 
-  it(
-    "defers an undemanded bound source prompt to the final pass",
-    async () => {
-      const { mode } = createModeFixture();
-      const { prompt, calls } = createTestPrompt();
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: () => undefined,
-      });
-      let phase2Mode: string | undefined = "unset";
-      const dynamicContext: SourceContext = {
-        id: Symbol.for("@optique/prompt/test-bound-undemanded-phase-two"),
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase2ContextRequest(request)) {
-            phase2Mode = (request.parsed as { readonly mode?: string })?.mode;
-          }
-          return {};
-        },
-      };
-      const parser = object({
-        mode: prompt(
-          bindEnv(option("--mode", mode), {
-            context: envContext,
-            key: "MODE",
-            parser: choice(["dev", "prod"] as const),
-          }),
-          { value: "prod" },
-        ),
-      });
+  it("defers an undemanded bound source prompt to the final pass", async () => {
+    const { mode } = createModeFixture();
+    const { prompt, calls } = createTestPrompt();
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: () => undefined,
+    });
+    let phase2Mode: string | undefined = "unset";
+    const dynamicContext: SourceContext = {
+      id: Symbol.for("@optique/prompt/test-bound-undemanded-phase-two"),
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase2ContextRequest(request)) {
+          phase2Mode = (request.parsed as { readonly mode?: string })?.mode;
+        }
+        return {};
+      },
+    };
+    const parser = object({
+      mode: prompt(
+        bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        }),
+        { value: "prod" },
+      ),
+    });
 
-      const result = await runWith(
-        parser,
-        "test",
-        [dynamicContext, envContext],
-        { args: [] },
-      );
+    const result = await runWith(parser, "test", [dynamicContext, envContext], {
+      args: [],
+    });
 
-      assert.deepEqual(result, { mode: "prod" });
-      assert.equal(phase2Mode, undefined);
-      assert.equal(calls.length, 1);
-    },
-  );
+    assert.deepEqual(result, { mode: "prod" });
+    assert.equal(phase2Mode, undefined);
+    assert.equal(calls.length, 1);
+  });
 
   it("keeps env precedence over a bound source prompt in two-pass runs", async () => {
     const { mode, level } = createModeFixture();
@@ -3951,12 +3817,9 @@ describe("prompted values as dependency sources", () => {
       level: option("--level", level),
     });
 
-    const result = await runWith(
-      parser,
-      "test",
-      [dynamicContext, envContext],
-      { args: ["--level", "silent"] },
-    );
+    const result = await runWith(parser, "test", [dynamicContext, envContext], {
+      args: ["--level", "silent"],
+    });
 
     assert.deepEqual(result, { mode: "prod", level: "silent" });
     assert.deepEqual(calls, []);
@@ -3967,9 +3830,7 @@ describe("prompted values as dependency sources", () => {
 describe("derived prompt configurations", () => {
   function createFedifyChain() {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(
-      choice(["deno", "npm", "pnpm"] as const),
-    );
+    const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
     const storage = packageManager.deriveSync({
       metavar: "STORAGE",
       factory: (value: "deno" | "npm" | "pnpm") =>
@@ -4150,10 +4011,9 @@ describe("derived prompt configurations", () => {
   it("omits the signal from dependency resolver contexts without one", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
     const runtime = dependency(choice(["deno", "node"] as const));
-    const single = derivePromptConfig(
-      framework,
-      (_value, context) => ({ value: context }),
-    );
+    const single = derivePromptConfig(framework, (_value, context) => ({
+      value: context,
+    }));
     const tuple = derivePromptConfig(
       [framework, runtime],
       (_values, context) => ({ value: context }),
@@ -4328,55 +4188,52 @@ describe("derived prompt configurations", () => {
   });
 
   // https://github.com/dahlia/optique/issues/920
-  it(
-    "should derive a prompt configuration from a two-pass configuration binding",
-    async () => {
-      const region = dependency(choice(["us", "eu"] as const));
-      const zone = dependency(choice(["z1", "z2"] as const));
-      const zoneDerived = zone.deriveSync({
-        metavar: "ZD",
-        factory: (value: "z1" | "z2") =>
-          choice(
-            value === "z1"
-              ? (["a1", "common"] as const)
-              : (["a2", "common"] as const),
-          ),
-        defaultValue: () => "z1" as const,
-      });
-      const context = createRegionConfigContext();
-      const { prompt, calls } = createTestPrompt();
-      const parser = object({
-        region: bindConfig(option("--region", region), {
-          context,
-          key: "region",
-        }),
-        zone: prompt(
-          option("--zone", zone),
-          derivePromptConfig(region, (value) => ({
-            value: value === "eu" ? "z2" : "z1",
-          })),
+  it("should derive a prompt configuration from a two-pass configuration binding", async () => {
+    const region = dependency(choice(["us", "eu"] as const));
+    const zone = dependency(choice(["z1", "z2"] as const));
+    const zoneDerived = zone.deriveSync({
+      metavar: "ZD",
+      factory: (value: "z1" | "z2") =>
+        choice(
+          value === "z1"
+            ? (["a1", "common"] as const)
+            : (["a2", "common"] as const),
         ),
-        out: option("--out", zoneDerived),
-      });
+      defaultValue: () => "z1" as const,
+    });
+    const context = createRegionConfigContext();
+    const { prompt, calls } = createTestPrompt();
+    const parser = object({
+      region: bindConfig(option("--region", region), {
+        context,
+        key: "region",
+      }),
+      zone: prompt(
+        option("--zone", zone),
+        derivePromptConfig(region, (value) => ({
+          value: value === "eu" ? "z2" : "z1",
+        })),
+      ),
+      out: option("--out", zoneDerived),
+    });
 
-      const result = await runWith(parser, "test", [context], {
-        args: ["--out", "common"],
-        contextOptions: {
-          load: () => ({
-            config: { region: "eu" as const },
-            meta: undefined,
-          }),
-        },
-      });
+    const result = await runWith(parser, "test", [context], {
+      args: ["--out", "common"],
+      contextOptions: {
+        load: () => ({
+          config: { region: "eu" as const },
+          meta: undefined,
+        }),
+      },
+    });
 
-      assert.deepEqual(result, {
-        region: "eu",
-        zone: "z2",
-        out: "common",
-      });
-      assert.deepEqual(calls, [{ value: "z2" }]);
-    },
-  );
+    assert.deepEqual(result, {
+      region: "eu",
+      zone: "z2",
+      out: "common",
+    });
+    assert.deepEqual(calls, [{ value: "z2" }]);
+  });
 });
 
 // https://github.com/dahlia/optique/issues/964
@@ -4538,10 +4395,13 @@ describe("zero-dependency derived prompt configurations", () => {
     let resolverCalls = 0;
     const parser = prompt(
       option("--name", string()),
-      derivePromptConfig(() => {
-        resolverCalls++;
-        return { value: "loaded" };
-      }, { when: () => Promise.resolve(false), otherwise: "skipped" }),
+      derivePromptConfig(
+        () => {
+          resolverCalls++;
+          return { value: "loaded" };
+        },
+        { when: () => Promise.resolve(false), otherwise: "skipped" },
+      ),
     );
 
     const result = await parseAsync(parser, []);
@@ -4576,7 +4436,7 @@ describe("zero-dependency derived prompt configurations", () => {
     const parser = prompt(
       option("--name", string()),
       derivePromptConfig(() =>
-        Promise.reject(new TypeError("Bucket not found."))
+        Promise.reject(new TypeError("Bucket not found.")),
       ),
     );
 
@@ -4589,9 +4449,7 @@ describe("zero-dependency derived prompt configurations", () => {
 
   it("feeds a dependent prompt from a demanded source in a two-pass run", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(
-      choice(["deno", "npm", "pnpm"] as const),
-    );
+    const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
     const storage = packageManager.deriveSync({
       metavar: "STORAGE",
       factory: (value: "deno" | "npm" | "pnpm") =>
@@ -4883,10 +4741,8 @@ describe("derived prompt configuration failures and edge cases", () => {
       framework: option("--framework", framework),
       greeting: prompt(
         option("--greeting", string()),
-        derivePromptConfig(
-          framework,
-          (): Promise<{ value: string }> =>
-            Promise.reject(new Error("rejected")),
+        derivePromptConfig(framework, (): Promise<{ value: string }> =>
+          Promise.reject(new Error("rejected")),
         ),
       ),
     });
@@ -4926,9 +4782,7 @@ describe("derived prompt configuration failures and edge cases", () => {
 
   it("stops later prompts when a resolver fails on a source prompt", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(
-      choice(["deno", "npm", "pnpm"] as const),
-    );
+    const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
     const extra = dependency(choice(["a", "b"] as const));
     const { prompt, calls } = createTestPrompt();
     const parser = object({
@@ -4952,12 +4806,14 @@ describe("derived prompt configuration failures and edge cases", () => {
 
   it("does not run the resolver when an upstream source failed", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const middle = dependency(framework.deriveSync({
-      metavar: "MIDDLE",
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const middle = dependency(
+      framework.deriveSync({
+        metavar: "MIDDLE",
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const resolverCalls: unknown[] = [];
     const { prompt, calls } = createTestPrompt();
     const parser = object({
@@ -4988,12 +4844,14 @@ describe("derived prompt configuration failures and edge cases", () => {
 
   it("includes the dependency chain when a source prompt depends on a failed source", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const middle = dependency(framework.deriveSync({
-      metavar: "MIDDLE",
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const middle = dependency(
+      framework.deriveSync({
+        metavar: "MIDDLE",
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const packageManager = dependency(choice(["deno", "npm"] as const));
     const { prompt, calls } = createTestPrompt();
     const parser = object({
@@ -5026,10 +4884,14 @@ describe("derived prompt configuration failures and edge cases", () => {
       framework: prompt(option("--framework", framework), { value: "hono" }),
       packageManager: prompt(
         option("--package-manager", packageManager),
-        derivePromptConfig(framework, (value) => {
-          resolverCalls.push(value);
-          return { value: "npm" };
-        }, { when: () => false, otherwise: "deno" }),
+        derivePromptConfig(
+          framework,
+          (value) => {
+            resolverCalls.push(value);
+            return { value: "npm" };
+          },
+          { when: () => false, otherwise: "deno" },
+        ),
       ),
     });
 
@@ -5055,15 +4917,19 @@ describe("derived prompt configuration failures and edge cases", () => {
       framework: option("--framework", framework),
       greeting: prompt(
         option("--greeting", string()),
-        derivePromptConfig(framework, (value) => {
-          resolverCalls.push(value);
-          return { value: `hi-${value}` };
-        }, {
-          defaultValue: () => {
-            defaultCalls.push(null);
-            return "fresh" as const;
+        derivePromptConfig(
+          framework,
+          (value) => {
+            resolverCalls.push(value);
+            return { value: `hi-${value}` };
           },
-        }),
+          {
+            defaultValue: () => {
+              defaultCalls.push(null);
+              return "fresh" as const;
+            },
+          },
+        ),
       ),
     });
 
@@ -5146,11 +5012,7 @@ describe("derived prompt configuration failures and edge cases", () => {
 
   it("rejects an empty dependency tuple at construction", () => {
     assert.throws(
-      () =>
-        derivePromptConfig(
-          [] as never,
-          () => ({ value: "unreachable" }),
-        ),
+      () => derivePromptConfig([] as never, () => ({ value: "unreachable" })),
       TypeError,
     );
   });
@@ -5158,10 +5020,7 @@ describe("derived prompt configuration failures and edge cases", () => {
   it("rejects a non-source dependency at construction", () => {
     assert.throws(
       () =>
-        derivePromptConfig(
-          string() as never,
-          () => ({ value: "unreachable" }),
-        ),
+        derivePromptConfig(string() as never, () => ({ value: "unreachable" })),
       TypeError,
     );
   });
@@ -5297,10 +5156,9 @@ describe("derived prompt configuration failures and edge cases", () => {
       ),
       b: prompt(
         option("--b", b),
-        derivePromptConfig(
-          a,
-          (value) => ({ value: value === "x" ? "y" : "unexpected" }),
-        ),
+        derivePromptConfig(a, (value) => ({
+          value: value === "x" ? "y" : "unexpected",
+        })),
       ),
     });
 
@@ -5328,10 +5186,7 @@ describe("derived prompt configuration failures and edge cases", () => {
       ),
     });
 
-    await assert.rejects(
-      () => parseAsync(parser, []),
-      /Circular dependency/,
-    );
+    await assert.rejects(() => parseAsync(parser, []), /Circular dependency/);
   });
 
   it("fails a self-dependent configuration without a default", async () => {
@@ -5383,9 +5238,13 @@ describe("derived prompt configuration failures and edge cases", () => {
     const parser = object({
       a: prompt(
         option("--a", a),
-        derivePromptConfig(a, (value, { usedDefault }) => ({
-          value: `${value}:${usedDefault}`,
-        }), { defaultValue: () => "x" as const }),
+        derivePromptConfig(
+          a,
+          (value, { usedDefault }) => ({
+            value: `${value}:${usedDefault}`,
+          }),
+          { defaultValue: () => "x" as const },
+        ),
       ),
     });
 
@@ -5418,9 +5277,7 @@ describe("derived prompt configuration failures and edge cases", () => {
 
   it("prompts a demanded derived-configuration source chain in the seed pass once", async () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(
-      choice(["deno", "npm", "pnpm"] as const),
-    );
+    const packageManager = dependency(choice(["deno", "npm", "pnpm"] as const));
     const storage = packageManager.deriveSync({
       metavar: "STORAGE",
       factory: (value: "deno" | "npm" | "pnpm") =>
@@ -5496,10 +5353,7 @@ describe("derived prompt configuration failures and edge cases", () => {
 
           assert.ok(cliResult.success);
           assert.ok(promptedResult.success);
-          assert.equal(
-            cliResult.value.greeting,
-            promptedResult.value.greeting,
-          );
+          assert.equal(cliResult.value.greeting, promptedResult.value.greeting);
           assert.deepEqual(cliCalls, [{ value: `hi-${frameworkValue}` }]);
           assert.deepEqual(promptedCalls, [
             { value: frameworkValue },
@@ -5566,20 +5420,17 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // source prompt declared after the conditional: the provider must
     // still publish before the branch prepares.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "npm" : "deno",
-              })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "npm" : "deno",
+            })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
     });
 
@@ -5636,21 +5487,18 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // discriminator confirms it, and only then may the branch's
     // derived configuration resolve—against the later provider.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "npm" : "deno",
-              })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "npm" : "deno",
+            })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
     });
 
@@ -5686,21 +5534,18 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // consumer, so the consumer's completion is bypassed: its framework
     // prerequisite must not be demanded into the seed pass.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -5710,10 +5555,7 @@ describe("branch completion dependencies across scheduling barriers", () => {
     });
 
     assert.equal((result as { readonly level: string }).level, "silent");
-    assert.equal(
-      (result as { readonly framework: string }).framework,
-      "hono",
-    );
+    assert.equal((result as { readonly framework: string }).framework, "hono");
     // The CLI-satisfied branch value reaches the phase-two exchange,
     // but the bypassed consumer's prerequisite does not prompt early.
     assert.ok(phase2Parsed?.cond != null);
@@ -5741,20 +5583,17 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // demand edge must pull the configuration's framework prerequisite
     // into the seed pass too, mirroring the flat rule.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
-          }),
-          z: object({ za: option("--za", choice(["1"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        z: object({ za: option("--za", choice(["1"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -5794,21 +5633,18 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // unsatisfied, so the speculative barrier's recomputed demand edge
     // must still pull the framework prerequisite into the seed pass.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -5846,30 +5682,24 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // control edge.  The parked prerequisites then drain in dependency
     // order within the same seed pass, ahead of the branch consumer.
     const parser = object({
-      condA: conditional(
-        prompt(option("--kind-a", kindA), { value: "a" }),
-        {
-          a: object({
-            fw: prompt(option("--fw", framework), { value: "hono" }),
-          }),
-          z: object({ za: option("--za", choice(["1"] as const)) }),
-        },
-      ),
-      condB: conditional(
-        prompt(option("--kind-b", kindB), { value: "b" }),
-        {
-          b: object({
-            bx: option("--bx", choice(["x"] as const)),
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
-          }),
-          z: object({ zb: option("--zb", choice(["2"] as const)) }),
-        },
-      ),
+      condA: conditional(prompt(option("--kind-a", kindA), { value: "a" }), {
+        a: object({
+          fw: prompt(option("--fw", framework), { value: "hono" }),
+        }),
+        z: object({ za: option("--za", choice(["1"] as const)) }),
+      }),
+      condB: conditional(prompt(option("--kind-b", kindB), { value: "b" }), {
+        b: object({
+          bx: option("--bx", choice(["x"] as const)),
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        z: object({ zb: option("--zb", choice(["2"] as const)) }),
+      }),
       level: option("--level", level),
     });
 
@@ -5896,32 +5726,26 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // after the outer conditional: the speculative recompute must
     // forward the nested barrier's aggregates.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  pm: prompt(
-                    option(
-                      "--pm",
-                      dependency(choice(["deno", "npm"] as const)),
-                    ),
-                    derivePromptConfig(framework, (value) => ({
-                      value: value === "hono" ? "npm" : "deno",
-                    })),
-                  ),
-                }),
-                i2: object({ z: option("--z", choice(["9"] as const)) }),
-              },
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                pm: prompt(
+                  option("--pm", dependency(choice(["deno", "npm"] as const))),
+                  derivePromptConfig(framework, (value) => ({
+                    value: value === "hono" ? "npm" : "deno",
+                  })),
+                ),
+              }),
+              i2: object({ z: option("--z", choice(["9"] as const)) }),
+            },
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
     });
 
@@ -5957,23 +5781,20 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // or the internal framework prompt would defer out of the seed
     // pass and stall the consumer.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            framework: prompt(option("--framework", framework), {
-              value: "hono",
-            }),
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          framework: prompt(option("--framework", framework), {
+            value: "hono",
           }),
-          z: object({ za: option("--za", choice(["1"] as const)) }),
-        },
-      ),
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        z: object({ za: option("--za", choice(["1"] as const)) }),
+      }),
       level: option("--level", level),
     });
 
@@ -6008,21 +5829,18 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // prompt during the seed pass; it runs in the final pass, still
     // ordered before the barrier.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            mode: prompt(option("--mode", mode), { value: "prod" }),
-            extra: prompt(
-              option("--extra", other),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "two" : "one",
-              })),
-            ),
-          }),
-          z: object({ za: option("--za", choice(["1"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          mode: prompt(option("--mode", mode), { value: "prod" }),
+          extra: prompt(
+            option("--extra", other),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "two" : "one",
+            })),
+          ),
+        }),
+        z: object({ za: option("--za", choice(["1"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -6043,28 +5861,27 @@ describe("branch completion dependencies across scheduling barriers", () => {
   it("includes the dependency chain when a branch prompt depends on a failed source", async () => {
     const kind = dependency(choice(["a", "b"] as const));
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const middle = dependency(framework.deriveSync({
-      metavar: "MIDDLE",
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const middle = dependency(
+      framework.deriveSync({
+        metavar: "MIDDLE",
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const { prompt, calls } = createTestPrompt();
     const parser = object({
       framework: option("--framework", framework),
       middle: option("--middle", middle),
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(middle, (value) => ({ value })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(middle, (value) => ({ value })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
     });
 
     const result = await parseAsync(parser, [
@@ -6087,21 +5904,18 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const resolverCalls: unknown[] = [];
     const { prompt, calls } = createTestPrompt();
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolverCalls.push(value);
-                return { value: "npm" };
-              }),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolverCalls.push(value);
+              return { value: "npm" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), {
         value: "hono",
         reject: true,
@@ -6125,22 +5939,19 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const { prompt, calls } = createTestPrompt();
     // "--d 1" guesses the a branch, but the discriminator answers "b":
     // the guessed branch's derived configuration must never resolve.
-    const parser = conditional(
-      prompt(option("--kind", kind), { value: "b" }),
-      {
-        a: object({
-          d: option("--d", string()),
-          pm: prompt(
-            option("--pm", dependency(choice(["deno", "npm"] as const))),
-            derivePromptConfig(framework, (value) => {
-              resolverCalls.push(value);
-              return { value: "npm" };
-            }),
-          ),
-        }),
-        b: object({ p: option("--p", string()) }),
-      },
-    );
+    const parser = conditional(prompt(option("--kind", kind), { value: "b" }), {
+      a: object({
+        d: option("--d", string()),
+        pm: prompt(
+          option("--pm", dependency(choice(["deno", "npm"] as const))),
+          derivePromptConfig(framework, (value) => {
+            resolverCalls.push(value);
+            return { value: "npm" };
+          }),
+        ),
+      }),
+      b: object({ p: option("--p", string()) }),
+    });
 
     const result = await parseAsync(parser, ["--d", "1"]);
 
@@ -6167,21 +5978,18 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // configuration, so rejecting the guess must leave it unprompted in
     // every pass, and the run fails with the branch mismatch.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "b" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "b" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -6189,7 +5997,7 @@ describe("branch completion dependencies across scheduling barriers", () => {
     await assert.rejects(() =>
       runWith(parser, "test", [dynamicContext], {
         args: ["--a", "x", "--level", "silent"],
-      })
+      }),
     );
 
     // Only the discriminator prompt ran; neither the guessed branch's
@@ -6207,22 +6015,19 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // the run at the barrier, before the later-declared framework
     // prompt executes.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "b" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolverCalls.push(value);
-                return { value: "npm" };
-              }),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "b" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolverCalls.push(value);
+              return { value: "npm" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
     });
 
@@ -6238,12 +6043,16 @@ describe("branch completion dependencies across scheduling barriers", () => {
   it("keeps an independently demanded prerequisite on rejection", async () => {
     const kind = dependency(choice(["a", "b"] as const));
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const level = dependency(framework.deriveSync({
-      metavar: "LEVEL",
-      factory: (value) =>
-        choice(value === "hono" ? (["silent"] as const) : (["debug"] as const)),
-      defaultValue: () => "hono" as const,
-    }));
+    const level = dependency(
+      framework.deriveSync({
+        metavar: "LEVEL",
+        factory: (value) =>
+          choice(
+            value === "hono" ? (["silent"] as const) : (["debug"] as const),
+          ),
+        defaultValue: () => "hono" as const,
+      }),
+    );
     const { mode } = createModeFixture();
     const { prompt, calls } = createTestPrompt();
     const dynamicContext: SourceContext = {
@@ -6258,28 +6067,25 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // discriminator rejects the guessed branch that also reads it.
     const parser = object({
       framework: prompt(option("--framework", framework), { value: "hono" }),
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "b" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "b" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       level: option("--level", level),
     });
 
     await assert.rejects(() =>
       runWith(parser, "test", [dynamicContext], {
         args: ["--a", "x", "--level", "silent"],
-      })
+      }),
     );
 
     // The independently required prerequisite ran in its declaration
@@ -6309,31 +6115,28 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // discriminator's answer "j" rejects the nested guess before the
     // prerequisite prompt declared after the outer conditional can run.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            ax: option("--a", choice(["x"] as const)),
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "j" }),
-              {
-                i: object({
-                  iy: option("--i", choice(["y"] as const)),
-                  mode: prompt(
-                    option("--mode", mode),
-                    derivePromptConfig(framework, (value) => {
-                      resolverCalls.push(value);
-                      return { value: value === "hono" ? "prod" : "dev" };
-                    }),
-                  ),
-                }),
-                j: object({ z: option("--z", choice(["9"] as const)) }),
-              },
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          ax: option("--a", choice(["x"] as const)),
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "j" }),
+            {
+              i: object({
+                iy: option("--i", choice(["y"] as const)),
+                mode: prompt(
+                  option("--mode", mode),
+                  derivePromptConfig(framework, (value) => {
+                    resolverCalls.push(value);
+                    return { value: value === "hono" ? "prod" : "dev" };
+                  }),
+                ),
+              }),
+              j: object({ z: option("--z", choice(["9"] as const)) }),
+            },
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -6341,7 +6144,7 @@ describe("branch completion dependencies across scheduling barriers", () => {
     await assert.rejects(() =>
       runWith(parser, "test", [dynamicContext], {
         args: ["--a", "x", "--i", "y", "--level", "silent"],
-      })
+      }),
     );
 
     assert.deepEqual(resolverCalls, []);
@@ -6565,9 +6368,11 @@ describe("branch completion dependencies across scheduling barriers", () => {
       phase: "two-pass",
       getAnnotations(request?: unknown) {
         if (isPhase2ContextRequest(request)) {
-          phase2Framework = (request.parsed as {
-            readonly framework?: unknown;
-          })?.framework;
+          phase2Framework = (
+            request.parsed as {
+              readonly framework?: unknown;
+            }
+          )?.framework;
         }
         return {};
       },
@@ -6577,22 +6382,19 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // estimate's mode -> framework edge must not demand the framework
     // prompt into the seed pass; it defers to the final pass instead.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "b" }),
-        {
-          a: object({
-            modeA: prompt(
-              option("--mode-a", mode),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "hono" ? "prod" : "dev",
-              })),
-            ),
-          }),
-          b: object({
-            modeB: prompt(option("--mode-b", mode), { value: "prod" }),
-          }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "b" }), {
+        a: object({
+          modeA: prompt(
+            option("--mode-a", mode),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "hono" ? "prod" : "dev",
+            })),
+          ),
+        }),
+        b: object({
+          modeB: prompt(option("--mode-b", mode), { value: "prod" }),
+        }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -6626,10 +6428,10 @@ describe("branch completion dependencies across scheduling barriers", () => {
       ),
     });
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "b" }),
-        { a: shared, b: shared },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "b" }), {
+        a: shared,
+        b: shared,
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
     });
 
@@ -6665,21 +6467,18 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // occurrence, while the occurrence declared after the conditional
     // wins for post-conditional consumers.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: prompt(option("--fw", framework), { value: "fresh" }),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => ({
-                value: value === "fresh" ? "deno" : "npm",
-              })),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: prompt(option("--fw", framework), { value: "fresh" }),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => ({
+              value: value === "fresh" ? "deno" : "npm",
+            })),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -6702,22 +6501,23 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // the occurrence declared after the conditional, whose prompted
     // value reaches the branch resolver.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: optional(option("--fw", framework)),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value, { usedDefault }) => {
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: optional(option("--fw", framework)),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value, { usedDefault }) => {
                 resolved.push([value, usedDefault]);
                 return { value: value === "hono" ? "npm" : "deno" };
-              }, { defaultValue: () => "fresh" as const }),
+              },
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -6738,32 +6538,30 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // branch: the selected i2 consumer waits for the provider declared
     // after the outer conditional and reads its prompted value.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i2" }),
-              {
-                i1: object({ fw: option("--fw", framework) }),
-                i2: object({
-                  pm: prompt(
-                    option(
-                      "--pm",
-                      dependency(choice(["deno", "npm"] as const)),
-                    ),
-                    derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i2" }),
+            {
+              i1: object({ fw: option("--fw", framework) }),
+              i2: object({
+                pm: prompt(
+                  option("--pm", dependency(choice(["deno", "npm"] as const))),
+                  derivePromptConfig(
+                    framework,
+                    (value) => {
                       resolved.push(value);
                       return { value: value === "hono" ? "npm" : "deno" };
-                    }, { defaultValue: () => "fresh" as const }),
+                    },
+                    { defaultValue: () => "fresh" as const },
                   ),
-                }),
-              },
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+                ),
+              }),
+            },
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -6783,24 +6581,23 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // it is a merely possible provider: the consumer still waits for
     // the occurrence declared after the conditional.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: optional(
-              prompt(option("--fw", framework), { value: "fresh" }),
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: optional(prompt(option("--fw", framework), { value: "fresh" })),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "hono" ? "npm" : "deno" };
-              }, { defaultValue: () => "fresh" as const }),
+              },
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -6820,26 +6617,23 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // guaranteed provider: the branch consumer reads that value instead
     // of waiting for the occurrence declared after the conditional.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: prompt(option("--fw", framework), {
-              value: "hono",
-              when: () => false,
-              otherwise: "fresh" as const,
-            }),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolved.push(value);
-                return { value: value === "hono" ? "npm" : "deno" };
-              }),
-            ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: prompt(option("--fw", framework), {
+            value: "hono",
+            when: () => false,
+            otherwise: "fresh" as const,
           }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolved.push(value);
+              return { value: value === "hono" ? "npm" : "deno" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -6865,22 +6659,19 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // later occurrence, the branch consumer reads the default, and the
     // later occurrence still wins for post-conditional consumers.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: withDefault(option("--fw", framework), "fresh" as const),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolved.push(value);
-                return { value: value === "fresh" ? "deno" : "npm" };
-              }),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: withDefault(option("--fw", framework), "fresh" as const),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolved.push(value);
+              return { value: value === "fresh" ? "deno" : "npm" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -6901,25 +6692,22 @@ describe("branch completion dependencies across scheduling barriers", () => {
     let thunkCalls = 0;
     const { prompt } = createTestPrompt();
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: withDefault(option("--fw", framework), () => {
-              thunkCalls++;
-              return "fresh" as const;
-            }),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolved.push(value);
-                return { value: value === "fresh" ? "deno" : "npm" };
-              }),
-            ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: withDefault(option("--fw", framework), () => {
+            thunkCalls++;
+            return "fresh" as const;
           }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolved.push(value);
+              return { value: value === "fresh" ? "deno" : "npm" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
     });
 
     const result = await parseAsync(parser, []);
@@ -6947,22 +6735,19 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // overwritten by the branch's unmatched withDefault() fallback.
     const parser = object({
       fw1: option("--fw", framework),
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: withDefault(option("--fw2", framework), "hono" as const),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolved.push(value);
-                return { value: value === "fresh" ? "deno" : "npm" };
-              }),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: withDefault(option("--fw2", framework), "hono" as const),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolved.push(value);
+              return { value: value === "fresh" ? "deno" : "npm" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
     });
 
     const result = await parseAsync(parser, ["--fw", "fresh"]);
@@ -6981,25 +6766,22 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // the publishable default, so it stays a guaranteed provider: the
     // prompt answers inside the branch and the consumer reads it.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: withDefault(
-              prompt(option("--fw", framework), { value: "fresh" }),
-              "fresh" as const,
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolved.push(value);
-                return { value: value === "fresh" ? "deno" : "npm" };
-              }),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: withDefault(
+            prompt(option("--fw", framework), { value: "fresh" }),
+            "fresh" as const,
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolved.push(value);
+              return { value: value === "fresh" ? "deno" : "npm" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -7027,32 +6809,29 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // consumer reads the inner answer, and the later occurrence wins
     // for post-conditional consumers.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i2" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "hono" }),
-                }),
-                i2: object({
-                  fw: prompt(option("--fw-b", framework), { value: "fresh" }),
-                }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
-                resolved.push(value);
-                return { value: value === "fresh" ? "deno" : "npm" };
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i2" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "hono" }),
               }),
-            ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+              i2: object({
+                fw: prompt(option("--fw-b", framework), { value: "fresh" }),
+              }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(framework, (value) => {
+              resolved.push(value);
+              return { value: value === "fresh" ? "deno" : "npm" };
+            }),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7078,36 +6857,44 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // first against its own default and the branch consumer reads the
     // sibling's published value.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            pa: prompt(
-              option("--pa", dependency(choice(["x", "y"] as const))),
-              derivePromptConfig(alpha, (value) => {
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          pa: prompt(
+            option("--pa", dependency(choice(["x", "y"] as const))),
+            derivePromptConfig(
+              alpha,
+              (value) => {
                 resolved.push(["pa", value]);
                 return { value: value === "a1" ? "x" : "y" };
-              }, { defaultValue: () => "a1" as const }),
+              },
+              { defaultValue: () => "a1" as const },
             ),
-          }),
-          b: object({
-            pb: prompt(option("--pb", beta), { value: "b1" }),
-          }),
-        },
-      ),
+          ),
+        }),
+        b: object({
+          pb: prompt(option("--pb", beta), { value: "b1" }),
+        }),
+      }),
       sibling: prompt(
         option("--sibling", alpha),
-        derivePromptConfig(beta, (value) => {
-          resolved.push(["sibling", value]);
-          return { value: value === "b1" ? "a1" : "a2" };
-        }, { defaultValue: () => "b2" as const }),
+        derivePromptConfig(
+          beta,
+          (value) => {
+            resolved.push(["sibling", value]);
+            return { value: value === "b1" ? "a1" : "a2" };
+          },
+          { defaultValue: () => "b2" as const },
+        ),
       ),
     });
 
     const result = await parseAsync(parser, []);
 
     assert.ok(result.success);
-    assert.deepEqual(resolved, [["sibling", "b2"], ["pa", "a2"]]);
+    assert.deepEqual(resolved, [
+      ["sibling", "b2"],
+      ["pa", "a2"],
+    ]);
   });
 
   it("rejects a genuine cycle between an active branch provider and a sibling consumer", async () => {
@@ -7120,33 +6907,35 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // discriminator resolves the branch, both edges are concrete and
     // the cycle is genuine.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            pb: prompt(option("--pb", beta), { value: "b1" }),
-            pa: prompt(
-              option("--pa", dependency(choice(["x", "y"] as const))),
-              derivePromptConfig(alpha, (value) => ({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          pb: prompt(option("--pb", beta), { value: "b1" }),
+          pa: prompt(
+            option("--pa", dependency(choice(["x", "y"] as const))),
+            derivePromptConfig(
+              alpha,
+              (value) => ({
                 value: value === "a1" ? "x" : "y",
-              }), { defaultValue: () => "a1" as const }),
+              }),
+              { defaultValue: () => "a1" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       sibling: prompt(
         option("--sibling", alpha),
-        derivePromptConfig(beta, (value) => ({
-          value: value === "b1" ? "a1" : "a2",
-        }), { defaultValue: () => "b2" as const }),
+        derivePromptConfig(
+          beta,
+          (value) => ({
+            value: value === "b1" ? "a1" : "a2",
+          }),
+          { defaultValue: () => "b2" as const },
+        ),
       ),
     });
 
-    await assert.rejects(
-      () => parseAsync(parser, []),
-      /Circular dependency/,
-    );
+    await assert.rejects(() => parseAsync(parser, []), /Circular dependency/);
   });
 
   it("resolves an absent optional provider's consumer under runWith", async () => {
@@ -7165,21 +6954,22 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // pass, and the absent optional occurrence does not hide the
     // later provider under the two-pass path either.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: optional(option("--fw", framework)),
-            mode: prompt(
-              option("--mode", mode),
-              derivePromptConfig(framework, (value) => ({
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: optional(option("--fw", framework)),
+          mode: prompt(
+            option("--mode", mode),
+            derivePromptConfig(
+              framework,
+              (value) => ({
                 value: value === "hono" ? "prod" : "dev",
-              }), { defaultValue: () => "fresh" as const }),
+              }),
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          z: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        z: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       framework: prompt(option("--framework", framework), { value: "hono" }),
       level: option("--level", level),
     });
@@ -7189,10 +6979,10 @@ describe("branch completion dependencies across scheduling barriers", () => {
     });
 
     assert.equal((result as { readonly level: string }).level, "silent");
-    assert.deepEqual(
-      (result as { readonly cond: unknown }).cond,
-      ["a", { fw: undefined, mode: "prod" }],
-    );
+    assert.deepEqual((result as { readonly cond: unknown }).cond, [
+      "a",
+      { fw: undefined, mode: "prod" },
+    ]);
     assert.deepEqual(calls, [
       { value: "a" },
       { value: "hono" },
@@ -7210,25 +7000,26 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // alternative is an unconditional prompt: the consumer waits for
     // the occurrence declared after the conditional.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: or(
-              prompt(option("--fw", framework), { value: "fresh" }),
-              constant("none"),
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: or(
+            prompt(option("--fw", framework), { value: "fresh" }),
+            constant("none"),
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "hono" ? "npm" : "deno" };
-              }, { defaultValue: () => "fresh" as const }),
+              },
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -7247,24 +7038,25 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // the scheduler never registers, so the occurrence stays a merely
     // possible provider and the consumer waits for the later one.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: prompt(optional(option("--fw", framework)), {
-              value: undefined,
-            }),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: prompt(optional(option("--fw", framework)), {
+            value: undefined,
+          }),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "hono" ? "npm" : "deno" };
-              }, { defaultValue: () => "fresh" as const }),
+              },
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -7290,9 +7082,13 @@ describe("branch completion dependencies across scheduling barriers", () => {
             pb: prompt(option("--pb", beta), { value: "b1" }),
             pa: prompt(
               option("--pa", dependency(choice(["x", "y"] as const))),
-              derivePromptConfig(alpha, (value) => ({
-                value: value === "a1" ? "x" : "y",
-              }), { defaultValue: () => "a1" as const }),
+              derivePromptConfig(
+                alpha,
+                (value) => ({
+                  value: value === "a1" ? "x" : "y",
+                }),
+                { defaultValue: () => "a1" as const },
+              ),
             ),
           }),
           b: object({ y: option("--y", choice(["2"] as const)) }),
@@ -7300,16 +7096,17 @@ describe("branch completion dependencies across scheduling barriers", () => {
       ),
       sibling: prompt(
         option("--sibling", alpha),
-        derivePromptConfig(beta, (value) => ({
-          value: value === "b1" ? "a1" : "a2",
-        }), { defaultValue: () => "b2" as const }),
+        derivePromptConfig(
+          beta,
+          (value) => ({
+            value: value === "b1" ? "a1" : "a2",
+          }),
+          { defaultValue: () => "b2" as const },
+        ),
       ),
     });
 
-    await assert.rejects(
-      () => parseAsync(parser, []),
-      /Circular dependency/,
-    );
+    await assert.rejects(() => parseAsync(parser, []), /Circular dependency/);
   });
 
   it("confirms a config-bound branch provider once its value binds", async () => {
@@ -7323,25 +7120,26 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // consumer reads the bound value instead of waiting for the later
     // occurrence.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            region: bindConfig(option("--region", region), {
-              context,
-              key: "region",
-            }),
-            zone: prompt(
-              option("--zone", dependency(choice(["z1", "z2"] as const))),
-              derivePromptConfig(region, (value) => {
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          region: bindConfig(option("--region", region), {
+            context,
+            key: "region",
+          }),
+          zone: prompt(
+            option("--zone", dependency(choice(["z1", "z2"] as const))),
+            derivePromptConfig(
+              region,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "eu" ? "z2" : "z1" };
-              }, { defaultValue: () => "us" as const }),
+              },
+              { defaultValue: () => "us" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       region2: prompt(option("--region2", region), { value: "us" }),
     });
 
@@ -7385,30 +7183,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // anyway, its publish serves the branch consumer, and the later
     // occurrence is restored for the post-conditional consumer.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7440,30 +7239,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // The nested route is selected on the command line instead of by a
     // prompted discriminator; the precedence rule is the same.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i2" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i2" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7491,30 +7291,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // consumer and the post-conditional consumer both read the later
     // occurrence, and the unselected i1 route's prompt never runs.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i2" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i2" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "fresh" as const }),
+              },
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7543,28 +7344,29 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // rather than prompted; parsed, bound, and prompted publishes follow
     // the same precedence rule.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({ fw: option("--fw", framework) }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({ fw: option("--fw", framework) }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7591,40 +7393,36 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // The later occurrence is parsed from the command line; it still
     // wins outside the conditional over the prompted branch publish.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: option("--fw2", framework),
       out: option("--out", frameworkDerived),
     });
 
-    const result = await parseAsync(parser, [
-      "--fw2",
-      "hono",
-      "--out",
-      "npm",
-    ]);
+    const result = await parseAsync(parser, ["--fw2", "hono", "--out", "npm"]);
 
     assert.ok(result.success);
     assert.deepEqual(resolved, ["fresh"]);
@@ -7644,40 +7442,45 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // the consumer declared after it, outside the conditional, over the
     // prompted branch publish.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  region: prompt(option("--region", region), { value: "us" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            zone: prompt(
-              option("--zone", dependency(choice(["z1", "z2"] as const))),
-              derivePromptConfig(region, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                region: prompt(option("--region", region), { value: "us" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          zone: prompt(
+            option("--zone", dependency(choice(["z1", "z2"] as const))),
+            derivePromptConfig(
+              region,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "us" ? "z1" : "z2" };
-              }, { defaultValue: () => "eu" as const }),
+              },
+              { defaultValue: () => "eu" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       region2: bindConfig(option("--region2", region), {
         context,
         key: "region",
       }),
       zone2: prompt(
         option("--zone2", dependency(choice(["z1", "z2"] as const))),
-        derivePromptConfig(region, (value) => {
-          resolvedOutside.push(value);
-          return { value: value === "us" ? "z1" : "z2" };
-        }, { defaultValue: () => "us" as const }),
+        derivePromptConfig(
+          region,
+          (value) => {
+            resolvedOutside.push(value);
+            return { value: value === "us" ? "z1" : "z2" };
+          },
+          { defaultValue: () => "us" as const },
+        ),
       ),
     });
 
@@ -7693,10 +7496,7 @@ describe("branch completion dependencies across scheduling barriers", () => {
 
     assert.deepEqual(resolved, ["us"]);
     assert.deepEqual(resolvedOutside, ["eu"]);
-    assert.deepEqual(
-      (result as { readonly zone2: string }).zone2,
-      "z2",
-    );
+    assert.deepEqual((result as { readonly zone2: string }).zone2, "z2");
   });
 
   it("keeps nested-branch precedence under the demand-only seed pass", async () => {
@@ -7722,35 +7522,36 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // providing route serves its branch, the later occurrence wins
     // outside, and the unselected i2 route's prompt never runs.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({
-                  other: prompt(
-                    option("--other", dependency(choice(["x"] as const))),
-                    { value: "x" },
-                  ),
-                }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({
+                other: prompt(
+                  option("--other", dependency(choice(["x"] as const))),
+                  { value: "x" },
+                ),
+              }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7787,30 +7588,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // leaves both consumers on the later occurrence, and the unselected
     // i1 route's prompt never runs.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i2" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i2" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "fresh" as const }),
+              },
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7840,30 +7642,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // later occurrence has already published when the route runs, so the
     // default supplies nothing and both consumers read the later value.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: withDefault(option("--fw", framework), "fresh" as const),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: withDefault(option("--fw", framework), "fresh" as const),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "fresh" as const }),
+              },
+              { defaultValue: () => "fresh" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -7892,30 +7695,28 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // displace the later conditional's occurrence for consumers outside
     // both.
     const parser = object({
-      cond1: conditional(
-        prompt(option("--kind1", kind1), { value: "a" }),
-        {
-          a: object({
-            fw: prompt(option("--fw", framework), { value: "fresh" }),
-            pa: prompt(
-              option("--pa", dependency(choice(["x", "y"] as const))),
-              derivePromptConfig(extra, (value) => ({
+      cond1: conditional(prompt(option("--kind1", kind1), { value: "a" }), {
+        a: object({
+          fw: prompt(option("--fw", framework), { value: "fresh" }),
+          pa: prompt(
+            option("--pa", dependency(choice(["x", "y"] as const))),
+            derivePromptConfig(
+              extra,
+              (value) => ({
                 value: value === "e1" ? "x" : "y",
-              }), { defaultValue: () => "e2" as const }),
+              }),
+              { defaultValue: () => "e2" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
-      cond2: conditional(
-        prompt(option("--kind2", kind2), { value: "a" }),
-        {
-          a: object({
-            fwB: prompt(option("--fw-b", framework), { value: "hono" }),
-          }),
-          b: object({ z: option("--z", choice(["3"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
+      cond2: conditional(prompt(option("--kind2", kind2), { value: "a" }), {
+        a: object({
+          fwB: prompt(option("--fw-b", framework), { value: "hono" }),
+        }),
+        b: object({ z: option("--z", choice(["3"] as const)) }),
+      }),
       extra: prompt(option("--extra", extra), { value: "e1" }),
       out: option("--out", frameworkDerived),
     });
@@ -7944,30 +7745,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // nothing, so the restored value comes from the latest occurrence
     // that actually published.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       fw3: optional(option("--fw3", framework)),
       out: option("--out", frameworkDerived),
@@ -7996,30 +7798,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // object(); its node still joins the enclosing pass, so the branch
     // publish is confined and the nested later occurrence wins outside.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       later: object({
         fw2: prompt(option("--fw2", framework), { value: "hono" }),
       }),
@@ -8051,30 +7854,31 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // enclosing scope directly, so the branch consumer follows plain
     // declaration order and reads the later occurrence.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: prompt(
-              option("--pm", dependency(choice(["deno", "npm"] as const))),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: prompt(
+            option("--pm", dependency(choice(["deno", "npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "deno" : "npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -8112,57 +7916,56 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // outer boundary, so the post-conditional consumer reads the
     // occurrence declared after the outer conditional.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            mid: conditional(
-              prompt(option("--mid", kindMid), { value: "m1" }),
-              {
-                m1: object({
-                  inner: conditional(
-                    prompt(option("--inner", kindInner), { value: "i1" }),
-                    {
-                      i1: object({
-                        fw: prompt(option("--fw", framework), {
-                          value: "fresh",
-                        }),
-                        pi: prompt(
-                          option(
-                            "--pi",
-                            dependency(choice(["x", "y"] as const)),
-                          ),
-                          derivePromptConfig(tool, (value) => {
-                            resolved.push(["inner", value]);
-                            return { value: value === "t1" ? "x" : "y" };
-                          }, { defaultValue: () => "t2" as const }),
-                        ),
-                      }),
-                      i2: object({ z: constant("1") }),
-                    },
-                  ),
-                  fwMid: prompt(option("--fw-mid", framework), {
-                    value: "hono",
-                  }),
-                  toolP: prompt(option("--tool", tool), { value: "t1" }),
-                  pmMid: prompt(
-                    option(
-                      "--pm-mid",
-                      dependency(choice(["deno", "npm"] as const)),
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          mid: conditional(prompt(option("--mid", kindMid), { value: "m1" }), {
+            m1: object({
+              inner: conditional(
+                prompt(option("--inner", kindInner), { value: "i1" }),
+                {
+                  i1: object({
+                    fw: prompt(option("--fw", framework), {
+                      value: "fresh",
+                    }),
+                    pi: prompt(
+                      option("--pi", dependency(choice(["x", "y"] as const))),
+                      derivePromptConfig(
+                        tool,
+                        (value) => {
+                          resolved.push(["inner", value]);
+                          return { value: value === "t1" ? "x" : "y" };
+                        },
+                        { defaultValue: () => "t2" as const },
+                      ),
                     ),
-                    derivePromptConfig(framework, (value) => {
-                      resolved.push(["mid", value]);
-                      return { value: value === "fresh" ? "deno" : "npm" };
-                    }, { defaultValue: () => "fresh" as const }),
-                  ),
-                }),
-                m2: object({ w: constant("2") }),
-              },
-            ),
+                  }),
+                  i2: object({ z: constant("1") }),
+                },
+              ),
+              fwMid: prompt(option("--fw-mid", framework), {
+                value: "hono",
+              }),
+              toolP: prompt(option("--tool", tool), { value: "t1" }),
+              pmMid: prompt(
+                option(
+                  "--pm-mid",
+                  dependency(choice(["deno", "npm"] as const)),
+                ),
+                derivePromptConfig(
+                  framework,
+                  (value) => {
+                    resolved.push(["mid", value]);
+                    return { value: value === "fresh" ? "deno" : "npm" };
+                  },
+                  { defaultValue: () => "fresh" as const },
+                ),
+              ),
+            }),
+            m2: object({ w: constant("2") }),
           }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+        }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -8170,7 +7973,10 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const result = await parseAsync(parser, ["--out", "npm"]);
 
     assert.ok(result.success);
-    assert.deepEqual(resolved, [["inner", "t1"], ["mid", "hono"]]);
+    assert.deepEqual(resolved, [
+      ["inner", "t1"],
+      ["mid", "hono"],
+    ]);
     assert.equal(result.value.out, "npm");
   });
 
@@ -8194,24 +8000,21 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // validates against "fresh" while the consumer declared after the
     // conditional reads the later occurrence.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: object({
-            inner: conditional(
-              prompt(option("--inner", kindInner), { value: "i1" }),
-              {
-                i1: object({
-                  fw: prompt(option("--fw", framework), { value: "fresh" }),
-                }),
-                i2: object({ z: constant("1") }),
-              },
-            ),
-            pm: option("--pm", frameworkDerived),
-          }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: object({
+          inner: conditional(
+            prompt(option("--inner", kindInner), { value: "i1" }),
+            {
+              i1: object({
+                fw: prompt(option("--fw", framework), { value: "fresh" }),
+              }),
+              i2: object({ z: constant("1") }),
+            },
+          ),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -8243,26 +8046,24 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const resolved: unknown[] = [];
     const { prompt } = createTestPrompt();
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: prompt(option("--fw", framework), { value: "fresh" }),
-            pm: option("--pm", frameworkDerived),
-            tool: prompt(
-              option(
-                "--tool",
-                dependency(choice(["t-deno", "t-npm"] as const)),
-              ),
-              derivePromptConfig(framework, (value) => {
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: prompt(option("--fw", framework), { value: "fresh" }),
+          pm: option("--pm", frameworkDerived),
+          tool: prompt(
+            option("--tool", dependency(choice(["t-deno", "t-npm"] as const))),
+            derivePromptConfig(
+              framework,
+              (value) => {
                 resolved.push(value);
                 return { value: value === "fresh" ? "t-deno" : "t-npm" };
-              }, { defaultValue: () => "hono" as const }),
+              },
+              { defaultValue: () => "hono" as const },
             ),
-          }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+          ),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -8293,19 +8094,16 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // one, so the branch consumer reads the prompted value even though
     // the branch's own completion re-collects the parsed value first.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw0: option("--fw0", framework),
-            inner: object({
-              fw: prompt(option("--fw", framework), { value: "hono" }),
-            }),
-            pm: option("--pm", frameworkDerived),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw0: option("--fw0", framework),
+          inner: object({
+            fw: prompt(option("--fw", framework), { value: "hono" }),
           }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "fresh" }),
     });
 
@@ -8329,19 +8127,16 @@ describe("branch completion dependencies across scheduling barriers", () => {
     });
     const { prompt } = createTestPrompt();
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            inner: object({
-              fw: prompt(option("--fw", framework), { value: "hono" }),
-            }),
-            fw0: option("--fw0", framework),
-            pm: option("--pm", frameworkDerived),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          inner: object({
+            fw: prompt(option("--fw", framework), { value: "hono" }),
           }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+          fw0: option("--fw0", framework),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -8367,19 +8162,16 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // The nested object's own completion must not re-assert its cached
     // publish over the later sibling occurrence in the same branch.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            inner: object({
-              fw: prompt(option("--fw", framework), { value: "hono" }),
-            }),
-            fw3: prompt(option("--fw3", framework), { value: "fresh" }),
-            pm: option("--pm", frameworkDerived),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          inner: object({
+            fw: prompt(option("--fw", framework), { value: "hono" }),
           }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+          fw3: prompt(option("--fw3", framework), { value: "fresh" }),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
     });
 
@@ -8404,19 +8196,17 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const envContext = createEnvContext({ source: () => undefined });
     const { prompt, calls } = createTestPrompt();
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: bindEnv(
-              prompt(option("--fw", framework), { value: "fresh" }),
-              { context: envContext, key: "FW", parser: framework },
-            ),
-            pm: option("--pm", frameworkDerived),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: bindEnv(prompt(option("--fw", framework), { value: "fresh" }), {
+            context: envContext,
+            key: "FW",
+            parser: framework,
           }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -8426,7 +8216,10 @@ describe("branch completion dependencies across scheduling barriers", () => {
     assert.ok(result.success);
     assert.deepEqual(result.value.cond, ["a", { fw: "fresh", pm: "deno" }]);
     assert.equal(result.value.out, "npm");
-    assert.deepEqual(calls.map((call) => call.value), ["a", "fresh", "hono"]);
+    assert.deepEqual(
+      calls.map((call) => call.value),
+      ["a", "fresh", "hono"],
+    );
   });
 
   it("serves a deferred consumer from a bound branch occurrence under runWith", async () => {
@@ -8445,19 +8238,16 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // against that bound value, and the consumer declared after the
     // conditional against the later prompted occurrence.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            region: bindConfig(option("--region", region), {
-              context,
-              key: "region",
-            }),
-            zone: option("--zone", zoneDerived),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          region: bindConfig(option("--region", region), {
+            context,
+            key: "region",
           }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+          zone: option("--zone", zoneDerived),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       region2: prompt(option("--region2", region), { value: "eu" }),
       zone2: option("--zone2", zoneDerived),
     });
@@ -8477,7 +8267,10 @@ describe("branch completion dependencies across scheduling barriers", () => {
       region2: "eu",
       zone2: "z2",
     });
-    assert.deepEqual(calls.map((call) => call.value), ["a", "eu"]);
+    assert.deepEqual(
+      calls.map((call) => call.value),
+      ["a", "eu"],
+    );
   });
 
   it("serves a deferred consumer through an outer branchError hook", async () => {
@@ -8536,31 +8329,36 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // reads the later occurrence, like the completion consumer pinned by
     // "keeps a command-line-committed branch in the enclosing scope".
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: object({
-            fw: prompt(option("--fw", framework), { value: "fresh" }),
-            pm: option("--pm", frameworkDerived),
-          }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: object({
+          fw: prompt(option("--fw", framework), { value: "fresh" }),
+          pm: option("--pm", frameworkDerived),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
 
-    const accepted = await parseAsync(
-      parser,
-      ["--kind", "a", "--pm", "npm", "--out", "npm"],
-    );
+    const accepted = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "--pm",
+      "npm",
+      "--out",
+      "npm",
+    ]);
     assert.ok(accepted.success);
     assert.deepEqual(accepted.value.cond, ["a", { fw: "fresh", pm: "npm" }]);
 
-    const rejected = await parseAsync(
-      parser,
-      ["--kind", "a", "--pm", "deno", "--out", "npm"],
-    );
+    const rejected = await parseAsync(parser, [
+      "--kind",
+      "a",
+      "--pm",
+      "deno",
+      "--out",
+      "npm",
+    ]);
     assert.ok(!rejected.success);
     assert.match(formatMessage(rejected.error), /--pm/);
   });
@@ -8577,22 +8375,22 @@ describe("branch completion dependencies across scheduling barriers", () => {
     const { prompt, calls } = createTestPrompt();
     // Without an enclosing construct nothing is cached ahead of the
     // branch's own pass, which runs each effect exactly once.
-    const parser = conditional(
-      prompt(option("--kind", kind), { value: "a" }),
-      {
-        a: object({
-          fw: prompt(option("--fw", framework), { value: "fresh" }),
-          pm: option("--pm", frameworkDerived),
-        }),
-        b: object({ y: constant("2") }),
-      },
-    );
+    const parser = conditional(prompt(option("--kind", kind), { value: "a" }), {
+      a: object({
+        fw: prompt(option("--fw", framework), { value: "fresh" }),
+        pm: option("--pm", frameworkDerived),
+      }),
+      b: object({ y: constant("2") }),
+    });
 
     const result = await parseAsync(parser, ["--pm", "deno"]);
 
     assert.ok(result.success);
     assert.deepEqual(result.value, ["a", { fw: "fresh", pm: "deno" }]);
-    assert.deepEqual(calls.map((call) => call.value), ["a", "fresh"]);
+    assert.deepEqual(
+      calls.map((call) => call.value),
+      ["a", "fresh"],
+    );
   });
 
   it("wraps a top-level speculative branch's failed effect with branchError", async () => {
@@ -8637,7 +8435,10 @@ describe("branch completion dependencies across scheduling barriers", () => {
       formatMessage(result.error),
       /Branch "a" failed: .*Prompt rejected/,
     );
-    assert.deepEqual(calls.map((call) => call.value), ["a", "fresh"]);
+    assert.deepEqual(
+      calls.map((call) => call.value),
+      ["a", "fresh"],
+    );
   });
 
   it("serves a deferred consumer through transparent branch wrappers", async () => {
@@ -8667,10 +8468,10 @@ describe("branch completion dependencies across scheduling barriers", () => {
 
     for (const [name, [wrapped, args]] of Object.entries(wrappers)) {
       const parser = object({
-        cond: conditional(
-          prompt(option("--kind", kind), { value: "a" }),
-          { a: wrapped, b: object({ y: constant("2") }) },
-        ),
+        cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+          a: wrapped,
+          b: object({ y: constant("2") }),
+        }),
         fw2: prompt(option("--fw2", framework), { value: "hono" }),
         out: option("--out", frameworkDerived),
       });
@@ -8701,27 +8502,28 @@ describe("branch completion dependencies across scheduling barriers", () => {
     // The inner conditional is committed on the command line and is the
     // first pass owner under the outer branch's completion.
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kindOuter), { value: "a" }),
-        {
-          a: conditional(option("--inner", kindInner), {
-            i1: object({
-              fw: prompt(option("--fw", framework), { value: "fresh" }),
-              pm: option("--pm", frameworkDerived),
-            }),
-            i2: object({ z: constant("1") }),
+      cond: conditional(prompt(option("--kind", kindOuter), { value: "a" }), {
+        a: conditional(option("--inner", kindInner), {
+          i1: object({
+            fw: prompt(option("--fw", framework), { value: "fresh" }),
+            pm: option("--pm", frameworkDerived),
           }),
-          b: object({ y: constant("2") }),
-        },
-      ),
+          i2: object({ z: constant("1") }),
+        }),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
 
-    const result = await parseAsync(
-      parser,
-      ["--inner", "i1", "--pm", "deno", "--out", "npm"],
-    );
+    const result = await parseAsync(parser, [
+      "--inner",
+      "i1",
+      "--pm",
+      "deno",
+      "--out",
+      "npm",
+    ]);
 
     assert.ok(result.success);
     assert.deepEqual(result.value.cond, [
@@ -8742,18 +8544,15 @@ describe("branch completion dependencies across scheduling barriers", () => {
     });
     const { prompt } = createTestPrompt();
     const parser = object({
-      cond: conditional(
-        prompt(option("--kind", kind), { value: "a" }),
-        {
-          a: merge(
-            object({
-              fw: prompt(option("--fw", framework), { value: "fresh" }),
-            }),
-            object({ pm: option("--pm", frameworkDerived) }),
-          ),
-          b: object({ y: constant("2") }),
-        },
-      ),
+      cond: conditional(prompt(option("--kind", kind), { value: "a" }), {
+        a: merge(
+          object({
+            fw: prompt(option("--fw", framework), { value: "fresh" }),
+          }),
+          object({ pm: option("--pm", frameworkDerived) }),
+        ),
+        b: object({ y: constant("2") }),
+      }),
       fw2: prompt(option("--fw2", framework), { value: "hono" }),
       out: option("--out", frameworkDerived),
     });
@@ -8778,25 +8577,25 @@ describe("CLI-committed dependency source precedence", () => {
                 choice(value === "fresh" ? ["deno"] : ["npm"]);
               const pm = asyncDerived
                 ? framework.derive({
-                  metavar: "PM",
-                  mode: "async",
-                  factory: (value) => {
-                    const inner = factory(value);
-                    return {
-                      ...inner,
-                      mode: "async" as const,
-                      suggest: undefined,
-                      parse: (input: string) =>
-                        Promise.resolve(inner.parse(input)),
-                    };
-                  },
-                  defaultValue: () => "fresh" as const,
-                })
+                    metavar: "PM",
+                    mode: "async",
+                    factory: (value) => {
+                      const inner = factory(value);
+                      return {
+                        ...inner,
+                        mode: "async" as const,
+                        suggest: undefined,
+                        parse: (input: string) =>
+                          Promise.resolve(inner.parse(input)),
+                      };
+                    },
+                    defaultValue: () => "fresh" as const,
+                  })
                 : framework.deriveSync({
-                  metavar: "PM",
-                  factory,
-                  defaultValue: () => "fresh" as const,
-                });
+                    metavar: "PM",
+                    factory,
+                    defaultValue: () => "fresh" as const,
+                  });
               const { prompt, calls } = createTestPrompt();
               const cond = conditional(
                 option("--kind", choice(["a", "b"] as const)),
@@ -8816,8 +8615,8 @@ describe("CLI-committed dependency source precedence", () => {
                     ? object({ fw2, cond, out })
                     : object({ cond, fw2, out })
                   : outerFirst
-                  ? tuple([fw2, cond, out])
-                  : tuple([cond, fw2, out]);
+                    ? tuple([fw2, cond, out])
+                    : tuple([cond, fw2, out]);
               const args = [
                 "--kind",
                 "a",
@@ -8842,8 +8641,8 @@ describe("CLI-committed dependency source precedence", () => {
                 shape === "object"
                   ? { cond: branch, fw2: "hono", out: acceptedPm }
                   : outerFirst
-                  ? ["hono", branch, acceptedPm]
-                  : [branch, "hono", acceptedPm],
+                    ? ["hono", branch, acceptedPm]
+                    : [branch, "hono", acceptedPm],
               );
               assert.equal(
                 calls.filter((call) => call.value === "fresh").length,
@@ -9063,7 +8862,10 @@ describe("uncollected committed dependency sources", () => {
       fw2: "hono",
       items: [["a", { fw: "fresh", pm: "deno" }]],
     });
-    assert.deepEqual(calls.map((call) => call.value), ["hono", "fresh"]);
+    assert.deepEqual(
+      calls.map((call) => call.value),
+      ["hono", "fresh"],
+    );
   });
 });
 
@@ -9080,10 +8882,12 @@ describe("uncollected descendants of committed branches", () => {
       cond: conditional(option("--kind", choice(["a", "b"] as const)), {
         a: object({
           fw: option("--fw", framework),
-          items: multiple(object({
-            fw2: prompt(option("--fw2", framework), { value: "fresh" }),
-            pm: option("--pm", pm),
-          })),
+          items: multiple(
+            object({
+              fw2: prompt(option("--fw2", framework), { value: "fresh" }),
+              pm: option("--pm", pm),
+            }),
+          ),
         }),
         b: constant("b"),
       }),
@@ -9103,7 +8907,10 @@ describe("uncollected descendants of committed branches", () => {
     assert.deepEqual(result.value, {
       cond: ["a", { fw: "hono", items: [{ fw2: "fresh", pm: "deno" }] }],
     });
-    assert.deepEqual(calls.map((call) => call.value), ["fresh"]);
+    assert.deepEqual(
+      calls.map((call) => call.value),
+      ["fresh"],
+    );
   });
 });
 
@@ -9127,12 +8934,7 @@ describe("nested command-line sources beside a prompted source", () => {
       const parser = consumerFirst
         ? object({ effect, consumer, nested })
         : object({ effect, nested, consumer });
-      const result = await parseAsync(parser, [
-        "--fw",
-        "hono",
-        "--pm",
-        "npm",
-      ]);
+      const result = await parseAsync(parser, ["--fw", "hono", "--pm", "npm"]);
       assert.ok(
         result.success,
         result.success ? undefined : formatMessage(result.error),
@@ -9247,7 +9049,8 @@ describe("derived prompt pending hooks", () => {
           return config;
         }),
         {
-          validate: () => ++validations === 1 ? message`Try again.` : undefined,
+          validate: () =>
+            ++validations === 1 ? message`Try again.` : undefined,
         },
       ),
       [],
@@ -9441,9 +9244,13 @@ describe("derived prompt pending hooks", () => {
     controller.abort("already aborted");
     await assert.rejects(
       parseAsync(
-        prompt(inner, derivePromptConfig(() => ({ value: "loaded" })), {
-          signal: controller.signal,
-        }),
+        prompt(
+          inner,
+          derivePromptConfig(() => ({ value: "loaded" })),
+          {
+            signal: controller.signal,
+          },
+        ),
         [],
       ),
       (error) => error === "already aborted",
@@ -9524,16 +9331,14 @@ describe("derived prompt pending hooks", () => {
         assert.fail("Invalid dependencies must not open a prompt.");
       },
     });
-    for (
-      const config of [
-        derivePromptConfig(source, () => ({})),
-        derivePromptConfig(source, () => ({}), {
-          defaultValue() {
-            throw new Error("Default failed.");
-          },
-        }),
-      ]
-    ) {
+    for (const config of [
+      derivePromptConfig(source, () => ({})),
+      derivePromptConfig(source, () => ({}), {
+        defaultValue() {
+          throw new Error("Default failed.");
+        },
+      }),
+    ]) {
       const result = await parseAsync(
         prompt(option("--name", string()), config),
         [],

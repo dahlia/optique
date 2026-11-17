@@ -229,8 +229,12 @@ function getRepoDir(dirOption: string | undefined): string {
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {
-  return typeof error === "object" && error !== null && "code" in error &&
-    (error as { readonly code?: unknown }).code === code;
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { readonly code?: unknown }).code === code
+  );
 }
 
 function listFailureMessage(
@@ -331,11 +335,12 @@ function createAsyncValueParser(
       options.suggestionDepth < 1
     ) {
       const depth = options.suggestionDepth;
-      const repr = typeof depth === "number"
-        ? String(depth)
-        : typeof depth === "string"
-        ? JSON.stringify(depth)
-        : `${typeof depth} ${String(depth)}`;
+      const repr =
+        typeof depth === "number"
+          ? String(depth)
+          : typeof depth === "string"
+            ? JSON.stringify(depth)
+            : `${typeof depth} ${String(depth)}`;
       throw new RangeError(
         `Invalid suggestionDepth (must be a positive integer): ${repr}`,
       );
@@ -407,9 +412,9 @@ export function gitBranch(
           }`,
         };
       } catch (error) {
-        const fallback = message`Failed to list branches. Ensure ${
-          value(dir)
-        } is a valid git repository.`;
+        const fallback = message`Failed to list branches. Ensure ${value(
+          dir,
+        )} is a valid git repository.`;
         return {
           success: false,
           error: listFailureMessage(error, dir, errors, fallback),
@@ -470,13 +475,15 @@ export function gitRemoteBranch(
         remote === null
           ? "null"
           : Array.isArray(remote)
-          ? "array"
-          : typeof remote
+            ? "array"
+            : typeof remote
       }.`,
     );
   }
+  /* oxlint-disable no-control-regex -- Match control characters. */
   // deno-lint-ignore no-control-regex
   if (remote === "" || /[\s\x00-\x1f]/.test(remote)) {
+    /* oxlint-enable no-control-regex */
     throw new TypeError(
       `${expectedMessage}, but got: ${JSON.stringify(remote)}.`,
     );
@@ -522,19 +529,18 @@ export function gitRemoteBranch(
         }
         return {
           success: false,
-          error: message`Remote branch ${
-            value(input)
-          } does not exist on remote ${value(remote)}.${
+          error: message`Remote branch ${value(
+            input,
+          )} does not exist on remote ${value(remote)}.${
             branches.length > 0
               ? message` Available branches: ${valueSet(branches, "")}`
               : message``
           }`,
         };
       } catch (error) {
-        const fallback =
-          message`Failed to list remote branches. Ensure remote ${
-            value(remote)
-          } exists.`;
+        const fallback = message`Failed to list remote branches. Ensure remote ${value(
+          remote,
+        )} exists.`;
 
         return {
           success: false,
@@ -595,9 +601,9 @@ export function gitTag(
           }`,
         };
       } catch (error) {
-        const fallback = message`Failed to list tags. Ensure ${
-          value(dir)
-        } is a valid git repository.`;
+        const fallback = message`Failed to list tags. Ensure ${value(
+          dir,
+        )} is a valid git repository.`;
         return {
           success: false,
           error: listFailureMessage(error, dir, errors, fallback),
@@ -657,9 +663,9 @@ export function gitRemote(
           }`,
         };
       } catch (error) {
-        const fallback = message`Failed to list remotes. Ensure ${
-          value(dir)
-        } is a valid git repository.`;
+        const fallback = message`Failed to list remotes. Ensure ${value(
+          dir,
+        )} is a valid git repository.`;
         return {
           success: false,
           error: listFailureMessage(error, dir, errors, fallback),
@@ -710,9 +716,9 @@ export function gitCommit(
         }
         return {
           success: false,
-          error: message`Invalid commit SHA: ${
-            value(input)
-          }. Provide an abbreviated (4+) or full (40) hexadecimal commit SHA.`,
+          error: message`Invalid commit SHA: ${value(
+            input,
+          )}. Provide an abbreviated (4+) or full (40) hexadecimal commit SHA.`,
         };
       }
 
@@ -726,9 +732,9 @@ export function gitCommit(
         ) {
           return {
             success: false,
-            error: message`Commit SHA ${
-              value(input)
-            } is ambiguous. Provide more characters to disambiguate.`,
+            error: message`Commit SHA ${value(
+              input,
+            )} is ambiguous. Provide more characters to disambiguate.`,
           };
         }
         if (errors?.notFound) {
@@ -736,9 +742,9 @@ export function gitCommit(
         }
         return {
           success: false,
-          error: message`Commit ${
-            value(input)
-          } does not exist. Provide a valid commit SHA.`,
+          error: message`Commit ${value(
+            input,
+          )} does not exist. Provide a valid commit SHA.`,
         };
       }
     },
@@ -811,9 +817,9 @@ export function gitRef(
         ) {
           return {
             success: false,
-            error: message`Reference ${
-              value(input)
-            } is ambiguous. Provide more characters to disambiguate.`,
+            error: message`Reference ${value(
+              input,
+            )} is ambiguous. Provide more characters to disambiguate.`,
           };
         }
         if (errors?.notFound) {
@@ -821,9 +827,9 @@ export function gitRef(
         }
         return {
           success: false,
-          error: message`Reference ${
-            value(input)
-          } does not exist. Provide a valid branch, tag, or commit SHA.`,
+          error: message`Reference ${value(
+            input,
+          )} does not exist. Provide a valid branch, tag, or commit SHA.`,
         };
       }
     },

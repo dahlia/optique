@@ -34,18 +34,17 @@ describe("startup fixture manifest", () => {
         .replace(
           /import \{([^}]+)\} from "([^"]+)";/gs,
           (_, symbols: string, path: string) =>
-            `const {${symbols}} = require("${
-              path.replace("./grammar.js", "./grammar.cjs")
-            }");`,
+            `const {${symbols}} = require("${path.replace(
+              "./grammar.js",
+              "./grammar.cjs",
+            )}");`,
         )
         .replace(
           'import process from "node:process";',
           'const process = require("node:process");',
         )
-        .replaceAll("export function ", "function ").replaceAll(
-          "export const ",
-          "const ",
-        );
+        .replaceAll("export function ", "function ")
+        .replaceAll("export const ", "const ");
       if (name === "grammar") {
         generated += "module.exports = { options, set, start, status };";
       }

@@ -6,7 +6,10 @@ import { run } from "@optique/run";
 import { options, set, start, status } from "./grammar.js";
 
 const parser = or(
-  command("start", map(start(), (value) => ({ command: "start", ...value }))),
+  command(
+    "start",
+    map(start(), (value) => ({ command: "start", ...value })),
+  ),
   command(
     "status",
     map(status(), (value) => ({ command: "status", ...value })),

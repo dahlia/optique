@@ -140,10 +140,12 @@ function getPromptFunctions(): PromptFunctions {
  * Determines whether an error came from an interrupted Inquirer.js prompt.
  */
 function isExitPromptError(error: unknown): boolean {
-  return typeof error === "object" &&
+  return (
+    typeof error === "object" &&
     error != null &&
     "name" in error &&
-    error.name === "ExitPromptError";
+    error.name === "ExitPromptError"
+  );
 }
 
 // ---- Choice types ----
@@ -460,15 +462,18 @@ export type StringPromptConfig =
  * @since 1.0.0
  * @since 1.3.0 Added conditional prompt skipping.
  */
-export type PromptConfig<T> =
-  & BasePromptConfig<Exclude<T, null | undefined>>
-  & PromptCondition<T>;
+export type PromptConfig<T> = BasePromptConfig<Exclude<T, null | undefined>> &
+  PromptCondition<T>;
 
-type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
-  : T extends number ? NumberPromptConfig
-  : T extends string ? StringPromptConfig
-  : T extends readonly string[] ? CheckboxConfig
-  : never;
+type BasePromptConfig<T> = T extends boolean
+  ? ConfirmConfig
+  : T extends number
+    ? NumberPromptConfig
+    : T extends string
+      ? StringPromptConfig
+      : T extends readonly string[]
+        ? CheckboxConfig
+        : never;
 
 /**
  * Union of every prompt configuration this package can execute,
@@ -552,9 +557,7 @@ async function executePromptRaw<TValue>(
   const prompts = getPromptFunctions();
   try {
     if (!validPromptTypes.has(cfg.type)) {
-      throw new TypeError(
-        `Unsupported prompt type: ${String(cfg.type)}.`,
-      );
+      throw new TypeError(`Unsupported prompt type: ${String(cfg.type)}.`);
     }
 
     if ("prompter" in cfg && cfg.prompter != null) {
@@ -578,20 +581,26 @@ async function executePromptRaw<TValue>(
       case "confirm":
         return {
           success: true,
-          value: await prompts.confirm({
-            message: cfg.message,
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }, inquirerContext) as TValue,
+          value: (await prompts.confirm(
+            {
+              message: cfg.message,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            },
+            inquirerContext,
+          )) as TValue,
         };
 
       case "number": {
-        const numResult = await prompts.number({
-          message: cfg.message,
-          ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          ...(cfg.min !== undefined ? { min: cfg.min } : {}),
-          ...(cfg.max !== undefined ? { max: cfg.max } : {}),
-          ...(cfg.step !== undefined ? { step: cfg.step } : {}),
-        }, inquirerContext);
+        const numResult = await prompts.number(
+          {
+            message: cfg.message,
+            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            ...(cfg.min !== undefined ? { min: cfg.min } : {}),
+            ...(cfg.max !== undefined ? { max: cfg.max } : {}),
+            ...(cfg.step !== undefined ? { step: cfg.step } : {}),
+          },
+          inquirerContext,
+        );
         if (numResult === undefined) {
           return { success: false, error: message`No number provided.` };
         }
@@ -601,94 +610,120 @@ async function executePromptRaw<TValue>(
       case "input":
         return {
           success: true,
-          value: await prompts.input({
-            message: cfg.message,
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-            ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }, inquirerContext) as TValue,
+          value: (await prompts.input(
+            {
+              message: cfg.message,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+              ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
+            },
+            inquirerContext,
+          )) as TValue,
         };
 
       case "password":
         return {
           success: true,
-          value: await prompts.password({
-            message: cfg.message,
-            ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
-            ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }, inquirerContext) as TValue,
+          value: (await prompts.password(
+            {
+              message: cfg.message,
+              ...(cfg.mask !== undefined ? { mask: cfg.mask } : {}),
+              ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
+            },
+            inquirerContext,
+          )) as TValue,
         };
 
       case "editor":
         return {
           success: true,
-          value: await prompts.editor({
-            message: cfg.message,
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-            ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
-          }, inquirerContext) as TValue,
+          value: (await prompts.editor(
+            {
+              message: cfg.message,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+              ...(cfg.validate !== undefined ? { validate: cfg.validate } : {}),
+            },
+            inquirerContext,
+          )) as TValue,
         };
 
       case "select":
         return {
           success: true,
-          value: await prompts.select({
-            message: cfg.message,
-            choices: normalizeChoices(cfg.choices),
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }, inquirerContext) as TValue,
+          value: (await prompts.select(
+            {
+              message: cfg.message,
+              choices: normalizeChoices(cfg.choices),
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            },
+            inquirerContext,
+          )) as TValue,
         };
 
       case "search":
         return {
           success: true,
-          value: await prompts.search({
-            message: cfg.message,
-            source: async (term, sourceContext) =>
-              normalizeChoices(await cfg.source(term, sourceContext)),
-            ...(cfg.default === undefined ? {} : { default: cfg.default }),
-            ...(cfg.pageSize === undefined ? {} : { pageSize: cfg.pageSize }),
-            ...(cfg.validate === undefined ? {} : { validate: cfg.validate }),
-          }, inquirerContext) as TValue,
+          value: (await prompts.search(
+            {
+              message: cfg.message,
+              source: async (term, sourceContext) =>
+                normalizeChoices(await cfg.source(term, sourceContext)),
+              ...(cfg.default === undefined ? {} : { default: cfg.default }),
+              ...(cfg.pageSize === undefined ? {} : { pageSize: cfg.pageSize }),
+              ...(cfg.validate === undefined ? {} : { validate: cfg.validate }),
+            },
+            inquirerContext,
+          )) as TValue,
         };
 
       case "rawlist":
         return {
           success: true,
-          value: await prompts.rawlist({
-            message: cfg.message,
-            choices: normalizeChoices(cfg.choices),
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }, inquirerContext) as TValue,
+          value: (await prompts.rawlist(
+            {
+              message: cfg.message,
+              choices: normalizeChoices(cfg.choices),
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
+            },
+            inquirerContext,
+          )) as TValue,
         };
 
       case "expand":
         return {
           success: true,
-          value: await (prompts.expand as (
-            config: {
-              message: string;
-              choices: readonly {
-                value: string;
-                name?: string;
-                key: string;
-              }[];
-              default?: string;
+          value: (await (
+            prompts.expand as (
+              config: {
+                message: string;
+                choices: readonly {
+                  value: string;
+                  name?: string;
+                  key: string;
+                }[];
+                default?: string;
+              },
+              context?: InquirerPromptContext,
+            ) => Promise<string>
+          )(
+            {
+              message: cfg.message,
+              choices: cfg.choices,
+              ...(cfg.default !== undefined ? { default: cfg.default } : {}),
             },
-            context?: InquirerPromptContext,
-          ) => Promise<string>)({
-            message: cfg.message,
-            choices: cfg.choices,
-            ...(cfg.default !== undefined ? { default: cfg.default } : {}),
-          }, inquirerContext) as TValue,
+            inquirerContext,
+          )) as TValue,
         };
 
       case "checkbox":
         return {
           success: true,
-          value: await prompts.checkbox({
-            message: cfg.message,
-            choices: normalizeChoices(cfg.choices),
-          }, inquirerContext) as TValue,
+          value: (await prompts.checkbox(
+            {
+              message: cfg.message,
+              choices: normalizeChoices(cfg.choices),
+            },
+            inquirerContext,
+          )) as TValue,
         };
     }
   } catch (error) {
@@ -705,17 +740,23 @@ async function executePromptRaw<TValue>(
 
 /** Normalize choices to the format Inquirer.js expects. */
 function normalizeChoices(
-  choices:
-    readonly (string | Choice | CheckboxChoice | ExpandChoice | Separator)[],
+  choices: readonly (
+    | string
+    | Choice
+    | CheckboxChoice
+    | ExpandChoice
+    | Separator
+  )[],
 ): Array<
-  {
-    value: string;
-    name?: string;
-    description?: string;
-    short?: string;
-    disabled?: boolean | string;
-    checked?: boolean;
-  } | Separator
+  | {
+      value: string;
+      name?: string;
+      description?: string;
+      short?: string;
+      disabled?: boolean | string;
+      checked?: boolean;
+    }
+  | Separator
 > {
   return choices.map((c) => {
     if (typeof c === "string") return { value: c, name: c };

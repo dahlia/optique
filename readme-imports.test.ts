@@ -1,4 +1,12 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
@@ -25,13 +33,7 @@ const CONSTRUCTS = [
   "conditional",
 ];
 
-const MODIFIERS = [
-  "optional",
-  "withDefault",
-  "map",
-  "multiple",
-  "nonEmpty",
-];
+const MODIFIERS = ["optional", "withDefault", "map", "multiple", "nonEmpty"];
 
 const MOVED_SYMBOLS = new Map<string, string>([
   ...PRIMITIVES.map((s) => [s, "@optique/core/primitives"] as const),
@@ -42,11 +44,32 @@ const MOVED_SYMBOLS = new Map<string, string>([
 const IMPORT_RE =
   /import\s+\{([^}]+)\}\s+from\s+["']@optique\/core\/parser["']/g;
 
+it("README discovery ignores disposable fixtures and coverage reports", async () => {
+  const tmp = fileURLToPath(new URL("tmp/", import.meta.url));
+  await mkdir(tmp, { recursive: true });
+  const root = await mkdtemp(join(tmp, "readme-discovery-"));
+  try {
+    for (const directory of [
+      "tmp/fixture",
+      "coverage/report",
+      "packages/example",
+    ]) {
+      await mkdir(join(root, directory), { recursive: true });
+      await writeFile(join(root, directory, "README.md"), "");
+    }
+    assert.deepEqual(await findReadmeFiles(root), [
+      join(root, "packages/example/README.md"),
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function findReadmeFiles(dir: string): Promise<string[]> {
   const results: string[] = [];
   const entries = await readdir(dir);
   for (const entry of entries) {
-    if (entry === "node_modules" || entry === "dist" || entry === ".git") {
+    if (["node_modules", "dist", ".git", "tmp", "coverage"].includes(entry)) {
       continue;
     }
     const full = join(dir, entry);
@@ -57,7 +80,7 @@ async function findReadmeFiles(dir: string): Promise<string[]> {
       continue;
     }
     if (info.isDirectory()) {
-      results.push(...await findReadmeFiles(full));
+      results.push(...(await findReadmeFiles(full)));
     } else if (entry === "README.md") {
       results.push(full);
     }
@@ -121,9 +144,7 @@ describe("README run() usage", () => {
       const content = await readFile(readme, "utf-8");
       const rel = readme.replace(root, "");
       // Only check inside code blocks
-      const codeBlocks = content.matchAll(
-        /~~~~ typescript\n([\s\S]*?)~~~~/g,
-      );
+      const codeBlocks = content.matchAll(/~~~~ typescript\n([\s\S]*?)~~~~/g);
       for (const block of codeBlocks) {
         if (runObjectPattern.test(block[1])) {
           violations.push(
@@ -176,9 +197,7 @@ describe("README run() usage", () => {
     for (const readme of readmes) {
       const content = await readFile(readme, "utf-8");
       const rel = readme.replace(root, "");
-      const codeBlocks = content.matchAll(
-        /~~~~ typescript\n([\s\S]*?)~~~~/g,
-      );
+      const codeBlocks = content.matchAll(/~~~~ typescript\n([\s\S]*?)~~~~/g);
       for (const block of codeBlocks) {
         if (pattern.test(block[1])) {
           violations.push(
@@ -222,9 +241,9 @@ describe("README imports", () => {
     assert.deepStrictEqual(
       violations,
       [],
-      `Found stale @optique/core/parser imports in README files:\n${
-        violations.join("\n")
-      }`,
+      `Found stale @optique/core/parser imports in README files:\n${violations.join(
+        "\n",
+      )}`,
     );
   });
 });

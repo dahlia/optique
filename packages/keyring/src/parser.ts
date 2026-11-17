@@ -69,8 +69,12 @@ function getTypeName(value: unknown): string {
 function isSourceData(
   value: unknown,
 ): value is { readonly source: KeyringSource } {
-  return value != null && typeof value === "object" &&
-    "source" in value && typeof value.source === "function";
+  return (
+    value != null &&
+    typeof value === "object" &&
+    "source" in value &&
+    typeof value.source === "function"
+  );
 }
 
 /**
@@ -97,23 +101,25 @@ export function bindKeyring<M extends Mode, TState>(
 ): FluentParser<"async", string, BindState<TState>> {
   if (typeof options.service !== "string") {
     throw new TypeError(
-      `Expected service to be a string, but got: ${
-        getTypeName(options.service)
-      }.`,
+      `Expected service to be a string, but got: ${getTypeName(
+        options.service,
+      )}.`,
     );
   }
   if (typeof options.username !== "string") {
     throw new TypeError(
-      `Expected username to be a string, but got: ${
-        getTypeName(options.username)
-      }.`,
+      `Expected username to be a string, but got: ${getTypeName(
+        options.username,
+      )}.`,
     );
   }
 
   const stateId = Symbol("@optique/keyring/binding");
   const isBindState = (value: unknown): value is BindState<TState> =>
-    value != null && typeof value === "object" &&
-    stateKey in value && value[stateKey] === stateId;
+    value != null &&
+    typeof value === "object" &&
+    stateKey in value &&
+    value[stateKey] === stateId;
 
   const parserInheritsAnnotations =
     getTraits(parser).inheritsAnnotations === true;
@@ -148,16 +154,20 @@ export function bindKeyring<M extends Mode, TState>(
   const isInnerDemanded = (state: unknown, exec?: ExecutionContext): boolean =>
     innerNodes(state, exec?.path).some((node) => {
       const id = node.parser.dependencyMetadata?.source?.sourceId;
-      return id != null &&
-        exec?.effectfulCompletionSession?.demanded.has(id) === true;
+      return (
+        id != null &&
+        exec?.effectfulCompletionSession?.demanded.has(id) === true
+      );
     });
 
   const preparedKey = (path: readonly PropertyKey[] = []): string =>
     serializeSchedulingPath([stateId, ...path]);
 
   const isPreparedInner = (value: unknown): value is PreparedInner =>
-    value != null && typeof value === "object" &&
-    stateKey in value && value[stateKey] === stateId;
+    value != null &&
+    typeof value === "object" &&
+    stateKey in value &&
+    value[stateKey] === stateId;
 
   const completeInner = (
     state: BindState<TState>,
@@ -168,10 +178,11 @@ export function bindKeyring<M extends Mode, TState>(
     );
     if (isPreparedInner(prepared)) return Promise.resolve(prepared.result);
 
-    return Promise.resolve(withInnerState(
-      state,
-      (annotatedState) => parser.complete(annotatedState, exec),
-    ));
+    return Promise.resolve(
+      withInnerState(state, (annotatedState) =>
+        parser.complete(annotatedState, exec),
+      ),
+    );
   };
 
   const boundParser: Parser<"async", string, BindState<TState>> & {
@@ -219,23 +230,29 @@ export function bindKeyring<M extends Mode, TState>(
       const annotations = getAnnotations(context.state);
       const state = innerState(context.state);
 
-      const result = await withInnerState(
-        context.state,
-        (annotatedState) => parser.parse({ ...context, state: annotatedState }),
+      const result = await withInnerState(context.state, (annotatedState) =>
+        parser.parse({ ...context, state: annotatedState }),
       );
       if (!result.success && result.consumed > 0) return result;
 
-      const consumedOnlyTerminator = result.success &&
-        !context.optionsTerminated && result.next.optionsTerminated &&
-        result.consumed.length === 1 && result.consumed[0] === "--";
-      const nextState = injectAnnotations({
-        [stateKey]: stateId,
-        hasCliValue:
-          (isBindState(context.state) && context.state.hasCliValue) ||
-          (result.success && result.consumed.length > 0 &&
-            !consumedOnlyTerminator),
-        cliState: result.success ? result.next.state : state,
-      }, annotations);
+      const consumedOnlyTerminator =
+        result.success &&
+        !context.optionsTerminated &&
+        result.next.optionsTerminated &&
+        result.consumed.length === 1 &&
+        result.consumed[0] === "--";
+      const nextState = injectAnnotations(
+        {
+          [stateKey]: stateId,
+          hasCliValue:
+            (isBindState(context.state) && context.state.hasCliValue) ||
+            (result.success &&
+              result.consumed.length > 0 &&
+              !consumedOnlyTerminator),
+          cliState: result.success ? result.next.state : state,
+        },
+        annotations,
+      );
 
       return {
         success: true,
@@ -268,10 +285,9 @@ export function bindKeyring<M extends Mode, TState>(
         const innerResult = await completeInner(state, exec);
         return annotations != null && !innerResult.success
           ? {
-            success: false,
-            error:
-              message`Keyring password could not be read: the keyring context was not passed to run()'s contexts option.`,
-          }
+              success: false,
+              error: message`Keyring password could not be read: the keyring context was not passed to run()'s contexts option.`,
+            }
           : innerResult;
       }
 
@@ -289,18 +305,17 @@ export function bindKeyring<M extends Mode, TState>(
         return { success: true, value: "", deferred: true };
       }
 
-      const value = await lookupOnce(
-        session?.results,
-        exec?.path,
-        () => sourceData.source(options.service, options.username),
+      const value = await lookupOnce(session?.results, exec?.path, () =>
+        sourceData.source(options.service, options.username),
       );
       if (value === undefined) return await completeInner(state, exec);
 
       let result: ValueParserResult<string>;
       try {
-        result = typeof parser.validateValue === "function"
-          ? await parser.validateValue(value)
-          : { success: true, value };
+        result =
+          typeof parser.validateValue === "function"
+            ? await parser.validateValue(value)
+            : { success: true, value };
       } catch {
         // Validators can include the password (or a transformed version of it)
         // in an exception. Do not retain its message or cause.
@@ -323,10 +338,8 @@ export function bindKeyring<M extends Mode, TState>(
     },
 
     async *suggest(context, prefix) {
-      const suggestions = withInnerState(
-        context.state,
-        (annotatedState) =>
-          parser.suggest({ ...context, state: annotatedState }, prefix),
+      const suggestions = withInnerState(context.state, (annotatedState) =>
+        parser.suggest({ ...context, state: annotatedState }, prefix),
       );
       yield* suggestions;
     },
@@ -336,28 +349,26 @@ export function bindKeyring<M extends Mode, TState>(
         return parser.getDocFragments(state, upperDefaultValue);
       }
 
-      return withInnerState(
-        state.state,
-        (annotatedState) =>
-          parser.getDocFragments(
-            { kind: "available", state: annotatedState },
-            upperDefaultValue,
-          ),
+      return withInnerState(state.state, (annotatedState) =>
+        parser.getDocFragments(
+          { kind: "available", state: annotatedState },
+          upperDefaultValue,
+        ),
       );
     },
 
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion: (
-          state: BindState<TState>,
-          exec?: ExecutionContext,
-        ) =>
-          withInnerState(
-            state,
-            (annotatedState) =>
-              parser.shouldDeferCompletion?.(annotatedState, exec) === true,
-          ),
-      }
+          shouldDeferCompletion: (
+            state: BindState<TState>,
+            exec?: ExecutionContext,
+          ) =>
+            withInnerState(
+              state,
+              (annotatedState) =>
+                parser.shouldDeferCompletion?.(annotatedState, exec) === true,
+            ),
+        }
       : {}),
   };
 
@@ -404,16 +415,19 @@ export function bindKeyring<M extends Mode, TState>(
           isBindState(state) ? state.cliState : state,
         );
       },
-      completeSource: source.preservesSourceValue === false
-        ? undefined
-        : async (state: unknown, exec?: ExecutionContext) =>
-          await boundParser.complete(
-            isBindState(state) ? state : injectAnnotations(
-              boundParser.initialState,
-              getAnnotations(state),
-            ),
-            exec,
-          ),
+      completeSource:
+        source.preservesSourceValue === false
+          ? undefined
+          : async (state: unknown, exec?: ExecutionContext) =>
+              await boundParser.complete(
+                isBindState(state)
+                  ? state
+                  : injectAnnotations(
+                      boundParser.initialState,
+                      getAnnotations(state),
+                    ),
+                exec,
+              ),
     }),
   );
   if (dependencyMetadata != null) {
@@ -424,10 +438,8 @@ export function bindKeyring<M extends Mode, TState>(
     });
   }
 
-  defineForwardedEffectfulSchedulingNodes(
-    boundParser,
-    parser,
-    (state) => withInnerState(state, (annotatedState) => annotatedState),
+  defineForwardedEffectfulSchedulingNodes(boundParser, parser, (state) =>
+    withInnerState(state, (annotatedState) => annotatedState),
   );
   const schedulingNodes = boundParser[effectfulSchedulingNodesKey];
   if (schedulingNodes != null) {
@@ -461,53 +473,58 @@ export function bindKeyring<M extends Mode, TState>(
         }
         if (providesSourceIds.size === 0) return [];
 
-        return [{
-          path: path ?? [],
-          parser: {},
-          state,
-          providesSourceIds,
-          barrierCompletionDependencies: {
-            orderingDependencyIds: [...dependencyIds].filter((id) =>
-              !providesSourceIds.has(id)
-            ),
-            demandEdges: [],
-          },
-          prepare: async ({ exec, runtime }) => {
-            if (exec == null) return;
-            if (
-              exec.effectfulCompletionSession?.policy === "demand-only" &&
-              !isInnerDemanded(state, exec)
-            ) return;
-
-            const value = await lookupOnce(
-              exec.effectfulCompletionSession?.results,
-              path,
-              () => sourceData.source(options.service, options.username),
-            );
-            if (value !== undefined) return;
-
-            const result = await completeInner(
-              isBindState(state) ? state : injectAnnotations(
-                boundParser.initialState,
-                getAnnotations(state),
+        return [
+          {
+            path: path ?? [],
+            parser: {},
+            state,
+            providesSourceIds,
+            barrierCompletionDependencies: {
+              orderingDependencyIds: [...dependencyIds].filter(
+                (id) => !providesSourceIds.has(id),
               ),
-              {
-                ...exec,
-                path: path ?? [],
-                dependencyRuntime: runtime,
-                dependencyRegistry: runtime.registry,
-              },
-            );
-            if (!result.success || !result.deferred) {
-              exec.effectfulCompletionSession?.preparedByPath.set(
-                preparedKey(path),
-                { [stateKey]: stateId, result } satisfies PreparedInner,
-              );
-            }
+              demandEdges: [],
+            },
+            prepare: async ({ exec, runtime }) => {
+              if (exec == null) return;
+              if (
+                exec.effectfulCompletionSession?.policy === "demand-only" &&
+                !isInnerDemanded(state, exec)
+              )
+                return;
 
-            return result.success ? undefined : result;
+              const value = await lookupOnce(
+                exec.effectfulCompletionSession?.results,
+                path,
+                () => sourceData.source(options.service, options.username),
+              );
+              if (value !== undefined) return;
+
+              const result = await completeInner(
+                isBindState(state)
+                  ? state
+                  : injectAnnotations(
+                      boundParser.initialState,
+                      getAnnotations(state),
+                    ),
+                {
+                  ...exec,
+                  path: path ?? [],
+                  dependencyRuntime: runtime,
+                  dependencyRegistry: runtime.registry,
+                },
+              );
+              if (!result.success || !result.deferred) {
+                exec.effectfulCompletionSession?.preparedByPath.set(
+                  preparedKey(path),
+                  { [stateKey]: stateId, result } satisfies PreparedInner,
+                );
+              }
+
+              return result.success ? undefined : result;
+            },
           },
-        }];
+        ];
       }) satisfies EffectfulSchedulingNodesFn,
       configurable: true,
       enumerable: false,
@@ -518,9 +535,11 @@ export function bindKeyring<M extends Mode, TState>(
   // The empty step preserves success/provisional or accepts a non-match.
   const emptyStep = getEmptyInputBehavior(parser).step;
   defineEmptyInputBehavior(boundParser, {
-    ...(emptyStep === undefined ? {} : {
-      step: emptyStep === "failure" ? "success" : emptyStep,
-    }),
+    ...(emptyStep === undefined
+      ? {}
+      : {
+          step: emptyStep === "failure" ? "success" : emptyStep,
+        }),
   });
   return fluent(boundParser);
 }

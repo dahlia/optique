@@ -20,10 +20,12 @@ const hidden = { hidden: "usage" } as const;
 // no indexed names still let us exercise ambiguous usage trees, without
 // weakening that public validation rule.
 function or(...parsers: readonly Parser<Mode, unknown, unknown>[]) {
-  return validatedOr(...parsers.map((parser) => ({
-    ...parser,
-    leadingNames: new Set<string>(),
-  })));
+  return validatedOr(
+    ...parsers.map((parser) => ({
+      ...parser,
+      leadingNames: new Set<string>(),
+    })),
+  );
 }
 
 function synopsis(page: DocPage | undefined): string {
@@ -81,10 +83,12 @@ describe("hidden command branch selection", () => {
       );
       const before = cloneUsage(parser.usage);
 
-      const page = await getDocPage(
-        parser,
-        ["profile", "a", "--value", "selected"],
-      );
+      const page = await getDocPage(parser, [
+        "profile",
+        "a",
+        "--value",
+        "selected",
+      ]);
 
       assert.match(synopsis(page), /\balpha\b/);
       assert.match(synopsis(page), /--value/);
@@ -104,11 +108,9 @@ describe("hidden command branch selection", () => {
             option("--public-host", valueParser),
             hidden,
           ),
-          internal: command(
-            "serve",
-            option("--internal-token", valueParser),
-            { hidden: true },
-          ),
+          internal: command("serve", option("--internal-token", valueParser), {
+            hidden: true,
+          }),
         },
       );
       const page = await selectedPage(
@@ -128,18 +130,20 @@ describe("hidden command branch selection", () => {
     it(`${mode}: keeps an unselected shared command prefix hidden`, async () => {
       const parsedInputs: string[] = [];
       const valueParser = values(mode, parsedInputs);
-      const parser = optional(or(
-        command(
-          "alpha",
-          command("foo", option("--value", valueParser), hidden),
-          hidden,
+      const parser = optional(
+        or(
+          command(
+            "alpha",
+            command("foo", option("--value", valueParser), hidden),
+            hidden,
+          ),
+          command(
+            "alpha",
+            command("bar", option("--other", valueParser), hidden),
+            hidden,
+          ),
         ),
-        command(
-          "alpha",
-          command("bar", option("--other", valueParser), hidden),
-          hidden,
-        ),
-      ));
+      );
       const page = await selectedPage(
         parser,
         mode,
@@ -156,13 +160,15 @@ describe("hidden command branch selection", () => {
     it(`${mode}: retains a trailing command after selecting the short branch`, async () => {
       const parsedInputs: string[] = [];
       const parser = tuple([
-        optional(or(
-          command("alpha", command("beta", constant("long"), hidden), hidden),
-          tuple([
-            option("--short"),
-            command("alpha", constant("short"), hidden),
-          ]),
-        )),
+        optional(
+          or(
+            command("alpha", command("beta", constant("long"), hidden), hidden),
+            tuple([
+              option("--short"),
+              command("alpha", constant("short"), hidden),
+            ]),
+          ),
+        ),
         multiple(
           command(
             "beta",
@@ -214,18 +220,20 @@ describe("hidden command branch selection", () => {
     it(`${mode}: reveals only the final branch after shared-option replay`, async () => {
       const parsedInputs: string[] = [];
       const valueParser = values(mode, parsedInputs);
-      const parser = optional(or(
-        object({
-          shared: option("--shared", valueParser),
-          action: command("serve", constant("public"), hidden),
-          publicHost: option("--public-host", valueParser),
-        }),
-        object({
-          shared: option("--shared", valueParser),
-          action: command("serve", constant("internal"), hidden),
-          internalToken: option("--internal-token", valueParser),
-        }),
-      ));
+      const parser = optional(
+        or(
+          object({
+            shared: option("--shared", valueParser),
+            action: command("serve", constant("public"), hidden),
+            publicHost: option("--public-host", valueParser),
+          }),
+          object({
+            shared: option("--shared", valueParser),
+            action: command("serve", constant("internal"), hidden),
+            internalToken: option("--internal-token", valueParser),
+          }),
+        ),
+      );
       const page = await selectedPage(
         parser,
         mode,
@@ -243,22 +251,24 @@ describe("hidden command branch selection", () => {
     it(`${mode}: retains commands selected in earlier repeated items`, async () => {
       const parsedInputs: string[] = [];
       const valueParser = values(mode, parsedInputs);
-      const parser = multiple(command(
-        "item",
-        or(
-          command(
-            "alpha",
-            tuple([constant("alpha"), option("--value", valueParser)]),
-            hidden,
+      const parser = multiple(
+        command(
+          "item",
+          or(
+            command(
+              "alpha",
+              tuple([constant("alpha"), option("--value", valueParser)]),
+              hidden,
+            ),
+            command(
+              "beta",
+              tuple([constant("beta"), option("--value", valueParser)]),
+              hidden,
+            ),
+            command("gamma", constant("gamma"), hidden),
           ),
-          command(
-            "beta",
-            tuple([constant("beta"), option("--value", valueParser)]),
-            hidden,
-          ),
-          command("gamma", constant("gamma"), hidden),
         ),
-      ));
+      );
       const page = await selectedPage(
         parser,
         mode,
@@ -272,7 +282,10 @@ describe("hidden command branch selection", () => {
           "--value",
           "selected",
         ],
-        [["alpha", "selected"], ["beta", "selected"]],
+        [
+          ["alpha", "selected"],
+          ["beta", "selected"],
+        ],
         parsedInputs,
       );
       const text = synopsis(page);
@@ -293,29 +306,32 @@ describe("exclusive navigation with a usage-free discriminator", () => {
           public: command("serve", option("--public-host", value), hidden),
           internal: command("serve", option("--internal-token", value), hidden),
         };
-        const cli = shape === "default"
-          ? conditional(
-            constant("fallback"),
-            branches,
-            command("serve", option("--default-target", value), hidden),
-          )
-          : conditional(constant("internal"), branches);
-        const parser = shape === "nested"
-          ? command(
-            "project",
-            tuple([cli, optional(option("--global"))]),
-            hidden,
-          )
-          : cli;
-        const flag = shape === "default"
-          ? "--default-target"
-          : "--internal-token";
-        const args = shape === "nested"
-          ? ["project", "serve", flag, "selected", "--global"]
-          : ["serve", flag, "selected"];
-        const expected = shape === "nested"
-          ? [["internal", "selected"], true]
-          : [shape === "default" ? undefined : "internal", "selected"];
+        const cli =
+          shape === "default"
+            ? conditional(
+                constant("fallback"),
+                branches,
+                command("serve", option("--default-target", value), hidden),
+              )
+            : conditional(constant("internal"), branches);
+        const parser =
+          shape === "nested"
+            ? command(
+                "project",
+                tuple([cli, optional(option("--global"))]),
+                hidden,
+              )
+            : cli;
+        const flag =
+          shape === "default" ? "--default-target" : "--internal-token";
+        const args =
+          shape === "nested"
+            ? ["project", "serve", flag, "selected", "--global"]
+            : ["serve", flag, "selected"];
+        const expected =
+          shape === "nested"
+            ? [["internal", "selected"], true]
+            : [shape === "default" ? undefined : "internal", "selected"];
         const page = await selectedPage(
           parser,
           mode,
@@ -369,9 +385,12 @@ describe("exclusive navigation with a usage-free discriminator", () => {
 
 describe("exclusive navigation through command wrappers", () => {
   for (const mode of ["sync", "async"] as const) {
-    for (
-      const wrapper of ["optional", "multiple", "nested", "with tail"] as const
-    ) {
+    for (const wrapper of [
+      "optional",
+      "multiple",
+      "nested",
+      "with tail",
+    ] as const) {
       for (const wrongHidden of [false, true]) {
         it(`${mode}: selects ${wrapper} before a ${wrongHidden ? "hidden" : "visible"} same-named branch`, async () => {
           const parsedInputs: string[] = [];
@@ -381,28 +400,33 @@ describe("exclusive navigation through command wrappers", () => {
             option("--selected", value),
             hidden,
           );
-          const wrapped = wrapper === "optional"
-            ? optional(selected)
-            : wrapper === "multiple"
-            ? multiple(selected, { min: 1, max: 1 })
-            : wrapper === "nested"
-            ? optional(or(
-              multiple(optional(selected), { min: 1, max: 1 }),
-              command("different", constant("different"), hidden),
-            ))
-            : tuple([optional(selected), optional(option("--global"))]);
+          const wrapped =
+            wrapper === "optional"
+              ? optional(selected)
+              : wrapper === "multiple"
+                ? multiple(selected, { min: 1, max: 1 })
+                : wrapper === "nested"
+                  ? optional(
+                      or(
+                        multiple(optional(selected), { min: 1, max: 1 }),
+                        command("different", constant("different"), hidden),
+                      ),
+                    )
+                  : tuple([optional(selected), optional(option("--global"))]);
           const parser = or(
             wrapped,
             command("alpha", option("--wrong", value), { hidden: wrongHidden }),
           );
-          const args = wrapper === "with tail"
-            ? ["alpha", "--selected", "selected", "--global"]
-            : ["alpha", "--selected", "selected"];
-          const expected = wrapper === "optional"
-            ? "selected"
-            : wrapper === "with tail"
-            ? ["selected", true]
-            : ["selected"];
+          const args =
+            wrapper === "with tail"
+              ? ["alpha", "--selected", "selected", "--global"]
+              : ["alpha", "--selected", "selected"];
+          const expected =
+            wrapper === "optional"
+              ? "selected"
+              : wrapper === "with tail"
+                ? ["selected", true]
+                : ["selected"];
           const page = await selectedPage(
             parser,
             mode,
@@ -430,13 +454,18 @@ describe("wrapped command navigation provenance guards", () => {
       const value = values(mode, parsedInputs);
       const selected = command("alpha", option("--selected", value), hidden);
       const wrong = command("alpha", option("--wrong", value), hidden);
-      const usage: Usage = [{
-        type: "exclusive",
-        terms: [wrong.usage, [
-          { type: "command", name: "alpha", hidden: "usage" },
-          { type: "literal", value: "CUSTOM" },
-        ]],
-      }];
+      const usage: Usage = [
+        {
+          type: "exclusive",
+          terms: [
+            wrong.usage,
+            [
+              { type: "command", name: "alpha", hidden: "usage" },
+              { type: "literal", value: "CUSTOM" },
+            ],
+          ],
+        },
+      ];
       const page = await selectedPage(
         { ...selected, usage },
         mode,

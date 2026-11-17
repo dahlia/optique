@@ -71,31 +71,35 @@ import { bindEnv, createEnvContext } from "@optique/env";
 type AssertNever<T extends never> = T;
 
 function isPhase1ContextRequest(request: unknown): boolean {
-  return request === undefined ||
+  return (
+    request === undefined ||
     (request != null &&
       typeof request === "object" &&
       "phase" in request &&
-      (request as { readonly phase?: unknown }).phase === "phase1");
+      (request as { readonly phase?: unknown }).phase === "phase1")
+  );
 }
 
 function isPhase2ContextRequest(
   request: unknown,
 ): request is SourceContextPhase2Request {
-  return request != null &&
+  return (
+    request != null &&
     typeof request === "object" &&
     "phase" in request &&
     (request as { readonly phase?: unknown }).phase === "phase2" &&
-    "parsed" in request;
+    "parsed" in request
+  );
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
-  return isPhase2ContextRequest(request) ? request.parsed as T : undefined;
+  return isPhase2ContextRequest(request) ? (request.parsed as T) : undefined;
 }
 
 function getRuntimeExtractPhase2SeedKey(): symbol {
   const parser = command("probe", constant(null));
-  const key = Object.getOwnPropertySymbols(parser).find((symbol) =>
-    symbol.description === "@optique/core/extractPhase2Seed"
+  const key = Object.getOwnPropertySymbols(parser).find(
+    (symbol) => symbol.description === "@optique/core/extractPhase2Seed",
   );
   assert.ok(key, "expected command() to expose extractPhase2SeedKey");
   return key;
@@ -175,31 +179,33 @@ function createFlatCommandDocParser(): Parser<"sync", undefined, undefined> {
     *suggest() {},
     getDocFragments() {
       return {
-        fragments: [{
-          type: "section",
-          entries: [
-            {
-              term: { type: "command", name: "remote" },
-              description: message`Manage remotes.`,
-            },
-            {
-              term: { type: "command", name: "remote add" },
-              description: message`Add a remote.`,
-            },
-            {
-              term: { type: "command", name: "remote remove" },
-              description: message`Remove a remote.`,
-            },
-            {
-              term: { type: "command", name: "config" },
-              description: message`Manage configuration.`,
-            },
-            {
-              term: { type: "command", name: "config get" },
-              description: message`Read configuration.`,
-            },
-          ],
-        }],
+        fragments: [
+          {
+            type: "section",
+            entries: [
+              {
+                term: { type: "command", name: "remote" },
+                description: message`Manage remotes.`,
+              },
+              {
+                term: { type: "command", name: "remote add" },
+                description: message`Add a remote.`,
+              },
+              {
+                term: { type: "command", name: "remote remove" },
+                description: message`Remove a remote.`,
+              },
+              {
+                term: { type: "command", name: "config" },
+                description: message`Manage configuration.`,
+              },
+              {
+                term: { type: "command", name: "config get" },
+                description: message`Read configuration.`,
+              },
+            ],
+          },
+        ],
       };
     },
   };
@@ -377,7 +383,8 @@ type PhaseTwoScrubbedConfig = {
 function isPhaseTwoScrubbedConfig(
   value: unknown,
 ): value is PhaseTwoScrubbedConfig {
-  return value != null &&
+  return (
+    value != null &&
     typeof value === "object" &&
     "config" in value &&
     (value as { readonly config?: unknown }).config === "optique.json" &&
@@ -385,7 +392,8 @@ function isPhaseTwoScrubbedConfig(
     (value as { readonly nested?: unknown }).nested != null &&
     typeof (value as { readonly nested?: unknown }).nested === "object" &&
     "list" in value &&
-    Array.isArray((value as { readonly list?: unknown }).list);
+    Array.isArray((value as { readonly list?: unknown }).list)
+  );
 }
 
 describe("runParser", () => {
@@ -1335,7 +1343,8 @@ describe("runParser", () => {
           }),
         {
           name: "TypeError",
-          message: "Help option name must not contain control characters: " +
+          message:
+            "Help option name must not contain control characters: " +
             '"--bad\\nname".',
         },
       );
@@ -1450,7 +1459,8 @@ describe("runParser", () => {
           }),
         {
           name: "TypeError",
-          message: "Help command name must not contain control characters: " +
+          message:
+            "Help command name must not contain control characters: " +
             '"help\\x00".',
         },
       );
@@ -1483,7 +1493,8 @@ describe("runParser", () => {
           }),
         {
           name: "TypeError",
-          message: "Version option name must not contain control characters: " +
+          message:
+            "Version option name must not contain control characters: " +
             '"--ver\\tsion".',
         },
       );
@@ -1569,7 +1580,8 @@ describe("runParser", () => {
           }),
         {
           name: "TypeError",
-          message: "Completion option name must not contain whitespace: " +
+          message:
+            "Completion option name must not contain whitespace: " +
             '"--comp lete".',
         },
       );
@@ -1746,10 +1758,7 @@ describe("runParser", () => {
     it("should allow nested subcommand named 'help' when it is not a leading command", () => {
       const parser = command(
         "tool",
-        longestMatch(
-          command("help", object({})),
-          command("build", object({})),
-        ),
+        longestMatch(command("help", object({})), command("build", object({}))),
       );
       // "tool" is the leading command; nested "help" does not collide
       const result = runParser(parser, "test", ["tool", "help"], {
@@ -1763,24 +1772,16 @@ describe("runParser", () => {
 
     // conditional discriminator gates should not trigger false positives
     it("should allow conditional branch command that shares meta command name", () => {
-      const parser = conditional(
-        option("--mode", string()),
-        {
-          server: command("help", object({})),
-        },
-      );
+      const parser = conditional(option("--mode", string()), {
+        server: command("help", object({})),
+      });
       // "help" is behind --mode server (literal gate) → not a leading command
-      const result = runParser(
-        parser,
-        "test",
-        ["--mode", "server", "help"],
-        {
-          help: {
-            command: true,
-            onShow: () => "HELP",
-          },
+      const result = runParser(parser, "test", ["--mode", "server", "help"], {
+        help: {
+          command: true,
+          onShow: () => "HELP",
         },
-      );
+      });
       assert.deepEqual(result, ["server", {}]);
     });
 
@@ -1803,10 +1804,9 @@ describe("runParser", () => {
 
     // Literal values shadowed by meta option scanners
     it("should allow conditional discriminator value shadowing a meta option", () => {
-      const parser = conditional(
-        option("--mode", string()),
-        { "--help": object({}) },
-      );
+      const parser = conditional(option("--mode", string()), {
+        "--help": object({}),
+      });
       const result = runParser(parser, "test", ["--mode", "--help"], {
         help: {
           option: true,
@@ -1821,13 +1821,10 @@ describe("runParser", () => {
       // Argument-based conditional branch keys are not detectable via
       // usage-tree analysis because map() is invisible in the tree.
       // See https://github.com/dahlia/optique/issues/734
-      const parser = conditional(
-        argument(string()),
-        {
-          help: object({ port: option("--port", integer()) }),
-          serve: object({ dir: argument(string()) }),
-        },
-      );
+      const parser = conditional(argument(string()), {
+        help: object({ port: option("--port", integer()) }),
+        serve: object({ dir: argument(string()) }),
+      });
       let helpShown = false;
       const result = runParser(parser, "myapp", ["serve", "foo"], {
         help: {
@@ -1879,10 +1876,7 @@ describe("runParser", () => {
       // command("tool", object({ v: flag("--version") }))
       // + version: { command: { names: ["--version"] } }
       // --version is nested inside "tool", meta command only matches args[0]
-      const parser = command(
-        "tool",
-        object({ v: flag("--version") }),
-      );
+      const parser = command("tool", object({ v: flag("--version") }));
       const result = runParser(parser, "test", ["tool", "--version"], {
         version: {
           command: { names: ["--version"] },
@@ -1896,10 +1890,7 @@ describe("runParser", () => {
     it("should allow nested command shadowing a meta help option", () => {
       const parser = command(
         "tool",
-        longestMatch(
-          command("--help", object({})),
-          command("run", object({})),
-        ),
+        longestMatch(command("--help", object({})), command("run", object({}))),
       );
       const result = runParser(parser, "test", ["tool", "--help"], {
         help: {
@@ -2534,23 +2525,23 @@ describe("runParser", () => {
       let helpOutput = "";
 
       // Test: cli build --help --output out.js should show build help
-      const result = runParser(parser, "cli", [
-        "build",
-        "--help",
-        "--output",
-        "out.js",
-      ], {
-        help: {
-          option: true,
-          onShow: () => {
-            helpShown = true;
-            return "help-shown";
+      const result = runParser(
+        parser,
+        "cli",
+        ["build", "--help", "--output", "out.js"],
+        {
+          help: {
+            option: true,
+            onShow: () => {
+              helpShown = true;
+              return "help-shown";
+            },
+          },
+          stdout: (text) => {
+            helpOutput = text;
           },
         },
-        stdout: (text) => {
-          helpOutput = text;
-        },
-      });
+      );
 
       assert.equal(result, "help-shown");
       assert.ok(helpShown);
@@ -2708,30 +2699,29 @@ describe("runParser", () => {
               assert.equal(
                 result1,
                 "help-shown",
-                `Expected help-shown for helpConfig=${
-                  JSON.stringify(helpConfig)
-                }, versionConfig=${
-                  JSON.stringify(versionConfig)
-                }, got ${result1}`,
+                `Expected help-shown for helpConfig=${JSON.stringify(
+                  helpConfig,
+                )}, versionConfig=${JSON.stringify(
+                  versionConfig,
+                )}, got ${result1}`,
               );
               assert.ok(
                 helpShown && !versionShown,
-                `Expected help to win for helpConfig=${
-                  JSON.stringify(helpConfig)
-                }, versionConfig=${JSON.stringify(versionConfig)}`,
+                `Expected help to win for helpConfig=${JSON.stringify(
+                  helpConfig,
+                )}, versionConfig=${JSON.stringify(versionConfig)}`,
               );
             }
           } catch (error) {
             // Some mode combinations are expected to fail (e.g., command-only modes with options)
-            const errorMsg = error instanceof Error
-              ? error.message
-              : String(error);
+            const errorMsg =
+              error instanceof Error ? error.message : String(error);
             console.log(
-              `Config combination helpConfig=${
-                JSON.stringify(helpConfig)
-              }, versionConfig=${
-                JSON.stringify(versionConfig)
-              } failed as expected:`,
+              `Config combination helpConfig=${JSON.stringify(
+                helpConfig,
+              )}, versionConfig=${JSON.stringify(
+                versionConfig,
+              )} failed as expected:`,
               errorMsg.slice(0, 50),
             );
           }
@@ -2782,24 +2772,23 @@ describe("runParser", () => {
 
       let versionShown = false;
 
-      const result = runParser(parser, "test", [
-        "--verbose",
-        "--quiet",
-        "--version",
-        "--output",
-        "test.txt",
-      ], {
-        version: {
-          command: true,
-          option: true,
-          value: "2.0.0",
-          onShow: () => {
-            versionShown = true;
-            return "version-shown";
+      const result = runParser(
+        parser,
+        "test",
+        ["--verbose", "--quiet", "--version", "--output", "test.txt"],
+        {
+          version: {
+            command: true,
+            option: true,
+            value: "2.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
+            },
           },
+          stdout: () => {},
         },
-        stdout: () => {},
-      });
+      );
 
       assert.equal(result, "version-shown");
       assert.ok(versionShown);
@@ -2824,11 +2813,9 @@ describe("runParser", () => {
         { description: message`Create a commit` },
       );
 
-      const gitCommand = command(
-        "git",
-        or(gitAddCommand, gitCommitCommand),
-        { description: message`Git version control` },
-      );
+      const gitCommand = command("git", or(gitAddCommand, gitCommitCommand), {
+        description: message`Git version control`,
+      });
 
       const parser = gitCommand;
 
@@ -3033,8 +3020,7 @@ describe("Documentation augmentation (brief, description, footer)", () => {
       stdout: (text) => {
         output = text;
       },
-      description:
-        message`This program does something amazing with the provided name parameter.`,
+      description: message`This program does something amazing with the provided name parameter.`,
     });
 
     assert.equal(result, "help");
@@ -3228,21 +3214,17 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     // https://github.com/dahlia/optique/issues/119.
     // A subcommand's own brief appears at the top of its help page, before
     // Usage.  Run-level docs must NOT bleed in.
-    const addCommand = command(
-      "add",
-      object({ force: flag("--force") }),
-      { brief: message`Add something` },
-    );
+    const addCommand = command("add", object({ force: flag("--force") }), {
+      brief: message`Add something`,
+    });
     const removeCommand = command(
       "remove",
       object({ force: flag("--force") }),
       { brief: message`Remove something` },
     );
-    const fileCommand = command(
-      "file",
-      or(addCommand, removeCommand),
-      { brief: message`File operations` },
-    );
+    const fileCommand = command("file", or(addCommand, removeCommand), {
+      brief: message`File operations`,
+    });
 
     let helpOutput = "";
     runParser(fileCommand, "repro", ["file", "--help"], {
@@ -3333,24 +3315,18 @@ describe("Documentation augmentation (brief, description, footer)", () => {
     // When a command is wrapped in group(), its own brief must still appear
     // at the top of the help page (not the run-level brief), and its own
     // description must appear below Usage.
-    const addCommand = command(
-      "add",
-      object({ force: flag("--force") }),
-      { brief: message`brief for add command` },
-    );
+    const addCommand = command("add", object({ force: flag("--force") }), {
+      brief: message`brief for add command`,
+    });
     const removeCommand = command(
       "remove",
       object({ force: flag("--force") }),
       { brief: message`brief for remove command` },
     );
-    const fileCommands = command(
-      "file",
-      or(addCommand, removeCommand),
-      {
-        brief: message`brief for file command group`,
-        description: message`description for file command group`,
-      },
-    );
+    const fileCommands = command("file", or(addCommand, removeCommand), {
+      brief: message`brief for file command group`,
+      description: message`description for file command group`,
+    });
     const cli = group("File commands", fileCommands);
 
     let helpOutput = "";
@@ -3430,13 +3406,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       },
     );
 
-    const gitCommand = command(
-      "git",
-      addCommand,
-      {
-        description: message`Git version control`,
-      },
-    );
+    const gitCommand = command("git", addCommand, {
+      description: message`Git version control`,
+    });
 
     const parser = gitCommand;
 
@@ -3631,24 +3603,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
     let helpOutput = "";
 
     // Test: cli deploy --env prod --help target should show deploy help
-    const result = runParser(parser, "cli", [
-      "deploy",
-      "--env",
-      "prod",
-      "--help",
-      "target",
-    ], {
-      help: {
-        option: true,
-        onShow: () => {
-          helpShown = true;
-          return "help-shown";
+    const result = runParser(
+      parser,
+      "cli",
+      ["deploy", "--env", "prod", "--help", "target"],
+      {
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
+          },
+        },
+        stdout: (text) => {
+          helpOutput = text;
         },
       },
-      stdout: (text) => {
-        helpOutput = text;
-      },
-    });
+    );
 
     assert.equal(result, "help-shown");
     assert.ok(helpShown);
@@ -3762,21 +3733,13 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
     const gitSubCommands = or(statusSubCommand, branchSubCommand);
 
-    const gitCommand = command(
-      "git",
-      gitSubCommands,
-      {
-        description: message`Git operations`,
-      },
-    );
+    const gitCommand = command("git", gitSubCommands, {
+      description: message`Git operations`,
+    });
 
-    const devCommand = command(
-      "dev",
-      gitCommand,
-      {
-        description: message`Development tools`,
-      },
-    );
+    const devCommand = command("dev", gitCommand, {
+      description: message`Development tools`,
+    });
 
     const parser = devCommand;
 
@@ -3898,12 +3861,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       ),
     );
 
-    for (
-      const completion of [
-        { option: true },
-        { command: true, option: true },
-      ] as const
-    ) {
+    for (const completion of [
+      { option: true },
+      { command: true, option: true },
+    ] as const) {
       let helpOutput = "";
       const result = runParser(parser, "demo", ["group", "sub", "--help"], {
         help: {
@@ -4014,9 +3975,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       });
 
       // Should suggest options for bash (newline separated)
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--verbose"));
       assert.ok(suggestions.includes("--format"));
     });
@@ -4037,9 +3998,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--verbose"));
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
@@ -4059,9 +4020,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("build"));
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
@@ -4086,9 +4047,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--target"));
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
@@ -4104,24 +4065,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--output",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--output", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4136,24 +4096,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--output",
-        "--",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--output", "--"],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4172,9 +4131,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4189,24 +4148,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--output=dist",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--output=dist", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
@@ -4221,25 +4179,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--output",
-        "--",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--output", "--", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
@@ -4254,25 +4210,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--output",
-        "--help",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--output", "--help", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
@@ -4293,9 +4247,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4342,12 +4296,7 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       );
 
-      await runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "--output",
-        "",
-      ], {
+      await runParser(parser, "myapp", ["completion", "bash", "--output", ""], {
         help: { option: true, onShow: () => "help" },
         version: { option: true, value: "1.0.0" },
         completion: { command: true },
@@ -4377,18 +4326,21 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
 
     it("should not add meta options while completing a root option value sharing a command option name", () => {
-      const parser = object({
-        command: command("build", object({ output: flag("--output") })),
-        output: option("--output", string()),
-      }, { allowDuplicates: true });
+      const parser = object(
+        {
+          command: command("build", object({ output: flag("--output") })),
+          output: option("--output", string()),
+        },
+        { allowDuplicates: true },
+      );
 
       let completionOutput = "";
 
@@ -4401,9 +4353,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4416,24 +4368,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--target",
-        "--",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--target", "--"],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
@@ -4446,25 +4397,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--target",
-        "--",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--target", "--", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4477,24 +4426,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "build",
-        "--target",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "build", "--target", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4510,24 +4458,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "tool",
-        "--target",
-        "--",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "tool", "--target", "--"],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
@@ -4543,25 +4490,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "tool",
-        "--target",
-        "--",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "tool", "--target", "--", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4574,24 +4519,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "outer",
-        "--output",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "outer", "--output", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
@@ -4607,24 +4551,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "outer",
-        "--global",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "outer", "--global", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4633,53 +4576,40 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       const parser = command(
         "tool",
         or(
-          command(
-            "deploy",
-            object({ target: option("--target", string()) }),
-          ),
+          command("deploy", object({ target: option("--target", string()) })),
           command("status", object({})),
         ),
       );
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "tool",
-        "--target",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "tool", "--target", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
 
     it("should not add meta options while completing a command option value", () => {
-      const parser = command(
-        "tool",
-        object({ b: option("--b", string()) }),
-      );
+      const parser = command("tool", object({ b: option("--b", string()) }));
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "tool",
-        "--b",
-        "",
-      ], {
+      runParser(parser, "myapp", ["completion", "bash", "tool", "--b", ""], {
         help: { option: true, onShow: () => "help" },
         version: { option: true, value: "1.0.0" },
         completion: { command: true },
@@ -4688,9 +4618,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4706,24 +4636,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       let completionOutput = "";
 
-      runParser(parser, "myapp", [
-        "completion",
-        "bash",
-        "tool",
-        "--target",
-        "",
-      ], {
-        help: { option: true, onShow: () => "help" },
-        version: { option: true, value: "1.0.0" },
-        completion: { command: true },
-        stdout: (text) => {
-          completionOutput += text;
+      runParser(
+        parser,
+        "myapp",
+        ["completion", "bash", "tool", "--target", ""],
+        {
+          help: { option: true, onShow: () => "help" },
+          version: { option: true, value: "1.0.0" },
+          completion: { command: true },
+          stdout: (text) => {
+            completionOutput += text;
+          },
         },
-      });
-
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
       );
+
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(suggestions.includes("--version"));
     });
@@ -4747,9 +4676,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4769,9 +4698,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.equal(
         suggestions.filter((suggestion) => suggestion === "--help").length,
         1,
@@ -4794,9 +4723,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--verbose"));
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
@@ -4818,9 +4747,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("-v"));
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
@@ -4845,9 +4774,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("-v"));
       assert.ok(suggestions.includes("-h"));
       assert.ok(suggestions.includes("-V"));
@@ -4877,9 +4806,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("-v"));
       assert.ok(suggestions.includes("-help"));
       assert.ok(suggestions.includes("-version"));
@@ -4903,9 +4832,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("/v"));
       assert.ok(suggestions.includes("/?"));
       assert.ok(suggestions.includes("/V"));
@@ -4927,9 +4856,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("+verbose"));
       assert.ok(suggestions.includes("+h"));
       assert.ok(suggestions.includes("+V"));
@@ -4951,9 +4880,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
     });
@@ -4972,9 +4901,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.includes("build"));
       assert.ok(!suggestions.includes("--help"));
       assert.ok(!suggestions.includes("--version"));
@@ -5015,12 +4944,12 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(
         suggestions.some((suggestion) =>
-          suggestion.startsWith("__FILE__:file")
+          suggestion.startsWith("__FILE__:file"),
         ),
       );
       assert.ok(suggestions.includes("--help"));
@@ -5035,12 +4964,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         }),
       );
 
-      for (
-        const completionArgs of [
-          ["completion", "bash", "build", "--help", ""],
-          ["completion", "bash", "build", "--version", ""],
-        ]
-      ) {
+      for (const completionArgs of [
+        ["completion", "bash", "build", "--help", ""],
+        ["completion", "bash", "build", "--version", ""],
+      ]) {
         let completionOutput = "";
 
         runParser(parser, "myapp", completionArgs, {
@@ -5052,9 +4979,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           },
         });
 
-        const suggestions = completionOutput.split("\n").filter((s) =>
-          s.length > 0
-        );
+        const suggestions = completionOutput
+          .split("\n")
+          .filter((s) => s.length > 0);
         assert.deepEqual(suggestions, []);
       }
     });
@@ -5147,9 +5074,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.deepEqual(suggestions, ["--target"]);
     });
 
@@ -5180,9 +5107,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         },
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.deepEqual(suggestions, ["--target"]);
     });
 
@@ -5195,20 +5122,15 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
 
       // "myapp --completion bash --completion" means:
       // complete the partial input "--completion" using bash completion
-      runParser(
-        parser,
-        "myapp",
-        ["--completion", "bash", "--completion"],
-        {
-          completion: {
-            option: true,
-            onShow: (exitCode: number) => {
-              completionResult = `completion-${exitCode}`;
-              return completionResult;
-            },
+      runParser(parser, "myapp", ["--completion", "bash", "--completion"], {
+        completion: {
+          option: true,
+          onShow: (exitCode: number) => {
+            completionResult = `completion-${exitCode}`;
+            return completionResult;
           },
         },
-      );
+      });
 
       // Should invoke completion (not error)—the first --completion is the
       // meta option; the second --completion is completion payload
@@ -5226,19 +5148,14 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       // complete the partial input "--completion=zsh" using bash completion.
       // The first --completion=bash is the meta option; "--completion=zsh"
       // is passed as a completion payload argument.
-      runParser(
-        parser,
-        "myapp",
-        ["--completion=bash", "--completion=zsh"],
-        {
-          completion: {
-            option: true,
-          },
-          stdout: (text) => {
-            completionOutput = text;
-          },
+      runParser(parser, "myapp", ["--completion=bash", "--completion=zsh"], {
+        completion: {
+          option: true,
         },
-      );
+        stdout: (text) => {
+          completionOutput = text;
+        },
+      });
 
       // If this were last-option-wins, --completion=zsh would be the meta
       // option with no payload, producing a zsh completion script containing
@@ -5556,9 +5473,9 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       });
 
       // Should provide completions for the git add subcommand context
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.length > 0
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.length > 0);
       assert.ok(suggestions.length > 0);
     });
 
@@ -5725,29 +5642,24 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["completion", "bash", "--", "--help"],
-        {
-          help: {
-            option: true,
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["completion", "bash", "--", "--help"], {
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            command: true,
-            option: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          command: true,
+          option: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(completionShown, "completion callback should be called");
       assert.ok(!helpShown, "help callback should not be called");
@@ -5759,28 +5671,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["completion", "bash", "git", "--help"],
-        {
-          help: {
-            option: true,
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["completion", "bash", "git", "--help"], {
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(completionShown, "completion callback should be called");
       assert.ok(!helpShown, "help callback should not be called");
@@ -5792,28 +5699,23 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["completion", "bash", "--", "--assist"],
-        {
-          help: {
-            option: { names: ["--assist"] },
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["completion", "bash", "--", "--assist"], {
+        help: {
+          option: { names: ["--assist"] },
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(completionShown, "completion callback should be called");
       assert.ok(!helpShown, "help callback should not be called");
@@ -5825,29 +5727,24 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--completion", "bash", "--help"],
-        {
-          help: {
-            option: true,
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["--completion", "bash", "--help"], {
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(completionShown, "completion callback should be called");
       assert.ok(!helpShown, "help callback should not be called");
@@ -5859,29 +5756,24 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--help", "--completion", "bash"],
-        {
-          help: {
-            option: true,
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["--help", "--completion", "bash"], {
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(helpShown, "help callback should be called");
       assert.ok(!completionShown, "completion callback should not be called");
@@ -6010,30 +5902,25 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["help", "--completion", "bash"],
-        {
-          help: {
-            command: true,
-            option: true,
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["help", "--completion", "bash"], {
+        help: {
+          command: true,
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(helpShown, "help callback should be called");
       assert.ok(!completionShown, "completion callback should not be called");
@@ -6045,31 +5932,26 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let versionShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["version", "--completion", "bash"],
-        {
-          version: {
-            command: true,
-            option: true,
-            value: "1.0.0",
-            onShow: () => {
-              versionShown = true;
-              return "version-shown";
-            },
+      runParser(parser, "myapp", ["version", "--completion", "bash"], {
+        version: {
+          command: true,
+          option: true,
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(versionShown, "version callback should be called");
       assert.ok(!completionShown, "completion callback should not be called");
@@ -6121,29 +6003,24 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--completion=bash", "--help"],
-        {
-          help: {
-            option: true,
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["--completion=bash", "--help"], {
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(completionShown, "completion callback should be called");
       assert.ok(!helpShown, "help callback should not be called");
@@ -6155,29 +6032,24 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let helpShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--help", "--completion=bash"],
-        {
-          help: {
-            option: true,
-            onShow: () => {
-              helpShown = true;
-              return "help-shown";
-            },
+      runParser(parser, "myapp", ["--help", "--completion=bash"], {
+        help: {
+          option: true,
+          onShow: () => {
+            helpShown = true;
+            return "help-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(helpShown, "help callback should be called");
       assert.ok(!completionShown, "completion callback should not be called");
@@ -6189,30 +6061,25 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let versionShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--completion", "bash", "--version"],
-        {
-          version: {
-            option: true,
-            value: "1.0.0",
-            onShow: () => {
-              versionShown = true;
-              return "version-shown";
-            },
+      runParser(parser, "myapp", ["--completion", "bash", "--version"], {
+        version: {
+          option: true,
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(completionShown, "completion callback should be called");
       assert.ok(!versionShown, "version callback should not be called");
@@ -6224,30 +6091,25 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let versionShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--version", "--completion", "bash"],
-        {
-          version: {
-            option: true,
-            value: "1.0.0",
-            onShow: () => {
-              versionShown = true;
-              return "version-shown";
-            },
+      runParser(parser, "myapp", ["--version", "--completion", "bash"], {
+        version: {
+          option: true,
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(versionShown, "version callback should be called");
       assert.ok(!completionShown, "completion callback should not be called");
@@ -6259,30 +6121,25 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let versionShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--completion=bash", "--version"],
-        {
-          version: {
-            option: true,
-            value: "1.0.0",
-            onShow: () => {
-              versionShown = true;
-              return "version-shown";
-            },
+      runParser(parser, "myapp", ["--completion=bash", "--version"], {
+        version: {
+          option: true,
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(completionShown, "completion callback should be called");
       assert.ok(!versionShown, "version callback should not be called");
@@ -6294,30 +6151,25 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
       let completionShown = false;
       let versionShown = false;
 
-      runParser(
-        parser,
-        "myapp",
-        ["--version", "--completion=bash"],
-        {
-          version: {
-            option: true,
-            value: "1.0.0",
-            onShow: () => {
-              versionShown = true;
-              return "version-shown";
-            },
+      runParser(parser, "myapp", ["--version", "--completion=bash"], {
+        version: {
+          option: true,
+          value: "1.0.0",
+          onShow: () => {
+            versionShown = true;
+            return "version-shown";
           },
-          completion: {
-            option: true,
-            command: true,
-            onShow: () => {
-              completionShown = true;
-              return "completion-shown";
-            },
-          },
-          stdout: () => {},
         },
-      );
+        completion: {
+          option: true,
+          command: true,
+          onShow: () => {
+            completionShown = true;
+            return "completion-shown";
+          },
+        },
+        stdout: () => {},
+      });
 
       assert.ok(versionShown, "version callback should be called");
       assert.ok(!completionShown, "completion callback should not be called");
@@ -6348,16 +6200,14 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         object({ target: option("--target", string()) }),
       );
 
-      for (
-        const { hidden, usageVisible, docVisible } of [
-          { hidden: true, usageVisible: false, docVisible: false },
-          { hidden: "help", usageVisible: false, docVisible: false },
-          { hidden: "doc", usageVisible: true, docVisible: false },
-          { hidden: "usage", usageVisible: false, docVisible: true },
-          { hidden: undefined, usageVisible: true, docVisible: true },
-          { hidden: false, usageVisible: true, docVisible: true },
-        ] as const
-      ) {
+      for (const { hidden, usageVisible, docVisible } of [
+        { hidden: true, usageVisible: false, docVisible: false },
+        { hidden: "help", usageVisible: false, docVisible: false },
+        { hidden: "doc", usageVisible: true, docVisible: false },
+        { hidden: "usage", usageVisible: false, docVisible: true },
+        { hidden: undefined, usageVisible: true, docVisible: true },
+        { hidden: false, usageVisible: true, docVisible: true },
+      ] as const) {
         it(`should apply hidden=${hidden} to the option and its arguments`, () => {
           let output = "";
           const result = runParser(parser, "example", ["--help"], {
@@ -6408,9 +6258,11 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
           assert.ok(separator > 0, output);
           const usage = output.slice(0, separator);
           const entries = output.slice(separator + 2);
-          for (
-            const term of ["--completion SHELL", "--completions SHELL", "ARG"]
-          ) {
+          for (const term of [
+            "--completion SHELL",
+            "--completions SHELL",
+            "ARG",
+          ]) {
             assert.equal(usage.includes(term), hidden === "doc", usage);
             assert.ok(!entries.includes(term), entries);
           }
@@ -6438,9 +6290,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         assert.doesNotMatch(stderr, /ARG|\[\]/);
       });
 
-      for (
-        const args of [["--completion", "bash"], ["--completion=bash"]] as const
-      ) {
+      for (const args of [
+        ["--completion", "bash"],
+        ["--completion=bash"],
+      ] as const) {
         it(`should generate a script through hidden ${args[0]}`, () => {
           let stdout = "";
           const result = runParser(parser, "example", args, {
@@ -7024,18 +6877,18 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
   describe("program name validation", () => {
     it("should reject empty program name (old API)", () => {
       const parser = object({ name: argument(string()) });
-      assert.throws(
-        () => runParser(parser, "", ["x"]),
-        { name: "TypeError", message: /program name.*empty/i },
-      );
+      assert.throws(() => runParser(parser, "", ["x"]), {
+        name: "TypeError",
+        message: /program name.*empty/i,
+      });
     });
 
     it("should reject program name with control characters (old API)", () => {
       const parser = object({ name: argument(string()) });
-      assert.throws(
-        () => runParser(parser, "bad\nname", ["x"]),
-        { name: "TypeError", message: /program name.*control characters/i },
-      );
+      assert.throws(() => runParser(parser, "bad\nname", ["x"]), {
+        name: "TypeError",
+        message: /program name.*control characters/i,
+      });
     });
 
     it("should reject empty metadata name (Program API)", () => {
@@ -7043,10 +6896,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         parser: object({ name: argument(string()) }),
         metadata: { name: "" },
       };
-      assert.throws(
-        () => runParser(prog, ["x"]),
-        { name: "TypeError", message: /program name.*empty/i },
-      );
+      assert.throws(() => runParser(prog, ["x"]), {
+        name: "TypeError",
+        message: /program name.*empty/i,
+      });
     });
 
     it("should reject non-string metadata name (Program API)", () => {
@@ -7054,10 +6907,10 @@ describe("Subcommand help edge cases (Issue #26 comprehensive coverage)", () => 
         parser: object({ name: argument(string()) }),
         metadata: { name: 123 as never },
       } as Program<"sync", { readonly name: string }>;
-      assert.throws(
-        () => runParser(prog, ["x"]),
-        { name: "TypeError", message: /program name.*string/i },
-      );
+      assert.throws(() => runParser(prog, ["x"]), {
+        name: "TypeError",
+        message: /program name.*string/i,
+      });
     });
   });
 });
@@ -7441,7 +7294,8 @@ describe("runWith", () => {
         phase: "two-pass",
         getAnnotations(request?: unknown) {
           const parsed = getPhase2ContextParsed<object>(request);
-          reusedIdentity = parsed != null &&
+          reusedIdentity =
+            parsed != null &&
             typeof parsed === "object" &&
             seenParsed.has(parsed);
           return {};
@@ -7528,16 +7382,9 @@ describe("runWith", () => {
         ["prompt", null],
         [
           "nested",
-          new Map<PropertyKey, DeferredMap | null>([
-            ["prompt", null],
-          ]),
+          new Map<PropertyKey, DeferredMap | null>([["prompt", null]]),
         ],
-        [
-          "list",
-          new Map<PropertyKey, DeferredMap | null>([
-            [0, null],
-          ]),
-        ],
+        ["list", new Map<PropertyKey, DeferredMap | null>([[0, null]])],
       ]);
       let phase2Parsed: unknown;
       const parser = createPhaseTwoSeedParser(tokenKey, {
@@ -7591,9 +7438,7 @@ describe("runWith", () => {
       const parser = createPhaseTwoSeedParser(tokenKey, {
         value: ["prompt-placeholder"],
         deferred: true,
-        deferredKeys: new Map<PropertyKey, DeferredMap | null>([
-          [0, null],
-        ]),
+        deferredKeys: new Map<PropertyKey, DeferredMap | null>([[0, null]]),
       });
       const context = createPhaseTwoCaptureContext(tokenKey, (parsed) => {
         phase2Parsed = parsed;
@@ -8127,9 +7972,9 @@ describe("runWith", () => {
         complete(state) {
           return state == null
             ? {
-              success: false as const,
-              error: message`Missing annotated help value.`,
-            }
+                success: false as const,
+                error: message`Missing annotated help value.`,
+              }
             : { success: true as const, value: { value: state } };
         },
         *suggest() {},
@@ -8169,10 +8014,7 @@ describe("runWith", () => {
     it("should display error only once with a two-pass context and empty args", async () => {
       const cmd1 = command("foo", object({ cmd: constant("foo") }));
       const cmd2 = command("bar", object({ cmd: constant("bar") }));
-      const parser = merge(
-        or(cmd1, cmd2),
-        object({ debug: flag("-d") }),
-      );
+      const parser = merge(or(cmd1, cmd2), object({ debug: flag("-d") }));
 
       const dynamicContext: SourceContext = {
         id: Symbol("dynamic"),
@@ -8200,9 +8042,9 @@ describe("runWith", () => {
       assert.equal(
         stderrCalls.length,
         2,
-        `Expected 2 stderr calls (Usage + Error) but got ${stderrCalls.length}: ${
-          JSON.stringify(stderrCalls)
-        }`,
+        `Expected 2 stderr calls (Usage + Error) but got ${stderrCalls.length}: ${JSON.stringify(
+          stderrCalls,
+        )}`,
       );
       assert.ok(
         stderrCalls[0].startsWith("Usage:"),
@@ -8717,10 +8559,7 @@ describe("runWith", () => {
           se.error instanceof Error,
           "error should be the disposal error",
         );
-        assert.equal(
-          (se.error as Error).message,
-          "dispose failed.",
-        );
+        assert.equal((se.error as Error).message, "dispose failed.");
       }
 
       assert.ok(disposed);
@@ -8900,10 +8739,9 @@ describe("runWith", () => {
 
       // Context should receive { args: ["context-args"] }, not the runner's args
       assert.ok(receivedOptions != null);
-      assert.deepEqual(
-        (receivedOptions as Record<string, unknown>).args,
-        ["context-args"],
-      );
+      assert.deepEqual((receivedOptions as Record<string, unknown>).args, [
+        "context-args",
+      ]);
     });
 
     it("should forward contextOptions.help without collision with runner help config", async () => {
@@ -8990,10 +8828,7 @@ describe("runWith", () => {
       });
 
       assert.ok(receivedOptions != null);
-      assert.equal(
-        (receivedOptions as Record<string, unknown>).profile,
-        "dev",
-      );
+      assert.equal((receivedOptions as Record<string, unknown>).profile, "dev");
     });
   });
 
@@ -9379,9 +9214,9 @@ describe("runWithSync", () => {
         complete(state) {
           return state == null
             ? {
-              success: false as const,
-              error: message`Missing annotated completion value.`,
-            }
+                success: false as const,
+                error: message`Missing annotated completion value.`,
+              }
             : { success: true as const, value: { value: state } };
         },
         *suggest() {},
@@ -9712,10 +9547,7 @@ describe("runWithSync", () => {
           se.error instanceof Error,
           "error should be the disposal error",
         );
-        assert.equal(
-          (se.error as Error).message,
-          "sync dispose failed.",
-        );
+        assert.equal((se.error as Error).message, "sync dispose failed.");
       }
 
       assert.ok(disposed);
@@ -10092,12 +9924,9 @@ describe("runWithAsync", () => {
       value: withDefault(option("--value", string()), "default"),
     });
 
-    const result = await runWithAsync(
-      parser,
-      "test",
-      [context1, context2],
-      { args: [] },
-    );
+    const result = await runWithAsync(parser, "test", [context1, context2], {
+      args: [],
+    });
 
     assert.deepEqual(result, { value: "default" });
   });
@@ -10128,8 +9957,8 @@ describe("runWithAsync", () => {
       // Find the usage lines in error output (may be multi-line)
       const usageLines = errorOutput
         .split("\n")
-        .filter((line) =>
-          line.startsWith("Usage:") || line.startsWith("       ")
+        .filter(
+          (line) => line.startsWith("Usage:") || line.startsWith("       "),
         )
         .join("\n");
       assert.ok(usageLines, "Should have usage lines in error output");
@@ -10324,10 +10153,7 @@ describe("runWithAsync", () => {
       const removeCommand = command("remove", constant("remove"), {
         brief: message`Remove files`,
       });
-      const cli = or(
-        group("Core", addCommand),
-        group("Core", removeCommand),
-      );
+      const cli = or(group("Core", addCommand), group("Core", removeCommand));
 
       let helpOutput = "";
       runParser(cli, "mycli", ["--help"], {
@@ -11334,22 +11160,17 @@ describe("runWithAsync", () => {
         const parser = object({ name: argument(string()) });
 
         let versionShown = false;
-        const result = runParser(
-          parser,
-          "test",
-          ["--verbose", "-V"],
-          {
-            version: {
-              option: { names: ["-V", "--version"] },
-              value: "3.0.0",
-              onShow: () => {
-                versionShown = true;
-                return "version-shown";
-              },
+        const result = runParser(parser, "test", ["--verbose", "-V"], {
+          version: {
+            option: { names: ["-V", "--version"] },
+            value: "3.0.0",
+            onShow: () => {
+              versionShown = true;
+              return "version-shown";
             },
-            stdout: () => {},
           },
-        );
+          stdout: () => {},
+        });
 
         assert.equal(result, "version-shown");
         assert.ok(versionShown);
@@ -11568,9 +11389,9 @@ describe("runWithAsync", () => {
         const hasHelpInDocSection = docLines.some((l) => /^\s+help\b/.test(l));
         assert.ok(
           !hasHelpInDocSection,
-          `help command should not appear in doc section when hidden: "help", got lines:\n${
-            docLines.join("\n")
-          }`,
+          `help command should not appear in doc section when hidden: "help", got lines:\n${docLines.join(
+            "\n",
+          )}`,
         );
       });
 
@@ -11619,13 +11440,13 @@ describe("runWithAsync", () => {
               l.trim().length > 0,
           );
         const hasVersionInDocSection = docLines.some((l) =>
-          /^\s+version\b/.test(l)
+          /^\s+version\b/.test(l),
         );
         assert.ok(
           !hasVersionInDocSection,
-          `version command should not appear in doc section when hidden: "help", got lines:\n${
-            docLines.join("\n")
-          }`,
+          `version command should not appear in doc section when hidden: "help", got lines:\n${docLines.join(
+            "\n",
+          )}`,
         );
       });
     });
@@ -11682,9 +11503,9 @@ describe("runWithAsync", () => {
         const hasHelpInDocSection = docLines.some((l) => /^\s+help\b/.test(l));
         assert.ok(
           !hasHelpInDocSection,
-          `help command should not appear in doc section when hidden: "doc", got lines:\n${
-            docLines.join("\n")
-          }`,
+          `help command should not appear in doc section when hidden: "doc", got lines:\n${docLines.join(
+            "\n",
+          )}`,
         );
       });
     });
@@ -11862,9 +11683,9 @@ describe("runWithAsync", () => {
         assert.equal(
           docOptionLines.length,
           0,
-          `--help should NOT appear in doc options when hidden: "doc", found:\n${
-            docOptionLines.join("\n")
-          }`,
+          `--help should NOT appear in doc options when hidden: "doc", found:\n${docOptionLines.join(
+            "\n",
+          )}`,
         );
       });
     });
@@ -12056,8 +11877,9 @@ describe("runWithAsync", () => {
 
       // "Meta" should appear once (not twice) as a section header
       // Section headers appear as "Meta:" (with a trailing colon)
-      const metaCount =
-        helpOutput.split("\n").filter((l) => l.trim() === "Meta:").length;
+      const metaCount = helpOutput
+        .split("\n")
+        .filter((l) => l.trim() === "Meta:").length;
       assert.equal(
         metaCount,
         1,
@@ -12406,9 +12228,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const key = Symbol.for("@test/two-pass-refine-non-empty-async");
     let phase2Called = false;
     type AnnotationValue = { readonly phase1?: true; readonly phase2?: true };
-    const isAnnotationValue = (
-      value: unknown,
-    ): value is AnnotationValue => value != null && typeof value === "object";
+    const isAnnotationValue = (value: unknown): value is AnnotationValue =>
+      value != null && typeof value === "object";
 
     const parser: Parser<"sync", AnnotationValue | null, undefined> = {
       $valueType: [] as readonly (AnnotationValue | null)[],
@@ -12495,12 +12316,14 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     };
 
-    const result = await runWith(parser, "test", [
-      mutatingContext,
-      readingContext,
-    ], {
-      args: [],
-    });
+    const result = await runWith(
+      parser,
+      "test",
+      [mutatingContext, readingContext],
+      {
+        args: [],
+      },
+    );
 
     assert.deepEqual(secondContextParsed, { config: "optique.json" });
     assert.deepEqual(result, {
@@ -12543,23 +12366,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     defineInheritedAnnotationParser(tokenParser);
 
     const dynamicContext: SourceContext<{
-      readonly getConfigPath: (
-        parsed: { readonly config: string },
-      ) => string | undefined;
+      readonly getConfigPath: (parsed: {
+        readonly config: string;
+      }) => string | undefined;
     }> = {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
         request: SourceContextRequest | undefined,
         options?: {
-          readonly getConfigPath: (
-            parsed: { readonly config: string },
-          ) => string | undefined;
+          readonly getConfigPath: (parsed: {
+            readonly config: string;
+          }) => string | undefined;
         },
       ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly config: string }
-        >(request);
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly config: string;
+        }>(request);
         if (phase2ParsedValue === undefined) return {};
         phase2Parsed = phase2ParsedValue;
         const configPath = options?.getConfigPath(phase2ParsedValue);
@@ -12622,23 +12445,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     defineInheritedAnnotationParser(tokenParser);
 
     const dynamicContext: SourceContext<{
-      readonly getConfigPath: (
-        parsed: { readonly config: string },
-      ) => string | undefined;
+      readonly getConfigPath: (parsed: {
+        readonly config: string;
+      }) => string | undefined;
     }> = {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
         request: SourceContextRequest | undefined,
         options?: {
-          readonly getConfigPath: (
-            parsed: { readonly config: string },
-          ) => string | undefined;
+          readonly getConfigPath: (parsed: {
+            readonly config: string;
+          }) => string | undefined;
         },
       ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly config: string }
-        >(request);
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly config: string;
+        }>(request);
         if (phase2ParsedValue === undefined) return {};
         phase2Called = true;
         const configPath = options?.getConfigPath(phase2ParsedValue);
@@ -12706,23 +12529,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     defineInheritedAnnotationParser(tokenParser);
 
     const dynamicContext: SourceContext<{
-      readonly getConfigPath: (
-        parsed: { readonly config: string },
-      ) => string | undefined;
+      readonly getConfigPath: (parsed: {
+        readonly config: string;
+      }) => string | undefined;
     }> = {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
         request: SourceContextRequest | undefined,
         options?: {
-          readonly getConfigPath: (
-            parsed: { readonly config: string },
-          ) => string | undefined;
+          readonly getConfigPath: (parsed: {
+            readonly config: string;
+          }) => string | undefined;
         },
       ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly config: string }
-        >(request);
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly config: string;
+        }>(request);
         if (phase2ParsedValue === undefined) return {};
         phase2Called = true;
         const configPath = options?.getConfigPath(phase2ParsedValue);
@@ -12748,135 +12571,130 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.ok(!phase2Called, "phase 2 context should not hide thrown errors");
   });
 
-  it(
-    "runWithSync: phase two does not hide top-level parse throws",
-    () => {
-      const tokenKey = Symbol.for("@test/dyn-phase-two-top-level-parse-throw");
-      let phase2Called = false;
+  it("runWithSync: phase two does not hide top-level parse throws", () => {
+    const tokenKey = Symbol.for("@test/dyn-phase-two-top-level-parse-throw");
+    let phase2Called = false;
 
-      const parser: Parser<
-        "sync",
-        { readonly config: string; readonly token: string },
-        { readonly config?: string; readonly token?: string }
-      > = {
-        mode: "sync",
-        $valueType: [] as readonly {
-          readonly config: string;
-          readonly token: string;
-        }[],
-        $stateType: [] as readonly {
-          readonly config?: string;
-          readonly token?: string;
-        }[],
-        priority: 0,
-        usage: [],
-        leadingNames: new Set(),
-        acceptingAnyToken: false,
-        initialState: {},
-        parse(context) {
-          const [head, value, ...rest] = context.buffer;
-          if (context.state.config == null) {
-            if (head !== "--config" || value == null) {
-              return {
-                success: false as const,
-                error: message`Missing config.`,
-                consumed: 0,
-              };
-            }
+    const parser: Parser<
+      "sync",
+      { readonly config: string; readonly token: string },
+      { readonly config?: string; readonly token?: string }
+    > = {
+      mode: "sync",
+      $valueType: [] as readonly {
+        readonly config: string;
+        readonly token: string;
+      }[],
+      $stateType: [] as readonly {
+        readonly config?: string;
+        readonly token?: string;
+      }[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: {},
+      parse(context) {
+        const [head, value, ...rest] = context.buffer;
+        if (context.state.config == null) {
+          if (head !== "--config" || value == null) {
             return {
-              success: true as const,
-              next: {
-                ...context,
-                buffer: rest,
-                state: { ...context.state, config: value },
-              },
-              consumed: [head, value],
+              success: false as const,
+              error: message`Missing config.`,
+              consumed: 0,
             };
           }
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: rest,
+              state: { ...context.state, config: value },
+            },
+            consumed: [head, value],
+          };
+        }
 
-          const annotations = getAnnotations(context.state);
-          const token = annotations?.[tokenKey];
-          if (typeof token === "string") {
-            return {
-              success: true as const,
-              next: {
-                ...context,
-                buffer: [],
-                state: { ...context.state, token },
-              },
-              consumed: context.buffer,
-            };
-          }
-          throw new Error("Top-level parse boom.");
-        },
-        complete(state) {
-          return state.config != null && state.token != null
-            ? {
+        const annotations = getAnnotations(context.state);
+        const token = annotations?.[tokenKey];
+        if (typeof token === "string") {
+          return {
+            success: true as const,
+            next: {
+              ...context,
+              buffer: [],
+              state: { ...context.state, token },
+            },
+            consumed: context.buffer,
+          };
+        }
+        throw new Error("Top-level parse boom.");
+      },
+      complete(state) {
+        return state.config != null && state.token != null
+          ? {
               success: true as const,
               value: {
                 config: state.config,
                 token: state.token,
               },
             }
-            : { success: false as const, error: message`Missing token.` };
-        },
-        *suggest() {},
-        getDocFragments() {
-          return { fragments: [] };
-        },
-      };
-      Object.defineProperty(parser, extractPhase2SeedKey, {
-        value(state: { readonly config?: string }) {
-          return state.config == null
-            ? null
-            : { value: { config: state.config } };
-        },
-        enumerable: true,
-      });
+          : { success: false as const, error: message`Missing token.` };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    Object.defineProperty(parser, extractPhase2SeedKey, {
+      value(state: { readonly config?: string }) {
+        return state.config == null
+          ? null
+          : { value: { config: state.config } };
+      },
+      enumerable: true,
+    });
 
-      const dynamicContext: SourceContext<{
-        readonly getConfigPath: (
-          parsed: { readonly config: string },
-        ) => string | undefined;
-      }> = {
-        id: tokenKey,
-        phase: "two-pass",
-        getAnnotations(
-          request: SourceContextRequest | undefined,
-          options?: {
-            readonly getConfigPath: (
-              parsed: { readonly config: string },
-            ) => string | undefined;
+    const dynamicContext: SourceContext<{
+      readonly getConfigPath: (parsed: {
+        readonly config: string;
+      }) => string | undefined;
+    }> = {
+      id: tokenKey,
+      phase: "two-pass",
+      getAnnotations(
+        request: SourceContextRequest | undefined,
+        options?: {
+          readonly getConfigPath: (parsed: {
+            readonly config: string;
+          }) => string | undefined;
+        },
+      ) {
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly config: string;
+        }>(request);
+        if (phase2ParsedValue === undefined) return {};
+        phase2Called = true;
+        const configPath = options?.getConfigPath(phase2ParsedValue);
+        return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
+      },
+    };
+
+    assert.throws(
+      () =>
+        runWithSync(parser, "test", [dynamicContext], {
+          args: ["--config", "optique.json", "rest"],
+          contextOptions: {
+            getConfigPath: (parsed) => parsed.config,
           },
-        ) {
-          const phase2ParsedValue = getPhase2ContextParsed<
-            { readonly config: string }
-          >(request);
-          if (phase2ParsedValue === undefined) return {};
-          phase2Called = true;
-          const configPath = options?.getConfigPath(phase2ParsedValue);
-          return configPath == null
-            ? {}
-            : { [tokenKey]: `token:${configPath}` };
-        },
-      };
-
-      assert.throws(
-        () =>
-          runWithSync(parser, "test", [dynamicContext], {
-            args: ["--config", "optique.json", "rest"],
-            contextOptions: {
-              getConfigPath: (parsed) => parsed.config,
-            },
-          }),
-        /Top-level parse boom\./,
-      );
-      assert.ok(
-        !phase2Called,
-        "phase 2 context should not hide top-level parse errors",
-      );
-    },
-  );
+        }),
+      /Top-level parse boom\./,
+    );
+    assert.ok(
+      !phase2Called,
+      "phase 2 context should not hide top-level parse errors",
+    );
+  });
 
   it("runWith: phase two does not hide top-level async parse throws", async () => {
     const tokenKey = Symbol.for("@test/dyn-phase-two-top-level-async-throw");
@@ -12940,12 +12758,12 @@ describe("branch coverage: facade.ts edge cases", () => {
         return Promise.resolve(
           state.config != null && state.token != null
             ? {
-              success: true as const,
-              value: {
-                config: state.config,
-                token: state.token,
-              },
-            }
+                success: true as const,
+                value: {
+                  config: state.config,
+                  token: state.token,
+                },
+              }
             : { success: false as const, error: message`Missing token.` },
         );
       },
@@ -12964,23 +12782,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     });
 
     const dynamicContext: SourceContext<{
-      readonly getConfigPath: (
-        parsed: { readonly config: string },
-      ) => string | undefined;
+      readonly getConfigPath: (parsed: {
+        readonly config: string;
+      }) => string | undefined;
     }> = {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
         request: SourceContextRequest | undefined,
         options?: {
-          readonly getConfigPath: (
-            parsed: { readonly config: string },
-          ) => string | undefined;
+          readonly getConfigPath: (parsed: {
+            readonly config: string;
+          }) => string | undefined;
         },
       ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly config: string }
-        >(request);
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly config: string;
+        }>(request);
         if (phase2ParsedValue == null) return {};
         phase2Called = true;
         const configPath = options?.getConfigPath(phase2ParsedValue);
@@ -13166,23 +12984,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     defineInheritedAnnotationParser(tokenParser);
 
     const dynamicContext: SourceContext<{
-      readonly getConfigPath: (
-        parsed: { readonly config: string },
-      ) => string | undefined;
+      readonly getConfigPath: (parsed: {
+        readonly config: string;
+      }) => string | undefined;
     }> = {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
         request: SourceContextRequest | undefined,
         options?: {
-          readonly getConfigPath: (
-            parsed: { readonly config: string },
-          ) => string | undefined;
+          readonly getConfigPath: (parsed: {
+            readonly config: string;
+          }) => string | undefined;
         },
       ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly config: string }
-        >(request);
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly config: string;
+        }>(request);
         if (phase2ParsedValue == null) return {};
         const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
@@ -13244,23 +13062,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     defineInheritedAnnotationParser(tokenParser);
 
     const dynamicContext: SourceContext<{
-      readonly getConfigPath: (
-        parsed: { readonly config: string },
-      ) => string | undefined;
+      readonly getConfigPath: (parsed: {
+        readonly config: string;
+      }) => string | undefined;
     }> = {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
         request: SourceContextRequest | undefined,
         options?: {
-          readonly getConfigPath: (
-            parsed: { readonly config: string },
-          ) => string | undefined;
+          readonly getConfigPath: (parsed: {
+            readonly config: string;
+          }) => string | undefined;
         },
       ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly config: string }
-        >(request);
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly config: string;
+        }>(request);
         if (phase2ParsedValue == null) return {};
         const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
@@ -13329,12 +13147,10 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: tokenKey,
       phase: "two-pass",
-      getAnnotations(
-        request: SourceContextRequest | undefined,
-      ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly commandPath: readonly string[] }
-        >(request);
+      getAnnotations(request: SourceContextRequest | undefined) {
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly commandPath: readonly string[];
+        }>(request);
         if (phase2ParsedValue == null) return {};
         return phase2ParsedValue.commandPath[0] === "serve"
           ? { [tokenKey]: "from-phase-two" }
@@ -13397,12 +13213,10 @@ describe("branch coverage: facade.ts edge cases", () => {
     const dynamicContext: SourceContext = {
       id: tokenKey,
       phase: "two-pass",
-      getAnnotations(
-        request: SourceContextRequest | undefined,
-      ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly commandPath: readonly string[] }
-        >(request);
+      getAnnotations(request: SourceContextRequest | undefined) {
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly commandPath: readonly string[];
+        }>(request);
         if (phase2ParsedValue == null) return {};
         return phase2ParsedValue.commandPath[0] === "serve"
           ? { [tokenKey]: "from-phase-two" }
@@ -13501,23 +13315,23 @@ describe("branch coverage: facade.ts edge cases", () => {
     defineInheritedAnnotationParser(tokenParser);
 
     const dynamicContext: SourceContext<{
-      readonly getConfigPath: (
-        parsed: { readonly configs: readonly string[] },
-      ) => string | undefined;
+      readonly getConfigPath: (parsed: {
+        readonly configs: readonly string[];
+      }) => string | undefined;
     }> = {
       id: tokenKey,
       phase: "two-pass",
       getAnnotations(
         request: SourceContextRequest | undefined,
         options?: {
-          readonly getConfigPath: (
-            parsed: { readonly configs: readonly string[] },
-          ) => string | undefined;
+          readonly getConfigPath: (parsed: {
+            readonly configs: readonly string[];
+          }) => string | undefined;
         },
       ) {
-        const phase2ParsedValue = getPhase2ContextParsed<
-          { readonly configs: readonly string[] }
-        >(request);
+        const phase2ParsedValue = getPhase2ContextParsed<{
+          readonly configs: readonly string[];
+        }>(request);
         if (phase2ParsedValue == null) return {};
         const configPath = options?.getConfigPath(phase2ParsedValue);
         return configPath == null ? {} : { [tokenKey]: `token:${configPath}` };
@@ -13629,51 +13443,48 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(result, "world");
   });
 
-  it(
-    "runWith: two-pass context still refines a successful undefined first-pass value",
-    async () => {
-      const key = Symbol.for("@test/two-pass-undefined-first-pass-async");
-      const parser: Parser<"sync", string | undefined, null> = {
-        mode: "sync",
-        $valueType: [] as readonly (string | undefined)[],
-        $stateType: [] as readonly null[],
-        priority: 0,
-        usage: [],
-        leadingNames: new Set(),
-        acceptingAnyToken: false,
-        initialState: null,
-        parse(context) {
-          return {
-            success: true as const,
-            next: context,
-            consumed: [],
-          };
-        },
-        complete(state) {
-          return {
-            success: true as const,
-            value: getAnnotations(state)?.[key] as string | undefined,
-          };
-        },
-        *suggest() {},
-        getDocFragments() {
-          return { fragments: [] };
-        },
-      };
-      const context: SourceContext = {
-        id: key,
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase1ContextRequest(request)) return {};
-          return { [key]: "phase2" };
-        },
-      };
+  it("runWith: two-pass context still refines a successful undefined first-pass value", async () => {
+    const key = Symbol.for("@test/two-pass-undefined-first-pass-async");
+    const parser: Parser<"sync", string | undefined, null> = {
+      mode: "sync",
+      $valueType: [] as readonly (string | undefined)[],
+      $stateType: [] as readonly null[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: getAnnotations(state)?.[key] as string | undefined,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const context: SourceContext = {
+      id: key,
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {};
+        return { [key]: "phase2" };
+      },
+    };
 
-      const result = await runWith(parser, "test", [context], { args: [] });
+    const result = await runWith(parser, "test", [context], { args: [] });
 
-      assert.equal(result, "phase2");
-    },
-  );
+    assert.equal(result, "phase2");
+  });
 
   it("runWith: async parser + hasDynamic + first-pass fails", async () => {
     const dynKey = Symbol.for("@test/dyn-async-fail2");
@@ -13915,51 +13726,48 @@ describe("branch coverage: facade.ts edge cases", () => {
     assert.equal(staleParserReused, false);
   });
 
-  it(
-    "runWithSync: two-pass context still refines a successful undefined first-pass value",
-    () => {
-      const key = Symbol.for("@test/two-pass-undefined-first-pass-sync");
-      const parser: Parser<"sync", string | undefined, null> = {
-        mode: "sync",
-        $valueType: [] as readonly (string | undefined)[],
-        $stateType: [] as readonly null[],
-        priority: 0,
-        usage: [],
-        leadingNames: new Set(),
-        acceptingAnyToken: false,
-        initialState: null,
-        parse(context) {
-          return {
-            success: true as const,
-            next: context,
-            consumed: [],
-          };
-        },
-        complete(state) {
-          return {
-            success: true as const,
-            value: getAnnotations(state)?.[key] as string | undefined,
-          };
-        },
-        *suggest() {},
-        getDocFragments() {
-          return { fragments: [] };
-        },
-      };
-      const context: SourceContext = {
-        id: key,
-        phase: "two-pass",
-        getAnnotations(request?: unknown) {
-          if (isPhase1ContextRequest(request)) return {};
-          return { [key]: "phase2" };
-        },
-      };
+  it("runWithSync: two-pass context still refines a successful undefined first-pass value", () => {
+    const key = Symbol.for("@test/two-pass-undefined-first-pass-sync");
+    const parser: Parser<"sync", string | undefined, null> = {
+      mode: "sync",
+      $valueType: [] as readonly (string | undefined)[],
+      $stateType: [] as readonly null[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set(),
+      acceptingAnyToken: false,
+      initialState: null,
+      parse(context) {
+        return {
+          success: true as const,
+          next: context,
+          consumed: [],
+        };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: getAnnotations(state)?.[key] as string | undefined,
+        };
+      },
+      *suggest() {},
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+    const context: SourceContext = {
+      id: key,
+      phase: "two-pass",
+      getAnnotations(request?: unknown) {
+        if (isPhase1ContextRequest(request)) return {};
+        return { [key]: "phase2" };
+      },
+    };
 
-      const result = runWithSync(parser, "test", [context], { args: [] });
+    const result = runWithSync(parser, "test", [context], { args: [] });
 
-      assert.equal(result, "phase2");
-    },
-  );
+    assert.equal(result, "phase2");
+  });
 
   it("runWithSync: two-phase, first pass throws → handled via runParser", () => {
     const dynKey = Symbol.for("@test/sync-two-phase-throw");
@@ -13988,9 +13796,8 @@ describe("branch coverage: facade.ts edge cases", () => {
     const key = Symbol.for("@test/two-pass-refine-non-empty-sync");
     let phase2Called = false;
     type AnnotationValue = { readonly phase1?: true; readonly phase2?: true };
-    const isAnnotationValue = (
-      value: unknown,
-    ): value is AnnotationValue => value != null && typeof value === "object";
+    const isAnnotationValue = (value: unknown): value is AnnotationValue =>
+      value != null && typeof value === "object";
 
     const parser: Parser<"sync", AnnotationValue | null, undefined> = {
       $valueType: [] as readonly (AnnotationValue | null)[],
@@ -14106,7 +13913,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       () => runWithSync(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
-        message: `Context ${String(key)} must declare phase as ` +
+        message:
+          `Context ${String(key)} must declare phase as ` +
           '"single-pass" or "two-pass".',
       },
     );
@@ -14129,7 +13937,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       () => runWithSync(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
-        message: `Context ${String(key)} must declare phase as ` +
+        message:
+          `Context ${String(key)} must declare phase as ` +
           '"single-pass" or "two-pass".',
       },
     );
@@ -14151,7 +13960,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       () => runWith(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
-        message: `Context ${String(key)} must declare phase as ` +
+        message:
+          `Context ${String(key)} must declare phase as ` +
           '"single-pass" or "two-pass".',
       },
     );
@@ -14174,7 +13984,8 @@ describe("branch coverage: facade.ts edge cases", () => {
       () => runWith(parser, "test", [context as never], { args: [] }),
       {
         name: "TypeError",
-        message: `Context ${String(key)} must declare phase as ` +
+        message:
+          `Context ${String(key)} must declare phase as ` +
           '"single-pass" or "two-pass".',
       },
     );
@@ -14249,9 +14060,10 @@ describe("branch coverage: facade.ts edge cases", () => {
       parse(context) {
         return Promise.resolve({
           success: false as const,
-          error: context.buffer[0] == null
-            ? message`Missing argument.`
-            : message`Unexpected option or argument: ${context.buffer[0]}.`,
+          error:
+            context.buffer[0] == null
+              ? message`Missing argument.`
+              : message`Unexpected option or argument: ${context.buffer[0]}.`,
           consumed: 0,
         });
       },
@@ -14705,11 +14517,14 @@ describe("branch coverage: facade.ts edge cases", () => {
         return { [Symbol.for("@test/facade-static-fastpath")]: {} };
       },
     };
-    const withStaticContext = await runWith(asyncParser, "test", [
-      staticContext,
-    ], {
-      args: ["second"],
-    });
+    const withStaticContext = await runWith(
+      asyncParser,
+      "test",
+      [staticContext],
+      {
+        args: ["second"],
+      },
+    );
     assert.equal(withStaticContext, "second");
   });
 
@@ -14825,9 +14640,10 @@ describe("branch coverage: facade.ts edge cases", () => {
       parse(context) {
         return Promise.resolve({
           success: false as const,
-          error: context.buffer[0] == null
-            ? message`Missing argument.`
-            : message`Unexpected option or argument: ${context.buffer[0]}.`,
+          error:
+            context.buffer[0] == null
+              ? message`Missing argument.`
+              : message`Unexpected option or argument: ${context.buffer[0]}.`,
           consumed: 0,
         });
       },
@@ -14843,15 +14659,17 @@ describe("branch coverage: facade.ts edge cases", () => {
       },
     };
 
-    const result = await runParser(asyncParser, "myapp", [
-      "completion",
-      "powershell",
-    ], {
-      completion: { command: true },
-      onError: (code) => `async-error-${code}`,
-      stderr: () => {},
-      stdout: () => {},
-    });
+    const result = await runParser(
+      asyncParser,
+      "myapp",
+      ["completion", "powershell"],
+      {
+        completion: { command: true },
+        onError: (code) => `async-error-${code}`,
+        stderr: () => {},
+        stdout: () => {},
+      },
+    );
     assert.equal(result, "async-error-1");
   });
 
@@ -15715,13 +15533,10 @@ describe("runParserSync", () => {
     };
     const parser = object({ name: argument(asyncVp) });
 
-    assert.throws(
-      () => runParserSync(parser as never, "test", ["hello"]),
-      {
-        name: "TypeError",
-        message: /runParser\(\) or runParserAsync\(\)/,
-      },
-    );
+    assert.throws(() => runParserSync(parser as never, "test", ["hello"]), {
+      name: "TypeError",
+      message: /runParser\(\) or runParserAsync\(\)/,
+    });
   });
 });
 
@@ -15761,7 +15576,7 @@ describe("runWithSync async parser rejection", () => {
 describe("options terminator (--) handling", () => {
   function createIssue267Fixture() {
     const envContext = createEnvContext({
-      source: (key) => key === "HOST" ? "env-host" : undefined,
+      source: (key) => (key === "HOST" ? "env-host" : undefined),
     });
     const parser = object({
       file: argument(string()),
@@ -15782,23 +15597,25 @@ describe("options terminator (--) handling", () => {
     const { parser, envContext } = createIssue267Fixture();
     return await runWith(parser, "test", [envContext], {
       args: ["--", token],
-      help: kind === "help"
-        ? {
-          option: names == null ? true : { names },
-          onShow: () => "help",
-        }
-        : { option: true, onShow: () => "help" },
-      version: kind === "version"
-        ? {
-          value: "1.0.0",
-          option: names == null ? true : { names },
-          onShow: () => "version",
-        }
-        : {
-          value: "1.0.0",
-          option: true,
-          onShow: () => "version",
-        },
+      help:
+        kind === "help"
+          ? {
+              option: names == null ? true : { names },
+              onShow: () => "help",
+            }
+          : { option: true, onShow: () => "help" },
+      version:
+        kind === "version"
+          ? {
+              value: "1.0.0",
+              option: names == null ? true : { names },
+              onShow: () => "version",
+            }
+          : {
+              value: "1.0.0",
+              option: true,
+              onShow: () => "version",
+            },
       stdout: () => {},
       stderr: () => {},
     });
@@ -15812,23 +15629,25 @@ describe("options terminator (--) handling", () => {
     const { parser, envContext } = createIssue267Fixture();
     return runWithSync(parser, "test", [envContext], {
       args: ["--", token],
-      help: kind === "help"
-        ? {
-          option: names == null ? true : { names },
-          onShow: () => "help",
-        }
-        : { option: true, onShow: () => "help" },
-      version: kind === "version"
-        ? {
-          value: "1.0.0",
-          option: names == null ? true : { names },
-          onShow: () => "version",
-        }
-        : {
-          value: "1.0.0",
-          option: true,
-          onShow: () => "version",
-        },
+      help:
+        kind === "help"
+          ? {
+              option: names == null ? true : { names },
+              onShow: () => "help",
+            }
+          : { option: true, onShow: () => "help" },
+      version:
+        kind === "version"
+          ? {
+              value: "1.0.0",
+              option: names == null ? true : { names },
+              onShow: () => "version",
+            }
+          : {
+              value: "1.0.0",
+              option: true,
+              onShow: () => "version",
+            },
       stdout: () => {},
       stderr: () => {},
     });
@@ -15847,32 +15666,22 @@ describe("options terminator (--) handling", () => {
   // https://github.com/dahlia/optique/issues/228
   it("runParser ignores --completion=bash after -- terminator", () => {
     const parser = object({ args: multiple(argument(string())) });
-    const result = runParser(
-      parser,
-      "test",
-      ["--", "--completion=bash"],
-      {
-        completion: { option: true },
-        stdout: () => {},
-        stderr: () => {},
-      },
-    );
+    const result = runParser(parser, "test", ["--", "--completion=bash"], {
+      completion: { option: true },
+      stdout: () => {},
+      stderr: () => {},
+    });
     assert.deepEqual(result, { args: ["--completion=bash"] });
   });
 
   // https://github.com/dahlia/optique/issues/228
   it("runParser ignores custom completion option names after -- terminator", () => {
     const parser = object({ args: multiple(argument(string())) });
-    const result = runParser(
-      parser,
-      "test",
-      ["--", "--completions", "bash"],
-      {
-        completion: { option: { names: ["--completions"] } },
-        stdout: () => {},
-        stderr: () => {},
-      },
-    );
+    const result = runParser(parser, "test", ["--", "--completions", "bash"], {
+      completion: { option: { names: ["--completions"] } },
+      stdout: () => {},
+      stderr: () => {},
+    });
     assert.deepEqual(result, { args: ["--completions", "bash"] });
   });
 
@@ -15994,13 +15803,10 @@ describe("options terminator (--) handling", () => {
       file: "--version",
       host: "env-host",
     });
-    assert.deepEqual(
-      await runIssue267With("--assist", "help", ["--assist"]),
-      {
-        file: "--assist",
-        host: "env-host",
-      },
-    );
+    assert.deepEqual(await runIssue267With("--assist", "help", ["--assist"]), {
+      file: "--assist",
+      host: "env-host",
+    });
     assert.deepEqual(await runIssue267With("--ver", "version", ["--ver"]), {
       file: "--ver",
       host: "env-host",
@@ -16017,13 +15823,10 @@ describe("options terminator (--) handling", () => {
       file: "--version",
       host: "env-host",
     });
-    assert.deepEqual(
-      runIssue267SyncWith("--assist", "help", ["--assist"]),
-      {
-        file: "--assist",
-        host: "env-host",
-      },
-    );
+    assert.deepEqual(runIssue267SyncWith("--assist", "help", ["--assist"]), {
+      file: "--assist",
+      host: "env-host",
+    });
     assert.deepEqual(runIssue267SyncWith("--ver", "version", ["--ver"]), {
       file: "--ver",
       host: "env-host",
@@ -16033,96 +15836,82 @@ describe("options terminator (--) handling", () => {
 
 describe("structured runner errors", () => {
   // Fixed output captured before adding the structured callback argument.
-  for (
-    const { colors, args, chunks } of [
-      {
-        colors: false,
-        args: ["completion"],
-        chunks: [
-          [
-            "Error: Missing shell name for completion.",
-            "",
-          ].join("\n"),
-          [
-            "Generate shell completion script or provide completions.",
-            "Usage: test completion [SHELL] [ARG...]",
-            "",
-            "Generate shell completion script or provide completions.",
-            "",
-            '  SHELL                       Shell type ("bash", "fish", "nu", "pwsh", "zsh"). Generate completion script when used alone, or provide completions when followed by arguments.',
-            "  ARG                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
-            "",
-            "Examples:",
-            '  Bash:       `eval "$(test completion bash)"`',
-            '  zsh:        `eval "$(test completion zsh)"`',
-            '  fish:       `eval "$(test completion fish)"`',
-            "  PowerShell: `test completion pwsh > test-completion.ps1; . ./test-completion.ps1`",
-            "  Nushell:    `test completion nu | save test-completion.nu; source ./test-completion.nu`",
-          ].join("\n"),
-        ],
-      },
-      {
-        colors: false,
-        args: ["--completion"],
-        chunks: [
-          [
-            "Error: Missing shell name for completion.",
-            "",
-          ].join("\n"),
-          [
-            "Usage: test --completion SHELL [[ARG...]]",
-            "",
-            "  --completion SHELL          Generate shell completion script.",
-            "  ARG                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
-            "",
-          ].join("\n"),
-        ],
-      },
-      {
-        colors: true,
-        args: ["completion"],
-        chunks: [
-          [
-            "Error: Missing shell name for completion.",
-            "",
-          ].join("\n"),
-          [
-            "Generate shell completion script or provide completions.",
-            "\u001b[1;2mUsage:\u001b[0m \u001b[1mtest\u001b[0m \u001b[1mcompletion\u001b[0m \u001b[2m[\u001b[0m\u001b[4mSHELL\u001b[0m\u001b[2m]\u001b[0m \u001b[2m[\u001b[0m\u001b[4mARG\u001b[0m\u001b[2m...\u001b[0m\u001b[2m]\u001b[0m",
-            "",
-            "Generate shell completion script or provide completions.",
-            "",
-            "  \u001b[4mSHELL\u001b[0m                       Shell type (\u001b[32mbash\u001b[0m, \u001b[32mfish\u001b[0m, \u001b[32mnu\u001b[0m, \u001b[32mpwsh\u001b[0m, \u001b[32mzsh\u001b[0m). Generate completion script when used alone, or provide completions when followed by arguments.",
-            "  \u001b[4mARG\u001b[0m                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
-            "",
-            "Examples:",
-            '  Bash:       \u001b[36meval "$(test completion bash)"\u001b[0m',
-            '  zsh:        \u001b[36meval "$(test completion zsh)"\u001b[0m',
-            '  fish:       \u001b[36meval "$(test completion fish)"\u001b[0m',
-            "  PowerShell: \u001b[36mtest completion pwsh > test-completion.ps1; . ./test-completion.ps1\u001b[0m",
-            "  Nushell:    \u001b[36mtest completion nu | save test-completion.nu; source ./test-completion.nu\u001b[0m",
-          ].join("\n"),
-        ],
-      },
-      {
-        colors: true,
-        args: ["--completion"],
-        chunks: [
-          [
-            "Error: Missing shell name for completion.",
-            "",
-          ].join("\n"),
-          [
-            "\u001b[1;2mUsage:\u001b[0m \u001b[1mtest\u001b[0m \u001b[3m--completion\u001b[0m \u001b[4m\u001b[2mSHELL\u001b[0m \u001b[2m[\u001b[0m\u001b[2m[\u001b[0m\u001b[4mARG\u001b[0m\u001b[2m...\u001b[0m\u001b[2m]\u001b[0m\u001b[2m]\u001b[0m",
-            "",
-            "  \u001b[3m--completion\u001b[0m \u001b[4m\u001b[2mSHELL\u001b[0m          Generate shell completion script.",
-            "  \u001b[4mARG\u001b[0m                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
-            "",
-          ].join("\n"),
-        ],
-      },
-    ]
-  ) {
+  for (const { colors, args, chunks } of [
+    {
+      colors: false,
+      args: ["completion"],
+      chunks: [
+        ["Error: Missing shell name for completion.", ""].join("\n"),
+        [
+          "Generate shell completion script or provide completions.",
+          "Usage: test completion [SHELL] [ARG...]",
+          "",
+          "Generate shell completion script or provide completions.",
+          "",
+          '  SHELL                       Shell type ("bash", "fish", "nu", "pwsh", "zsh"). Generate completion script when used alone, or provide completions when followed by arguments.',
+          "  ARG                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+          "",
+          "Examples:",
+          '  Bash:       `eval "$(test completion bash)"`',
+          '  zsh:        `eval "$(test completion zsh)"`',
+          '  fish:       `eval "$(test completion fish)"`',
+          "  PowerShell: `test completion pwsh > test-completion.ps1; . ./test-completion.ps1`",
+          "  Nushell:    `test completion nu | save test-completion.nu; source ./test-completion.nu`",
+        ].join("\n"),
+      ],
+    },
+    {
+      colors: false,
+      args: ["--completion"],
+      chunks: [
+        ["Error: Missing shell name for completion.", ""].join("\n"),
+        [
+          "Usage: test --completion SHELL [[ARG...]]",
+          "",
+          "  --completion SHELL          Generate shell completion script.",
+          "  ARG                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+          "",
+        ].join("\n"),
+      ],
+    },
+    {
+      colors: true,
+      args: ["completion"],
+      chunks: [
+        ["Error: Missing shell name for completion.", ""].join("\n"),
+        [
+          "Generate shell completion script or provide completions.",
+          "\u001b[1;2mUsage:\u001b[0m \u001b[1mtest\u001b[0m \u001b[1mcompletion\u001b[0m \u001b[2m[\u001b[0m\u001b[4mSHELL\u001b[0m\u001b[2m]\u001b[0m \u001b[2m[\u001b[0m\u001b[4mARG\u001b[0m\u001b[2m...\u001b[0m\u001b[2m]\u001b[0m",
+          "",
+          "Generate shell completion script or provide completions.",
+          "",
+          "  \u001b[4mSHELL\u001b[0m                       Shell type (\u001b[32mbash\u001b[0m, \u001b[32mfish\u001b[0m, \u001b[32mnu\u001b[0m, \u001b[32mpwsh\u001b[0m, \u001b[32mzsh\u001b[0m). Generate completion script when used alone, or provide completions when followed by arguments.",
+          "  \u001b[4mARG\u001b[0m                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+          "",
+          "Examples:",
+          '  Bash:       \u001b[36meval "$(test completion bash)"\u001b[0m',
+          '  zsh:        \u001b[36meval "$(test completion zsh)"\u001b[0m',
+          '  fish:       \u001b[36meval "$(test completion fish)"\u001b[0m',
+          "  PowerShell: \u001b[36mtest completion pwsh > test-completion.ps1; . ./test-completion.ps1\u001b[0m",
+          "  Nushell:    \u001b[36mtest completion nu | save test-completion.nu; source ./test-completion.nu\u001b[0m",
+        ].join("\n"),
+      ],
+    },
+    {
+      colors: true,
+      args: ["--completion"],
+      chunks: [
+        ["Error: Missing shell name for completion.", ""].join("\n"),
+        [
+          "\u001b[1;2mUsage:\u001b[0m \u001b[1mtest\u001b[0m \u001b[3m--completion\u001b[0m \u001b[4m\u001b[2mSHELL\u001b[0m \u001b[2m[\u001b[0m\u001b[2m[\u001b[0m\u001b[4mARG\u001b[0m\u001b[2m...\u001b[0m\u001b[2m]\u001b[0m\u001b[2m]\u001b[0m",
+          "",
+          "  \u001b[3m--completion\u001b[0m \u001b[4m\u001b[2mSHELL\u001b[0m          Generate shell completion script.",
+          "  \u001b[4mARG\u001b[0m                         Command line arguments for completion suggestions (used by shell integration; you usually don't need to provide this).",
+          "",
+        ].join("\n"),
+      ],
+    },
+  ]) {
     it(`should preserve completion help chunks for ${args[0]} colors=${colors}`, () => {
       const events: unknown[] = [];
       runParser(object({}), "test", args, {
@@ -16134,10 +15923,10 @@ describe("structured runner errors", () => {
           events.push(args);
         },
       });
-      assert.deepEqual(events, [...chunks, [
-        1,
-        message`Missing shell name for completion.`,
-      ]]);
+      assert.deepEqual(events, [
+        ...chunks,
+        [1, message`Missing shell name for completion.`],
+      ]);
     });
   }
 
@@ -16185,26 +15974,28 @@ describe("structured runner errors", () => {
           },
         });
         assert.deepEqual(events, [
-          ...(aboveError === "none" ? [] : [[
-            "stderr",
-            aboveError === "help" ? "Usage: test\n" : "Usage: test",
-          ]]),
+          ...(aboveError === "none"
+            ? []
+            : [
+                [
+                  "stderr",
+                  aboveError === "help" ? "Usage: test\n" : "Usage: test",
+                ],
+              ]),
           ["stderr", "Error: Invalid input."],
           ["onError", 1, error],
         ]);
       });
     }
 
-    for (
-      const args of [
-        ["completion"],
-        ["--completion"],
-        ["--completion="],
-        ["completions"],
-        ["--complete"],
-        ["--complete="],
-      ]
-    ) {
+    for (const args of [
+      ["completion"],
+      ["--completion"],
+      ["--completion="],
+      ["completions"],
+      ["--complete"],
+      ["--complete="],
+    ]) {
       it(`should pass the missing-shell message for ${name} ${args[0]}`, async () => {
         const events: unknown[] = [];
         const result = await runParser(
@@ -16285,15 +16076,13 @@ describe("structured runner errors", () => {
     }
 
     for (const colors of [false, true]) {
-      for (
-        const args of [
-          ["completion", "unknown"],
-          ["--completion", "unknown"],
-          ["--completion=unknown"],
-          ["completions", "unknown"],
-          ["--complete=unknown"],
-        ]
-      ) {
+      for (const args of [
+        ["completion", "unknown"],
+        ["--completion", "unknown"],
+        ["--completion=unknown"],
+        ["completions", "unknown"],
+        ["--complete=unknown"],
+      ]) {
         it(`should preserve ${name} unsupported-shell output for ${args.join(" ")} colors=${colors}`, async () => {
           const events: unknown[] = [];
           await runParser(create(message`Unused failure.`), "test", args, {
@@ -16327,20 +16116,17 @@ describe("structured runner errors", () => {
       }
     }
 
-    for (
-      const args of [
-        ["completion", "unknown"],
-        ["--completion", "unknown"],
-        ["--completion=unknown"],
-        ["completions", "unknown"],
-        ["--complete=unknown"],
-      ]
-    ) {
+    for (const args of [
+      ["completion", "unknown"],
+      ["--completion", "unknown"],
+      ["--completion=unknown"],
+      ["completions", "unknown"],
+      ["--complete=unknown"],
+    ]) {
       for (const kind of ["static", "callback", "empty"] as const) {
         it(`should use a ${kind} unsupported-shell message for ${name} ${args[0]}`, async () => {
-          const error: Message = kind === "empty"
-            ? []
-            : message`Choose another ${"unknown"}.`;
+          const error: Message =
+            kind === "empty" ? [] : message`Choose another ${"unknown"}.`;
           const chunks: string[] = [];
           let calls = 0;
           const result = await runParser(
@@ -16354,21 +16140,22 @@ describe("structured runner errors", () => {
                 option: { names: ["--completion", "--complete"] },
                 shells: { zsh: bash, custom: bash },
                 errors: {
-                  unsupportedShell: kind === "callback"
-                    ? (shell, shells) => {
-                      calls++;
-                      assert.equal(shell, "unknown");
-                      assert.deepEqual(shells, [
-                        "bash",
-                        "fish",
-                        "nu",
-                        "pwsh",
-                        "zsh",
-                        "custom",
-                      ]);
-                      return error;
-                    }
-                    : error,
+                  unsupportedShell:
+                    kind === "callback"
+                      ? (shell, shells) => {
+                          calls++;
+                          assert.equal(shell, "unknown");
+                          assert.deepEqual(shells, [
+                            "bash",
+                            "fish",
+                            "nu",
+                            "pwsh",
+                            "zsh",
+                            "custom",
+                          ]);
+                          return error;
+                        }
+                      : error,
                 },
               },
               stdout: () => {
@@ -16392,9 +16179,10 @@ describe("structured runner errors", () => {
     }
 
     for (const shellName of ["toString", "constructor", "__proto__"]) {
-      for (
-        const args of [["completion", shellName], [`--completion=${shellName}`]]
-      ) {
+      for (const args of [
+        ["completion", shellName],
+        [`--completion=${shellName}`],
+      ]) {
         it(`should reject inherited shell ${shellName} for ${name} ${args[0]}`, async () => {
           const error = message`Unsupported completion shell ${shellName}.`;
           const chunks: string[] = [];
@@ -16506,23 +16294,26 @@ describe("structured runner errors", () => {
 
     it(`should not invoke the ${name} unsupported-shell callback for a supported shell`, async () => {
       const output: string[] = [];
-      const result = await runParser(create(message`Unused failure.`), "test", [
-        "--completion=bash",
-      ], {
-        completion: {
-          option: true,
-          errors: {
-            unsupportedShell: () => {
-              throw new Error("Unexpected callback.");
+      const result = await runParser(
+        create(message`Unused failure.`),
+        "test",
+        ["--completion=bash"],
+        {
+          completion: {
+            option: true,
+            errors: {
+              unsupportedShell: () => {
+                throw new Error("Unexpected callback.");
+              },
             },
+            onShow: () => "shown",
           },
-          onShow: () => "shown",
+          stdout: (chunk) => output.push(chunk),
+          stderr: () => {
+            throw new Error("Unexpected stderr.");
+          },
         },
-        stdout: (chunk) => output.push(chunk),
-        stderr: () => {
-          throw new Error("Unexpected stderr.");
-        },
-      });
+      );
       assert.equal(result, "shown");
       assert.ok(output[0].includes("complete -F"));
     });
@@ -16553,40 +16344,45 @@ describe("structured runner errors", () => {
     it(`should accept an empty ${name} missing-shell message`, async () => {
       const error: Message = [];
       const chunks: string[] = [];
-      await runParser(create(message`Unused failure.`), "test", [
-        "--completion",
-      ], {
-        completion: { option: true, errors: { missingShell: error } },
-        stderr: (chunk) => chunks.push(chunk),
-        onError: (_code, received) => {
-          assert.strictEqual(received, error);
-          return "handled";
+      await runParser(
+        create(message`Unused failure.`),
+        "test",
+        ["--completion"],
+        {
+          completion: { option: true, errors: { missingShell: error } },
+          stderr: (chunk) => chunks.push(chunk),
+          onError: (_code, received) => {
+            assert.strictEqual(received, error);
+            return "handled";
+          },
         },
-      });
+      );
       assert.equal(chunks[0], "Error: \n");
       assert.equal(chunks.length, 2);
     });
 
     it(`should preserve the ${name} default unsupported-shell error when only missingShell is customized`, async () => {
       const chunks: string[] = [];
-      await runParser(create(message`Unused failure.`), "test", [
-        "--completion",
-        "unknown",
-      ], {
-        colors: false,
-        completion: {
-          option: true,
-          errors: { missingShell: message`Select a shell.` },
+      await runParser(
+        create(message`Unused failure.`),
+        "test",
+        ["--completion", "unknown"],
+        {
+          colors: false,
+          completion: {
+            option: true,
+            errors: { missingShell: message`Select a shell.` },
+          },
+          stderr: (chunk) => chunks.push(chunk),
+          onError: (_code, error) => {
+            assert.deepEqual(
+              error,
+              message`Unsupported shell ${"unknown"}. Available shells: ${message`${"bash"}, ${"fish"}, ${"nu"}, ${"pwsh"}, ${"zsh"}`}.`,
+            );
+            return "handled";
+          },
         },
-        stderr: (chunk) => chunks.push(chunk),
-        onError: (_code, error) => {
-          assert.deepEqual(
-            error,
-            message`Unsupported shell ${"unknown"}. Available shells: ${message`${"bash"}, ${"fish"}, ${"nu"}, ${"pwsh"}, ${"zsh"}`}.`,
-          );
-          return "handled";
-        },
-      });
+      );
       assert.deepEqual(chunks, [
         'Error: Unsupported shell "unknown". Available shells: "bash", "fish", "nu", "pwsh", "zsh".',
       ]);
@@ -16595,17 +16391,20 @@ describe("structured runner errors", () => {
     it(`should render ${name} custom message terms with colors`, async () => {
       const chunks: string[] = [];
       const error = message`Choose another ${"unknown"}.`;
-      await runParser(create(message`Unused failure.`), "test", [
-        "--completion=unknown",
-      ], {
-        colors: true,
-        completion: { option: true, errors: { unsupportedShell: error } },
-        stderr: (chunk) => chunks.push(chunk),
-        onError: (_code, received) => {
-          assert.strictEqual(received, error);
-          return "handled";
+      await runParser(
+        create(message`Unused failure.`),
+        "test",
+        ["--completion=unknown"],
+        {
+          colors: true,
+          completion: { option: true, errors: { unsupportedShell: error } },
+          stderr: (chunk) => chunks.push(chunk),
+          onError: (_code, received) => {
+            assert.strictEqual(received, error);
+            return "handled";
+          },
         },
-      });
+      );
       assert.deepEqual(chunks, [
         "Error: Choose another \x1b[32munknown\x1b[0m.",
       ]);
@@ -16613,27 +16412,32 @@ describe("structured runner errors", () => {
 
     it(`should preserve exceptions from the ${name} unsupported-shell callback`, async () => {
       const failure = new TypeError("Cannot select a message.");
-      await assert.rejects(async () => {
-        await runParser(create(message`Unused failure.`), "test", [
-          "completion",
-          "unknown",
-        ], {
-          completion: {
-            command: true,
-            errors: {
-              unsupportedShell: () => {
-                throw failure;
+      await assert.rejects(
+        async () => {
+          await runParser(
+            create(message`Unused failure.`),
+            "test",
+            ["completion", "unknown"],
+            {
+              completion: {
+                command: true,
+                errors: {
+                  unsupportedShell: () => {
+                    throw failure;
+                  },
+                },
+              },
+              stderr: () => {
+                throw new Error("Unexpected stderr.");
+              },
+              onError: () => {
+                throw new Error("Unexpected onError.");
               },
             },
-          },
-          stderr: () => {
-            throw new Error("Unexpected stderr.");
-          },
-          onError: () => {
-            throw new Error("Unexpected onError.");
-          },
-        });
-      }, (error) => error === failure);
+          );
+        },
+        (error) => error === failure,
+      );
     });
 
     it(`should pass ${name} errors through the context runners before disposal`, async () => {
@@ -16680,9 +16484,12 @@ describe("structured runner errors", () => {
           },
         });
       if (name === "sync") assert.throws(invoke, (e) => e === thrown);
-      else {await assert.rejects(async () =>
-          await invoke(), (e) =>
-          e === thrown);}
+      else {
+        await assert.rejects(
+          async () => await invoke(),
+          (e) => e === thrown,
+        );
+      }
     });
   }
 
@@ -16699,9 +16506,9 @@ describe("structured runner errors", () => {
       'Error: `--port`: Expected a valid integer, but got "bad".',
       [
         1,
-        message`${
-          optionNames(["--port"])
-        }: ${message`Expected a valid integer, but got ${"bad"}.`}`,
+        message`${optionNames([
+          "--port",
+        ])}: ${message`Expected a valid integer, but got ${"bad"}.`}`,
       ],
     ]);
   });
@@ -16743,21 +16550,22 @@ describe("structured runner errors", () => {
       );
       assert.deepEqual(events, ["dispose"]);
     }
-    assert.deepEqual(received, Array.from({ length: 5 }, () => [1, error]));
+    assert.deepEqual(
+      received,
+      Array.from({ length: 5 }, () => [1, error]),
+    );
   });
 
-  for (
-    const parser of [
-      command("known", constant("ok")),
-      command("parent", command("known", constant("ok"))),
-      object({ maybe: optional(option("--ok")) }),
-      asyncStructuredFailureParser(message`Unknown command.`),
-    ]
-  ) {
+  for (const parser of [
+    command("known", constant("ok")),
+    command("parent", command("known", constant("ok"))),
+    object({ maybe: optional(option("--ok")) }),
+    asyncStructuredFailureParser(message`Unknown command.`),
+  ]) {
     it(`should pass help-validation errors for ${JSON.stringify(parser.usage)} (${parser.mode})`, async () => {
       const events: unknown[] = [];
-      const nested = parser.usage.some((term) =>
-        term.type === "command" && term.name === "parent"
+      const nested = parser.usage.some(
+        (term) => term.type === "command" && term.name === "parent",
       );
       await runParser(
         parser,
@@ -16850,8 +16658,8 @@ describe("structured help callbacks", () => {
     // Fixed output captured before adding the callback argument.
     assert.deepEqual(chunks, [
       "Usage: test STRING\n       test --help\n\n" +
-      "  STRING                    \n" +
-      "  --help                      Show help information.\n",
+        "  STRING                    \n" +
+        "  --help                      Show help information.\n",
     ]);
   });
 });
@@ -16887,15 +16695,15 @@ describe("final help pages", () => {
         const invoke = (options: RunOptions<string, never>) =>
           valueParser.mode === "sync"
             ? runParser(
-              { ...program, parser: option("--name", valueParser) },
-              args,
-              options,
-            )
+                { ...program, parser: option("--name", valueParser) },
+                args,
+                options,
+              )
             : runParser(
-              { ...program, parser: option("--name", valueParser) },
-              args,
-              options,
-            );
+                { ...program, parser: option("--name", valueParser) },
+                args,
+                options,
+              );
         const result = invoke({
           ...formats,
           showUsage: false,
@@ -16918,28 +16726,34 @@ describe("final help pages", () => {
               assert.deepEqual(page.author, message`Program author.`);
               assert.deepEqual(page.bugs, message`Program bugs.`);
               assert.deepEqual(page.footer, message`Program footer.`);
-              const terms = page.sections.flatMap((section) => section.entries)
+              const terms = page.sections
+                .flatMap((section) => section.entries)
                 .map((entry) => entry.term);
-              for (
-                const name of ["--help", "--version", "--completion"] as const
-              ) {
+              for (const name of [
+                "--help",
+                "--version",
+                "--completion",
+              ] as const) {
                 assert.ok(
-                  terms.some((term) =>
-                    term.type === "option" && term.names.includes(name)
+                  terms.some(
+                    (term) =>
+                      term.type === "option" && term.names.includes(name),
                   ),
                 );
               }
               for (const name of ["help", "version", "completion"]) {
                 assert.ok(
-                  terms.some((term) =>
-                    term.type === "command" && term.name === name
+                  terms.some(
+                    (term) => term.type === "command" && term.name === name,
                   ),
                 );
               }
-              assert.deepEqual(chunks, [formatDocPage("test", page, {
-                ...formats,
-                showUsage: false,
-              })]);
+              assert.deepEqual(chunks, [
+                formatDocPage("test", page, {
+                  ...formats,
+                  showUsage: false,
+                }),
+              ]);
               return "shown";
             },
           },
@@ -16958,19 +16772,17 @@ describe("final help pages", () => {
       });
     }
 
-    for (
-      const args of [
-        ["remote", "add", "--help"],
-        ["help", "remote", "add"],
-        ["assist", "remote", "add"],
-        ["help", "help"],
-        ["help", "version"],
-        ["help", "completion"],
-        ["help", "--help"],
-        ["ver", "--help"],
-        ["completion", "--help"],
-      ]
-    ) {
+    for (const args of [
+      ["remote", "add", "--help"],
+      ["help", "remote", "add"],
+      ["assist", "remote", "add"],
+      ["help", "help"],
+      ["help", "version"],
+      ["help", "completion"],
+      ["help", "--help"],
+      ["ver", "--help"],
+      ["completion", "--help"],
+    ]) {
       it(`should forward selected ${mode} help for ${args.join(" ")}`, async () => {
         const parser = command(
           "remote",
@@ -17019,8 +16831,8 @@ describe("final help pages", () => {
                 const selected = args.includes("completion")
                   ? "completion"
                   : args.includes("version") || args.includes("ver")
-                  ? "version"
-                  : "help";
+                    ? "version"
+                    : "help";
                 assert.match(
                   chunks[0],
                   new RegExp(`Usage: test ${selected}\\b`),
@@ -17080,34 +16892,27 @@ describe("final help pages", () => {
       }
     }
 
-    for (
-      const args of [
-        ["--name", "value"],
-        ["--version"],
-        ["--completion", "bash"],
-        ["--completion"],
-        ["--completion", "unknown"],
-        [],
-      ]
-    ) {
+    for (const args of [
+      ["--name", "value"],
+      ["--version"],
+      ["--completion", "bash"],
+      ["--completion"],
+      ["--completion", "unknown"],
+      [],
+    ]) {
       it(`should not call help for ${mode} non-help input ${JSON.stringify(args)}`, async () => {
-        await runParser(
-          option("--name", valueParser),
-          "test",
-          args,
-          {
-            aboveError: "help",
-            help: {
-              option: true,
-              onShow: () => assert.fail("Unexpected help."),
-            },
-            version: { option: true, value: "1.0", onShow: () => "version" },
-            completion: { option: true, onShow: () => "completion" },
-            onError: () => "error",
-            stdout: () => {},
-            stderr: () => {},
+        await runParser(option("--name", valueParser), "test", args, {
+          aboveError: "help",
+          help: {
+            option: true,
+            onShow: () => assert.fail("Unexpected help."),
           },
-        );
+          version: { option: true, value: "1.0", onShow: () => "version" },
+          completion: { option: true, onShow: () => "completion" },
+          onError: () => "error",
+          stdout: () => {},
+          stderr: () => {},
+        });
       });
     }
     for (const throwing of ["stdout", "callback"] as const) {
@@ -17129,9 +16934,12 @@ describe("final help pages", () => {
             },
           });
         if (mode === "sync") assert.throws(invoke, (e) => e === error);
-        else {await assert.rejects(async () =>
-            await invoke(), (e) =>
-            e === error);}
+        else {
+          await assert.rejects(
+            async () => await invoke(),
+            (e) => e === error,
+          );
+        }
         assert.equal(calls, throwing === "stdout" ? 0 : 1);
       });
     }
@@ -17143,9 +16951,10 @@ describe("final help pages", () => {
       help: {
         option: true,
         onShow(_code, page) {
-          const names = page.sections.flatMap((section) => section.entries)
+          const names = page.sections
+            .flatMap((section) => section.entries)
             .flatMap((entry) =>
-              entry.term.type === "command" ? [entry.term.name] : []
+              entry.term.type === "command" ? [entry.term.name] : [],
             );
           assert.deepEqual(names, ["remote", "config"]);
         },
@@ -17231,11 +17040,12 @@ describe("completion errors through context runners", () => {
           },
         };
         const parser = flag("--verbose");
-        const result = runner === "runWithSync"
-          ? runWithSync(parser, "test", [context], options)
-          : runner === "runWithAsync"
-          ? await runWithAsync(parser, "test", [context], options)
-          : await runWith(parser, "test", [context], options);
+        const result =
+          runner === "runWithSync"
+            ? runWithSync(parser, "test", [context], options)
+            : runner === "runWithAsync"
+              ? await runWithAsync(parser, "test", [context], options)
+              : await runWith(parser, "test", [context], options);
         assert.equal(result, "handled");
         assert.equal(calls, 1);
       });
@@ -17264,11 +17074,13 @@ describe("helpSections", () => {
         option: true as const,
         onShow(_code: number, page: DocPage) {
           pages.push(page);
-          assert.deepEqual(chunks, [formatDocPage("demo", page, {
-            colors: false,
-            showUsage: false,
-            sectionOrder: overrides.sectionOrder,
-          })]);
+          assert.deepEqual(chunks, [
+            formatDocPage("demo", page, {
+              colors: false,
+              showUsage: false,
+              sectionOrder: overrides.sectionOrder,
+            }),
+          ]);
         },
       },
     };
@@ -17304,13 +17116,16 @@ describe("helpSections", () => {
         helpSections: labels,
         help: { command: true, option: true },
       });
-      assert.deepEqual(page.sections.map((s) => s.title), [
-        "Commands",
-        "Options",
-      ]);
+      assert.deepEqual(
+        page.sections.map((s) => s.title),
+        ["Commands", "Options"],
+      );
       assert.ok(page.sections.every((s) => s.entries.length > 0));
     }
-    for (const args of [["list", "--help"], ["remote", "add", "--help"]]) {
+    for (const args of [
+      ["list", "--help"],
+      ["remote", "add", "--help"],
+    ]) {
       const { page, output } = capture(cli(), args, { helpSections: labels });
       assert.ok(page.sections.every((s) => s.title == null));
       assert.doesNotMatch(output, /^(Commands|Options):$/m);
@@ -17328,7 +17143,7 @@ describe("helpSections", () => {
     assert.ok(options);
     assert.deepEqual(
       options.entries.flatMap((e) =>
-        e.term.type === "option" ? e.term.names : []
+        e.term.type === "option" ? e.term.names : [],
       ),
       ["--verbose", "--help", "--version", "--completion"],
     );
@@ -17344,9 +17159,10 @@ describe("helpSections", () => {
   });
 
   it("should leave categories without a configured label untitled", () => {
-    for (
-      const helpSections of [{ commands: "Commands" }, { options: "Options" }]
-    ) {
+    for (const helpSections of [
+      { commands: "Commands" },
+      { options: "Options" },
+    ]) {
       const { page } = capture(cli(), ["--help"], { helpSections });
       assert.equal(page.sections.filter((s) => s.title != null).length, 1);
       assert.ok(page.sections.some((s) => s.title == null));
@@ -17371,20 +17187,19 @@ describe("helpSections", () => {
       helpSections: labels,
       help: { command: true, option: true },
     });
-    assert.deepEqual(page.sections.map((s) => s.title), [
-      "Commands",
-      "Options",
-      "Logging",
-    ]);
+    assert.deepEqual(
+      page.sections.map((s) => s.title),
+      ["Commands", "Options", "Logging"],
+    );
     assert.deepEqual(
       page.sections[0].entries.map((e) =>
-        e.term.type === "command" ? e.term.name : ""
+        e.term.type === "command" ? e.term.name : "",
       ),
       ["list", "rotate", "help"],
     );
     assert.deepEqual(
       page.sections[1].entries.flatMap((e) =>
-        e.term.type === "option" ? e.term.names : []
+        e.term.type === "option" ? e.term.names : [],
       ),
       ["--verbose", "--help"],
     );
@@ -17400,12 +17215,7 @@ describe("helpSections", () => {
     assert.equal(page.sections.length, 1);
     assert.equal(page.sections[0].title, "Available");
     const types = page.sections[0].entries.map((e) => e.term.type);
-    assert.deepEqual(types, [
-      "command",
-      "command",
-      "option",
-      "option",
-    ]);
+    assert.deepEqual(types, ["command", "command", "option", "option"]);
   });
 
   it("should leave positional entries untitled and let the comparator order final sections", () => {
@@ -17422,11 +17232,10 @@ describe("helpSections", () => {
       helpSections: labels,
       sectionOrder: () => 0,
     });
-    assert.deepEqual(stable.page.sections.map((s) => s.title), [
-      "Commands",
-      "Options",
-      undefined,
-    ]);
+    assert.deepEqual(
+      stable.page.sections.map((s) => s.title),
+      ["Commands", "Options", undefined],
+    );
     assert.equal(stable.page.sections[2].entries[0].term.type, "argument");
     const sorted = capture(parser, ["--help"], {
       helpSections: labels,
@@ -17463,10 +17272,12 @@ describe("helpSections", () => {
         const doc = original(...args);
         return {
           ...doc,
-          fragments: [{
-            type: "entry" as const,
-            term: { type: "command" as const, name: "" },
-          }],
+          fragments: [
+            {
+              type: "entry" as const,
+              term: { type: "command" as const, name: "" },
+            },
+          ],
         };
       },
     };
@@ -17492,7 +17303,7 @@ describe("helpSections", () => {
     });
     assert.deepEqual(
       page.sections[0].entries.map((e) =>
-        e.term.type === "command" ? e.term.name : ""
+        e.term.type === "command" ? e.term.name : "",
       ),
       ["remote", "config"],
     );
@@ -17555,10 +17366,10 @@ describe("helpSections asynchronous runners", () => {
       },
       stdout: () => {},
     });
-    assert.deepEqual(pages[0].sections.map((s) => s.title), [
-      "Commands",
-      "Options",
-    ]);
+    assert.deepEqual(
+      pages[0].sections.map((s) => s.title),
+      ["Commands", "Options"],
+    );
   });
 
   it("should pass the grouped page through runWith", async () => {
@@ -17585,10 +17396,10 @@ describe("helpSections asynchronous runners", () => {
       },
       stdout: () => {},
     });
-    assert.deepEqual(pages[0].sections.map((s) => s.title), [
-      "Commands",
-      "Options",
-    ]);
+    assert.deepEqual(
+      pages[0].sections.map((s) => s.title),
+      ["Commands", "Options"],
+    );
   });
 
   it("should keep completion diagnostic help flat", () => {
@@ -17621,9 +17432,11 @@ describe("helpSections entry metadata", () => {
     });
     const raw = getDocPage(parser, []);
     assert.ok(raw);
-    const original = raw.sections.flatMap((s) => s.entries).find((e) =>
-      e.term.type === "option" && e.term.names.includes("--format")
-    );
+    const original = raw.sections
+      .flatMap((s) => s.entries)
+      .find(
+        (e) => e.term.type === "option" && e.term.names.includes("--format"),
+      );
     assert.ok(original?.default);
     assert.ok(original.choices);
     const source = Object.freeze(original);
@@ -17634,8 +17447,9 @@ describe("helpSections entry metadata", () => {
         onShow(_code, page) {
           const options = page.sections.find((s) => s.title === "Options");
           assert.ok(options);
-          const moved = options.entries.find((e) =>
-            e.term.type === "option" && e.term.names.includes("--format")
+          const moved = options.entries.find(
+            (e) =>
+              e.term.type === "option" && e.term.names.includes("--format"),
           );
           assert.deepEqual(moved, source);
         },
@@ -17647,9 +17461,7 @@ describe("helpSections entry metadata", () => {
 });
 
 describe("runParser() showAliases", () => {
-  function createAliasParser(
-    installShowAliases?: boolean,
-  ) {
+  function createAliasParser(installShowAliases?: boolean) {
     return or(
       command("install", object({ pkg: option("--package", string()) }), {
         aliases: ["i", "add"],
@@ -17783,18 +17595,22 @@ describe("runParser() showAliases", () => {
       ...createFlatCommandDocParser(),
       getDocFragments() {
         return {
-          fragments: [{
-            type: "section",
-            entries: [{
-              term: {
-                type: "command",
-                name: "remote add",
-                aliases: ["remote a"],
-              },
-              description: message`Add a remote.`,
-              showAliases: true,
-            }],
-          }],
+          fragments: [
+            {
+              type: "section",
+              entries: [
+                {
+                  term: {
+                    type: "command",
+                    name: "remote add",
+                    aliases: ["remote a"],
+                  },
+                  description: message`Add a remote.`,
+                  showAliases: true,
+                },
+              ],
+            },
+          ],
         };
       },
     };

@@ -36,16 +36,14 @@ it("skips all handlers and resource hooks for metadata and parse failures", asyn
       },
     } satisfies typeof program.hooks,
   };
-  for (
-    const args of [
-      ["--help"],
-      ["file", "--help"],
-      ["file", "lines", "--help"],
-      ["--version"],
-      ["completion", "bash"],
-      ["completion", "bash", "file", ""],
-    ]
-  ) {
+  for (const args of [
+    ["--help"],
+    ["file", "--help"],
+    ["file", "lines", "--help"],
+    ["--version"],
+    ["completion", "bash"],
+    ["completion", "bash", "file", ""],
+  ]) {
     const result = await captureProgramRun({
       ...observed,
       ...formatting,
@@ -62,14 +60,12 @@ it("skips all handlers and resource hooks for metadata and parse failures", asyn
       assert.match(result.stdout, /lines/);
     }
   }
-  for (
-    const args of [
-      ["--unknown"],
-      ["file", "lines"],
-      ["file", "info", "-"],
-      ["file", "info", "sample", "extra"],
-    ]
-  ) {
+  for (const args of [
+    ["--unknown"],
+    ["file", "lines"],
+    ["file", "info", "-"],
+    ["file", "info", "sample", "extra"],
+  ]) {
     const result = await captureProgramRun({
       ...observed,
       ...formatting,

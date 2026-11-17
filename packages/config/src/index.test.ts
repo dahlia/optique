@@ -46,12 +46,12 @@ import {
 import { bindConfig, createConfigContext } from "#src/index.ts";
 import type { ConfigLoadResult, ConfigMeta } from "#src/index.ts";
 
-type IsExact<T, U> = (<V>() => V extends T ? 1 : 2) extends
-  (<V>() => V extends U ? 1 : 2)
-  ? ((<V>() => V extends U ? 1 : 2) extends (<V>() => V extends T ? 1 : 2)
-    ? true
-    : false)
-  : false;
+type IsExact<T, U> =
+  (<V>() => V extends T ? 1 : 2) extends <V>() => V extends U ? 1 : 2
+    ? (<V>() => V extends U ? 1 : 2) extends <V>() => V extends T ? 1 : 2
+      ? true
+      : false
+    : false;
 
 const propertyParameters = { numRuns: 200 } as const;
 const cliStringValueArbitrary = fc.string().map((value) => `value${value}`);
@@ -157,44 +157,39 @@ describe("createConfigContext", () => {
     );
   });
 
-  for (
-    const [parsed, expectedHost, label] of [
-      [0, "zero-host", "0"],
-      [false, "false-host", "false"],
-      ["", "empty-string-host", '""'],
-    ] as const
-  ) {
-    test(
-      `treats ${label} as a valid phase-two parsed value`,
-      async () => {
-        const schema = z.object({
-          host: z.string(),
-        });
+  for (const [parsed, expectedHost, label] of [
+    [0, "zero-host", "0"],
+    [false, "false-host", "false"],
+    ["", "empty-string-host", '""'],
+  ] as const) {
+    test(`treats ${label} as a valid phase-two parsed value`, async () => {
+      const schema = z.object({
+        host: z.string(),
+      });
 
-        const context = createConfigContext({ schema });
-        let receivedParsed: unknown;
+      const context = createConfigContext({ schema });
+      let receivedParsed: unknown;
 
-        const annotations = await context.getAnnotations(phase2(parsed), {
-          load: (value: unknown) => {
-            receivedParsed = value;
-            return {
-              config: { host: expectedHost },
-              meta: {
-                configDir: "/app",
-                configPath: "/app/config.json",
-              } satisfies ConfigMeta,
-            };
-          },
-        });
+      const annotations = await context.getAnnotations(phase2(parsed), {
+        load: (value: unknown) => {
+          receivedParsed = value;
+          return {
+            config: { host: expectedHost },
+            meta: {
+              configDir: "/app",
+              configPath: "/app/config.json",
+            } satisfies ConfigMeta,
+          };
+        },
+      });
 
-        assert.equal(receivedParsed, parsed);
-        const contextAnnotation = annotations[context.id] as
-          | { readonly data: unknown; readonly meta?: unknown }
-          | undefined;
-        assert.ok(contextAnnotation != null);
-        assert.deepEqual(contextAnnotation.data, { host: expectedHost });
-      },
-    );
+      assert.equal(receivedParsed, parsed);
+      const contextAnnotation = annotations[context.id] as
+        | { readonly data: unknown; readonly meta?: unknown }
+        | undefined;
+      assert.ok(contextAnnotation != null);
+      assert.deepEqual(contextAnnotation.data, { host: expectedHost });
+    });
   }
 });
 
@@ -202,7 +197,10 @@ describe("bindConfig", () => {
   test("preserves conditional full names before CLI delegation", async () => {
     const context = createConfigContext({
       schema: z.object({
-        branch: z.tuple([z.literal("a"), z.boolean()]).readonly().optional(),
+        branch: z
+          .tuple([z.literal("a"), z.boolean()])
+          .readonly()
+          .optional(),
       }),
     });
     const p = object({
@@ -298,7 +296,7 @@ describe("bindConfig", () => {
         bindConfig(option("--name", string()), {
           context,
           key: sym,
-        })
+        }),
       );
     });
 
@@ -311,7 +309,7 @@ describe("bindConfig", () => {
         bindConfig(option("--name", string()), {
           context,
           key: 0,
-        })
+        }),
       );
     });
 
@@ -320,21 +318,20 @@ describe("bindConfig", () => {
       const context = createConfigContext({ schema });
       const parser = bindConfig(option("--name", string()), {
         context,
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         key: (async (config: { name: string }) =>
           config.name.toUpperCase()) as never,
+        /* oxlint-enable require-await */
       });
       const annotations = await context.getAnnotations(phase2({}), {
         load: () => ({ config: { name: "alice" }, meta: undefined }),
       });
-      assert.throws(
-        () => parse(parser, [], { annotations }),
-        {
-          name: "TypeError",
-          message:
-            "The key callback must return a synchronous value, but got a thenable.",
-        },
-      );
+      assert.throws(() => parse(parser, [], { annotations }), {
+        name: "TypeError",
+        message:
+          "The key callback must return a synchronous value, but got a thenable.",
+      });
     });
 
     test("rejects thenable-returning key callback at parse time", async () => {
@@ -350,23 +347,19 @@ describe("bindConfig", () => {
       const annotations = await context.getAnnotations(phase2({}), {
         load: () => ({ config: { name: "alice" }, meta: undefined }),
       });
-      assert.throws(
-        () => parse(parser, [], { annotations }),
-        {
-          name: "TypeError",
-          message:
-            "The key callback must return a synchronous value, but got a thenable.",
-        },
-      );
+      assert.throws(() => parse(parser, [], { annotations }), {
+        name: "TypeError",
+        message:
+          "The key callback must return a synchronous value, but got a thenable.",
+      });
     });
 
     test("rejects callable thenable-returning key callback at parse time", async () => {
       const schema = z.object({ name: z.string() });
       const context = createConfigContext({ schema });
-      const callableThenable = Object.assign(
-        () => "ignored",
-        { then: (resolve: (value: string) => void) => resolve("ALICE") },
-      );
+      const callableThenable = Object.assign(() => "ignored", {
+        then: (resolve: (value: string) => void) => resolve("ALICE"),
+      });
       const parser = bindConfig(option("--name", string()), {
         context,
         key: (() => callableThenable) as never,
@@ -374,14 +367,11 @@ describe("bindConfig", () => {
       const annotations = await context.getAnnotations(phase2({}), {
         load: () => ({ config: { name: "alice" }, meta: undefined }),
       });
-      assert.throws(
-        () => parse(parser, [], { annotations }),
-        {
-          name: "TypeError",
-          message:
-            "The key callback must return a synchronous value, but got a thenable.",
-        },
-      );
+      assert.throws(() => parse(parser, [], { annotations }), {
+        name: "TypeError",
+        message:
+          "The key callback must return a synchronous value, but got a thenable.",
+      });
     });
   });
 
@@ -716,14 +706,11 @@ describe("bindConfig", () => {
       const context = createConfigContext({
         schema: z.object({ port: z.number() }),
       });
-      const parser = bindConfig(
-        option("--port", integer({ min: 1024 })),
-        {
-          context,
-          key: "port",
-          default: 8080,
-        },
-      );
+      const parser = bindConfig(option("--port", integer({ min: 1024 })), {
+        context,
+        key: "port",
+        default: 8080,
+      });
       const annotations: Annotations = {
         [context.id]: { data: { port: 80 } },
       };
@@ -820,13 +807,10 @@ describe("bindConfig", () => {
         source: () => undefined,
       });
       const parser = bindEnv(
-        bindConfig(
-          option("--name", string({ pattern: /^[A-Z]+$/ })),
-          {
-            context: configContext,
-            key: "name",
-          },
-        ),
+        bindConfig(option("--name", string({ pattern: /^[A-Z]+$/ })), {
+          context: configContext,
+          key: "name",
+        }),
         {
           context: envContext,
           key: "NAME",
@@ -857,8 +841,10 @@ describe("bindConfig", () => {
         usage: portParser.usage,
       });
       assert.ok(parseResult.success);
-      const extracted = portParser.dependencyMetadata?.source
-        ?.extractSourceValue(parseResult.next.state);
+      const extracted =
+        portParser.dependencyMetadata?.source?.extractSourceValue(
+          parseResult.next.state,
+        );
       assert.ok(extracted != null && !(extracted instanceof Promise));
       assert.ok(!extracted.success);
     });
@@ -881,8 +867,8 @@ describe("bindConfig", () => {
       });
       assert.ok(parseResult.success);
       // getMissingSourceValue routes through inner parser's validator.
-      const getMissing = portParser.dependencyMetadata?.source
-        ?.getMissingSourceValue;
+      const getMissing =
+        portParser.dependencyMetadata?.source?.getMissingSourceValue;
       assert.ok(typeof getMissing === "function");
       const missing = getMissing!();
       assert.ok(missing != null && !(missing instanceof Promise));
@@ -984,10 +970,7 @@ describe("bindConfig", () => {
         schema: z.object({ name: z.string().optional() }),
       });
       const parser = bindConfig(
-        group(
-          "Server",
-          option("--name", string({ pattern: /^[A-Z]+$/ })),
-        ),
+        group("Server", option("--name", string({ pattern: /^[A-Z]+$/ }))),
         {
           context,
           key: "name",
@@ -1146,10 +1129,10 @@ describe("bindConfig", () => {
         }),
       },
     );
-    assert.deepEqual(
-      parse(parser, [], { annotations: firstAnnotations }),
-      { success: true, value: "/first:one" },
-    );
+    assert.deepEqual(parse(parser, [], { annotations: firstAnnotations }), {
+      success: true,
+      value: "/first:one",
+    });
 
     const secondAnnotations = await context.getAnnotations(
       phase2({ cfg: "b" }),
@@ -1166,10 +1149,10 @@ describe("bindConfig", () => {
     assert.ok(annotation != null);
     assert.deepEqual(annotation.data, { outDir: "two" });
     assert.ok(!("meta" in annotation));
-    assert.deepEqual(
-      parse(parser, [], { annotations: secondAnnotations }),
-      { success: true, value: "no-meta:two" },
-    );
+    assert.deepEqual(parse(parser, [], { annotations: secondAnnotations }), {
+      success: true,
+      value: "no-meta:two",
+    });
   });
 
   test("ConfigLoadResult allows undefined metadata", () => {
@@ -1359,10 +1342,12 @@ describe("bindConfig", () => {
     });
     assert.ok(leafParse.success);
     const parser = tuple([leaf]);
-    const result = parser.complete(
-      [leafParse.next.state],
-      { usage: parser.usage, phase: "complete", path: [], trace: undefined },
-    );
+    const result = parser.complete([leafParse.next.state], {
+      usage: parser.usage,
+      phase: "complete",
+      path: [],
+      trace: undefined,
+    });
 
     assert.ok(result.success);
     assert.deepEqual(result.value, ["prod"]);
@@ -1396,10 +1381,12 @@ describe("bindConfig", () => {
     });
     assert.ok(leafParse.success);
     const parser = concat(tuple([leaf]), tuple([]));
-    const result = parser.complete(
-      [[leafParse.next.state], []],
-      { usage: parser.usage, phase: "complete", path: [], trace: undefined },
-    );
+    const result = parser.complete([[leafParse.next.state], []], {
+      usage: parser.usage,
+      phase: "complete",
+      path: [],
+      trace: undefined,
+    });
 
     assert.ok(result.success);
     assert.deepEqual(result.value, ["prod"]);
@@ -1446,10 +1433,12 @@ describe("bindConfig", () => {
 
     keyCalls = 0;
     const grouped = concat(tuple([group("Mode", leaf)]), tuple([]));
-    const groupedResult = grouped.complete(
-      [[leafParse.next.state], []],
-      { usage: grouped.usage, phase: "complete", path: [], trace: undefined },
-    );
+    const groupedResult = grouped.complete([[leafParse.next.state], []], {
+      usage: grouped.usage,
+      phase: "complete",
+      path: [],
+      trace: undefined,
+    });
     assert.ok(groupedResult.success);
     assert.deepEqual(groupedResult.value, ["prod"]);
     assert.equal(keyCalls, 1);
@@ -1464,10 +1453,11 @@ describe("bindConfig", () => {
     const context = createConfigContext({ schema });
 
     const parser = object({
-      myFlag: bindConfig(
-        flag("-a", "--my-flag"),
-        { context, key: "myFlag", default: false },
-      ),
+      myFlag: bindConfig(flag("-a", "--my-flag"), {
+        context,
+        key: "myFlag",
+        default: false,
+      }),
     });
 
     // This should not crash with "Cannot read properties of undefined
@@ -1509,14 +1499,10 @@ describe("bindConfig", () => {
 
     const entries = docPage.sections.flatMap((s) => s.entries);
     const hostEntry = entries.find(
-      (e) =>
-        e.term.type === "option" &&
-        e.term.names.includes("--host"),
+      (e) => e.term.type === "option" && e.term.names.includes("--host"),
     );
     const portEntry = entries.find(
-      (e) =>
-        e.term.type === "option" &&
-        e.term.names.includes("--port"),
+      (e) => e.term.type === "option" && e.term.names.includes("--port"),
     );
 
     assert.ok(hostEntry);
@@ -1545,9 +1531,7 @@ describe("bindConfig", () => {
 
     const entries = docPage.sections.flatMap((s) => s.entries);
     const hostEntry = entries.find(
-      (e) =>
-        e.term.type === "option" &&
-        e.term.names.includes("--host"),
+      (e) => e.term.type === "option" && e.term.names.includes("--host"),
     );
 
     assert.ok(hostEntry);
@@ -1710,7 +1694,7 @@ describe("bindConfig parity with bindEnv", () => {
     const configCtx = createConfigContext({ schema });
 
     const envCtx = createEnvContext({
-      source: (key) => key === "PORT" ? "7777" : undefined,
+      source: (key) => (key === "PORT" ? "7777" : undefined),
     });
 
     const parser = bindEnv(
@@ -1783,49 +1767,36 @@ describe("createConfigContext input validation", () => {
   });
 
   test("rejects null schema", () => {
-    assert.throws(
-      () => createConfigContext({ schema: null as never }),
-      {
-        name: "TypeError",
-        message:
-          "Expected schema to be a Standard Schema object, but got: null.",
-      },
-    );
+    assert.throws(() => createConfigContext({ schema: null as never }), {
+      name: "TypeError",
+      message: "Expected schema to be a Standard Schema object, but got: null.",
+    });
   });
 
   test("rejects object without ~standard property", () => {
-    assert.throws(
-      () => createConfigContext({ schema: {} as never }),
-      {
-        name: "TypeError",
-        message:
-          "Expected schema to be a Standard Schema object, but got: object.",
-      },
-    );
+    assert.throws(() => createConfigContext({ schema: {} as never }), {
+      name: "TypeError",
+      message:
+        "Expected schema to be a Standard Schema object, but got: object.",
+    });
   });
 
   test("rejects array schema", () => {
-    assert.throws(
-      () => createConfigContext({ schema: [] as never }),
-      {
-        name: "TypeError",
-        message:
-          "Expected schema to be a Standard Schema object, but got: array.",
-      },
-    );
+    assert.throws(() => createConfigContext({ schema: [] as never }), {
+      name: "TypeError",
+      message:
+        "Expected schema to be a Standard Schema object, but got: array.",
+    });
   });
 
   test("accepts callable Standard Schema (e.g., ArkType)", () => {
-    const callableSchema = Object.assign(
-      (input: unknown) => input,
-      {
-        "~standard": {
-          validate(value: unknown) {
-            return { value };
-          },
+    const callableSchema = Object.assign((input: unknown) => input, {
+      "~standard": {
+        validate(value: unknown) {
+          return { value };
         },
       },
-    );
+    });
     const context = createConfigContext({
       schema: callableSchema as never,
     });
@@ -1833,14 +1804,11 @@ describe("createConfigContext input validation", () => {
   });
 
   test("accepts callable ~standard property bag", () => {
-    const callableStandard = Object.assign(
-      () => {},
-      {
-        validate(value: unknown) {
-          return { value };
-        },
+    const callableStandard = Object.assign(() => {}, {
+      validate(value: unknown) {
+        return { value };
       },
-    );
+    });
     const schema = { "~standard": callableStandard };
     const context = createConfigContext({ schema: schema as never });
     assert.ok(context != null);
@@ -1926,13 +1894,13 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          { any: 1 } as never,
-          { load: () => ({ config: { host: "ok" }, meta: undefined }) },
-        ),
+        context.getAnnotations({ any: 1 } as never, {
+          load: () => ({ config: { host: "ok" }, meta: undefined }),
+        }),
       {
         name: "TypeError",
-        message: "Expected getAnnotations() to receive no request or a " +
+        message:
+          "Expected getAnnotations() to receive no request or a " +
           'SourceContextRequest ({ phase: "phase1" } or ' +
           '{ phase: "phase2", parsed }), but got: object.',
       },
@@ -1944,13 +1912,13 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          { phase: "phase2" } as never,
-          { load: () => ({ config: { host: "ok" }, meta: undefined }) },
-        ),
+        context.getAnnotations({ phase: "phase2" } as never, {
+          load: () => ({ config: { host: "ok" }, meta: undefined }),
+        }),
       {
         name: "TypeError",
-        message: "Expected getAnnotations() to receive no request or a " +
+        message:
+          "Expected getAnnotations() to receive no request or a " +
           'SourceContextRequest ({ phase: "phase1" } or ' +
           '{ phase: "phase2", parsed }), but got: object.',
       },
@@ -1962,13 +1930,13 @@ describe("createConfigContext input validation", () => {
     const context = createConfigContext({ schema });
     assert.throws(
       () =>
-        context.getAnnotations(
-          null as never,
-          { load: () => ({ config: { host: "ok" }, meta: undefined }) },
-        ),
+        context.getAnnotations(null as never, {
+          load: () => ({ config: { host: "ok" }, meta: undefined }),
+        }),
       {
         name: "TypeError",
-        message: "Expected getAnnotations() to receive no request or a " +
+        message:
+          "Expected getAnnotations() to receive no request or a " +
           'SourceContextRequest ({ phase: "phase1" } or ' +
           '{ phase: "phase2", parsed }), but got: null.',
       },
@@ -2160,16 +2128,15 @@ describe("load() return value validation", () => {
     if (annotations instanceof Promise) {
       throw new TypeError("Expected synchronous annotations.");
     }
-    assert.deepEqual(
-      parse(parser, [], { annotations }),
-      { success: true, value: "configured" },
-    );
+    assert.deepEqual(parse(parser, [], { annotations }), {
+      success: true,
+      value: "configured",
+    });
 
     assert.deepEqual(
-      context.getAnnotations(
-        undefined,
-        { load: () => ({ config: { name: "later" }, meta: undefined }) },
-      ),
+      context.getAnnotations(undefined, {
+        load: () => ({ config: { name: "later" }, meta: undefined }),
+      }),
       {},
     );
 
@@ -2182,46 +2149,43 @@ describe("load() return value validation", () => {
     );
   });
 
-  test(
-    "validation failures in later probes do not leak prior config into plain parse",
-    () => {
-      const context = createNameContext();
-      const parser = bindConfig(option("--name", string()), {
-        context,
-        key: "name",
-      });
+  test("validation failures in later probes do not leak prior config into plain parse", () => {
+    const context = createNameContext();
+    const parser = bindConfig(option("--name", string()), {
+      context,
+      key: "name",
+    });
 
-      const annotations = context.getAnnotations(phase2({}), {
-        load: () => ({ config: { name: "configured" }, meta: undefined }),
-      });
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      assert.deepEqual(
-        parse(parser, [], { annotations }),
-        { success: true, value: "configured" },
-      );
+    const annotations = context.getAnnotations(phase2({}), {
+      load: () => ({ config: { name: "configured" }, meta: undefined }),
+    });
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    assert.deepEqual(parse(parser, [], { annotations }), {
+      success: true,
+      value: "configured",
+    });
 
-      assert.throws(
-        () =>
-          context.getAnnotations(phase2({}), {
-            load: () => ({
-              config: { name: 123 },
-              meta: undefined,
-            }),
+    assert.throws(
+      () =>
+        context.getAnnotations(phase2({}), {
+          load: () => ({
+            config: { name: 123 },
+            meta: undefined,
           }),
-        { message: /Config validation failed/ },
-      );
+        }),
+      { message: /Config validation failed/ },
+    );
 
-      const result = parse(parser, []);
-      assert.ok(!result.success);
-      if (result.success) return;
-      assert.equal(
-        formatMessage(result.error),
-        "Missing required configuration value.",
-      );
-    },
-  );
+    const result = parse(parser, []);
+    assert.ok(!result.success);
+    if (result.success) return;
+    assert.equal(
+      formatMessage(result.error),
+      "Missing required configuration value.",
+    );
+  });
 
   test("no-config phase-two probes do not leak prior config into plain parse", () => {
     const context = createNameContext();
@@ -2236,10 +2200,10 @@ describe("load() return value validation", () => {
     if (annotations instanceof Promise) {
       throw new TypeError("Expected synchronous annotations.");
     }
-    assert.deepEqual(
-      parse(parser, [], { annotations }),
-      { success: true, value: "configured" },
-    );
+    assert.deepEqual(parse(parser, [], { annotations }), {
+      success: true,
+      value: "configured",
+    });
 
     assert.deepEqual(
       context.getAnnotations(phase2({}), { getConfigPath: () => undefined }),
@@ -2255,51 +2219,47 @@ describe("load() return value validation", () => {
     );
   });
 
-  test(
-    "empty follow-up annotations do not resurrect earlier config data or metadata",
-    () => {
-      const schema = z.object({ outDir: z.string() });
-      const context = createConfigContext({ schema });
-      const parser = bindConfig(option("--out-dir", string()), {
-        context,
-        key: (config, meta) =>
-          `${meta?.configDir ?? "no-meta"}:${config.outDir}`,
-      });
+  test("empty follow-up annotations do not resurrect earlier config data or metadata", () => {
+    const schema = z.object({ outDir: z.string() });
+    const context = createConfigContext({ schema });
+    const parser = bindConfig(option("--out-dir", string()), {
+      context,
+      key: (config, meta) => `${meta?.configDir ?? "no-meta"}:${config.outDir}`,
+    });
 
-      const firstAnnotations = context.getAnnotations(phase2({ cfg: "a" }), {
-        load: () => ({
-          config: { outDir: "one" },
-          meta: {
-            configDir: "/first",
-            configPath: "/first/app.json",
-          } satisfies ConfigMeta,
-        }),
-      });
-      if (firstAnnotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      assert.deepEqual(
-        parse(parser, [], { annotations: firstAnnotations }),
-        { success: true, value: "/first:one" },
-      );
+    const firstAnnotations = context.getAnnotations(phase2({ cfg: "a" }), {
+      load: () => ({
+        config: { outDir: "one" },
+        meta: {
+          configDir: "/first",
+          configPath: "/first/app.json",
+        } satisfies ConfigMeta,
+      }),
+    });
+    if (firstAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    assert.deepEqual(parse(parser, [], { annotations: firstAnnotations }), {
+      success: true,
+      value: "/first:one",
+    });
 
-      const emptyAnnotations = context.getAnnotations(phase2({ cfg: "b" }), {
-        getConfigPath: () => undefined,
-      });
-      if (emptyAnnotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      assert.deepEqual(emptyAnnotations, {});
+    const emptyAnnotations = context.getAnnotations(phase2({ cfg: "b" }), {
+      getConfigPath: () => undefined,
+    });
+    if (emptyAnnotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    assert.deepEqual(emptyAnnotations, {});
 
-      const result = parse(parser, [], { annotations: emptyAnnotations });
-      assert.ok(!result.success);
-      if (result.success) return;
-      assert.equal(
-        formatMessage(result.error),
-        "Missing required configuration value.",
-      );
-    },
-  );
+    const result = parse(parser, [], { annotations: emptyAnnotations });
+    assert.ok(!result.success);
+    if (result.success) return;
+    assert.equal(
+      formatMessage(result.error),
+      "Missing required configuration value.",
+    );
+  });
 
   test("rejects array return value from load()", () => {
     const context = createNameContext();
@@ -2338,7 +2298,8 @@ describe("load() return value validation", () => {
         }),
       {
         name: "TypeError",
-        message: "Expected load() to return a plain object or Promise, " +
+        message:
+          "Expected load() to return a plain object or Promise, " +
           "but got a thenable. Use a real Promise instead.",
       },
     );
@@ -2380,7 +2341,8 @@ describe("load() return value validation", () => {
         }),
       {
         name: "TypeError",
-        message: "Expected load() to return a plain object or Promise, " +
+        message:
+          "Expected load() to return a plain object or Promise, " +
           "but got a thenable. Use a real Promise instead.",
       },
     );
@@ -2398,7 +2360,8 @@ describe("load() return value validation", () => {
         }),
       {
         name: "TypeError",
-        message: "Expected config in load() result to not be a Promise. " +
+        message:
+          "Expected config in load() result to not be a Promise. " +
           "Resolve the Promise before returning.",
       },
     );
@@ -2419,7 +2382,8 @@ describe("load() return value validation", () => {
         }),
       {
         name: "TypeError",
-        message: "Expected meta in load() result to not be a Promise. " +
+        message:
+          "Expected meta in load() result to not be a Promise. " +
           "Resolve the Promise before returning.",
       },
     );
@@ -2467,7 +2431,8 @@ describe("load() return value validation", () => {
         }),
       {
         name: "TypeError",
-        message: "Expected config in load() result to not be a Promise. " +
+        message:
+          "Expected config in load() result to not be a Promise. " +
           "Resolve the Promise before returning.",
       },
     );
@@ -2489,7 +2454,8 @@ describe("load() return value validation", () => {
         }),
       {
         name: "TypeError",
-        message: "Expected meta in load() result to not be a Promise. " +
+        message:
+          "Expected meta in load() result to not be a Promise. " +
           "Resolve the Promise before returning.",
       },
     );
@@ -2536,7 +2502,8 @@ describe("load() return value validation", () => {
         }) as Promise<unknown>,
       {
         name: "TypeError",
-        message: "Expected config in load() result to not be a Promise. " +
+        message:
+          "Expected config in load() result to not be a Promise. " +
           "Resolve the Promise before returning.",
       },
     );
@@ -2555,7 +2522,8 @@ describe("load() return value validation", () => {
         }) as Promise<unknown>,
       {
         name: "TypeError",
-        message: "Expected meta in load() result to not be a Promise. " +
+        message:
+          "Expected meta in load() result to not be a Promise. " +
           "Resolve the Promise before returning.",
       },
     );
@@ -2797,9 +2765,11 @@ describe("createConfigContext error paths", () => {
 
   test("key accessor function that throws propagates the error", () => {
     const schema = z.object({
-      nested: z.object({
-        value: z.string(),
-      }).optional(),
+      nested: z
+        .object({
+          value: z.string(),
+        })
+        .optional(),
     });
 
     const context = createConfigContext({ schema });
@@ -2815,10 +2785,7 @@ describe("createConfigContext error paths", () => {
       [context.id]: { data: { nested: undefined } },
     };
 
-    assert.throws(
-      () => parse(parser, [], { annotations }),
-      TypeError,
-    );
+    assert.throws(() => parse(parser, [], { annotations }), TypeError);
   });
 
   test("key callback exceptions are not swallowed", () => {
@@ -2861,10 +2828,10 @@ describe("createConfigContext error paths", () => {
     }
     context[Symbol.dispose]!();
 
-    assert.deepEqual(
-      parse(parser, [], { annotations }),
-      { success: true, value: "test-host" },
-    );
+    assert.deepEqual(parse(parser, [], { annotations }), {
+      success: true,
+      value: "test-host",
+    });
   });
 
   test("load function receives parsed value and returns config", async () => {
@@ -2977,11 +2944,9 @@ describe("createConfigContext error paths", () => {
     const parsed = await parseResult;
     assert.ok(parsed.success);
 
-    const completeResult = parser.complete(
-      { hasCliValue: false } as unknown as Parameters<
-        typeof parser.complete
-      >[0],
-    );
+    const completeResult = parser.complete({
+      hasCliValue: false,
+    } as unknown as Parameters<typeof parser.complete>[0]);
     assert.ok(completeResult instanceof Promise);
     const completed = await completeResult;
     assert.ok(completed.success);
@@ -3065,70 +3030,65 @@ describe("createConfigContext error paths", () => {
     assert.equal(nodes[0]?.state, "cli-state");
   });
 
-  test(
-    "bindConfig getSuggestRuntimeNodes preserves annotations on no-cli fallback",
-    () => {
-      const context = createConfigContext({
-        schema: z.object({
-          host: z.string().optional(),
-        }),
-      });
-      let seenHost: string | undefined;
-      const inner: Parser<"sync", string, undefined> = {
-        mode: "sync" as const,
-        $valueType: [] as readonly string[],
-        $stateType: [] as readonly undefined[],
-        priority: 0,
-        usage: [],
-        leadingNames: new Set<string>(),
-        acceptingAnyToken: false,
-        initialState: undefined,
-        parse(parseContext) {
-          return {
-            success: true as const,
-            next: { ...parseContext, state: undefined },
-            consumed: [],
-          };
-        },
-        complete: () => ({ success: true as const, value: "ok" }),
-        suggest: () => [],
-        getSuggestRuntimeNodes(state, path) {
-          seenHost = (
-            getAnnotations(state) as
-              | {
+  test("bindConfig getSuggestRuntimeNodes preserves annotations on no-cli fallback", () => {
+    const context = createConfigContext({
+      schema: z.object({
+        host: z.string().optional(),
+      }),
+    });
+    let seenHost: string | undefined;
+    const inner: Parser<"sync", string, undefined> = {
+      mode: "sync" as const,
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly undefined[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: undefined,
+      parse(parseContext) {
+        return {
+          success: true as const,
+          next: { ...parseContext, state: undefined },
+          consumed: [],
+        };
+      },
+      complete: () => ({ success: true as const, value: "ok" }),
+      suggest: () => [],
+      getSuggestRuntimeNodes(state, path) {
+        seenHost = (
+          getAnnotations(state) as
+            | {
                 readonly [key: symbol]: { readonly data?: { host?: string } };
               }
-              | undefined
-          )?.[context.id]?.data?.host;
-          return [{ path, parser: inner, state }];
-        },
-        getDocFragments: () => ({ fragments: [] }),
-      };
-      const parser = bindConfig(inner, {
-        context,
-        key: "host",
-      });
+            | undefined
+        )?.[context.id]?.data?.host;
+        return [{ path, parser: inner, state }];
+      },
+      getDocFragments: () => ({ fragments: [] }),
+    };
+    const parser = bindConfig(inner, {
+      context,
+      key: "host",
+    });
 
-      const parsed = parser.parse({
-        buffer: [],
-        state: injectAnnotations(parser.initialState, {
-          [context.id]: { data: { host: "prod" } },
-        }),
-        optionsTerminated: false,
-        usage: parser.usage,
-      });
-      assert.ok(parsed.success);
-      if (!parsed.success) return;
+    const parsed = parser.parse({
+      buffer: [],
+      state: injectAnnotations(parser.initialState, {
+        [context.id]: { data: { host: "prod" } },
+      }),
+      optionsTerminated: false,
+      usage: parser.usage,
+    });
+    assert.ok(parsed.success);
+    if (!parsed.success) return;
 
-      const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, [
-        "host",
-      ]);
-      assert.ok(nodes != null);
-      if (nodes == null) return;
-      assert.equal(nodes.length, 1);
-      assert.equal(seenHost, "prod");
-    },
-  );
+    const nodes = parser.getSuggestRuntimeNodes?.(parsed.next.state, ["host"]);
+    assert.ok(nodes != null);
+    if (nodes == null) return;
+    assert.equal(nodes.length, 1);
+    assert.equal(seenHost, "prod");
+  });
 
   test("bindConfig canSkip preserves annotations on no-cli fallback", () => {
     const context = createConfigContext({
@@ -3164,9 +3124,11 @@ describe("createConfigContext error paths", () => {
       complete: () => ({ success: true as const, value: "ok" }),
       suggest: () => [],
       canSkip(state) {
-        return state instanceof InnerState &&
+        return (
+          state instanceof InnerState &&
           state.marker === "inner" &&
-          getAnnotations(state)?.[annotationKey] === true;
+          getAnnotations(state)?.[annotationKey] === true
+        );
       },
       getDocFragments: () => ({ fragments: [] }),
     };
@@ -3220,8 +3182,8 @@ describe("createConfigContext error paths", () => {
     assert.equal(nodes.at(-1)?.state, parsed.next.state);
     assert.ok(nodes.some((node) => node.parser === inner));
     assert.ok(
-      nodes.some((node) =>
-        JSON.stringify(node.path) === JSON.stringify(["mode", 0])
+      nodes.some(
+        (node) => JSON.stringify(node.path) === JSON.stringify(["mode", 0]),
       ),
     );
   });
@@ -3531,7 +3493,7 @@ describe("bindConfig() with dependency sources", () => {
   test("propagates config value as dependency to derived parser (suggest)", () => {
     const { parser, annotations } = createParser({ mode: "prod" });
     const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("silent"));
     assert.ok(texts.includes("strict"));
     assert.ok(!texts.includes("debug"));
@@ -3660,57 +3622,51 @@ describe("bindConfig() with dependency sources", () => {
     }
   });
 
-  test(
-    "optional(bindConfig(flag)) at top level uses config via annotations",
-    () => {
-      // Boolean flag options (no value parser) have an object-shaped
-      // initialState `{ success: true, value: false }`.  Regression
-      // test for the annotation injection gap identified in review
-      // of the #233 fix: `deriveOptionalInnerParseState` must inject
-      // annotations into object initial states as well as primitive
-      // ones, otherwise `optional(bindConfig(option("--verbose")))`
-      // cannot see its config fallback at top level.
-      const flagSchema = z.object({ verbose: z.boolean().optional() });
-      const context = createConfigContext({ schema: flagSchema });
-      const annotations: Annotations = {
-        [context.id]: { data: { verbose: true } },
-      };
-      const parser = optional(
-        bindConfig(option("-v", "--verbose"), {
-          context,
-          key: "verbose",
-        }),
-      );
-      const result = parse(parser, [], { annotations });
-      assert.ok(result.success);
-      if (result.success) {
-        assert.equal(result.value, true);
-      }
-    },
-  );
+  test("optional(bindConfig(flag)) at top level uses config via annotations", () => {
+    // Boolean flag options (no value parser) have an object-shaped
+    // initialState `{ success: true, value: false }`.  Regression
+    // test for the annotation injection gap identified in review
+    // of the #233 fix: `deriveOptionalInnerParseState` must inject
+    // annotations into object initial states as well as primitive
+    // ones, otherwise `optional(bindConfig(option("--verbose")))`
+    // cannot see its config fallback at top level.
+    const flagSchema = z.object({ verbose: z.boolean().optional() });
+    const context = createConfigContext({ schema: flagSchema });
+    const annotations: Annotations = {
+      [context.id]: { data: { verbose: true } },
+    };
+    const parser = optional(
+      bindConfig(option("-v", "--verbose"), {
+        context,
+        key: "verbose",
+      }),
+    );
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, true);
+    }
+  });
 
-  test(
-    "withDefault(bindConfig(flag), fb) at top level uses config via annotations",
-    () => {
-      const flagSchema = z.object({ verbose: z.boolean().optional() });
-      const context = createConfigContext({ schema: flagSchema });
-      const annotations: Annotations = {
-        [context.id]: { data: { verbose: true } },
-      };
-      const parser = withDefault(
-        bindConfig(option("-v", "--verbose"), {
-          context,
-          key: "verbose",
-        }),
-        false as const,
-      );
-      const result = parse(parser, [], { annotations });
-      assert.ok(result.success);
-      if (result.success) {
-        assert.equal(result.value, true);
-      }
-    },
-  );
+  test("withDefault(bindConfig(flag), fb) at top level uses config via annotations", () => {
+    const flagSchema = z.object({ verbose: z.boolean().optional() });
+    const context = createConfigContext({ schema: flagSchema });
+    const annotations: Annotations = {
+      [context.id]: { data: { verbose: true } },
+    };
+    const parser = withDefault(
+      bindConfig(option("-v", "--verbose"), {
+        context,
+        key: "verbose",
+      }),
+      false as const,
+    );
+    const result = parse(parser, [], { annotations });
+    assert.ok(result.success);
+    if (result.success) {
+      assert.equal(result.value, true);
+    }
+  });
 
   test("optional(bindConfig(..., default)) uses bindConfig default when config absent", () => {
     const context = createConfigContext({ schema });
@@ -3777,9 +3733,8 @@ describe("bindConfig() with dependency sources", () => {
       [context.id]: { data: { mode: "prod" as const } },
     };
     const parser = bindConfig(
-      map(
-        option("--mode", mode),
-        (value) => value === "dev" ? "development" : "production",
+      map(option("--mode", mode), (value) =>
+        value === "dev" ? "development" : "production",
       ),
       {
         context,
@@ -3851,7 +3806,7 @@ describe("bindConfig() with dependency sources across merge() boundaries", () =>
   test("propagates config value as dependency across merged children (suggest)", () => {
     const { parser, annotations } = createMergedParser({ mode: "prod" });
     const suggestions = suggestSync(parser, ["--level", "s"], { annotations });
-    const texts = suggestions.map((s) => "text" in s ? s.text : "");
+    const texts = suggestions.map((s) => ("text" in s ? s.text : ""));
     assert.ok(texts.includes("silent"));
     assert.ok(texts.includes("strict"));
     assert.ok(!texts.includes("debug"));
@@ -3916,9 +3871,7 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
           key: "mode",
         }),
       ]),
-      tuple([
-        option("--level", level),
-      ]),
+      tuple([option("--level", level)]),
     );
     const annotations = {
       [context.id]: { data: { mode: "prod" as const } },
@@ -3936,11 +3889,7 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
 
   test("tuple() suggest uses config-backed dependency source", () => {
     const { parser, annotations } = createTupleParser();
-    const texts = suggestSync(
-      parser,
-      ["--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--level", "s"], { annotations })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -3964,11 +3913,9 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
 
   test("tuple() suggest does not override invalid CLI source with config", () => {
     const { parser, annotations } = createTupleParser();
-    const texts = suggestSync(
-      parser,
-      ["--mode", "invalid", "--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--mode", "invalid", "--level", "s"], {
+      annotations,
+    })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -3992,11 +3939,7 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
 
   test("concat() suggest uses config-backed dependency source", () => {
     const { parser, annotations } = createConcatParser();
-    const texts = suggestSync(
-      parser,
-      ["--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--level", "s"], { annotations })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -4020,11 +3963,9 @@ describe("bindConfig() with dependency sources across tuple()/concat() boundarie
 
   test("concat() suggest does not override invalid CLI source with config", () => {
     const { parser, annotations } = createConcatParser();
-    const texts = suggestSync(
-      parser,
-      ["--mode", "invalid", "--level", "s"],
-      { annotations },
-    )
+    const texts = suggestSync(parser, ["--mode", "invalid", "--level", "s"], {
+      annotations,
+    })
       .filter((suggestion) => suggestion.kind === "literal")
       .map((suggestion) => suggestion.text);
 
@@ -4194,9 +4135,9 @@ describe("expandHome option", () => {
   }
 
   function uniqueName(): string {
-    return `optique-expand-home-${process.pid}-${Date.now()}-${
-      Math.random().toString(36).slice(2)
-    }`;
+    return `optique-expand-home-${process.pid}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}`;
   }
 
   test("expands ~/ to the home directory when enabled", async () => {
@@ -4217,37 +4158,45 @@ describe("expandHome option", () => {
     });
   });
 
-  test("expands ~\\ to the home directory on Windows", {
-    skip: process.platform !== "win32",
-  }, async () => {
-    // Bun ignores the skip option, so we need an early return as well:
-    if (process.platform !== "win32") return;
-    await withTempConfig(async (_file, homeRelative) => {
-      if (homeRelative === undefined) return;
+  test(
+    "expands ~\\ to the home directory on Windows",
+    {
+      skip: process.platform !== "win32",
+    },
+    async () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform !== "win32") return;
+      await withTempConfig(async (_file, homeRelative) => {
+        if (homeRelative === undefined) return;
+        const context = createConfigContext({ schema });
+        const annotations = await context.getAnnotations(phase2({}), {
+          getConfigPath: () => `~\\${homeRelative.replaceAll("/", "\\")}`,
+          expandHome: true,
+        });
+        const annotation = annotations[context.id] as
+          | { readonly data: unknown }
+          | undefined;
+        assert.deepEqual(annotation?.data, { host: "from-file" });
+      });
+    },
+  );
+
+  test(
+    "does not expand ~\\ on non-Windows platforms",
+    {
+      skip: process.platform === "win32",
+    },
+    async () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform === "win32") return;
       const context = createConfigContext({ schema });
       const annotations = await context.getAnnotations(phase2({}), {
-        getConfigPath: () => `~\\${homeRelative.replaceAll("/", "\\")}`,
+        getConfigPath: () => `~\\${uniqueName()}.json`,
         expandHome: true,
       });
-      const annotation = annotations[context.id] as
-        | { readonly data: unknown }
-        | undefined;
-      assert.deepEqual(annotation?.data, { host: "from-file" });
-    });
-  });
-
-  test("does not expand ~\\ on non-Windows platforms", {
-    skip: process.platform === "win32",
-  }, async () => {
-    // Bun ignores the skip option, so we need an early return as well:
-    if (process.platform === "win32") return;
-    const context = createConfigContext({ schema });
-    const annotations = await context.getAnnotations(phase2({}), {
-      getConfigPath: () => `~\\${uniqueName()}.json`,
-      expandHome: true,
-    });
-    assert.deepEqual(annotations, {});
-  });
+      assert.deepEqual(annotations, {});
+    },
+  );
 
   test("does not expand ~ by default", async () => {
     await withTempConfig(async (_file, homeRelative) => {
@@ -4281,7 +4230,9 @@ describe("expandHome option", () => {
         }),
       (error: unknown) => {
         assert.ok(
-          typeof error === "object" && error !== null && "code" in error &&
+          typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
             typeof error.code === "string",
           `Expected a file system error, but got: ${String(error)}`,
         );
@@ -4294,13 +4245,11 @@ describe("expandHome option", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const context = createConfigContext({ schema });
-    for (
-      const path of [
-        `~${uniqueName()}/config.json`,
-        join(tmpdir(), uniqueName(), "~", "config.json"),
-        `./~/${uniqueName()}.json`,
-      ]
-    ) {
+    for (const path of [
+      `~${uniqueName()}/config.json`,
+      join(tmpdir(), uniqueName(), "~", "config.json"),
+      `./~/${uniqueName()}.json`,
+    ]) {
       assert.deepEqual(
         await context.getAnnotations(phase2({}), {
           getConfigPath: () => path,
@@ -4325,13 +4274,11 @@ describe("expandHome option", () => {
 
   test("rejects a non-boolean expandHome", () => {
     const context = createConfigContext({ schema });
-    for (
-      const [value, typeName] of [
-        ["yes", "string"],
-        [1, "number"],
-        [null, "null"],
-      ] as const
-    ) {
+    for (const [value, typeName] of [
+      ["yes", "string"],
+      [1, "number"],
+      [null, "null"],
+    ] as const) {
       assert.throws(
         () =>
           context.getAnnotations(phase2({}), {

@@ -206,47 +206,47 @@ export interface ValueParser<M extends Mode = "sync", T = unknown> {
  */
 export type ValueParserResult<T> =
   | {
-    /** Indicates that the parsing operation was successful. */
-    readonly success: true;
+      /** Indicates that the parsing operation was successful. */
+      readonly success: true;
 
-    /** The successfully parsed value of type {@link T}. */
-    readonly value: T;
+      /** The successfully parsed value of type {@link T}. */
+      readonly value: T;
 
-    /**
-     * When `true`, indicates that the value is a placeholder stand-in for
-     * a deferred interactive prompt, not a real user-provided value.
-     * Combinators propagate this flag so that the two-phase parsing
-     * facade can strip deferred values before passing them to phase-two
-     * contexts.
-     *
-     * @since 1.0.0
-     */
-    readonly deferred?: true;
+      /**
+       * When `true`, indicates that the value is a placeholder stand-in for
+       * a deferred interactive prompt, not a real user-provided value.
+       * Combinators propagate this flag so that the two-phase parsing
+       * facade can strip deferred values before passing them to phase-two
+       * contexts.
+       *
+       * @since 1.0.0
+       */
+      readonly deferred?: true;
 
-    /**
-     * A recursive map describing which property keys in {@link value} hold
-     * deferred placeholder values.  Set by `object()`, `tuple()`, `merge()`,
-     * and other combinators.  Intentionally not propagated by `map()` because
-     * opaque transforms invalidate the inner key set.  Used by the two-phase
-     * facade to selectively replace only deferred fields with `undefined`
-     * while preserving non-deferred fields for phase-two context annotation
-     * collection.
-     *
-     * Each entry maps a property key to either `null` (the entire field is
-     * deferred) or another `DeferredMap` (the field is an object whose own
-     * sub-fields are partially deferred).
-     *
-     * @since 1.0.0
-     */
-    readonly deferredKeys?: DeferredMap;
-  }
+      /**
+       * A recursive map describing which property keys in {@link value} hold
+       * deferred placeholder values.  Set by `object()`, `tuple()`, `merge()`,
+       * and other combinators.  Intentionally not propagated by `map()` because
+       * opaque transforms invalidate the inner key set.  Used by the two-phase
+       * facade to selectively replace only deferred fields with `undefined`
+       * while preserving non-deferred fields for phase-two context annotation
+       * collection.
+       *
+       * Each entry maps a property key to either `null` (the entire field is
+       * deferred) or another `DeferredMap` (the field is an object whose own
+       * sub-fields are partially deferred).
+       *
+       * @since 1.0.0
+       */
+      readonly deferredKeys?: DeferredMap;
+    }
   | {
-    /** Indicates that the parsing operation failed. */
-    readonly success: false;
+      /** Indicates that the parsing operation failed. */
+      readonly success: false;
 
-    /** The error message describing why the parsing failed. */
-    readonly error: Message;
-  };
+      /** The error message describing why the parsing failed. */
+      readonly error: Message;
+    };
 
 /**
  * A recursive map that tracks which fields in a parsed object hold deferred
@@ -368,9 +368,9 @@ export interface ChoiceOptionsString extends ChoiceOptionsBase {
     | "never"
     | Readonly<Pick<FindSimilarOptions, "maxDistance" | "maxSuggestions">>
     | ((
-      input: string,
-      choices: readonly string[],
-    ) => readonly string[] | undefined);
+        input: string,
+        choices: readonly string[],
+      ) => readonly string[] | undefined);
 
   /**
    * Custom error messages for choice parsing failures.
@@ -506,18 +506,22 @@ export function isValueParser<M extends Mode, T>(
   object: unknown,
 ): object is ValueParser<M, T> {
   if (
-    typeof object !== "object" || object == null ||
+    typeof object !== "object" ||
+    object == null ||
     !("mode" in object) ||
     ((object as ValueParser<M, T>).mode !== "sync" &&
       (object as ValueParser<M, T>).mode !== "async")
   ) {
     return false;
   }
-  const hasMetavar = "metavar" in object &&
+  const hasMetavar =
+    "metavar" in object &&
     typeof (object as ValueParser<M, T>).metavar === "string";
-  const hasParse = "parse" in object &&
+  const hasParse =
+    "parse" in object &&
     typeof (object as ValueParser<M, T>).parse === "function";
-  const hasFormat = "format" in object &&
+  const hasFormat =
+    "format" in object &&
     typeof (object as ValueParser<M, T>).format === "function";
   const hasPlaceholder = "placeholder" in object;
   if (hasMetavar && hasParse && hasFormat && !hasPlaceholder) {
@@ -591,9 +595,7 @@ export function choice<const T extends string | number>(
     );
   }
   if (choices.some((c) => c === "")) {
-    throw new TypeError(
-      "Empty strings are not allowed as choices.",
-    );
+    throw new TypeError("Empty strings are not allowed as choices.");
   }
   for (const c of choices) {
     if (typeof c !== "string" && typeof c !== "number") {
@@ -613,9 +615,7 @@ export function choice<const T extends string | number>(
     }
   }
   if (isNumber && (choices as readonly number[]).some((v) => Number.isNaN(v))) {
-    throw new TypeError(
-      "NaN is not allowed in number choices.",
-    );
+    throw new TypeError("NaN is not allowed in number choices.");
   }
   const metavar = options.metavar ?? "TYPE";
   ensureNonEmptyString(metavar);
@@ -646,86 +646,40 @@ export function choice<const T extends string | number>(
     const numberInvalidChoice = (options as ChoiceOptionsNumber).errors
       ?.invalidChoice;
     const numberStrings = numberChoices.map((v) =>
-      Object.is(v, -0) ? "-0" : String(v)
+      Object.is(v, -0) ? "-0" : String(v),
     );
     const frozenNumberChoices = Object.freeze(numberChoices) as readonly T[];
-    return captureDocValue({
-      mode: "sync",
-      metavar,
-      placeholder: choices[0],
-      choices: frozenNumberChoices,
-      parse(input: string): ValueParserResult<T> {
-        // Exact match against canonical string representations
-        // (String(value) for most values, "-0" for negative zero).
-        const index = numberStrings.indexOf(input);
-        if (index >= 0) {
-          return { success: true, value: numberChoices[index] as T };
-        }
-        // Fall back to strict decimal parsing for alternate spellings
-        // (e.g., "1000000000000000000000" for 1e21, or "8.0" for 8).
-        // Rejects hex, binary, octal, scientific notation, empty, and
-        // whitespace inputs.
-        if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(input)) {
-          const parsed = Number(input);
-          if (Number.isFinite(parsed)) {
-            // Verify exact decimal equivalence: the input must normalize
-            // to the same string as the canonical form, not merely round
-            // to the same IEEE-754 double.
-            const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
-            const normalizedInput = normalizeDecimal(input);
-            const normalizedCanonical = normalizeDecimal(
-              expandScientific(canonical),
-            );
-            if (normalizedInput === normalizedCanonical) {
-              const fallbackIndex = numberChoices.findIndex((v) =>
-                Object.is(v, parsed)
-              );
-              if (fallbackIndex >= 0) {
-                return {
-                  success: true,
-                  value: numberChoices[fallbackIndex] as T,
-                };
-              }
-            }
-            // When parsed is -0 but only 0 is in the list (or vice
-            // versa), the normalization above won't match because
-            // "-0" normalizes differently from "0". Treat -0 and 0
-            // as interchangeable when the list does not distinguish
-            // them (i.e., does not contain both 0 and -0).
-            if (
-              parsed === 0 &&
-              normalizedInput.replace(/^-/, "") === "0" &&
-              !numberChoices.some((v) => Object.is(v, -0))
-            ) {
-              // Use indexOf (===) which treats -0 and 0 as equal
-              const zeroIndex = numberChoices.indexOf(0);
-              if (zeroIndex >= 0) {
-                return {
-                  success: true,
-                  value: numberChoices[zeroIndex] as T,
-                };
-              }
-            }
+    return captureDocValue(
+      {
+        mode: "sync",
+        metavar,
+        placeholder: choices[0],
+        choices: frozenNumberChoices,
+        parse(input: string): ValueParserResult<T> {
+          // Exact match against canonical string representations
+          // (String(value) for most values, "-0" for negative zero).
+          const index = numberStrings.indexOf(input);
+          if (index >= 0) {
+            return { success: true, value: numberChoices[index] as T };
           }
-        }
-        // Fall back to scientific notation parsing for alternate exponent
-        // spellings (e.g., "1e21" for canonical "1e+21", "1.0e-7" for
-        // "1e-7"). Only accepted when the canonical form also uses
-        // scientific notation, so "2e0" for choice([2]) stays rejected.
-        if (/^[+-]?(\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(input)) {
-          const parsed = Number(input);
-          if (Number.isFinite(parsed)) {
-            const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
-            if (/[eE]/.test(canonical)) {
-              const normalizedInput = normalizeDecimal(
-                expandScientific(input),
-              );
+          // Fall back to strict decimal parsing for alternate spellings
+          // (e.g., "1000000000000000000000" for 1e21, or "8.0" for 8).
+          // Rejects hex, binary, octal, scientific notation, empty, and
+          // whitespace inputs.
+          if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(input)) {
+            const parsed = Number(input);
+            if (Number.isFinite(parsed)) {
+              // Verify exact decimal equivalence: the input must normalize
+              // to the same string as the canonical form, not merely round
+              // to the same IEEE-754 double.
+              const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
+              const normalizedInput = normalizeDecimal(input);
               const normalizedCanonical = normalizeDecimal(
                 expandScientific(canonical),
               );
               if (normalizedInput === normalizedCanonical) {
                 const fallbackIndex = numberChoices.findIndex((v) =>
-                  Object.is(v, parsed)
+                  Object.is(v, parsed),
                 );
                 if (fallbackIndex >= 0) {
                   return {
@@ -734,35 +688,85 @@ export function choice<const T extends string | number>(
                   };
                 }
               }
+              // When parsed is -0 but only 0 is in the list (or vice
+              // versa), the normalization above won't match because
+              // "-0" normalizes differently from "0". Treat -0 and 0
+              // as interchangeable when the list does not distinguish
+              // them (i.e., does not contain both 0 and -0).
+              if (
+                parsed === 0 &&
+                normalizedInput.replace(/^-/, "") === "0" &&
+                !numberChoices.some((v) => Object.is(v, -0))
+              ) {
+                // Use indexOf (===) which treats -0 and 0 as equal
+                const zeroIndex = numberChoices.indexOf(0);
+                if (zeroIndex >= 0) {
+                  return {
+                    success: true,
+                    value: numberChoices[zeroIndex] as T,
+                  };
+                }
+              }
             }
           }
-        }
-        return {
-          success: false,
-          error: formatNumberChoiceError(
-            input,
-            numberChoices,
-            numberChoices,
-            numberInvalidChoice,
-          ),
-        };
+          // Fall back to scientific notation parsing for alternate exponent
+          // spellings (e.g., "1e21" for canonical "1e+21", "1.0e-7" for
+          // "1e-7"). Only accepted when the canonical form also uses
+          // scientific notation, so "2e0" for choice([2]) stays rejected.
+          if (/^[+-]?(\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(input)) {
+            const parsed = Number(input);
+            if (Number.isFinite(parsed)) {
+              const canonical = Object.is(parsed, -0) ? "-0" : String(parsed);
+              if (/[eE]/.test(canonical)) {
+                const normalizedInput = normalizeDecimal(
+                  expandScientific(input),
+                );
+                const normalizedCanonical = normalizeDecimal(
+                  expandScientific(canonical),
+                );
+                if (normalizedInput === normalizedCanonical) {
+                  const fallbackIndex = numberChoices.findIndex((v) =>
+                    Object.is(v, parsed),
+                  );
+                  if (fallbackIndex >= 0) {
+                    return {
+                      success: true,
+                      value: numberChoices[fallbackIndex] as T,
+                    };
+                  }
+                }
+              }
+            }
+          }
+          return {
+            success: false,
+            error: formatNumberChoiceError(
+              input,
+              numberChoices,
+              numberChoices,
+              numberInvalidChoice,
+            ),
+          };
+        },
+        format(value: T): string {
+          return Object.is(value, -0) ? "-0" : String(value);
+        },
+        suggest(prefix: string) {
+          return numberStrings
+            .filter(
+              (valueStr, i) =>
+                !Number.isNaN(numberChoices[i]) && valueStr.startsWith(prefix),
+            )
+            .map((valueStr) => ({ kind: "literal" as const, text: valueStr }));
+        },
       },
-      format(value: T): string {
-        return Object.is(value, -0) ? "-0" : String(value);
+      {
+        kind: "number",
+        choices: numberChoices,
+        preserveNegativeZero: true,
+        canFormatDefault: true,
       },
-      suggest(prefix: string) {
-        return numberStrings
-          .filter((valueStr, i) =>
-            !Number.isNaN(numberChoices[i]) && valueStr.startsWith(prefix)
-          )
-          .map((valueStr) => ({ kind: "literal" as const, text: valueStr }));
-      },
-    }, {
-      kind: "number",
-      choices: numberChoices,
-      preserveNegativeZero: true,
-      canFormatDefault: true,
-    });
+    );
   }
 
   // String choice implementation—deduplicate identical values
@@ -779,7 +783,8 @@ export function choice<const T extends string | number>(
     throw new TypeError("Cannot use key with caseInsensitive.");
   }
   const caseInsensitive = stringOptions.caseInsensitive ?? false;
-  const matchingKey = customKey ??
+  const matchingKey =
+    customKey ??
     (caseInsensitive
       ? (text: string) => text.toLowerCase()
       : (text: string) => text);
@@ -812,18 +817,18 @@ export function choice<const T extends string | number>(
   const stringInvalidChoice = stringOptions.errors?.invalidChoice;
   const stringSuggest = stringOptions.suggest;
   if (stringSuggest !== undefined) {
-    const isValidString = stringSuggest === "nearest" ||
-      stringSuggest === "never";
+    const isValidString =
+      stringSuggest === "nearest" || stringSuggest === "never";
     const isArray = Array.isArray(stringSuggest);
-    const isValidObject = typeof stringSuggest === "object" &&
-      stringSuggest !== null && !isArray;
+    const isValidObject =
+      typeof stringSuggest === "object" && stringSuggest !== null && !isArray;
     const isValidFunction = typeof stringSuggest === "function";
     if (!isValidString && !isValidObject && !isValidFunction) {
       const actualType = isArray
         ? "array"
         : stringSuggest === null
-        ? "null"
-        : typeof stringSuggest;
+          ? "null"
+          : typeof stringSuggest;
       throw new TypeError(
         `Expected suggest to be "nearest", "never", an object, or a ` +
           `function, but got ${actualType}: ${String(stringSuggest)}.`,
@@ -860,60 +865,62 @@ export function choice<const T extends string | number>(
   const snapshotSuggest =
     typeof stringSuggest === "object" && stringSuggest !== null
       ? {
-        maxDistance: stringSuggest.maxDistance,
-        maxSuggestions: stringSuggest.maxSuggestions,
-      }
+          maxDistance: stringSuggest.maxDistance,
+          maxSuggestions: stringSuggest.maxSuggestions,
+        }
       : stringSuggest;
-  return captureDocValue({
-    mode: "sync",
-    metavar,
-    placeholder: choices[0],
-    choices: stringChoices as readonly T[],
-    parse(input: string): ValueParserResult<T> {
-      let inputKey: string | undefined;
-      try {
-        inputKey = getMatchingKey(input);
-      } catch {
-        inputKey = undefined;
-      }
-      const index = inputKey === undefined
-        ? -1
-        : matchingKeys.indexOf(inputKey);
-      if (index < 0) {
-        return {
-          success: false,
-          error: formatStringChoiceError(
-            input,
-            stringChoices,
-            stringInvalidChoice,
-            snapshotSuggest,
-          ),
-        };
-      }
-      return { success: true, value: stringChoices[index] as T };
-    },
-    format(value: T): string {
-      return String(value);
-    },
-    suggest(prefix: string) {
-      let matchingPrefix: string;
-      try {
-        matchingPrefix = getMatchingKey(prefix);
-      } catch {
-        return [];
-      }
+  return captureDocValue(
+    {
+      mode: "sync",
+      metavar,
+      placeholder: choices[0],
+      choices: stringChoices as readonly T[],
+      parse(input: string): ValueParserResult<T> {
+        let inputKey: string | undefined;
+        try {
+          inputKey = getMatchingKey(input);
+        } catch {
+          inputKey = undefined;
+        }
+        const index =
+          inputKey === undefined ? -1 : matchingKeys.indexOf(inputKey);
+        if (index < 0) {
+          return {
+            success: false,
+            error: formatStringChoiceError(
+              input,
+              stringChoices,
+              stringInvalidChoice,
+              snapshotSuggest,
+            ),
+          };
+        }
+        return { success: true, value: stringChoices[index] as T };
+      },
+      format(value: T): string {
+        return String(value);
+      },
+      suggest(prefix: string) {
+        let matchingPrefix: string;
+        try {
+          matchingPrefix = getMatchingKey(prefix);
+        } catch {
+          return [];
+        }
 
-      return stringChoices
-        .filter((_value, index) =>
-          matchingKeys[index].startsWith(matchingPrefix)
-        )
-        .map((value) => ({ kind: "literal" as const, text: value }));
+        return stringChoices
+          .filter((_value, index) =>
+            matchingKeys[index].startsWith(matchingPrefix),
+          )
+          .map((value) => ({ kind: "literal" as const, text: value }));
+      },
     },
-  }, {
-    kind: "string",
-    choices: stringChoices,
-    canFormatDefault: customKey === undefined && !caseInsensitive,
-  });
+    {
+      kind: "string",
+      choices: stringChoices,
+      canFormatDefault: customKey === undefined && !caseInsensitive,
+    },
+  );
 }
 
 /**
@@ -1004,9 +1011,11 @@ export function biject<const T extends object>(
 function applyInputNormalizer(
   normalize: (input: string) => string,
   input: string,
-): { readonly success: true; readonly value: string } | {
-  readonly success: false;
-} {
+):
+  | { readonly success: true; readonly value: string }
+  | {
+      readonly success: false;
+    } {
   try {
     const value: unknown = normalize(input);
     if (typeof value === "string") return { success: true, value };
@@ -1073,25 +1082,31 @@ export function normalizeInput<M extends Mode, T>(
     format(value: T): string {
       return parser.format(value);
     },
-    ...(normalizeValue == null ? {} : {
-      normalize(value: T): T {
-        return normalizeValue(value);
-      },
-    }),
-    ...(validate == null ? {} : {
-      validate(value: T): ValueParserResult<T> {
-        return validate(value);
-      },
-    }),
-    ...(suggest == null ? {} : {
-      suggest(prefix: string): ModeIterable<M, Suggestion> {
-        const normalized = applyInputNormalizer(normalize, prefix);
-        return wrapIterableForMode(
-          parser.mode,
-          normalized.success ? suggest(normalized.value) : [],
-        );
-      },
-    }),
+    ...(normalizeValue == null
+      ? {}
+      : {
+          normalize(value: T): T {
+            return normalizeValue(value);
+          },
+        }),
+    ...(validate == null
+      ? {}
+      : {
+          validate(value: T): ValueParserResult<T> {
+            return validate(value);
+          },
+        }),
+    ...(suggest == null
+      ? {}
+      : {
+          suggest(prefix: string): ModeIterable<M, Suggestion> {
+            const normalized = applyInputNormalizer(normalize, prefix);
+            return wrapIterableForMode(
+              parser.mode,
+              normalized.success ? suggest(normalized.value) : [],
+            );
+          },
+        }),
   };
   if (isDerivedValueParser(parser)) {
     preserveNormalizedDerivedMetadata(wrapped, parser, normalize);
@@ -1116,10 +1131,7 @@ function preserveNormalizedDerivedMetadata<M extends Mode, T>(
         return wrapForMode(
           parser.mode,
           normalized.success
-            ? parser[parseWithDependency](
-              normalized.value,
-              dependencyValue,
-            )
+            ? parser[parseWithDependency](normalized.value, dependencyValue)
             : inputNormalizationFailure<T>(),
         );
       },
@@ -1235,8 +1247,7 @@ export interface WithSuggestionsSyncOptions extends WithSuggestionsOptionsBase {
  *
  * @since 1.4.0
  */
-export interface WithSuggestionsAsyncOptions
-  extends WithSuggestionsOptionsBase {
+export interface WithSuggestionsAsyncOptions extends WithSuggestionsOptionsBase {
   /**
    * The provider mode.  Asynchronous providers make the resulting value
    * parser asynchronous.
@@ -1397,16 +1408,20 @@ export function withSuggestions<M extends Mode, T>(
     format(value: T): string {
       return inner.format(value);
     },
-    ...(normalizeValue == null ? {} : {
-      normalize(value: T): T {
-        return normalizeValue(value);
-      },
-    }),
-    ...(validate == null ? {} : {
-      validate(value: T): ValueParserResult<T> {
-        return validate(value);
-      },
-    }),
+    ...(normalizeValue == null
+      ? {}
+      : {
+          normalize(value: T): T {
+            return normalizeValue(value);
+          },
+        }),
+    ...(validate == null
+      ? {}
+      : {
+          validate(value: T): ValueParserResult<T> {
+            return validate(value);
+          },
+        }),
     suggest(prefix: string): ModeIterable<Mode, Suggestion> {
       return suggestFrom(
         prefix,
@@ -1448,8 +1463,8 @@ function preserveSuggestedDerivedMetadata<T>(
       ): ModeValue<Mode, ValueParserResult<T>> {
         return lift
           ? liftToAsync(() =>
-            parser[parseWithDependency](input, dependencyValue)
-          )
+              parser[parseWithDependency](input, dependencyValue),
+            )
           : parser[parseWithDependency](input, dependencyValue);
       },
       enumerable: true,
@@ -1476,7 +1491,8 @@ function preserveSuggestedDerivedMetadata<T>(
   // When replacing, the hook is omitted: the provider does not depend on the
   // dependency values, so completion falls back to the public suggest().
   if (
-    includeExisting && suggestWithDependency in parser &&
+    includeExisting &&
+    suggestWithDependency in parser &&
     parser[suggestWithDependency] != null
   ) {
     const existing = parser[suggestWithDependency].bind(parser);
@@ -1506,8 +1522,9 @@ function liftToAsync<T>(compute: () => T | Promise<T>): ModeValue<Mode, T> {
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return isObjectLike(value) && "then" in value &&
-    typeof value.then === "function";
+  return (
+    isObjectLike(value) && "then" in value && typeof value.then === "function"
+  );
 }
 
 /**
@@ -1527,8 +1544,9 @@ function checkSyncProviderResult(source: unknown): unknown {
 }
 
 function isObjectLike(value: unknown): value is object {
-  return value != null &&
-    (typeof value === "object" || typeof value === "function");
+  return (
+    value != null && (typeof value === "object" || typeof value === "function")
+  );
 }
 
 /**
@@ -1536,7 +1554,8 @@ function isObjectLike(value: unknown): value is object {
  */
 function getSyncIteratorMethod(source: unknown): () => Iterator<unknown> {
   if (
-    !isObjectLike(source) || !(Symbol.iterator in source) ||
+    !isObjectLike(source) ||
+    !(Symbol.iterator in source) ||
     typeof source[Symbol.iterator] !== "function"
   ) {
     throw new TypeError("Expected an iterable of suggestions.");
@@ -1560,7 +1579,8 @@ function getAnyIterator(
   source: unknown,
 ): Iterator<unknown> | AsyncIterator<unknown> {
   if (
-    isObjectLike(source) && Symbol.asyncIterator in source &&
+    isObjectLike(source) &&
+    Symbol.asyncIterator in source &&
     typeof source[Symbol.asyncIterator] === "function"
   ) {
     const iterable = source as AsyncIterable<unknown>;
@@ -1612,20 +1632,21 @@ function screenSuggestionInput(item: unknown): Suggestion | undefined {
   if (!isOptionalOfType(item, "description", Array.isArray)) return undefined;
   if (item.kind === "literal") {
     return "text" in item && typeof item.text === "string"
-      ? item as Suggestion
+      ? (item as Suggestion)
       : undefined;
   }
   if (item.kind === "file") {
-    return "type" in item && fileSuggestionTypes.has(item.type) &&
-        isOptionalOfType(item, "pattern", isString) &&
-        isOptionalOfType(item, "prefix", isString) &&
-        isOptionalOfType(item, "extensions", isStringArray) &&
-        isOptionalOfType(
-          item,
-          "includeHidden",
-          (value) => typeof value === "boolean",
-        )
-      ? item as Suggestion
+    return "type" in item &&
+      fileSuggestionTypes.has(item.type) &&
+      isOptionalOfType(item, "pattern", isString) &&
+      isOptionalOfType(item, "prefix", isString) &&
+      isOptionalOfType(item, "extensions", isStringArray) &&
+      isOptionalOfType(
+        item,
+        "includeHidden",
+        (value) => typeof value === "boolean",
+      )
+      ? (item as Suggestion)
       : undefined;
   }
   return undefined;
@@ -1658,7 +1679,8 @@ function createSuggestionProcessors(
       const suggestion = screenSuggestionInput(item);
       if (
         suggestion == null ||
-        (filterByPrefix && suggestion.kind === "literal" &&
+        (filterByPrefix &&
+          suggestion.kind === "literal" &&
           !suggestion.text.startsWith(prefix))
       ) {
         return undefined;
@@ -1808,34 +1830,37 @@ export function transform<M extends Mode, T, U>(
   }
   const normalize = parser.normalize?.bind(parser);
   const suggest = parser.suggest?.bind(parser);
-  const transformedChoices = parser.choices == null
-    ? undefined
-    : Object.freeze(parser.choices.map((choice) => mapping.map(choice)));
+  const transformedChoices =
+    parser.choices == null
+      ? undefined
+      : Object.freeze(parser.choices.map((choice) => mapping.map(choice)));
   const transformed: ValueParser<M, U> = {
     mode: parser.mode,
     metavar: parser.metavar,
     placeholder: undefined as U,
     ...(transformedChoices == null ? {} : { choices: transformedChoices }),
     parse(input: string): ModeValue<M, ValueParserResult<U>> {
-      return mapMaybePromiseByMode(
-        parser.mode,
-        parser.parse(input),
-        (result) => transformValueParserResult(result, mapping),
+      return mapMaybePromiseByMode(parser.mode, parser.parse(input), (result) =>
+        transformValueParserResult(result, mapping),
       );
     },
     format(value: U): string {
       return parser.format(mapping.unmap(value));
     },
-    ...(normalize == null ? {} : {
-      normalize(value: U): U {
-        return mapping.map(normalize(mapping.unmap(value)));
-      },
-    }),
-    ...(suggest == null ? {} : {
-      suggest(prefix: string): ModeIterable<M, Suggestion> {
-        return wrapIterableForMode(parser.mode, suggest(prefix));
-      },
-    }),
+    ...(normalize == null
+      ? {}
+      : {
+          normalize(value: U): U {
+            return mapping.map(normalize(mapping.unmap(value)));
+          },
+        }),
+    ...(suggest == null
+      ? {}
+      : {
+          suggest(prefix: string): ModeIterable<M, Suggestion> {
+            return wrapIterableForMode(parser.mode, suggest(prefix));
+          },
+        }),
   };
   Object.defineProperty(transformed, "placeholder", {
     get() {
@@ -1897,10 +1922,7 @@ export function transform<M extends Mode, T, U>(
         try {
           result = wrapForMode("sync", syncParser.parse(formatted));
         } catch (error) {
-          if (
-            error instanceof TypeError &&
-            error.message.includes("Promise")
-          ) {
+          if (error instanceof TypeError && error.message.includes("Promise")) {
             throw error;
           }
           return transformMappingFailure();
@@ -1943,10 +1965,7 @@ function preserveTransformedDerivedMetadata<M extends Mode, T, U>(
       ): ModeValue<M, ValueParserResult<U>> {
         return mapMaybePromiseByMode(
           parser.mode,
-          parser[parseWithDependency](
-            input,
-            dependencyValue,
-          ),
+          parser[parseWithDependency](input, dependencyValue),
           (result) => transformValueParserResult(result, mapping),
         );
       },
@@ -2037,15 +2056,16 @@ export function checkEnumOption<T extends object>(
     value !== undefined &&
     (typeof value !== "string" || !allowed.includes(value))
   ) {
-    const rendered = typeof value === "string"
-      ? JSON.stringify(value)
-      : typeof value === "symbol"
-      ? value.toString()
-      : String(value);
+    const rendered =
+      typeof value === "string"
+        ? JSON.stringify(value)
+        : typeof value === "symbol"
+          ? value.toString()
+          : String(value);
     throw new TypeError(
-      `Expected ${String(key)} to be one of ${
-        allowed.map((v) => JSON.stringify(v)).join(", ")
-      }, but got ${typeof value}: ${rendered}.`,
+      `Expected ${String(key)} to be one of ${allowed
+        .map((v) => JSON.stringify(v))
+        .join(", ")}, but got ${typeof value}: ${rendered}.`,
     );
   }
 }
@@ -2117,9 +2137,9 @@ function formatStringChoiceError(
   suggest: ChoiceOptionsString["suggest"],
 ): Message {
   const base = invalidChoice
-    ? (typeof invalidChoice === "function"
+    ? typeof invalidChoice === "function"
       ? invalidChoice(input, choices)
-      : invalidChoice)
+      : invalidChoice
     : formatDefaultChoiceError(input, choices);
 
   if (suggest == null || suggest === "never") return base;
@@ -2167,13 +2187,14 @@ function formatDefaultChoiceError(
 ): Message {
   const choiceStrings = choices
     .filter((c) => typeof c === "string" || !Number.isNaN(c))
-    .map((c) => Object.is(c, -0) ? "-0" : String(c));
+    .map((c) => (Object.is(c, -0) ? "-0" : String(c)));
   if (choiceStrings.length === 0 && choices.length > 0) {
     return message`No valid choices are configured, but got ${input}.`;
   }
-  return message`Expected one of ${
-    valueSet(choiceStrings, { fallback: "", locale: "en-US" })
-  }, but got ${input}.`;
+  return message`Expected one of ${valueSet(choiceStrings, {
+    fallback: "",
+    locale: "en-US",
+  })}, but got ${input}.`;
 }
 
 /**
@@ -2209,34 +2230,37 @@ export function string(
   const patternSource = options.pattern?.source ?? null;
   const patternFlags = options.pattern?.flags ?? null;
   const patternMismatch = options.errors?.patternMismatch;
-  return captureDocValue({
-    mode: "sync",
-    metavar,
-    placeholder: options.placeholder ?? "",
-    parse(input: string): ValueParserResult<string> {
-      if (patternSource != null && patternFlags != null) {
-        const pattern = new RegExp(patternSource, patternFlags);
-        if (pattern.test(input)) {
-          return { success: true, value: input };
-        }
+  return captureDocValue(
+    {
+      mode: "sync",
+      metavar,
+      placeholder: options.placeholder ?? "",
+      parse(input: string): ValueParserResult<string> {
+        if (patternSource != null && patternFlags != null) {
+          const pattern = new RegExp(patternSource, patternFlags);
+          if (pattern.test(input)) {
+            return { success: true, value: input };
+          }
 
-        return {
-          success: false,
-          error: patternMismatch
-            ? (typeof patternMismatch === "function"
-              ? patternMismatch(input, pattern)
-              : patternMismatch)
-            : message`Expected a string matching pattern ${
-              text(patternSource)
-            }, but got ${input}.`,
-        };
-      }
-      return { success: true, value: input };
+          return {
+            success: false,
+            error: patternMismatch
+              ? typeof patternMismatch === "function"
+                ? patternMismatch(input, pattern)
+                : patternMismatch
+              : message`Expected a string matching pattern ${text(
+                  patternSource,
+                )}, but got ${input}.`,
+          };
+        }
+        return { success: true, value: input };
+      },
+      format(value: string): string {
+        return value;
+      },
     },
-    format(value: string): string {
-      return value;
-    },
-  }, { kind: "string" });
+    { kind: "string" },
+  );
 }
 
 /**
@@ -2306,9 +2330,9 @@ export function regExp(
   ensureNonEmptyString(metavar);
   if (options.flags !== undefined && typeof options.flags !== "string") {
     throw new TypeError(
-      `Expected flags to be a string, but got ${typeof options.flags}: ${
-        String(options.flags)
-      }.`,
+      `Expected flags to be a string, but got ${typeof options.flags}: ${String(
+        options.flags,
+      )}.`,
     );
   }
 
@@ -2322,9 +2346,9 @@ export function regExp(
       return {
         success: false,
         error: invalidRegExp
-          ? (typeof invalidRegExp === "function"
+          ? typeof invalidRegExp === "function"
             ? invalidRegExp(input)
-            : invalidRegExp)
+            : invalidRegExp
           : message`Invalid regular expression: ${input}.`,
       };
     }
@@ -2423,39 +2447,45 @@ interface KeyValueOptionsBase {
   };
 }
 
-type IsDefaultString<T> = [T] extends [string] ? [string] extends [T] ? true
-  : false
+type IsDefaultString<T> = [T] extends [string]
+  ? [string] extends [T]
+    ? true
+    : false
   : false;
 
-type KeyValueKeyOption<K> = IsDefaultString<K> extends true ? {
-    /**
-     * Parser used to validate and transform the key side.
-     * @default `string({ placeholder: "KEY" })`
-     */
-    readonly key?: ValueParser<"sync", K>;
-  }
-  : {
-    /**
-     * Parser used to validate and transform the key side.
-     * @default `string({ placeholder: "KEY" })`
-     */
-    readonly key: ValueParser<"sync", K>;
-  };
+type KeyValueKeyOption<K> =
+  IsDefaultString<K> extends true
+    ? {
+        /**
+         * Parser used to validate and transform the key side.
+         * @default `string({ placeholder: "KEY" })`
+         */
+        readonly key?: ValueParser<"sync", K>;
+      }
+    : {
+        /**
+         * Parser used to validate and transform the key side.
+         * @default `string({ placeholder: "KEY" })`
+         */
+        readonly key: ValueParser<"sync", K>;
+      };
 
-type KeyValueValueOption<V> = IsDefaultString<V> extends true ? {
-    /**
-     * Parser used to validate and transform the value side.
-     * @default `string()`
-     */
-    readonly value?: ValueParser<"sync", V>;
-  }
-  : {
-    /**
-     * Parser used to validate and transform the value side.
-     * @default `string()`
-     */
-    readonly value: ValueParser<"sync", V>;
-  };
+type KeyValueValueOption<V> =
+  IsDefaultString<V> extends true
+    ? {
+        /**
+         * Parser used to validate and transform the value side.
+         * @default `string()`
+         */
+        readonly value?: ValueParser<"sync", V>;
+      }
+    : {
+        /**
+         * Parser used to validate and transform the value side.
+         * @default `string()`
+         */
+        readonly value: ValueParser<"sync", V>;
+      };
 
 /**
  * Options for creating a {@link keyValue} parser.
@@ -2469,10 +2499,9 @@ type KeyValueValueOption<V> = IsDefaultString<V> extends true ? {
  * @template V The parsed value type.
  * @since 1.1.0
  */
-export type KeyValueOptions<K = string, V = string> =
-  & KeyValueOptionsBase
-  & KeyValueKeyOption<K>
-  & KeyValueValueOption<V>;
+export type KeyValueOptions<K = string, V = string> = KeyValueOptionsBase &
+  KeyValueKeyOption<K> &
+  KeyValueValueOption<V>;
 
 type KeyValueOptionsInput = KeyValueOptionsBase & {
   readonly key?: ValueParser<"sync", unknown>;
@@ -2481,12 +2510,14 @@ type KeyValueOptionsInput = KeyValueOptionsBase & {
 
 type KeyValueKeyType<Options> = Options extends {
   readonly key: ValueParser<"sync", infer K>;
-} ? K
+}
+  ? K
   : string;
 
 type KeyValueValueType<Options> = Options extends {
   readonly value: ValueParser<"sync", infer V>;
-} ? V
+}
+  ? V
   : string;
 
 type KeyValueResultType<Options> = Options extends KeyValueOptionsInput
@@ -2512,18 +2543,16 @@ type KeyValueResultType<Options> = Options extends KeyValueOptionsInput
 export function keyValue(): ValueParser<"sync", readonly [string, string]>;
 export function keyValue<
   const Options extends KeyValueOptionsInput | undefined,
->(
-  options: Options,
-): ValueParser<"sync", KeyValueResultType<Options>>;
+>(options: Options): ValueParser<"sync", KeyValueResultType<Options>>;
 export function keyValue(
   options: KeyValueOptionsInput = {},
 ): ValueParser<"sync", readonly [unknown, unknown]> {
   const separator = options.separator ?? "=";
   if (typeof separator !== "string") {
     throw new TypeError(
-      `Expected separator to be a string, but got ${typeof separator}: ${
-        String(separator)
-      }.`,
+      `Expected separator to be a string, but got ${typeof separator}: ${String(
+        separator,
+      )}.`,
     );
   }
   ensureNonEmptyString(separator);
@@ -2539,15 +2568,17 @@ export function keyValue(
   ensureNonEmptyString(metavar);
 
   const rawKeyParser = options.key ?? string({ placeholder: "KEY" });
-  const rawValueParser = options.value ??
-    string({ placeholder: allowEmptyValue ? "" : "VALUE" });
+  const rawValueParser =
+    options.value ?? string({ placeholder: allowEmptyValue ? "" : "VALUE" });
   checkKeyValueChildParser("key", rawKeyParser);
   checkKeyValueChildParser("value", rawValueParser);
   const keyParser = rawKeyParser as ValueParser<"sync", unknown>;
   const valueParser = rawValueParser as ValueParser<"sync", unknown>;
-  const hasNormalize = typeof keyParser.normalize === "function" ||
+  const hasNormalize =
+    typeof keyParser.normalize === "function" ||
     typeof valueParser.normalize === "function";
-  const hasSuggest = typeof keyParser.suggest === "function" ||
+  const hasSuggest =
+    typeof keyParser.suggest === "function" ||
     typeof valueParser.suggest === "function";
 
   function findSeparator(input: string): number {
@@ -2663,16 +2694,15 @@ export function keyValue(
     if (index < 0) {
       return false;
     }
-    return input.slice(0, index) === key &&
-      input.slice(index + separator.length) === value;
+    return (
+      input.slice(0, index) === key &&
+      input.slice(index + separator.length) === value
+    );
   }
 
   function validateResultParts(
     input: string,
-    keyResult: Extract<
-      ValueParserResult<unknown>,
-      { readonly success: true }
-    >,
+    keyResult: Extract<ValueParserResult<unknown>, { readonly success: true }>,
     valueResult: Extract<
       ValueParserResult<unknown>,
       { readonly success: true }
@@ -2741,17 +2771,17 @@ export function keyValue(
       if (!partsRoundTrip(formattedKey, formattedValue)) {
         return split === "first"
           ? {
-            success: false,
-            error: invalidKeyError(
-              message`Expected a key that round-trips with ${separator}, but got ${formattedKey}.`,
-            ),
-          }
+              success: false,
+              error: invalidKeyError(
+                message`Expected a key that round-trips with ${separator}, but got ${formattedKey}.`,
+              ),
+            }
           : {
-            success: false,
-            error: invalidValueError(
-              message`Expected a value that round-trips with ${separator}, but got ${formattedValue}.`,
-            ),
-          };
+              success: false,
+              error: invalidValueError(
+                message`Expected a value that round-trips with ${separator}, but got ${formattedValue}.`,
+              ),
+            };
       }
     }
     return makeKeyValueSuccess(keyResult, valueResult);
@@ -2791,10 +2821,7 @@ export function keyValue(
   return {
     mode: "sync",
     metavar,
-    placeholder: [
-      keyParser.placeholder,
-      valueParser.placeholder,
-    ] as const,
+    placeholder: [keyParser.placeholder, valueParser.placeholder] as const,
     parse(input: string): ValueParserResult<readonly [unknown, unknown]> {
       const index = findSeparator(input);
       if (index < 0) {
@@ -2805,9 +2832,9 @@ export function keyValue(
       return validateParts(input, key, value);
     },
     format(value: readonly [unknown, unknown]): string {
-      return `${keyParser.format(value[0])}${separator}${
-        valueParser.format(value[1])
-      }`;
+      return `${keyParser.format(value[0])}${separator}${valueParser.format(
+        value[1],
+      )}`;
     },
     validate(
       value: readonly [unknown, unknown],
@@ -2822,81 +2849,78 @@ export function keyValue(
     },
     ...(hasNormalize
       ? {
-        normalize(
-          value: readonly [unknown, unknown],
-        ): readonly [unknown, unknown] {
-          if (!isKeyValueTuple(value)) {
-            return value;
-          }
-          const normalized = [
-            typeof keyParser.normalize === "function"
-              ? keyParser.normalize(value[0])
-              : value[0],
-            typeof valueParser.normalize === "function"
-              ? valueParser.normalize(value[1])
-              : value[1],
-          ] as const;
-          return validateTuple(normalized).success ? normalized : value;
-        },
-      }
+          normalize(
+            value: readonly [unknown, unknown],
+          ): readonly [unknown, unknown] {
+            if (!isKeyValueTuple(value)) {
+              return value;
+            }
+            const normalized = [
+              typeof keyParser.normalize === "function"
+                ? keyParser.normalize(value[0])
+                : value[0],
+              typeof valueParser.normalize === "function"
+                ? valueParser.normalize(value[1])
+                : value[1],
+            ] as const;
+            return validateTuple(normalized).success ? normalized : value;
+          },
+        }
       : {}),
     ...(hasSuggest
       ? {
-        *suggest(prefix: string): Iterable<Suggestion> {
-          const index = findSeparator(prefix);
-          const suggestions: Suggestion[] = [];
-          if (index < 0 || split === "last") {
-            if (typeof keyParser.suggest === "function") {
-              for (const suggestion of keyParser.suggest(prefix)) {
-                const key = suggestionTextValue(suggestion);
+          *suggest(prefix: string): Iterable<Suggestion> {
+            const index = findSeparator(prefix);
+            const suggestions: Suggestion[] = [];
+            if (index < 0 || split === "last") {
+              if (typeof keyParser.suggest === "function") {
+                for (const suggestion of keyParser.suggest(prefix)) {
+                  const key = suggestionTextValue(suggestion);
+                  if (
+                    suggestion.kind === "literal"
+                      ? !validateKeyForSuggestion(key)
+                      : !validateKeyPatternForSuggestion(key)
+                  ) {
+                    continue;
+                  }
+                  suggestions.push(
+                    prefixKeyValueSuggestion(suggestion, "", separator),
+                  );
+                }
+              }
+            }
+            if (index < 0) {
+              yield* deduplicateSuggestions(suggestions);
+              return;
+            }
+
+            if (typeof valueParser.suggest === "function") {
+              const key = prefix.slice(0, index);
+              if (!validateKeyForSuggestion(key)) {
+                yield* deduplicateSuggestions(suggestions);
+                return;
+              }
+              const valuePrefix = prefix.slice(index + separator.length);
+              for (const suggestion of valueParser.suggest(valuePrefix)) {
+                const value = suggestionTextValue(suggestion);
+                if (!partsRoundTrip(key, value)) {
+                  continue;
+                }
                 if (
-                  suggestion.kind === "literal"
-                    ? !validateKeyForSuggestion(key)
-                    : !validateKeyPatternForSuggestion(key)
+                  suggestion.kind === "literal" &&
+                  !validateParts(`${key}${separator}${value}`, key, value)
+                    .success
                 ) {
                   continue;
                 }
                 suggestions.push(
-                  prefixKeyValueSuggestion(suggestion, "", separator),
+                  prefixKeyValueSuggestion(suggestion, `${key}${separator}`),
                 );
               }
             }
-          }
-          if (index < 0) {
             yield* deduplicateSuggestions(suggestions);
-            return;
-          }
-
-          if (typeof valueParser.suggest === "function") {
-            const key = prefix.slice(0, index);
-            if (!validateKeyForSuggestion(key)) {
-              yield* deduplicateSuggestions(suggestions);
-              return;
-            }
-            const valuePrefix = prefix.slice(index + separator.length);
-            for (const suggestion of valueParser.suggest(valuePrefix)) {
-              const value = suggestionTextValue(suggestion);
-              if (!partsRoundTrip(key, value)) {
-                continue;
-              }
-              if (
-                suggestion.kind === "literal" &&
-                !validateParts(
-                  `${key}${separator}${value}`,
-                  key,
-                  value,
-                ).success
-              ) {
-                continue;
-              }
-              suggestions.push(
-                prefixKeyValueSuggestion(suggestion, `${key}${separator}`),
-              );
-            }
-          }
-          yield* deduplicateSuggestions(suggestions);
-        },
-      }
+          },
+        }
       : {}),
   };
 }
@@ -2973,7 +2997,7 @@ function stringFormatError(): Message {
 function suggestionTextValue(suggestion: Suggestion): string {
   return suggestion.kind === "literal"
     ? suggestion.text
-    : suggestion.pattern ?? "";
+    : (suggestion.pattern ?? "");
 }
 
 function prefixKeyValueSuggestion(
@@ -2996,10 +3020,7 @@ function prefixKeyValueSuggestion(
 }
 
 function isKeyValueTuple(value: unknown): value is readonly [unknown, unknown] {
-  return Array.isArray(value) &&
-    value.length === 2 &&
-    0 in value &&
-    1 in value;
+  return Array.isArray(value) && value.length === 2 && 0 in value && 1 in value;
 }
 
 function makeKeyValueSuccess<K, V>(
@@ -3019,9 +3040,9 @@ function makeKeyValueSuccess<K, V>(
     value: [keyResult.value, valueResult.value] as const,
     ...(hasDeferred
       ? {
-        deferred: true as const,
-        ...(deferredKeys.size > 0 ? { deferredKeys } : {}),
-      }
+          deferred: true as const,
+          ...(deferredKeys.size > 0 ? { deferredKeys } : {}),
+        }
       : {}),
   };
 }
@@ -3253,9 +3274,9 @@ export function integer(
     options.type !== "bigint"
   ) {
     throw new TypeError(
-      `Expected type to be "number" or "bigint", but got: ${
-        String(options.type)
-      }.`,
+      `Expected type to be "number" or "bigint", but got: ${String(
+        options.type,
+      )}.`,
     );
   }
   if (options?.type !== "bigint") {
@@ -3271,7 +3292,9 @@ export function integer(
     }
   }
   if (
-    options?.min != null && options?.max != null && options.min > options.max
+    options?.min != null &&
+    options?.max != null &&
+    options.min > options.max
   ) {
     throw new RangeError(
       `Expected min to be less than or equal to max, but got ` +
@@ -3281,56 +3304,60 @@ export function integer(
   if (options?.type === "bigint") {
     const metavar = options.metavar ?? "INTEGER";
     ensureNonEmptyString(metavar);
-    return captureDocValue({
-      mode: "sync",
-      metavar,
-      placeholder: options?.placeholder ??
-        (options?.min != null && options.min > 0n
-          ? options.min
-          : options?.max != null && options.max < 0n
-          ? options.max
-          : 0n),
-      parse(input: string): ValueParserResult<bigint> {
-        if (!input.match(/^-?\d+$/)) {
-          return {
-            success: false,
-            error: options.errors?.invalidInteger
-              ? (typeof options.errors.invalidInteger === "function"
-                ? options.errors.invalidInteger(input)
-                : options.errors.invalidInteger)
-              : message`Expected a valid integer, but got ${input}.`,
-          };
-        }
-        const value = BigInt(input);
-        if (options.min != null && value < options.min) {
-          return {
-            success: false,
-            error: options.errors?.belowMinimum
-              ? (typeof options.errors.belowMinimum === "function"
-                ? options.errors.belowMinimum(value, options.min)
-                : options.errors.belowMinimum)
-              : message`Expected a value greater than or equal to ${
-                text(options.min.toLocaleString("en"))
-              }, but got ${input}.`,
-          };
-        } else if (options.max != null && value > options.max) {
-          return {
-            success: false,
-            error: options.errors?.aboveMaximum
-              ? (typeof options.errors.aboveMaximum === "function"
-                ? options.errors.aboveMaximum(value, options.max)
-                : options.errors.aboveMaximum)
-              : message`Expected a value less than or equal to ${
-                text(options.max.toLocaleString("en"))
-              }, but got ${input}.`,
-          };
-        }
-        return { success: true, value };
+    return captureDocValue(
+      {
+        mode: "sync",
+        metavar,
+        placeholder:
+          options?.placeholder ??
+          (options?.min != null && options.min > 0n
+            ? options.min
+            : options?.max != null && options.max < 0n
+              ? options.max
+              : 0n),
+        parse(input: string): ValueParserResult<bigint> {
+          if (!input.match(/^-?\d+$/)) {
+            return {
+              success: false,
+              error: options.errors?.invalidInteger
+                ? typeof options.errors.invalidInteger === "function"
+                  ? options.errors.invalidInteger(input)
+                  : options.errors.invalidInteger
+                : message`Expected a valid integer, but got ${input}.`,
+            };
+          }
+          const value = BigInt(input);
+          if (options.min != null && value < options.min) {
+            return {
+              success: false,
+              error: options.errors?.belowMinimum
+                ? typeof options.errors.belowMinimum === "function"
+                  ? options.errors.belowMinimum(value, options.min)
+                  : options.errors.belowMinimum
+                : message`Expected a value greater than or equal to ${text(
+                    options.min.toLocaleString("en"),
+                  )}, but got ${input}.`,
+            };
+          } else if (options.max != null && value > options.max) {
+            return {
+              success: false,
+              error: options.errors?.aboveMaximum
+                ? typeof options.errors.aboveMaximum === "function"
+                  ? options.errors.aboveMaximum(value, options.max)
+                  : options.errors.aboveMaximum
+                : message`Expected a value less than or equal to ${text(
+                    options.max.toLocaleString("en"),
+                  )}, but got ${input}.`,
+            };
+          }
+          return { success: true, value };
+        },
+        format(value: bigint): string {
+          return value.toString();
+        },
       },
-      format(value: bigint): string {
-        return value.toString();
-      },
-    }, { kind: "bigint" });
+      { kind: "bigint" },
+    );
   }
   const metavar = options?.metavar ?? "INTEGER";
   ensureNonEmptyString(metavar);
@@ -3355,77 +3382,79 @@ export function integer(
     );
   }
   const unsafeIntegerError = options?.errors?.unsafeInteger;
-  function makeUnsafeIntegerError(
-    input: string,
-  ): ValueParserResult<number> {
+  function makeUnsafeIntegerError(input: string): ValueParserResult<number> {
     return {
       success: false,
       error: unsafeIntegerError
-        ? (typeof unsafeIntegerError === "function"
+        ? typeof unsafeIntegerError === "function"
           ? unsafeIntegerError(input)
-          : unsafeIntegerError)
-        : message`Expected a safe integer between ${
-          text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
-        } and ${
-          text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
-        }, but got ${input}. Use type: "bigint" for large values.`,
+          : unsafeIntegerError
+        : message`Expected a safe integer between ${text(
+            Number.MIN_SAFE_INTEGER.toLocaleString("en"),
+          )} and ${text(
+            Number.MAX_SAFE_INTEGER.toLocaleString("en"),
+          )}, but got ${input}. Use type: "bigint" for large values.`,
     };
   }
-  return captureDocValue({
-    mode: "sync",
-    metavar,
-    placeholder: options?.placeholder ??
-      (firstAllowed > 0 ? firstAllowed : lastAllowed < 0 ? lastAllowed : 0),
-    parse(input: string): ValueParserResult<number> {
-      if (!input.match(/^-?\d+$/)) {
-        return {
-          success: false,
-          error: options?.errors?.invalidInteger
-            ? (typeof options.errors.invalidInteger === "function"
-              ? options.errors.invalidInteger(input)
-              : options.errors.invalidInteger)
-            : message`Expected a valid integer, but got ${input}.`,
-        };
-      }
-      let n: bigint;
-      try {
-        n = BigInt(input);
-      } catch {
-        return makeUnsafeIntegerError(input);
-      }
-      if (n > maxSafe || n < minSafe) {
-        return makeUnsafeIntegerError(input);
-      }
-      const value = Number(input);
-      if (options?.min != null && value < options.min) {
-        return {
-          success: false,
-          error: options.errors?.belowMinimum
-            ? (typeof options.errors.belowMinimum === "function"
-              ? options.errors.belowMinimum(value, options.min)
-              : options.errors.belowMinimum)
-            : message`Expected a value greater than or equal to ${
-              text(options.min.toLocaleString("en"))
-            }, but got ${input}.`,
-        };
-      } else if (options?.max != null && value > options.max) {
-        return {
-          success: false,
-          error: options.errors?.aboveMaximum
-            ? (typeof options.errors.aboveMaximum === "function"
-              ? options.errors.aboveMaximum(value, options.max)
-              : options.errors.aboveMaximum)
-            : message`Expected a value less than or equal to ${
-              text(options.max.toLocaleString("en"))
-            }, but got ${input}.`,
-        };
-      }
-      return { success: true, value };
+  return captureDocValue(
+    {
+      mode: "sync",
+      metavar,
+      placeholder:
+        options?.placeholder ??
+        (firstAllowed > 0 ? firstAllowed : lastAllowed < 0 ? lastAllowed : 0),
+      parse(input: string): ValueParserResult<number> {
+        if (!input.match(/^-?\d+$/)) {
+          return {
+            success: false,
+            error: options?.errors?.invalidInteger
+              ? typeof options.errors.invalidInteger === "function"
+                ? options.errors.invalidInteger(input)
+                : options.errors.invalidInteger
+              : message`Expected a valid integer, but got ${input}.`,
+          };
+        }
+        let n: bigint;
+        try {
+          n = BigInt(input);
+        } catch {
+          return makeUnsafeIntegerError(input);
+        }
+        if (n > maxSafe || n < minSafe) {
+          return makeUnsafeIntegerError(input);
+        }
+        const value = Number(input);
+        if (options?.min != null && value < options.min) {
+          return {
+            success: false,
+            error: options.errors?.belowMinimum
+              ? typeof options.errors.belowMinimum === "function"
+                ? options.errors.belowMinimum(value, options.min)
+                : options.errors.belowMinimum
+              : message`Expected a value greater than or equal to ${text(
+                  options.min.toLocaleString("en"),
+                )}, but got ${input}.`,
+          };
+        } else if (options?.max != null && value > options.max) {
+          return {
+            success: false,
+            error: options.errors?.aboveMaximum
+              ? typeof options.errors.aboveMaximum === "function"
+                ? options.errors.aboveMaximum(value, options.max)
+                : options.errors.aboveMaximum
+              : message`Expected a value less than or equal to ${text(
+                  options.max.toLocaleString("en"),
+                )}, but got ${input}.`,
+          };
+        }
+        return { success: true, value };
+      },
+      format(value: number): string {
+        return value.toString();
+      },
     },
-    format(value: number): string {
-      return value.toString();
-    },
-  }, { kind: "number" });
+    { kind: "number" },
+  );
 }
 
 /**
@@ -3525,9 +3554,7 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
       `Expected max to be a finite number, but got: ${options.max}`,
     );
   }
-  if (
-    options.min != null && options.max != null && options.min > options.max
-  ) {
+  if (options.min != null && options.max != null && options.min > options.max) {
     throw new RangeError(
       `Expected min to be less than or equal to max, but got ` +
         `min: ${options.min} and max: ${options.max}.`,
@@ -3543,19 +3570,20 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
   return {
     mode: "sync",
     metavar,
-    placeholder: options?.placeholder ??
+    placeholder:
+      options?.placeholder ??
       (options?.min != null && options.min > 0
         ? options.min
         : options?.max != null && options.max < 0
-        ? options.max
-        : 0),
+          ? options.max
+          : 0),
     parse(input: string): ValueParserResult<number> {
       const invalidNumber = (i: string): ValueParserResult<number> => ({
         success: false,
         error: options.errors?.invalidNumber
-          ? (typeof options.errors.invalidNumber === "function"
+          ? typeof options.errors.invalidNumber === "function"
             ? options.errors.invalidNumber(i)
-            : options.errors.invalidNumber)
+            : options.errors.invalidNumber
           : message`Expected a valid number, but got ${i}.`,
       });
 
@@ -3588,23 +3616,23 @@ export function float(options: FloatOptions = {}): ValueParser<"sync", number> {
         return {
           success: false,
           error: options.errors?.belowMinimum
-            ? (typeof options.errors.belowMinimum === "function"
+            ? typeof options.errors.belowMinimum === "function"
               ? options.errors.belowMinimum(value, options.min)
-              : options.errors.belowMinimum)
-            : message`Expected a value greater than or equal to ${
-              text(options.min.toLocaleString("en"))
-            }, but got ${input}.`,
+              : options.errors.belowMinimum
+            : message`Expected a value greater than or equal to ${text(
+                options.min.toLocaleString("en"),
+              )}, but got ${input}.`,
         };
       } else if (options.max != null && value > options.max) {
         return {
           success: false,
           error: options.errors?.aboveMaximum
-            ? (typeof options.errors.aboveMaximum === "function"
+            ? typeof options.errors.aboveMaximum === "function"
               ? options.errors.aboveMaximum(value, options.max)
-              : options.errors.aboveMaximum)
-            : message`Expected a value less than or equal to ${
-              text(options.max.toLocaleString("en"))
-            }, but got ${input}.`,
+              : options.errors.aboveMaximum
+            : message`Expected a value less than or equal to ${text(
+                options.max.toLocaleString("en"),
+              )}, but got ${input}.`,
         };
       }
       return { success: true, value };
@@ -3976,14 +4004,10 @@ function formatBigIntBytes(
  * the result would be fractional.  The safe-integer range check is NOT applied
  * here; callers add it as needed.
  */
-function parseExactBytesRaw(
-  numStr: string,
-  mBig: bigint,
-): bigint | null {
+function parseExactBytesRaw(numStr: string, mBig: bigint): bigint | null {
   const negative = numStr.startsWith("-");
-  const absStr = numStr.startsWith("+") || numStr.startsWith("-")
-    ? numStr.slice(1)
-    : numStr;
+  const absStr =
+    numStr.startsWith("+") || numStr.startsWith("-") ? numStr.slice(1) : numStr;
   const dotIdx = absStr.indexOf(".");
   const intPart = dotIdx < 0 ? absStr : absStr.slice(0, dotIdx);
   const fracPart = dotIdx < 0 ? "" : absStr.slice(dotIdx + 1);
@@ -4003,10 +4027,7 @@ function parseExactBytesRaw(
  * All arithmetic is performed with `bigint` to avoid float64 precision loss
  * (e.g. `"1.0000000000000001"` must not silently round to `1`).
  */
-function parseExactBytes(
-  numStr: string,
-  multiplier: number,
-): number | null {
+function parseExactBytes(numStr: string, multiplier: number): number | null {
   const bytes = parseExactBytesRaw(numStr, BigInt(multiplier));
   if (bytes == null) return null;
   const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
@@ -4105,9 +4126,9 @@ export function fileSize(
     options.type !== "bigint"
   ) {
     throw new TypeError(
-      `Expected type to be "number" or "bigint", but got: ${
-        String(options.type)
-      }.`,
+      `Expected type to be "number" or "bigint", but got: ${String(
+        options.type,
+      )}.`,
     );
   }
   const metavar = options.metavar ?? "SIZE";
@@ -4121,9 +4142,9 @@ export function fileSize(
     return {
       success: false,
       error: options.errors?.invalidFormat
-        ? (typeof options.errors.invalidFormat === "function"
+        ? typeof options.errors.invalidFormat === "function"
           ? options.errors.invalidFormat(input)
-          : options.errors.invalidFormat)
+          : options.errors.invalidFormat
         : message`Expected a file size like ${"10MB"} or ${"1.5GiB"}, but got ${input}.`,
     };
   }
@@ -4133,9 +4154,9 @@ export function fileSize(
     const bigintMultiplierMap: Readonly<Record<string, bigint>> = siAsBinary
       ? BIGINT_IEC_MULTIPLIERS
       : {
-        ...BIGINT_SI_MULTIPLIERS,
-        ...BIGINT_IEC_ONLY_MULTIPLIERS,
-      };
+          ...BIGINT_SI_MULTIPLIERS,
+          ...BIGINT_IEC_ONLY_MULTIPLIERS,
+        };
     const bigintFormatUnits = siAsBinary
       ? BIGINT_FORMAT_UNITS_SI_AS_BINARY
       : BIGINT_FORMAT_UNITS_DEFAULT;
@@ -4167,9 +4188,9 @@ export function fileSize(
           return {
             success: false,
             error: options.errors?.negativeNotAllowed
-              ? (typeof options.errors.negativeNotAllowed === "function"
+              ? typeof options.errors.negativeNotAllowed === "function"
                 ? options.errors.negativeNotAllowed(bytes)
-                : options.errors.negativeNotAllowed)
+                : options.errors.negativeNotAllowed
               : message`Expected a non-negative file size, but got ${input}.`,
           };
         }
@@ -4186,10 +4207,12 @@ export function fileSize(
   }
 
   // number branch (default)
-  const multiplierMap = siAsBinary ? IEC_MULTIPLIERS : {
-    ...SI_MULTIPLIERS,
-    ...IEC_ONLY_MULTIPLIERS,
-  };
+  const multiplierMap = siAsBinary
+    ? IEC_MULTIPLIERS
+    : {
+        ...SI_MULTIPLIERS,
+        ...IEC_ONLY_MULTIPLIERS,
+      };
   const formatUnits = siAsBinary
     ? FORMAT_UNITS_SI_AS_BINARY
     : FORMAT_UNITS_DEFAULT;
@@ -4218,9 +4241,9 @@ export function fileSize(
         return {
           success: false,
           error: options.errors?.negativeNotAllowed
-            ? (typeof options.errors.negativeNotAllowed === "function"
+            ? typeof options.errors.negativeNotAllowed === "function"
               ? options.errors.negativeNotAllowed(bytes)
-              : options.errors.negativeNotAllowed)
+              : options.errors.negativeNotAllowed
             : message`Expected a non-negative file size, but got ${input}.`,
         };
       }
@@ -4387,11 +4410,7 @@ const CSS_NAMED_COLORS: Readonly<Record<string, Color>> = {
 
 const CSS_NAMED_COLOR_KEYS: readonly string[] = Object.keys(CSS_NAMED_COLORS);
 
-function hslToRgb(
-  h: number,
-  s: number,
-  l: number,
-): [number, number, number] {
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   h = ((h % 360) + 360) % 360;
   const a = s * Math.min(l, 1 - l);
   const f = (n: number): number => {
@@ -4405,12 +4424,10 @@ function hslToRgb(
   ];
 }
 
-function rgbToHsl(
-  r: number,
-  g: number,
-  b: number,
-): [number, number, number] {
-  const rn = r / 255, gn = g / 255, bn = b / 255;
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const rn = r / 255,
+    gn = g / 255,
+    bn = b / 255;
   const max = Math.max(rn, gn, bn);
   const min = Math.min(rn, gn, bn);
   const l = (max + min) / 2;
@@ -4539,9 +4556,9 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
     for (const fmt of options.formats) {
       if (!(VALID_COLOR_FORMATS as readonly string[]).includes(fmt)) {
         throw new TypeError(
-          `Expected formats to contain only ${
-            VALID_COLOR_FORMATS.map((v) => JSON.stringify(v)).join(", ")
-          }, but got: ${JSON.stringify(fmt)}.`,
+          `Expected formats to contain only ${VALID_COLOR_FORMATS.map((v) =>
+            JSON.stringify(v),
+          ).join(", ")}, but got: ${JSON.stringify(fmt)}.`,
         );
       }
     }
@@ -4566,15 +4583,13 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
     return {
       success: false,
       error: options.errors?.invalidFormat
-        ? (typeof options.errors.invalidFormat === "function"
+        ? typeof options.errors.invalidFormat === "function"
           ? options.errors.invalidFormat(input)
-          : options.errors.invalidFormat)
-        : message`Expected a CSS color like ${
-          valueSet(formatExamples, {
+          : options.errors.invalidFormat
+        : message`Expected a CSS color like ${valueSet(formatExamples, {
             fallback: "a valid color",
             type: "disjunction",
-          })
-        }, but got ${input}.`,
+          })}, but got ${input}.`,
     };
   }
 
@@ -4613,8 +4628,12 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           const b = parseInt(m[3], 10);
           const aRaw = m[4] !== undefined ? parseFloat(m[4]) : 1;
           if (
-            r > 255 || g > 255 || b > 255 ||
-            !Number.isFinite(aRaw) || aRaw < 0 || aRaw > 1
+            r > 255 ||
+            g > 255 ||
+            b > 255 ||
+            !Number.isFinite(aRaw) ||
+            aRaw < 0 ||
+            aRaw > 1
           ) {
             return invalidFormatError(input);
           }
@@ -4632,9 +4651,15 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
           const aRaw = m[4] !== undefined ? parseFloat(m[4]) : 1;
           if (
             !Number.isFinite(h) ||
-            !Number.isFinite(s) || s < 0 || s > 100 ||
-            !Number.isFinite(l) || l < 0 || l > 100 ||
-            !Number.isFinite(aRaw) || aRaw < 0 || aRaw > 1
+            !Number.isFinite(s) ||
+            s < 0 ||
+            s > 100 ||
+            !Number.isFinite(l) ||
+            l < 0 ||
+            l > 100 ||
+            !Number.isFinite(aRaw) ||
+            aRaw < 0 ||
+            aRaw > 1
           ) {
             return invalidFormatError(input);
           }
@@ -4657,10 +4682,18 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
     format(value: Color): string {
       const { r, g, b, a } = value;
       if (
-        !Number.isInteger(r) || r < 0 || r > 255 ||
-        !Number.isInteger(g) || g < 0 || g > 255 ||
-        !Number.isInteger(b) || b < 0 || b > 255 ||
-        !Number.isFinite(a) || a < 0 || a > 1
+        !Number.isInteger(r) ||
+        r < 0 ||
+        r > 255 ||
+        !Number.isInteger(g) ||
+        g < 0 ||
+        g > 255 ||
+        !Number.isInteger(b) ||
+        b < 0 ||
+        b > 255 ||
+        !Number.isFinite(a) ||
+        a < 0 ||
+        a > 1
       ) {
         throw new RangeError(
           `Color components out of range: r=${r}, g=${g}, b=${b}, a=${a}.`,
@@ -4672,7 +4705,9 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
         const gh = g.toString(16).padStart(2, "0");
         const bh = b.toString(16).padStart(2, "0");
         if (a === 1) return `#${rh}${gh}${bh}`;
-        const ah = Math.round(a * 255).toString(16).padStart(2, "0");
+        const ah = Math.round(a * 255)
+          .toString(16)
+          .padStart(2, "0");
         return `#${rh}${gh}${bh}${ah}`;
       }
       if (allowRgb) {
@@ -4700,10 +4735,18 @@ export function color(options: ColorOptions = {}): ValueParser<"sync", Color> {
 
     normalize(value: Color): Color {
       if (
-        !Number.isInteger(value.r) || value.r < 0 || value.r > 255 ||
-        !Number.isInteger(value.g) || value.g < 0 || value.g > 255 ||
-        !Number.isInteger(value.b) || value.b < 0 || value.b > 255 ||
-        !Number.isFinite(value.a) || value.a < 0 || value.a > 1
+        !Number.isInteger(value.r) ||
+        value.r < 0 ||
+        value.r > 255 ||
+        !Number.isInteger(value.g) ||
+        value.g < 0 ||
+        value.g > 255 ||
+        !Number.isInteger(value.b) ||
+        value.b < 0 ||
+        value.b > 255 ||
+        !Number.isFinite(value.a) ||
+        value.a < 0 ||
+        value.a > 1
       ) {
         return value;
       }
@@ -4802,9 +4845,10 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
         typeof protocol !== "string" ||
         !/^[a-z][a-z0-9+\-.]*:$/i.test(protocol)
       ) {
-        const rendered = typeof protocol === "string"
-          ? JSON.stringify(protocol)
-          : String(protocol);
+        const rendered =
+          typeof protocol === "string"
+            ? JSON.stringify(protocol)
+            : String(protocol);
         throw new TypeError(
           `Each allowed protocol must be a valid protocol ending with a colon` +
             ` (e.g., "https:"), got: ${rendered}.`,
@@ -4822,12 +4866,14 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
   }
   // Snapshot the original protocols for callback arguments (preserves casing),
   // and a normalized copy for internal matching.
-  const originalProtocols = options.allowedProtocols != null
-    ? Object.freeze(originalProtocolsList)
-    : undefined;
-  const allowedProtocols = options.allowedProtocols != null
-    ? Object.freeze(normalizedProtocolsList)
-    : undefined;
+  const originalProtocols =
+    options.allowedProtocols != null
+      ? Object.freeze(originalProtocolsList)
+      : undefined;
+  const allowedProtocols =
+    options.allowedProtocols != null
+      ? Object.freeze(normalizedProtocolsList)
+      : undefined;
   const metavar = options.metavar ?? "URL";
   ensureNonEmptyString(metavar);
   const invalidUrl = options.errors?.invalidUrl;
@@ -4836,44 +4882,40 @@ export function url(options: UrlOptions = {}): ValueParser<"sync", URL> {
     mode: "sync",
     metavar,
     get placeholder() {
-      return new URL(
-        `${allowedProtocols?.[0] ?? "http:"}//0.invalid`,
-      );
+      return new URL(`${allowedProtocols?.[0] ?? "http:"}//0.invalid`);
     },
     parse(input: string): ValueParserResult<URL> {
       if (!URL.canParse(input)) {
         return {
           success: false,
           error: invalidUrl
-            ? (typeof invalidUrl === "function"
+            ? typeof invalidUrl === "function"
               ? invalidUrl(input)
-              : invalidUrl)
+              : invalidUrl
             : message`Invalid URL: ${input}.`,
         };
       }
       const url = new URL(input);
       if (
-        allowedProtocols != null && !allowedProtocols.includes(url.protocol)
+        allowedProtocols != null &&
+        !allowedProtocols.includes(url.protocol)
       ) {
         return {
           success: false,
           error: disallowedProtocol
-            ? (typeof disallowedProtocol === "function"
-              ? disallowedProtocol(
-                url.protocol,
-                originalProtocols!,
-              )
-              : disallowedProtocol)
-            : [
-              { type: "text", text: "URL protocol " },
-              { type: "value", value: url.protocol },
-              { type: "text", text: " is not allowed. Allowed protocols: " },
-              ...valueSet(originalProtocols!, {
-                fallback: "",
-                locale: "en-US",
-              }),
-              { type: "text", text: "." },
-            ] as Message,
+            ? typeof disallowedProtocol === "function"
+              ? disallowedProtocol(url.protocol, originalProtocols!)
+              : disallowedProtocol
+            : ([
+                { type: "text", text: "URL protocol " },
+                { type: "value", value: url.protocol },
+                { type: "text", text: " is not allowed. Allowed protocols: " },
+                ...valueSet(originalProtocols!, {
+                  fallback: "",
+                  locale: "en-US",
+                }),
+                { type: "text", text: "." },
+              ] as Message),
         };
       }
       return { success: true, value: url };
@@ -5014,9 +5056,7 @@ export interface OriginOptions {
  *   string ending with a colon (e.g., `"https:"`).
  * @since 1.3.0
  */
-export function origin(
-  options: OriginOptions = {},
-): ValueParser<"sync", URL> {
+export function origin(options: OriginOptions = {}): ValueParser<"sync", URL> {
   const metavar = options.metavar ?? "ORIGIN";
   ensureNonEmptyString(metavar);
   checkEnumOption(options, "extraComponents", ["strip", "reject"]);
@@ -5032,9 +5072,10 @@ export function origin(
         typeof protocol !== "string" ||
         !/^[a-z][a-z0-9+\-.]*:$/i.test(protocol)
       ) {
-        const rendered = typeof protocol === "string"
-          ? JSON.stringify(protocol)
-          : String(protocol);
+        const rendered =
+          typeof protocol === "string"
+            ? JSON.stringify(protocol)
+            : String(protocol);
         throw new TypeError(
           `Each allowed protocol must be a valid protocol ending with a colon` +
             ` (e.g., "https:"), got: ${rendered}.`,
@@ -5056,35 +5097,37 @@ export function origin(
       throw new TypeError("allowedProtocols must not be empty.");
     }
   }
-  const originalProtocols = options.allowedProtocols != null
-    ? Object.freeze(originalProtocolsList)
-    : undefined;
-  const allowedProtocols = options.allowedProtocols != null
-    ? Object.freeze(normalizedProtocolsList)
-    : undefined;
+  const originalProtocols =
+    options.allowedProtocols != null
+      ? Object.freeze(originalProtocolsList)
+      : undefined;
+  const allowedProtocols =
+    options.allowedProtocols != null
+      ? Object.freeze(normalizedProtocolsList)
+      : undefined;
   const invalidOrigin = options.errors?.invalidOrigin;
   const disallowedProtocol = options.errors?.disallowedProtocol;
 
   function invalidOriginError(input: string): Message {
     return invalidOrigin
-      ? (typeof invalidOrigin === "function"
+      ? typeof invalidOrigin === "function"
         ? invalidOrigin(input)
-        : invalidOrigin)
+        : invalidOrigin
       : message`Invalid origin.`;
   }
 
   function disallowedProtocolError(protocol: string): Message {
     return disallowedProtocol
-      ? (typeof disallowedProtocol === "function"
+      ? typeof disallowedProtocol === "function"
         ? disallowedProtocol(protocol, originalProtocols!)
-        : disallowedProtocol)
-      : [
-        { type: "text", text: "URL protocol " },
-        { type: "value", value: protocol },
-        { type: "text", text: " is not allowed. Allowed protocols: " },
-        ...valueSet(originalProtocols!, { fallback: "", locale: "en-US" }),
-        { type: "text", text: "." },
-      ] as Message;
+        : disallowedProtocol
+      : ([
+          { type: "text", text: "URL protocol " },
+          { type: "value", value: protocol },
+          { type: "text", text: " is not allowed. Allowed protocols: " },
+          ...valueSet(originalProtocols!, { fallback: "", locale: "en-US" }),
+          { type: "text", text: "." },
+        ] as Message);
   }
 
   function withTrailingDot(url: URL): URL {
@@ -5107,8 +5150,7 @@ export function origin(
     if (url.protocol === "blob:") {
       return {
         success: false,
-        error:
-          message`The ${url.protocol} URL wraps another origin. Pass that origin instead.`,
+        error: message`The ${url.protocol} URL wraps another origin. Pass that origin instead.`,
       };
     }
     if (url.origin === "null") {
@@ -5125,17 +5167,14 @@ export function origin(
     }
     if (
       extraComponents === "reject" &&
-      (
-        url.pathname !== "/" ||
+      (url.pathname !== "/" ||
         url.search !== "" ||
         url.hash !== "" ||
-        url.href !== new URL(url.origin).href
-      )
+        url.href !== new URL(url.origin).href)
     ) {
       return {
         success: false,
-        error:
-          message`Expected only an origin, but got extra components on ${url.origin}.`,
+        error: message`Expected only an origin, but got extra components on ${url.origin}.`,
       };
     }
     return { success: true, value: withTrailingDot(new URL(url.origin)) };
@@ -5238,9 +5277,9 @@ export function locale(
           return {
             success: false,
             error: options.errors?.invalidLocale
-              ? (typeof options.errors.invalidLocale === "function"
+              ? typeof options.errors.invalidLocale === "function"
                 ? options.errors.invalidLocale(input)
-                : options.errors.invalidLocale)
+                : options.errors.invalidLocale
               : message`Invalid locale: ${input}.`,
           };
         }
@@ -5647,29 +5686,30 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
   checkBooleanOption(options, "strict");
   // Snapshot mutable config at construction time
   const strict = options.strict !== false;
-  const allowedVersions = options.allowedVersions != null
-    ? (() => {
-      const unique = new Set<number>();
-      for (const v of options.allowedVersions) {
-        if (!Number.isInteger(v)) {
-          throw new TypeError(
-            `Expected every element of allowedVersions to be an integer, but got value "${
-              typeof v === "symbol" ? (v as symbol).toString() : String(v)
-            }" of type "${
-              Array.isArray(v) ? "array" : (v === null ? "null" : typeof v)
-            }".`,
-          );
-        }
-        if (v < 1 || v > 8) {
-          throw new RangeError(
-            `Expected every element of allowedVersions to be between 1 and 8, but got: ${v}.`,
-          );
-        }
-        unique.add(v);
-      }
-      return Object.freeze([...unique]);
-    })()
-    : null;
+  const allowedVersions =
+    options.allowedVersions != null
+      ? (() => {
+          const unique = new Set<number>();
+          for (const v of options.allowedVersions) {
+            if (!Number.isInteger(v)) {
+              throw new TypeError(
+                `Expected every element of allowedVersions to be an integer, but got value "${
+                  typeof v === "symbol" ? (v as symbol).toString() : String(v)
+                }" of type "${
+                  Array.isArray(v) ? "array" : v === null ? "null" : typeof v
+                }".`,
+              );
+            }
+            if (v < 1 || v > 8) {
+              throw new RangeError(
+                `Expected every element of allowedVersions to be between 1 and 8, but got: ${v}.`,
+              );
+            }
+            unique.add(v);
+          }
+          return Object.freeze([...unique]);
+        })()
+      : null;
   const invalidUuid = options.errors?.invalidUuid;
   const disallowedVersion = options.errors?.disallowedVersion;
   const invalidVariant = options.errors?.invalidVariant;
@@ -5683,9 +5723,9 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
         return {
           success: false,
           error: invalidUuid
-            ? (typeof invalidUuid === "function"
+            ? typeof invalidUuid === "function"
               ? invalidUuid(input)
-              : invalidUuid)
+              : invalidUuid
             : message`Expected a valid UUID in format ${"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}, but got ${input}.`,
         };
       }
@@ -5709,24 +5749,25 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
           return {
             success: false,
             error: disallowedVersion
-              ? (typeof disallowedVersion === "function"
+              ? typeof disallowedVersion === "function"
                 ? disallowedVersion(version, allowedVersions)
-                : disallowedVersion)
+                : disallowedVersion
               : (() => {
-                let expectedVersions = message``;
-                let i = 0;
-                for (const v of allowedVersions) {
-                  expectedVersions = i < 1
-                    ? message`${expectedVersions}${v.toLocaleString("en")}`
-                    : i + 1 >= allowedVersions.length
-                    ? message`${expectedVersions}, or ${v.toLocaleString("en")}`
-                    : message`${expectedVersions}, ${v.toLocaleString("en")}`;
-                  i++;
-                }
-                return message`Expected UUID version ${expectedVersions}, but got version ${
-                  version.toLocaleString("en")
-                }.`;
-              })(),
+                  let expectedVersions = message``;
+                  let i = 0;
+                  for (const v of allowedVersions) {
+                    expectedVersions =
+                      i < 1
+                        ? message`${expectedVersions}${v.toLocaleString("en")}`
+                        : i + 1 >= allowedVersions.length
+                          ? message`${expectedVersions}, or ${v.toLocaleString("en")}`
+                          : message`${expectedVersions}, ${v.toLocaleString("en")}`;
+                    i++;
+                  }
+                  return message`Expected UUID version ${expectedVersions}, but got version ${version.toLocaleString(
+                    "en",
+                  )}.`;
+                })(),
           };
         }
       } else if (strict && (version < 1 || version > 8)) {
@@ -5734,12 +5775,12 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
         return {
           success: false,
           error: disallowedVersion
-            ? (typeof disallowedVersion === "function"
+            ? typeof disallowedVersion === "function"
               ? disallowedVersion(version, [1, 2, 3, 4, 5, 6, 7, 8])
-              : disallowedVersion)
-            : message`Expected UUID version 1 through 8, but got version ${
-              version.toLocaleString("en")
-            }.`,
+              : disallowedVersion
+            : message`Expected UUID version 1 through 8, but got version ${version.toLocaleString(
+                "en",
+              )}.`,
         };
       }
 
@@ -5747,15 +5788,17 @@ export function uuid(options: UuidOptions = {}): ValueParser<"sync", Uuid> {
       if (strict) {
         const variantChar = input.charAt(19).toLowerCase();
         if (
-          variantChar !== "8" && variantChar !== "9" &&
-          variantChar !== "a" && variantChar !== "b"
+          variantChar !== "8" &&
+          variantChar !== "9" &&
+          variantChar !== "a" &&
+          variantChar !== "b"
         ) {
           return {
             success: false,
             error: invalidVariant
-              ? (typeof invalidVariant === "function"
+              ? typeof invalidVariant === "function"
                 ? invalidVariant(input)
-                : invalidVariant)
+                : invalidVariant
               : message`Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ${variantChar} in ${input}.`,
           };
         }
@@ -5935,9 +5978,7 @@ export interface PortOptionsBigInt {
  * @returns A {@link ValueParser} that parses strings into port numbers.
  * @since 0.10.0
  */
-export function port(
-  options?: PortOptionsNumber,
-): ValueParser<"sync", number>;
+export function port(options?: PortOptionsNumber): ValueParser<"sync", number>;
 
 /**
  * Creates a ValueParser for TCP/UDP port numbers that returns `bigint` values.
@@ -5946,9 +5987,7 @@ export function port(
  * @returns A {@link ValueParser} that parses strings into `bigint` port values.
  * @since 0.10.0
  */
-export function port(
-  options: PortOptionsBigInt,
-): ValueParser<"sync", bigint>;
+export function port(options: PortOptionsBigInt): ValueParser<"sync", bigint>;
 
 /**
  * Creates a ValueParser for TCP/UDP port numbers.
@@ -5999,9 +6038,9 @@ export function port(
     options.type !== "bigint"
   ) {
     throw new TypeError(
-      `Expected type to be "number" or "bigint", but got: ${
-        String(options.type)
-      }.`,
+      `Expected type to be "number" or "bigint", but got: ${String(
+        options.type,
+      )}.`,
     );
   }
   if (options?.type === "bigint") {
@@ -6025,18 +6064,21 @@ export function port(
     return {
       mode: "sync",
       metavar,
-      placeholder: options.placeholder ??
+      placeholder:
+        options.placeholder ??
         (options.disallowWellKnown && min < 1024n
-          ? (1024n > min ? 1024n : min)
+          ? 1024n > min
+            ? 1024n
+            : min
           : min),
       parse(input: string): ValueParserResult<bigint> {
         if (!input.match(/^-?\d+$/)) {
           return {
             success: false,
             error: options.errors?.invalidPort
-              ? (typeof options.errors.invalidPort === "function"
+              ? typeof options.errors.invalidPort === "function"
                 ? options.errors.invalidPort(input)
-                : options.errors.invalidPort)
+                : options.errors.invalidPort
               : message`Expected a valid port number, but got ${input}.`,
           };
         }
@@ -6046,12 +6088,12 @@ export function port(
           return {
             success: false,
             error: options.errors?.belowMinimum
-              ? (typeof options.errors.belowMinimum === "function"
+              ? typeof options.errors.belowMinimum === "function"
                 ? options.errors.belowMinimum(value, min)
-                : options.errors.belowMinimum)
-              : message`Expected a port number greater than or equal to ${
-                text(min.toLocaleString("en"))
-              }, but got ${input}.`,
+                : options.errors.belowMinimum
+              : message`Expected a port number greater than or equal to ${text(
+                  min.toLocaleString("en"),
+                )}, but got ${input}.`,
           };
         }
 
@@ -6059,12 +6101,12 @@ export function port(
           return {
             success: false,
             error: options.errors?.aboveMaximum
-              ? (typeof options.errors.aboveMaximum === "function"
+              ? typeof options.errors.aboveMaximum === "function"
                 ? options.errors.aboveMaximum(value, max)
-                : options.errors.aboveMaximum)
-              : message`Expected a port number less than or equal to ${
-                text(max.toLocaleString("en"))
-              }, but got ${input}.`,
+                : options.errors.aboveMaximum
+              : message`Expected a port number less than or equal to ${text(
+                  max.toLocaleString("en"),
+                )}, but got ${input}.`,
           };
         }
 
@@ -6072,12 +6114,12 @@ export function port(
           return {
             success: false,
             error: options.errors?.wellKnownNotAllowed
-              ? (typeof options.errors.wellKnownNotAllowed === "function"
+              ? typeof options.errors.wellKnownNotAllowed === "function"
                 ? options.errors.wellKnownNotAllowed(value)
-                : options.errors.wellKnownNotAllowed)
-              : message`Port ${
-                value.toLocaleString("en")
-              } is a well-known port (1-1023) and may require elevated privileges.`,
+                : options.errors.wellKnownNotAllowed
+              : message`Port ${value.toLocaleString(
+                  "en",
+                )} is a well-known port (1-1023) and may require elevated privileges.`,
           };
         }
 
@@ -6119,16 +6161,17 @@ export function port(
   return {
     mode: "sync",
     metavar,
-    placeholder: options?.placeholder ??
+    placeholder:
+      options?.placeholder ??
       (options?.disallowWellKnown && min < 1024 ? Math.max(1024, min) : min),
     parse(input: string): ValueParserResult<number> {
       if (!input.match(/^-?\d+$/)) {
         return {
           success: false,
           error: options?.errors?.invalidPort
-            ? (typeof options.errors.invalidPort === "function"
+            ? typeof options.errors.invalidPort === "function"
               ? options.errors.invalidPort(input)
-              : options.errors.invalidPort)
+              : options.errors.invalidPort
             : message`Expected a valid port number, but got ${input}.`,
         };
       }
@@ -6139,12 +6182,12 @@ export function port(
         return {
           success: false,
           error: options?.errors?.belowMinimum
-            ? (typeof options.errors.belowMinimum === "function"
+            ? typeof options.errors.belowMinimum === "function"
               ? options.errors.belowMinimum(value, min)
-              : options.errors.belowMinimum)
-            : message`Expected a port number greater than or equal to ${
-              text(min.toLocaleString("en"))
-            }, but got ${input}.`,
+              : options.errors.belowMinimum
+            : message`Expected a port number greater than or equal to ${text(
+                min.toLocaleString("en"),
+              )}, but got ${input}.`,
         };
       }
 
@@ -6152,12 +6195,12 @@ export function port(
         return {
           success: false,
           error: options?.errors?.aboveMaximum
-            ? (typeof options.errors.aboveMaximum === "function"
+            ? typeof options.errors.aboveMaximum === "function"
               ? options.errors.aboveMaximum(value, max)
-              : options.errors.aboveMaximum)
-            : message`Expected a port number less than or equal to ${
-              text(max.toLocaleString("en"))
-            }, but got ${input}.`,
+              : options.errors.aboveMaximum
+            : message`Expected a port number less than or equal to ${text(
+                max.toLocaleString("en"),
+              )}, but got ${input}.`,
         };
       }
 
@@ -6165,12 +6208,12 @@ export function port(
         return {
           success: false,
           error: options.errors?.wellKnownNotAllowed
-            ? (typeof options.errors.wellKnownNotAllowed === "function"
+            ? typeof options.errors.wellKnownNotAllowed === "function"
               ? options.errors.wellKnownNotAllowed(value)
-              : options.errors.wellKnownNotAllowed)
-            : message`Port ${
-              value.toLocaleString("en")
-            } is a well-known port (1-1023) and may require elevated privileges.`,
+              : options.errors.wellKnownNotAllowed
+            : message`Port ${value.toLocaleString(
+                "en",
+              )} is a well-known port (1-1023) and may require elevated privileges.`,
         };
       }
 
@@ -6365,16 +6408,17 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
     placeholder: allowZero
       ? "0.0.0.0"
       : allowLoopback
-      ? "127.0.0.1"
-      : "192.0.2.1",
+        ? "127.0.0.1"
+        : "192.0.2.1",
     parse(input: string): ValueParserResult<string> {
       const octets = parseIpv4Octets(input);
       if (octets === null) {
         const errorMsg = options?.errors?.invalidIpv4;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ??
-            message`Expected a valid IPv4 address, but got ${input}.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input)
+            : (errorMsg ??
+              message`Expected a valid IPv4 address, but got ${input}.`);
         return { success: false, error: msg };
       }
 
@@ -6383,49 +6427,55 @@ export function ipv4(options?: Ipv4Options): ValueParser<"sync", string> {
       // Check IP address type filters
       if (!allowPrivate && isPrivateIp(octets)) {
         const errorMsg = options?.errors?.privateNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(ipAddress)
-          : errorMsg ?? message`${ipAddress} is a private IP address.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(ipAddress)
+            : (errorMsg ?? message`${ipAddress} is a private IP address.`);
         return { success: false, error: msg };
       }
 
       if (!allowLoopback && isLoopbackIp(octets)) {
         const errorMsg = options?.errors?.loopbackNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(ipAddress)
-          : errorMsg ?? message`${ipAddress} is a loopback address.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(ipAddress)
+            : (errorMsg ?? message`${ipAddress} is a loopback address.`);
         return { success: false, error: msg };
       }
 
       if (!allowLinkLocal && isLinkLocalIp(octets)) {
         const errorMsg = options?.errors?.linkLocalNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(ipAddress)
-          : errorMsg ?? message`${ipAddress} is a link-local address.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(ipAddress)
+            : (errorMsg ?? message`${ipAddress} is a link-local address.`);
         return { success: false, error: msg };
       }
 
       if (!allowMulticast && isMulticastIp(octets)) {
         const errorMsg = options?.errors?.multicastNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(ipAddress)
-          : errorMsg ?? message`${ipAddress} is a multicast address.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(ipAddress)
+            : (errorMsg ?? message`${ipAddress} is a multicast address.`);
         return { success: false, error: msg };
       }
 
       if (!allowBroadcast && isBroadcastIp(octets)) {
         const errorMsg = options?.errors?.broadcastNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(ipAddress)
-          : errorMsg ?? message`${ipAddress} is the broadcast address.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(ipAddress)
+            : (errorMsg ?? message`${ipAddress} is the broadcast address.`);
         return { success: false, error: msg };
       }
 
       if (!allowZero && isZeroIp(octets)) {
         const errorMsg = options?.errors?.zeroNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(ipAddress)
-          : errorMsg ?? message`${ipAddress} is the zero address.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(ipAddress)
+            : (errorMsg ?? message`${ipAddress} is the zero address.`);
         return { success: false, error: msg };
       }
 
@@ -6575,29 +6625,36 @@ export function hostname(
   return {
     mode: "sync",
     metavar,
-    placeholder: options?.placeholder ??
+    placeholder:
+      options?.placeholder ??
       (allowLocalhost
-        ? (maxLength >= 9 ? "localhost" : "a.bc")
-        : (maxLength >= 11 ? "example.com" : "a.bc")),
+        ? maxLength >= 9
+          ? "localhost"
+          : "a.bc"
+        : maxLength >= 11
+          ? "example.com"
+          : "a.bc"),
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
         const errorMsg = options?.errors?.tooLong;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input, maxLength)
-          : errorMsg ??
-            message`Hostname ${input} is too long (maximum ${
-              text(maxLength.toString())
-            } characters).`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input, maxLength)
+            : (errorMsg ??
+              message`Hostname ${input} is too long (maximum ${text(
+                maxLength.toString(),
+              )} characters).`);
         return { success: false, error: msg };
       }
 
       // Check for localhost
       if (!allowLocalhost && input.toLowerCase() === "localhost") {
         const errorMsg = options?.errors?.localhostNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ?? message`Hostname 'localhost' is not allowed.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input)
+            : (errorMsg ?? message`Hostname 'localhost' is not allowed.`);
         return { success: false, error: msg };
       }
 
@@ -6605,10 +6662,11 @@ export function hostname(
       if (input.startsWith("*.")) {
         if (!allowWildcard) {
           const errorMsg = options?.errors?.wildcardNotAllowed;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Wildcard hostname ${input} is not allowed.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Wildcard hostname ${input} is not allowed.`);
           return { success: false, error: msg };
         }
 
@@ -6616,19 +6674,21 @@ export function hostname(
         const rest = input.slice(2);
         if (!rest || rest.includes("*")) {
           const errorMsg = options?.errors?.invalidHostname;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid hostname, but got ${input}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Expected a valid hostname, but got ${input}.`);
           return { success: false, error: msg };
         }
 
         // Check for wildcard localhost (e.g., *.localhost)
         if (!allowLocalhost && rest.toLowerCase() === "localhost") {
           const errorMsg = options?.errors?.localhostNotAllowed;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ?? message`Hostname 'localhost' is not allowed.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ?? message`Hostname 'localhost' is not allowed.`);
           return { success: false, error: msg };
         }
       }
@@ -6636,10 +6696,11 @@ export function hostname(
       // Check for underscore
       if (!allowUnderscore && input.includes("_")) {
         const errorMsg = options?.errors?.underscoreNotAllowed;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ??
-            message`Hostname ${input} contains underscore, which is not allowed.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input)
+            : (errorMsg ??
+              message`Hostname ${input} contains underscore, which is not allowed.`);
         return { success: false, error: msg };
       }
 
@@ -6647,9 +6708,11 @@ export function hostname(
       // Must not be empty
       if (input.length === 0) {
         const errorMsg = options?.errors?.invalidHostname;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ?? message`Expected a valid hostname, but got ${input}.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input)
+            : (errorMsg ??
+              message`Expected a valid hostname, but got ${input}.`);
         return { success: false, error: msg };
       }
 
@@ -6661,27 +6724,31 @@ export function hostname(
         // Label must not be empty
         if (label.length === 0) {
           const errorMsg = options?.errors?.invalidHostname;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid hostname, but got ${input}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Expected a valid hostname, but got ${input}.`);
           return { success: false, error: msg };
         }
 
         // Label must not exceed 63 characters
         if (label.length > 63) {
           const errorMsg = options?.errors?.invalidHostname;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid hostname, but got ${input}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Expected a valid hostname, but got ${input}.`);
           return { success: false, error: msg };
         }
 
         // Skip the leftmost wildcard label only when wildcard is allowed
         // and the input starts with "*." (already validated above)
         if (
-          label === "*" && allowWildcard && input.startsWith("*.") &&
+          label === "*" &&
+          allowWildcard &&
+          input.startsWith("*.") &&
           label === labels[0]
         ) {
           continue;
@@ -6690,10 +6757,11 @@ export function hostname(
         // Label must not start or end with hyphen
         if (label.startsWith("-") || label.endsWith("-")) {
           const errorMsg = options?.errors?.invalidHostname;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid hostname, but got ${input}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Expected a valid hostname, but got ${input}.`);
           return { success: false, error: msg };
         }
 
@@ -6703,10 +6771,11 @@ export function hostname(
           : /^[a-zA-Z0-9-]+$/;
         if (!allowedPattern.test(label)) {
           const errorMsg = options?.errors?.invalidHostname;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid hostname, but got ${input}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Expected a valid hostname, but got ${input}.`);
           return { success: false, error: msg };
         }
       }
@@ -6716,10 +6785,11 @@ export function hostname(
       // hostname() can still accept values like "123".
       if (labels.length >= 2 && labels.every((l) => /^[0-9]+$/.test(l))) {
         const errorMsg = options?.errors?.invalidHostname;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ??
-            message`Expected a valid hostname, but got ${input}.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input)
+            : (errorMsg ??
+              message`Expected a valid hostname, but got ${input}.`);
         return { success: false, error: msg };
       }
 
@@ -6839,9 +6909,7 @@ export interface EmailOptions {
 export function email(
   options: EmailOptions & { allowMultiple: true },
 ): ValueParser<"sync", readonly string[]>;
-export function email(
-  options?: EmailOptions,
-): ValueParser<"sync", string>;
+export function email(options?: EmailOptions): ValueParser<"sync", string>;
 export function email(
   options?: EmailOptions,
 ): ValueParser<"sync", string | readonly string[]> {
@@ -6863,9 +6931,10 @@ export function email(
   }
   const allowDisplayName = options?.allowDisplayName ?? false;
   const lowercase = options?.lowercase ?? false;
-  const allowedDomains = options?.allowedDomains != null
-    ? Object.freeze([...options.allowedDomains])
-    : undefined;
+  const allowedDomains =
+    options?.allowedDomains != null
+      ? Object.freeze([...options.allowedDomains])
+      : undefined;
   if (allowedDomains != null) {
     if (allowedDomains.length === 0) {
       throw new TypeError("allowedDomains must not be empty.");
@@ -6879,46 +6948,50 @@ export function email(
       }
       if (entry !== entry.trim()) {
         throw new TypeError(
-          `allowedDomains[${i}] must not have leading or trailing whitespace: ${
-            JSON.stringify(entry)
-          }`,
+          `allowedDomains[${i}] must not have leading or trailing whitespace: ${JSON.stringify(
+            entry,
+          )}`,
         );
       }
       if (entry.startsWith("@")) {
         throw new TypeError(
-          `allowedDomains[${i}] must not start with "@": ${
-            JSON.stringify(entry)
-          }`,
+          `allowedDomains[${i}] must not start with "@": ${JSON.stringify(
+            entry,
+          )}`,
         );
       }
       if (entry === "" || !entry.includes(".")) {
         throw new TypeError(
-          `allowedDomains[${i}] is not a valid domain: ${
-            JSON.stringify(entry)
-          }`,
+          `allowedDomains[${i}] is not a valid domain: ${JSON.stringify(
+            entry,
+          )}`,
         );
       }
       if (
-        entry.startsWith(".") || entry.endsWith(".") ||
-        entry.startsWith("-") || entry.endsWith("-")
+        entry.startsWith(".") ||
+        entry.endsWith(".") ||
+        entry.startsWith("-") ||
+        entry.endsWith("-")
       ) {
         throw new TypeError(
-          `allowedDomains[${i}] is not a valid domain: ${
-            JSON.stringify(entry)
-          }`,
+          `allowedDomains[${i}] is not a valid domain: ${JSON.stringify(
+            entry,
+          )}`,
         );
       }
       const labels = entry.split(".");
       for (const label of labels) {
         if (
-          label.length === 0 || label.length > 63 ||
-          label.startsWith("-") || label.endsWith("-") ||
+          label.length === 0 ||
+          label.length > 63 ||
+          label.startsWith("-") ||
+          label.endsWith("-") ||
           !/^[a-zA-Z0-9-]+$/.test(label)
         ) {
           throw new TypeError(
-            `allowedDomains[${i}] is not a valid domain: ${
-              JSON.stringify(entry)
-            }`,
+            `allowedDomains[${i}] is not a valid domain: ${JSON.stringify(
+              entry,
+            )}`,
           );
         }
       }
@@ -6928,9 +7001,9 @@ export function email(
         labels.every((label) => /^[0-9]+$/.test(label))
       ) {
         throw new TypeError(
-          `allowedDomains[${i}] is not a valid domain: ${
-            JSON.stringify(entry)
-          }`,
+          `allowedDomains[${i}] is not a valid domain: ${JSON.stringify(
+            entry,
+          )}`,
         );
       }
     }
@@ -7037,7 +7110,8 @@ export function email(
       }
 
       // Check each part is valid atext
-      isValidLocal = localParts.length > 0 &&
+      isValidLocal =
+        localParts.length > 0 &&
         localParts.every((part) => part.length > 0 && atextRegex.test(part));
     }
 
@@ -7062,8 +7136,10 @@ export function email(
 
     // Domain cannot start or end with dot or hyphen
     if (
-      domain.startsWith(".") || domain.endsWith(".") ||
-      domain.startsWith("-") || domain.endsWith("-")
+      domain.startsWith(".") ||
+      domain.endsWith(".") ||
+      domain.startsWith("-") ||
+      domain.endsWith("-")
     ) {
       return null;
     }
@@ -7100,8 +7176,9 @@ export function email(
     const resultEmail = emailAddr;
     if (!lowercase) return resultEmail;
     const lastAt = resultEmail.lastIndexOf("@");
-    return resultEmail.slice(0, lastAt) +
-      resultEmail.slice(lastAt).toLowerCase();
+    return (
+      resultEmail.slice(0, lastAt) + resultEmail.slice(lastAt).toLowerCase()
+    );
   }
 
   /**
@@ -7143,13 +7220,13 @@ export function email(
   return {
     mode: "sync" as const,
     metavar,
-    placeholder: (options?.placeholder ?? (options?.allowMultiple
-      ? ([
-        `user@${options?.allowedDomains?.[0] ?? "example.com"}`,
-      ] as readonly string[])
-      : `user@${options?.allowedDomains?.[0] ?? "example.com"}`)) as
-        & string
-        & readonly string[],
+    placeholder: (options?.placeholder ??
+      (options?.allowMultiple
+        ? ([
+            `user@${options?.allowedDomains?.[0] ?? "example.com"}`,
+          ] as readonly string[])
+        : `user@${options?.allowedDomains?.[0] ?? "example.com"}`)) as string &
+      readonly string[],
     parse(
       input: string,
     ): ValueParserResult<string> | ValueParserResult<readonly string[]> {
@@ -7162,10 +7239,11 @@ export function email(
           const validated = validateEmail(email);
           if (validated === null) {
             const errorMsg = invalidEmail;
-            const msg = typeof errorMsg === "function"
-              ? errorMsg(email)
-              : errorMsg ??
-                message`Expected a valid email address, but got ${email}.`;
+            const msg =
+              typeof errorMsg === "function"
+                ? errorMsg(email)
+                : (errorMsg ??
+                  message`Expected a valid email address, but got ${email}.`);
             return { success: false, error: msg };
           }
 
@@ -7173,8 +7251,8 @@ export function email(
           if (allowedDomains != null) {
             const atIndex = validated.indexOf("@");
             const domain = validated.substring(atIndex + 1).toLowerCase();
-            const isAllowed = allowedDomains.some((allowed) =>
-              domain === allowed.toLowerCase()
+            const isAllowed = allowedDomains.some(
+              (allowed) => domain === allowed.toLowerCase(),
             );
             if (!isAllowed) {
               const errorMsg = domainNotAllowed;
@@ -7184,13 +7262,18 @@ export function email(
                   error: errorMsg(validated, allowedDomains),
                 };
               }
-              const msg = errorMsg ?? [
-                { type: "text", text: "Email domain " },
-                { type: "value", value: domain },
-                { type: "text", text: " is not allowed. Allowed domains: " },
-                ...valueSet(allowedDomains, { fallback: "", locale: "en-US" }),
-                { type: "text", text: "." },
-              ] as Message;
+              const msg =
+                errorMsg ??
+                ([
+                  { type: "text", text: "Email domain " },
+                  { type: "value", value: domain },
+                  { type: "text", text: " is not allowed. Allowed domains: " },
+                  ...valueSet(allowedDomains, {
+                    fallback: "",
+                    locale: "en-US",
+                  }),
+                  { type: "text", text: "." },
+                ] as Message);
               return { success: false, error: msg };
             }
           }
@@ -7204,10 +7287,11 @@ export function email(
         const validated = validateEmail(input);
         if (validated === null) {
           const errorMsg = invalidEmail;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Expected a valid email address, but got ${input}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Expected a valid email address, but got ${input}.`);
           return { success: false, error: msg };
         }
 
@@ -7215,8 +7299,8 @@ export function email(
         if (allowedDomains != null) {
           const atIndex = validated.indexOf("@");
           const domain = validated.substring(atIndex + 1).toLowerCase();
-          const isAllowed = allowedDomains.some((allowed) =>
-            domain === allowed.toLowerCase()
+          const isAllowed = allowedDomains.some(
+            (allowed) => domain === allowed.toLowerCase(),
           );
           if (!isAllowed) {
             const errorMsg = domainNotAllowed;
@@ -7226,13 +7310,15 @@ export function email(
                 error: errorMsg(validated, allowedDomains),
               };
             }
-            const msg = errorMsg ?? [
-              { type: "text", text: "Email domain " },
-              { type: "value", value: domain },
-              { type: "text", text: " is not allowed. Allowed domains: " },
-              ...valueSet(allowedDomains, { fallback: "", locale: "en-US" }),
-              { type: "text", text: "." },
-            ] as Message;
+            const msg =
+              errorMsg ??
+              ([
+                { type: "text", text: "Email domain " },
+                { type: "value", value: domain },
+                { type: "text", text: " is not allowed. Allowed domains: " },
+                ...valueSet(allowedDomains, { fallback: "", locale: "en-US" }),
+                { type: "text", text: "." },
+              ] as Message);
             return { success: false, error: msg };
           }
         }
@@ -7417,9 +7503,9 @@ export function socketAddress(
   }
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
-      `Expected separator to not contain digits, but got: ${
-        JSON.stringify(separator)
-      }.`,
+      `Expected separator to not contain digits, but got: ${JSON.stringify(
+        separator,
+      )}.`,
     );
   }
   const formatExample = `host${JSON.stringify(separator).slice(1, -1)}port`;
@@ -7442,11 +7528,12 @@ export function socketAddress(
     );
   }
   const hasLegacyIpOptions = options?.host?.ip !== undefined;
-  const hasNewIpOptions = rawHostVersion !== undefined ||
+  const hasNewIpOptions =
+    rawHostVersion !== undefined ||
     options?.host?.ipv4 !== undefined ||
     options?.host?.ipv6 !== undefined;
-  const hostVersion = rawHostVersion ??
-    (hasLegacyIpOptions && !hasNewIpOptions ? 4 : "both");
+  const hostVersion =
+    rawHostVersion ?? (hasLegacyIpOptions && !hasNewIpOptions ? 4 : "both");
 
   // Create host parser based on type
   const hostnameParser = hostname({
@@ -7479,14 +7566,15 @@ export function socketAddress(
   // In "ip" mode hostname options are irrelevant, so a maximally
   // permissive syntax check is used instead to avoid leaking
   // hostname policy into IP-only parsing.
-  const disambiguationParser = hostType === "ip"
-    ? hostname({
-      metavar: "HOST",
-      allowWildcard: true,
-      allowUnderscore: true,
-      maxLength: Math.max(253, options?.host?.hostname?.maxLength ?? 0),
-    })
-    : hostnameParser;
+  const disambiguationParser =
+    hostType === "ip"
+      ? hostname({
+          metavar: "HOST",
+          allowWildcard: true,
+          allowUnderscore: true,
+          maxLength: Math.max(253, options?.host?.hostname?.maxLength ?? 0),
+        })
+      : hostnameParser;
 
   // Whether the separator consists of characters that can appear
   // inside valid hostnames (letters, digits, dot, hyphen).  When
@@ -7510,8 +7598,10 @@ export function socketAddress(
 
   function looksLikeIpv6(input: string): boolean {
     const colonCount = input.match(/:/g)?.length ?? 0;
-    return colonCount >= 2 &&
-      (input.includes("::") || /^[0-9a-fA-F:.]+$/.test(input));
+    return (
+      colonCount >= 2 &&
+      (input.includes("::") || /^[0-9a-fA-F:.]+$/.test(input))
+    );
   }
 
   function looksLikeBareIpv6(input: string): boolean {
@@ -7526,7 +7616,7 @@ export function socketAddress(
     // are allowed as single-label hostnames.
     if (/^0[xX][0-9a-fA-F]+$/.test(input)) {
       const n = parseInt(input.slice(2), 16);
-      return n <= 0xFFFFFFFF;
+      return n <= 0xffffffff;
     }
 
     // Single octal integer within 32-bit IPv4 range: 017700000001.
@@ -7536,7 +7626,7 @@ export function socketAddress(
     // and fall through to hostname validation.
     if (/^0[0-7]+$/.test(input)) {
       const n = parseInt(input.slice(1), 8);
-      return n <= 0xFFFFFFFF;
+      return n <= 0xffffffff;
     }
 
     // Dotted forms (2-4 parts) where at least one part uses hex or
@@ -7566,8 +7656,10 @@ export function socketAddress(
           }
         }
         const lastMax = 256 ** (5 - parts.length);
-        return values.slice(0, -1).every((v) => v <= 255) &&
-          values[values.length - 1] < lastMax;
+        return (
+          values.slice(0, -1).every((v) => v <= 255) &&
+          values[values.length - 1] < lastMax
+        );
       }
     }
 
@@ -7608,8 +7700,7 @@ export function socketAddress(
       if (looksLikeAltIpv4Literal(hostInput)) {
         return {
           success: false,
-          error:
-            message`${hostInput} appears to be a non-standard IPv4 address notation.`,
+          error: message`${hostInput} appears to be a non-standard IPv4 address notation.`,
         };
       }
       if (looksLikeIpv4(hostInput)) {
@@ -7628,8 +7719,7 @@ export function socketAddress(
       if (looksLikeAltIpv4Literal(hostInput)) {
         return {
           success: false,
-          error:
-            message`${hostInput} appears to be a non-standard IPv4 address notation.`,
+          error: message`${hostInput} appears to be a non-standard IPv4 address notation.`,
         };
       }
       if (looksLikeIpv4(hostInput)) {
@@ -7648,10 +7738,13 @@ export function socketAddress(
     input: string,
   ): ValueParserResult<SocketAddressValue> {
     const errorMsg = options?.errors?.invalidFormat;
-    const msg = typeof errorMsg === "function" ? errorMsg(input) : errorMsg ??
-      message`Expected a socket address in format ${
-        text(formatExample)
-      }, but got ${input}.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(input)
+        : (errorMsg ??
+          message`Expected a socket address in format ${text(
+            formatExample,
+          )}, but got ${input}.`);
     return { success: false, error: msg };
   }
 
@@ -7659,9 +7752,10 @@ export function socketAddress(
     input: string,
   ): ValueParserResult<SocketAddressValue> {
     const errorMsg = options?.errors?.missingPort;
-    const msg = typeof errorMsg === "function"
-      ? errorMsg(input)
-      : errorMsg ?? message`Port number is required but was not specified.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(input)
+        : (errorMsg ?? message`Port number is required but was not specified.`);
     return { success: false, error: msg };
   }
 
@@ -7731,9 +7825,14 @@ export function socketAddress(
   }
 
   function isSocketAddressValue(value: unknown): value is SocketAddressValue {
-    return typeof value === "object" && value !== null &&
-      "host" in value && typeof value.host === "string" &&
-      "port" in value && typeof value.port === "number";
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      "host" in value &&
+      typeof value.host === "string" &&
+      "port" in value &&
+      typeof value.port === "number"
+    );
   }
 
   function formatSocketAddressValue(value: SocketAddressValue): string {
@@ -7749,9 +7848,12 @@ export function socketAddress(
     metavar,
     get placeholder() {
       return {
-        host: hostType === "ip"
-          ? hostVersion === 6 ? ipv6Parser.placeholder : ipv4Parser.placeholder
-          : hostnameParser.placeholder,
+        host:
+          hostType === "ip"
+            ? hostVersion === 6
+              ? ipv6Parser.placeholder
+              : ipv4Parser.placeholder
+            : hostnameParser.placeholder,
         port: defaultPort ?? portParser.placeholder,
       };
     },
@@ -7764,11 +7866,7 @@ export function socketAddress(
       const canOmitPort = defaultPort !== undefined && !requirePort;
 
       if (separator === ":") {
-        const bracketedResult = parseBracketedHost(
-          input,
-          trimmed,
-          canOmitPort,
-        );
+        const bracketedResult = parseBracketedHost(input, trimmed, canOmitPort);
         if (bracketedResult !== undefined) return bracketedResult;
 
         if (looksLikeBareIpv6(trimmed)) {
@@ -7833,16 +7931,17 @@ export function socketAddress(
         anySeparatorFound = true;
 
         const hostPart = searchInput.substring(0, separatorIndex).trim();
-        const portPart = searchInput.substring(
-          separatorIndex + separator.length,
-        ).trim();
+        const portPart = searchInput
+          .substring(separatorIndex + separator.length)
+          .trim();
 
         if (portPart === "") {
           // Trailing separator—potential omitted port.  Record the
           // first (rightmost) result so it can be used as a fallback
           // when the whole input is not a valid hostname.
           if (
-            trailingSepHost === undefined && trailingSepHostError === undefined
+            trailingSepHost === undefined &&
+            trailingSepHostError === undefined
           ) {
             if (separatorIndex + separator.length > trimmed.length) {
               trailingSepInTrimmedRegion = true;
@@ -7872,8 +7971,7 @@ export function socketAddress(
             // not shadowed by earlier generic hostname failures.
             if (
               firstHostError === undefined ||
-              ((looksLikeIpv4(hostPart) ||
-                looksLikeAltIpv4Literal(hostPart)) &&
+              ((looksLikeIpv4(hostPart) || looksLikeAltIpv4Literal(hostPart)) &&
                 !looksLikeIpv4(firstHostError.hostPart) &&
                 !looksLikeAltIpv4Literal(firstHostError.hostPart))
             ) {
@@ -7891,10 +7989,7 @@ export function socketAddress(
             // non-IP hosts, a non-empty hostPart is enough signal that
             // the user intended a split (even if the host itself is
             // invalid, like "db-" with a trailing hyphen).
-            if (
-              looksLikeIpv4(hostPart) ||
-              looksLikeAltIpv4Literal(hostPart)
-            ) {
+            if (looksLikeIpv4(hostPart) || looksLikeAltIpv4Literal(hostPart)) {
               const hostResult = parseHost(hostPart);
               if (!hostResult.success) {
                 if (
@@ -7922,8 +8017,7 @@ export function socketAddress(
             (firstHostError === undefined ||
               (!looksLikeIpv4(firstHostError.hostPart) &&
                 !looksLikeAltIpv4Literal(firstHostError.hostPart))) &&
-            (looksLikeIpv4(hostPart) ||
-              looksLikeAltIpv4Literal(hostPart))
+            (looksLikeIpv4(hostPart) || looksLikeAltIpv4Literal(hostPart))
           ) {
             // Port is invalid and non-numeric (e.g., "abc").  If the
             // host part is IP-shaped, validate it anyway so that
@@ -7948,9 +8042,8 @@ export function socketAddress(
       if (validHostInvalidPortError !== undefined) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg;
+          const msg =
+            typeof errorMsg === "function" ? errorMsg(input) : errorMsg;
           return { success: false, error: msg };
         }
         // When both host and port failed on the same split, prefer the
@@ -7969,9 +8062,9 @@ export function socketAddress(
           if (portSplitHostIsDegenerate) {
             return {
               success: false,
-              error: message`Expected a socket address in format ${
-                text(formatExample)
-              }, but got ${input}.`,
+              error: message`Expected a socket address in format ${text(
+                formatExample,
+              )}, but got ${input}.`,
             };
           }
           if (!disambiguationParser.parse(trimmed).success) {
@@ -7984,9 +8077,9 @@ export function socketAddress(
         if (disambiguationParser.parse(trimmed).success) {
           return {
             success: false,
-            error: message`Expected a socket address in format ${
-              text(formatExample)
-            }, but got ${input}.`,
+            error: message`Expected a socket address in format ${text(
+              formatExample,
+            )}, but got ${input}.`,
           };
         }
         return { success: false, error: validHostInvalidPortError };
@@ -8006,9 +8099,8 @@ export function socketAddress(
         ) {
           const errorMsg = options?.errors?.invalidFormat;
           if (errorMsg) {
-            const msg = typeof errorMsg === "function"
-              ? errorMsg(input)
-              : errorMsg;
+            const msg =
+              typeof errorMsg === "function" ? errorMsg(input) : errorMsg;
             return { success: false, error: msg };
           }
           return { success: false, error: firstHostError.error };
@@ -8030,7 +8122,9 @@ export function socketAddress(
       ) {
         hostOnlyResult = parseHost(trimmed);
         if (
-          canOmitPort && hostOnlyResult.success && !trailingSepInTrimmedRegion
+          canOmitPort &&
+          hostOnlyResult.success &&
+          !trailingSepInTrimmedRegion
         ) {
           return {
             success: true,
@@ -8053,10 +8147,11 @@ export function socketAddress(
         (!hostOnlyResult.success || trailingSepInTrimmedRegion)
       ) {
         const errorMsg = options?.errors?.missingPort;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ??
-            message`Port number is required but was not specified.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input)
+            : (errorMsg ??
+              message`Port number is required but was not specified.`);
         return { success: false, error: msg };
       }
 
@@ -8070,9 +8165,8 @@ export function socketAddress(
       ) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg;
+          const msg =
+            typeof errorMsg === "function" ? errorMsg(input) : errorMsg;
           return { success: false, error: msg };
         }
         const trailingHostIsDegenerate = separatorIsHostChar
@@ -8097,10 +8191,11 @@ export function socketAddress(
         hostOnlyResult.success
       ) {
         const errorMsg = options?.errors?.missingPort;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input)
-          : errorMsg ??
-            message`Port number is required but was not specified.`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input)
+            : (errorMsg ??
+              message`Port number is required but was not specified.`);
         return { success: false, error: msg };
       }
 
@@ -8110,10 +8205,11 @@ export function socketAddress(
         hostOnlyResult = hostOnlyResult ?? parseHost(trimmed);
         if (hostOnlyResult.success) {
           const errorMsg = options?.errors?.missingPort;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg ??
-              message`Port number is required but was not specified.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(input)
+              : (errorMsg ??
+                message`Port number is required but was not specified.`);
           return { success: false, error: msg };
         }
       }
@@ -8125,9 +8221,8 @@ export function socketAddress(
       if (firstHostError !== undefined) {
         const errorMsg = options?.errors?.invalidFormat;
         if (errorMsg) {
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(input)
-            : errorMsg;
+          const msg =
+            typeof errorMsg === "function" ? errorMsg(input) : errorMsg;
           return { success: false, error: msg };
         }
         // Only surface the split-host error when the hostPart is
@@ -8161,18 +8256,16 @@ export function socketAddress(
       }
 
       if (hostOnlyResult !== undefined && !hostOnlyResult.success) {
-        if (
-          looksLikeIpv4(trimmed) || looksLikeAltIpv4Literal(trimmed)
-        ) {
+        if (looksLikeIpv4(trimmed) || looksLikeAltIpv4Literal(trimmed)) {
           return { success: false, error: hostOnlyResult.error };
         }
       }
 
       return {
         success: false,
-        error: message`Expected a socket address in format ${
-          text(formatExample)
-        }, but got ${input}.`,
+        error: message`Expected a socket address in format ${text(
+          formatExample,
+        )}, but got ${input}.`,
       };
     },
     format(value: SocketAddressValue): string {
@@ -8465,9 +8558,9 @@ export function portRange(
     options.type !== "bigint"
   ) {
     throw new TypeError(
-      `Expected type to be "number" or "bigint", but got: ${
-        String(options.type)
-      }.`,
+      `Expected type to be "number" or "bigint", but got: ${String(
+        options.type,
+      )}.`,
     );
   }
   const separator = options?.separator ?? "-";
@@ -8476,9 +8569,9 @@ export function portRange(
   }
   if (/\p{Nd}/u.test(separator)) {
     throw new TypeError(
-      `Expected separator to not contain digits, but got: ${
-        JSON.stringify(separator)
-      }.`,
+      `Expected separator to not contain digits, but got: ${JSON.stringify(
+        separator,
+      )}.`,
     );
   }
   const metavar = options?.metavar ?? `PORT${separator}PORT`;
@@ -8489,37 +8582,39 @@ export function portRange(
   // Create port parser for validation
   const portParser = isBigInt
     ? port({
-      type: "bigint",
-      min: (options as PortRangeOptionsBigInt).min,
-      max: (options as PortRangeOptionsBigInt).max,
-      disallowWellKnown: options.disallowWellKnown,
-      errors: options.errors,
-    })
+        type: "bigint",
+        min: (options as PortRangeOptionsBigInt).min,
+        max: (options as PortRangeOptionsBigInt).max,
+        disallowWellKnown: options.disallowWellKnown,
+        errors: options.errors,
+      })
     : port({
-      type: "number",
-      min: (options as PortRangeOptionsNumber | undefined)?.min,
-      max: (options as PortRangeOptionsNumber | undefined)?.max,
-      disallowWellKnown: options?.disallowWellKnown,
-      errors: options?.errors,
-    });
+        type: "number",
+        min: (options as PortRangeOptionsNumber | undefined)?.min,
+        max: (options as PortRangeOptionsNumber | undefined)?.max,
+        disallowWellKnown: options?.disallowWellKnown,
+        errors: options?.errors,
+      });
 
   return {
     mode: "sync",
     metavar,
     get placeholder(): PortRangeValueNumber | PortRangeValueBigInt {
-      return (isBigInt
-        ? {
-          start: portParser.placeholder as bigint,
-          end: portParser.placeholder as bigint,
-        }
-        : {
-          start: portParser.placeholder as number,
-          end: portParser.placeholder as number,
-        }) as PortRangeValueNumber | PortRangeValueBigInt;
+      return (
+        isBigInt
+          ? {
+              start: portParser.placeholder as bigint,
+              end: portParser.placeholder as bigint,
+            }
+          : {
+              start: portParser.placeholder as number,
+              end: portParser.placeholder as number,
+            }
+      ) as PortRangeValueNumber | PortRangeValueBigInt;
     },
-    parse(input: string): ValueParserResult<
-      PortRangeValueNumber | PortRangeValueBigInt
-    > {
+    parse(
+      input: string,
+    ): ValueParserResult<PortRangeValueNumber | PortRangeValueBigInt> {
       const trimmed = input.trim();
 
       // Find separator
@@ -8532,15 +8627,16 @@ export function portRange(
           if (typeof errorMsg === "function") {
             return { success: false, error: errorMsg(input) };
           }
-          const msg = errorMsg ?? [
-            {
-              type: "text",
-              text:
-                `Expected a port range in format start${separator}end, but got `,
-            },
-            { type: "value", value: input },
-            { type: "text", text: "." },
-          ] as Message;
+          const msg =
+            errorMsg ??
+            ([
+              {
+                type: "text",
+                text: `Expected a port range in format start${separator}end, but got `,
+              },
+              { type: "value", value: input },
+              { type: "text", text: "." },
+            ] as Message);
           return { success: false, error: msg };
         }
 
@@ -8585,10 +8681,11 @@ export function portRange(
         if (start > end) {
           const errorMsg = (options as PortRangeOptionsBigInt).errors
             ?.invalidRange;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(start, end)
-            : errorMsg ??
-              message`Start port ${startPart} must be less than or equal to end port ${endPart}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(start, end)
+              : (errorMsg ??
+                message`Start port ${startPart} must be less than or equal to end port ${endPart}.`);
           return { success: false, error: msg };
         }
         return {
@@ -8601,10 +8698,11 @@ export function portRange(
         if (start > end) {
           const errorMsg = (options as PortRangeOptionsNumber | undefined)
             ?.errors?.invalidRange;
-          const msg = typeof errorMsg === "function"
-            ? errorMsg(start, end)
-            : errorMsg ??
-              message`Start port ${startPart} must be less than or equal to end port ${endPart}.`;
+          const msg =
+            typeof errorMsg === "function"
+              ? errorMsg(start, end)
+              : (errorMsg ??
+                message`Start port ${startPart} must be less than or equal to end port ${endPart}.`);
           return { success: false, error: msg };
         }
         return {
@@ -8788,10 +8886,7 @@ export function macAddress(
         }
       }
 
-      if (
-        octets.length === 0 &&
-        (separator === "-" || separator === "any")
-      ) {
+      if (octets.length === 0 && (separator === "-" || separator === "any")) {
         const match = hyphenRegex.exec(input);
         if (match) {
           octets = match.slice(1, 7);
@@ -8799,10 +8894,7 @@ export function macAddress(
         }
       }
 
-      if (
-        octets.length === 0 &&
-        (separator === "." || separator === "any")
-      ) {
+      if (octets.length === 0 && (separator === "." || separator === "any")) {
         const match = dotRegex.exec(input);
         if (match) {
           // Cisco format: split 3 groups of 4 hex digits into 6 octets
@@ -8837,11 +8929,13 @@ export function macAddress(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid MAC address, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid MAC address, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9008,9 +9102,10 @@ export function domain(
   checkBooleanOption(options, "allowSubdomains");
   checkBooleanOption(options, "lowercase");
   const allowSubdomains = options?.allowSubdomains ?? true;
-  const allowedTlds = options?.allowedTlds != null
-    ? Object.freeze([...options.allowedTlds])
-    : undefined;
+  const allowedTlds =
+    options?.allowedTlds != null
+      ? Object.freeze([...options.allowedTlds])
+      : undefined;
   // Domain label regex: 1-63 alphanumeric characters and hyphens,
   // cannot start or end with hyphen
   const labelRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
@@ -9026,9 +9121,7 @@ export function domain(
         );
       }
       if (tld.length === 0) {
-        throw new TypeError(
-          `allowedTlds[${i}] must not be an empty string.`,
-        );
+        throw new TypeError(`allowedTlds[${i}] must not be an empty string.`);
       }
       if (tld.includes(".")) {
         throw new TypeError(
@@ -9037,9 +9130,9 @@ export function domain(
       }
       if (tld !== tld.trim()) {
         throw new TypeError(
-          `allowedTlds[${i}] must not have leading or trailing whitespace: ${
-            JSON.stringify(tld)
-          }.`,
+          `allowedTlds[${i}] must not have leading or trailing whitespace: ${JSON.stringify(
+            tld,
+          )}.`,
         );
       }
       if (!labelRegex.test(tld)) {
@@ -9049,9 +9142,10 @@ export function domain(
       }
     }
   }
-  const allowedTldsLower = allowedTlds != null
-    ? Object.freeze(allowedTlds.map((t) => t.toLowerCase()))
-    : undefined;
+  const allowedTldsLower =
+    allowedTlds != null
+      ? Object.freeze(allowedTlds.map((t) => t.toLowerCase()))
+      : undefined;
   const minLabels = options?.minLabels ?? 2;
   const maxLength = options?.maxLength ?? 253;
   const lowercase = options?.lowercase ?? false;
@@ -9080,18 +9174,19 @@ export function domain(
   const domainParserObj: ValueParser<"sync", string> = {
     mode: "sync",
     metavar,
-    placeholder: options?.placeholder ??
-      `example.${allowedTldsLower?.[0] ?? "com"}`,
+    placeholder:
+      options?.placeholder ?? `example.${allowedTldsLower?.[0] ?? "com"}`,
     parse(input: string): ValueParserResult<string> {
       // Check length constraint first
       if (input.length > maxLength) {
         const errorMsg = tooLong;
-        const msg = typeof errorMsg === "function"
-          ? errorMsg(input, maxLength)
-          : errorMsg ??
-            message`Domain ${input} is too long (maximum ${
-              text(maxLength.toString())
-            } characters).`;
+        const msg =
+          typeof errorMsg === "function"
+            ? errorMsg(input, maxLength)
+            : (errorMsg ??
+              message`Domain ${input} is too long (maximum ${text(
+                maxLength.toString(),
+              )} characters).`);
         return { success: false, error: msg };
       }
 
@@ -9101,11 +9196,13 @@ export function domain(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid domain name, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid domain name, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9115,11 +9212,13 @@ export function domain(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid domain name, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid domain name, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9133,11 +9232,13 @@ export function domain(
           if (typeof errorMsg === "function") {
             return { success: false, error: errorMsg(input) };
           }
-          const msg = errorMsg ?? [
-            { type: "text", text: "Expected a valid domain name, but got " },
-            { type: "value", value: input },
-            { type: "text", text: "." },
-          ] as Message;
+          const msg =
+            errorMsg ??
+            ([
+              { type: "text", text: "Expected a valid domain name, but got " },
+              { type: "value", value: input },
+              { type: "text", text: "." },
+            ] as Message);
           return { success: false, error: msg };
         }
       }
@@ -9150,11 +9251,13 @@ export function domain(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid domain name, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid domain name, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9164,14 +9267,16 @@ export function domain(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input, minLabels) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Domain " },
-          { type: "value", value: input },
-          {
-            type: "text",
-            text: ` must have at least ${minLabels} labels.`,
-          },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Domain " },
+            { type: "value", value: input },
+            {
+              type: "text",
+              text: ` must have at least ${minLabels} labels.`,
+            },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9181,11 +9286,13 @@ export function domain(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Subdomains are not allowed, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Subdomains are not allowed, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9199,13 +9306,15 @@ export function domain(
           if (typeof errorMsg === "function") {
             return { success: false, error: errorMsg(tld, allowedTlds) };
           }
-          const msg = errorMsg ?? [
-            { type: "text", text: "Top-level domain " },
-            { type: "value", value: tld },
-            { type: "text", text: " is not allowed. Allowed TLDs: " },
-            ...valueSet(allowedTlds, { fallback: "", locale: "en-US" }),
-            { type: "text", text: "." },
-          ] as Message;
+          const msg =
+            errorMsg ??
+            ([
+              { type: "text", text: "Top-level domain " },
+              { type: "value", value: tld },
+              { type: "text", text: " is not allowed. Allowed TLDs: " },
+              ...valueSet(allowedTlds, { fallback: "", locale: "en-US" }),
+              { type: "text", text: "." },
+            ] as Message);
           return { success: false, error: msg };
         }
       }
@@ -9379,9 +9488,7 @@ export interface Ipv6Options {
  *
  * @since 0.10.0
  */
-export function ipv6(
-  options?: Ipv6Options,
-): ValueParser<"sync", string> {
+export function ipv6(options?: Ipv6Options): ValueParser<"sync", string> {
   const allowLoopback = options?.allowLoopback ?? true;
   const allowLinkLocal = options?.allowLinkLocal ?? true;
   const allowUniqueLocal = options?.allowUniqueLocal ?? true;
@@ -9402,11 +9509,13 @@ export function ipv6(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid IPv6 address, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid IPv6 address, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9416,10 +9525,12 @@ export function ipv6(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(normalized) };
         }
-        const msg = errorMsg ?? [
-          { type: "value", value: normalized },
-          { type: "text", text: " is the zero address." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "value", value: normalized },
+            { type: "text", text: " is the zero address." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9429,10 +9540,12 @@ export function ipv6(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(normalized) };
         }
-        const msg = errorMsg ?? [
-          { type: "value", value: normalized },
-          { type: "text", text: " is a loopback address." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "value", value: normalized },
+            { type: "text", text: " is a loopback address." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9443,11 +9556,13 @@ export function ipv6(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid IPv6 address, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid IPv6 address, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9459,10 +9574,12 @@ export function ipv6(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(normalized) };
         }
-        const msg = errorMsg ?? [
-          { type: "value", value: normalized },
-          { type: "text", text: " is a link-local address." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "value", value: normalized },
+            { type: "text", text: " is a link-local address." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9472,10 +9589,12 @@ export function ipv6(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(normalized) };
         }
-        const msg = errorMsg ?? [
-          { type: "value", value: normalized },
-          { type: "text", text: " is a unique local address." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "value", value: normalized },
+            { type: "text", text: " is a unique local address." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9485,10 +9604,12 @@ export function ipv6(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(normalized) };
         }
-        const msg = errorMsg ?? [
-          { type: "value", value: normalized },
-          { type: "text", text: " is a multicast address." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "value", value: normalized },
+            { type: "text", text: " is a multicast address." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -9586,9 +9707,9 @@ function parseAndNormalizeIpv6(input: string): string | null {
     const group2 = (octets[2] << 8) | octets[3];
 
     // Reconstruct as full IPv6
-    const fullAddress = `${ipv6Part}:${group1.toString(16)}:${
-      group2.toString(16)
-    }`;
+    const fullAddress = `${ipv6Part}:${group1.toString(16)}:${group2.toString(
+      16,
+    )}`;
     return parseAndNormalizeIpv6(fullAddress);
   }
 
@@ -9737,12 +9858,7 @@ function extractIpv4FromMapped(
   // Extract octets from groups 6 and 7
   const high = parseInt(groups[6], 16);
   const low = parseInt(groups[7], 16);
-  return [
-    (high >> 8) & 0xff,
-    high & 0xff,
-    (low >> 8) & 0xff,
-    low & 0xff,
-  ];
+  return [(high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff];
 }
 
 /**
@@ -9757,14 +9873,16 @@ function checkIpv4MappedRestrictions(
   octets: readonly number[],
   normalizedIpv6: string,
   ipv4Opts: Omit<Ipv4Options, "metavar" | "errors"> | undefined,
-  errors: {
-    readonly privateNotAllowed?: Message | ((ip: string) => Message);
-    readonly loopbackNotAllowed?: Message | ((ip: string) => Message);
-    readonly linkLocalNotAllowed?: Message | ((ip: string) => Message);
-    readonly multicastNotAllowed?: Message | ((ip: string) => Message);
-    readonly broadcastNotAllowed?: Message | ((ip: string) => Message);
-    readonly zeroNotAllowed?: Message | ((ip: string) => Message);
-  } | undefined,
+  errors:
+    | {
+        readonly privateNotAllowed?: Message | ((ip: string) => Message);
+        readonly loopbackNotAllowed?: Message | ((ip: string) => Message);
+        readonly linkLocalNotAllowed?: Message | ((ip: string) => Message);
+        readonly multicastNotAllowed?: Message | ((ip: string) => Message);
+        readonly broadcastNotAllowed?: Message | ((ip: string) => Message);
+        readonly zeroNotAllowed?: Message | ((ip: string) => Message);
+      }
+    | undefined,
 ): { readonly success: false; readonly error: Message } | null {
   const allowPrivate = ipv4Opts?.allowPrivate ?? true;
   const allowLoopback = ipv4Opts?.allowLoopback ?? true;
@@ -9775,49 +9893,55 @@ function checkIpv4MappedRestrictions(
 
   if (!allowPrivate && isPrivateIp(octets)) {
     const errorMsg = errors?.privateNotAllowed;
-    const msg = typeof errorMsg === "function"
-      ? errorMsg(normalizedIpv6)
-      : errorMsg ?? message`${normalizedIpv6} is a private IP address.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(normalizedIpv6)
+        : (errorMsg ?? message`${normalizedIpv6} is a private IP address.`);
     return { success: false, error: msg };
   }
 
   if (!allowLoopback && isLoopbackIp(octets)) {
     const errorMsg = errors?.loopbackNotAllowed;
-    const msg = typeof errorMsg === "function"
-      ? errorMsg(normalizedIpv6)
-      : errorMsg ?? message`${normalizedIpv6} is a loopback address.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(normalizedIpv6)
+        : (errorMsg ?? message`${normalizedIpv6} is a loopback address.`);
     return { success: false, error: msg };
   }
 
   if (!allowLinkLocal && isLinkLocalIp(octets)) {
     const errorMsg = errors?.linkLocalNotAllowed;
-    const msg = typeof errorMsg === "function"
-      ? errorMsg(normalizedIpv6)
-      : errorMsg ?? message`${normalizedIpv6} is a link-local address.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(normalizedIpv6)
+        : (errorMsg ?? message`${normalizedIpv6} is a link-local address.`);
     return { success: false, error: msg };
   }
 
   if (!allowMulticast && isMulticastIp(octets)) {
     const errorMsg = errors?.multicastNotAllowed;
-    const msg = typeof errorMsg === "function"
-      ? errorMsg(normalizedIpv6)
-      : errorMsg ?? message`${normalizedIpv6} is a multicast address.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(normalizedIpv6)
+        : (errorMsg ?? message`${normalizedIpv6} is a multicast address.`);
     return { success: false, error: msg };
   }
 
   if (!allowBroadcast && isBroadcastIp(octets)) {
     const errorMsg = errors?.broadcastNotAllowed;
-    const msg = typeof errorMsg === "function"
-      ? errorMsg(normalizedIpv6)
-      : errorMsg ?? message`${normalizedIpv6} is the broadcast address.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(normalizedIpv6)
+        : (errorMsg ?? message`${normalizedIpv6} is the broadcast address.`);
     return { success: false, error: msg };
   }
 
   if (!allowZero && isZeroIp(octets)) {
     const errorMsg = errors?.zeroNotAllowed;
-    const msg = typeof errorMsg === "function"
-      ? errorMsg(normalizedIpv6)
-      : errorMsg ?? message`${normalizedIpv6} is the zero address.`;
+    const msg =
+      typeof errorMsg === "function"
+        ? errorMsg(normalizedIpv6)
+        : (errorMsg ?? message`${normalizedIpv6} is the zero address.`);
     return { success: false, error: msg };
   }
 
@@ -9937,73 +10061,74 @@ export interface IpOptions {
  *
  * @since 0.10.0
  */
-export function ip(
-  options?: IpOptions,
-): ValueParser<"sync", string> {
+export function ip(options?: IpOptions): ValueParser<"sync", string> {
   const version = options?.version ?? "both";
   const metavar = options?.metavar ?? "IP";
   const errors = options?.errors;
 
   // Create IPv4 parser if needed
-  const ipv4Parser = (version === 4 || version === "both")
-    ? ipv4({
-      ...options?.ipv4,
-      errors: {
-        invalidIpv4: errors?.invalidIP,
-        privateNotAllowed: errors?.privateNotAllowed,
-        loopbackNotAllowed: errors?.loopbackNotAllowed,
-        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-        multicastNotAllowed: errors?.multicastNotAllowed,
-        broadcastNotAllowed: errors?.broadcastNotAllowed,
-        zeroNotAllowed: errors?.zeroNotAllowed,
-      },
-    })
-    : null;
+  const ipv4Parser =
+    version === 4 || version === "both"
+      ? ipv4({
+          ...options?.ipv4,
+          errors: {
+            invalidIpv4: errors?.invalidIP,
+            privateNotAllowed: errors?.privateNotAllowed,
+            loopbackNotAllowed: errors?.loopbackNotAllowed,
+            linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+            multicastNotAllowed: errors?.multicastNotAllowed,
+            broadcastNotAllowed: errors?.broadcastNotAllowed,
+            zeroNotAllowed: errors?.zeroNotAllowed,
+          },
+        })
+      : null;
 
   // Create IPv6 parser if needed
-  const ipv6Parser = (version === 6 || version === "both")
-    ? ipv6({
-      ...options?.ipv6,
-      errors: {
-        invalidIpv6: errors?.invalidIP,
-        loopbackNotAllowed: errors?.loopbackNotAllowed,
-        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-        uniqueLocalNotAllowed: errors?.uniqueLocalNotAllowed,
-        multicastNotAllowed: errors?.multicastNotAllowed,
-        zeroNotAllowed: errors?.zeroNotAllowed,
-      },
-    })
-    : null;
+  const ipv6Parser =
+    version === 6 || version === "both"
+      ? ipv6({
+          ...options?.ipv6,
+          errors: {
+            invalidIpv6: errors?.invalidIP,
+            loopbackNotAllowed: errors?.loopbackNotAllowed,
+            linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+            uniqueLocalNotAllowed: errors?.uniqueLocalNotAllowed,
+            multicastNotAllowed: errors?.multicastNotAllowed,
+            zeroNotAllowed: errors?.zeroNotAllowed,
+          },
+        })
+      : null;
 
   // Snapshot IPv4 restriction config for mapped IPv6 checking,
   // consistent with how ipv4Parser snapshots at construction time.
-  const mappedIpv4Opts = version === "both"
-    ? {
-      allowPrivate: options?.ipv4?.allowPrivate,
-      allowLoopback: options?.ipv4?.allowLoopback,
-      allowLinkLocal: options?.ipv4?.allowLinkLocal,
-      allowMulticast: options?.ipv4?.allowMulticast,
-      allowBroadcast: options?.ipv4?.allowBroadcast,
-      allowZero: options?.ipv4?.allowZero,
-    }
-    : undefined;
-  const mappedIpv4Errors = version === "both"
-    ? {
-      privateNotAllowed: errors?.privateNotAllowed,
-      loopbackNotAllowed: errors?.loopbackNotAllowed,
-      linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-      multicastNotAllowed: errors?.multicastNotAllowed,
-      broadcastNotAllowed: errors?.broadcastNotAllowed,
-      zeroNotAllowed: errors?.zeroNotAllowed,
-    }
-    : undefined;
+  const mappedIpv4Opts =
+    version === "both"
+      ? {
+          allowPrivate: options?.ipv4?.allowPrivate,
+          allowLoopback: options?.ipv4?.allowLoopback,
+          allowLinkLocal: options?.ipv4?.allowLinkLocal,
+          allowMulticast: options?.ipv4?.allowMulticast,
+          allowBroadcast: options?.ipv4?.allowBroadcast,
+          allowZero: options?.ipv4?.allowZero,
+        }
+      : undefined;
+  const mappedIpv4Errors =
+    version === "both"
+      ? {
+          privateNotAllowed: errors?.privateNotAllowed,
+          loopbackNotAllowed: errors?.loopbackNotAllowed,
+          linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+          multicastNotAllowed: errors?.multicastNotAllowed,
+          broadcastNotAllowed: errors?.broadcastNotAllowed,
+          zeroNotAllowed: errors?.zeroNotAllowed,
+        }
+      : undefined;
 
   const ipParserObj: ValueParser<"sync", string> = {
     mode: "sync",
     metavar,
-    placeholder: version === 6
-      ? ipv6Parser!.placeholder
-      : ipv4Parser!.placeholder,
+    placeholder:
+      version === 6 ? ipv6Parser!.placeholder : ipv4Parser!.placeholder,
     parse(input: string): ValueParserResult<string> {
       let ipv4Error: ValueParserResult<string> | null = null;
       let ipv6Error: ValueParserResult<string> | null = null;
@@ -10052,8 +10177,8 @@ export function ip(
       // (e.g., "private not allowed" over "invalid IPv4")
       if (ipv4Error !== null && !ipv4Error.success) {
         // Check if it's a generic "invalid" error by looking for "Expected" text
-        const isGeneric = ipv4Error.error.some((term) =>
-          term.type === "text" && term.text.includes("Expected")
+        const isGeneric = ipv4Error.error.some(
+          (term) => term.type === "text" && term.text.includes("Expected"),
         );
         if (!isGeneric) {
           return ipv4Error;
@@ -10061,8 +10186,8 @@ export function ip(
       }
 
       if (ipv6Error !== null && !ipv6Error.success) {
-        const isGeneric = ipv6Error.error.some((term) =>
-          term.type === "text" && term.text.includes("Expected")
+        const isGeneric = ipv6Error.error.some(
+          (term) => term.type === "text" && term.text.includes("Expected"),
         );
         if (!isGeneric) {
           return ipv6Error;
@@ -10074,11 +10199,13 @@ export function ip(
       if (typeof errorMsg === "function") {
         return { success: false, error: errorMsg(input) };
       }
-      const msg = errorMsg ?? [
-        { type: "text", text: "Expected a valid IP address, but got " },
-        { type: "value", value: input },
-        { type: "text", text: "." },
-      ] as Message;
+      const msg =
+        errorMsg ??
+        ([
+          { type: "text", text: "Expected a valid IP address, but got " },
+          { type: "value", value: input },
+          { type: "text", text: "." },
+        ] as Message);
       return { success: false, error: msg };
     },
     format(value: string): string {
@@ -10298,9 +10425,7 @@ export interface CidrOptions {
  *
  * @since 0.10.0
  */
-export function cidr(
-  options?: CidrOptions,
-): ValueParser<"sync", CidrValue> {
+export function cidr(options?: CidrOptions): ValueParser<"sync", CidrValue> {
   if (options?.minPrefix != null && !Number.isFinite(options.minPrefix)) {
     throw new RangeError(
       `Expected minPrefix to be a finite number, but got: ${options.minPrefix}`,
@@ -10312,7 +10437,8 @@ export function cidr(
     );
   }
   if (
-    options?.minPrefix != null && options?.maxPrefix != null &&
+    options?.minPrefix != null &&
+    options?.maxPrefix != null &&
     options.minPrefix > options.maxPrefix
   ) {
     throw new RangeError(
@@ -10356,57 +10482,61 @@ export function cidr(
 
   // Create IP parsers for address validation, forwarding restriction
   // error hooks from CidrOptions.errors to the nested parsers
-  const ipv4Parser = (version === 4 || version === "both")
-    ? ipv4({
-      ...options?.ipv4,
-      errors: {
-        invalidIpv4: genericIpSentinel,
-        privateNotAllowed: errors?.privateNotAllowed,
-        loopbackNotAllowed: errors?.loopbackNotAllowed,
-        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-        multicastNotAllowed: errors?.multicastNotAllowed,
-        broadcastNotAllowed: errors?.broadcastNotAllowed,
-        zeroNotAllowed: errors?.zeroNotAllowed,
-      },
-    })
-    : null;
+  const ipv4Parser =
+    version === 4 || version === "both"
+      ? ipv4({
+          ...options?.ipv4,
+          errors: {
+            invalidIpv4: genericIpSentinel,
+            privateNotAllowed: errors?.privateNotAllowed,
+            loopbackNotAllowed: errors?.loopbackNotAllowed,
+            linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+            multicastNotAllowed: errors?.multicastNotAllowed,
+            broadcastNotAllowed: errors?.broadcastNotAllowed,
+            zeroNotAllowed: errors?.zeroNotAllowed,
+          },
+        })
+      : null;
 
-  const ipv6Parser = (version === 6 || version === "both")
-    ? ipv6({
-      ...options?.ipv6,
-      errors: {
-        invalidIpv6: genericIpSentinel,
-        loopbackNotAllowed: errors?.loopbackNotAllowed,
-        linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-        multicastNotAllowed: errors?.multicastNotAllowed,
-        zeroNotAllowed: errors?.zeroNotAllowed,
-        uniqueLocalNotAllowed: errors?.uniqueLocalNotAllowed,
-      },
-    })
-    : null;
+  const ipv6Parser =
+    version === 6 || version === "both"
+      ? ipv6({
+          ...options?.ipv6,
+          errors: {
+            invalidIpv6: genericIpSentinel,
+            loopbackNotAllowed: errors?.loopbackNotAllowed,
+            linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+            multicastNotAllowed: errors?.multicastNotAllowed,
+            zeroNotAllowed: errors?.zeroNotAllowed,
+            uniqueLocalNotAllowed: errors?.uniqueLocalNotAllowed,
+          },
+        })
+      : null;
 
   // Snapshot IPv4 restriction config for mapped IPv6 checking,
   // consistent with how ipv4Parser snapshots at construction time.
-  const mappedIpv4Opts = version === "both"
-    ? {
-      allowPrivate: options?.ipv4?.allowPrivate,
-      allowLoopback: options?.ipv4?.allowLoopback,
-      allowLinkLocal: options?.ipv4?.allowLinkLocal,
-      allowMulticast: options?.ipv4?.allowMulticast,
-      allowBroadcast: options?.ipv4?.allowBroadcast,
-      allowZero: options?.ipv4?.allowZero,
-    }
-    : undefined;
-  const mappedIpv4Errors = version === "both"
-    ? {
-      privateNotAllowed: errors?.privateNotAllowed,
-      loopbackNotAllowed: errors?.loopbackNotAllowed,
-      linkLocalNotAllowed: errors?.linkLocalNotAllowed,
-      multicastNotAllowed: errors?.multicastNotAllowed,
-      broadcastNotAllowed: errors?.broadcastNotAllowed,
-      zeroNotAllowed: errors?.zeroNotAllowed,
-    }
-    : undefined;
+  const mappedIpv4Opts =
+    version === "both"
+      ? {
+          allowPrivate: options?.ipv4?.allowPrivate,
+          allowLoopback: options?.ipv4?.allowLoopback,
+          allowLinkLocal: options?.ipv4?.allowLinkLocal,
+          allowMulticast: options?.ipv4?.allowMulticast,
+          allowBroadcast: options?.ipv4?.allowBroadcast,
+          allowZero: options?.ipv4?.allowZero,
+        }
+      : undefined;
+  const mappedIpv4Errors =
+    version === "both"
+      ? {
+          privateNotAllowed: errors?.privateNotAllowed,
+          loopbackNotAllowed: errors?.loopbackNotAllowed,
+          linkLocalNotAllowed: errors?.linkLocalNotAllowed,
+          multicastNotAllowed: errors?.multicastNotAllowed,
+          broadcastNotAllowed: errors?.broadcastNotAllowed,
+          zeroNotAllowed: errors?.zeroNotAllowed,
+        }
+      : undefined;
 
   const cidrParserObj: ValueParser<"sync", CidrValue> = {
     mode: "sync",
@@ -10414,15 +10544,15 @@ export function cidr(
     get placeholder() {
       return version === 6 || (version === "both" && (minPrefix ?? 0) > 32)
         ? {
-          address: ipv6Parser!.placeholder,
-          prefix: minPrefix ?? 0,
-          version: 6 as 4 | 6,
-        }
+            address: ipv6Parser!.placeholder,
+            prefix: minPrefix ?? 0,
+            version: 6 as 4 | 6,
+          }
         : {
-          address: ipv4Parser!.placeholder,
-          prefix: minPrefix ?? 0,
-          version: 4 as 4 | 6,
-        };
+            address: ipv4Parser!.placeholder,
+            prefix: minPrefix ?? 0,
+            version: 4 as 4 | 6,
+          };
     },
     parse(input: string): ValueParserResult<CidrValue> {
       // Parse CIDR format: <ip>/<prefix>
@@ -10432,11 +10562,13 @@ export function cidr(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid CIDR notation, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid CIDR notation, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -10446,18 +10578,21 @@ export function cidr(
       // Parse prefix length
       const prefix = parseInt(prefixPart, 10);
       if (
-        !Number.isInteger(prefix) || prefixPart !== prefix.toString() ||
+        !Number.isInteger(prefix) ||
+        prefixPart !== prefix.toString() ||
         prefix < 0
       ) {
         const errorMsg = errors?.invalidCidr;
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid CIDR notation, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid CIDR notation, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -10479,16 +10614,18 @@ export function cidr(
             if (typeof errorMsg === "function") {
               return { success: false, error: errorMsg(prefix, 4) };
             }
-            const msg = errorMsg ?? [
-              {
-                type: "text",
-                text: "Expected a prefix length between 0 and ",
-              },
-              { type: "text", text: "32" },
-              { type: "text", text: " for IPv4, but got " },
-              { type: "text", text: prefix.toString() },
-              { type: "text", text: "." },
-            ] as Message;
+            const msg =
+              errorMsg ??
+              ([
+                {
+                  type: "text",
+                  text: "Expected a prefix length between 0 and ",
+                },
+                { type: "text", text: "32" },
+                { type: "text", text: " for IPv4, but got " },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message);
             return { success: false, error: msg };
           }
         } else {
@@ -10509,16 +10646,18 @@ export function cidr(
             if (typeof errorMsg === "function") {
               return { success: false, error: errorMsg(prefix, 6) };
             }
-            const msg = errorMsg ?? [
-              {
-                type: "text",
-                text: "Expected a prefix length between 0 and ",
-              },
-              { type: "text", text: "128" },
-              { type: "text", text: " for IPv6, but got " },
-              { type: "text", text: prefix.toString() },
-              { type: "text", text: "." },
-            ] as Message;
+            const msg =
+              errorMsg ??
+              ([
+                {
+                  type: "text",
+                  text: "Expected a prefix length between 0 and ",
+                },
+                { type: "text", text: "128" },
+                { type: "text", text: " for IPv6, but got " },
+                { type: "text", text: prefix.toString() },
+                { type: "text", text: "." },
+              ] as Message);
             return { success: false, error: msg };
           }
         } else {
@@ -10536,7 +10675,10 @@ export function cidr(
           ValueParserResult<string> | null,
           4 | 6,
           number,
-        ][] = [[ipv4Error, 4, 32], [ipv6Error, 6, 128]];
+        ][] = [
+          [ipv4Error, 4, 32],
+          [ipv6Error, 6, 128],
+        ];
         for (const [err, ver, maxPfx] of candidates) {
           if (err !== null && !err.success && err.error !== genericIpSentinel) {
             // The IP was structurally valid but violated a restriction.
@@ -10547,16 +10689,18 @@ export function cidr(
               if (typeof errorMsg === "function") {
                 return { success: false, error: errorMsg(prefix, ver) };
               }
-              const msg = errorMsg ?? [
-                {
-                  type: "text",
-                  text: "Expected a prefix length between 0 and ",
-                },
-                { type: "text", text: maxPfx.toString() },
-                { type: "text", text: ` for IPv${ver}, but got ` },
-                { type: "text", text: prefix.toString() },
-                { type: "text", text: "." },
-              ] as Message;
+              const msg =
+                errorMsg ??
+                ([
+                  {
+                    type: "text",
+                    text: "Expected a prefix length between 0 and ",
+                  },
+                  { type: "text", text: maxPfx.toString() },
+                  { type: "text", text: ` for IPv${ver}, but got ` },
+                  { type: "text", text: prefix.toString() },
+                  { type: "text", text: "." },
+                ] as Message);
               return { success: false, error: msg };
             }
             if (minPrefix !== undefined && prefix < minPrefix) {
@@ -10564,16 +10708,18 @@ export function cidr(
               if (typeof errorMsg === "function") {
                 return { success: false, error: errorMsg(prefix, minPrefix) };
               }
-              const msg = errorMsg ?? [
-                {
-                  type: "text",
-                  text: "Expected a prefix length greater than or equal to ",
-                },
-                { type: "text", text: minPrefix.toString() },
-                { type: "text", text: ", but got " },
-                { type: "text", text: prefix.toString() },
-                { type: "text", text: "." },
-              ] as Message;
+              const msg =
+                errorMsg ??
+                ([
+                  {
+                    type: "text",
+                    text: "Expected a prefix length greater than or equal to ",
+                  },
+                  { type: "text", text: minPrefix.toString() },
+                  { type: "text", text: ", but got " },
+                  { type: "text", text: prefix.toString() },
+                  { type: "text", text: "." },
+                ] as Message);
               return { success: false, error: msg };
             }
             if (maxPrefix !== undefined && prefix > maxPrefix) {
@@ -10581,16 +10727,18 @@ export function cidr(
               if (typeof errorMsg === "function") {
                 return { success: false, error: errorMsg(prefix, maxPrefix) };
               }
-              const msg = errorMsg ?? [
-                {
-                  type: "text",
-                  text: "Expected a prefix length less than or equal to ",
-                },
-                { type: "text", text: maxPrefix.toString() },
-                { type: "text", text: ", but got " },
-                { type: "text", text: prefix.toString() },
-                { type: "text", text: "." },
-              ] as Message;
+              const msg =
+                errorMsg ??
+                ([
+                  {
+                    type: "text",
+                    text: "Expected a prefix length less than or equal to ",
+                  },
+                  { type: "text", text: maxPrefix.toString() },
+                  { type: "text", text: ", but got " },
+                  { type: "text", text: prefix.toString() },
+                  { type: "text", text: "." },
+                ] as Message);
               return { success: false, error: msg };
             }
             return err;
@@ -10601,11 +10749,13 @@ export function cidr(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(input) };
         }
-        const msg = errorMsg ?? [
-          { type: "text", text: "Expected a valid CIDR notation, but got " },
-          { type: "value", value: input },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            { type: "text", text: "Expected a valid CIDR notation, but got " },
+            { type: "value", value: input },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -10615,16 +10765,18 @@ export function cidr(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(prefix, minPrefix) };
         }
-        const msg = errorMsg ?? [
-          {
-            type: "text",
-            text: "Expected a prefix length greater than or equal to ",
-          },
-          { type: "text", text: minPrefix.toString() },
-          { type: "text", text: ", but got " },
-          { type: "text", text: prefix.toString() },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            {
+              type: "text",
+              text: "Expected a prefix length greater than or equal to ",
+            },
+            { type: "text", text: minPrefix.toString() },
+            { type: "text", text: ", but got " },
+            { type: "text", text: prefix.toString() },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -10634,16 +10786,18 @@ export function cidr(
         if (typeof errorMsg === "function") {
           return { success: false, error: errorMsg(prefix, maxPrefix) };
         }
-        const msg = errorMsg ?? [
-          {
-            type: "text",
-            text: "Expected a prefix length less than or equal to ",
-          },
-          { type: "text", text: maxPrefix.toString() },
-          { type: "text", text: ", but got " },
-          { type: "text", text: prefix.toString() },
-          { type: "text", text: "." },
-        ] as Message;
+        const msg =
+          errorMsg ??
+          ([
+            {
+              type: "text",
+              text: "Expected a prefix length less than or equal to ",
+            },
+            { type: "text", text: maxPrefix.toString() },
+            { type: "text", text: ", but got " },
+            { type: "text", text: prefix.toString() },
+            { type: "text", text: "." },
+          ] as Message);
         return { success: false, error: msg };
       }
 
@@ -10680,8 +10834,10 @@ export function cidr(
   Object.defineProperty(cidrParserObj, "format", {
     value(value: CidrValue): string {
       if (
-        typeof value !== "object" || value == null ||
-        !("address" in value) || !("prefix" in value) ||
+        typeof value !== "object" ||
+        value == null ||
+        !("address" in value) ||
+        !("prefix" in value) ||
         !("version" in value)
       ) {
         return metavar;
@@ -10706,8 +10862,10 @@ export function cidr(
   Object.defineProperty(cidrParserObj, "normalize", {
     value(v: CidrValue): CidrValue {
       if (
-        typeof v !== "object" || v == null ||
-        !("address" in v) || !("prefix" in v) ||
+        typeof v !== "object" ||
+        v == null ||
+        !("address" in v) ||
+        !("prefix" in v) ||
         !("version" in v)
       ) {
         return v;
@@ -10938,7 +11096,9 @@ export function semVer(
     return {
       success: false,
       error: errorOption
-        ? (typeof errorOption === "function" ? errorOption(input) : errorOption)
+        ? typeof errorOption === "function"
+          ? errorOption(input)
+          : errorOption
         : message`Expected a valid Semantic Versioning 2.0.0 string (e.g. ${"1.0.0"}), but got ${input}.`,
     };
   }
@@ -11246,31 +11406,32 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
     const nonFinitePlaceholder = findNonFiniteNumber(p);
     if (nonFinitePlaceholder !== undefined) {
       throw new TypeError(
-        `Expected placeholder to contain only finite numbers, but found ${
-          String(nonFinitePlaceholder)
-        }.`,
+        `Expected placeholder to contain only finite numbers, but found ${String(
+          nonFinitePlaceholder,
+        )}.`,
       );
     }
     if (rootType != null && jsonTypeOf(p) !== rootType) {
       throw new TypeError(
-        `Expected placeholder to be a JSON ${rootType}, but got ${
-          jsonTypeOf(p)
-        }.`,
+        `Expected placeholder to be a JSON ${rootType}, but got ${jsonTypeOf(
+          p,
+        )}.`,
       );
     }
   }
 
-  const defaultPlaceholder: Json = rootType === "string"
-    ? ""
-    : rootType === "number"
-    ? 0
-    : rootType === "boolean"
-    ? false
-    : rootType === "object"
-    ? {}
-    : rootType === "array"
-    ? []
-    : null;
+  const defaultPlaceholder: Json =
+    rootType === "string"
+      ? ""
+      : rootType === "number"
+        ? 0
+        : rootType === "boolean"
+          ? false
+          : rootType === "object"
+            ? {}
+            : rootType === "array"
+              ? []
+              : null;
   const placeholder: Json = options?.placeholder ?? defaultPlaceholder;
 
   return {
@@ -11283,26 +11444,31 @@ export function json(options?: JsonOptions): ValueParser<"sync", Json> {
         value = JSON.parse(input) as Json;
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));
-        const error: Message = invalidJsonError instanceof Function
-          ? invalidJsonError(input)
-          : invalidJsonError ?? [text(`Not a valid JSON: ${err.message}`)];
+        const error: Message =
+          invalidJsonError instanceof Function
+            ? invalidJsonError(input)
+            : (invalidJsonError ?? [text(`Not a valid JSON: ${err.message}`)]);
         return { success: false, error };
       }
       const nonFinite = findNonFiniteNumber(value);
       if (nonFinite !== undefined) {
-        const error: Message = invalidJsonError instanceof Function
-          ? invalidJsonError(input)
-          : invalidJsonError ??
-            [text(`Not a valid JSON: number out of range.`)];
+        const error: Message =
+          invalidJsonError instanceof Function
+            ? invalidJsonError(input)
+            : (invalidJsonError ?? [
+                text(`Not a valid JSON: number out of range.`),
+              ]);
         return { success: false, error };
       }
       if (rootType != null) {
         const actual = jsonTypeOf(value);
         if (actual !== rootType) {
-          const error: Message = invalidRootTypeError instanceof Function
-            ? invalidRootTypeError(value, rootType)
-            : invalidRootTypeError ??
-              [text(`Expected JSON ${rootType}, but got ${actual}.`)];
+          const error: Message =
+            invalidRootTypeError instanceof Function
+              ? invalidRootTypeError(value, rootType)
+              : (invalidRootTypeError ?? [
+                  text(`Expected JSON ${rootType}, but got ${actual}.`),
+                ]);
           return { success: false, error };
         }
       }
@@ -11447,11 +11613,15 @@ export interface CronOptions {
  *
  * @since 1.2.0
  */
-export type CronExpressionForOptions<O extends CronOptions> =
-  & Omit<CronExpression, "second" | "year">
-  & (O["seconds"] extends true ? { readonly second: string }
-    : { readonly second?: string })
-  & (O["years"] extends true ? { readonly year: string }
+export type CronExpressionForOptions<O extends CronOptions> = Omit<
+  CronExpression,
+  "second" | "year"
+> &
+  (O["seconds"] extends true
+    ? { readonly second: string }
+    : { readonly second?: string }) &
+  (O["years"] extends true
+    ? { readonly year: string }
     : { readonly year?: string });
 
 type CronFieldKind =
@@ -11558,10 +11728,11 @@ export function cron(
   const expectedFieldCount = 5 + (seconds ? 1 : 0) + (years ? 1 : 0);
 
   function makeError(input: string): ValueParserResult<never> {
-    const error = invalidCronError instanceof Function
-      ? invalidCronError(input)
-      : invalidCronError ??
-        message`Expected a valid cron expression, but got ${input}.`;
+    const error =
+      invalidCronError instanceof Function
+        ? invalidCronError(input)
+        : (invalidCronError ??
+          message`Expected a valid cron expression, but got ${input}.`);
     return { success: false, error };
   }
 
@@ -11592,10 +11763,7 @@ export function cron(
     ];
 
     for (const [field, spec] of fieldChecks) {
-      if (
-        field !== undefined &&
-        !isValidCronField(field, spec, { quartz })
-      ) {
+      if (field !== undefined && !isValidCronField(field, spec, { quartz })) {
         return makeError(input);
       }
     }
@@ -11646,7 +11814,8 @@ export function cron(
         return makeError(this.format(value));
       }
       if (
-        (!seconds && value.second != null) || (!years && value.year != null)
+        (!seconds && value.second != null) ||
+        (!years && value.year != null)
       ) {
         return makeError(this.format(value));
       }
@@ -11663,7 +11832,8 @@ function isValidCronField(
 ): boolean {
   if (field === "") return false;
   const parts = field.split(",");
-  const standard = !parts.some((part) => part === "") &&
+  const standard =
+    !parts.some((part) => part === "") &&
     parts.every((part) => isValidCronFieldPart(part, spec));
   return standard || isQuartzCronField(field, spec, options.quartz);
 }
@@ -12000,9 +12170,10 @@ export function firstOf(
 ): ValueParser<"sync", unknown> {
   // The fixed-arity and array overloads declare the trailing options as
   // optional, so an explicit `undefined` may arrive as the last argument:
-  const args = rawArgs.length > 0 && rawArgs.at(-1) === undefined
-    ? rawArgs.slice(0, -1)
-    : rawArgs;
+  const args =
+    rawArgs.length > 0 && rawArgs.at(-1) === undefined
+      ? rawArgs.slice(0, -1)
+      : rawArgs;
   let parsers: readonly ValueParser<"sync", unknown>[];
   let options: FirstOfOptions;
   if (args.length > 0 && Array.isArray(args[0])) {
@@ -12014,7 +12185,9 @@ export function firstOf(
   } else {
     const last = args.at(-1);
     if (
-      args.length > 0 && typeof last === "object" && last != null &&
+      args.length > 0 &&
+      typeof last === "object" &&
+      last != null &&
       !isValueParser(last)
     ) {
       options = last as FirstOfOptions;
@@ -12052,8 +12225,8 @@ export function firstOf(
       );
     }
   }
-  const metavar = options.metavar ??
-    parsers.map((parser) => parser.metavar).join("|");
+  const metavar =
+    options.metavar ?? parsers.map((parser) => parser.metavar).join("|");
   ensureNonEmptyString(metavar);
 
   // A merged choices list is only meaningful when it is exhaustive, i.e.,
@@ -12063,13 +12236,13 @@ export function firstOf(
   // distinguishes.
   const mergedChoices = parsers.every((parser) => parser.choices != null)
     ? Object.freeze(
-      parsers
-        .flatMap((parser) => [...parser.choices!])
-        .filter(
-          (value, index, all) =>
-            all.findIndex((other) => Object.is(other, value)) === index,
-        ),
-    )
+        parsers
+          .flatMap((parser) => [...parser.choices!])
+          .filter(
+            (value, index, all) =>
+              all.findIndex((other) => Object.is(other, value)) === index,
+          ),
+      )
     : undefined;
 
   // Finds the constituent that produced the given value, along with its
@@ -12093,19 +12266,17 @@ export function firstOf(
   // value.  Object values are exempt from the second pass: structural
   // equality is the only way to tell canonicalization from data loss
   // there, and the first pass already covers it.
-  function findOwner(
-    value: unknown,
-  ):
+  function findOwner(value: unknown):
     | {
-      readonly parser: ValueParser<"sync", unknown>;
-      readonly result: ValueParserResult<unknown>;
-    }
-    | undefined {
-    let canonicalizing:
-      | {
         readonly parser: ValueParser<"sync", unknown>;
         readonly result: ValueParserResult<unknown>;
       }
+    | undefined {
+    let canonicalizing:
+      | {
+          readonly parser: ValueParser<"sync", unknown>;
+          readonly result: ValueParserResult<unknown>;
+        }
       | undefined;
     for (const parser of parsers) {
       if (typeof parser.validate === "function") {
@@ -12136,7 +12307,8 @@ export function firstOf(
       }
       if (
         canonicalizing == null &&
-        value !== null && typeof value !== "object" &&
+        value !== null &&
+        typeof value !== "object" &&
         typeof result.value === typeof value
       ) {
         canonicalizing = { parser, result };
@@ -12167,11 +12339,12 @@ export function firstOf(
       const noMatch = options.errors?.noMatch;
       return {
         success: false,
-        error: noMatch == null
-          ? firstOfNoMatchError(errors)
-          : typeof noMatch === "function"
-          ? noMatch(input, errors)
-          : noMatch,
+        error:
+          noMatch == null
+            ? firstOfNoMatchError(errors)
+            : typeof noMatch === "function"
+              ? noMatch(input, errors)
+              : noMatch,
       };
     },
     format(value: unknown): string {
@@ -12219,7 +12392,8 @@ export function firstOf(
             }
             if (
               canonicalizing == null &&
-              value !== null && typeof value !== "object" &&
+              value !== null &&
+              typeof value !== "object" &&
               typeof result.value === typeof value
             ) {
               canonicalizing = formatted;
@@ -12247,28 +12421,28 @@ export function firstOf(
     },
     ...(hasNormalize
       ? {
-        normalize(value: unknown): unknown {
-          const owner = findOwner(value);
-          if (owner == null || typeof owner.parser.normalize !== "function") {
-            return value;
-          }
-          return owner.parser.normalize(value);
-        },
-      }
+          normalize(value: unknown): unknown {
+            const owner = findOwner(value);
+            if (owner == null || typeof owner.parser.normalize !== "function") {
+              return value;
+            }
+            return owner.parser.normalize(value);
+          },
+        }
       : {}),
     ...(hasSuggest
       ? {
-        *suggest(prefix: string): Iterable<Suggestion> {
-          const collected: Suggestion[] = [];
-          for (const parser of parsers) {
-            if (typeof parser.suggest !== "function") continue;
-            for (const suggestion of parser.suggest(prefix)) {
-              collected.push(suggestion);
+          *suggest(prefix: string): Iterable<Suggestion> {
+            const collected: Suggestion[] = [];
+            for (const parser of parsers) {
+              if (typeof parser.suggest !== "function") continue;
+              for (const suggestion of parser.suggest(prefix)) {
+                collected.push(suggestion);
+              }
             }
-          }
-          yield* deduplicateSuggestions(collected);
-        },
-      }
+            yield* deduplicateSuggestions(collected);
+          },
+        }
       : {}),
   };
 }
@@ -12346,17 +12520,25 @@ function ownsRoundTrippedValue(
 function valuesEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (
-    typeof a !== "object" || typeof b !== "object" || a == null || b == null
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a == null ||
+    b == null
   ) {
     return false;
   }
   if (Array.isArray(a) || Array.isArray(b)) {
-    return Array.isArray(a) && Array.isArray(b) && a.length === b.length &&
-      a.every((item, i) => valuesEqual(item, b[i]));
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, i) => valuesEqual(item, b[i]))
+    );
   }
   if (a instanceof Date || b instanceof Date) {
-    return a instanceof Date && b instanceof Date &&
-      a.getTime() === b.getTime();
+    return (
+      a instanceof Date && b instanceof Date && a.getTime() === b.getTime()
+    );
   }
   if (a instanceof URL || b instanceof URL) {
     return a instanceof URL && b instanceof URL && a.href === b.href;
@@ -12407,8 +12589,9 @@ function hasCustomToString(value: object): boolean {
   // throwing getter); treat those as having no usable toString().
   try {
     const toString = (value as { toString?: unknown }).toString;
-    return typeof toString === "function" &&
-      toString !== Object.prototype.toString;
+    return (
+      typeof toString === "function" && toString !== Object.prototype.toString
+    );
   } catch {
     return false;
   }
@@ -12423,8 +12606,9 @@ function plainObjectsEqual(a: object, b: object): boolean {
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
   const bRecord = b as Record<string, unknown>;
-  return aKeys.every((key) =>
-    Object.hasOwn(b, key) &&
-    valuesEqual((a as Record<string, unknown>)[key], bRecord[key])
+  return aKeys.every(
+    (key) =>
+      Object.hasOwn(b, key) &&
+      valuesEqual((a as Record<string, unknown>)[key], bRecord[key]),
   );
 }

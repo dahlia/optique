@@ -19,22 +19,28 @@ it("run preserves command policy through Program and source-context wrappers", a
     const contexts: readonly SourceContext[] = useContext ? [context] : [];
     let output = "";
     let exitCode: number | undefined;
-    await assert.rejects(async () => {
-      await run({ parser, metadata: { name: "tool" } }, {
-        args: ["build", "--help"],
-        help: "both",
-        showUsage: false,
-        contexts,
-        colors: false,
-        stdout: (text) => {
-          output += text;
-        },
-        onExit(code): never {
-          exitCode = code;
-          throw exit;
-        },
-      });
-    }, (error: unknown) => error === exit);
+    await assert.rejects(
+      async () => {
+        await run(
+          { parser, metadata: { name: "tool" } },
+          {
+            args: ["build", "--help"],
+            help: "both",
+            showUsage: false,
+            contexts,
+            colors: false,
+            stdout: (text) => {
+              output += text;
+            },
+            onExit(code): never {
+              exitCode = code;
+              throw exit;
+            },
+          },
+        );
+      },
+      (error: unknown) => error === exit,
+    );
     assert.equal(exitCode, 0);
     assert.match(output, /Usage: tool build/);
   }

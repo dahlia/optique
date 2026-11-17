@@ -63,16 +63,14 @@ it("runs the actual entry point and separates stdout from stderr", () =>
 it("reports parse and missing-file errors without ANSI or stack traces", () =>
   fixture(async (cwd) => {
     const cli = createCliRunner({ entrypoint, runtimeArgs, env, cwd });
-    for (
-      const args of [
-        ["file", "lines"],
-        ["file", "lines", "sample.txt", "extra"],
-        ["file", "info", "-"],
-        ["file", "info", ""],
-        ["--unknown"],
-        ["file", "info", "missing.txt"],
-      ]
-    ) {
+    for (const args of [
+      ["file", "lines"],
+      ["file", "lines", "sample.txt", "extra"],
+      ["file", "info", "-"],
+      ["file", "info", ""],
+      ["--unknown"],
+      ["file", "info", "missing.txt"],
+    ]) {
       const result = await cli.invoke(...args);
       assert.equal(result.exitCode, 1);
       assert.equal(result.stdout, "");
@@ -99,8 +97,10 @@ it("escapes terminal controls in filesystem error messages", () =>
     assert.match(result.stderr, /^file-inspect: .*missing/);
     assert.ok(result.stderr.endsWith("\n"));
     // Only the final diagnostic newline may contain a control character.
+    /* oxlint-disable no-control-regex -- Match control characters. */
     // deno-lint-ignore no-control-regex
     assert.doesNotMatch(result.stderr.slice(0, -1), /[\x00-\x1f\x7f-\x9f]/);
+    /* oxlint-enable no-control-regex */
   }));
 
 it("escapes Unicode format characters in filesystem errors", () =>
@@ -122,12 +122,11 @@ it("escapes Unicode format characters in filesystem errors", () =>
 it("consumes explicit stdin and terminates after EOF", () =>
   fixture(async (cwd) => {
     const cli = createCliRunner({ entrypoint, runtimeArgs, env, cwd });
-    for (
-      const [stdin, stdout] of [["", "0\n"], ["one\ntwo", "2\n"], [
-        "a\r\nb\r\n",
-        "2\n",
-      ]]
-    ) {
+    for (const [stdin, stdout] of [
+      ["", "0\n"],
+      ["one\ntwo", "2\n"],
+      ["a\r\nb\r\n", "2\n"],
+    ]) {
       assert.deepEqual(
         await cli.invoke({ args: ["file", "lines", "-"], stdin }),
         {
@@ -142,24 +141,26 @@ it("consumes explicit stdin and terminates after EOF", () =>
 
 it("finishes file, help, version and invalid invocations while stdin stays open", () =>
   fixture(async (cwd) => {
-    for (
-      const args of [
-        ["file", "info", "sample.txt"],
-        ["file", "lines", "sample.txt"],
-        ["--help"],
-        ["--version"],
-        ["--unknown"],
-      ]
-    ) {
-      const child = spawn(process.execPath, [
-        ...("Deno" in globalThis ? ["run", ...runtimeArgs] : []),
-        fileURLToPath(entrypoint),
-        ...args,
-      ], {
-        cwd,
-        env: { ...process.env, ...env },
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+    for (const args of [
+      ["file", "info", "sample.txt"],
+      ["file", "lines", "sample.txt"],
+      ["--help"],
+      ["--version"],
+      ["--unknown"],
+    ]) {
+      const child = spawn(
+        process.execPath,
+        [
+          ...("Deno" in globalThis ? ["run", ...runtimeArgs] : []),
+          fileURLToPath(entrypoint),
+          ...args,
+        ],
+        {
+          cwd,
+          env: { ...process.env, ...env },
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
       child.stdin.on("error", () => {});
       child.stdout.resume();
       child.stderr.resume();
@@ -185,52 +186,60 @@ it("finishes file, help, version and invalid invocations while stdin stays open"
     }
   }));
 
-it("rejects a FIFO without waiting for a writer", {
-  skip: process.platform !== "linux",
-}, async () => {
-  if (process.platform !== "linux") return;
-  await fixture(async (cwd) => {
-    execFileSync("mkfifo", [join(cwd, "input.fifo")]);
-    const cli = createCliRunner({
-      entrypoint,
-      runtimeArgs,
-      env,
-      cwd,
-      timeout: 2000,
+it(
+  "rejects a FIFO without waiting for a writer",
+  {
+    skip: process.platform !== "linux",
+  },
+  async () => {
+    if (process.platform !== "linux") return;
+    await fixture(async (cwd) => {
+      execFileSync("mkfifo", [join(cwd, "input.fifo")]);
+      const cli = createCliRunner({
+        entrypoint,
+        runtimeArgs,
+        env,
+        cwd,
+        timeout: 2000,
+      });
+      for (const command of ["info", "lines"]) {
+        const result = await cli.invoke("file", command, "input.fifo");
+        assert.equal(result.exitCode, 1);
+        assert.equal(result.stdout, "");
+        assert.match(result.stderr, /regular file/);
+      }
     });
-    for (const command of ["info", "lines"]) {
-      const result = await cli.invoke("file", command, "input.fifo");
+  },
+);
+
+it(
+  "reports stdout failure through the concise handler error boundary",
+  {
+    skip: process.platform !== "linux",
+  },
+  async () => {
+    if (process.platform !== "linux") return;
+    await fixture(async (cwd) => {
+      const cli = createCliRunner({
+        command: [
+          "bash",
+          "--norc",
+          "--noprofile",
+          "-c",
+          'exec "$@" > /dev/full',
+          "bash",
+          process.execPath,
+          ...("Deno" in globalThis ? ["run", ...runtimeArgs] : []),
+          fileURLToPath(entrypoint),
+        ],
+        env,
+        cwd,
+      });
+      const result = await cli.invoke("file", "lines", "sample.txt");
       assert.equal(result.exitCode, 1);
       assert.equal(result.stdout, "");
-      assert.match(result.stderr, /regular file/);
-    }
-  });
-});
-
-it("reports stdout failure through the concise handler error boundary", {
-  skip: process.platform !== "linux",
-}, async () => {
-  if (process.platform !== "linux") return;
-  await fixture(async (cwd) => {
-    const cli = createCliRunner({
-      command: [
-        "bash",
-        "--norc",
-        "--noprofile",
-        "-c",
-        'exec "$@" > /dev/full',
-        "bash",
-        process.execPath,
-        ...("Deno" in globalThis ? ["run", ...runtimeArgs] : []),
-        fileURLToPath(entrypoint),
-      ],
-      env,
-      cwd,
+      assert.match(result.stderr, /^file-inspect:/);
+      assert.doesNotMatch(result.stderr, /\n\s+at /);
     });
-    const result = await cli.invoke("file", "lines", "sample.txt");
-    assert.equal(result.exitCode, 1);
-    assert.equal(result.stdout, "");
-    assert.match(result.stderr, /^file-inspect:/);
-    assert.doesNotMatch(result.stderr, /\n\s+at /);
-  });
-});
+  },
+);

@@ -16,9 +16,8 @@ import {
 const fixture = fileURLToPath(
   new URL("../test/fixtures/markdown-reference/", import.meta.url),
 );
-const runtimeArgs = "Deno" in globalThis
-  ? ["--allow-read", "--allow-write", "--allow-env"]
-  : [];
+const runtimeArgs =
+  "Deno" in globalThis ? ["--allow-read", "--allow-write", "--allow-env"] : [];
 const cli = createCliRunner({
   entrypoint: join(fixture, "cli.ts"),
   runtimeArgs,
@@ -26,15 +25,14 @@ const cli = createCliRunner({
 
 describe("Markdown reference application example", () => {
   it("keeps maintained command examples valid", () => {
-    for (
-      const args of [
-        ["serve", "--port", "9000", "--tag", "local", "--tag", "demo"],
-        ["config", "get", "theme", "color"],
-        ["config", "g", "theme"],
-        ["config", "set", "theme", "--format", "text"],
-        ["docs"],
-      ]
-    ) assert.ok(parseArgsSync(parser, args).success);
+    for (const args of [
+      ["serve", "--port", "9000", "--tag", "local", "--tag", "demo"],
+      ["config", "get", "theme", "color"],
+      ["config", "g", "theme"],
+      ["config", "set", "theme", "--format", "text"],
+      ["docs"],
+    ])
+      assert.ok(parseArgsSync(parser, args).success);
     assert.ok(
       !parseArgsSync(parser, ["config", "set", "theme", "--format", "invalid"])
         .success,

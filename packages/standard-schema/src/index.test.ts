@@ -41,36 +41,27 @@ describe("standardSchema()", () => {
     });
 
     it("should throw TypeError when schema is null", () => {
-      assert.throws(
-        () => standardSchema(null as never, { placeholder: 0 }),
-        {
-          name: "TypeError",
-          message:
-            "standardSchema() requires a Standard Schema-compatible validator, got null.",
-        },
-      );
+      assert.throws(() => standardSchema(null as never, { placeholder: 0 }), {
+        name: "TypeError",
+        message:
+          "standardSchema() requires a Standard Schema-compatible validator, got null.",
+      });
     });
 
     it("should throw TypeError when schema is missing ~standard", () => {
-      assert.throws(
-        () => standardSchema({} as never, { placeholder: 0 }),
-        {
-          name: "TypeError",
-          message:
-            "standardSchema() requires a Standard Schema-compatible validator, got object.",
-        },
-      );
+      assert.throws(() => standardSchema({} as never, { placeholder: 0 }), {
+        name: "TypeError",
+        message:
+          "standardSchema() requires a Standard Schema-compatible validator, got object.",
+      });
     });
 
     it("should throw TypeError when schema is an array", () => {
-      assert.throws(
-        () => standardSchema([] as never, { placeholder: 0 }),
-        {
-          name: "TypeError",
-          message:
-            "standardSchema() requires a Standard Schema-compatible validator, got array.",
-        },
-      );
+      assert.throws(() => standardSchema([] as never, { placeholder: 0 }), {
+        name: "TypeError",
+        message:
+          "standardSchema() requires a Standard Schema-compatible validator, got array.",
+      });
     });
 
     it("should throw TypeError when ~standard lacks validate", () => {
@@ -117,13 +108,10 @@ describe("standardSchema()", () => {
         }
       }
 
-      assert.throws(
-        () => standardSchema(integerSchema, new Options()),
-        {
-          name: "TypeError",
-          message: "standardSchema() requires an options object.",
-        },
-      );
+      assert.throws(() => standardSchema(integerSchema, new Options()), {
+        name: "TypeError",
+        message: "standardSchema() requires an options object.",
+      });
     });
 
     it("should throw TypeError when placeholder is missing from options", () => {
@@ -141,13 +129,10 @@ describe("standardSchema()", () => {
     it("should throw TypeError when placeholder is inherited", () => {
       const inheritedOptions = Object.create({ placeholder: 0 }) as never;
 
-      assert.throws(
-        () => standardSchema(integerSchema, inheritedOptions),
-        {
-          name: "TypeError",
-          message: "standardSchema() requires an options object.",
-        },
-      );
+      assert.throws(() => standardSchema(integerSchema, inheritedOptions), {
+        name: "TypeError",
+        message: "standardSchema() requires an options object.",
+      });
     });
   });
 
@@ -329,14 +314,11 @@ describe("standardSchema()", () => {
       });
       const parser = standardSchema(asyncSchema, { placeholder: "" });
 
-      assert.throws(
-        () => parser.parse("hello"),
-        {
-          name: "TypeError",
-          message:
-            "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
-        },
-      );
+      assert.throws(() => parser.parse("hello"), {
+        name: "TypeError",
+        message:
+          "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
+      });
     });
 
     it("should observe rejected async validation results", async () => {
@@ -352,14 +334,11 @@ describe("standardSchema()", () => {
       process.on("unhandledRejection", onUnhandled);
 
       try {
-        assert.throws(
-          () => parser.parse("hello"),
-          {
-            name: "TypeError",
-            message:
-              "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
-          },
-        );
+        assert.throws(() => parser.parse("hello"), {
+          name: "TypeError",
+          message:
+            "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
+        });
         await new Promise((resolve) => setTimeout(resolve, 0));
       } finally {
         process.off("unhandledRejection", onUnhandled);
@@ -378,8 +357,8 @@ describe("standardSchema()", () => {
         value<TResult1 = StandardSchemaV1.Result<string>, TResult2 = never>(
           onFulfilled?:
             | ((
-              value: StandardSchemaV1.Result<string>,
-            ) => TResult1 | PromiseLike<TResult1>)
+                value: StandardSchemaV1.Result<string>,
+              ) => TResult1 | PromiseLike<TResult1>)
             | null,
           onRejected?:
             | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
@@ -392,14 +371,11 @@ describe("standardSchema()", () => {
       const asyncSchema = schema<unknown, string>(() => result);
       const parser = standardSchema(asyncSchema, { placeholder: "" });
 
-      assert.throws(
-        () => parser.parse("hello"),
-        {
-          name: "TypeError",
-          message:
-            "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
-        },
-      );
+      assert.throws(() => parser.parse("hello"), {
+        name: "TypeError",
+        message:
+          "Async Standard Schema validators are not supported by standardSchema(). Use standardSchemaAsync() instead.",
+      });
       assert.ok(handled);
     });
 
@@ -432,14 +408,10 @@ describe("standardSchemaAsync()", () => {
     });
 
     it("should throw TypeError when options are invalid", () => {
-      assert.throws(
-        () => standardSchemaAsync(integerSchema, [] as never),
-        {
-          name: "TypeError",
-          message:
-            "standardSchemaAsync() requires an options object, got array.",
-        },
-      );
+      assert.throws(() => standardSchemaAsync(integerSchema, [] as never), {
+        name: "TypeError",
+        message: "standardSchemaAsync() requires an options object, got array.",
+      });
     });
   });
 

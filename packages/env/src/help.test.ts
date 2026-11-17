@@ -88,30 +88,34 @@ describe("bindEnv documentation", () => {
       parser: string(),
     });
     assert.deepEqual(getDocPage(parser)?.sections, []);
-    assert.deepEqual(getDocPage(parser)?.environmentBindings, [{
-      name: "APP_NAME",
-    }]);
+    assert.deepEqual(getDocPage(parser)?.environmentBindings, [
+      {
+        name: "APP_NAME",
+      },
+    ]);
   });
 
   it("preserves arbitrary declared prefixes and keys without reading values", () => {
-    fc.assert(fc.property(fc.string(), fc.string(), (prefix, key) => {
-      const context = createEnvContext({
-        prefix,
-        source() {
-          throw new Error("Unexpected source read.");
-        },
-      });
-      const parser = bindEnv(option("--name", string()), {
-        context,
-        key,
-        parser: string(),
-      });
-      const page = getDocPage(parser);
-      assert.ok(page);
-      assert.deepEqual(page.sections[0].entries[0].envVars, [
-        `${prefix}${key}`,
-      ]);
-    }));
+    fc.assert(
+      fc.property(fc.string(), fc.string(), (prefix, key) => {
+        const context = createEnvContext({
+          prefix,
+          source() {
+            throw new Error("Unexpected source read.");
+          },
+        });
+        const parser = bindEnv(option("--name", string()), {
+          context,
+          key,
+          parser: string(),
+        });
+        const page = getDocPage(parser);
+        assert.ok(page);
+        assert.deepEqual(page.sections[0].entries[0].envVars, [
+          `${prefix}${key}`,
+        ]);
+      }),
+    );
   });
 
   it("annotates all documented children of a composite binding", () => {

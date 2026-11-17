@@ -2,8 +2,10 @@
  * Matches Unicode control characters: C0 (U+0000–U+001F), DEL (U+007F),
  * C1 (U+0080–U+009F), and line separators (U+2028, U+2029).
  */
+/* oxlint-disable no-control-regex -- Match control characters. */
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/;
+/* oxlint-enable no-control-regex */
 
 const CONTROL_CHAR_RE_GLOBAL = new RegExp(CONTROL_CHAR_RE.source, "g");
 
@@ -46,9 +48,7 @@ export function validateOptionNames(
   label: string,
 ): void {
   if (names.length === 0) {
-    throw new TypeError(
-      `Expected at least one ${label.toLowerCase()} name.`,
-    );
+    throw new TypeError(`Expected at least one ${label.toLowerCase()} name.`);
   }
   for (const name of names) {
     if (name === "") {
@@ -99,9 +99,7 @@ export function validateCommandNames(
   label: string,
 ): void {
   if (names.length === 0) {
-    throw new TypeError(
-      `Expected at least one ${label.toLowerCase()} name.`,
-    );
+    throw new TypeError(`Expected at least one ${label.toLowerCase()} name.`);
   }
   for (const name of names) {
     if (name === "") {
@@ -189,8 +187,7 @@ export function validateMetaNameCollisions(
       const existingLabel = nameToLabel.get(name);
       if (existingLabel != null) {
         throw new TypeError(
-          `Name "${name}" is used by both ` +
-            `${existingLabel} and ${label}.`,
+          `Name "${name}" is used by both ` + `${existingLabel} and ${label}.`,
         );
       }
       nameToLabel.set(name, label);
@@ -210,8 +207,15 @@ export function validateMetaNameCollisions(
           if (i === j && otherName === name) continue;
           if (!otherName.startsWith(prefix)) continue;
           throw new TypeError(
-            'The prefix form of name "' + name + '" in ' + label +
-              ' shadows "' + otherName + '" in ' + otherLabel + ".",
+            'The prefix form of name "' +
+              name +
+              '" in ' +
+              label +
+              ' shadows "' +
+              otherName +
+              '" in ' +
+              otherLabel +
+              ".",
           );
         }
       }
@@ -300,9 +304,7 @@ export function validateContextIds(
   const seen = new Set<symbol>();
   for (const context of contexts) {
     if (seen.has(context.id)) {
-      throw new TypeError(
-        `Duplicate SourceContext id: ${String(context.id)}`,
-      );
+      throw new TypeError(`Duplicate SourceContext id: ${String(context.id)}`);
     }
     seen.add(context.id);
   }

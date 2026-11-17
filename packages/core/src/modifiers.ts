@@ -88,9 +88,12 @@ const MULTIPLE_NATIVE_APPEND_THRESHOLD = 256;
 
 function isTerminalMultipleItemState(state: unknown): boolean {
   const unwrapped = unwrapMultipleItemState(state).value;
-  return unwrapped != null && typeof unwrapped === "object" &&
+  return (
+    unwrapped != null &&
+    typeof unwrapped === "object" &&
     Object.hasOwn(unwrapped, "success") &&
-    typeof (unwrapped as { success?: unknown }).success === "boolean";
+    typeof (unwrapped as { success?: unknown }).success === "boolean"
+  );
 }
 
 function isMatchedCommandParserState(
@@ -101,10 +104,12 @@ function isMatchedCommandParserState(
     return false;
   }
   const unwrapped = unwrapMultipleItemState(state).value;
-  return Array.isArray(unwrapped) &&
+  return (
+    Array.isArray(unwrapped) &&
     unwrapped.length === 2 &&
     unwrapped[0] === "matched" &&
-    typeof unwrapped[1] === "string";
+    typeof unwrapped[1] === "string"
+  );
 }
 
 function isUnstartedMultipleItemState(
@@ -116,15 +121,13 @@ function isUnstartedMultipleItemState(
 
   if (originalState === undefined) return false;
   const unwrappedOriginalState = unwrapMultipleItemState(originalState);
-  return unwrappedState.value === unwrappedOriginalState.value &&
-    (
-      unwrappedState.viaBoundCliWrapper ||
+  return (
+    unwrappedState.value === unwrappedOriginalState.value &&
+    (unwrappedState.viaBoundCliWrapper ||
       unwrappedOriginalState.viaBoundCliWrapper ||
-      (
-        unwrappedOriginalState.value != null &&
-        typeof unwrappedOriginalState.value === "object"
-      )
-    );
+      (unwrappedOriginalState.value != null &&
+        typeof unwrappedOriginalState.value === "object"))
+  );
 }
 
 /**
@@ -136,32 +139,28 @@ function completesOptionalLikeFallback(
   parser: Parser<Mode, unknown, unknown>,
 ): boolean | undefined {
   return typeof parser.shouldDeferCompletion !== "function" &&
-      parser.dependencyMetadata?.source == null &&
-      parser[unmatchedNonCliDependencySourceStateMarker] !== true
+    parser.dependencyMetadata?.source == null &&
+    parser[unmatchedNonCliDependencySourceStateMarker] !== true
     ? true
     : undefined;
 }
 
-function isBoundCliWrapperState(
-  state: unknown,
-): state is {
+function isBoundCliWrapperState(state: unknown): state is {
   readonly hasCliValue: boolean;
   readonly cliState?: unknown;
 } {
-  return state != null &&
+  return (
+    state != null &&
     typeof state === "object" &&
     Object.hasOwn(state, "hasCliValue") &&
     typeof (state as { readonly hasCliValue?: unknown }).hasCliValue ===
       "boolean" &&
-    (
-      Object.hasOwn(state, "cliState") ||
-      (state as { readonly hasCliValue: boolean }).hasCliValue === false
-    );
+    (Object.hasOwn(state, "cliState") ||
+      (state as { readonly hasCliValue: boolean }).hasCliValue === false)
+  );
 }
 
-function unwrapMultipleItemState(
-  state: unknown,
-): {
+function unwrapMultipleItemState(state: unknown): {
   readonly value: unknown;
   readonly viaBoundCliWrapper: boolean;
 } {
@@ -186,10 +185,12 @@ function unwrapMultipleItemState(
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
-  return value != null &&
+  return (
+    value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
-    typeof (value as Record<string, unknown>).then === "function";
+    typeof (value as Record<string, unknown>).then === "function"
+  );
 }
 
 function normalizeOptionalLikeCompleteResult<T>(
@@ -198,9 +199,9 @@ function normalizeOptionalLikeCompleteResult<T>(
 ): ValueParserResult<T> {
   return result.success && shouldNormalize
     ? {
-      ...result,
-      value: normalizeNestedDelegatedAnnotationState(result.value),
-    }
+        ...result,
+        value: normalizeNestedDelegatedAnnotationState(result.value),
+      }
     : result;
 }
 
@@ -208,10 +209,12 @@ function shouldRetryOptionalLikeCompatibilityError(
   error: unknown,
   state: unknown,
 ): boolean {
-  return error instanceof TypeError &&
+  return (
+    error instanceof TypeError &&
     state != null &&
     typeof state === "object" &&
-    isInjectedAnnotationWrapper(state);
+    isInjectedAnnotationWrapper(state)
+  );
 }
 
 function completeOptionalLikeSync<TValue, TState>(
@@ -220,8 +223,8 @@ function completeOptionalLikeSync<TValue, TState>(
   exec?: ExecutionContext,
 ): ValueParserResult<TValue> {
   const hasCarrier = hasDelegatedAnnotationCarrier(state);
-  const shouldRetryFalseResult = hasCarrier &&
-    isAnnotationWrappedInitialState(state);
+  const shouldRetryFalseResult =
+    hasCarrier && isAnnotationWrappedInitialState(state);
   const run = (candidate: TState, shouldNormalize: boolean) =>
     normalizeOptionalLikeCompleteResult(
       parser.complete(candidate, exec),
@@ -247,8 +250,8 @@ async function completeOptionalLikeAsync<TValue, TState>(
   exec?: ExecutionContext,
 ): Promise<ValueParserResult<TValue>> {
   const hasCarrier = hasDelegatedAnnotationCarrier(state);
-  const shouldRetryFalseResult = hasCarrier &&
-    isAnnotationWrappedInitialState(state);
+  const shouldRetryFalseResult =
+    hasCarrier && isAnnotationWrappedInitialState(state);
   const run = async (candidate: TState, shouldNormalize: boolean) =>
     normalizeOptionalLikeCompleteResult(
       await parser.complete(candidate, exec),
@@ -272,12 +275,14 @@ function normalizeOptionalLikePhase2Seed<T>(
   seed: Phase2Seed<T> | null,
   shouldNormalize: boolean,
 ): Phase2Seed<T> | null {
-  return seed == null ? null : shouldNormalize
-    ? {
-      ...seed,
-      value: normalizeNestedDelegatedAnnotationState(seed.value),
-    }
-    : seed;
+  return seed == null
+    ? null
+    : shouldNormalize
+      ? {
+          ...seed,
+          value: normalizeNestedDelegatedAnnotationState(seed.value),
+        }
+      : seed;
 }
 
 function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
@@ -285,10 +290,7 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
   state: [TState] | TState | undefined,
   exec?: ExecutionContext,
 ): ModeValue<M, Phase2Seed<TValue> | null> {
-  if (
-    !Array.isArray(state) &&
-    !(state != null && typeof state === "object")
-  ) {
+  if (!Array.isArray(state) && !(state != null && typeof state === "object")) {
     return wrapForMode(parser.mode, null);
   }
   const innerState = normalizeOptionalLikeInnerState(
@@ -297,8 +299,8 @@ function extractOptionalLikePhase2Seed<M extends Mode, TValue, TState>(
     parser,
   );
   const hasCarrier = hasDelegatedAnnotationCarrier(innerState);
-  const shouldRetryFalseResult = hasCarrier &&
-    isAnnotationWrappedInitialState(innerState);
+  const shouldRetryFalseResult =
+    hasCarrier && isAnnotationWrappedInitialState(innerState);
   return dispatchByMode(
     parser.mode,
     () => {
@@ -496,8 +498,8 @@ function deriveOptionalInnerParseState<TState>(
     return initial;
   }
   return initial != null && typeof initial === "object"
-    ? getDelegatedAnnotationState(outerState, initial) as TState
-    : inheritAnnotations(outerState, initial) as TState;
+    ? (getDelegatedAnnotationState(outerState, initial) as TState)
+    : (inheritAnnotations(outerState, initial) as TState);
 }
 
 /**
@@ -548,9 +550,11 @@ function hasOptionalLikeParseStateChanged<TState>(
   previousState: TState,
   nextState: TState,
 ): boolean {
-  return previousState !== nextState &&
+  return (
+    previousState !== nextState &&
     normalizeDelegatedAnnotationState(previousState) !==
-      normalizeDelegatedAnnotationState(nextState);
+      normalizeDelegatedAnnotationState(nextState)
+  );
 }
 
 function processOptionalStyleResult<TState>(
@@ -621,14 +625,16 @@ function adaptOptionalStyleParseLanes<M extends Mode, TState>(
     requiredConsumptionGroups: [
       ...(lane.requiredConsumptionGroups?.map((group) => ({
         id: group.id,
-        ...(group.isActive == null ? {} : {
-          isActive(state: unknown) {
-            const innerState = Array.isArray(state)
-              ? state[0]
-              : parser.initialState;
-            return group.isActive?.(innerState) ?? true;
-          },
-        }),
+        ...(group.isActive == null
+          ? {}
+          : {
+              isActive(state: unknown) {
+                const innerState = Array.isArray(state)
+                  ? state[0]
+                  : parser.initialState;
+                return group.isActive?.(innerState) ?? true;
+              },
+            }),
       })) ?? []),
       {
         id: consumptionGroup,
@@ -679,8 +685,8 @@ function adaptShouldDeferCompletion<TState>(
         parser,
       );
       const hasCarrier = hasDelegatedAnnotationCarrier(innerState);
-      const shouldRetryFalseResult = hasCarrier &&
-        isAnnotationWrappedInitialState(innerState);
+      const shouldRetryFalseResult =
+        hasCarrier && isAnnotationWrappedInitialState(innerState);
       try {
         const result = innerCheck(innerState, exec);
         if (!result && shouldRetryFalseResult) {
@@ -713,9 +719,11 @@ function isAnnotationOnlyObjectState(
     return false;
   }
   const keys = Reflect.ownKeys(state);
-  return getAnnotations(state) != null &&
+  return (
+    getAnnotations(state) != null &&
     keys.length === 1 &&
-    keys[0] === annotationKey;
+    keys[0] === annotationKey
+  );
 }
 
 function normalizeOptionalLikeInnerState<TState>(
@@ -729,10 +737,8 @@ function normalizeOptionalLikeInnerState<TState>(
   if (isAnnotationOnlyObjectState(state)) {
     if (
       parser != null &&
-      (
-        parser.dependencyMetadata?.source != null ||
-        typeof parser.shouldDeferCompletion === "function"
-      )
+      (parser.dependencyMetadata?.source != null ||
+        typeof parser.shouldDeferCompletion === "function")
     ) {
       return getDelegatedAnnotationState(state, initialState);
     }
@@ -843,11 +849,11 @@ export function optional<M extends Mode, TValue, TState>(
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
-          parser.shouldDeferCompletion.bind(parser),
-          parser,
-        ),
-      }
+          shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
+            parser.shouldDeferCompletion.bind(parser),
+            parser,
+          ),
+        }
       : {}),
     getSuggestRuntimeNodes(
       state: [TState] | undefined,
@@ -861,10 +867,12 @@ export function optional<M extends Mode, TValue, TState>(
         parser.initialState,
         parser,
       );
-      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+      return (
+        parser.getSuggestRuntimeNodes?.(innerState, path) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state: innerState }]
-          : []);
+          : [])
+      );
     },
     [extractPhase2SeedKey](
       state: [TState] | undefined,
@@ -893,21 +901,18 @@ export function optional<M extends Mode, TValue, TState>(
             () =>
               completeOptionalLikeSync(syncParser, resolvedInnerState, exec),
             async () =>
-              await completeOptionalLikeAsync(
+              (await completeOptionalLikeAsync(
                 parser,
                 resolvedInnerState,
                 exec,
-              ) as ValueParserResult<TValue | undefined>,
+              )) as ValueParserResult<TValue | undefined>,
           );
-          return mapModeValue(
-            parser.mode,
-            innerResult,
-            (result) =>
-              result.success
-                ? result
-                : { success: true, value: undefined } as ValueParserResult<
+          return mapModeValue(parser.mode, innerResult, (result) =>
+            result.success
+              ? result
+              : ({ success: true, value: undefined } as ValueParserResult<
                   TValue | undefined
-                >,
+                >),
           );
         };
         if (
@@ -939,11 +944,11 @@ export function optional<M extends Mode, TValue, TState>(
             parser.mode,
             () => completeOptionalLikeSync(syncParser, delegatedState, exec),
             async () =>
-              await completeOptionalLikeAsync(
+              (await completeOptionalLikeAsync(
                 parser,
                 delegatedState,
                 exec,
-              ) as ValueParserResult<TValue | undefined>,
+              )) as ValueParserResult<TValue | undefined>,
           );
         }
         // When the inner parser is a non-CLI source binding (bindEnv,
@@ -983,17 +988,14 @@ export function optional<M extends Mode, TValue, TState>(
         () =>
           completeOptionalLikeSync(syncParser, innerElement as TState, exec),
         async () =>
-          await completeOptionalLikeAsync(
+          (await completeOptionalLikeAsync(
             parser,
             innerElement as TState,
             exec,
-          ) as ValueParserResult<TValue | undefined>,
+          )) as ValueParserResult<TValue | undefined>,
       );
     },
-    suggest(
-      context: ParserContext<[TState] | undefined>,
-      prefix: string,
-    ) {
+    suggest(context: ParserContext<[TState] | undefined>, prefix: string) {
       return dispatchIterableByMode(
         parser.mode,
         () => suggestSync(context, prefix),
@@ -1004,11 +1006,12 @@ export function optional<M extends Mode, TValue, TState>(
       state: DocState<[TState] | undefined>,
       defaultValue?: TValue,
     ) {
-      const innerState: DocState<TState> = state.kind === "unavailable"
-        ? { kind: "unavailable" }
-        : state.state === undefined
-        ? { kind: "unavailable" }
-        : { kind: "available", state: state.state[0] };
+      const innerState: DocState<TState> =
+        state.kind === "unavailable"
+          ? { kind: "unavailable" }
+          : state.state === undefined
+            ? { kind: "unavailable" }
+            : { kind: "available", state: state.state[0] };
       return syncParser.getDocFragments(innerState, defaultValue);
     },
     // Type assertion needed because TypeScript cannot verify ModeValue<M, T>
@@ -1063,54 +1066,54 @@ export function optional<M extends Mode, TValue, TState>(
       // completion at all, because this wrapper's completion lives in
       // the transformed domain and must never register under the raw
       // source ID.
-      const rebound = composed.source?.completeSource == null
-        ? composed
-        : composed.source.preservesSourceValue === false
-        ? {
-          ...composed,
-          source: { ...composed.source, completeSource: undefined },
-        }
-        : {
-          ...composed,
-          source: {
-            ...composed.source,
-            completeSource: (
-              state: unknown,
-              exec?: ExecutionContext,
-            ): Promise<ValueParserResult<unknown> | undefined> =>
-              Promise.resolve(
-                optionalParser.complete(
-                  state as Parameters<typeof optionalParser.complete>[0],
-                  exec,
-                ),
-              ) as Promise<ValueParserResult<unknown>>,
-          },
-        };
-      (optionalParser as unknown as Record<string, unknown>)
-        .dependencyMetadata = rebound;
+      const rebound =
+        composed.source?.completeSource == null
+          ? composed
+          : composed.source.preservesSourceValue === false
+            ? {
+                ...composed,
+                source: { ...composed.source, completeSource: undefined },
+              }
+            : {
+                ...composed,
+                source: {
+                  ...composed.source,
+                  completeSource: (
+                    state: unknown,
+                    exec?: ExecutionContext,
+                  ): Promise<ValueParserResult<unknown> | undefined> =>
+                    Promise.resolve(
+                      optionalParser.complete(
+                        state as Parameters<typeof optionalParser.complete>[0],
+                        exec,
+                      ),
+                    ) as Promise<ValueParserResult<unknown>>,
+                },
+              };
+      (
+        optionalParser as unknown as Record<string, unknown>
+      ).dependencyMetadata = rebound;
     }
   }
   // Forward the inner effectful scheduling hook (e.g., a wrapped
   // exclusive or command construct), unwrapping optional()'s
   // `[innerState]` state shape first.
-  defineForwardedEffectfulSchedulingNodes(
-    optionalParser,
-    parser,
-    (state) => Array.isArray(state) && state.length === 1 ? state[0] : state,
+  defineForwardedEffectfulSchedulingNodes(optionalParser, parser, (state) =>
+    Array.isArray(state) && state.length === 1 ? state[0] : state,
   );
   defineParseLanes(optionalParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(optionalParser);
   defineSourceBindingOnlyAnnotationCompletionParser(optionalParser);
-  defineReachableChildren(optionalParser, [parser], (state) => [{
-    parser,
-    state: deriveOptionalInnerParseState(state, parser),
-  }]);
+  defineReachableChildren(optionalParser, [parser], (state) => [
+    {
+      parser,
+      state: deriveOptionalInnerParseState(state, parser),
+    },
+  ]);
   // A known child succeeds even without input, so parsing wraps its state
   // and completion preserves its value instead of using the fallback.
-  defineKnownCompletionLookup(
-    optionalParser,
-    (state) =>
-      getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
+  defineKnownCompletionLookup(optionalParser, (state) =>
+    getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
   );
   const scopedOptionalParser = scopeParser(
     optionalParser,
@@ -1337,11 +1340,11 @@ export function withDefault<
     // outer state shape ([TState] | undefined) to the inner TState.
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
-          parser.shouldDeferCompletion.bind(parser),
-          parser,
-        ),
-      }
+          shouldDeferCompletion: adaptShouldDeferCompletion<TState>(
+            parser.shouldDeferCompletion.bind(parser),
+            parser,
+          ),
+        }
       : {}),
     getSuggestRuntimeNodes(
       state: [TState] | undefined,
@@ -1355,10 +1358,12 @@ export function withDefault<
         parser.initialState,
         parser,
       );
-      return parser.getSuggestRuntimeNodes?.(innerState, path) ??
+      return (
+        parser.getSuggestRuntimeNodes?.(innerState, path) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state: innerState }]
-          : []);
+          : [])
+      );
     },
     [extractPhase2SeedKey](
       state: [TState] | undefined,
@@ -1377,9 +1382,10 @@ export function withDefault<
       // Evaluate the default value (immediate or lazy) and normalize it
       // through the inner parser's value normalizer when available.
       function evaluateDefault(): TDefault {
-        const raw = typeof defaultValue === "function"
-          ? (defaultValue as () => TDefault)()
-          : defaultValue;
+        const raw =
+          typeof defaultValue === "function"
+            ? (defaultValue as () => TDefault)()
+            : defaultValue;
         if (typeof parser.normalizeValue === "function") {
           try {
             return parser.normalizeValue(
@@ -1412,11 +1418,11 @@ export function withDefault<
             parser.mode,
             () => completeOptionalLikeSync(syncParser, innerState, exec),
             async () =>
-              await completeOptionalLikeAsync(
+              (await completeOptionalLikeAsync(
                 parser,
                 innerState,
                 exec,
-              ) as ValueParserResult<TValue>,
+              )) as ValueParserResult<TValue>,
           );
           // Propagate the inner result as-is.  When wrapping
           // bindConfig(), success means config resolved; failure means
@@ -1452,11 +1458,11 @@ export function withDefault<
             parser.mode,
             () => completeOptionalLikeSync(syncParser, innerState, exec),
             async () =>
-              await completeOptionalLikeAsync(
+              (await completeOptionalLikeAsync(
                 parser,
                 innerState,
                 exec,
-              ) as ValueParserResult<TValue>,
+              )) as ValueParserResult<TValue>,
           );
           const handleInnerResult = (
             result: ValueParserResult<TValue>,
@@ -1474,9 +1480,10 @@ export function withDefault<
             } catch (error) {
               return {
                 success: false as const,
-                error: error instanceof WithDefaultError
-                  ? error.errorMessage
-                  : message`${text(String(error))}`,
+                error:
+                  error instanceof WithDefaultError
+                    ? error.errorMessage
+                    : message`${text(String(error))}`,
               };
             }
           };
@@ -1484,11 +1491,7 @@ export function withDefault<
             M,
             ValueParserResult<TValue>,
             ValueParserResult<TValue | TDefault>
-          >(
-            parser.mode,
-            innerResult,
-            handleInnerResult,
-          );
+          >(parser.mode, innerResult, handleInnerResult);
         }
         try {
           const value = evaluateDefault();
@@ -1496,9 +1499,10 @@ export function withDefault<
         } catch (error) {
           return {
             success: false,
-            error: error instanceof WithDefaultError
-              ? error.errorMessage
-              : message`${text(String(error))}`,
+            error:
+              error instanceof WithDefaultError
+                ? error.errorMessage
+                : message`${text(String(error))}`,
           };
         }
       }
@@ -1512,17 +1516,14 @@ export function withDefault<
         () =>
           completeOptionalLikeSync(syncParser, innerElement as TState, exec),
         async () =>
-          await completeOptionalLikeAsync(
+          (await completeOptionalLikeAsync(
             parser,
             innerElement as TState,
             exec,
-          ) as ValueParserResult<TValue | TDefault>,
+          )) as ValueParserResult<TValue | TDefault>,
       );
     },
-    suggest(
-      context: ParserContext<[TState] | undefined>,
-      prefix: string,
-    ) {
+    suggest(context: ParserContext<[TState] | undefined>, prefix: string) {
       return dispatchIterableByMode(
         parser.mode,
         () => suggestSync(context, prefix),
@@ -1533,30 +1534,25 @@ export function withDefault<
       state: DocState<[TState] | undefined>,
       upperDefaultValue?: TValue | TDefault,
     ) {
-      const innerState: DocState<TState> = state.kind === "unavailable"
-        ? { kind: "unavailable" }
-        : state.state === undefined
-        ? { kind: "unavailable" }
-        : { kind: "available", state: state.state[0] };
+      const innerState: DocState<TState> =
+        state.kind === "unavailable"
+          ? { kind: "unavailable" }
+          : state.state === undefined
+            ? { kind: "unavailable" }
+            : { kind: "available", state: state.state[0] };
 
-      let docDefault: TValue | undefined = getDocDefaultValue(
-        upperDefaultValue,
-      );
+      let docDefault: TValue | undefined =
+        getDocDefaultValue(upperDefaultValue);
       // Normalize the default for documentation so that help text matches
       // the representation that parse() would produce.
-      if (
-        docDefault != null && typeof parser.normalizeValue === "function"
-      ) {
+      if (docDefault != null && typeof parser.normalizeValue === "function") {
         try {
           docDefault = parser.normalizeValue(docDefault);
         } catch {
           // best-effort; sentinel defaults are shown as-is
         }
       }
-      const fragments = syncParser.getDocFragments(
-        innerState,
-        docDefault,
-      );
+      const fragments = syncParser.getDocFragments(innerState, docDefault);
 
       // If a custom message is provided, replace the default field in all entries
       if (options?.message) {
@@ -1569,10 +1565,13 @@ export function withDefault<
           }
           return fragment;
         });
-        return withCommandDocMetadata({
-          ...fragments,
-          fragments: modifiedFragments,
-        }, getCommandDocMetadata(fragments));
+        return withCommandDocMetadata(
+          {
+            ...fragments,
+            fragments: modifiedFragments,
+          },
+          getCommandDocMetadata(fragments),
+        );
       }
 
       return fragments;
@@ -1636,16 +1635,18 @@ export function withDefault<
         defaultValue: () => {
           let v: TDefault;
           try {
-            v = typeof defaultValue === "function"
-              ? (defaultValue as () => TDefault)()
-              : defaultValue;
+            v =
+              typeof defaultValue === "function"
+                ? (defaultValue as () => TDefault)()
+                : defaultValue;
           } catch (e) {
             // Dynamic default thunks may throw (validation, env checks).
             // Preserve the structured errorMessage from WithDefaultError,
             // matching withDefault.complete() which surfaces it directly.
-            const error = e instanceof WithDefaultError
-              ? e.errorMessage
-              : message`${e instanceof Error ? e.message : String(e)}`;
+            const error =
+              e instanceof WithDefaultError
+                ? e.errorMessage
+                : message`${e instanceof Error ? e.message : String(e)}`;
             return { success: false as const, error };
           }
           // Normalize the default value to match what the inner parser's
@@ -1654,9 +1655,8 @@ export function withDefault<
           // input or a default.
           if (typeof parser.normalizeValue === "function") {
             try {
-              v = parser.normalizeValue(v as unknown as TValue) as
-                & TValue
-                & TDefault;
+              v = parser.normalizeValue(v as unknown as TValue) as TValue &
+                TDefault;
             } catch {
               // Normalization may fail for sentinel types; keep raw value.
             }
@@ -1675,57 +1675,56 @@ export function withDefault<
       // completion at all, because this wrapper's completion lives in
       // the transformed domain and must never register under the raw
       // source ID.
-      const rebound = composed.source?.completeSource == null
-        ? composed
-        : composed.source.preservesSourceValue === false
-        ? {
-          ...composed,
-          source: { ...composed.source, completeSource: undefined },
-        }
-        : {
-          ...composed,
-          source: {
-            ...composed.source,
-            completeSource: (
-              state: unknown,
-              exec?: ExecutionContext,
-            ): Promise<ValueParserResult<unknown> | undefined> =>
-              Promise.resolve(
-                withDefaultParser.complete(
-                  state as Parameters<typeof withDefaultParser.complete>[0],
-                  exec,
-                ),
-              ) as Promise<ValueParserResult<unknown>>,
-          },
-        };
-      (withDefaultParser as unknown as Record<string, unknown>)
-        .dependencyMetadata = rebound;
+      const rebound =
+        composed.source?.completeSource == null
+          ? composed
+          : composed.source.preservesSourceValue === false
+            ? {
+                ...composed,
+                source: { ...composed.source, completeSource: undefined },
+              }
+            : {
+                ...composed,
+                source: {
+                  ...composed.source,
+                  completeSource: (
+                    state: unknown,
+                    exec?: ExecutionContext,
+                  ): Promise<ValueParserResult<unknown> | undefined> =>
+                    Promise.resolve(
+                      withDefaultParser.complete(
+                        state as Parameters<
+                          typeof withDefaultParser.complete
+                        >[0],
+                        exec,
+                      ),
+                    ) as Promise<ValueParserResult<unknown>>,
+                },
+              };
+      (
+        withDefaultParser as unknown as Record<string, unknown>
+      ).dependencyMetadata = rebound;
     }
   }
   // Forward the inner effectful scheduling hook (e.g., a wrapped
   // exclusive or command construct), unwrapping withDefault()'s
   // `[innerState]` state shape first.
-  defineForwardedEffectfulSchedulingNodes(
-    withDefaultParser,
-    parser,
-    (state) => Array.isArray(state) && state.length === 1 ? state[0] : state,
+  defineForwardedEffectfulSchedulingNodes(withDefaultParser, parser, (state) =>
+    Array.isArray(state) && state.length === 1 ? state[0] : state,
   );
-  defineParseLanes(
-    withDefaultParser,
-    adaptOptionalStyleParseLanes(parser),
-  );
+  defineParseLanes(withDefaultParser, adaptOptionalStyleParseLanes(parser));
   defineInheritedAnnotationParser(withDefaultParser);
   defineSourceBindingOnlyAnnotationCompletionParser(withDefaultParser);
-  defineReachableChildren(withDefaultParser, [parser], (state) => [{
-    parser,
-    state: deriveOptionalInnerParseState(state, parser),
-  }]);
+  defineReachableChildren(withDefaultParser, [parser], (state) => [
+    {
+      parser,
+      state: deriveOptionalInnerParseState(state, parser),
+    },
+  ]);
   // A known child succeeds even without input, so parsing wraps its state
   // and completion preserves its value instead of using the fallback.
-  defineKnownCompletionLookup(
-    withDefaultParser,
-    (state) =>
-      getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
+  defineKnownCompletionLookup(withDefaultParser, (state) =>
+    getKnownCompletion(parser, deriveOptionalInnerParseState(state, parser)),
   );
   const scopedWithDefaultParser = scopeParser(
     withDefaultParser,
@@ -1834,43 +1833,39 @@ export function map<M extends Mode, T, U, TState>(
     state: TState,
     exec?: ExecutionContext,
   ): ModeValue<M, ValueParserResult<U>> => {
-    return mapModeValue(
-      parser.mode,
-      parser.complete(state, exec),
-      (result) => {
-        if (!result.success) return result;
-        if (result.deferred) {
-          // The value is a phase-1 placeholder that may not satisfy the
-          // inner parser's normal guarantees (e.g., port() placeholder 0
-          // fed into a positivity check).  Try the transform; if it
-          // throws, fall back to undefined so the deferred flag still
-          // propagates and phase-2 contexts treat the value as missing.
-          try {
-            return {
-              success: true,
-              value: transform(result.value),
-              deferred: true as const,
-              // deferredKeys is intentionally NOT propagated through
-              // map().  The inner object()'s key set describes the INPUT
-              // shape, but the transform produces an arbitrary OUTPUT
-              // shape where keys may be renamed, dropped, or reused
-              // with different semantics.  Forwarding stale keys would
-              // cause prepareParsedForContexts() to strip the wrong
-              // fields.  Instead, the deferred flag alone signals that
-              // the mapped value may contain placeholder data, and the
-              // facade falls back to passing the value through as-is.
-            };
-          } catch {
-            return {
-              success: true,
-              value: undefined as unknown as U,
-              deferred: true as const,
-            };
-          }
+    return mapModeValue(parser.mode, parser.complete(state, exec), (result) => {
+      if (!result.success) return result;
+      if (result.deferred) {
+        // The value is a phase-1 placeholder that may not satisfy the
+        // inner parser's normal guarantees (e.g., port() placeholder 0
+        // fed into a positivity check).  Try the transform; if it
+        // throws, fall back to undefined so the deferred flag still
+        // propagates and phase-2 contexts treat the value as missing.
+        try {
+          return {
+            success: true,
+            value: transform(result.value),
+            deferred: true as const,
+            // deferredKeys is intentionally NOT propagated through
+            // map().  The inner object()'s key set describes the INPUT
+            // shape, but the transform produces an arbitrary OUTPUT
+            // shape where keys may be renamed, dropped, or reused
+            // with different semantics.  Forwarding stale keys would
+            // cause prepareParsedForContexts() to strip the wrong
+            // fields.  Instead, the deferred flag alone signals that
+            // the mapped value may contain placeholder data, and the
+            // facade falls back to passing the value through as-is.
+          };
+        } catch {
+          return {
+            success: true,
+            value: undefined as unknown as U,
+            deferred: true as const,
+          };
         }
-        return { success: true, value: transform(result.value) };
-      },
-    );
+      }
+      return { success: true, value: transform(result.value) };
+    });
   };
 
   const mappedParser = {
@@ -1904,10 +1899,12 @@ export function map<M extends Mode, T, U, TState>(
       if (mappedParser.dependencyMetadata?.source != null) {
         return [{ path, parser: mappedParser, state }];
       }
-      return parser.getSuggestRuntimeNodes?.(state, path) ??
+      return (
+        parser.getSuggestRuntimeNodes?.(state, path) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state }]
-          : []);
+          : [])
+      );
     },
     getDocFragments(state: DocState<TState>, _defaultValue?: U) {
       // Since we can't reverse the transformation, we delegate to the original
@@ -1949,10 +1946,7 @@ export function map<M extends Mode, T, U, TState>(
   // preservesSourceValue.  Wrap replayParse to apply the map transform
   // so that replayed values match what complete() would produce.
   if (parser.dependencyMetadata != null) {
-    let composed = composeDependencyMetadata(
-      parser.dependencyMetadata,
-      "map",
-    );
+    let composed = composeDependencyMetadata(parser.dependencyMetadata, "map");
     if (composed?.derived != null) {
       const innerReplay = composed.derived.replayParse;
       // Mirror map().complete() deferred handling: strip deferredKeys
@@ -1983,10 +1977,7 @@ export function map<M extends Mode, T, U, TState>(
         ...composed,
         derived: {
           ...composed.derived,
-          replayParse: (
-            rawInput: string,
-            depValues: readonly unknown[],
-          ) => {
+          replayParse: (rawInput: string, depValues: readonly unknown[]) => {
             const result = innerReplay(rawInput, depValues);
             return isPromiseLike(result)
               ? result.then(applyMappedReplay)
@@ -2011,16 +2002,20 @@ export function map<M extends Mode, T, U, TState>(
   // failing completion is known without running user code.
   const innerFacts = getEmptyInputFacts(parser);
   defineEmptyInputFacts(mappedParser, {
-    ...(innerFacts.probe == null ? {} : {
-      probe: {
-        step: innerFacts.probe.step,
-        next: innerFacts.probe.next,
-        ...(innerFacts.probe.afterStep === false ? { afterStep: false } : {}),
-        ...(innerFacts.probe.fromInitial === false
-          ? { fromInitial: false }
-          : {}),
-      },
-    }),
+    ...(innerFacts.probe == null
+      ? {}
+      : {
+          probe: {
+            step: innerFacts.probe.step,
+            next: innerFacts.probe.next,
+            ...(innerFacts.probe.afterStep === false
+              ? { afterStep: false }
+              : {}),
+            ...(innerFacts.probe.fromInitial === false
+              ? { fromInitial: false }
+              : {}),
+          },
+        }),
     ...(innerFacts.step == null ? {} : { step: innerFacts.step }),
     ...(innerFacts.next == null ? {} : { next: innerFacts.next }),
     ...(innerFacts.afterStep === false ? { afterStep: false } : {}),
@@ -2056,17 +2051,17 @@ export type DeferredValueSource = "specified" | "fallback";
  * @template C The handler-time context type passed to the fallback resolver.
  * @since 1.2.0
  */
-export type DeferredValue<T, C = void> =
-  & ([C] extends [void] ? (() => T | Promise<T>)
-    : [undefined] extends [C] ? ((ctx?: C) => T | Promise<T>)
-    : ((ctx: C) => T | Promise<T>))
-  & {
-    /**
-     * Which branch produced this value: `"specified"` when the wrapped parser
-     * produced a value, `"fallback"` when the fallback resolver was selected.
-     */
-    readonly source: DeferredValueSource;
-  };
+export type DeferredValue<T, C = void> = ([C] extends [void]
+  ? () => T | Promise<T>
+  : [undefined] extends [C]
+    ? (ctx?: C) => T | Promise<T>
+    : (ctx: C) => T | Promise<T>) & {
+  /**
+   * Which branch produced this value: `"specified"` when the wrapped parser
+   * produced a value, `"fallback"` when the fallback resolver was selected.
+   */
+  readonly source: DeferredValueSource;
+};
 
 /**
  * Options for {@link deferredValue}.
@@ -2248,9 +2243,10 @@ export function deferredValue<M extends Mode, T, S, C = void>(
           // such as bindEnv()/bindConfig()) selects "specified".  optional()
           // collapses a genuinely produced `undefined` into the same absence as
           // "no value", so such a value selects the fallback resolver.
-          const value = result.value === undefined
-            ? makeFallbackDeferredValue<T, C>(fallback, memoize)
-            : makeSpecifiedDeferredValue<T, C>(result.value);
+          const value =
+            result.value === undefined
+              ? makeFallbackDeferredValue<T, C>(fallback, memoize)
+              : makeSpecifiedDeferredValue<T, C>(result.value);
           return result.deferred
             ? { success: true, value, deferred: true }
             : { success: true, value };
@@ -2318,10 +2314,12 @@ export function deferredValue<M extends Mode, T, S, C = void>(
 export function isDeferredValue(
   value: unknown,
 ): value is DeferredValue<unknown> {
-  return typeof value === "function" &&
+  return (
+    typeof value === "function" &&
     (value as { readonly [deferredValueBrand]?: unknown })[
-        deferredValueBrand
-      ] === true;
+      deferredValueBrand
+    ] === true
+  );
 }
 
 /**
@@ -2380,19 +2378,16 @@ function getMultipleEmptyInputFacts(
   if (options.max != null || !Number.isInteger(min) || min < 0) return {};
   const facts = getEmptyInputFacts(parser);
   const childInitialState = parser.initialState;
-  const retainsItem = facts.step === "success" ||
-      facts.step === "provisional"
-    ? facts.next == null ? undefined : !isUnstartedMultipleItemState(
-      resolveEmptyStepState(facts.next, childInitialState),
-      childInitialState,
-    )
-    : false;
-  return multipleFacts(
-    facts,
-    retainsItem,
-    childInitialState,
-    min,
-  );
+  const retainsItem =
+    facts.step === "success" || facts.step === "provisional"
+      ? facts.next == null
+        ? undefined
+        : !isUnstartedMultipleItemState(
+            resolveEmptyStepState(facts.next, childInitialState),
+            childInitialState,
+          )
+      : false;
+  return multipleFacts(facts, retainsItem, childInitialState, min);
 }
 
 /**
@@ -2564,9 +2559,9 @@ export function multiple<M extends Mode, TValue, TState>(
     path: readonly PropertyKey[],
   ) =>
     parser.getSuggestRuntimeNodes?.(state, path) ??
-      (parser.dependencyMetadata?.source != null
-        ? [{ path, parser, state }]
-        : []);
+    (parser.dependencyMetadata?.source != null
+      ? [{ path, parser, state }]
+      : []);
   // Structural candidates are shared; only parsing asks whether a current
   // item is skippable. Opaque canSkip callbacks cannot run during inspection.
   const selectItems = (state: MultipleState) => {
@@ -2576,12 +2571,14 @@ export function multiple<M extends Mode, TValue, TState>(
         ? [{ parser, state: current, index: state.length - 1, fresh: false }]
         : []),
       ...(state.length < max
-        ? [{
-          parser,
-          state: parser.initialState,
-          index: state.length,
-          fresh: true,
-        }]
+        ? [
+            {
+              parser,
+              state: parser.initialState,
+              index: state.length,
+              fresh: true,
+            },
+          ]
         : []),
     ];
   };
@@ -2592,24 +2589,18 @@ export function multiple<M extends Mode, TValue, TState>(
   ): state is TState =>
     state != null &&
     !isTerminalMultipleItemState(state) &&
-    (
-      isMatchedCommandParserState(parser, state) ||
-      parser.canSkip?.(state, withChildExecPath(exec, itemIndex)) !== true
-    );
+    (isMatchedCommandParserState(parser, state) ||
+      parser.canSkip?.(state, withChildExecPath(exec, itemIndex)) !== true);
 
   // Sync parse implementation
-  const parseSync = (
-    context: ParserContext<MultipleState>,
-  ): ParseResult => {
+  const parseSync = (context: ParserContext<MultipleState>): ParseResult => {
     const items = selectItems(context.state);
     const current = items.find((item) => !item.fresh);
     const fresh = items.find((item) => item.fresh);
     const currentItemState = current?.state;
-    const canExtendCurrent = current != null && canExtendMultipleItem(
-      current.state,
-      current.index,
-      context.exec,
-    );
+    const canExtendCurrent =
+      current != null &&
+      canExtendMultipleItem(current.state, current.index, context.exec);
     const canOpenFreshItem = fresh != null;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
@@ -2663,7 +2654,8 @@ export function multiple<M extends Mode, TValue, TState>(
           // optional() and withDefault() can still absorb it via
           // their own processOptionalStyleResult fallback.
           if (
-            min === 0 && context.buffer.length === 0 &&
+            min === 0 &&
+            context.buffer.length === 0 &&
             result.consumed === 0
           ) {
             return { success: true, next: context, consumed: [] };
@@ -2704,10 +2696,10 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
-              trace: mergedExec.trace,
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         },
         consumed: result.consumed,
@@ -2719,10 +2711,7 @@ export function multiple<M extends Mode, TValue, TState>(
     if (
       result.next.state === currentItemStateWithAnnotations &&
       result.consumed.length > 0 &&
-      (
-        !added ||
-        result.next.optionsTerminated !== context.optionsTerminated
-      )
+      (!added || result.next.optionsTerminated !== context.optionsTerminated)
     ) {
       return {
         success: true,
@@ -2732,10 +2721,10 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
-              trace: mergedExec.trace,
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         },
         consumed: result.consumed,
@@ -2754,18 +2743,19 @@ export function multiple<M extends Mode, TValue, TState>(
           context.state,
           itemIndex < MULTIPLE_NATIVE_APPEND_THRESHOLD
             ? [
-              ...(added ? context.state : context.state.slice(0, -1)),
-              nextItemState,
-            ]
-            : [...(added ? context.state : context.state.slice(0, -1))]
-              .toSpliced(Infinity, 0, nextItemState),
+                ...(added ? context.state : context.state.slice(0, -1)),
+                nextItemState,
+              ]
+            : [
+                ...(added ? context.state : context.state.slice(0, -1)),
+              ].toSpliced(Infinity, 0, nextItemState),
         ),
         ...(mergedExec != null
           ? {
-            trace: mergedExec.trace,
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       },
       consumed: result.consumed,
@@ -2780,11 +2770,9 @@ export function multiple<M extends Mode, TValue, TState>(
     const current = items.find((item) => !item.fresh);
     const fresh = items.find((item) => item.fresh);
     const currentItemState = current?.state;
-    const canExtendCurrent = current != null && canExtendMultipleItem(
-      current.state,
-      current.index,
-      context.exec,
-    );
+    const canExtendCurrent =
+      current != null &&
+      canExtendMultipleItem(current.state, current.index, context.exec);
     const canOpenFreshItem = fresh != null;
     if (!canExtendCurrent && !canOpenFreshItem) {
       return {
@@ -2838,7 +2826,8 @@ export function multiple<M extends Mode, TValue, TState>(
           // optional() and withDefault() can still absorb it via
           // their own processOptionalStyleResult fallback.
           if (
-            min === 0 && context.buffer.length === 0 &&
+            min === 0 &&
+            context.buffer.length === 0 &&
             result.consumed === 0
           ) {
             return { success: true, next: context, consumed: [] };
@@ -2879,10 +2868,10 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
-              trace: mergedExec.trace,
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         },
         consumed: result.consumed,
@@ -2894,10 +2883,7 @@ export function multiple<M extends Mode, TValue, TState>(
     if (
       result.next.state === currentItemStateWithAnnotations &&
       result.consumed.length > 0 &&
-      (
-        !added ||
-        result.next.optionsTerminated !== context.optionsTerminated
-      )
+      (!added || result.next.optionsTerminated !== context.optionsTerminated)
     ) {
       return {
         success: true,
@@ -2907,10 +2893,10 @@ export function multiple<M extends Mode, TValue, TState>(
           state: context.state,
           ...(mergedExec != null
             ? {
-              trace: mergedExec.trace,
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         },
         consumed: result.consumed,
@@ -2929,18 +2915,19 @@ export function multiple<M extends Mode, TValue, TState>(
           context.state,
           itemIndex < MULTIPLE_NATIVE_APPEND_THRESHOLD
             ? [
-              ...(added ? context.state : context.state.slice(0, -1)),
-              nextItemState,
-            ]
-            : [...(added ? context.state : context.state.slice(0, -1))]
-              .toSpliced(Infinity, 0, nextItemState),
+                ...(added ? context.state : context.state.slice(0, -1)),
+                nextItemState,
+              ]
+            : [
+                ...(added ? context.state : context.state.slice(0, -1)),
+              ].toSpliced(Infinity, 0, nextItemState),
         ),
         ...(mergedExec != null
           ? {
-            trace: mergedExec.trace,
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       },
       consumed: result.consumed,
@@ -2955,12 +2942,14 @@ export function multiple<M extends Mode, TValue, TState>(
     $valueType: [] as readonly TValue[],
     $stateType: [] as readonly TState[],
     priority: parser.priority,
-    usage: [{
-      type: "multiple",
-      terms: parser.usage,
-      min,
-      ...(acceptsEmpty == null ? {} : { acceptsEmpty }),
-    }],
+    usage: [
+      {
+        type: "multiple",
+        terms: parser.usage,
+        min,
+        ...(acceptsEmpty == null ? {} : { acceptsEmpty }),
+      },
+    ],
     leadingNames: parser.leadingNames,
     // multiple(min=0) can succeed without consuming, so only propagate
     // catch-all status when at least one match is required.
@@ -3077,10 +3066,7 @@ export function multiple<M extends Mode, TValue, TState>(
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredIndices.set(i, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredIndices.set(i, null);
               } else {
                 hasDeferred = true;
@@ -3092,11 +3078,11 @@ export function multiple<M extends Mode, TValue, TState>(
             value: values as readonly TValue[],
             ...(deferredIndices.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredIndices.size > 0
-                  ? { deferredKeys: deferredIndices as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredIndices.size > 0
+                    ? { deferredKeys: deferredIndices as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -3116,10 +3102,7 @@ export function multiple<M extends Mode, TValue, TState>(
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredIndices.set(i, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredIndices.set(i, null);
               } else {
                 hasDeferred = true;
@@ -3131,11 +3114,11 @@ export function multiple<M extends Mode, TValue, TState>(
             value: values as readonly TValue[],
             ...(deferredIndices.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredIndices.size > 0
-                  ? { deferredKeys: deferredIndices as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredIndices.size > 0
+                    ? { deferredKeys: deferredIndices as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -3164,15 +3147,12 @@ export function multiple<M extends Mode, TValue, TState>(
         : context.state.length;
       const suggestInitialState = canExtendCurrent
         ? currentItemState
-        : inheritAnnotations(
-          context.state,
-          parser.initialState,
-        );
+        : inheritAnnotations(context.state, parser.initialState);
       const suggestFallbackState = unwrapInjectedWrapper(
         suggestInitialState,
       ) as TState;
-      const hasSuggestFallbackState = suggestFallbackState !==
-        suggestInitialState;
+      const hasSuggestFallbackState =
+        suggestFallbackState !== suggestInitialState;
       const collectSelectedValuesSync = () => {
         const selectedValues = new Set<string>();
         for (let i = 0; i < context.state.length; i++) {
@@ -3221,9 +3201,10 @@ export function multiple<M extends Mode, TValue, TState>(
         return true;
       };
       const suggestionKey = (suggestion: Suggestion): string => {
-        const description = suggestion.description == null
-          ? ""
-          : formatMessage(suggestion.description);
+        const description =
+          suggestion.description == null
+            ? ""
+            : formatMessage(suggestion.description);
         if (suggestion.kind === "literal") {
           return JSON.stringify(["literal", suggestion.text, description]);
         }
@@ -3277,11 +3258,7 @@ export function multiple<M extends Mode, TValue, TState>(
           if (shouldTryFallback) {
             yield* yieldUnique(
               syncParser.suggest(
-                withChildContext(
-                  context,
-                  itemIndex,
-                  suggestFallbackState,
-                ),
+                withChildContext(context, itemIndex, suggestFallbackState),
                 prefix,
               ),
             );
@@ -3324,11 +3301,7 @@ export function multiple<M extends Mode, TValue, TState>(
           if (shouldTryFallback) {
             yield* yieldUnique(
               parser.suggest(
-                withChildContext(
-                  context,
-                  itemIndex,
-                  suggestFallbackState,
-                ),
+                withChildContext(context, itemIndex, suggestFallbackState),
                 prefix,
               ) as AsyncIterable<Suggestion>,
             );
@@ -3340,18 +3313,20 @@ export function multiple<M extends Mode, TValue, TState>(
       state: DocState<MultipleState>,
       defaultValue?: readonly TValue[],
     ) {
-      const latestState = state.kind === "available" && state.state.length > 0
-        ? state.state.at(-1)!
-        : undefined;
-      const latestInnerState = latestState != null &&
-          isInjectedAnnotationWrapper(latestState)
-        ? unwrapInjectedWrapper(latestState)
-        : latestState;
-      const innerState: DocState<TState> = state.kind === "unavailable"
-        ? { kind: "unavailable" }
-        : latestInnerState !== undefined
-        ? { kind: "available", state: latestInnerState as TState }
-        : { kind: "unavailable" };
+      const latestState =
+        state.kind === "available" && state.state.length > 0
+          ? state.state.at(-1)!
+          : undefined;
+      const latestInnerState =
+        latestState != null && isInjectedAnnotationWrapper(latestState)
+          ? unwrapInjectedWrapper(latestState)
+          : latestState;
+      const innerState: DocState<TState> =
+        state.kind === "unavailable"
+          ? { kind: "unavailable" }
+          : latestInnerState !== undefined
+            ? { kind: "available", state: latestInnerState as TState }
+            : { kind: "unavailable" };
       const docs = syncParser.getDocFragments(
         innerState,
         defaultValue != null && defaultValue.length > 0
@@ -3364,10 +3339,10 @@ export function multiple<M extends Mode, TValue, TState>(
       const metadata = getCommandDocMetadata(docs);
       const selected = [...getSelectedCommandUsage(metadata)];
       for (const itemState of state.state.slice(0, -1)) {
-        const itemInnerState = itemState != null &&
-            isInjectedAnnotationWrapper(itemState)
-          ? unwrapInjectedWrapper(itemState)
-          : itemState;
+        const itemInnerState =
+          itemState != null && isInjectedAnnotationWrapper(itemState)
+            ? unwrapInjectedWrapper(itemState)
+            : itemState;
         const itemDocs = syncParser.getDocFragments(
           itemInnerState === undefined
             ? { kind: "unavailable" }
@@ -3400,24 +3375,24 @@ export function multiple<M extends Mode, TValue, TState>(
       return {
         success: false as const,
         error: customMessage
-          ? (typeof customMessage === "function"
+          ? typeof customMessage === "function"
             ? customMessage(min, result.length)
-            : customMessage)
-          : message`Expected at least ${
-            text(min.toLocaleString("en"))
-          } values, but got only ${text(result.length.toLocaleString("en"))}.`,
+            : customMessage
+          : message`Expected at least ${text(
+              min.toLocaleString("en"),
+            )} values, but got only ${text(result.length.toLocaleString("en"))}.`,
       };
     } else if (result.length > max) {
       const customMessage = options.errors?.tooMany;
       return {
         success: false as const,
         error: customMessage
-          ? (typeof customMessage === "function"
+          ? typeof customMessage === "function"
             ? customMessage(max, result.length)
-            : customMessage)
-          : message`Expected at most ${
-            text(max.toLocaleString("en"))
-          } values, but got ${text(result.length.toLocaleString("en"))}.`,
+            : customMessage
+          : message`Expected at most ${text(
+              max.toLocaleString("en"),
+            )} values, but got ${text(result.length.toLocaleString("en"))}.`,
       };
     }
     const isDeferred = deferredIndices.size > 0 || hasDeferred;
@@ -3426,11 +3401,11 @@ export function multiple<M extends Mode, TValue, TState>(
       value: result,
       ...(isDeferred
         ? {
-          deferred: true as const,
-          ...(deferredIndices.size > 0
-            ? { deferredKeys: deferredIndices as DeferredMap }
-            : {}),
-        }
+            deferred: true as const,
+            ...(deferredIndices.size > 0
+              ? { deferredKeys: deferredIndices as DeferredMap }
+              : {}),
+          }
         : {}),
     };
   }
@@ -3447,7 +3422,9 @@ export function multiple<M extends Mode, TValue, TState>(
             () => parser.placeholder,
           ) as readonly TValue[];
         }
-      } catch { /* inner placeholder may throw */ }
+      } catch {
+        /* inner placeholder may throw */
+      }
       return [] as readonly TValue[];
     },
     configurable: true,
@@ -3483,9 +3460,10 @@ export function multiple<M extends Mode, TValue, TState>(
   // fallback values even when the inner parser has no validateValue.
   // Non-enumerable so map()'s spread does not propagate it.
   {
-    const innerValidate = typeof parser.validateValue === "function"
-      ? parser.validateValue.bind(parser)
-      : undefined;
+    const innerValidate =
+      typeof parser.validateValue === "function"
+        ? parser.validateValue.bind(parser)
+        : undefined;
     // Mirrors the arity branch of `validateMultipleResult` above so that
     // fallback validation failures look identical to CLI failures (same
     // number formatting via `toLocaleString("en")`, same "but got only"
@@ -3499,14 +3477,14 @@ export function multiple<M extends Mode, TValue, TState>(
         return {
           success: false,
           error: customMessage
-            ? (typeof customMessage === "function"
+            ? typeof customMessage === "function"
               ? customMessage(min, values.length)
-              : customMessage)
-            : message`Expected at least ${
-              text(min.toLocaleString("en"))
-            } values, but got only ${
-              text(values.length.toLocaleString("en"))
-            }.`,
+              : customMessage
+            : message`Expected at least ${text(
+                min.toLocaleString("en"),
+              )} values, but got only ${text(
+                values.length.toLocaleString("en"),
+              )}.`,
         };
       }
       if (values.length > max) {
@@ -3514,12 +3492,12 @@ export function multiple<M extends Mode, TValue, TState>(
         return {
           success: false,
           error: customMessage
-            ? (typeof customMessage === "function"
+            ? typeof customMessage === "function"
               ? customMessage(max, values.length)
-              : customMessage)
-            : message`Expected at most ${
-              text(max.toLocaleString("en"))
-            } values, but got ${text(values.length.toLocaleString("en"))}.`,
+              : customMessage
+            : message`Expected at most ${text(
+                max.toLocaleString("en"),
+              )} values, but got ${text(values.length.toLocaleString("en"))}.`,
         };
       }
       return { success: true as const, value: values };
@@ -3539,8 +3517,7 @@ export function multiple<M extends Mode, TValue, TState>(
             parser.mode,
             {
               success: false as const,
-              error:
-                message`Expected an array of values, but received ${actualType}.`,
+              error: message`Expected an array of values, but received ${actualType}.`,
             },
           );
         }
@@ -3630,9 +3607,7 @@ export function multiple<M extends Mode, TValue, TState>(
                 const result = innerSource.extractSourceValue(state[i]);
                 if (result == null) continue;
                 if (
-                  isPromiseLike<ValueParserResult<unknown> | undefined>(
-                    result,
-                  )
+                  isPromiseLike<ValueParserResult<unknown> | undefined>(result)
                 ) {
                   return Promise.resolve(result).then(
                     (resolved) => resolved ?? scan(i - 1),
@@ -3651,14 +3626,11 @@ export function multiple<M extends Mode, TValue, TState>(
     });
   }
 
-  defineReachableChildren(
-    resultParser,
-    [parser],
-    (state) =>
-      selectItems(state).map((item) => ({
-        parser,
-        state: unwrapInjectedWrapper(item.state),
-      })),
+  defineReachableChildren(resultParser, [parser], (state) =>
+    selectItems(state).map((item) => ({
+      parser,
+      state: unwrapInjectedWrapper(item.state),
+    })),
   );
   const scopedResultParser = scopeParser(
     resultParser,
@@ -3735,9 +3707,7 @@ export function nonEmpty<M extends Mode, T, TState>(
   };
 
   // Sync parse implementation
-  const parseSync = (
-    context: ParserContext<TState>,
-  ): ParserResult<TState> => {
+  const parseSync = (context: ParserContext<TState>): ParserResult<TState> => {
     const result = syncParser.parse(context);
     return processNonEmptyResult(result);
   };
@@ -3761,12 +3731,12 @@ export function nonEmpty<M extends Mode, T, TState>(
     initialState,
     ...(typeof parser.canSkip === "function"
       ? {
-        canSkip(state: TState, exec?: ExecutionContext) {
-          const unwrappedState = unwrapInjectedAnnotationWrapper(state);
-          if (unwrappedState === initialState) return false;
-          return parser.canSkip?.(unwrappedState, exec) === true;
-        },
-      }
+          canSkip(state: TState, exec?: ExecutionContext) {
+            const unwrappedState = unwrapInjectedAnnotationWrapper(state);
+            if (unwrappedState === initialState) return false;
+            return parser.canSkip?.(unwrappedState, exec) === true;
+          },
+        }
       : {}),
     // Forward shouldDeferCompletion from inner parser so that prompt()
     // can defer through nonEmpty() wrappers.
@@ -3774,10 +3744,12 @@ export function nonEmpty<M extends Mode, T, TState>(
       ? { shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser) }
       : {}),
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
-      return parser.getSuggestRuntimeNodes?.(state, path) ??
+      return (
+        parser.getSuggestRuntimeNodes?.(state, path) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state }]
-          : []);
+          : [])
+      );
     },
     parse(context: ParserContext<TState>) {
       return dispatchByMode(
@@ -3864,11 +3836,9 @@ export function nonEmpty<M extends Mode, T, TState>(
   // through unchanged, so a wrapped exclusive or command construct stays
   // visible to a parent's scheduling expansion.
   defineForwardedEffectfulSchedulingNodes(nonEmptyParser, parser);
-  defineReachableChildren(
-    nonEmptyParser,
-    [parser],
-    (state) => [{ parser, state }],
-  );
+  defineReachableChildren(nonEmptyParser, [parser], (state) => [
+    { parser, state },
+  ]);
   const scopedNonEmptyParser = scopeParser(
     nonEmptyParser,
     combinedOptionScope([parser]),
@@ -3877,9 +3847,11 @@ export function nonEmpty<M extends Mode, T, TState>(
   // from the initial state exactly as its inner parser does.
   const innerFacts = getEmptyInputFacts(parser);
   defineEmptyInputFacts(scopedNonEmptyParser, {
-    ...(innerFacts.probe == null ? {} : {
-      probe: { step: "failure", fromInitial: innerFacts.probe.fromInitial },
-    }),
+    ...(innerFacts.probe == null
+      ? {}
+      : {
+          probe: { step: "failure", fromInitial: innerFacts.probe.fromInitial },
+        }),
     step: "failure",
     ...(innerFacts.fromInitial == null
       ? {}

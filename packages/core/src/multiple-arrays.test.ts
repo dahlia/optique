@@ -284,10 +284,10 @@ for (const mode of ["sync", "async"] as const) {
 
     it("keeps large states cloneable, freezable ordinary arrays", async () => {
       const parser = createParser(mode);
-      const state: State = Array.from(
-        { length: 1025 },
-        (_, i) => [`item-${i}`, "complete"],
-      );
+      const state: State = Array.from({ length: 1025 }, (_, i) => [
+        `item-${i}`,
+        "complete",
+      ]);
       const appended = await step(parser, state, ["partial"]);
       assert.equal(state.length, 1025);
       assert.equal(appended.state.length, 1026);

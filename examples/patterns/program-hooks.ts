@@ -16,9 +16,9 @@ import process from "node:process";
 // live in one place instead of being copied into every command handler.
 //
 // Usage:
-//   deno run -A examples/patterns/program-hooks.ts build --target web
-//   deno run -A examples/patterns/program-hooks.ts deploy --env staging
-//   deno run -A examples/patterns/program-hooks.ts deploy --env production
+//   node examples/patterns/program-hooks.ts build --target web
+//   node examples/patterns/program-hooks.ts deploy --env staging
+//   node examples/patterns/program-hooks.ts deploy --env production
 
 // A tiny stand-in for a real log scope, tracing span, or pooled resource.
 // A beforeEach hook opens one and returns it as the hook context's resource;
@@ -112,9 +112,9 @@ await runProgram<Scope>({
       const scope = context.resource;
       if (scope == null) return;
       print(
-        message`✔ ${text(scope.label)} finished in ${
-          text(`${Date.now() - scope.startedAt}ms`)
-        }.`,
+        message`✔ ${text(scope.label)} finished in ${text(
+          `${Date.now() - scope.startedAt}ms`,
+        )}.`,
       );
     },
     onError(context, error) {

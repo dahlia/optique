@@ -127,16 +127,19 @@ export interface StdioStreamLike {
 export function getDefaultEncoding(stream: object): unknown {
   if (!("_writableState" in stream)) return undefined;
   const state = stream._writableState;
-  return typeof state === "object" && state != null &&
-      "defaultEncoding" in state
+  return typeof state === "object" &&
+    state != null &&
+    "defaultEncoding" in state
     ? state.defaultEncoding
     : undefined;
 }
 
 function isUtf8Encoding(encoding: unknown): boolean {
-  return encoding === undefined ||
+  return (
+    encoding === undefined ||
     (typeof encoding === "string" &&
-      ["utf8", "utf-8"].includes(encoding.toLowerCase()));
+      ["utf8", "utf-8"].includes(encoding.toLowerCase()))
+  );
 }
 
 /**
@@ -167,9 +170,15 @@ export function shouldWriteDirectly(
   deno: boolean,
 ): boolean {
   const fd = stream.fd;
-  return !deno && platform !== "win32" && !stream.isTTY &&
-    typeof fd === "number" && Number.isInteger(fd) && fd >= 0 &&
-    isUtf8Encoding(stream.defaultEncoding);
+  return (
+    !deno &&
+    platform !== "win32" &&
+    !stream.isTTY &&
+    typeof fd === "number" &&
+    Number.isInteger(fd) &&
+    fd >= 0 &&
+    isUtf8Encoding(stream.defaultEncoding)
+  );
 }
 
 const encoder = new TextEncoder();

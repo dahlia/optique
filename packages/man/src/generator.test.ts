@@ -99,10 +99,7 @@ describe("required options in SYNOPSIS", () => {
   it("keeps the flag required in an exclusive branch with an optional topic", () => {
     const parser = or(
       argument(string({ metavar: "FILE" })),
-      tuple([
-        flag("--help"),
-        optional(argument(string({ metavar: "TOPIC" }))),
-      ]),
+      tuple([flag("--help"), optional(argument(string({ metavar: "TOPIC" })))]),
     );
     assert.equal(
       formatUsage("repro", parser.usage),
@@ -190,10 +187,9 @@ describe("empty-input behavior in SYNOPSIS", () => {
   });
 
   it("requires optional items of a repetition that rejects empty input", () => {
-    const parser = multiple(
-      optional(argument(string({ metavar: "FILE" }))),
-      { min: 1 },
-    );
+    const parser = multiple(optional(argument(string({ metavar: "FILE" }))), {
+      min: 1,
+    });
     assert.ok(!parse(parser, []).success);
     assert.equal(formatUsage("repro", parser.usage), "repro FILE...");
     assert.equal(
@@ -374,12 +370,9 @@ describe("generateManPage()", () => {
 
   it("handles choice value parser", () => {
     const parser = object({
-      format: option(
-        "-f",
-        "--format",
-        choice(["json", "yaml", "xml"]),
-        { description: message`Output format.` },
-      ),
+      format: option("-f", "--format", choice(["json", "yaml", "xml"]), {
+        description: message`Output format.`,
+      }),
     });
 
     const result = generateManPage(parser, {
@@ -554,11 +547,14 @@ describe("generateManPageSync()", () => {
     // isParser() and isProgram() each have a try/catch so that Proxies with
     // throwing traps are treated as "not a parser" rather than propagating
     // the exception.
-    const throwingProxy = new Proxy({}, {
-      has(_target, _prop) {
-        throw new Error("property access denied");
+    const throwingProxy = new Proxy(
+      {},
+      {
+        has(_target, _prop) {
+          throw new Error("property access denied");
+        },
       },
-    });
+    );
     assert.throws(
       () =>
         generateManPageSync(throwingProxy as never, { name: "x", section: 1 }),
@@ -994,10 +990,7 @@ describe("Program-based API", () => {
       metadata: { name: "myapp" },
     });
     for (const section of [0, 9, -1, 99, 1.5] as never[]) {
-      assert.throws(
-        () => generateManPage(prog, { section }),
-        RangeError,
-      );
+      assert.throws(() => generateManPage(prog, { section }), RangeError);
     }
   });
 
@@ -1017,10 +1010,10 @@ describe("Program-based API", () => {
       parser: {},
       metadata: { name: "x" },
     };
-    assert.throws(
-      () => generateManPage(fakeProgram as never, { section: 1 }),
-      { name: "TypeError", message: /not a valid.*Parser/ },
-    );
+    assert.throws(() => generateManPage(fakeProgram as never, { section: 1 }), {
+      name: "TypeError",
+      message: /not a valid.*Parser/,
+    });
   });
 
   it("rejects a malformed parser-like object", () => {
@@ -1075,8 +1068,7 @@ describe("Program-based API", () => {
         name: "myapp",
         version: "1.0.0",
         brief: message`A sample application.`,
-        description:
-          message`This is a detailed description of the application.`,
+        description: message`This is a detailed description of the application.`,
         footer: message`Copyright 2026 Example Corp.`,
       },
     });
@@ -1088,9 +1080,7 @@ describe("Program-based API", () => {
     // DESCRIPTION section should exist
     assert.ok(result.includes(".SH DESCRIPTION"));
     assert.ok(
-      result.includes(
-        "This is a detailed description of the application.",
-      ),
+      result.includes("This is a detailed description of the application."),
     );
     // Footer should be present
     assert.ok(result.includes("Copyright 2026 Example Corp."));
@@ -1149,12 +1139,10 @@ describe("man generator display controls", () => {
       "a",
     );
     const program = defineProgram({ parser, metadata: { name: "app" } });
-    for (
-      const controls of [
-        { showDefault: false, showChoices: { maxItems: 1 } },
-        { showDefault: { prefix: " [", suffix: "]" }, showChoices: false },
-      ]
-    ) {
+    for (const controls of [
+      { showDefault: false, showChoices: { maxItems: 1 } },
+      { showDefault: { prefix: " [", suffix: "]" }, showChoices: false },
+    ]) {
       const options = { name: "app", section: 1 as const, ...controls };
       const programOptions = { section: 1 as const, ...controls };
       const outputs = await Promise.all([

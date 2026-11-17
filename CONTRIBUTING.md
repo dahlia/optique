@@ -38,8 +38,10 @@ Use [mise] to manage runtime versions and run development tasks.
 
 ### Package manager
 
-This project uses Deno as the primary development tool and pnpm for
-npm-related tasks (building for npm publishing).
+This project uses Node.js and pnpm for dependency installation and repository
+tooling.  Routine checks, npm builds, documentation builds, and Node.js tests
+do not need Deno.  Deno and Bun remain supported library runtimes; Deno also
+publishes the TypeScript sources to JSR.
 
 > [!IMPORTANT]
 > Do *not* use npm or Yarn as package managers in this project.  Always use
@@ -48,26 +50,85 @@ npm-related tasks (building for npm publishing).
 ### Installation
 
 ~~~~ bash
-mise install  # Install runtime tools (Deno, Node.js, Bun, pnpm)
-mise deps     # Install project dependencies
+mise install          # Install Node.js, Bun, and development tools
+mise deps             # Install workspace dependencies with pnpm
+mise run setup:deno   # Prepare Deno compatibility dependencies (optional)
 ~~~~
+
+When a compatibility task needs Deno, mise selects Deno 2.9 through its
+task-local tool declaration.  With automatic installation enabled, mise installs
+it on demand.  If automatic installation is disabled, run
+`mise install deno@2.9` before `mise run setup:deno` or compatibility checks.
+The setup task prepares Deno's cache without replacing pnpm-managed
+*node\_modules*.
 
 ### Quality checks
 
 ~~~~ bash
-mise check       # Type check, lint, format check, and dry-run publish
-deno fmt         # Format code
-deno lint        # Run linter
+mise check              # Node-based type, lint, format, and version checks
+mise run fmt            # Format supported source files and Markdown
+mise run check:lint     # Run Oxlint
+mise run check:deno     # Deno type checking and recommended Deno lint rules
+mise run check:publish  # JSR publish dry-run (requires Deno)
 ~~~~
+
+`mise check` also checks Markdown with Hongdown and changelog fragments with
+Sacho.  It does not run Deno or a JSR publish dry-run.
+
+The source checker covers workspace source, tests (including inference tests),
+build configuration, repository scripts, and examples without requiring *dist*
+output.  Its *tsconfig.check.json* configuration is deliberately named so
+ordinary builds and Bun do not discover it as their default TypeScript
+configuration. Run the checker through mise rather than relying on editor
+diagnostics alone.
+
+Oxlint handles the mapped repository lint rules.  It is not a replacement for
+every recommended Deno lint rule.  For example, `ban-unknown-rule-code`,
+`ban-untagged-ignore`, and `ban-unused-ignore` still require Deno.  The
+[rule mapping] records each counterpart and compatibility-only check; the
+complete recommended Deno lint set remains in `check:deno`.  Run the
+compatibility checks before committing even when the Node.js-only checks pass.
+
+Oxfmt owns JavaScript/TypeScript-family and JSON/JSONC-family files selected by
+the formatting task.  Markdown stays with Hongdown (and Sacho for changelog
+fragments), mise TOML stays with `mise fmt`, and YAML, documentation code
+blocks, generated output, and excluded fixtures are outside Oxfmt's scope.
+Do not run an unscoped formatter across the repository.  Import and package
+sorting and JSDoc rewriting are disabled.  Oxfmt still changes some wrapping
+and callback indentation; keep mechanical formatting separate from behavior
+changes to make maintenance backports easier.
+
+The checked-in VS Code and Zed defaults use Oxfmt for these source languages
+without enabling Deno or sorting imports on save.  Install the recommended Oxc
+extension in VS Code.  Zed invokes the workspace's Oxfmt through pnpm, so start
+it with mise-managed tools on `PATH`.  Use `mise run fmt` for the complete
+formatting workflow.
+
+[rule mapping]: ./scripts/tooling/lint-mapping.json
 
 ### Testing
 
 ~~~~ bash
-mise test:deno   # Run tests with Deno (primary test environment)
-mise test:node   # Run tests with Node.js
-mise test:bun    # Run tests with Bun
-mise test        # Run all checks and tests across all runtimes
+mise run dev       # Node-only checks and tests for routine development
+mise test:node     # Run Node.js tests against built npm packages
+mise test:deno     # Run Deno compatibility tests
+mise test:bun      # Run tests with Bun against built npm packages
+mise run coverage # Run Node.js source coverage and write LCOV/JUnit reports
+mise test          # Run all checks and tests across all runtimes
 ~~~~
+
+The full `mise test` gate includes `check:deno` and `check:publish` as well as
+the Node.js-only development gate and all three runtime suites.  Coverage writes
+*coverage/lcov.info* and per-plan _coverage/junit/\*.xml_ reports; it uses
+separate source resolution without
+changing published builds or adding source maps to npm packages.
+
+CI runs the Node.js-only bootstrap and routine tasks on Linux and Windows with a
+failing Deno executable that records every attempted launch.  Deno
+compatibility runs separately, including the JSR dry-run.  The Windows CLI
+matrix retains Node.js, Deno, and Bun subprocess checks.  File-inspection
+packaging/smoke checks and startup benchmark checks are separate CI jobs, not
+dependencies of the routine development gate.
 
 ### Startup and installation measurements
 
@@ -87,11 +148,11 @@ mise build       # Build all packages with tsdown
 
 ### Version management
 
-All packages must share the same version.  Use the check-versions task:
+All packages must share the same version.  Use the `check:versions` task:
 
 ~~~~ bash
-mise check-versions          # Check for version mismatches
-mise check-versions --fix    # Auto-fix version mismatches
+mise run check:versions        # Check for version mismatches
+mise run check:versions --fix  # Auto-fix version mismatches
 ~~~~
 
 ### Adding dependencies
@@ -106,7 +167,7 @@ to use an older version.
 
 > [!IMPORTANT]
 > Because this project supports both Deno and Node.js/Bun, third-party
-> dependencies must be added to *both* configuration files:
+> runtime dependencies must be added to *both* configuration files:
 >
 >  -  *deno.json*: Add to the `imports` field (for Deno)
 >  -  *package.json*: Add to `dependencies` or `devDependencies` (for
@@ -125,6 +186,10 @@ to use an older version.
 >
 > Forgetting to add a dependency to *package.json* will cause Node.js and Bun
 > tests to fail with `ERR_MODULE_NOT_FOUND`, even if Deno tests pass.
+
+Repository-only tools belong in the private root *package.json* and the pnpm
+catalog, not in a published package or Deno's runtime imports.  Keep
+checker-only declarations out of Deno's file set and published archives.
 
 [JSR API]: https://jsr.io/docs/api
 
@@ -760,9 +825,9 @@ pnpm add @optique/run
 ### Building documentation
 
 ~~~~ bash
-cd docs
-pnpm build    # Build for production (runs Twoslash type checking)
-pnpm dev      # Start development server
+mise run docs:build  # Build workspace packages and production docs with Twoslash
 ~~~~
 
-Always run `pnpm build` before committing to catch Twoslash type errors.
+For the local documentation server, run `pnpm dev` from *docs/*.  Always run
+`mise run docs:build` before committing to catch Twoslash type errors.  Neither
+documentation command requires Deno.

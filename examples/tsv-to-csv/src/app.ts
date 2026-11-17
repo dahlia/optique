@@ -16,18 +16,19 @@ import { deriveOutputPath, tsvToCsv } from "./convert.ts";
  */
 export const program = defineProgram({
   parser: object({
-    input: argument(
-      path({ metavar: "INPUT", mustExist: true, type: "file" }),
-      { description: message`Tab-separated file to convert.` },
+    input: argument(path({ metavar: "INPUT", mustExist: true, type: "file" }), {
+      description: message`Tab-separated file to convert.`,
+    }),
+    output: optional(
+      option(
+        "-o",
+        "--output",
+        path({ metavar: "OUTPUT", type: "file", allowCreate: true }),
+        {
+          description: message`CSV file to write; defaults to INPUT with .csv.`,
+        },
+      ),
     ),
-    output: optional(option(
-      "-o",
-      "--output",
-      path({ metavar: "OUTPUT", type: "file", allowCreate: true }),
-      {
-        description: message`CSV file to write; defaults to INPUT with .csv.`,
-      },
-    )),
     force: option("-f", "--force", {
       description: message`Replace OUTPUT if it already exists.`,
     }),
@@ -79,7 +80,7 @@ export async function convertFile(
       io.stdout(output);
       return 0;
     }
-    if (!await isRegularFileOrMissing(output)) {
+    if (!(await isRegularFileOrMissing(output))) {
       io.stderr(`tsv-to-csv: ${output} is not a regular file.`);
       return 1;
     }
@@ -96,7 +97,7 @@ export async function convertFile(
         );
         return 1;
       }
-      if (!await io.confirm(output)) {
+      if (!(await io.confirm(output))) {
         io.stderr(`tsv-to-csv: Kept the existing ${output}.`);
         return 1;
       }
@@ -151,7 +152,7 @@ async function replaceFile(path: string, contents: string): Promise<void> {
   // A fixed prefix keeps the name short however long the destination's
   // name is; filesystems commonly limit a name to 255 bytes:
   const temporary = join(dirname(path), `.tsv-to-csv-${randomUUID()}.tmp`);
-  if (!await createFile(temporary, contents)) {
+  if (!(await createFile(temporary, contents))) {
     throw new Error(`Temporary file already exists: ${temporary}`);
   }
   try {

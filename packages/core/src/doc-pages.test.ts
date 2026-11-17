@@ -16,8 +16,8 @@ describe("collectDocPages()", () => {
   it("retains labels on ordered sequences", () => {
     const parser = seq("Ordered", argument(string()), option("--x", integer()));
     assert.ok(
-      collectDocPages(parser).entries[0].page.sections.some((section) =>
-        section.title === "Ordered"
+      collectDocPages(parser).entries[0].page.sections.some(
+        (section) => section.title === "Ordered",
       ),
     );
   });
@@ -30,14 +30,11 @@ describe("collectDocPages()", () => {
     );
     const nested = command(
       "config",
-      or(
-        command("get", flag("--g")),
-        command("set", flag("--s")),
-      ),
+      or(command("get", flag("--g")), command("set", flag("--s"))),
       { hidden: "usage" },
     );
-    const page = collectDocPages(nested).entries.find((entry) =>
-      entry.path.join("/") === "config/get"
+    const page = collectDocPages(nested).entries.find(
+      (entry) => entry.path.join("/") === "config/get",
     );
     assert.equal(
       formatUsage("app", page?.page.usage ?? []),
@@ -48,12 +45,17 @@ describe("collectDocPages()", () => {
   it("reports consecutive command-bearing sequence children as an opaque ambiguous scope", () => {
     const parser = seq(command("x", flag("--x")), command("y", flag("--y")));
     const result = collectDocPages(parser, { strict: false });
-    assert.deepEqual(result.entries.map((entry) => entry.path), [[]]);
-    assert.deepEqual(result.unresolved, [{
-      path: [],
-      scope: "subtree",
-      reason: "ambiguous-command-path",
-    }]);
+    assert.deepEqual(
+      result.entries.map((entry) => entry.path),
+      [[]],
+    );
+    assert.deepEqual(result.unresolved, [
+      {
+        path: [],
+        scope: "subtree",
+        reason: "ambiguous-command-path",
+      },
+    ]);
     assert.throws(() => collectDocPages(parser), DocPageCollectionError);
     assert.doesNotThrow(() =>
       collectDocPages(parser, {
@@ -62,7 +64,7 @@ describe("collectDocPages()", () => {
           { path: ["x"], page: blank },
           { path: ["x", "y"], page: blank },
         ],
-      })
+      }),
     );
   });
 
@@ -73,11 +75,13 @@ describe("collectDocPages()", () => {
     });
     const entries = [{ path: [], page: blank, coverage: "subtree" as const }];
     const result = collectDocPages(parser, { strict: false, entries });
-    assert.deepEqual(result.unresolved, [{
-      path: ["serve"],
-      scope: "page",
-      reason: "unregistered-parser",
-    }]);
+    assert.deepEqual(result.unresolved, [
+      {
+        path: ["serve"],
+        scope: "page",
+        reason: "unregistered-parser",
+      },
+    ]);
     assert.throws(
       () => collectDocPages(parser, { entries }),
       DocPageCollectionError,
@@ -85,23 +89,26 @@ describe("collectDocPages()", () => {
     assert.doesNotThrow(() =>
       collectDocPages(parser, {
         entries: [...entries, { path: ["serve"], page: blank }],
-      })
+      }),
     );
   });
 
   it("requires an authored page for known incomplete descendants of a subtree assertion", () => {
     const parser = command("opaque", { ...flag("--custom") });
-    assert.throws(() =>
-      collectDocPages(parser, {
-        entries: [{ path: [], page: blank, coverage: "subtree" }],
-      }), DocPageCollectionError);
+    assert.throws(
+      () =>
+        collectDocPages(parser, {
+          entries: [{ path: [], page: blank, coverage: "subtree" }],
+        }),
+      DocPageCollectionError,
+    );
     assert.doesNotThrow(() =>
       collectDocPages(parser, {
         entries: [
           { path: [], page: blank, coverage: "subtree" },
           { path: ["opaque"], page: blank },
         ],
-      })
+      }),
     );
   });
 
@@ -122,52 +129,70 @@ describe("collectDocPages()", () => {
       strict: false,
       entries: [{ path: [], page: blank }],
     });
-    assert.deepEqual(result.unresolved, [{
-      path: ["serve"],
-      scope: "page",
-      reason: "static-default-format-unavailable",
-    }]);
-    assert.throws(() =>
-      collectDocPages(parser, {
-        entries: [{ path: [], page: blank }],
-      }), DocPageCollectionError);
+    assert.deepEqual(result.unresolved, [
+      {
+        path: ["serve"],
+        scope: "page",
+        reason: "static-default-format-unavailable",
+      },
+    ]);
+    assert.throws(
+      () =>
+        collectDocPages(parser, {
+          entries: [{ path: [], page: blank }],
+        }),
+      DocPageCollectionError,
+    );
     assert.doesNotThrow(() =>
       collectDocPages(parser, {
-        entries: [{ path: [], page: blank }, { path: ["serve"], page: blank }],
-      })
+        entries: [
+          { path: [], page: blank },
+          { path: ["serve"], page: blank },
+        ],
+      }),
     );
   });
 
   it("skips documentation-hidden object scopes before enumeration and reporting", () => {
     for (const hidden of [true, "doc", "help"] as const) {
       const parser = or(
-        object({ secret: command("secret", { ...flag("--secret") }) }, {
-          hidden,
-        }),
+        object(
+          { secret: command("secret", { ...flag("--secret") }) },
+          {
+            hidden,
+          },
+        ),
         command("public", flag("--public")),
       );
       const result = collectDocPages(parser);
-      assert.deepEqual(result.entries.map((entry) => entry.path), [[], [
-        "public",
-      ]]);
+      assert.deepEqual(
+        result.entries.map((entry) => entry.path),
+        [[], ["public"]],
+      );
       assert.deepEqual(result.unresolved, []);
       assert.ok(
-        result.entries[0].page.sections.flatMap((section) => section.entries)
-          .every((entry) =>
-            entry.term.type !== "command" || entry.term.name !== "secret"
+        result.entries[0].page.sections
+          .flatMap((section) => section.entries)
+          .every(
+            (entry) =>
+              entry.term.type !== "command" || entry.term.name !== "secret",
           ),
       );
     }
   });
 
   it("applies object usage visibility to projected command synopses", () => {
-    const parser = object({ action: command("serve", flag("--port")) }, {
-      hidden: "usage",
-    });
+    const parser = object(
+      { action: command("serve", flag("--port")) },
+      {
+        hidden: "usage",
+      },
+    );
     const result = collectDocPages(parser);
-    assert.deepEqual(result.entries.map((entry) => entry.path), [[], [
-      "serve",
-    ]]);
+    assert.deepEqual(
+      result.entries.map((entry) => entry.path),
+      [[], ["serve"]],
+    );
     assert.equal(
       formatUsage("app", result.entries[1].page.usage ?? []),
       "app serve",
@@ -192,7 +217,7 @@ describe("collectDocPages()", () => {
       collectDocPages(parser).entries[0].page.sections.map((section) => ({
         title: section.title,
         names: section.entries.map((entry) =>
-          entry.term.type === "option" ? entry.term.names : []
+          entry.term.type === "option" ? entry.term.names : [],
         ),
       })),
       [
@@ -208,10 +233,13 @@ describe("collectDocPages()", () => {
       [hiddenCommandAliasesKey]: ["other"],
     } as const;
     const parser = command("first", flag("--a"), aliases);
-    assert.throws(() =>
-      collectDocPages(parser, {
-        entries: [{ path: ["other"], page: blank }],
-      }), /Ambiguous command spelling/);
+    assert.throws(
+      () =>
+        collectDocPages(parser, {
+          entries: [{ path: ["other"], page: blank }],
+        }),
+      /Ambiguous command spelling/,
+    );
   });
 
   it("uses the choice constructor's captured values after custom key side effects", () => {
@@ -237,12 +265,13 @@ describe("collectDocPages()", () => {
     );
     const result = collectDocPages(parser, { strict: false });
     assert.ok(
-      result.entries[0].page.sections.flatMap((section) => section.entries)
+      result.entries[0].page.sections
+        .flatMap((section) => section.entries)
         .every((entry) => entry.default == null),
     );
     assert.ok(
-      result.unresolved.some((gap) =>
-        gap.reason === "static-default-format-unavailable"
+      result.unresolved.some(
+        (gap) => gap.reason === "static-default-format-unavailable",
       ),
     );
   });
@@ -266,35 +295,36 @@ describe("collectDocPages()", () => {
       ),
     });
     const result = collectDocPages(parser);
-    assert.deepEqual(result.entries.map((entry) => entry.path), [
-      [],
-      ["serve"],
-      ["config"],
-      ["config", "get"],
-      ["config", "set"],
-    ]);
+    assert.deepEqual(
+      result.entries.map((entry) => entry.path),
+      [[], ["serve"], ["config"], ["config", "get"], ["config", "set"]],
+    );
     assert.deepEqual(result.unresolved, []);
     assert.equal(result.scope, "parser");
     for (const entry of result.entries) {
       assert.ok(
-        entry.page.sections.flatMap((section) => section.entries).some((
-          entry,
-        ) =>
-          entry.term.type === "option" && entry.term.names.includes("--verbose")
-        ),
+        entry.page.sections
+          .flatMap((section) => section.entries)
+          .some(
+            (entry) =>
+              entry.term.type === "option" &&
+              entry.term.names.includes("--verbose"),
+          ),
       );
     }
-    const port = result.entries[1].page.sections.flatMap((section) =>
-      section.entries
-    ).find((entry) =>
-      entry.term.type === "option" && entry.term.names.includes("--port")
-    );
+    const port = result.entries[1].page.sections
+      .flatMap((section) => section.entries)
+      .find(
+        (entry) =>
+          entry.term.type === "option" && entry.term.names.includes("--port"),
+      );
     assert.equal(
       formatMessage(port?.default ?? [], { colors: false, quotes: false }),
       "8080",
     );
     assert.ok(
-      result.entries[4].page.sections.flatMap((section) => section.entries)
+      result.entries[4].page.sections
+        .flatMap((section) => section.entries)
         .some((entry) => entry.choices != null),
     );
     assert.deepEqual(result.entries[3].aliases, ["g"]);
@@ -330,11 +360,14 @@ describe("collectDocPages()", () => {
       DocPageCollectionError,
     );
     const result = collectDocPages(parser, {
-      entries: [{ path: ["opaque"], page: replacement, coverage: "subtree" }, {
-        path: ["opaque", "child"],
-        page: blank,
-        coverage: "page",
-      }],
+      entries: [
+        { path: ["opaque"], page: replacement, coverage: "subtree" },
+        {
+          path: ["opaque", "child"],
+          page: blank,
+          coverage: "page",
+        },
+      ],
     });
     assert.deepEqual(result.unresolved, []);
     assert.equal(
@@ -348,7 +381,10 @@ describe("collectDocPages()", () => {
     assert.throws(
       () =>
         collectDocPages(parser, {
-          entries: [{ path: [], page: blank }, { path: [], page: blank }],
+          entries: [
+            { path: [], page: blank },
+            { path: [], page: blank },
+          ],
         }),
       /Duplicate/,
     );
@@ -372,14 +408,17 @@ describe("collectDocPages()", () => {
     );
     const result = collectDocPages(parser);
     assert.ok(
-      result.entries[1].page.sections.flatMap((section) => section.entries)
+      result.entries[1].page.sections
+        .flatMap((section) => section.entries)
         .every((entry) => entry.default == null),
     );
     assert.ok(
-      result.entries[2].page.sections.flatMap((section) => section.entries)
-        .some((entry) =>
-          entry.default != null &&
-          formatMessage(entry.default, { colors: false }) === "chosen later"
+      result.entries[2].page.sections
+        .flatMap((section) => section.entries)
+        .some(
+          (entry) =>
+            entry.default != null &&
+            formatMessage(entry.default, { colors: false }) === "chosen later",
         ),
     );
     assert.equal(
@@ -394,11 +433,13 @@ describe("collectDocPages()", () => {
     );
     assert.doesNotThrow(() =>
       collectDocPages(functional, {
-        entries: [{
-          path: ["f"],
-          page: { usage: [{ type: "command", name: "f" }], sections: [] },
-        }],
-      })
+        entries: [
+          {
+            path: ["f"],
+            page: { usage: [{ type: "command", name: "f" }], sections: [] },
+          },
+        ],
+      }),
     );
   });
 
@@ -409,9 +450,10 @@ describe("collectDocPages()", () => {
         command("visible", flag("--flag"), { hidden: "usage" }),
       );
       const result = collectDocPages(parser);
-      assert.deepEqual(result.entries.map((entry) => entry.path), [[], [
-        "visible",
-      ]]);
+      assert.deepEqual(
+        result.entries.map((entry) => entry.path),
+        [[], ["visible"]],
+      );
       assert.deepEqual(result.unresolved, []);
     }
     assert.doesNotThrow(() =>
@@ -420,7 +462,7 @@ describe("collectDocPages()", () => {
           option("--hidden", { ...integer() }, { hidden: "doc" }),
           42,
         ),
-      )
+      ),
     );
   });
 
@@ -431,9 +473,10 @@ describe("collectDocPages()", () => {
         command("serve", withDefault(option("--port", integer()), 8080)),
       ),
     );
-    assert.deepEqual(result.entries.map((entry) => entry.path), [[], [
-      "serve",
-    ]]);
+    assert.deepEqual(
+      result.entries.map((entry) => entry.path),
+      [[], ["serve"]],
+    );
     assert.equal(
       formatUsage("app", result.entries[1].page.usage ?? []),
       "app PROFILE serve [--port INTEGER]",
@@ -453,8 +496,8 @@ describe("collectDocPages()", () => {
     assert.equal(result.entries[1].page.showUsage, false);
     assert.equal(result.entries[2].page.showUsage, true);
     assert.ok(
-      result.entries[2].page.sections.some((section) =>
-        section.title === "Inputs"
+      result.entries[2].page.sections.some(
+        (section) => section.title === "Inputs",
       ),
     );
   });
@@ -467,24 +510,33 @@ describe("collectDocPages()", () => {
       entries: [{ path: ["hidden"], hidden: "doc", page: blank }],
     });
     assert.ok(
-      !result.entries[0].page.sections.flatMap((section) => section.entries)
-        .some((entry) =>
-          entry.term.type === "command" && entry.term.name === "hidden"
+      !result.entries[0].page.sections
+        .flatMap((section) => section.entries)
+        .some(
+          (entry) =>
+            entry.term.type === "command" && entry.term.name === "hidden",
         ),
     );
     assert.throws(
       () =>
-        collectDocPages({ ...flag("--custom") }, {
-          entries: [{
-            path: [],
-            coverage: "subtree",
-            page: {
-              sections: [{
-                entries: [{ term: { type: "command", name: "missing" } }],
-              }],
-            },
-          }],
-        }),
+        collectDocPages(
+          { ...flag("--custom") },
+          {
+            entries: [
+              {
+                path: [],
+                coverage: "subtree",
+                page: {
+                  sections: [
+                    {
+                      entries: [{ term: { type: "command", name: "missing" } }],
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ),
       DocPageCollectionError,
     );
   });
@@ -503,8 +555,9 @@ describe("collectDocPages()", () => {
       Reflect.set(entry.choices[0], "text", "corrupt");
     }
     const second = collectDocPages(parser);
-    const fresh =
-      second.entries[1].page.sections.flatMap((section) => section.entries)[0];
+    const fresh = second.entries[1].page.sections.flatMap(
+      (section) => section.entries,
+    )[0];
     assert.ok(
       fresh.term.type === "option" && fresh.term.names.includes("--format"),
     );
@@ -522,15 +575,16 @@ describe("collectDocPages()", () => {
     const collected = collectDocPages(parser);
     assert.equal(calls, 0);
     assert.ok(
-      collected.entries[0].page.sections.flatMap((section) => section.entries)
+      collected.entries[0].page.sections
+        .flatMap((section) => section.entries)
         .every((entry) => entry.default == null),
     );
     const ordinary = getDocPageSync(parser);
     assert.ok(calls > 0);
     assert.ok(
-      ordinary?.sections.flatMap((section) => section.entries).some((entry) =>
-        entry.default != null
-      ),
+      ordinary?.sections
+        .flatMap((section) => section.entries)
+        .some((entry) => entry.default != null),
     );
   });
 
@@ -547,12 +601,13 @@ describe("collectDocPages()", () => {
     const result = collectDocPages(parser, { strict: false });
     assert.equal(calls, 0);
     assert.ok(
-      result.unresolved.some((gap) =>
-        gap.reason === "static-default-format-unavailable"
+      result.unresolved.some(
+        (gap) => gap.reason === "static-default-format-unavailable",
       ),
     );
     assert.ok(
-      result.entries[0].page.sections.flatMap((section) => section.entries)
+      result.entries[0].page.sections
+        .flatMap((section) => section.entries)
         .every((entry) => entry.default == null),
     );
     assert.doesNotThrow(() =>
@@ -560,7 +615,7 @@ describe("collectDocPages()", () => {
         withDefault(option("--format", value), "JSON", {
           message: message`json`,
         }),
-      )
+      ),
     );
     assert.equal(calls, 0);
   });

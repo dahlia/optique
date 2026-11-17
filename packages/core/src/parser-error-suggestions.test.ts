@@ -659,7 +659,7 @@ describe("Parser error suggestions", () => {
         // Count suggestions - should be at most 3
         const lines = errorMsg.split("\n");
         const suggestionLines = lines.filter((line) =>
-          line.trim().startsWith("--ver")
+          line.trim().startsWith("--ver"),
         );
         assert.ok(
           suggestionLines.length <= 3,
@@ -680,27 +680,27 @@ const asyncString: ValueParser<"async", string> = {
 
 describe("deferred suggestion compatibility", () => {
   for (const literal of [message`No match.`, [] satisfies Message]) {
-    for (
-      const parser of [
-        option("--verbose", { errors: { noMatch: literal } }),
-        option("--verbose", string(), { errors: { noMatch: literal } }),
-        option("--verbose", asyncString, { errors: { noMatch: literal } }),
-        flag("--verbose", { errors: { noMatch: literal } }),
-      ]
-    ) {
+    for (const parser of [
+      option("--verbose", { errors: { noMatch: literal } }),
+      option("--verbose", string(), { errors: { noMatch: literal } }),
+      option("--verbose", asyncString, { errors: { noMatch: literal } }),
+      flag("--verbose", { errors: { noMatch: literal } }),
+    ]) {
       it(`skips candidate traversal for ${parser.mode} literal noMatch (${literal.length} terms)`, async () => {
         let traversals = 0;
         const result = await parser.parse({
           buffer: ["--verbos"],
           state: undefined,
           optionsTerminated: false,
-          usage: [{
-            type: "option",
-            get names() {
-              traversals++;
-              return ["--verbose"] as const;
+          usage: [
+            {
+              type: "option",
+              get names() {
+                traversals++;
+                return ["--verbose"] as const;
+              },
             },
-          }],
+          ],
         });
         assert.ok(!result.success);
         if (!result.success) {
@@ -741,9 +741,10 @@ describe("deferred suggestion compatibility", () => {
     it(`skips callbacks for successful ${mode} compositions`, async () => {
       const calls: CallbackCall[] = [];
       const args = ["alpha", "src/filename.ts", "alpha"];
-      const result = mode === "sync"
-        ? parseSync(pathParser(string(), calls), args)
-        : await parseAsync(pathParser(asyncString, calls), args);
+      const result =
+        mode === "sync"
+          ? parseSync(pathParser(string(), calls), args)
+          : await parseAsync(pathParser(asyncString, calls), args);
       assert.ok(result.success);
       if (result.success) assert.deepEqual(result.value.paths, args);
       assert.deepEqual(calls, []);
@@ -788,26 +789,30 @@ describe("deferred suggestion compatibility", () => {
 
     it(`preserves literal errors and typo diagnostics through ${mode} multiple()`, async () => {
       const literal = message`Unknown option.`;
-      const custom = mode === "sync"
-        ? parseSync(
-          multiple(
-            option("--verbose", string(), { errors: { noMatch: literal } }),
-          ),
-          ["--verbos"],
-        )
-        : await parseAsync(
-          multiple(
-            option("--verbose", asyncString, { errors: { noMatch: literal } }),
-          ),
-          ["--verbos"],
-        );
+      const custom =
+        mode === "sync"
+          ? parseSync(
+              multiple(
+                option("--verbose", string(), { errors: { noMatch: literal } }),
+              ),
+              ["--verbos"],
+            )
+          : await parseAsync(
+              multiple(
+                option("--verbose", asyncString, {
+                  errors: { noMatch: literal },
+                }),
+              ),
+              ["--verbos"],
+            );
       assert.ok(!custom.success);
       if (!custom.success) assert.strictEqual(custom.error, literal);
-      const defaultError = mode === "sync"
-        ? parseSync(multiple(option("--verbose", string())), ["--verbos"])
-        : await parseAsync(multiple(option("--verbose", asyncString)), [
-          "--verbos",
-        ]);
+      const defaultError =
+        mode === "sync"
+          ? parseSync(multiple(option("--verbose", string())), ["--verbos"])
+          : await parseAsync(multiple(option("--verbose", asyncString)), [
+              "--verbos",
+            ]);
       assert.ok(!defaultError.success);
       if (!defaultError.success) {
         assert.equal(

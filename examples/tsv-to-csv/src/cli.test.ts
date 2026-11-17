@@ -9,9 +9,8 @@ import { createCliRunner } from "@optique/testing/cli";
 import manifest from "../package.json" with { type: "json" };
 
 const entrypoint = new URL("./cli.ts", import.meta.url);
-const runtimeArgs = "Deno" in globalThis
-  ? ["--allow-read", "--allow-write", "--allow-env"]
-  : [];
+const runtimeArgs =
+  "Deno" in globalThis ? ["--allow-read", "--allow-write", "--allow-env"] : [];
 const env = {
   FORCE_COLOR: undefined,
   CLICOLOR_FORCE: undefined,
@@ -117,16 +116,14 @@ describe("tsv-to-csv", () => {
       assert.equal(version.exitCode, 0);
       assert.equal(version.stdout, `${manifest.version}\n`);
 
-      for (
-        const args of [
-          [],
-          ["missing.tsv"],
-          ["data.tsv", "--output"],
-          ["data.tsv", "extra.tsv"],
-          ["data.tsv", "-o", "missing-dir/out.csv"],
-          ["--unknown", "data.tsv"],
-        ]
-      ) {
+      for (const args of [
+        [],
+        ["missing.tsv"],
+        ["data.tsv", "--output"],
+        ["data.tsv", "extra.tsv"],
+        ["data.tsv", "-o", "missing-dir/out.csv"],
+        ["--unknown", "data.tsv"],
+      ]) {
         const result = await cli.invoke(...args);
         assert.equal(result.exitCode, 1, args.join(" "));
         assert.equal(result.stdout, "", args.join(" "));
@@ -136,33 +133,37 @@ describe("tsv-to-csv", () => {
       assert.deepEqual(await files(cwd), ["data.csv", "data.tsv"]);
       assert.equal(await readFile(join(cwd, "data.csv"), "utf8"), OLD);
     }));
-  it("removes a partially written destination when writing fails", {
-    skip: process.platform !== "linux",
-  }, () => {
-    // Bun ignores the skip option, so we need an early return as well:
-    if (process.platform !== "linux") return;
-    return fixture(async (cwd) => {
-      // A zero file size limit lets the CLI create data.csv but makes the
-      // first write to it fail with EFBIG.  SIGXFSZ is ignored so the write
-      // reports an error instead of terminating the process.
-      const cli = createCliRunner({
-        command: [
-          "bash",
-          "-c",
-          "trap '' XFSZ; ulimit -f 0; exec \"$@\"",
-          "bash",
-          process.execPath,
-          ...runtimeArgs.length > 0 ? ["run", ...runtimeArgs] : [],
-          fileURLToPath(entrypoint),
-        ],
-        env,
-        cwd,
+  it(
+    "removes a partially written destination when writing fails",
+    {
+      skip: process.platform !== "linux",
+    },
+    () => {
+      // Bun ignores the skip option, so we need an early return as well:
+      if (process.platform !== "linux") return;
+      return fixture(async (cwd) => {
+        // A zero file size limit lets the CLI create data.csv but makes the
+        // first write to it fail with EFBIG.  SIGXFSZ is ignored so the write
+        // reports an error instead of terminating the process.
+        const cli = createCliRunner({
+          command: [
+            "bash",
+            "-c",
+            "trap '' XFSZ; ulimit -f 0; exec \"$@\"",
+            "bash",
+            process.execPath,
+            ...(runtimeArgs.length > 0 ? ["run", ...runtimeArgs] : []),
+            fileURLToPath(entrypoint),
+          ],
+          env,
+          cwd,
+        });
+        const result = await cli.invoke("data.tsv");
+        assert.equal(result.exitCode, 1);
+        assert.equal(result.stdout, "");
+        assert.match(result.stderr, /^tsv-to-csv: /);
+        assert.deepEqual(await files(cwd), ["data.tsv"]);
       });
-      const result = await cli.invoke("data.tsv");
-      assert.equal(result.exitCode, 1);
-      assert.equal(result.stdout, "");
-      assert.match(result.stderr, /^tsv-to-csv: /);
-      assert.deepEqual(await files(cwd), ["data.tsv"]);
-    });
-  });
+    },
+  );
 });

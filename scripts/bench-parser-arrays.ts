@@ -20,12 +20,18 @@ import {
 import { argument, option } from "../packages/core/src/primitives.ts";
 import { string, type ValueParser } from "../packages/core/src/valueparser.ts";
 
-const counts = (process.argv.find((a) => a.startsWith("--counts="))
-  ?.slice("--counts=".length) ?? "1,8,32,500,2000,8000,16000,32000")
-  .split(",").map(Number);
+const counts = (
+  process.argv
+    .find((a) => a.startsWith("--counts="))
+    ?.slice("--counts=".length) ?? "1,8,32,500,2000,8000,16000,32000"
+)
+  .split(",")
+  .map(Number);
 assert.ok(counts.every((n) => Number.isSafeInteger(n) && n > 0));
-const workloads = process.argv.find((a) => a.startsWith("--workloads="))
-  ?.slice("--workloads=".length).split(",");
+const workloads = process.argv
+  .find((a) => a.startsWith("--workloads="))
+  ?.slice("--workloads=".length)
+  .split(",");
 const enabled = (name: string) => workloads == null || workloads.includes(name);
 
 function report(
@@ -35,13 +41,15 @@ function report(
   samples: number[],
 ) {
   const sorted = [...samples].sort((a, b) => a - b);
-  console.log(JSON.stringify({
-    workload,
-    mode,
-    count,
-    medianMs: sorted[2],
-    samples,
-  }));
+  console.log(
+    JSON.stringify({
+      workload,
+      mode,
+      count,
+      medianMs: sorted[2],
+      samples,
+    }),
+  );
 }
 
 function measureSync<T>(
@@ -104,33 +112,35 @@ for (const count of counts) {
     const input = mixed
       ? paths.flatMap((path) => ["--name", path, path])
       : paths;
-    const options = workload === "annotated"
-      ? { annotations: { [annotation]: "present" } }
-      : undefined;
+    const options =
+      workload === "annotated"
+        ? { annotations: { [annotation]: "present" } }
+        : undefined;
     const sync = mixed
       ? object({
-        names: multiple(option("--name", syncString)),
-        paths: multiple(argument(syncString)),
-      })
+          names: multiple(option("--name", syncString)),
+          paths: multiple(argument(syncString)),
+        })
       : object({
-        name: optional(option("--name", syncString)),
-        paths: multiple(argument(syncString)),
-      });
+          name: optional(option("--name", syncString)),
+          paths: multiple(argument(syncString)),
+        });
     const async = mixed
       ? object({
-        names: multiple(option("--name", asyncString)),
-        paths: multiple(argument(asyncString)),
-      })
+          names: multiple(option("--name", asyncString)),
+          paths: multiple(argument(asyncString)),
+        })
       : object({
-        name: optional(option("--name", asyncString)),
-        paths: multiple(argument(asyncString)),
-      });
+          name: optional(option("--name", asyncString)),
+          paths: multiple(argument(asyncString)),
+        });
     const expected = mixed
       ? { names: paths, paths }
       : { name: undefined, paths };
-    const verify = (
-      result: { readonly success: boolean; readonly value?: unknown },
-    ) => {
+    const verify = (result: {
+      readonly success: boolean;
+      readonly value?: unknown;
+    }) => {
       assert.ok(result.success);
       assert.deepStrictEqual(result.value, expected);
     };
@@ -190,9 +200,8 @@ for (const count of counts) {
     };
     const sync = multiple(child);
     const async = multiple(asyncChild);
-    const state: readonly State[] = Array.from(
-      { length: count },
-      () => replacement ? { step: 1 } : { step: 1, success: true },
+    const state: readonly State[] = Array.from({ length: count }, () =>
+      replacement ? { step: 1 } : { step: 1, success: true },
     );
     const context: ParserContext<readonly State[]> = {
       state,

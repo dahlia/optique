@@ -36,8 +36,9 @@ function quoteField(field: string): string {
  */
 export function deriveOutputPath(input: string): string {
   const extension = extname(input);
-  const stem = extension.toLowerCase() === ".tsv"
-    ? input.slice(0, -extension.length)
-    : input;
+  const stem =
+    extension.toLowerCase() === ".tsv"
+      ? input.slice(0, -extension.length)
+      : input;
   return `${stem}.csv`;
 }

@@ -11,10 +11,7 @@ const result = run(parser, {
 });
 if (result.action.type === "docs") {
   const [{ formatCommandReference }, { referenceEntries, referenceOptions }] =
-    await Promise.all([
-      import("@optique/man/markdown"),
-      import("./pages.ts"),
-    ]);
+    await Promise.all([import("@optique/man/markdown"), import("./pages.ts")]);
   process.stdout.write(
     formatCommandReference(referenceEntries, referenceOptions),
   );

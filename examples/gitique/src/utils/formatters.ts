@@ -110,8 +110,10 @@ export function formatTimestamp(date: Date): string {
  * Strips color codes from text (useful for plain text output)
  */
 export function stripColors(text: string): string {
+  /* oxlint-disable no-control-regex -- Match control characters. */
   // deno-lint-ignore no-control-regex
   return text.replace(/\x1b\[[0-9;]*m/g, "");
+  /* oxlint-enable no-control-regex */
 }
 
 /**
@@ -225,9 +227,9 @@ export function formatDiffStat(
   const insertionBars = Math.round((insertions / total) * barWidth) || 0;
   const deletionBars = barWidth - insertionBars;
 
-  const bar = `${colors.green}${
-    "+".repeat(insertionBars)
-  }${colors.reset}${colors.red}${"-".repeat(deletionBars)}${colors.reset}`;
+  const bar = `${colors.green}${"+".repeat(
+    insertionBars,
+  )}${colors.reset}${colors.red}${"-".repeat(deletionBars)}${colors.reset}`;
 
   return ` ${path} | ${total} ${bar}`;
 }

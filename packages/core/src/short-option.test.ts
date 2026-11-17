@@ -154,9 +154,10 @@ describe("option scope selection snapshots", () => {
     const child = forkOptionScope(terminated);
     route.select(child, alternate);
     assert.deepEqual([...getOptionScope(terminated)], ["initial"]);
-    assert.deepEqual([
-      ...getOptionScope({ ...child, optionsTerminated: false }),
-    ], ["alternate"]);
+    assert.deepEqual(
+      [...getOptionScope({ ...child, optionsTerminated: false })],
+      ["alternate"],
+    );
   });
 
   it("should reconnect isolated success to the live parent holder", () => {
@@ -180,8 +181,8 @@ function initialContext(): ParserContext<null> {
 }
 
 function sourceSet(context: object): unknown {
-  const key = Object.getOwnPropertySymbols(context).find((key) =>
-    key.description === "optionScope"
+  const key = Object.getOwnPropertySymbols(context).find(
+    (key) => key.description === "optionScope",
   );
   assert.ok(key);
   const scope: unknown = Reflect.get(context, key);

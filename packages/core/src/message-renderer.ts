@@ -18,17 +18,16 @@ import { messageRenderers } from "./message-registry.ts";
  * @since 1.3.0
  * @internal
  */
-export function resolveMessageFormatter(
-  options: {
-    readonly messageFormatter?: MessageFormatter;
-    readonly theme?: TerminalTheme;
-  },
-): (
+export function resolveMessageFormatter(options: {
+  readonly messageFormatter?: MessageFormatter;
+  readonly theme?: TerminalTheme;
+}): (
   message: Message,
   options?: MessageFormatOptions,
   ambient?: TerminalStyle,
 ) => string {
-  const formatter = options.messageFormatter ??
+  const formatter =
+    options.messageFormatter ??
     (options.theme == null
       ? formatMessage
       : createMessageFormatter(options.theme));
@@ -66,19 +65,21 @@ export function renderErrorMessage(
   }
   if (occupied < 0) throw new RangeError("Initial width must be nonnegative.");
   const colors = options.colors;
-  const label = spaceAfterLabel(renderTerminalTerm(
-    { type: "errorLabel", label: "Error:" },
-    options.theme,
-    typeof colors === "object" ? true : colors,
-    undefined,
-    undefined,
-    typeof colors === "object" ? colors.resetSuffix : undefined,
-  ));
+  const label = spaceAfterLabel(
+    renderTerminalTerm(
+      { type: "errorLabel", label: "Error:" },
+      options.theme,
+      typeof colors === "object" ? true : colors,
+      undefined,
+      undefined,
+      typeof colors === "object" ? colors.resetSuffix : undefined,
+    ),
+  );
   if (hasAutomaticWidth(options) && options.maxWidth != null) {
     const size = measureText(label);
     if (
       options.maxWidth <
-        Math.max(size.maxLineWidth, occupied + size.lastLineWidth + 1)
+      Math.max(size.maxLineWidth, occupied + size.lastLineWidth + 1)
     ) {
       options = { ...options, maxWidth: undefined };
     }

@@ -57,8 +57,9 @@ export type DerivedDefaultResolver<TParsed, TValue> = (
  * @since 1.2.0
  */
 export type DerivedDefaultValues<TResolvers> = {
-  readonly [K in keyof TResolvers]: TResolvers[K] extends
-    (parsed: infer _TParsed) => infer TValue
+  readonly [K in keyof TResolvers]: TResolvers[K] extends (
+    parsed: infer _TParsed,
+  ) => infer TValue
     ? Exclude<Awaited<TValue>, undefined>
     : never;
 };
@@ -77,8 +78,9 @@ export type DerivedDefaultKey<TValues extends object, TValue> = {
  *
  * @since 1.2.0
  */
-export interface DerivedDefaultsContext<TValues extends object>
-  extends SourceContext {
+export interface DerivedDefaultsContext<
+  TValues extends object,
+> extends SourceContext {
   readonly phase: "two-pass";
   readonly $values?: TValues;
 }
@@ -123,15 +125,17 @@ function getTypeName(value: unknown): string {
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
-  return value != null &&
+  return (
+    value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
-    typeof (value as Record<string, unknown>).then === "function";
+    typeof (value as Record<string, unknown>).then === "function"
+  );
 }
 
-function validateSourceContextRequest(request: unknown): asserts request is
-  | undefined
-  | SourceContextRequest {
+function validateSourceContextRequest(
+  request: unknown,
+): asserts request is undefined | SourceContextRequest {
   if (request === undefined) return;
   if (
     request === null ||
@@ -172,9 +176,7 @@ function validateFallbackValue<M extends Mode, TValue>(
   innerParser: Parser<M, TValue, unknown> | undefined,
   value: TValue,
 ): ModeValue<M, Result<TValue>> {
-  if (
-    innerParser == null || typeof innerParser.validateValue !== "function"
-  ) {
+  if (innerParser == null || typeof innerParser.validateValue !== "function") {
     return wrapForMode(mode, {
       success: true as const,
       value,
@@ -204,9 +206,9 @@ export function createDerivedDefaults<const TResolvers extends object>(
     const resolver = (resolvers as Record<PropertyKey, unknown>)[key];
     if (typeof resolver !== "function") {
       throw new TypeError(
-        `Expected resolver ${String(key)} to be a function, but got: ${
-          getTypeName(resolver)
-        }.`,
+        `Expected resolver ${String(key)} to be a function, but got: ${getTypeName(
+          resolver,
+        )}.`,
       );
     }
   }
@@ -231,10 +233,9 @@ export function createDerivedDefaults<const TResolvers extends object>(
       const values: Record<PropertyKey, unknown> = {};
       const pending: Promise<void>[] = [];
       for (const key of Reflect.ownKeys(resolvers)) {
-        const resolver =
-          (resolvers as Record<PropertyKey, (parsed: unknown) => unknown>)[
-            key
-          ];
+        const resolver = (
+          resolvers as Record<PropertyKey, (parsed: unknown) => unknown>
+        )[key];
         // Resolvers that declare a parsed-value parameter depend on a seed.
         // Zero-argument resolvers can still provide global defaults.
         if (request.parsed == null && resolver.length > 0) {
@@ -253,11 +254,13 @@ export function createDerivedDefaults<const TResolvers extends object>(
       }
 
       const buildAnnotations = (): Annotations =>
-        Reflect.ownKeys(values).length === 0 ? {} : {
-          [contextId]: {
-            values: values as Values,
-          } satisfies DerivedDefaultAnnotationData<Values>,
-        };
+        Reflect.ownKeys(values).length === 0
+          ? {}
+          : {
+              [contextId]: {
+                values: values as Values,
+              } satisfies DerivedDefaultAnnotationData<Values>,
+            };
       return pending.length === 0
         ? buildAnnotations()
         : Promise.all(pending).then(buildAnnotations);
@@ -290,27 +293,24 @@ export function bindDerivedDefault<
   options: BindDerivedDefaultOptions<TValues, TValue, TKey>,
 ): FluentParser<M, TValue, TState> {
   const keyType = typeof options.key;
-  if (
-    keyType !== "string" && keyType !== "number" && keyType !== "symbol"
-  ) {
+  if (keyType !== "string" && keyType !== "number" && keyType !== "symbol") {
     throw new TypeError(
-      `Expected key to be a property key, but got: ${
-        getTypeName(options.key)
-      }.`,
+      `Expected key to be a property key, but got: ${getTypeName(
+        options.key,
+      )}.`,
     );
   }
 
   const bindStateKey: unique symbol = Symbol(
     "@optique/derived-defaults/bindState",
   );
-  type BindState =
-    & { readonly [K in typeof bindStateKey]: true }
-    & { readonly hasCliValue: boolean; readonly cliState?: TState };
+  type BindState = { readonly [K in typeof bindStateKey]: true } & {
+    readonly hasCliValue: boolean;
+    readonly cliState?: TState;
+  };
 
   function isBindState(value: unknown): value is BindState {
-    return value != null &&
-      typeof value === "object" &&
-      bindStateKey in value;
+    return value != null && typeof value === "object" && bindStateKey in value;
   }
 
   function shouldDeferCompletion(
@@ -323,10 +323,10 @@ export function bindDerivedDefault<
     ) {
       return true;
     }
-    return parser.shouldDeferCompletion?.(
-      getInnerState(state as TState),
-      exec,
-    ) === true;
+    return (
+      parser.shouldDeferCompletion?.(getInnerState(state as TState), exec) ===
+      true
+    );
   }
 
   function getInnerState(state: TState): TState {
@@ -360,8 +360,9 @@ export function bindDerivedDefault<
     ) {
       return undefined;
     }
-    return (annotationValue as DerivedDefaultAnnotationData<TValues>)
-      .values[options.key] as TValue | undefined;
+    return (annotationValue as DerivedDefaultAnnotationData<TValues>).values[
+      options.key
+    ] as TValue | undefined;
   }
 
   function hasDerivedFallback(state: TState): boolean {
@@ -397,8 +398,7 @@ export function bindDerivedDefault<
           if (contextAbsent) {
             return {
               success: false as const,
-              error:
-                message`Derived default value could not be read: the derived default context was not passed to run()'s contexts option.`,
+              error: message`Derived default value could not be read: the derived default context was not passed to run()'s contexts option.`,
             };
           }
           return result;
@@ -408,8 +408,7 @@ export function bindDerivedDefault<
     if (contextAbsent) {
       return wrapForMode(mode, {
         success: false as const,
-        error:
-          message`Derived default value could not be read: the derived default context was not passed to run()'s contexts option.`,
+        error: message`Derived default value could not be read: the derived default context was not passed to run()'s contexts option.`,
       });
     }
     return wrapForMode(mode, {
@@ -436,12 +435,11 @@ export function bindDerivedDefault<
     const derivedValue = getDerivedValue(state);
     const validateFallback = (
       parsed: ValueParserResult<TValue>,
-    ):
-      | ValueParserResult<unknown>
-      | Promise<ValueParserResult<unknown>> => {
+    ): ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> => {
       if (!parsed.success) return parsed;
       if (
-        innerParser == null || typeof innerParser.validateValue !== "function"
+        innerParser == null ||
+        typeof innerParser.validateValue !== "function"
       ) {
         return parsed;
       }
@@ -475,9 +473,10 @@ export function bindDerivedDefault<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    usage: options.default !== undefined
-      ? [{ type: "optional", terms: parser.usage }]
-      : parser.usage,
+    usage:
+      options.default !== undefined
+        ? [{ type: "optional", terms: parser.usage }]
+        : parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
@@ -494,34 +493,32 @@ export function bindDerivedDefault<
     },
     getSuggestRuntimeNodes(state, path) {
       const innerState = getInnerState(state);
-      return delegateSuggestNodes(
-        parser,
-        boundParser,
-        state,
-        path,
-        innerState,
-      );
+      return delegateSuggestNodes(parser, boundParser, state, path, innerState);
     },
     parse(context) {
       const annotations = getAnnotations(context.state);
       const innerState = isBindState(context.state)
-        ? (context.state.hasCliValue
-          ? context.state.cliState as TState
-          : parser.initialState)
+        ? context.state.hasCliValue
+          ? (context.state.cliState as TState)
+          : parser.initialState
         : context.state;
-      const innerContext = innerState !== context.state
-        ? { ...context, state: innerState }
-        : context;
+      const innerContext =
+        innerState !== context.state
+          ? { ...context, state: innerState }
+          : context;
       const processResult = (
         result: ParserResult<TState>,
       ): ParserResult<TState> => {
         if (result.success) {
           const cliConsumed = result.consumed.length > 0;
-          const nextState = injectAnnotations({
-            [bindStateKey]: true as const,
-            hasCliValue: cliConsumed,
-            cliState: result.next.state,
-          }, annotations);
+          const nextState = injectAnnotations(
+            {
+              [bindStateKey]: true as const,
+              hasCliValue: cliConsumed,
+              cliState: result.next.state,
+            },
+            annotations,
+          );
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
@@ -530,10 +527,13 @@ export function bindDerivedDefault<
           };
         }
         if (result.consumed > 0) return result;
-        const nextState = injectAnnotations({
-          [bindStateKey]: true as const,
-          hasCliValue: false,
-        }, annotations);
+        const nextState = injectAnnotations(
+          {
+            [bindStateKey]: true as const,
+            hasCliValue: false,
+          },
+          annotations,
+        );
         return {
           success: true,
           next: { ...innerContext, state: nextState as TState },
@@ -548,18 +548,16 @@ export function bindDerivedDefault<
     },
     complete(state, exec) {
       if (isBindState(state) && state.hasCliValue) {
-        return wrapForMode(
-          parser.mode,
-          parser.complete(state.cliState!, exec),
-        );
+        return wrapForMode(parser.mode, parser.complete(state.cliState!, exec));
       }
       return getDerivedOrDefault(state, parser.mode, exec, parser);
     },
     suggest(context, prefix) {
       const innerState = getInnerState(context.state);
-      const innerContext = innerState !== context.state
-        ? { ...context, state: innerState }
-        : context;
+      const innerContext =
+        innerState !== context.state
+          ? { ...context, state: innerState }
+          : context;
       return parser.suggest(innerContext, prefix);
     },
     shouldDeferCompletion,
@@ -567,7 +565,8 @@ export function bindDerivedDefault<
       const defaultValue = upperDefaultValue ?? options.default;
       const fragments = parser.getDocFragments(state, defaultValue);
       if (
-        upperDefaultValue !== undefined || options.defaultDescription == null
+        upperDefaultValue !== undefined ||
+        options.defaultDescription == null
       ) {
         return fragments;
       }
@@ -585,20 +584,22 @@ export function bindDerivedDefault<
       const annotations = getAnnotations(state);
       if (
         annotations?.[options.context.id] !==
-          phase1DerivedDefaultAnnotationMarker
+        phase1DerivedDefaultAnnotationMarker
       ) {
-        const extractInnerPhase2Seed = (parser as typeof parser & {
-          readonly [extractPhase2SeedKey]?: (
-            state: TState,
-            exec?: ExecutionContext,
-          ) => ModeValue<M, unknown>;
-        })[extractPhase2SeedKey];
+        const extractInnerPhase2Seed = (
+          parser as typeof parser & {
+            readonly [extractPhase2SeedKey]?: (
+              state: TState,
+              exec?: ExecutionContext,
+            ) => ModeValue<M, unknown>;
+          }
+        )[extractPhase2SeedKey];
         return extractInnerPhase2Seed == null
           ? wrapForMode(parser.mode, null)
           : wrapForMode(
-            parser.mode,
-            extractInnerPhase2Seed(getInnerState(state), exec),
-          );
+              parser.mode,
+              extractInnerPhase2Seed(getInnerState(state), exec),
+            );
       }
       return wrapForMode(parser.mode, {
         value: undefined as TValue,
@@ -639,23 +640,24 @@ export function bindDerivedDefault<
     parser,
     (sourceMetadata: ParserSourceMetadata<M, TValue, TState>) => ({
       ...sourceMetadata,
-      getMissingSourceValue: sourceMetadata.preservesSourceValue !== false &&
-          options.default !== undefined
-        ? () => {
-          if (typeof parser.validateValue === "function") {
-            return wrapForMode(
-              parser.mode,
-              parser.validateValue(options.default!) as
-                | ValueParserResult<unknown>
-                | Promise<ValueParserResult<unknown>>,
-            );
-          }
-          return wrapForMode(parser.mode, {
-            success: true as const,
-            value: options.default,
-          });
-        }
-        : undefined,
+      getMissingSourceValue:
+        sourceMetadata.preservesSourceValue !== false &&
+        options.default !== undefined
+          ? () => {
+              if (typeof parser.validateValue === "function") {
+                return wrapForMode(
+                  parser.mode,
+                  parser.validateValue(options.default!) as
+                    | ValueParserResult<unknown>
+                    | Promise<ValueParserResult<unknown>>,
+                );
+              }
+              return wrapForMode(parser.mode, {
+                success: true as const,
+                value: options.default,
+              });
+            }
+          : undefined,
       extractSourceValue: (state: unknown) => {
         if (!isBindState(state)) {
           if (sourceMetadata.preservesSourceValue) {
@@ -700,13 +702,14 @@ export function bindDerivedDefault<
       // the wrapped parser transforms the source value, this wrapper's
       // completion lives in the transformed domain and must never
       // register under the raw source ID, so no completion is exposed.
-      completeSource: sourceMetadata.completeSource == null ||
-          sourceMetadata.preservesSourceValue === false
-        ? undefined
-        : (state: unknown, exec) =>
-          Promise.resolve(
-            boundParser.complete(state as TState, exec),
-          ) as Promise<ValueParserResult<unknown> | undefined>,
+      completeSource:
+        sourceMetadata.completeSource == null ||
+        sourceMetadata.preservesSourceValue === false
+          ? undefined
+          : (state: unknown, exec) =>
+              Promise.resolve(
+                boundParser.complete(state as TState, exec),
+              ) as Promise<ValueParserResult<unknown> | undefined>,
     }),
   );
   if (dependencyMetadata != null) {
@@ -720,9 +723,11 @@ export function bindDerivedDefault<
   // The empty step preserves success/provisional or accepts a non-match.
   const emptyStep = getEmptyInputBehavior(parser).step;
   defineEmptyInputBehavior(boundParser, {
-    ...(emptyStep === undefined ? {} : {
-      step: emptyStep === "failure" ? "success" : emptyStep,
-    }),
+    ...(emptyStep === undefined
+      ? {}
+      : {
+          step: emptyStep === "failure" ? "success" : emptyStep,
+        }),
   });
   return fluent(boundParser);
 }

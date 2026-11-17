@@ -8,30 +8,32 @@ import {
   trimLeadingSpace,
 } from "./text-layout.ts";
 
-const pieces = fc.array(fc.constantFrom(
-  "a",
-  "한",
-  "👩‍💻",
-  "e",
-  "\u0301",
-  "1",
-  "\uFE0F\u20E3",
-  "\n",
-  " ",
-  "\x1b[31mred\x1b[0m",
-  "\x1b]8;;https://example.com\x1b\\link\x1b]8;;\x1b\\",
-)).map((parts) => parts.join(""));
+const pieces = fc
+  .array(
+    fc.constantFrom(
+      "a",
+      "한",
+      "👩‍💻",
+      "e",
+      "\u0301",
+      "1",
+      "\uFE0F\u20E3",
+      "\n",
+      " ",
+      "\x1b[31mred\x1b[0m",
+      "\x1b]8;;https://example.com\x1b\\link\x1b]8;;\x1b\\",
+    ),
+  )
+  .map((parts) => parts.join(""));
 
 describe("measureText", () => {
   it("should distinguish empty, first, last and widest physical lines", () => {
-    for (
-      const [text, widths] of [
-        ["", [0, 0, 0, 1]],
-        ["\n", [0, 0, 0, 2]],
-        ["한\nabc\n", [2, 0, 3, 3]],
-        ["\ne\u0301\n\n👩‍💻", [0, 2, 2, 4]],
-      ] as const
-    ) {
+    for (const [text, widths] of [
+      ["", [0, 0, 0, 1]],
+      ["\n", [0, 0, 0, 2]],
+      ["한\nabc\n", [2, 0, 3, 3]],
+      ["\ne\u0301\n\n👩‍💻", [0, 2, 2, 4]],
+    ] as const) {
       assert.deepEqual(measureText(text), {
         firstLineWidth: widths[0],
         lastLineWidth: widths[1],
@@ -41,10 +43,12 @@ describe("measureText", () => {
     }
   });
   it("should remove complete escapes before identifying physical lines", () => {
-    assert.deepEqual(
-      measureText("\x1b]0;invisible\ntitle\x07a\n한"),
-      { firstLineWidth: 1, lastLineWidth: 2, maxLineWidth: 2, lineCount: 2 },
-    );
+    assert.deepEqual(measureText("\x1b]0;invisible\ntitle\x07a\n한"), {
+      firstLineWidth: 1,
+      lastLineWidth: 2,
+      maxLineWidth: 2,
+      lineCount: 2,
+    });
   });
   it("should measure styled and linked text like its visible content", () => {
     fc.assert(
@@ -131,12 +135,10 @@ describe("measureAnnotation", () => {
   });
 
   it("should measure headings with leading ANSI styles and OSC links", () => {
-    for (
-      const prefix of [
-        "\x1b[31m    [\x1b[0m",
-        "\x1b]8;;https://example.com\x1b\\    [\x1b]8;;\x1b\\",
-      ]
-    ) {
+    for (const prefix of [
+      "\x1b[31m    [\x1b[0m",
+      "\x1b]8;;https://example.com\x1b\\    [\x1b]8;;\x1b\\",
+    ]) {
       const layout = measureAnnotation(prefix, "]");
       assert.equal(layout.minWidth, 2);
       assert.equal(layout.prefixMetrics.firstLineWidth, 5);

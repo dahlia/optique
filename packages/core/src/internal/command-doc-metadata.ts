@@ -15,7 +15,7 @@ const selectedCommandUsage = new WeakMap<
 export function getSelectedCommandUsage(
   metadata: CommandDocMetadata | undefined,
 ): readonly CommandUsageId[] {
-  return metadata == null ? [] : selectedCommandUsage.get(metadata) ?? [];
+  return metadata == null ? [] : (selectedCommandUsage.get(metadata) ?? []);
 }
 
 /** Attaches selection without adding public metadata properties. @internal */
@@ -33,12 +33,14 @@ export function scopeCommandDocMetadata(
   metadata: CommandDocMetadata | undefined,
   scope: CommandUsageScope,
 ): CommandDocMetadata | undefined {
-  return metadata == null ? undefined : withSelectedCommandUsage(
-    metadata,
-    getSelectedCommandUsage(metadata).map((id) =>
-      scopeCommandUsageId(scope, id)
-    ),
-  );
+  return metadata == null
+    ? undefined
+    : withSelectedCommandUsage(
+        metadata,
+        getSelectedCommandUsage(metadata).map((id) =>
+          scopeCommandUsageId(scope, id),
+        ),
+      );
 }
 
 /**
@@ -98,25 +100,28 @@ export function getCommandDocMetadata(
   if (carrier != null) {
     // A decorator can replace or remove one public field without discarding
     // provenance for the others.  Unchanged entry descriptions stay excluded.
-    const brief = docs.brief === carrier.brief
-      ? carrier.metadata.brief
-      : docs.brief;
+    const brief =
+      docs.brief === carrier.brief ? carrier.metadata.brief : docs.brief;
     const origin = carrier.metadata.origin ?? "entry";
-    const customPage = origin === "entry" &&
+    const customPage =
+      origin === "entry" &&
       (docs.brief !== carrier.brief || docs.footer !== carrier.footer);
-    const description = (origin === "entry" && !customPage) ||
-        docs.description === carrier.description
-      ? carrier.metadata.description
-      : docs.description;
-    const footer = docs.footer === carrier.footer
-      ? carrier.metadata.footer
-      : docs.footer;
+    const description =
+      (origin === "entry" && !customPage) ||
+      docs.description === carrier.description
+        ? carrier.metadata.description
+        : docs.description;
+    const footer =
+      docs.footer === carrier.footer ? carrier.metadata.footer : docs.footer;
     return withSelectedCommandUsage(
-      withOrigin({
-        ...(brief == null ? {} : { brief }),
-        ...(description == null ? {} : { description }),
-        ...(footer == null ? {} : { footer }),
-      }, customPage ? "custom" : origin),
+      withOrigin(
+        {
+          ...(brief == null ? {} : { brief }),
+          ...(description == null ? {} : { description }),
+          ...(footer == null ? {} : { footer }),
+        },
+        customPage ? "custom" : origin,
+      ),
       getSelectedCommandUsage(carrier.metadata),
     );
   }
@@ -125,11 +130,14 @@ export function getCommandDocMetadata(
   // Custom parsers use the public collection-level fields as page metadata.
   // Built-in entry documentation supplies an explicit empty payload instead.
   return docs.brief != null || docs.description != null || docs.footer != null
-    ? withOrigin({
-      brief: docs.brief,
-      description: docs.description,
-      footer: docs.footer,
-    }, "custom")
+    ? withOrigin(
+        {
+          brief: docs.brief,
+          description: docs.description,
+          footer: docs.footer,
+        },
+        "custom",
+      )
     : undefined;
 }
 
@@ -184,11 +192,14 @@ function collectCommandPageMetadata(
   const brief = current?.brief ?? next.brief;
   const description = current?.description ?? next.description;
   const footer = current?.footer ?? next.footer;
-  return withOrigin({
-    ...(brief == null ? {} : { brief }),
-    ...(description == null ? {} : { description }),
-    ...(footer == null ? {} : { footer }),
-  }, origin);
+  return withOrigin(
+    {
+      ...(brief == null ? {} : { brief }),
+      ...(description == null ? {} : { description }),
+      ...(footer == null ? {} : { footer }),
+    },
+    origin,
+  );
 }
 
 /** Collects page fields and all selected command occurrences. @internal */

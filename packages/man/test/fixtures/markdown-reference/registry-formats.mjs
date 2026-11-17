@@ -2,18 +2,18 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 for (const format of ["esm", "cjs"]) {
-  const core = format === "esm"
-    ? await import("@optique/core")
-    : require("@optique/core");
-  const docs = format === "esm"
-    ? await import("@optique/core/doc-pages")
-    : require("@optique/core/doc-pages");
-  const markdown = format === "esm"
-    ? await import("@optique/man/markdown")
-    : require("@optique/man/markdown");
-  const ordinary = format === "esm"
-    ? await import("@optique/man")
-    : require("@optique/man");
+  const core =
+    format === "esm" ? await import("@optique/core") : require("@optique/core");
+  const docs =
+    format === "esm"
+      ? await import("@optique/core/doc-pages")
+      : require("@optique/core/doc-pages");
+  const markdown =
+    format === "esm"
+      ? await import("@optique/man/markdown")
+      : require("@optique/man/markdown");
+  const ordinary =
+    format === "esm" ? await import("@optique/man") : require("@optique/man");
   assert.ok(!("collectDocPages" in core));
   assert.ok(!("formatCommandReference" in ordinary));
   const parser = core.command(

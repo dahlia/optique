@@ -50,9 +50,9 @@ function asyncChoice<T extends string>(choices: readonly T[]) {
         choices.includes(input as T)
           ? { success: true as const, value: input as T }
           : {
-            success: false as const,
-            error: message`Invalid choice: ${input}`,
-          },
+              success: false as const,
+              error: message`Invalid choice: ${input}`,
+            },
       );
     },
     format(value: T): string {
@@ -137,12 +137,14 @@ describe("derived dependency sources", () => {
   it("should validate a multi-level chain against resolved upstream values", () => {
     // Arrange
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -179,12 +181,14 @@ describe("derived dependency sources", () => {
   it("should reject a stale preliminary value in a multi-level chain", () => {
     // Arrange
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -214,12 +218,14 @@ describe("derived dependency sources", () => {
   it("should resolve downstream suggestions through a derived source", () => {
     // Arrange
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -248,12 +254,14 @@ describe("derived dependency sources", () => {
 
   it("should resolve downstream suggestions after an upstream source default", () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -279,16 +287,18 @@ describe("derived dependency sources", () => {
   it("should preserve a derived source snapshot through wrappers", () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
     let defaultCalls = 0;
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => {
-        defaultCalls++;
-        if (defaultCalls > 1) throw new TypeError("Default evaluated twice.");
-        return "fresh" as const;
-      },
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => {
+          defaultCalls++;
+          if (defaultCalls > 1) throw new TypeError("Default evaluated twice.");
+          return "fresh" as const;
+        },
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -318,15 +328,17 @@ describe("derived dependency sources", () => {
   it("should reuse a preliminary source result when all inputs default", () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
     let factoryCalls = 0;
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: () => {
-        factoryCalls++;
-        if (factoryCalls > 1) throw new TypeError("Factory evaluated twice.");
-        return choice(["npm"] as const);
-      },
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: () => {
+          factoryCalls++;
+          if (factoryCalls > 1) throw new TypeError("Factory evaluated twice.");
+          return choice(["npm"] as const);
+        },
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -352,16 +364,18 @@ describe("derived dependency sources", () => {
 
   it("should replay the last occurrence of a repeated derived source", () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(
-          value === "fresh"
-            ? (["deno", "bun"] as const)
-            : (["npm", "pnpm"] as const),
-        ),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(
+            value === "fresh"
+              ? (["deno", "bun"] as const)
+              : (["npm", "pnpm"] as const),
+          ),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -401,11 +415,13 @@ describe("derived dependency sources", () => {
       parse: () => ({ success: true, value: undefined }),
       format: () => "none",
     };
-    const maybe = dependency(upstream.deriveSync({
-      metavar: "MAYBE" as NonEmptyString,
-      factory: () => maybeValueParser,
-      defaultValue: () => "enabled" as const,
-    }));
+    const maybe = dependency(
+      upstream.deriveSync({
+        metavar: "MAYBE" as NonEmptyString,
+        factory: () => maybeValueParser,
+        defaultValue: () => "enabled" as const,
+      }),
+    );
     const downstream = maybe.deriveSync({
       metavar: "DOWNSTREAM" as NonEmptyString,
       factory: (value) =>
@@ -438,15 +454,17 @@ describe("derived dependency sources", () => {
   it("should combine async modes through every level", async () => {
     // Arrange
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.derive({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      mode: "async",
-      factory: (value) =>
-        asyncChoice(
-          value === "fresh" ? (["deno"] as const) : (["npm"] as const),
-        ),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.derive({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        mode: "async",
+        factory: (value) =>
+          asyncChoice(
+            value === "fresh" ? (["deno"] as const) : (["npm"] as const),
+          ),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -478,18 +496,20 @@ describe("derived dependency sources", () => {
     // Arrange
     const framework = dependency(choice(["fresh", "hono"] as const));
     const runtime = dependency(choice(["deno", "node"] as const));
-    const packageManager = dependency(deriveFrom({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      mode: "sync",
-      dependencies: [framework, runtime] as const,
-      factory: (frameworkValue, runtimeValue) =>
-        choice(
-          frameworkValue === "fresh" && runtimeValue === "deno"
-            ? (["jsr"] as const)
-            : (["npm"] as const),
-        ),
-      defaultValues: () => ["fresh", "deno"] as const,
-    }));
+    const packageManager = dependency(
+      deriveFrom({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        mode: "sync",
+        dependencies: [framework, runtime] as const,
+        factory: (frameworkValue, runtimeValue) =>
+          choice(
+            frameworkValue === "fresh" && runtimeValue === "deno"
+              ? (["jsr"] as const)
+              : (["npm"] as const),
+          ),
+        defaultValues: () => ["fresh", "deno"] as const,
+      }),
+    );
     const registry = packageManager.deriveSync({
       metavar: "REGISTRY" as NonEmptyString,
       factory: (value) =>
@@ -523,12 +543,14 @@ describe("derived dependency sources", () => {
   it("should use downstream defaults when a derived source is absent", () => {
     // Arrange
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -546,12 +568,14 @@ describe("derived dependency sources", () => {
 
   it("should propagate an upstream failure through the dependency chain", () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -579,26 +603,30 @@ describe("derived dependency sources", () => {
       /TYPE -> PACKAGE_MANAGER -> STORAGE/u,
     );
     assert.deepEqual(
-      literalTexts(suggestSync(parser, [
-        "--framework",
-        "invalid",
-        "--package-manager",
-        "deno",
-        "--storage",
-        "",
-      ])),
+      literalTexts(
+        suggestSync(parser, [
+          "--framework",
+          "invalid",
+          "--package-manager",
+          "deno",
+          "--storage",
+          "",
+        ]),
+      ),
       [],
     );
   });
 
   it("should resolve a tuple independently of element order", () => {
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const packageManager = dependency(framework.deriveSync({
-      metavar: "PACKAGE_MANAGER" as NonEmptyString,
-      factory: (value) =>
-        choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
-      defaultValue: () => "fresh" as const,
-    }));
+    const packageManager = dependency(
+      framework.deriveSync({
+        metavar: "PACKAGE_MANAGER" as NonEmptyString,
+        factory: (value) =>
+          choice(value === "fresh" ? (["deno"] as const) : (["npm"] as const)),
+        defaultValue: () => "fresh" as const,
+      }),
+    );
     const storage = packageManager.deriveSync({
       metavar: "STORAGE" as NonEmptyString,
       factory: (value) =>
@@ -640,14 +668,16 @@ describe("derived dependency sources", () => {
         (order) => {
           // Arrange
           const framework = dependency(choice(["fresh", "hono"] as const));
-          const packageManager = dependency(framework.deriveSync({
-            metavar: "PACKAGE_MANAGER" as NonEmptyString,
-            factory: (value) =>
-              choice(
-                value === "fresh" ? (["deno"] as const) : (["npm"] as const),
-              ),
-            defaultValue: () => "fresh" as const,
-          }));
+          const packageManager = dependency(
+            framework.deriveSync({
+              metavar: "PACKAGE_MANAGER" as NonEmptyString,
+              factory: (value) =>
+                choice(
+                  value === "fresh" ? (["deno"] as const) : (["npm"] as const),
+                ),
+              defaultValue: () => "fresh" as const,
+            }),
+          );
           const storage = packageManager.deriveSync({
             metavar: "STORAGE" as NonEmptyString,
             factory: (value) =>
@@ -661,9 +691,11 @@ describe("derived dependency sources", () => {
             packageManager: option("--package-manager", packageManager),
             storage: option("--storage", storage),
           };
-          const parser = object(Object.fromEntries(
-            order.map((field) => [field, fields[field]] as const),
-          ));
+          const parser = object(
+            Object.fromEntries(
+              order.map((field) => [field, fields[field]] as const),
+            ),
+          );
 
           // Act
           const result = parseSync(parser, [
@@ -730,10 +762,7 @@ describe("A. Parse path: derive() × execution contexts", () => {
   test("A.4 tuple()—source earlier, derived later", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
-    const parser = tuple([
-      option("--env", env),
-      option("--log", log),
-    ]);
+    const parser = tuple([option("--env", env), option("--log", log)]);
     const result = parseSync(parser, ["--env", "prod", "--log", "info"]);
     assert.ok(result.success);
     assert.equal(result.value[0], "prod");
@@ -1009,10 +1038,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
   test("B.3 tuple()—suggests from the parsed source value", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
-    const parser = tuple([
-      option("--env", env),
-      option("--log", log),
-    ]);
+    const parser = tuple([option("--env", env), option("--log", log)]);
     const suggestions = suggestSync(parser, ["--env", "prod", "--log", ""]);
     const texts = literalTexts(suggestions);
     assert.ok(texts.includes("info"), `Expected "info" in ${texts}`);
@@ -1023,16 +1049,8 @@ describe("B. Suggest path: derive() × execution contexts", () => {
   test("B.3a tuple()—does not fall back after invalid source input", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
-    const parser = tuple([
-      option("--env", env),
-      option("--log", log),
-    ]);
-    const suggestions = suggestSync(parser, [
-      "--env",
-      "invalid",
-      "--log",
-      "",
-    ]);
+    const parser = tuple([option("--env", env), option("--log", log)]);
+    const suggestions = suggestSync(parser, ["--env", "invalid", "--log", ""]);
     const texts = literalTexts(suggestions);
     assert.deepEqual(texts, []);
   });
@@ -1043,9 +1061,7 @@ describe("B. Suggest path: derive() × execution contexts", () => {
     const theme = profile.deriveSync({
       metavar: "THEME" as NonEmptyString,
       factory: (value) =>
-        choice(
-          value === "light" ? (["day"] as const) : (["dusk"] as const),
-        ),
+        choice(value === "light" ? (["day"] as const) : (["dusk"] as const)),
       defaultValue: () => "light" as const,
     });
     const parser = tuple([
@@ -1177,12 +1193,7 @@ describe("B. Suggest path: deriveFrom(single) × execution contexts", () => {
       object({ env: option("--env", env) }),
       object({ endpoint: option("--endpoint", endpoint) }),
     );
-    const suggestions = suggestSync(parser, [
-      "--env",
-      "dev",
-      "--endpoint",
-      "",
-    ]);
+    const suggestions = suggestSync(parser, ["--env", "dev", "--endpoint", ""]);
     const texts = literalTexts(suggestions);
     // Current: suggestions are returned (may not reflect the parsed
     // source value for deriveFrom)
@@ -1319,10 +1330,12 @@ describe("C. Wrapper combinations: source wrappers", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
     const parser = object({
-      env: optional(or(
-        withDefault(option("--env", env), "prod" as Env),
-        withDefault(option("--mode", env), "prod" as Env),
-      )),
+      env: optional(
+        or(
+          withDefault(option("--env", env), "prod" as Env),
+          withDefault(option("--mode", env), "prod" as Env),
+        ),
+      ),
       log: option("--log", log),
     });
     const result = parseSync(parser, ["--log", "trace"]);
@@ -1459,10 +1472,7 @@ describe("D. argument() with dependencies", () => {
   test("D.2 argument as derived in tuple()", () => {
     const env = createEnvSource();
     const log = createDerivedLogLevel(env);
-    const parser = tuple([
-      option("--env", env),
-      argument(log),
-    ]);
+    const parser = tuple([option("--env", env), argument(log)]);
     const result = parseSync(parser, ["--env", "dev", "debug"]);
     assert.ok(result.success);
     assert.equal(result.value[0], "dev");

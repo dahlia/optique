@@ -52,9 +52,9 @@ switch (reporter) {
   case "json":
     // TypeScript knows: config is { pretty: boolean | undefined, indent: number | undefined }
     print(
-      message`JSON output, pretty: ${String(config.pretty ?? false)}, indent: ${
-        String(config.indent ?? 2)
-      }`,
+      message`JSON output, pretty: ${String(config.pretty ?? false)}, indent: ${String(
+        config.indent ?? 2,
+      )}`,
     );
     break;
 }

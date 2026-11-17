@@ -92,12 +92,10 @@ describe("man environment documentation", () => {
       ...options,
       showEnvironment: { placement: "section", sectionTitle: "Variables" },
     };
-    for (
-      const output of await Promise.all([
-        generateManPageAsync(parser, config),
-        generateManPageAsync(program, config),
-      ])
-    ) {
+    for (const output of await Promise.all([
+      generateManPageAsync(parser, config),
+      generateManPageAsync(program, config),
+    ])) {
       assert.match(output, /\.SH "VARIABLES"/);
     }
     const manual: ManPageOptions = {
@@ -163,19 +161,24 @@ describe("source-only man environment sections", () => {
     date: "September 2026",
   };
   it("emits safe empty bodies and unquoted generated purposes in every enabled mode", () => {
-    for (
-      const showEnvironment of [true, {}, { placement: "section" as const }, {
+    for (const showEnvironment of [
+      true,
+      {},
+      { placement: "section" as const },
+      {
         placement: "both" as const,
-      }]
-    ) {
+      },
+    ]) {
       const roff = formatDocPageAsMan(page, {
         ...options,
         showEnvironment,
         files: {
-          entries: [{
-            term: { type: "literal", value: "CONFIG" },
-            description: message`Settings.`,
-          }],
+          entries: [
+            {
+              term: { type: "literal", value: "CONFIG" },
+              description: message`Settings.`,
+            },
+          ],
         },
       });
       assert.ok(roff.includes(".SH ENVIRONMENT"));
@@ -187,10 +190,12 @@ describe("source-only man environment sections", () => {
   });
   it("honors manual sections and empty suppression even for inline fallback", () => {
     const manual = {
-      entries: [{
-        term: { type: "literal" as const, value: "MANUAL" },
-        description: message`${"quoted"}`,
-      }],
+      entries: [
+        {
+          term: { type: "literal" as const, value: "MANUAL" },
+          description: message`${"quoted"}`,
+        },
+      ],
     };
     const roff = formatDocPageAsMan(page, {
       ...options,
@@ -211,19 +216,22 @@ describe("source-only man environment sections", () => {
 });
 
 it("gives generated empty purpose bodies a safe roff placeholder", () => {
-  const roff = formatDocPageAsMan({
-    sections: [],
-    environmentBindings: [
-      { name: "EMPTY", description: [{ type: "text", text: "" }] },
-      { name: "NEXT", description: message`Next purpose.` },
-    ],
-  }, {
-    name: "app",
-    section: 1,
-    date: "September 2026",
-    showEnvironment: true,
-    showDefault: {},
-    showChoices: {},
-  });
+  const roff = formatDocPageAsMan(
+    {
+      sections: [],
+      environmentBindings: [
+        { name: "EMPTY", description: [{ type: "text", text: "" }] },
+        { name: "NEXT", description: message`Next purpose.` },
+      ],
+    },
+    {
+      name: "app",
+      section: 1,
+      date: "September 2026",
+      showEnvironment: true,
+      showDefault: {},
+      showChoices: {},
+    },
+  );
   assert.match(roff, /EMPTY\n\\&\n\.TP\nNEXT/);
 });

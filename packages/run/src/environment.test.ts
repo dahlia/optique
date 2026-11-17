@@ -66,26 +66,32 @@ it("preserves source-only metadata through runner help wrappers", async () => {
     getDocFragments: () => ({
       fragments: [],
       sourceOnly: true as const,
-      environmentBindings: [{ name: "VISIBLE" }, {
-        name: "HIDDEN",
-        hidden: true,
-      }],
+      environmentBindings: [
+        { name: "VISIBLE" },
+        {
+          name: "HIDDEN",
+          hidden: true,
+        },
+      ],
     }),
   };
   for (const invoke of [runSync, runAsync]) {
     const output: string[] = [];
     const exited = new Error("Exited.");
-    await assert.rejects(async () =>
-      await invoke(parser, {
-        args: ["--help"],
-        help: "option",
-        showEnvironment: true,
-        stdout: (line) => output.push(line),
-        colors: false,
-        onExit() {
-          throw exited;
-        },
-      }), (error) => error === exited);
+    await assert.rejects(
+      async () =>
+        await invoke(parser, {
+          args: ["--help"],
+          help: "option",
+          showEnvironment: true,
+          stdout: (line) => output.push(line),
+          colors: false,
+          onExit() {
+            throw exited;
+          },
+        }),
+      (error) => error === exited,
+    );
     assert.ok(output.join("\n").includes("VISIBLE"));
     assert.ok(!output.join("\n").includes("HIDDEN"));
   }

@@ -20,8 +20,9 @@ const command = [
   "--outfile",
   "dist/file-inspect",
 ];
-const compiler = execFileSync("bun", ["--version"], { encoding: "utf8" })
-  .trim();
+const compiler = execFileSync("bun", ["--version"], {
+  encoding: "utf8",
+}).trim();
 execFileSync("bun", command, { cwd: root, stdio: "inherit" });
 assert.equal(hash(await readFile(input)), inputSha256);
 await writeFile(

@@ -31,22 +31,25 @@ const EMPTY: Projection = {
 };
 
 function isHiddenLeaf(term: UsageTerm, isHidden: HiddenPredicate): boolean {
-  return (term.type === "argument" || term.type === "option" ||
-    term.type === "command" || term.type === "passthrough") &&
-    isHidden(term.hidden);
+  return (
+    (term.type === "argument" ||
+      term.type === "option" ||
+      term.type === "command" ||
+      term.type === "passthrough") &&
+    isHidden(term.hidden)
+  );
 }
 
 function isDegenerateLeaf(term: UsageTerm): boolean {
-  return (term.type === "option" && term.names.length === 0) ||
+  return (
+    (term.type === "option" && term.names.length === 0) ||
     (term.type === "command" && term.name === "") ||
     (term.type === "argument" && term.metavar.length === 0) ||
-    (term.type === "literal" && term.value === "");
+    (term.type === "literal" && term.value === "")
+  );
 }
 
-function projectTerms(
-  terms: Usage,
-  isHidden: HiddenPredicate,
-): Projection {
+function projectTerms(terms: Usage, isHidden: HiddenPredicate): Projection {
   let visible = false;
   let omissible = true;
   let hidesRequired = false;
@@ -65,10 +68,7 @@ function projectTerms(
  * alternative whose leading command is hidden as a whole, trailing terms
  * included.
  */
-function projectBranch(
-  branch: Usage,
-  isHidden: HiddenPredicate,
-): Projection {
+function projectBranch(branch: Usage, isHidden: HiddenPredicate): Projection {
   const first = branch[0];
   if (first?.type === "command" && isHidden(first.hidden)) {
     return { ...EMPTY, hidesRequired: true };
@@ -169,7 +169,7 @@ function resolveTerm(term: UsageTerm, isHidden: HiddenPredicate): UsageTerm {
     }
     case "exclusive": {
       const branches = term.terms.map((branch) =>
-        resolveTerms(branch, isHidden)
+        resolveTerms(branch, isHidden),
       );
       const resolved: UsageTerm = { type: "exclusive", terms: branches };
       if (term.acceptsEmpty == null) return resolved;
@@ -182,14 +182,15 @@ function resolveTerm(term: UsageTerm, isHidden: HiddenPredicate): UsageTerm {
         // may be omitted, for example through a branch that has no visible
         // terms.  Branches without visible terms are dropped by display
         // filtering anyway.
-        const visible = branches.filter((branch) =>
-          projectBranch(branch, isHidden).visible
+        const visible = branches.filter(
+          (branch) => projectBranch(branch, isHidden).visible,
         );
         return {
           type: "optional",
-          terms: visible.length === 1
-            ? visible[0]
-            : [{ type: "exclusive", terms: visible }],
+          terms:
+            visible.length === 1
+              ? visible[0]
+              : [{ type: "exclusive", terms: visible }],
         };
       }
       const required: Usage[] = [];

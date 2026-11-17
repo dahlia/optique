@@ -1,4 +1,5 @@
 import { bindEnv, bool, createEnvContext } from "@optique/env";
+import process from "node:process";
 import { object } from "@optique/core/constructs";
 import { message } from "@optique/core/message";
 import { option } from "@optique/core/primitives";
@@ -13,10 +14,10 @@ import { print, runAsync } from "@optique/run";
 // Priority order: CLI argument > environment variable > default
 //
 // Usage:
-//   deno run -A examples/patterns/env-variables.ts --host example.com
-//   MYAPP_HOST=example.com deno run -A examples/patterns/env-variables.ts
-//   MYAPP_PORT=9090 deno run -A examples/patterns/env-variables.ts --host 0.0.0.0
-//   MYAPP_DEBUG=true deno run -A examples/patterns/env-variables.ts
+//   node examples/patterns/env-variables.ts --host example.com
+//   MYAPP_HOST=example.com node examples/patterns/env-variables.ts
+//   MYAPP_PORT=9090 node examples/patterns/env-variables.ts --host 0.0.0.0
+//   MYAPP_DEBUG=true node examples/patterns/env-variables.ts
 
 // Create the environment context with a prefix.
 // All bound keys will be prefixed with "MYAPP_".
@@ -62,7 +63,7 @@ const parser = object({
 // Run with the environment context
 const result = await runAsync(parser, {
   contexts: [envContext],
-  args: Deno.args,
+  args: process.argv.slice(2),
 });
 
 print(message`Server configuration:`);
@@ -72,19 +73,19 @@ print(message`  Debug: ${String(result.debug)}`);
 
 // Examples:
 //
-//   $ deno run -A examples/patterns/env-variables.ts
+//   $ node examples/patterns/env-variables.ts
 //   Server configuration:
 //     Host:  localhost
 //     Port:  3000
 //     Debug: false
 //
-//   $ MYAPP_HOST=0.0.0.0 MYAPP_PORT=8080 deno run -A examples/patterns/env-variables.ts
+//   $ MYAPP_HOST=0.0.0.0 MYAPP_PORT=8080 node examples/patterns/env-variables.ts
 //   Server configuration:
 //     Host:  0.0.0.0
 //     Port:  8080
 //     Debug: false
 //
-//   $ MYAPP_PORT=8080 deno run -A examples/patterns/env-variables.ts --host example.com
+//   $ MYAPP_PORT=8080 node examples/patterns/env-variables.ts --host example.com
 //   Server configuration:
 //     Host:  example.com   (CLI wins over env)
 //     Port:  8080           (env wins over default)

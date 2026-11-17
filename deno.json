@@ -12,12 +12,9 @@
     "@logtape/logtape": "jsr:@logtape/logtape@^2.2.2",
     "@napi-rs/keyring": "npm:@napi-rs/keyring@2.0.0",
     "@standard-schema/spec": "npm:@standard-schema/spec@^1.1.0",
-    "@std/fs": "jsr:@std/fs@^1.0.19",
-    "@std/path": "jsr:@std/path@^1.1.1",
     "@types/node": "npm:@types/node@^24.0.0",
     "fast-check": "npm:fast-check@^4.7.0",
     "isomorphic-git": "npm:isomorphic-git@^1.36.1",
-    "markdownlint-cli2": "npm:markdownlint-cli2@^0.20.0",
     "tsdown": "npm:tsdown@^0.13.0",
     "typescript": "npm:typescript@^5.8.3",
     "valibot": "jsr:@valibot/valibot@^1.2.0",
@@ -35,7 +32,11 @@
     "docs",
     "tmp/startup-baseline",
     "tmp/startup-tests",
-    "tmp/parse-scope"
+    "tmp/parse-scope",
+    "scripts/types/",
+    "scripts/check-types.ts",
+    "scripts/check-types.test.ts",
+    "scripts/tooling/"
   ],
   "fmt": {
     "exclude": [
@@ -49,7 +50,7 @@
     ]
   },
   "tasks": {
-    "check-versions": "deno run --allow-read --allow-write scripts/check_versions.ts",
+    "check-versions": "node scripts/check_versions.ts",
     "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --allow-sys --allow-ffi --env-file=.env.test"
   }
 }

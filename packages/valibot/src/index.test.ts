@@ -167,7 +167,10 @@ describe("valibot()", () => {
   describe("transformations", () => {
     it("should apply transformations", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => s.toUpperCase())),
+        v.pipe(
+          v.string(),
+          v.transform((s) => s.toUpperCase()),
+        ),
         { placeholder: "" },
       );
       const result = parser.parse("hello");
@@ -178,7 +181,10 @@ describe("valibot()", () => {
 
     it("should parse and transform dates", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => new Date(s))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => new Date(s)),
+        ),
         { placeholder: new Date(0) },
       );
       const result = parser.parse("2025-01-01");
@@ -257,14 +263,17 @@ describe("valibot()", () => {
 
       it("should infer additional string refinements from internal pipeline", () => {
         const make = (actionType: string) =>
-          valibot({
-            type: "string",
-            pipe: [{ type: actionType }],
-          } as unknown as v.BaseSchema<
-            unknown,
-            unknown,
-            v.BaseIssue<unknown>
-          >, { placeholder: "" as unknown });
+          valibot(
+            {
+              type: "string",
+              pipe: [{ type: actionType }],
+            } as unknown as v.BaseSchema<
+              unknown,
+              unknown,
+              v.BaseIssue<unknown>
+            >,
+            { placeholder: "" as unknown },
+          );
 
         assert.equal(make("iso_date").metavar, "DATE");
         assert.equal(make("iso_date_time").metavar, "DATETIME");
@@ -303,10 +312,9 @@ describe("valibot()", () => {
 
     describe("edge cases", () => {
       it("should use first validation for multiple validations", () => {
-        const parser = valibot(
-          v.pipe(v.string(), v.email(), v.minLength(5)),
-          { placeholder: "" },
-        );
+        const parser = valibot(v.pipe(v.string(), v.email(), v.minLength(5)), {
+          placeholder: "",
+        });
         assert.equal(parser.metavar, "EMAIL");
       });
 
@@ -356,32 +364,33 @@ describe("valibot()", () => {
 
       it("should fallback to VALUE for transform schemas without pipeline type", () => {
         const parser = valibot(
-          v.pipe(v.string(), v.transform((s) => s.toUpperCase())),
+          v.pipe(
+            v.string(),
+            v.transform((s) => s.toUpperCase()),
+          ),
           { placeholder: "" },
         );
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should fallback to VALUE when internal schema type is missing", () => {
-        const parser = valibot({
-          pipe: [{ type: "email" }],
-        } as unknown as v.BaseSchema<
-          unknown,
-          unknown,
-          v.BaseIssue<unknown>
-        >, { placeholder: "" as unknown });
+        const parser = valibot(
+          {
+            pipe: [{ type: "email" }],
+          } as unknown as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          { placeholder: "" as unknown },
+        );
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should infer VALUE for number pipeline with transform", () => {
-        const parser = valibot({
-          type: "number",
-          pipe: [{ type: "transform" }],
-        } as unknown as v.BaseSchema<
-          unknown,
-          unknown,
-          v.BaseIssue<unknown>
-        >, { placeholder: "" as unknown });
+        const parser = valibot(
+          {
+            type: "number",
+            pipe: [{ type: "transform" }],
+          } as unknown as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
+          { placeholder: "" as unknown },
+        );
         assert.equal(parser.metavar, "VALUE");
       });
 
@@ -429,7 +438,10 @@ describe("valibot()", () => {
 
     it("should format date values as ISO strings", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => new Date(s))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => new Date(s)),
+        ),
         { placeholder: new Date(0) },
       );
       const date = new Date("2025-06-15T00:00:00.000Z");
@@ -438,7 +450,10 @@ describe("valibot()", () => {
 
     it("should not throw for invalid date values", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => new Date(s))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => new Date(s)),
+        ),
         { placeholder: new Date(0) },
       );
       const invalid = new Date("bad");
@@ -447,7 +462,10 @@ describe("valibot()", () => {
 
     it("should format object values as JSON", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => ({ raw: s })),
+        ),
         { placeholder: { raw: "" } },
       );
       assert.equal(parser.format({ raw: "hello" }), '{"raw":"hello"}');
@@ -455,7 +473,10 @@ describe("valibot()", () => {
 
     it("should format array values as comma-separated string", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => s.split(","))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => s.split(",")),
+        ),
         { placeholder: [] },
       );
       assert.equal(parser.format(["a", "b", "c"]), "a,b,c");
@@ -463,7 +484,10 @@ describe("valibot()", () => {
 
     it("should preserve array formatting even with [object Object] element", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => s.split(","))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => s.split(",")),
+        ),
         { placeholder: [] },
       );
       assert.equal(
@@ -488,7 +512,10 @@ describe("valibot()", () => {
 
     it("should not throw for non-JSON-serializable objects", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => ({ id: BigInt(s) }))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => ({ id: BigInt(s) })),
+        ),
         { placeholder: { id: 0n } },
       );
       assert.equal(parser.format({ id: 1n }), "[object Object]");
@@ -496,7 +523,10 @@ describe("valibot()", () => {
 
     it("should not throw for cyclic objects", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => ({ raw: s })),
+        ),
         { placeholder: { raw: "" } },
       );
       const cyclic: { raw: string; self?: unknown } = { raw: "hello" };
@@ -520,7 +550,10 @@ describe("valibot()", () => {
 
     it("should use custom format function from options", () => {
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => ({ raw: s }))),
+        v.pipe(
+          v.string(),
+          v.transform((s) => ({ raw: s })),
+        ),
         { placeholder: { raw: "" }, format: (val) => val.raw },
       );
       assert.equal(parser.format({ raw: "hello" }), "hello");
@@ -541,7 +574,10 @@ describe("valibot()", () => {
         }
       }
       const parser = valibot(
-        v.pipe(v.string(), v.transform((s) => new NamedValue(s) as never)),
+        v.pipe(
+          v.string(),
+          v.transform((s) => new NamedValue(s) as never),
+        ),
         { placeholder: new NamedValue("default") as never },
       );
       assert.equal(parser.format(new NamedValue("hello") as never), "hello");
@@ -552,7 +588,10 @@ describe("valibot()", () => {
       // toString returns "[object Object]" (line 748 false branch).
       class Opaque {}
       const parser = valibot(
-        v.pipe(v.string(), v.transform(() => new Opaque() as never)),
+        v.pipe(
+          v.string(),
+          v.transform(() => new Opaque() as never),
+        ),
         { placeholder: new Opaque() as never },
       );
       assert.equal(parser.format(new Opaque() as never), "[object Object]");
@@ -828,53 +867,47 @@ describe("valibot()", () => {
     });
 
     it("should expose choices for v.union() of literals", () => {
-      const parser = valibot(
-        v.union([v.literal("dev"), v.literal("prod")]),
-        { placeholder: "dev" },
-      );
+      const parser = valibot(v.union([v.literal("dev"), v.literal("prod")]), {
+        placeholder: "dev",
+      });
       assert.deepEqual(parser.choices, ["dev", "prod"]);
     });
 
     it("should not expose choices for v.union() with non-literal member", () => {
-      const parser = valibot(
-        v.union([v.literal("auto"), v.string()]),
-        { placeholder: "auto" },
-      );
+      const parser = valibot(v.union([v.literal("auto"), v.string()]), {
+        placeholder: "auto",
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should not expose choices for v.union() of numeric literals", () => {
-      const parser = valibot(
-        v.union([v.literal(1), v.literal(2)]),
-        { placeholder: 1 },
-      );
+      const parser = valibot(v.union([v.literal(1), v.literal(2)]), {
+        placeholder: 1,
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
       assert.equal(parser.metavar, "VALUE");
     });
 
     it("should preserve choices through v.optional()", () => {
-      const parser = valibot(
-        v.optional(v.picklist(["a", "b"])),
-        { placeholder: "a" },
-      );
+      const parser = valibot(v.optional(v.picklist(["a", "b"])), {
+        placeholder: "a",
+      });
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
     it("should preserve choices through v.nullable()", () => {
-      const parser = valibot(
-        v.nullable(v.picklist(["a", "b"])),
-        { placeholder: "a" },
-      );
+      const parser = valibot(v.nullable(v.picklist(["a", "b"])), {
+        placeholder: "a",
+      });
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
     it("should preserve choices through v.nullish()", () => {
-      const parser = valibot(
-        v.nullish(v.picklist(["a", "b"])),
-        { placeholder: "a" },
-      );
+      const parser = valibot(v.nullish(v.picklist(["a", "b"])), {
+        placeholder: "a",
+      });
       assert.deepEqual(parser.choices, ["a", "b"]);
     });
 
@@ -885,10 +918,9 @@ describe("valibot()", () => {
     });
 
     it("should infer CHOICE metavar for v.union() of literals", () => {
-      const parser = valibot(
-        v.union([v.literal("dev"), v.literal("prod")]),
-        { placeholder: "dev" },
-      );
+      const parser = valibot(v.union([v.literal("dev"), v.literal("prod")]), {
+        placeholder: "dev",
+      });
       assert.equal(parser.metavar, "CHOICE");
     });
 
@@ -932,38 +964,43 @@ describe("valibot()", () => {
       // When a union contains a catch-all schema (v.any()), inferChoices
       // detects it via isCatchAllSchema and returns undefined—no choices
       // are exposed because the union can accept any value.
-      const parser = valibot(
-        v.union([v.literal("a"), v.any()]) as never,
-        { placeholder: "a" as never },
-      );
+      const parser = valibot(v.union([v.literal("a"), v.any()]) as never, {
+        placeholder: "a" as never,
+      });
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
 
     it("should not expose choices from malformed internal choice metadata", () => {
-      const malformedPicklist = valibot({
-        type: "picklist",
-        options: "not-array",
-      } as never, { placeholder: "" });
+      const malformedPicklist = valibot(
+        {
+          type: "picklist",
+          options: "not-array",
+        } as never,
+        { placeholder: "" },
+      );
       assert.equal(malformedPicklist.metavar, "CHOICE");
       assert.equal(malformedPicklist.choices, undefined);
       assert.equal(malformedPicklist.suggest, undefined);
 
-      const malformedUnionOptions = valibot({
-        type: "union",
-        options: "not-array",
-      } as never, { placeholder: "" });
+      const malformedUnionOptions = valibot(
+        {
+          type: "union",
+          options: "not-array",
+        } as never,
+        { placeholder: "" },
+      );
       assert.equal(malformedUnionOptions.metavar, "VALUE");
       assert.equal(malformedUnionOptions.choices, undefined);
       assert.equal(malformedUnionOptions.suggest, undefined);
 
-      const malformedUnionMember = valibot({
-        type: "union",
-        options: [
-          { type: "literal", literal: "dev" },
-          "prod",
-        ],
-      } as never, { placeholder: "" });
+      const malformedUnionMember = valibot(
+        {
+          type: "union",
+          options: [{ type: "literal", literal: "dev" }, "prod"],
+        } as never,
+        { placeholder: "" },
+      );
       assert.equal(malformedUnionMember.metavar, "VALUE");
       assert.equal(malformedUnionMember.choices, undefined);
       assert.equal(malformedUnionMember.suggest, undefined);
@@ -973,15 +1010,18 @@ describe("valibot()", () => {
   describe("async schema rejection", () => {
     const expectedError = {
       name: "TypeError",
-      message: "Async Valibot schemas (e.g., async validations) are not " +
+      message:
+        "Async Valibot schemas (e.g., async validations) are not " +
         "supported by valibot(). Use synchronous schemas instead.",
     };
 
     it("should throw TypeError for async validations", () => {
       const asyncSchema = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       assert.throws(
         () => valibot(asyncSchema as never, { placeholder: "" as never }),
@@ -992,8 +1032,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside optional()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.optional(asyncInner as never);
       assert.throws(
@@ -1005,8 +1047,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside nullable()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.nullable(asyncInner as never);
       assert.throws(
@@ -1018,8 +1062,10 @@ describe("valibot()", () => {
     it("should not reject unions with a catch-all sync string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Union with a bare v.string() arm is safe because CLI input is
       // always a string, so the sync arm matches first.
@@ -1034,8 +1080,10 @@ describe("valibot()", () => {
     it("should throw TypeError for union without catch-all sync arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.literal("a") only matches "a", so non-"a" inputs reach the
       // async arm—this must be rejected.
@@ -1049,8 +1097,10 @@ describe("valibot()", () => {
     it("should not reject unions with wrapped catch-all string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.optional(v.string()) is still a catch-all for string input
       const asyncSchema = v.union([
@@ -1067,8 +1117,10 @@ describe("valibot()", () => {
     it("should not reject union with piped non-rejecting string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.string(), v.trim()) normalizes but never rejects
       const asyncSchema = v.union([
@@ -1085,8 +1137,10 @@ describe("valibot()", () => {
     it("should not reject union with v.unknown() arm after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.unknown() accepts every value, so async arm is unreachable
       // even after a type-changing transform.
@@ -1105,8 +1159,10 @@ describe("valibot()", () => {
     it("should reject union with string arm after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After a transform, string catch-all is no longer trusted since
       // we cannot determine the output type statically.
@@ -1124,8 +1180,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside intersect()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.intersect([v.string(), asyncInner] as never);
       assert.throws(
@@ -1137,8 +1195,10 @@ describe("valibot()", () => {
     it("should not reject async entries in direct containers", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Direct containers are unreachable from string input—the outer
       // type check (object/array/tuple) rejects the string first.
@@ -1159,14 +1219,15 @@ describe("valibot()", () => {
     it("should not reject async rest/promise in direct containers", () => {
       const asyncRest = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Direct containers are unreachable from string input.
-      const owrParser = valibot(
-        v.objectWithRest({}, asyncRest as never),
-        { placeholder: "" as never },
-      );
+      const owrParser = valibot(v.objectWithRest({}, asyncRest as never), {
+        placeholder: "" as never,
+      });
       assert.ok(!owrParser.parse("hello").success);
       const twrParser = valibot(v.tupleWithRest([], asyncRest as never), {
         placeholder: "" as never,
@@ -1181,8 +1242,10 @@ describe("valibot()", () => {
     it("should reject async entries after transform in pipe", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After JSON.parse, the object schema's entries become reachable.
       const asyncSchema = v.pipe(
@@ -1199,8 +1262,10 @@ describe("valibot()", () => {
     it("should reject async union arm after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After JSON.parse, v.string() is no longer a catch-all since
       // the value may not be a string.
@@ -1218,8 +1283,10 @@ describe("valibot()", () => {
     it("should not reject union with v.unknown() after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.unknown() is type-agnostic, so it's still catch-all after
       // transforms.
@@ -1238,8 +1305,10 @@ describe("valibot()", () => {
     it("should detect async in shared schema reused after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Shared schema node used in both a direct (unreachable) position
       // and a post-transform (reachable) position.  The second visit
@@ -1258,8 +1327,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside v.lazy()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.lazy() wrapping async schema cannot be detected at construction
       // time because the getter depends on actual parse input.  The
@@ -1287,8 +1358,10 @@ describe("valibot()", () => {
     it("should not reject union with v.any() catch-all arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.any() accepts every value of any type—async arm is unreachable
       const asyncSchema = v.union([v.any(), asyncInner] as never);
@@ -1302,8 +1375,10 @@ describe("valibot()", () => {
     it("should not reject union with v.fallback() catch-all arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.fallback() always succeeds (returns fallback value on failure).
       // Use a rejecting inner schema so the fallback branch actually fires.
@@ -1324,8 +1399,10 @@ describe("valibot()", () => {
     it("should not reject union with v.pipe(v.unknown(), safe-transform) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.unknown(), trim) is still a catch-all: unknown accepts
       // every value and the safe transformation never rejects.
@@ -1344,8 +1421,10 @@ describe("valibot()", () => {
     it("should not reject union with v.pipe(v.any(), safe-transform) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.union([
         v.pipe(v.any(), v.toLowerCase() as never),
@@ -1364,8 +1443,10 @@ describe("valibot()", () => {
     it("should not reject union with v.pipe(v.string(), safe-transform) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.union([
         v.pipe(v.string(), v.toUpperCase()),
@@ -1384,8 +1465,10 @@ describe("valibot()", () => {
     it("should not reject union with nested schema in string pipe catch-all", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // A string pipe whose second element is itself a catch-all schema —
       // the string pipe is still catch-all because every action accepts.
@@ -1404,8 +1487,10 @@ describe("valibot()", () => {
     it("should reject union whose string pipe arm has a validation action", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.email() is a validation—it can reject input, so the string pipe
       // is NOT a catch-all and the async arm may be reached.
@@ -1422,8 +1507,10 @@ describe("valibot()", () => {
     it("should reject async map members after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncKeySchema = v.pipe(
         v.string(),
@@ -1449,8 +1536,10 @@ describe("valibot()", () => {
     it("should reject async rest schemas after transform", () => {
       const asyncRest = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const objectSchema = v.pipe(
         v.string(),
@@ -1476,8 +1565,10 @@ describe("valibot()", () => {
     it("should propagate type-changing nested pipe schemas to later containers", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.pipe(
         v.string(),
@@ -1493,8 +1584,10 @@ describe("valibot()", () => {
     it("should reject async items inside containers after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After JSON.parse, array schema's item schema becomes reachable.
       const asyncSchema = v.pipe(
@@ -1511,8 +1604,10 @@ describe("valibot()", () => {
     it("should reject async tuple items after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.pipe(
         v.string(),
@@ -1528,8 +1623,10 @@ describe("valibot()", () => {
     it("should reject async promise inner after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.pipe(
         v.string(),
@@ -1545,8 +1642,10 @@ describe("valibot()", () => {
     it("should not reject direct containers with async items (string never reaches them)", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Without a preceding transform, CLI input is always a string.
       // v.array(), v.tuple() and v.record() reject strings before visiting
@@ -1556,18 +1655,19 @@ describe("valibot()", () => {
       });
       assert.ok(!arrParser.parse("hello").success);
 
-      const recParser = valibot(
-        v.record(v.string(), asyncInner as never),
-        { placeholder: "" as never },
-      );
+      const recParser = valibot(v.record(v.string(), asyncInner as never), {
+        placeholder: "" as never,
+      });
       assert.ok(!recParser.parse("hello").success);
     });
 
     it("should reject variant with async arms after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After transform the input is no longer a string, so variant arms
       // become reachable.
@@ -1587,8 +1687,10 @@ describe("valibot()", () => {
     it("should throw TypeError for union with v.pipe(v.unknown(), validation) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.unknown(), v.minLength(1)) has a validation action so it is
       // NOT a catch-all: the async arm is reachable and must be rejected.
@@ -1607,8 +1709,10 @@ describe("valibot()", () => {
     it("should not throw for union with v.pipe(v.unknown(), nested-string-schema) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.unknown(), v.string()) has a nested schema (kind="schema")
       // that is itself a catch-all, so the whole pipe is catch-all.  The

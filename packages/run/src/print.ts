@@ -149,10 +149,7 @@ export function printError(
   message: Message,
   options: PrintErrorOptions & { exitCode: number },
 ): never;
-export function printError(
-  message: Message,
-  options?: PrintErrorOptions,
-): void;
+export function printError(message: Message, options?: PrintErrorOptions): void;
 export function printError(
   message: Message,
   options: PrintErrorOptions = {},

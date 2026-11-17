@@ -153,8 +153,9 @@ async function collectSuggestions(
 
 function unwrapPrimitiveState(state: unknown): string {
   if (typeof state === "object" && state !== null) {
-    const value =
-      (state as Record<PropertyKey, unknown>)[annotationStateValueKey];
+    const value = (state as Record<PropertyKey, unknown>)[
+      annotationStateValueKey
+    ];
     if (typeof value === "string") {
       return value;
     }
@@ -218,9 +219,10 @@ describe("optional", () => {
         receivedStates.push(state);
         return {
           success: true as const,
-          value: getAnnotations(state)?.[annotation] === "ok"
-            ? "annotated"
-            : "missing",
+          value:
+            getAnnotations(state)?.[annotation] === "ok"
+              ? "annotated"
+              : "missing",
         };
       },
       suggest: function* () {},
@@ -939,11 +941,7 @@ describe("optional", () => {
           },
         },
       },
-    } as const satisfies Parser<
-      "async",
-      string,
-      { readonly value: string }
-    >;
+    } as const satisfies Parser<"async", string, { readonly value: string }>;
     const parser = optional(inner);
     let result: ReturnType<typeof parser.complete> | undefined;
 
@@ -983,11 +981,7 @@ describe("optional", () => {
       },
       suggest: async function* () {},
       getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<
-      "async",
-      string,
-      { readonly value: string }
-    >;
+    } as const satisfies Parser<"async", string, { readonly value: string }>;
     const parser = optional(inner);
     let result: ReturnType<typeof parser.complete> | undefined;
 
@@ -1222,11 +1216,7 @@ describe("withDefault", () => {
       shouldDeferCompletion() {
         return true;
       },
-    } as const satisfies Parser<
-      "async",
-      string,
-      { readonly pending: true }
-    >;
+    } as const satisfies Parser<"async", string, { readonly pending: true }>;
     const parser = withDefault(inner, "fallback");
     let result: Promise<ValueParserResult<string>> | undefined;
 
@@ -1270,11 +1260,7 @@ describe("withDefault", () => {
       },
       suggest: async function* () {},
       getDocFragments: () => ({ fragments: [] }),
-    } as const satisfies Parser<
-      "async",
-      string,
-      { readonly value: string }
-    >;
+    } as const satisfies Parser<"async", string, { readonly value: string }>;
     const parser = withDefault(inner, "fallback");
     let result: ReturnType<typeof parser.complete> | undefined;
 
@@ -1610,14 +1596,18 @@ describe("withDefault", () => {
       const baseParser = option("--token", string());
       const customMessage = message`${envVar("API_TOKEN")}`;
       let callbackCalls = 0;
-      const defaultParser = withDefault(baseParser, () => {
-        callbackCalls += 1;
-        throw new WithDefaultError(
-          message`Environment variable ${envVar("API_TOKEN")} is not set.`,
-        );
-      }, {
-        message: customMessage,
-      });
+      const defaultParser = withDefault(
+        baseParser,
+        () => {
+          callbackCalls += 1;
+          throw new WithDefaultError(
+            message`Environment variable ${envVar("API_TOKEN")} is not set.`,
+          );
+        },
+        {
+          message: customMessage,
+        },
+      );
 
       const fragments = defaultParser.getDocFragments({
         kind: "unavailable" as const,
@@ -1736,9 +1726,9 @@ describe("withDefault", () => {
   describe("with options parameter", () => {
     it("should use custom message in help output", () => {
       const baseParser = option("--url", string());
-      const customMessage = message`${
-        envVar("SERVICE_URL")
-      } environment variable`;
+      const customMessage = message`${envVar(
+        "SERVICE_URL",
+      )} environment variable`;
       const defaultParser = withDefault(baseParser, "https://default.com", {
         message: customMessage,
       });
@@ -1803,10 +1793,12 @@ describe("withDefault", () => {
       });
 
       assert.equal(defaultParser.priority, baseParser.priority);
-      assert.deepEqual(defaultParser.usage, [{
-        type: "optional",
-        terms: baseParser.usage,
-      }]);
+      assert.deepEqual(defaultParser.usage, [
+        {
+          type: "optional",
+          terms: baseParser.usage,
+        },
+      ]);
 
       const fragments = defaultParser.getDocFragments({
         kind: "unavailable" as const,
@@ -1841,9 +1833,9 @@ describe("withDefault", () => {
 
     it("should work with complex message formatting", () => {
       const baseParser = option("--config", string());
-      const customMessage = message`Path from ${envVar("CONFIG_DIR")} or ${
-        text("~/.config")
-      }`;
+      const customMessage = message`Path from ${envVar("CONFIG_DIR")} or ${text(
+        "~/.config",
+      )}`;
       const defaultParser = withDefault(baseParser, "/etc/config", {
         message: customMessage,
       });
@@ -1974,15 +1966,17 @@ describe("withDefault", () => {
       return;
     }
 
-    const suggestions = [...defaultParser.suggest(
-      {
-        buffer: ["--format"] as const,
-        state: parsed.next.state,
-        optionsTerminated: false,
-        usage: defaultParser.usage,
-      },
-      "y",
-    )];
+    const suggestions = [
+      ...defaultParser.suggest(
+        {
+          buffer: ["--format"] as const,
+          state: parsed.next.state,
+          optionsTerminated: false,
+          usage: defaultParser.usage,
+        },
+        "y",
+      ),
+    ];
 
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "yaml"),
@@ -2025,10 +2019,7 @@ describe("withDefault", () => {
 
   it("should normalize default values through the value parser", () => {
     const mac = macAddress({ case: "lower", outputSeparator: ":" });
-    const parser = withDefault(
-      option("--mac", mac),
-      "AA-BB-CC-DD-EE-FF",
-    );
+    const parser = withDefault(option("--mac", mac), "AA-BB-CC-DD-EE-FF");
     const result = parse(parser, []);
     assert.ok(result.success);
     if (result.success) {
@@ -2047,10 +2038,10 @@ describe("withDefault", () => {
   });
 
   it("should normalize socketAddress IPv6 default hosts", () => {
-    const parser = withDefault(
-      option("--endpoint", socketAddress()),
-      { host: "2001:0db8:0:0:0:0:0:1", port: 443 },
-    );
+    const parser = withDefault(option("--endpoint", socketAddress()), {
+      host: "2001:0db8:0:0:0:0:0:1",
+      port: 443,
+    });
 
     const omitted = parse(parser, []);
     assert.ok(omitted.success);
@@ -2099,10 +2090,7 @@ describe("withDefault", () => {
   });
 
   it("should preserve dotted sentinel defaults for macAddress", () => {
-    const parser = withDefault(
-      option("--mac", macAddress()),
-      "foo.bar.baz",
-    );
+    const parser = withDefault(option("--mac", macAddress()), "foo.bar.baz");
     const result = parse(parser, []);
     assert.ok(result.success);
     if (result.success) {
@@ -2138,10 +2126,7 @@ describe("withDefault", () => {
     // normalize() uses parse() internally, so defaults that would
     // fail validation are returned unchanged
     const parser = withDefault(
-      option(
-        "--domain",
-        domain({ lowercase: true, allowedTlds: ["com"] }),
-      ),
+      option("--domain", domain({ lowercase: true, allowedTlds: ["com"] })),
       "Example.NET",
     );
     const result = parse(parser, []);
@@ -2166,10 +2151,9 @@ describe("withDefault", () => {
   });
 
   it("should preserve non-string sentinel objects in defaults", () => {
-    const parser = withDefault(
-      option("--mac", macAddress()),
-      { kind: "local" } as never,
-    );
+    const parser = withDefault(option("--mac", macAddress()), {
+      kind: "local",
+    } as never);
     const result = parse(parser, []);
     assert.ok(result.success);
     if (result.success) {
@@ -2213,10 +2197,10 @@ describe("withDefault", () => {
     );
     assert.equal(typeof parser.normalizeValue, "function");
     if (typeof parser.normalizeValue === "function") {
-      assert.deepEqual(
-        parser.normalizeValue(["Example.COM", "Foo.Bar"]),
-        ["example.com", "foo.bar"],
-      );
+      assert.deepEqual(parser.normalizeValue(["Example.COM", "Foo.Bar"]), [
+        "example.com",
+        "foo.bar",
+      ]);
     }
   });
 
@@ -2492,9 +2476,8 @@ describe("map", () => {
   it("should work with optional parsers in object context", () => {
     const parser = object({
       verbose: option("-v", "--verbose"),
-      name: map(
-        optional(option("-n", "--name", string())),
-        (s) => s ? s.toUpperCase() : "ANONYMOUS",
+      name: map(optional(option("-n", "--name", string())), (s) =>
+        s ? s.toUpperCase() : "ANONYMOUS",
       ),
     });
 
@@ -2518,9 +2501,8 @@ describe("map", () => {
   it("should work with multiple parsers in object context", () => {
     const parser = object({
       verbose: option("-v", "--verbose"),
-      files: map(
-        multiple(option("-f", "--file", string())),
-        (files) => files.map((f) => f.toUpperCase()),
+      files: map(multiple(option("-f", "--file", string())), (files) =>
+        files.map((f) => f.toUpperCase()),
       ),
     });
 
@@ -2692,12 +2674,14 @@ describe("multiple", () => {
   });
 
   it("should extend matched command items with optional arguments", () => {
-    const parser = multiple(command(
-      "add",
-      object({
-        x: optional(option("--x")),
-      }),
-    ));
+    const parser = multiple(
+      command(
+        "add",
+        object({
+          x: optional(option("--x")),
+        }),
+      ),
+    );
 
     const result = parse(parser, ["add", "--x"]);
 
@@ -2708,12 +2692,14 @@ describe("multiple", () => {
   });
 
   it("should extend async matched command items with optional arguments", async () => {
-    const parser = multiple(command(
-      "add",
-      object({
-        x: optional(option("--x", asyncChoice(["yes"] as const))),
-      }),
-    ));
+    const parser = multiple(
+      command(
+        "add",
+        object({
+          x: optional(option("--x", asyncChoice(["yes"] as const))),
+        }),
+      ),
+    );
 
     const result = await parseAsync(parser, ["add", "--x", "yes"]);
 
@@ -3488,12 +3474,17 @@ describe("multiple", () => {
     if (!parseResult.success) {
       return;
     }
-    const suggestions = [...parser.suggest({
-      buffer: [],
-      state: parseResult.next.state,
-      optionsTerminated: false,
-      usage: parser.usage,
-    }, "")];
+    const suggestions = [
+      ...parser.suggest(
+        {
+          buffer: [],
+          state: parseResult.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ),
+    ];
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
     );
@@ -3554,12 +3545,17 @@ describe("multiple", () => {
     if (!parseResult.success) {
       return;
     }
-    const suggestions = await collectSuggestions(parser.suggest({
-      buffer: [],
-      state: parseResult.next.state,
-      optionsTerminated: false,
-      usage: parser.usage,
-    }, ""));
+    const suggestions = await collectSuggestions(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parseResult.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ),
+    );
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
     );
@@ -3602,14 +3598,17 @@ describe("multiple", () => {
 
     const parser = multiple(baseParser);
     const suggestions = [
-      ...parser.suggest({
-        buffer: [],
-        state: injectAnnotations(parser.initialState, {
-          [annotation]: "ok",
-        }),
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "") as Iterable<Suggestion>,
+      ...(parser.suggest(
+        {
+          buffer: [],
+          state: injectAnnotations(parser.initialState, {
+            [annotation]: "ok",
+          }),
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ) as Iterable<Suggestion>),
     ];
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
@@ -3653,14 +3652,17 @@ describe("multiple", () => {
 
     const parser = multiple(baseParser);
     const suggestions = await collectSuggestions(
-      parser.suggest({
-        buffer: [],
-        state: injectAnnotations(parser.initialState, {
-          [annotation]: "ok",
-        }),
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "") as AsyncIterable<Suggestion>,
+      parser.suggest(
+        {
+          buffer: [],
+          state: injectAnnotations(parser.initialState, {
+            [annotation]: "ok",
+          }),
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ) as AsyncIterable<Suggestion>,
     );
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "beta"),
@@ -3757,18 +3759,23 @@ describe("multiple", () => {
     };
 
     const parser = multiple(baseParser);
-    const suggestions = [...parser.suggest({
-      buffer: [],
-      state: [{ step: 1 }],
-      optionsTerminated: false,
-      usage: parser.usage,
-      exec: {
-        usage: parser.usage,
-        phase: "suggest",
-        path: ["root"],
-        trace: undefined,
-      },
-    }, "")];
+    const suggestions = [
+      ...parser.suggest(
+        {
+          buffer: [],
+          state: [{ step: 1 }],
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: ["root"],
+            trace: undefined,
+          },
+        },
+        "",
+      ),
+    ];
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "second" }]);
   });
@@ -3810,18 +3817,23 @@ describe("multiple", () => {
     };
 
     const parser = multiple(baseParser);
-    const suggestions = await collectSuggestions(parser.suggest({
-      buffer: [],
-      state: [{ step: 1 }],
-      optionsTerminated: false,
-      usage: parser.usage,
-      exec: {
-        usage: parser.usage,
-        phase: "suggest",
-        path: ["root"],
-        trace: undefined,
-      },
-    }, ""));
+    const suggestions = await collectSuggestions(
+      parser.suggest(
+        {
+          buffer: [],
+          state: [{ step: 1 }],
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: ["root"],
+            trace: undefined,
+          },
+        },
+        "",
+      ),
+    );
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "second" }]);
   });
@@ -3866,22 +3878,25 @@ describe("multiple", () => {
 
     const parser = multiple(baseParser);
     const suggestions = await collectSuggestions(
-      parser.suggest({
-        buffer: [],
-        state: injectAnnotations(parser.initialState, {
-          [annotation]: "ok",
-        }),
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "") as AsyncIterable<Suggestion>,
+      parser.suggest(
+        {
+          buffer: [],
+          state: injectAnnotations(parser.initialState, {
+            [annotation]: "ok",
+          }),
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ) as AsyncIterable<Suggestion>,
     );
 
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "wrapped-ok"),
     );
     assert.ok(
-      !suggestions.some((s) =>
-        s.kind === "literal" && s.text === "primitive-ok"
+      !suggestions.some(
+        (s) => s.kind === "literal" && s.text === "primitive-ok",
       ),
     );
   });
@@ -3929,27 +3944,32 @@ describe("multiple", () => {
     });
 
     const suggestions = [
-      ...parser.suggest({
-        buffer: [],
-        state: parser.initialState,
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "") as Iterable<Suggestion>,
+      ...(parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ) as Iterable<Suggestion>),
     ];
 
     assert.equal(suggestions.length, 2);
     assert.ok(
-      suggestions.some((s) =>
-        s.kind === "literal" &&
-        s.description != null &&
-        formatMessage(s.description).includes("https://example.com/a")
+      suggestions.some(
+        (s) =>
+          s.kind === "literal" &&
+          s.description != null &&
+          formatMessage(s.description).includes("https://example.com/a"),
       ),
     );
     assert.ok(
-      suggestions.some((s) =>
-        s.kind === "literal" &&
-        s.description != null &&
-        formatMessage(s.description).includes("https://example.com/b")
+      suggestions.some(
+        (s) =>
+          s.kind === "literal" &&
+          s.description != null &&
+          formatMessage(s.description).includes("https://example.com/b"),
       ),
     );
   });
@@ -3993,21 +4013,24 @@ describe("multiple", () => {
     });
 
     const suggestions = [
-      ...parser.suggest({
-        buffer: [],
-        state: injectAnnotations(parser.initialState, {
-          [annotation]: true,
-        }),
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "") as Iterable<Suggestion>,
+      ...(parser.suggest(
+        {
+          buffer: [],
+          state: injectAnnotations(parser.initialState, {
+            [annotation]: true,
+          }),
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ) as Iterable<Suggestion>),
     ];
     assert.ok(
       suggestions.some((s) => s.kind === "literal" && s.text === "wrapped-ok"),
     );
     assert.ok(
-      !suggestions.some((s) =>
-        s.kind === "literal" && s.text === "primitive-ok"
+      !suggestions.some(
+        (s) => s.kind === "literal" && s.text === "primitive-ok",
       ),
     );
   });
@@ -4049,12 +4072,15 @@ describe("multiple", () => {
     };
     const parser = multiple(baseParser);
     const suggestions = [
-      ...parser.suggest({
-        buffer: [],
-        state: injectAnnotations(parser.initialState, { [marker]: "ok" }),
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "") as Iterable<Suggestion>,
+      ...(parser.suggest(
+        {
+          buffer: [],
+          state: injectAnnotations(parser.initialState, { [marker]: "ok" }),
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ) as Iterable<Suggestion>),
     ];
 
     assert.deepEqual(suggestions, []);
@@ -4121,10 +4147,7 @@ describe("multiple", () => {
     ]);
     assert.ok(!resultTooMany.success);
     if (!resultTooMany.success) {
-      assertErrorIncludes(
-        resultTooMany.error,
-        "Unexpected option or argument",
-      );
+      assertErrorIncludes(resultTooMany.error, "Unexpected option or argument");
     }
 
     const resultOkay = parse(multipleParser, ["file1.txt", "file2.txt"]);
@@ -4151,10 +4174,7 @@ describe("multiple", () => {
     const resultTooMany = parse(multipleParser, ["a", "b", "c", "d"]);
     assert.ok(!resultTooMany.success);
     if (!resultTooMany.success) {
-      assertErrorIncludes(
-        resultTooMany.error,
-        "Unexpected option or argument",
-      );
+      assertErrorIncludes(resultTooMany.error, "Unexpected option or argument");
     }
 
     const resultJustRight = parse(multipleParser, ["a", "b"]);
@@ -4179,8 +4199,10 @@ describe("multiple", () => {
     }
 
     // Test with many values to ensure no arbitrary limit
-    const manyArgs = Array.from({ length: 10 }, (_, i) => ["-x", `value${i}`])
-      .flat();
+    const manyArgs = Array.from({ length: 10 }, (_, i) => [
+      "-x",
+      `value${i}`,
+    ]).flat();
     manyArgs.push("-h");
     const resultMany = parse(parser, manyArgs);
     assert.ok(resultMany.success);
@@ -4404,10 +4426,7 @@ describe("multiple", () => {
     const result3 = parse(parser2, ["-t", "Title", "id1", "id2", "id3", "id4"]);
     assert.ok(!result3.success);
     if (!result3.success) {
-      assertErrorIncludes(
-        result3.error,
-        "Unexpected option or argument",
-      );
+      assertErrorIncludes(result3.error, "Unexpected option or argument");
     }
   });
 
@@ -4500,10 +4519,7 @@ describe("multiple", () => {
     ]);
     assert.ok(!tooManyResult.success);
     if (!tooManyResult.success) {
-      assertErrorIncludes(
-        tooManyResult.error,
-        "Unexpected option or argument",
-      );
+      assertErrorIncludes(tooManyResult.error, "Unexpected option or argument");
     }
   });
 
@@ -5080,10 +5096,7 @@ describe("multiple", () => {
       // `min: 0` would let every child complete and the parse would
       // succeed with `{ v: [] }` instead of reaching this branch.  See
       // https://github.com/dahlia/optique/pull/776#discussion_r3047719147.
-      const result = parse(
-        object({ v: multiple(flag("-v"), { min: 1 }) }),
-        [],
-      );
+      const result = parse(object({ v: multiple(flag("-v"), { min: 1 }) }), []);
       assert.ok(!result.success);
       if (!result.success) {
         assertErrorIncludes(result.error, "No matching option found");
@@ -5130,10 +5143,7 @@ describe("multiple", () => {
 
     it("preserves async optional(multiple(min>0)) fallback on empty input", async () => {
       const parser = optional(
-        multiple(
-          option("--tag", asyncChoice(["a", "b"] as const)),
-          { min: 1 },
-        ),
+        multiple(option("--tag", asyncChoice(["a", "b"] as const)), { min: 1 }),
       );
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
@@ -5142,10 +5152,7 @@ describe("multiple", () => {
 
     it("preserves async withDefault(multiple(min>0), default) fallback", async () => {
       const parser = withDefault(
-        multiple(
-          option("--tag", asyncChoice(["a", "b"] as const)),
-          { min: 1 },
-        ),
+        multiple(option("--tag", asyncChoice(["a", "b"] as const)), { min: 1 }),
         ["a"] as readonly ("a" | "b")[],
       );
       const result = await parseAsync(parser, []);
@@ -5160,9 +5167,10 @@ describe("multiple", () => {
       const multipleParser = multiple(baseParser);
 
       // Should delegate to base parser with the last state
-      const fragments = multipleParser.getDocFragments(
-        { kind: "available" as const, state: [] },
-      );
+      const fragments = multipleParser.getDocFragments({
+        kind: "available" as const,
+        state: [],
+      });
       const baseFragments = baseParser.getDocFragments(
         baseParser.initialState === undefined
           ? { kind: "unavailable" as const }
@@ -5222,10 +5230,7 @@ describe("multiple", () => {
 
       const fragments = multipleParser.getDocFragments(
         { kind: "available" as const, state: [] },
-        [
-          "file1.txt",
-          "file2.txt",
-        ],
+        ["file1.txt", "file2.txt"],
       );
 
       assert.equal(fragments.fragments.length, 1);
@@ -5247,9 +5252,10 @@ describe("multiple", () => {
       const baseParser = option("-l", "--locale", string(), { description });
       const multipleParser = multiple(baseParser);
 
-      const fragments = multipleParser.getDocFragments(
-        { kind: "available" as const, state: [] },
-      );
+      const fragments = multipleParser.getDocFragments({
+        kind: "available" as const,
+        state: [],
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -5262,9 +5268,10 @@ describe("multiple", () => {
       const baseParser = option("-v", "--verbose");
       const multipleParser = multiple(baseParser);
 
-      const fragments = multipleParser.getDocFragments(
-        { kind: "available" as const, state: [] },
-      );
+      const fragments = multipleParser.getDocFragments({
+        kind: "available" as const,
+        state: [],
+      });
 
       assert.equal(fragments.fragments.length, 1);
       assert.equal(fragments.fragments[0].type, "entry");
@@ -5313,9 +5320,7 @@ describe("multiple", () => {
         [Symbol.for("@test/multiple-doc-state-wrapper")]: true,
       });
 
-      parser.getDocFragments(
-        { kind: "available", state: [wrappedState] },
-      );
+      parser.getDocFragments({ kind: "available", state: [wrappedState] });
 
       assert.equal(observedState, "active");
     });
@@ -5332,10 +5337,12 @@ describe("multiple() error customization", () => {
     });
 
     // Create a context with only one value parsed
-    const singleArgState = [{
-      success: true,
-      value: "file1.txt",
-    }] as const;
+    const singleArgState = [
+      {
+        success: true,
+        value: "file1.txt",
+      },
+    ] as const;
 
     const result = parser.complete(singleArgState);
     assert.strictEqual(result.success, false);
@@ -5352,17 +5359,19 @@ describe("multiple() error customization", () => {
       min: 3,
       errors: {
         tooFew: (min, actual) =>
-          message`Need ${text(min.toString())} files, but only found ${
-            text(actual.toString())
-          }.`,
+          message`Need ${text(min.toString())} files, but only found ${text(
+            actual.toString(),
+          )}.`,
       },
     });
 
     // Create a context with only one value parsed
-    const singleArgState = [{
-      success: true,
-      value: "file1.txt",
-    }] as const;
+    const singleArgState = [
+      {
+        success: true,
+        value: "file1.txt",
+      },
+    ] as const;
 
     const result = parser.complete(singleArgState);
     assert.strictEqual(result.success, false);
@@ -5404,9 +5413,9 @@ describe("multiple() error customization", () => {
       max: 1,
       errors: {
         tooMany: (max, actual) =>
-          message`Expected only ${text(max.toString())} file, but got ${
-            text(actual.toString())
-          }.`,
+          message`Expected only ${text(max.toString())} file, but got ${text(
+            actual.toString(),
+          )}.`,
       },
     });
 
@@ -5637,10 +5646,7 @@ describe("state management edge cases", () => {
 
     it("should preserve constant value through withDefault() in object()", () => {
       const parser = object({
-        mode: withDefault(
-          constant("inner" as const),
-          "fallback" as const,
-        ),
+        mode: withDefault(constant("inner" as const), "fallback" as const),
       });
 
       const result = parse(parser, []);
@@ -5664,10 +5670,7 @@ describe("state management edge cases", () => {
     });
 
     it("should handle map(optional(constant()))", () => {
-      const parser = map(
-        optional(constant(10)),
-        (value) => value ?? 0,
-      );
+      const parser = map(optional(constant(10)), (value) => value ?? 0);
 
       const result = parse(parser, []);
       assert.ok(result.success);
@@ -5770,9 +5773,7 @@ describe("state management edge cases", () => {
     // `parseAsync(object({ x: withDefault(...) }))` actually exercise
     // `parseOptionalStyleAsync`/the async wrapper path, rather than
     // dispatching through the sync fast path for a sync inner parser.
-    function asyncCompleteOnly<T>(
-      value: T,
-    ): Parser<"async", T, undefined> {
+    function asyncCompleteOnly<T>(value: T): Parser<"async", T, undefined> {
       return {
         $valueType: [] as readonly T[],
         $stateType: [] as readonly undefined[],
@@ -5794,9 +5795,7 @@ describe("state management edge cases", () => {
         },
         suggest(_context, _prefix) {
           return {
-            async *[Symbol.asyncIterator](): AsyncIterableIterator<
-              Suggestion
-            > {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
               yield* [];
             },
           };
@@ -5829,7 +5828,8 @@ describe("state management edge cases", () => {
         initialState: initial,
         parse(context) {
           const annotations = getAnnotations(context.state);
-          const tag = (annotations?.[marker] as string | undefined) ??
+          const tag =
+            (annotations?.[marker] as string | undefined) ??
             "no-annotations-in-parse";
           return {
             success: true,
@@ -5839,8 +5839,8 @@ describe("state management edge cases", () => {
         },
         complete(state) {
           const annotations = getAnnotations(state);
-          const completeTag = (annotations?.[marker] as string | undefined) ??
-            state.tag;
+          const completeTag =
+            (annotations?.[marker] as string | undefined) ?? state.tag;
           return { success: true, value: completeTag };
         },
         suggest(_context, _prefix) {
@@ -6087,11 +6087,9 @@ describe("state management edge cases", () => {
         assert.equal(optionalResult.value, "private-value");
       }
 
-      const withDefaultResult = parse(
-        withDefault(parser, "fallback"),
-        [],
-        { annotations: { [marker]: "annotated" } },
-      );
+      const withDefaultResult = parse(withDefault(parser, "fallback"), [], {
+        annotations: { [marker]: "annotated" },
+      });
       assert.ok(withDefaultResult.success);
       if (withDefaultResult.success) {
         assert.equal(withDefaultResult.value, "private-value");
@@ -6230,8 +6228,8 @@ describe("state management edge cases", () => {
         initialState: { tag: "initial" },
         parse(context) {
           const annotations = getAnnotations(context.state);
-          const tag = (annotations?.[marker] as string | undefined) ??
-            "no-annotations";
+          const tag =
+            (annotations?.[marker] as string | undefined) ?? "no-annotations";
           lastSeenAnnotation = tag;
           return {
             success: true,
@@ -6253,10 +6251,9 @@ describe("state management edge cases", () => {
 
       // First call: simulate the top-level annotated context that the
       // initial parse iteration sees.
-      const annotatedInitial = injectAnnotations(
-        optionalParser.initialState,
-        { [marker]: "first" },
-      ) as [{ readonly tag: string }] | undefined;
+      const annotatedInitial = injectAnnotations(optionalParser.initialState, {
+        [marker]: "first",
+      }) as [{ readonly tag: string }] | undefined;
       const first = optionalParser.parse({
         buffer: [],
         state: annotatedInitial,
@@ -6301,23 +6298,18 @@ describe("state management edge cases", () => {
       }
     }
 
-    for (
-      const [
-        name,
-        wrap,
-      ] of [
-        [
-          "optional",
-          (parser: Parser<"sync", string, StatefulReentryState>) =>
-            optional(parser),
-        ],
-        [
-          "withDefault",
-          (parser: Parser<"sync", string, StatefulReentryState>) =>
-            withDefault(parser, "fallback"),
-        ],
-      ] as const
-    ) {
+    for (const [name, wrap] of [
+      [
+        "optional",
+        (parser: Parser<"sync", string, StatefulReentryState>) =>
+          optional(parser),
+      ],
+      [
+        "withDefault",
+        (parser: Parser<"sync", string, StatefulReentryState>) =>
+          withDefault(parser, "fallback"),
+      ],
+    ] as const) {
       it(`${name}() re-entry preserves unchanged class-state identity`, () => {
         const marker = Symbol.for(`@test/issue-233/${name}/class-reentry`);
         let seenAnnotation: string | undefined;
@@ -6453,10 +6445,12 @@ describe("nonEmpty", () => {
   });
 
   it("should work with object parser that consumes input", () => {
-    const parser = nonEmpty(object({
-      verbose: option("-v", "--verbose"),
-      debug: option("-d", "--debug"),
-    }));
+    const parser = nonEmpty(
+      object({
+        verbose: option("-v", "--verbose"),
+        debug: option("-d", "--debug"),
+      }),
+    );
 
     const result = parse(parser, ["-v"]);
     assert.ok(result.success);
@@ -6467,10 +6461,12 @@ describe("nonEmpty", () => {
   });
 
   it("should fail with object parser that consumes no input", () => {
-    const parser = nonEmpty(object({
-      verbose: option("-v", "--verbose"),
-      debug: option("-d", "--debug"),
-    }));
+    const parser = nonEmpty(
+      object({
+        verbose: option("-v", "--verbose"),
+        debug: option("-d", "--debug"),
+      }),
+    );
 
     const result = parse(parser, []);
     assert.ok(!result.success);
@@ -6481,11 +6477,13 @@ describe("nonEmpty", () => {
 
   it("should work with longestMatch() for conditional defaults", () => {
     // This is the main use case from issue #79
-    const activeParser = nonEmpty(object({
-      mode: constant("active" as const),
-      cwd: withDefault(option("--cwd", string()), "./default"),
-      key: optional(option("--key", string())),
-    }));
+    const activeParser = nonEmpty(
+      object({
+        mode: constant("active" as const),
+        cwd: withDefault(option("--cwd", string()), "./default"),
+        key: optional(option("--key", string())),
+      }),
+    );
 
     const helpParser = object({
       mode: constant("help" as const),
@@ -6570,10 +6568,12 @@ describe("nonEmpty", () => {
   });
 
   it("should work with withDefault wrapper", () => {
-    const parser = nonEmpty(object({
-      verbose: option("-v", "--verbose"),
-      port: withDefault(option("-p", "--port", integer()), 8080),
-    }));
+    const parser = nonEmpty(
+      object({
+        verbose: option("-v", "--verbose"),
+        port: withDefault(option("-p", "--port", integer()), 8080),
+      }),
+    );
 
     // Providing at least one option makes it succeed
     const result = parse(parser, ["-v"]);
@@ -6588,9 +6588,11 @@ describe("nonEmpty", () => {
     // When wrapped in object(), multiple() without { min: 1 } succeeds
     // with empty array when no args are provided (zero tokens consumed).
     // nonEmpty() turns that into a failure.
-    const parser = nonEmpty(object({
-      files: multiple(argument(string())),
-    }));
+    const parser = nonEmpty(
+      object({
+        files: multiple(argument(string())),
+      }),
+    );
 
     const result = parse(parser, ["file1.txt", "file2.txt"]);
     assert.ok(result.success);
@@ -6661,9 +6663,13 @@ describe("branch coverage: modifiers edge cases", () => {
   it("withDefault: options.message skips non-entry fragments", () => {
     // object() returns section fragments; wrap it in withDefault with message
     const inner = object({ x: option("--x", string()) });
-    const parser = withDefault(inner, { x: "default" }, {
-      message: message`custom`,
-    });
+    const parser = withDefault(
+      inner,
+      { x: "default" },
+      {
+        message: message`custom`,
+      },
+    );
     const fragments = parser.getDocFragments(
       { kind: "unavailable" },
       undefined,
@@ -6740,9 +6746,9 @@ describe("branch coverage: modifiers edge cases", () => {
         return Promise.resolve(
           state === "bad"
             ? {
-              success: false as const,
-              error: message`Async complete failure.`,
-            }
+                success: false as const,
+                error: message`Async complete failure.`,
+              }
             : { success: true as const, value: state },
         );
       },
@@ -6800,16 +6806,13 @@ describe("branch coverage: modifiers edge cases", () => {
     const parser = multiple(child);
     const runtime = createDependencyRuntimeContext();
 
-    const pending = parser.complete(
-      ["slow", "fast"],
-      {
-        usage: parser.usage,
-        phase: "complete",
-        path: ["root"],
-        dependencyRuntime: runtime,
-        dependencyRegistry: runtime.registry,
-      },
-    );
+    const pending = parser.complete(["slow", "fast"], {
+      usage: parser.usage,
+      phase: "complete",
+      path: ["root"],
+      dependencyRuntime: runtime,
+      dependencyRegistry: runtime.registry,
+    });
 
     assert.deepEqual(started, ["slow"]);
     gates.get("slow")?.resolve();
@@ -6865,11 +6868,9 @@ describe("branch coverage: modifiers edge cases", () => {
       async *suggest(context) {
         yield {
           kind: "literal" as const,
-          text: `latest-${
-            String(
-              context.exec?.dependencyRuntime?.getSource(sourceId),
-            )
-          }`,
+          text: `latest-${String(
+            context.exec?.dependencyRuntime?.getSource(sourceId),
+          )}`,
         };
       },
       getDocFragments: () => ({ fragments: [] }),
@@ -6879,8 +6880,8 @@ describe("branch coverage: modifiers edge cases", () => {
 
     const suggestionsPromise = (async () => {
       const suggestions: Suggestion[] = [];
-      for await (
-        const suggestion of parser.suggest({
+      for await (const suggestion of parser.suggest(
+        {
           buffer: [],
           state: ["slow", "fast"],
           optionsTerminated: false,
@@ -6893,8 +6894,9 @@ describe("branch coverage: modifiers edge cases", () => {
             dependencyRuntime: runtime,
             dependencyRegistry: runtime.registry,
           },
-        }, "")
-      ) {
+        },
+        "",
+      )) {
         suggestions.push(suggestion);
       }
       return suggestions;
@@ -6967,9 +6969,7 @@ describe("branch coverage: modifiers edge cases", () => {
       optionsTerminated: false,
       usage: parser.usage,
     };
-    const suggestions = [
-      ...(parser.suggest(ctx, "") as Iterable<Suggestion>),
-    ];
+    const suggestions = [...(parser.suggest(ctx, "") as Iterable<Suggestion>)];
     // The file-kind suggestion should pass through shouldInclude (returns true)
     assert.ok(suggestions.some((s) => s.kind === "file"));
   });
@@ -6988,7 +6988,7 @@ describe("branch coverage: modifiers edge cases", () => {
     if (!parsed.success) return;
 
     const suggestions = [
-      ...parser.suggest(parsed.next, "") as Iterable<Suggestion>,
+      ...(parser.suggest(parsed.next, "") as Iterable<Suggestion>),
     ];
 
     assert.deepEqual(suggestions, []);
@@ -7215,11 +7215,7 @@ describe("branch coverage: modifiers edge cases", () => {
   });
 
   it("multiple: zero-consumption fresh object state does not add a slot", () => {
-    const inner: Parser<
-      "sync",
-      "idle",
-      { readonly kind: "idle" }
-    > = {
+    const inner: Parser<"sync", "idle", { readonly kind: "idle" }> = {
       mode: "sync" as const,
       $valueType: [] as readonly "idle"[],
       $stateType: [] as readonly { readonly kind: "idle" }[],
@@ -7645,12 +7641,9 @@ describe("branch coverage: modifiers edge cases", () => {
       suggest: async function* () {},
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"async", string, undefined>;
-    const parser = withDefault(
-      transformedAsyncParser,
-      () => {
-        throw new WithDefaultError(message`callback failed`);
-      },
-    );
+    const parser = withDefault(transformedAsyncParser, () => {
+      throw new WithDefaultError(message`callback failed`);
+    });
 
     const result = await parser.complete(undefined);
     assert.ok(!result.success);
@@ -7677,12 +7670,9 @@ describe("branch coverage: modifiers edge cases", () => {
       suggest: function* () {},
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"sync", string, undefined>;
-    const parser = withDefault(
-      wrappedParser,
-      () => {
-        throw new Error("wrapped default failed");
-      },
-    );
+    const parser = withDefault(wrappedParser, () => {
+      throw new Error("wrapped default failed");
+    });
 
     const result = parser.complete(undefined);
     assert.ok(!result.success);
@@ -7716,12 +7706,9 @@ describe("branch coverage: modifiers edge cases", () => {
       suggest: async function* () {},
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"async", string, undefined>;
-    const parser = withDefault(
-      transformedAsyncParser,
-      () => {
-        throw new Error("pending transform failed");
-      },
-    );
+    const parser = withDefault(transformedAsyncParser, () => {
+      throw new Error("pending transform failed");
+    });
 
     const pending = createPendingDependencySourceState(depId);
     const result = await parser.complete([pending] as unknown as [undefined]);
@@ -7730,12 +7717,9 @@ describe("branch coverage: modifiers edge cases", () => {
 
   it("withDefault: plain missing path handles callback errors", () => {
     const baseParser = option("--name", string());
-    const parser = withDefault(
-      baseParser,
-      () => {
-        throw new Error("pending callback failed");
-      },
-    );
+    const parser = withDefault(baseParser, () => {
+      throw new Error("pending callback failed");
+    });
 
     const result = parser.complete(undefined);
     assert.ok(!result.success);
@@ -7934,7 +7918,10 @@ describe("branch coverage: modifiers edge cases", () => {
     );
 
     assert.deepEqual(suggestions, []);
-    assert.deepEqual(seenPaths, [["root", 0], ["root", 1]]);
+    assert.deepEqual(seenPaths, [
+      ["root", 0],
+      ["root", 1],
+    ]);
   });
 
   it("optional: getSuggestRuntimeNodes preserves outer annotations", () => {
@@ -8038,12 +8025,9 @@ describe("branch coverage: modifiers edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"async", string, undefined>;
 
-    const parser = withDefault(
-      transformedAsyncParser,
-      () => {
-        throw new Error("default callback exploded");
-      },
-    );
+    const parser = withDefault(transformedAsyncParser, () => {
+      throw new Error("default callback exploded");
+    });
     const result = await parser.complete(undefined);
     assert.ok(!result.success);
     if (!result.success) {
@@ -8079,12 +8063,9 @@ describe("branch coverage: modifiers edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"async", string, undefined>;
 
-    const parser = withDefault(
-      transformedAsyncParser,
-      () => {
-        throw new Error("pending default callback exploded");
-      },
-    );
+    const parser = withDefault(transformedAsyncParser, () => {
+      throw new Error("pending default callback exploded");
+    });
     const result = await parser.complete(undefined);
     assert.ok(!result.success);
     if (!result.success) {
@@ -8118,12 +8099,9 @@ describe("branch coverage: modifiers edge cases", () => {
       getDocFragments: () => ({ fragments: [] }),
     } as unknown as Parser<"sync", string, undefined>;
 
-    const parser = withDefault(
-      wrappedParser,
-      () => {
-        throw new Error("wrapped callback exploded");
-      },
-    );
+    const parser = withDefault(wrappedParser, () => {
+      throw new Error("wrapped callback exploded");
+    });
     const result = parser.complete(undefined);
     assert.ok(!result.success);
     if (!result.success) {
@@ -8357,104 +8335,221 @@ describe("shouldDeferCompletion forwarding", () => {
   });
 });
 
-describe(
-  "optional-like delegated annotation propagation (issue #594)",
-  () => {
-    class DeferredClassState {
-      #secret = "private-value";
+describe("optional-like delegated annotation propagation (issue #594)", () => {
+  class DeferredClassState {
+    #secret = "private-value";
 
-      read(): string {
-        return this.#secret;
-      }
+    read(): string {
+      return this.#secret;
     }
+  }
 
-    function createPrimitiveCompletionParser(
-      marker: symbol,
-    ): Parser<"sync", string, string> {
-      return {
-        mode: "sync",
-        $valueType: [] as readonly string[],
-        $stateType: [] as readonly string[],
-        priority: 0,
-        usage: [],
-        leadingNames: new Set<string>(),
-        acceptingAnyToken: false,
-        initialState: "seed",
-        parse(context) {
-          return { success: true as const, next: context, consumed: [] };
-        },
-        complete(state) {
-          return {
-            success: true as const,
-            value: getAnnotations(state)?.[marker] === "ok"
+  function createPrimitiveCompletionParser(
+    marker: symbol,
+  ): Parser<"sync", string, string> {
+    return {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "seed",
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value:
+            getAnnotations(state)?.[marker] === "ok"
               ? "annotated"
               : "missing-annotations",
-          };
-        },
-        suggest() {
-          return [];
-        },
-        getDocFragments() {
-          return { fragments: [] };
-        },
-      };
-    }
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+  }
 
-    function createClassCompletionParser(
-      marker: symbol,
-    ): Parser<"sync", string, DeferredClassState> {
-      return {
-        mode: "sync",
-        $valueType: [] as readonly string[],
-        $stateType: [] as readonly DeferredClassState[],
-        priority: 0,
-        usage: [],
-        leadingNames: new Set<string>(),
-        acceptingAnyToken: false,
-        initialState: new DeferredClassState(),
-        parse(context) {
-          return { success: true as const, next: context, consumed: [] };
-        },
-        complete(state) {
-          return {
-            success: true as const,
-            value: getAnnotations(state)?.[marker] === "ok"
+  function createClassCompletionParser(
+    marker: symbol,
+  ): Parser<"sync", string, DeferredClassState> {
+    return {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly DeferredClassState[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: new DeferredClassState(),
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value:
+            getAnnotations(state)?.[marker] === "ok"
               ? state.read()
               : "missing-annotations",
-          };
-        },
-        suggest() {
-          return [];
-        },
-        getDocFragments() {
-          return { fragments: [] };
-        },
-      };
-    }
+        };
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+  }
 
-    function createPrimitiveDeferralParser(
-      marker: symbol,
-    ): Parser<"sync", string, string> {
-      return {
-        mode: "sync",
-        $valueType: [] as readonly string[],
-        $stateType: [] as readonly string[],
+  function createPrimitiveDeferralParser(
+    marker: symbol,
+  ): Parser<"sync", string, string> {
+    return {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly string[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: "seed",
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state) {
+        return {
+          success: true as const,
+          value: typeof state === "string" ? state : "wrapped",
+        };
+      },
+      shouldDeferCompletion(state) {
+        return getAnnotations(state)?.[marker] === "ok";
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+  }
+
+  function createClassDeferralParser(
+    marker: symbol,
+  ): Parser<"sync", string, DeferredClassState> {
+    return {
+      mode: "sync",
+      $valueType: [] as readonly string[],
+      $stateType: [] as readonly DeferredClassState[],
+      priority: 0,
+      usage: [],
+      leadingNames: new Set<string>(),
+      acceptingAnyToken: false,
+      initialState: new DeferredClassState(),
+      parse(context) {
+        return { success: true as const, next: context, consumed: [] };
+      },
+      complete(state) {
+        return { success: true as const, value: state.read() };
+      },
+      shouldDeferCompletion(state) {
+        return (
+          state.read() === "private-value" &&
+          getAnnotations(state)?.[marker] === "ok"
+        );
+      },
+      suggest() {
+        return [];
+      },
+      getDocFragments() {
+        return { fragments: [] };
+      },
+    };
+  }
+
+  const wrappers = [
+    {
+      name: "optional()",
+      wrap<TMode extends "sync" | "async", TValue, TState>(
+        parser: Parser<TMode, TValue, TState>,
+      ) {
+        return optionalLocal(parser);
+      },
+    },
+    {
+      name: "withDefault()",
+      wrap<TMode extends "sync" | "async", TValue, TState>(
+        parser: Parser<TMode, TValue, TState>,
+      ) {
+        return withDefaultLocal(parser, "fallback");
+      },
+    },
+  ] as const;
+
+  for (const { name, wrap } of wrappers) {
+    it(`${name} complete() preserves annotations on primitive inner states`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/complete-primitive`);
+      const parser = wrap(createPrimitiveCompletionParser(marker));
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
+      });
+
+      const result = parser.complete(outerState);
+
+      assert.deepEqual(result, {
+        success: true,
+        value: "annotated",
+      });
+    });
+
+    it(`${name} complete() preserves annotations on class inner states`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/complete-class`);
+      const parser = wrap(createClassCompletionParser(marker));
+      const state = new DeferredClassState();
+      const outerState = injectAnnotations([state] as [DeferredClassState], {
+        [marker]: "ok",
+      });
+
+      const result = parser.complete(outerState);
+
+      assert.deepEqual(result, {
+        success: true,
+        value: "private-value",
+      });
+      assert.equal(getAnnotations(state), undefined);
+    });
+
+    it(`${name} complete() deep-normalizes nested delegated primitive values`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/nested-primitive`);
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
         priority: 0,
         usage: [],
         leadingNames: new Set<string>(),
         acceptingAnyToken: false,
         initialState: "seed",
-        parse(context) {
+        parse(context: ParserContext<string>) {
           return { success: true as const, next: context, consumed: [] };
         },
-        complete(state) {
+        complete(state: string) {
           return {
             success: true as const,
-            value: typeof state === "string" ? state : "wrapped",
+            value: {
+              annotated: getAnnotations(state)?.[marker] === "ok",
+              inner: state,
+            },
           };
-        },
-        shouldDeferCompletion(state) {
-          return getAnnotations(state)?.[marker] === "ok";
         },
         suggest() {
           return [];
@@ -8462,30 +8557,45 @@ describe(
         getDocFragments() {
           return { fragments: [] };
         },
-      };
-    }
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
+      });
 
-    function createClassDeferralParser(
-      marker: symbol,
-    ): Parser<"sync", string, DeferredClassState> {
-      return {
-        mode: "sync",
-        $valueType: [] as readonly string[],
-        $stateType: [] as readonly DeferredClassState[],
+      const result = parser.complete(outerState);
+
+      assert.deepEqual(result, {
+        success: true,
+        value: {
+          annotated: true,
+          inner: "live",
+        },
+      });
+    });
+
+    it(`${name} complete() deep-normalizes nested delegated class values`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/nested-class`);
+      const state = new DeferredClassState();
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
         priority: 0,
         usage: [],
         leadingNames: new Set<string>(),
         acceptingAnyToken: false,
         initialState: new DeferredClassState(),
-        parse(context) {
+        parse(context: ParserContext<DeferredClassState>) {
           return { success: true as const, next: context, consumed: [] };
         },
-        complete(state) {
-          return { success: true as const, value: state.read() };
-        },
-        shouldDeferCompletion(state) {
-          return state.read() === "private-value" &&
-            getAnnotations(state)?.[marker] === "ok";
+        complete(innerState: DeferredClassState) {
+          return {
+            success: true as const,
+            value: {
+              annotated: getAnnotations(innerState)?.[marker] === "ok",
+              inner: innerState,
+            },
+          };
         },
         suggest() {
           return [];
@@ -8493,1927 +8603,1712 @@ describe(
         getDocFragments() {
           return { fragments: [] };
         },
-      };
-    }
-
-    const wrappers = [
-      {
-        name: "optional()",
-        wrap<TMode extends "sync" | "async", TValue, TState>(
-          parser: Parser<TMode, TValue, TState>,
-        ) {
-          return optionalLocal(parser);
-        },
-      },
-      {
-        name: "withDefault()",
-        wrap<TMode extends "sync" | "async", TValue, TState>(
-          parser: Parser<TMode, TValue, TState>,
-        ) {
-          return withDefaultLocal(parser, "fallback");
-        },
-      },
-    ] as const;
-
-    for (const { name, wrap } of wrappers) {
-      it(`${name} complete() preserves annotations on primitive inner states`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/complete-primitive`);
-        const parser = wrap(createPrimitiveCompletionParser(marker));
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: "ok",
-        });
-
-        const result = parser.complete(outerState);
-
-        assert.deepEqual(result, {
-          success: true,
-          value: "annotated",
-        });
+      });
+      const outerState = injectAnnotations([state] as [DeferredClassState], {
+        [marker]: "ok",
       });
 
-      it(`${name} complete() preserves annotations on class inner states`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/complete-class`);
-        const parser = wrap(createClassCompletionParser(marker));
-        const state = new DeferredClassState();
-        const outerState = injectAnnotations([state] as [DeferredClassState], {
-          [marker]: "ok",
-        });
+      const result = parser.complete(outerState);
 
-        const result = parser.complete(outerState);
-
-        assert.deepEqual(result, {
-          success: true,
-          value: "private-value",
-        });
-        assert.equal(getAnnotations(state), undefined);
-      });
-
-      it(`${name} complete() deep-normalizes nested delegated primitive values`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/nested-primitive`);
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: string) {
-            return {
-              success: true as const,
-              value: {
-                annotated: getAnnotations(state)?.[marker] === "ok",
-                inner: state,
-              },
-            };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: "ok",
-        });
-
-        const result = parser.complete(outerState);
-
-        assert.deepEqual(result, {
-          success: true,
-          value: {
-            annotated: true,
-            inner: "live",
-          },
-        });
-      });
-
-      it(`${name} complete() deep-normalizes nested delegated class values`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/nested-class`);
-        const state = new DeferredClassState();
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: new DeferredClassState(),
-          parse(context: ParserContext<DeferredClassState>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(innerState: DeferredClassState) {
-            return {
-              success: true as const,
-              value: {
-                annotated: getAnnotations(innerState)?.[marker] === "ok",
-                inner: innerState,
-              },
-            };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations([state] as [DeferredClassState], {
-          [marker]: "ok",
-        });
-
-        const result = parser.complete(outerState);
-
-        assert.deepEqual(result, {
-          success: true,
-          value: {
-            annotated: true,
-            inner: state,
-          },
-        });
-        if (
-          result.success &&
-          result.value != null &&
-          typeof result.value === "object" &&
-          "inner" in result.value
-        ) {
-          assert.strictEqual(result.value.inner, state);
-        }
-      });
-
-      it(`${name} complete() deep-normalizes nested delegated plain-object values`, () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/nested-plain-object`,
-        );
-        const state = { value: "live" };
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: { value: "seed" },
-          parse(context: ParserContext<{ value: string }>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(innerState: { value: string }) {
-            return {
-              success: true as const,
-              value: {
-                annotated: getAnnotations(innerState)?.[marker] === "ok",
-                inner: innerState,
-              },
-            };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations([state] as [{ value: string }], {
-          [marker]: "ok",
-        });
-
-        const result = parser.complete(outerState);
-
-        assert.deepEqual(result, {
-          success: true,
-          value: {
-            annotated: true,
-            inner: state,
-          },
-        });
-        if (
-          result.success &&
-          result.value != null &&
-          typeof result.value === "object" &&
-          "inner" in result.value
-        ) {
-          assert.strictEqual(result.value.inner, state);
-          assert.equal(getAnnotations(result.value.inner), undefined);
-        }
-      });
-
-      it(`${name} complete() preserves Map subclass results while unwrapping entries`, () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/map-subclass-result`,
-        );
-
-        class StatefulMap extends Map<string, unknown> {
-          #secret = "private-value";
-
-          read(): string {
-            return this.#secret;
-          }
-        }
-
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: new StatefulMap([["seed", "value"]]),
-          parse(context: ParserContext<StatefulMap>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(innerState: StatefulMap) {
-            return {
-              success: true as const,
-              value: new StatefulMap([
-                ["annotated", getAnnotations(innerState)?.[marker] === "ok"],
-                ["inner", innerState],
-              ]),
-            };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(
-          [new StatefulMap([["live", "value"]])] as [StatefulMap],
-          { [marker]: "ok" },
-        );
-
-        const result = parser.complete(outerState);
-
-        assert.ok(result.success);
-        if (!result.success) return;
-        assert.ok(result.value instanceof StatefulMap);
-        assert.equal(result.value.read(), "private-value");
-        assert.equal(result.value.get("annotated"), true);
-        const inner = result.value.get("inner");
-        assert.ok(inner instanceof StatefulMap);
-        assert.equal(inner.read(), "private-value");
-        assert.equal(getAnnotations(inner), undefined);
-      });
-
-      it(`${name} parse() strips annotations from plain-object initial states`, () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/parse-plain-object`,
-        );
-        const initialState = { value: "seed" };
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState,
-          parse(context: ParserContext<{ value: string }>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: { value: string }) {
-            return {
-              success: true as const,
-              value: {
-                annotated: getAnnotations(state)?.[marker] === "ok",
-                inner: state,
-              },
-            };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-
-        const result = parse(parser, [], {
-          annotations: { [marker]: "ok" },
-        });
-
-        assert.ok(result.success);
-        if (!result.success) return;
-        assert.deepEqual(result.value, {
+      assert.deepEqual(result, {
+        success: true,
+        value: {
           annotated: true,
-          inner: initialState,
-        });
-        assert.strictEqual(result.value.inner, initialState);
-        assert.equal(getAnnotations(result.value.inner), undefined);
-      });
-
-      it(`${name} parseAsync() strips annotations from plain-object initial states`, async () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/parse-plain-object-async`,
-        );
-        const initialState = { value: "seed" };
-        const parser = wrap({
-          mode: "async" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState,
-          parse(context: ParserContext<{ value: string }>) {
-            return Promise.resolve({
-              success: true as const,
-              next: context,
-              consumed: [],
-            });
-          },
-          complete(state: { value: string }) {
-            return Promise.resolve({
-              success: true as const,
-              value: {
-                annotated: getAnnotations(state)?.[marker] === "ok",
-                inner: state,
-              },
-            });
-          },
-          suggest: async function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-
-        const result = await parseAsync(parser, [], {
-          annotations: { [marker]: "ok" },
-        });
-
-        assert.ok(result.success);
-        if (!result.success) return;
-        assert.deepEqual(result.value, {
-          annotated: true,
-          inner: initialState,
-        });
-        assert.strictEqual(result.value.inner, initialState);
-        assert.equal(getAnnotations(result.value.inner), undefined);
-      });
-
-      it(`${name} suggest() keeps primitive inner states unwrapped`, () => {
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: string) {
-            return { success: true as const, value: state };
-          },
-          *suggest(context: ParserContext<string>) {
-            if (typeof context.state !== "string") {
-              throw new TypeError("Expected primitive suggest state.");
-            }
-            yield { kind: "literal" as const, text: context.state };
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [Symbol.for(`@test/issue-594/${name}/suggest-primitive`)]: true,
-        });
-
-        const suggestions = [...parser.suggest({
-          buffer: [],
-          state: outerState,
-          optionsTerminated: false,
-          usage: parser.usage,
-        }, "")];
-
-        assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
-      });
-
-      it(`${name} getSuggestRuntimeNodes() keeps primitive inner states unwrapped`, () => {
-        let seenState: unknown;
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          getSuggestRuntimeNodes(state: unknown) {
-            seenState = state;
-            return [];
-          },
-          parse(context: ParserContext<string>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: string) {
-            return { success: true as const, value: state };
-          },
-          suggest: function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [Symbol.for(`@test/issue-594/${name}/runtime-nodes-primitive`)]: true,
-        });
-
-        parser.getSuggestRuntimeNodes?.(outerState, ["root"]);
-
-        assert.equal(seenState, "live");
-      });
-
-      it(
-        `${name} shouldDeferCompletion() preserves annotations on primitive inner states`,
-        () => {
-          const marker = Symbol.for(
-            `@test/issue-594/${name}/defer-primitive`,
-          );
-          const parser = wrap(createPrimitiveDeferralParser(marker));
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: "ok",
-          });
-
-          assert.ok(parser.shouldDeferCompletion?.(outerState));
+          inner: state,
         },
+      });
+      if (
+        result.success &&
+        result.value != null &&
+        typeof result.value === "object" &&
+        "inner" in result.value
+      ) {
+        assert.strictEqual(result.value.inner, state);
+      }
+    });
+
+    it(`${name} complete() deep-normalizes nested delegated plain-object values`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/nested-plain-object`);
+      const state = { value: "live" };
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: { value: "seed" },
+        parse(context: ParserContext<{ value: string }>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(innerState: { value: string }) {
+          return {
+            success: true as const,
+            value: {
+              annotated: getAnnotations(innerState)?.[marker] === "ok",
+              inner: innerState,
+            },
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations([state] as [{ value: string }], {
+        [marker]: "ok",
+      });
+
+      const result = parser.complete(outerState);
+
+      assert.deepEqual(result, {
+        success: true,
+        value: {
+          annotated: true,
+          inner: state,
+        },
+      });
+      if (
+        result.success &&
+        result.value != null &&
+        typeof result.value === "object" &&
+        "inner" in result.value
+      ) {
+        assert.strictEqual(result.value.inner, state);
+        assert.equal(getAnnotations(result.value.inner), undefined);
+      }
+    });
+
+    it(`${name} complete() preserves Map subclass results while unwrapping entries`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/map-subclass-result`);
+
+      class StatefulMap extends Map<string, unknown> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new StatefulMap([["seed", "value"]]),
+        parse(context: ParserContext<StatefulMap>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(innerState: StatefulMap) {
+          return {
+            success: true as const,
+            value: new StatefulMap([
+              ["annotated", getAnnotations(innerState)?.[marker] === "ok"],
+              ["inner", innerState],
+            ]),
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(
+        [new StatefulMap([["live", "value"]])] as [StatefulMap],
+        { [marker]: "ok" },
       );
 
-      it(`${name} shouldDeferCompletion() preserves annotations on class inner states`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/defer-class`);
-        const parser = wrap(createClassDeferralParser(marker));
-        const state = new DeferredClassState();
-        const outerState = injectAnnotations([state] as [DeferredClassState], {
-          [marker]: "ok",
-        });
+      const result = parser.complete(outerState);
 
-        assert.ok(parser.shouldDeferCompletion?.(outerState));
-        assert.equal(getAnnotations(state), undefined);
+      assert.ok(result.success);
+      if (!result.success) return;
+      assert.ok(result.value instanceof StatefulMap);
+      assert.equal(result.value.read(), "private-value");
+      assert.equal(result.value.get("annotated"), true);
+      const inner = result.value.get("inner");
+      assert.ok(inner instanceof StatefulMap);
+      assert.equal(inner.read(), "private-value");
+      assert.equal(getAnnotations(inner), undefined);
+    });
+
+    it(`${name} parse() strips annotations from plain-object initial states`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/parse-plain-object`);
+      const initialState = { value: "seed" };
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState,
+        parse(context: ParserContext<{ value: string }>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: { value: string }) {
+          return {
+            success: true as const,
+            value: {
+              annotated: getAnnotations(state)?.[marker] === "ok",
+              inner: state,
+            },
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
       });
 
-      it(`${name} complete() preserves Array subclass inner states`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/complete-array`);
+      const result = parse(parser, [], {
+        annotations: { [marker]: "ok" },
+      });
 
-        class DeferredArrayState extends Array<string> {
-          #secret = "private-value";
+      assert.ok(result.success);
+      if (!result.success) return;
+      assert.deepEqual(result.value, {
+        annotated: true,
+        inner: initialState,
+      });
+      assert.strictEqual(result.value.inner, initialState);
+      assert.equal(getAnnotations(result.value.inner), undefined);
+    });
 
-          read(): string {
-            return this.#secret;
+    it(`${name} parseAsync() strips annotations from plain-object initial states`, async () => {
+      const marker = Symbol.for(
+        `@test/issue-594/${name}/parse-plain-object-async`,
+      );
+      const initialState = { value: "seed" };
+      const parser = wrap({
+        mode: "async" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState,
+        parse(context: ParserContext<{ value: string }>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state: { value: string }) {
+          return Promise.resolve({
+            success: true as const,
+            value: {
+              annotated: getAnnotations(state)?.[marker] === "ok",
+              inner: state,
+            },
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "ok" },
+      });
+
+      assert.ok(result.success);
+      if (!result.success) return;
+      assert.deepEqual(result.value, {
+        annotated: true,
+        inner: initialState,
+      });
+      assert.strictEqual(result.value.inner, initialState);
+      assert.equal(getAnnotations(result.value.inner), undefined);
+    });
+
+    it(`${name} suggest() keeps primitive inner states unwrapped`, () => {
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: string) {
+          return { success: true as const, value: state };
+        },
+        *suggest(context: ParserContext<string>) {
+          if (typeof context.state !== "string") {
+            throw new TypeError("Expected primitive suggest state.");
           }
-        }
-
-        const state = new DeferredArrayState("live");
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: new DeferredArrayState("seed"),
-          parse(context: ParserContext<DeferredArrayState>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(innerState: DeferredArrayState) {
-            return {
-              success: true as const,
-              value: {
-                annotated: getAnnotations(innerState)?.[marker] === "ok",
-                secret: innerState.read(),
-                inner: innerState,
-              },
-            };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations([state] as [DeferredArrayState], {
-          [marker]: "ok",
-        });
-
-        const result = parser.complete(outerState);
-
-        assert.deepEqual(result, {
-          success: true,
-          value: {
-            annotated: true,
-            secret: "private-value",
-            inner: state,
-          },
-        });
-        if (
-          result.success &&
-          result.value != null &&
-          typeof result.value === "object" &&
-          "inner" in result.value
-        ) {
-          assert.strictEqual(result.value.inner, state);
-          assert.equal(getAnnotations(result.value.inner), undefined);
-        }
+          yield { kind: "literal" as const, text: context.state };
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [Symbol.for(`@test/issue-594/${name}/suggest-primitive`)]: true,
       });
 
-      it(`${name} shouldDeferCompletion() preserves Array subclass inner states`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/defer-array`);
+      const suggestions = [
+        ...parser.suggest(
+          {
+            buffer: [],
+            state: outerState,
+            optionsTerminated: false,
+            usage: parser.usage,
+          },
+          "",
+        ),
+      ];
 
-        class DeferredArrayState extends Array<string> {
-          #secret = "private-value";
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "live" }]);
+    });
 
-          read(): string {
-            return this.#secret;
+    it(`${name} getSuggestRuntimeNodes() keeps primitive inner states unwrapped`, () => {
+      let seenState: unknown;
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        getSuggestRuntimeNodes(state: unknown) {
+          seenState = state;
+          return [];
+        },
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: string) {
+          return { success: true as const, value: state };
+        },
+        suggest: function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [Symbol.for(`@test/issue-594/${name}/runtime-nodes-primitive`)]: true,
+      });
+
+      parser.getSuggestRuntimeNodes?.(outerState, ["root"]);
+
+      assert.equal(seenState, "live");
+    });
+
+    it(`${name} shouldDeferCompletion() preserves annotations on primitive inner states`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/defer-primitive`);
+      const parser = wrap(createPrimitiveDeferralParser(marker));
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
+      });
+
+      assert.ok(parser.shouldDeferCompletion?.(outerState));
+    });
+
+    it(`${name} shouldDeferCompletion() preserves annotations on class inner states`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/defer-class`);
+      const parser = wrap(createClassDeferralParser(marker));
+      const state = new DeferredClassState();
+      const outerState = injectAnnotations([state] as [DeferredClassState], {
+        [marker]: "ok",
+      });
+
+      assert.ok(parser.shouldDeferCompletion?.(outerState));
+      assert.equal(getAnnotations(state), undefined);
+    });
+
+    it(`${name} complete() preserves Array subclass inner states`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/complete-array`);
+
+      class DeferredArrayState extends Array<string> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const state = new DeferredArrayState("live");
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new DeferredArrayState("seed"),
+        parse(context: ParserContext<DeferredArrayState>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(innerState: DeferredArrayState) {
+          return {
+            success: true as const,
+            value: {
+              annotated: getAnnotations(innerState)?.[marker] === "ok",
+              secret: innerState.read(),
+              inner: innerState,
+            },
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations([state] as [DeferredArrayState], {
+        [marker]: "ok",
+      });
+
+      const result = parser.complete(outerState);
+
+      assert.deepEqual(result, {
+        success: true,
+        value: {
+          annotated: true,
+          secret: "private-value",
+          inner: state,
+        },
+      });
+      if (
+        result.success &&
+        result.value != null &&
+        typeof result.value === "object" &&
+        "inner" in result.value
+      ) {
+        assert.strictEqual(result.value.inner, state);
+        assert.equal(getAnnotations(result.value.inner), undefined);
+      }
+    });
+
+    it(`${name} shouldDeferCompletion() preserves Array subclass inner states`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/defer-array`);
+
+      class DeferredArrayState extends Array<string> {
+        #secret = "private-value";
+
+        read(): string {
+          return this.#secret;
+        }
+      }
+
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: new DeferredArrayState("seed"),
+        parse(context: ParserContext<DeferredArrayState>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: DeferredArrayState) {
+          return { success: true as const, value: state.read() };
+        },
+        shouldDeferCompletion(state: DeferredArrayState) {
+          return (
+            getAnnotations(state)?.[marker] === "ok" &&
+            state.read() === "private-value"
+          );
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const state = new DeferredArrayState("live");
+      const outerState = injectAnnotations([state] as [DeferredArrayState], {
+        [marker]: "ok",
+      });
+
+      assert.ok(parser.shouldDeferCompletion?.(outerState));
+      assert.equal(getAnnotations(state), undefined);
+    });
+
+    it(`${name} complete() preserves annotation-aware exceptions`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/complete-throw`);
+      let callCount = 0;
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: string) {
+          callCount++;
+          if (getAnnotations(state)?.[marker] === "ok") {
+            throw new Error("Annotated complete failure.");
           }
-        }
-
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: new DeferredArrayState("seed"),
-          parse(context: ParserContext<DeferredArrayState>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: DeferredArrayState) {
-            return { success: true as const, value: state.read() };
-          },
-          shouldDeferCompletion(state: DeferredArrayState) {
-            return getAnnotations(state)?.[marker] === "ok" &&
-              state.read() === "private-value";
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const state = new DeferredArrayState("live");
-        const outerState = injectAnnotations([state] as [DeferredArrayState], {
-          [marker]: "ok",
-        });
-
-        assert.ok(parser.shouldDeferCompletion?.(outerState));
-        assert.equal(getAnnotations(state), undefined);
+          return { success: true as const, value: "fallback-success" };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
       });
 
-      it(`${name} complete() preserves annotation-aware exceptions`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/complete-throw`);
-        let callCount = 0;
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: string) {
-            callCount++;
-            if (getAnnotations(state)?.[marker] === "ok") {
-              throw new Error("Annotated complete failure.");
-            }
-            return { success: true as const, value: "fallback-success" };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: "ok",
-        });
+      assert.throws(
+        () => parser.complete(outerState),
+        /Annotated complete failure\./,
+      );
+      assert.equal(callCount, 1);
+    });
 
-        assert.throws(
-          () => parser.complete(outerState),
-          /Annotated complete failure\./,
-        );
-        assert.equal(callCount, 1);
+    it(`${name} async complete() preserves annotation-aware exceptions`, async () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/async-complete-throw`);
+      let callCount = 0;
+      const parser = wrap({
+        mode: "async" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state: string) {
+          callCount++;
+          if (getAnnotations(state)?.[marker] === "ok") {
+            throw new Error("Annotated async complete failure.");
+          }
+          return Promise.resolve({
+            success: true as const,
+            value: "fallback-success",
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
       });
 
-      it(`${name} async complete() preserves annotation-aware exceptions`, async () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/async-complete-throw`,
-        );
-        let callCount = 0;
-        const parser = wrap({
-          mode: "async" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return Promise.resolve({
-              success: true as const,
-              next: context,
-              consumed: [],
-            });
-          },
-          complete(state: string) {
-            callCount++;
-            if (getAnnotations(state)?.[marker] === "ok") {
-              throw new Error("Annotated async complete failure.");
-            }
-            return Promise.resolve({
-              success: true as const,
-              value: "fallback-success",
-            });
-          },
-          suggest: async function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: "ok",
-        });
+      await assert.rejects(
+        () => parser.complete(outerState),
+        /Annotated async complete failure\./,
+      );
+      assert.equal(callCount, 1);
+    });
 
-        await assert.rejects(
-          () => parser.complete(outerState),
-          /Annotated async complete failure\./,
-        );
-        assert.equal(callCount, 1);
+    it(`${name} complete() retries primitive wrapper TypeErrors`, () => {
+      const marker = Symbol.for(
+        `@test/issue-594/${name}/complete-primitive-typeerror`,
+      );
+      let callCount = 0;
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: string) {
+          callCount++;
+          return {
+            success: true as const,
+            value: state.toUpperCase(),
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: true,
       });
 
-      it(`${name} complete() retries primitive wrapper TypeErrors`, () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/complete-primitive-typeerror`,
-        );
-        let callCount = 0;
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: string) {
-            callCount++;
-            return {
-              success: true as const,
-              value: state.toUpperCase(),
-            };
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: true,
-        });
+      const result = parser.complete(outerState);
 
-        const result = parser.complete(outerState);
+      assert.deepEqual(result, {
+        success: true,
+        value: "LIVE",
+      });
+      assert.equal(callCount, 2);
+    });
 
-        assert.deepEqual(result, {
-          success: true,
-          value: "LIVE",
-        });
-        assert.equal(callCount, 2);
+    it(`${name} async complete() retries primitive wrapper TypeErrors`, async () => {
+      const marker = Symbol.for(
+        `@test/issue-594/${name}/async-complete-primitive-typeerror`,
+      );
+      let callCount = 0;
+      const parser = wrap({
+        mode: "async" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state: string) {
+          callCount++;
+          return Promise.resolve({
+            success: true as const,
+            value: state.toUpperCase(),
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: true,
       });
 
-      it(`${name} async complete() retries primitive wrapper TypeErrors`, async () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/async-complete-primitive-typeerror`,
-        );
-        let callCount = 0;
-        const parser = wrap({
-          mode: "async" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return Promise.resolve({
-              success: true as const,
-              next: context,
-              consumed: [],
-            });
-          },
-          complete(state: string) {
-            callCount++;
-            return Promise.resolve({
-              success: true as const,
-              value: state.toUpperCase(),
-            });
-          },
-          suggest: async function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: true,
-        });
+      const result = await parser.complete(outerState);
 
-        const result = await parser.complete(outerState);
+      assert.deepEqual(result, {
+        success: true,
+        value: "LIVE",
+      });
+      assert.equal(callCount, 2);
+    });
 
-        assert.deepEqual(result, {
-          success: true,
-          value: "LIVE",
-        });
-        assert.equal(callCount, 2);
+    it(`${name} shouldDeferCompletion() preserves annotation-aware exceptions`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/defer-throw`);
+      let callCount = 0;
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: string) {
+          return { success: true as const, value: state };
+        },
+        shouldDeferCompletion(state: string) {
+          callCount++;
+          if (getAnnotations(state)?.[marker] === "ok") {
+            throw new Error("Annotated defer failure.");
+          }
+          return false;
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
       });
 
-      it(`${name} shouldDeferCompletion() preserves annotation-aware exceptions`, () => {
-        const marker = Symbol.for(`@test/issue-594/${name}/defer-throw`);
-        let callCount = 0;
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: string) {
-            return { success: true as const, value: state };
-          },
-          shouldDeferCompletion(state: string) {
-            callCount++;
-            if (getAnnotations(state)?.[marker] === "ok") {
-              throw new Error("Annotated defer failure.");
-            }
-            return false;
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: "ok",
-        });
+      assert.throws(
+        () => parser.shouldDeferCompletion?.(outerState),
+        /Annotated defer failure\./,
+      );
+      assert.equal(callCount, 1);
+    });
 
-        assert.throws(
-          () => parser.shouldDeferCompletion?.(outerState),
-          /Annotated defer failure\./,
-        );
-        assert.equal(callCount, 1);
+    it(`${name} shouldDeferCompletion() retries primitive wrapper TypeErrors`, () => {
+      const marker = Symbol.for(
+        `@test/issue-594/${name}/defer-primitive-typeerror`,
+      );
+      let callCount = 0;
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: string) {
+          return { success: true as const, value: state };
+        },
+        shouldDeferCompletion(state: string) {
+          callCount++;
+          return state.toUpperCase() === "LIVE";
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: true,
       });
 
-      it(`${name} shouldDeferCompletion() retries primitive wrapper TypeErrors`, () => {
-        const marker = Symbol.for(
-          `@test/issue-594/${name}/defer-primitive-typeerror`,
-        );
-        let callCount = 0;
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: "seed",
-          parse(context: ParserContext<string>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: string) {
-            return { success: true as const, value: state };
-          },
-          shouldDeferCompletion(state: string) {
-            callCount++;
-            return state.toUpperCase() === "LIVE";
-          },
-          suggest() {
-            return [];
-          },
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(["live"] as [string], {
-          [marker]: true,
-        });
+      assert.ok(parser.shouldDeferCompletion?.(outerState));
+      assert.equal(callCount, 2);
+    });
 
-        assert.ok(parser.shouldDeferCompletion?.(outerState));
-        assert.equal(callCount, 2);
+    it(`${name} complete() retries wrapped initial-state failures`, () => {
+      const seenStates: unknown[] = [];
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete(state: unknown) {
+          seenStates.push(state);
+          return state === undefined
+            ? { success: true as const, value: "resolved" }
+            : { success: false as const, error: message`Wrapped failure.` };
+        },
+        shouldDeferCompletion(state: unknown) {
+          return state === undefined;
+        },
+        suggest: function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(undefined, {
+        [Symbol.for(`@test/issue-594/${name}/wrapped-initial-complete`)]: true,
       });
 
-      it(`${name} complete() retries wrapped initial-state failures`, () => {
-        const seenStates: unknown[] = [];
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: undefined,
-          parse(context: ParserContext<unknown>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete(state: unknown) {
-            seenStates.push(state);
-            return state === undefined
+      const result = parser.complete(
+        outerState as unknown as [unknown] | undefined,
+      );
+
+      assert.deepEqual(result, {
+        success: true,
+        value: "resolved",
+      });
+      assert.deepEqual(seenStates, [outerState, undefined]);
+    });
+
+    it(`${name} async complete() retries wrapped initial-state failures`, async () => {
+      const seenStates: unknown[] = [];
+      const parser = wrap({
+        mode: "async" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state: unknown) {
+          seenStates.push(state);
+          return Promise.resolve(
+            state === undefined
               ? { success: true as const, value: "resolved" }
-              : { success: false as const, error: message`Wrapped failure.` };
-          },
-          shouldDeferCompletion(state: unknown) {
-            return state === undefined;
-          },
-          suggest: function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(undefined, {
-          [Symbol.for(`@test/issue-594/${name}/wrapped-initial-complete`)]:
-            true,
-        });
-
-        const result = parser.complete(
-          outerState as unknown as [unknown] | undefined,
-        );
-
-        assert.deepEqual(result, {
-          success: true,
-          value: "resolved",
-        });
-        assert.deepEqual(seenStates, [outerState, undefined]);
-      });
-
-      it(`${name} async complete() retries wrapped initial-state failures`, async () => {
-        const seenStates: unknown[] = [];
-        const parser = wrap({
-          mode: "async" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: undefined,
-          parse(context: ParserContext<unknown>) {
-            return Promise.resolve({
-              success: true as const,
-              next: context,
-              consumed: [],
-            });
-          },
-          complete(state: unknown) {
-            seenStates.push(state);
-            return Promise.resolve(
-              state === undefined
-                ? { success: true as const, value: "resolved" }
-                : {
+              : {
                   success: false as const,
                   error: message`Wrapped async failure.`,
                 },
-            );
-          },
-          shouldDeferCompletion(state: unknown) {
-            return state === undefined;
-          },
-          suggest: async function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-        const outerState = injectAnnotations(undefined, {
-          [
-            Symbol.for(`@test/issue-594/${name}/wrapped-initial-async-complete`)
-          ]: true,
-        });
+          );
+        },
+        shouldDeferCompletion(state: unknown) {
+          return state === undefined;
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(undefined, {
+        [Symbol.for(`@test/issue-594/${name}/wrapped-initial-async-complete`)]:
+          true,
+      });
 
-        const result = await parser.complete(
+      const result = await parser.complete(
+        outerState as unknown as [unknown] | undefined,
+      );
+
+      assert.deepEqual(result, {
+        success: true,
+        value: "resolved",
+      });
+      assert.deepEqual(seenStates, [outerState, undefined]);
+    });
+
+    it(`${name} complete() does not retry plain undefined failures`, () => {
+      let callCount = 0;
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete() {
+          callCount++;
+          return {
+            success: false as const,
+            error: message`Plain undefined failure.`,
+          };
+        },
+        shouldDeferCompletion(state: unknown) {
+          return state === undefined;
+        },
+        suggest: function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+
+      const result = parser.complete([undefined] as unknown as [unknown]);
+
+      assert.equal(callCount, 1);
+      assert.deepEqual(result, {
+        success: false,
+        error: message`Plain undefined failure.`,
+      });
+    });
+
+    it(`${name} async complete() does not retry plain undefined failures`, async () => {
+      let callCount = 0;
+      const parser = wrap({
+        mode: "async" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete() {
+          callCount++;
+          return Promise.resolve({
+            success: false as const,
+            error: message`Plain async undefined failure.`,
+          });
+        },
+        shouldDeferCompletion(state: unknown) {
+          return state === undefined;
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+
+      const result = await parser.complete([undefined] as unknown as [unknown]);
+
+      assert.equal(callCount, 1);
+      assert.deepEqual(result, {
+        success: false,
+        error: message`Plain async undefined failure.`,
+      });
+    });
+
+    it(`${name} complete() skips nested normalization when no delegated carrier is present`, () => {
+      let ownKeysCalls = 0;
+      let descriptorCalls = 0;
+      const value = new Proxy(
+        { nested: { value: "ok" } },
+        {
+          ownKeys(target) {
+            ownKeysCalls++;
+            return Reflect.ownKeys(target);
+          },
+          getOwnPropertyDescriptor(target, key) {
+            descriptorCalls++;
+            return Reflect.getOwnPropertyDescriptor(target, key);
+          },
+        },
+      );
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete() {
+          return { success: true as const, value };
+        },
+        suggest: function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+
+      const result = parser.complete(["live"] as [string]);
+
+      assert.deepEqual(result, {
+        success: true,
+        value,
+      });
+      assert.equal(ownKeysCalls, 0);
+      assert.equal(descriptorCalls, 0);
+    });
+
+    it(`${name} shouldDeferCompletion() retries wrapped initial-state false results`, () => {
+      const seenStates: unknown[] = [];
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context: ParserContext<unknown>) {
+          return { success: true as const, next: context, consumed: [] };
+        },
+        complete() {
+          return { success: true as const, value: "unused" };
+        },
+        shouldDeferCompletion(state: unknown) {
+          seenStates.push(state);
+          return state === undefined;
+        },
+        suggest: function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(undefined, {
+        [Symbol.for(`@test/issue-594/${name}/wrapped-initial-defer`)]: true,
+      });
+
+      assert.ok(
+        parser.shouldDeferCompletion?.(
           outerState as unknown as [unknown] | undefined,
-        );
-
-        assert.deepEqual(result, {
-          success: true,
-          value: "resolved",
-        });
-        assert.deepEqual(seenStates, [outerState, undefined]);
-      });
-
-      it(`${name} complete() does not retry plain undefined failures`, () => {
-        let callCount = 0;
-        const parser = wrap({
-          mode: "sync" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: undefined,
-          parse(context: ParserContext<unknown>) {
-            return { success: true as const, next: context, consumed: [] };
-          },
-          complete() {
-            callCount++;
-            return {
-              success: false as const,
-              error: message`Plain undefined failure.`,
-            };
-          },
-          shouldDeferCompletion(state: unknown) {
-            return state === undefined;
-          },
-          suggest: function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-
-        const result = parser.complete([undefined] as unknown as [unknown]);
-
-        assert.equal(callCount, 1);
-        assert.deepEqual(result, {
-          success: false,
-          error: message`Plain undefined failure.`,
-        });
-      });
-
-      it(`${name} async complete() does not retry plain undefined failures`, async () => {
-        let callCount = 0;
-        const parser = wrap({
-          mode: "async" as const,
-          $valueType: [] as const,
-          $stateType: [] as const,
-          priority: 0,
-          usage: [],
-          leadingNames: new Set<string>(),
-          acceptingAnyToken: false,
-          initialState: undefined,
-          parse(context: ParserContext<unknown>) {
-            return Promise.resolve({
-              success: true as const,
-              next: context,
-              consumed: [],
-            });
-          },
-          complete() {
-            callCount++;
-            return Promise.resolve({
-              success: false as const,
-              error: message`Plain async undefined failure.`,
-            });
-          },
-          shouldDeferCompletion(state: unknown) {
-            return state === undefined;
-          },
-          suggest: async function* () {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
-        });
-
-        const result = await parser.complete(
-          [undefined] as unknown as [unknown],
-        );
-
-        assert.equal(callCount, 1);
-        assert.deepEqual(result, {
-          success: false,
-          error: message`Plain async undefined failure.`,
-        });
-      });
-
-      it(
-        `${name} complete() skips nested normalization when no delegated carrier is present`,
-        () => {
-          let ownKeysCalls = 0;
-          let descriptorCalls = 0;
-          const value = new Proxy(
-            { nested: { value: "ok" } },
-            {
-              ownKeys(target) {
-                ownKeysCalls++;
-                return Reflect.ownKeys(target);
-              },
-              getOwnPropertyDescriptor(target, key) {
-                descriptorCalls++;
-                return Reflect.getOwnPropertyDescriptor(target, key);
-              },
-            },
-          );
-          const parser = wrap({
-            mode: "sync" as const,
-            $valueType: [] as const,
-            $stateType: [] as const,
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context: ParserContext<string>) {
-              return { success: true as const, next: context, consumed: [] };
-            },
-            complete() {
-              return { success: true as const, value };
-            },
-            suggest: function* () {},
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          });
-
-          const result = parser.complete(["live"] as [string]);
-
-          assert.deepEqual(result, {
-            success: true,
-            value,
-          });
-          assert.equal(ownKeysCalls, 0);
-          assert.equal(descriptorCalls, 0);
-        },
+        ),
       );
+      assert.deepEqual(seenStates, [outerState, undefined]);
+    });
 
-      it(
-        `${name} shouldDeferCompletion() retries wrapped initial-state false results`,
-        () => {
-          const seenStates: unknown[] = [];
-          const parser = wrap({
-            mode: "sync" as const,
-            $valueType: [] as const,
-            $stateType: [] as const,
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: undefined,
-            parse(context: ParserContext<unknown>) {
-              return { success: true as const, next: context, consumed: [] };
-            },
-            complete() {
-              return { success: true as const, value: "unused" };
-            },
-            shouldDeferCompletion(state: unknown) {
-              seenStates.push(state);
-              return state === undefined;
-            },
-            suggest: function* () {},
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          });
-          const outerState = injectAnnotations(undefined, {
-            [
-              Symbol.for(`@test/issue-594/${name}/wrapped-initial-defer`)
-            ]: true,
-          });
-
-          assert.ok(
-            parser.shouldDeferCompletion?.(
-              outerState as unknown as [unknown] | undefined,
-            ),
-          );
-          assert.deepEqual(seenStates, [outerState, undefined]);
+    it(`${name} complete() preserves delegated completion failures without retrying`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/preserve-failure`);
+      let callCount = 0;
+      const parser = wrap({
+        mode: "sync" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return { success: true as const, next: context, consumed: [] };
         },
-      );
+        complete(state: string) {
+          callCount++;
+          return getAnnotations(state)?.[marker] === "ok"
+            ? {
+                success: false as const,
+                error: message`Annotated failure.`,
+              }
+            : {
+                success: true as const,
+                value: "fallback-success",
+              };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
+      });
 
-      it(
-        `${name} complete() preserves delegated completion failures without retrying`,
-        () => {
-          const marker = Symbol.for(`@test/issue-594/${name}/preserve-failure`);
-          let callCount = 0;
-          const parser = wrap({
-            mode: "sync" as const,
-            $valueType: [] as const,
-            $stateType: [] as const,
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context: ParserContext<string>) {
-              return { success: true as const, next: context, consumed: [] };
-            },
-            complete(state: string) {
-              callCount++;
-              return getAnnotations(state)?.[marker] === "ok"
-                ? {
+      const result = parser.complete(outerState);
+
+      assert.equal(callCount, 1);
+      assert.deepEqual(result, {
+        success: false,
+        error: message`Annotated failure.`,
+      });
+    });
+
+    it(`${name} async complete() preserves delegated completion failures without retrying`, async () => {
+      const marker = Symbol.for(
+        `@test/issue-594/${name}/async-preserve-failure`,
+      );
+      let callCount = 0;
+      const parser = wrap({
+        mode: "async" as const,
+        $valueType: [] as const,
+        $stateType: [] as const,
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context: ParserContext<string>) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state: string) {
+          callCount++;
+          return Promise.resolve(
+            getAnnotations(state)?.[marker] === "ok"
+              ? {
                   success: false as const,
-                  error: message`Annotated failure.`,
+                  error: message`Annotated async failure.`,
                 }
-                : {
+              : {
                   success: true as const,
                   value: "fallback-success",
-                };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          });
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: "ok",
-          });
-
-          const result = parser.complete(outerState);
-
-          assert.equal(callCount, 1);
-          assert.deepEqual(result, {
-            success: false,
-            error: message`Annotated failure.`,
-          });
-        },
-      );
-
-      it(
-        `${name} async complete() preserves delegated completion failures without retrying`,
-        async () => {
-          const marker = Symbol.for(
-            `@test/issue-594/${name}/async-preserve-failure`,
-          );
-          let callCount = 0;
-          const parser = wrap({
-            mode: "async" as const,
-            $valueType: [] as const,
-            $stateType: [] as const,
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context: ParserContext<string>) {
-              return Promise.resolve({
-                success: true as const,
-                next: context,
-                consumed: [],
-              });
-            },
-            complete(state: string) {
-              callCount++;
-              return Promise.resolve(
-                getAnnotations(state)?.[marker] === "ok"
-                  ? {
-                    success: false as const,
-                    error: message`Annotated async failure.`,
-                  }
-                  : {
-                    success: true as const,
-                    value: "fallback-success",
-                  },
-              );
-            },
-            suggest: async function* () {},
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          });
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: "ok",
-          });
-
-          const result = await parser.complete(outerState);
-
-          assert.equal(callCount, 1);
-          assert.deepEqual(result, {
-            success: false,
-            error: message`Annotated async failure.`,
-          });
-        },
-      );
-
-      it(
-        `${name} phase-two seed extraction preserves annotation-aware completion exceptions`,
-        () => {
-          const marker = Symbol.for(`@test/issue-594/${name}/phase2-throw`);
-          let completeCalls = 0;
-          let extractCalls = 0;
-          const inner: Parser<"sync", string, string> = {
-            mode: "sync",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return {
-                success: true as const,
-                next: context,
-                consumed: [],
-              };
-            },
-            complete(state) {
-              completeCalls++;
-              if (getAnnotations(state)?.[marker] === "ok") {
-                throw new Error("Annotated phase-two completion failure.");
-              }
-              return {
-                success: false as const,
-                error: message`Missing value.`,
-              };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value(state: string | object) {
-              extractCalls++;
-              return typeof state === "string"
-                ? { value: { inner: state } }
-                : null;
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: "ok",
-          });
-
-          assert.throws(
-            () => extractPhase2Seed(parser, outerState),
-            /Annotated phase-two completion failure\./,
-          );
-          assert.equal(completeCalls, 1);
-          assert.equal(extractCalls, 0);
-        },
-      );
-
-      it(
-        `${name} async phase-two seed extraction preserves annotation-aware completion exceptions`,
-        async () => {
-          const marker = Symbol.for(
-            `@test/issue-594/${name}/async-phase2-throw`,
-          );
-          let completeCalls = 0;
-          let extractCalls = 0;
-          const inner: Parser<"async", string, string> = {
-            mode: "async",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return Promise.resolve({
-                success: true as const,
-                next: context,
-                consumed: [],
-              });
-            },
-            complete(state) {
-              completeCalls++;
-              if (getAnnotations(state)?.[marker] === "ok") {
-                throw new Error(
-                  "Annotated async phase-two completion failure.",
-                );
-              }
-              return Promise.resolve({
-                success: false as const,
-                error: message`Missing value.`,
-              });
-            },
-            suggest: async function* () {},
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value(state: string | object) {
-              extractCalls++;
-              return Promise.resolve(
-                typeof state === "string" ? { value: { inner: state } } : null,
-              );
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: "ok",
-          });
-
-          await assert.rejects(
-            () => extractPhase2Seed(parser, outerState),
-            /Annotated async phase-two completion failure\./,
-          );
-          assert.equal(completeCalls, 1);
-          assert.equal(extractCalls, 0);
-        },
-      );
-
-      it(
-        `${name} phase-two seed extraction retries primitive-wrapper extractor TypeErrors`,
-        () => {
-          let completeCalls = 0;
-          let extractCalls = 0;
-          const inner: Parser<"sync", string, string> = {
-            mode: "sync",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return {
-                success: true as const,
-                next: context,
-                consumed: [],
-              };
-            },
-            complete() {
-              completeCalls++;
-              return {
-                success: false as const,
-                error: message`Missing value.`,
-              };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value(state: string) {
-              extractCalls++;
-              return { value: state.toUpperCase() };
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [Symbol.for(`@test/issue-594/${name}/phase2-extractor-typeerror`)]:
-              true,
-          });
-
-          const seed = extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, { value: "LIVE" });
-          assert.equal(completeCalls, 2);
-          assert.equal(extractCalls, 2);
-        },
-      );
-
-      it(
-        `${name} async phase-two seed extraction retries primitive-wrapper extractor TypeErrors`,
-        async () => {
-          let completeCalls = 0;
-          let extractCalls = 0;
-          const inner: Parser<"async", string, string> = {
-            mode: "async",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return Promise.resolve({
-                success: true as const,
-                next: context,
-                consumed: [],
-              });
-            },
-            complete() {
-              completeCalls++;
-              return Promise.resolve({
-                success: false as const,
-                error: message`Missing value.`,
-              });
-            },
-            suggest: async function* () {},
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value(state: string) {
-              extractCalls++;
-              return Promise.resolve({ value: state.toUpperCase() });
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [
-              Symbol.for(
-                `@test/issue-594/${name}/async-phase2-extractor-typeerror`,
-              )
-            ]: true,
-          });
-
-          const seed = await extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, { value: "LIVE" });
-          assert.equal(completeCalls, 2);
-          assert.equal(extractCalls, 2);
-        },
-      );
-
-      it(
-        `${name} phase-two seed extraction retries null delegated seeds`,
-        () => {
-          const marker = Symbol.for(
-            `@test/issue-594/${name}/phase2-null-retry`,
-          );
-          const extractedStates: unknown[] = [];
-          const inner: Parser<"sync", string, string> = {
-            mode: "sync",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return {
-                success: true as const,
-                next: context,
-                consumed: [],
-              };
-            },
-            complete() {
-              return {
-                success: false as const,
-                error: message`Missing value.`,
-              };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value(state: string | object) {
-              extractedStates.push(state);
-              return typeof state === "string"
-                ? { value: state.toUpperCase() }
-                : null;
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: true,
-          });
-
-          const seed = extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, { value: "LIVE" });
-          assert.ok(
-            extractedStates.some((state) =>
-              getAnnotations(state)?.[marker] === true
-            ),
-          );
-          assert.ok(extractedStates.includes("live"));
-        },
-      );
-
-      it(
-        `${name} async phase-two seed extraction retries null delegated seeds`,
-        async () => {
-          const marker = Symbol.for(
-            `@test/issue-594/${name}/async-phase2-null-retry`,
-          );
-          const extractedStates: unknown[] = [];
-          const inner: Parser<"async", string, string> = {
-            mode: "async",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return Promise.resolve({
-                success: true as const,
-                next: context,
-                consumed: [],
-              });
-            },
-            complete() {
-              return Promise.resolve({
-                success: false as const,
-                error: message`Missing value.`,
-              });
-            },
-            suggest: async function* () {},
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value(state: string | object) {
-              extractedStates.push(state);
-              return Promise.resolve(
-                typeof state === "string"
-                  ? { value: state.toUpperCase() }
-                  : null,
-              );
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: true,
-          });
-
-          const seed = await extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, { value: "LIVE" });
-          assert.ok(
-            extractedStates.some((state) =>
-              getAnnotations(state)?.[marker] === true
-            ),
-          );
-          assert.ok(extractedStates.includes("live"));
-        },
-      );
-
-      it(
-        `${name} phase-two seed extraction normalizes nested annotation wrappers`,
-        () => {
-          const marker = Symbol.for(
-            `@test/issue-594/${name}/phase2-normalize`,
-          );
-          const inner: Parser<
-            "sync",
-            { readonly nested: unknown },
-            string
-          > = {
-            mode: "sync",
-            $valueType: [] as readonly { readonly nested: unknown }[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return {
-                success: true as const,
-                next: context,
-                consumed: [],
-              };
-            },
-            complete() {
-              return {
-                success: true as const,
-                value: {
-                  nested: injectAnnotations("value", { [marker]: "inner" }),
                 },
-              };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: "outer",
-          });
-
-          const seed = extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, { value: { nested: "value" } });
-        },
-      );
-
-      it(
-        `${name} async phase-two seed extraction normalizes nested annotation wrappers`,
-        async () => {
-          const marker = Symbol.for(
-            `@test/issue-594/${name}/async-phase2-normalize`,
           );
-          const inner: Parser<
-            "async",
-            { readonly nested: unknown },
-            string
-          > = {
-            mode: "async",
-            $valueType: [] as readonly { readonly nested: unknown }[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return Promise.resolve({
-                success: true as const,
-                next: context,
-                consumed: [],
-              });
-            },
-            complete() {
-              return Promise.resolve({
-                success: true as const,
-                value: {
-                  nested: injectAnnotations("value", { [marker]: "inner" }),
-                },
-              });
-            },
-            suggest: async function* () {},
-            getDocFragments() {
-              return { fragments: [] };
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      });
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
+      });
+
+      const result = await parser.complete(outerState);
+
+      assert.equal(callCount, 1);
+      assert.deepEqual(result, {
+        success: false,
+        error: message`Annotated async failure.`,
+      });
+    });
+
+    it(`${name} phase-two seed extraction preserves annotation-aware completion exceptions`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/phase2-throw`);
+      let completeCalls = 0;
+      let extractCalls = 0;
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          completeCalls++;
+          if (getAnnotations(state)?.[marker] === "ok") {
+            throw new Error("Annotated phase-two completion failure.");
+          }
+          return {
+            success: false as const,
+            error: message`Missing value.`,
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value(state: string | object) {
+          extractCalls++;
+          return typeof state === "string" ? { value: { inner: state } } : null;
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
+      });
+
+      assert.throws(
+        () => extractPhase2Seed(parser, outerState),
+        /Annotated phase-two completion failure\./,
+      );
+      assert.equal(completeCalls, 1);
+      assert.equal(extractCalls, 0);
+    });
+
+    it(`${name} async phase-two seed extraction preserves annotation-aware completion exceptions`, async () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/async-phase2-throw`);
+      let completeCalls = 0;
+      let extractCalls = 0;
+      const inner: Parser<"async", string, string> = {
+        mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state) {
+          completeCalls++;
+          if (getAnnotations(state)?.[marker] === "ok") {
+            throw new Error("Annotated async phase-two completion failure.");
+          }
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing value.`,
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value(state: string | object) {
+          extractCalls++;
+          return Promise.resolve(
+            typeof state === "string" ? { value: { inner: state } } : null,
+          );
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "ok",
+      });
+
+      await assert.rejects(
+        () => extractPhase2Seed(parser, outerState),
+        /Annotated async phase-two completion failure\./,
+      );
+      assert.equal(completeCalls, 1);
+      assert.equal(extractCalls, 0);
+    });
+
+    it(`${name} phase-two seed extraction retries primitive-wrapper extractor TypeErrors`, () => {
+      let completeCalls = 0;
+      let extractCalls = 0;
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          completeCalls++;
+          return {
+            success: false as const,
+            error: message`Missing value.`,
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value(state: string) {
+          extractCalls++;
+          return { value: state.toUpperCase() };
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [Symbol.for(`@test/issue-594/${name}/phase2-extractor-typeerror`)]:
+          true,
+      });
+
+      const seed = extractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, { value: "LIVE" });
+      assert.equal(completeCalls, 2);
+      assert.equal(extractCalls, 2);
+    });
+
+    it(`${name} async phase-two seed extraction retries primitive-wrapper extractor TypeErrors`, async () => {
+      let completeCalls = 0;
+      let extractCalls = 0;
+      const inner: Parser<"async", string, string> = {
+        mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete() {
+          completeCalls++;
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing value.`,
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value(state: string) {
+          extractCalls++;
+          return Promise.resolve({ value: state.toUpperCase() });
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [Symbol.for(
+          `@test/issue-594/${name}/async-phase2-extractor-typeerror`,
+        )]: true,
+      });
+
+      const seed = await extractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, { value: "LIVE" });
+      assert.equal(completeCalls, 2);
+      assert.equal(extractCalls, 2);
+    });
+
+    it(`${name} phase-two seed extraction retries null delegated seeds`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/phase2-null-retry`);
+      const extractedStates: unknown[] = [];
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          return {
+            success: false as const,
+            error: message`Missing value.`,
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value(state: string | object) {
+          extractedStates.push(state);
+          return typeof state === "string"
+            ? { value: state.toUpperCase() }
+            : null;
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: true,
+      });
+
+      const seed = extractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, { value: "LIVE" });
+      assert.ok(
+        extractedStates.some(
+          (state) => getAnnotations(state)?.[marker] === true,
+        ),
+      );
+      assert.ok(extractedStates.includes("live"));
+    });
+
+    it(`${name} async phase-two seed extraction retries null delegated seeds`, async () => {
+      const marker = Symbol.for(
+        `@test/issue-594/${name}/async-phase2-null-retry`,
+      );
+      const extractedStates: unknown[] = [];
+      const inner: Parser<"async", string, string> = {
+        mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: false as const,
+            error: message`Missing value.`,
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value(state: string | object) {
+          extractedStates.push(state);
+          return Promise.resolve(
+            typeof state === "string" ? { value: state.toUpperCase() } : null,
+          );
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: true,
+      });
+
+      const seed = await extractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, { value: "LIVE" });
+      assert.ok(
+        extractedStates.some(
+          (state) => getAnnotations(state)?.[marker] === true,
+        ),
+      );
+      assert.ok(extractedStates.includes("live"));
+    });
+
+    it(`${name} phase-two seed extraction normalizes nested annotation wrappers`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/phase2-normalize`);
+      const inner: Parser<"sync", { readonly nested: unknown }, string> = {
+        mode: "sync",
+        $valueType: [] as readonly { readonly nested: unknown }[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          return {
+            success: true as const,
+            value: {
+              nested: injectAnnotations("value", { [marker]: "inner" }),
             },
           };
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: "outer",
-          });
-
-          const seed = await extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, { value: { nested: "value" } });
         },
-      );
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "outer",
+      });
 
-      it(
-        `${name} phase-two seed extraction retries the extractor without retrying failed completion`,
-        () => {
-          const marker = Symbol.for(`@test/issue-594/${name}/phase2`);
-          const completedStates: unknown[] = [];
-          const extractedStates: unknown[] = [];
-          const inner: Parser<"sync", string, string> = {
-            mode: "sync",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return {
-                success: true as const,
-                next: context,
-                consumed: [],
-              };
+      const seed = extractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, { value: { nested: "value" } });
+    });
+
+    it(`${name} async phase-two seed extraction normalizes nested annotation wrappers`, async () => {
+      const marker = Symbol.for(
+        `@test/issue-594/${name}/async-phase2-normalize`,
+      );
+      const inner: Parser<"async", { readonly nested: unknown }, string> = {
+        mode: "async",
+        $valueType: [] as readonly { readonly nested: unknown }[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: true as const,
+            value: {
+              nested: injectAnnotations("value", { [marker]: "inner" }),
             },
-            complete(state) {
-              completedStates.push(state);
-              return {
+          });
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: "outer",
+      });
+
+      const seed = await extractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, { value: { nested: "value" } });
+    });
+
+    it(`${name} phase-two seed extraction retries the extractor without retrying failed completion`, () => {
+      const marker = Symbol.for(`@test/issue-594/${name}/phase2`);
+      const completedStates: unknown[] = [];
+      const extractedStates: unknown[] = [];
+      const inner: Parser<"sync", string, string> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          completedStates.push(state);
+          return {
+            success: false as const,
+            error: message`Missing value.`,
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value(state: string | object) {
+          extractedStates.push(state);
+          return typeof state === "string" ? { value: { inner: state } } : null;
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations(["live"] as [string], {
+        [marker]: true,
+      });
+
+      const seed = completeOrExtractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, {
+        value: { inner: "live" },
+      });
+      assert.ok(
+        completedStates.some(
+          (state) => getAnnotations(state)?.[marker] === true,
+        ),
+      );
+      assert.ok(!completedStates.includes("live"));
+      assert.ok(extractedStates.includes("live"));
+    });
+    it(`${name} phase-two seed extraction retries wrapped initial-state failures before the extractor`, () => {
+      let completedUnwrappedState = false;
+      let extracted = false;
+      const inner: Parser<"sync", string, undefined> = {
+        mode: "sync",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          if (state === undefined) completedUnwrappedState = true;
+          return state === undefined
+            ? { success: true as const, value: "resolved" }
+            : {
                 success: false as const,
-                error: message`Missing value.`,
+                error: message`Wrapped phase-two failure.`,
               };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value(state: string | object) {
-              extractedStates.push(state);
-              return typeof state === "string"
-                ? { value: { inner: state } }
-                : null;
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations(["live"] as [string], {
-            [marker]: true,
-          });
-
-          const seed = completeOrExtractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, {
-            value: { inner: "live" },
-          });
-          assert.ok(
-            completedStates.some((state) =>
-              getAnnotations(state)?.[marker] === true
-            ),
-          );
-          assert.ok(!completedStates.includes("live"));
-          assert.ok(extractedStates.includes("live"));
         },
-      );
-      it(
-        `${name} phase-two seed extraction retries wrapped initial-state failures before the extractor`,
-        () => {
-          let completedUnwrappedState = false;
-          let extracted = false;
-          const inner: Parser<"sync", string, undefined> = {
-            mode: "sync",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly undefined[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: undefined,
-            parse(context) {
-              return {
-                success: true as const,
-                next: context,
-                consumed: [],
-              };
-            },
-            complete(state) {
-              if (state === undefined) completedUnwrappedState = true;
-              return state === undefined
-                ? { success: true as const, value: "resolved" }
-                : {
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value() {
+          extracted = true;
+          return null;
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations([undefined] as [undefined], {
+        [Symbol.for(`@test/issue-594/${name}/wrapped-phase2`)]: true,
+      });
+
+      const seed = extractPhase2Seed(parser, outerState);
+
+      assert.deepEqual(seed, {
+        value: "resolved",
+      });
+      assert.ok(completedUnwrappedState);
+      assert.ok(!extracted);
+    });
+
+    it(`${name} async phase-two seed extraction retries wrapped initial-state failures before the extractor`, async () => {
+      let completedUnwrappedState = false;
+      let extracted = false;
+      const inner: Parser<"async", string, undefined> = {
+        mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: context,
+            consumed: [],
+          });
+        },
+        complete(state) {
+          if (state === undefined) completedUnwrappedState = true;
+          return Promise.resolve(
+            state === undefined
+              ? { success: true as const, value: "resolved" }
+              : {
                   success: false as const,
-                  error: message`Wrapped phase-two failure.`,
-                };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value() {
-              extracted = true;
-              return null;
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations([undefined] as [undefined], {
-            [Symbol.for(`@test/issue-594/${name}/wrapped-phase2`)]: true,
-          });
-
-          const seed = extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, {
-            value: "resolved",
-          });
-          assert.ok(completedUnwrappedState);
-          assert.ok(!extracted);
-        },
-      );
-
-      it(
-        `${name} async phase-two seed extraction retries wrapped initial-state failures before the extractor`,
-        async () => {
-          let completedUnwrappedState = false;
-          let extracted = false;
-          const inner: Parser<"async", string, undefined> = {
-            mode: "async",
-            $valueType: [] as readonly string[],
-            $stateType: [] as readonly undefined[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: undefined,
-            parse(context) {
-              return Promise.resolve({
-                success: true as const,
-                next: context,
-                consumed: [],
-              });
-            },
-            complete(state) {
-              if (state === undefined) completedUnwrappedState = true;
-              return Promise.resolve(
-                state === undefined
-                  ? { success: true as const, value: "resolved" }
-                  : {
-                    success: false as const,
-                    error: message`Wrapped async phase-two failure.`,
-                  },
-              );
-            },
-            suggest: async function* () {},
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          Object.defineProperty(inner, extractPhase2SeedKey, {
-            value() {
-              extracted = true;
-              return Promise.resolve(null);
-            },
-          });
-          const parser = wrap(inner);
-          const outerState = injectAnnotations([undefined] as [undefined], {
-            [Symbol.for(`@test/issue-594/${name}/wrapped-async-phase2`)]: true,
-          });
-
-          const seed = await extractPhase2Seed(parser, outerState);
-
-          assert.deepEqual(seed, {
-            value: "resolved",
-          });
-          assert.ok(completedUnwrappedState);
-          assert.ok(!extracted);
-        },
-      );
-
-      it(
-        `${name} phase-two seed extraction skips nested normalization when no delegated carrier is present`,
-        () => {
-          let ownKeysCalls = 0;
-          let descriptorCalls = 0;
-          const value = new Proxy(
-            { nested: { value: "ok" } },
-            {
-              ownKeys(target) {
-                ownKeysCalls++;
-                return Reflect.ownKeys(target);
-              },
-              getOwnPropertyDescriptor(target, key) {
-                descriptorCalls++;
-                return Reflect.getOwnPropertyDescriptor(target, key);
-              },
-            },
+                  error: message`Wrapped async phase-two failure.`,
+                },
           );
-          const inner: Parser<"sync", typeof value, string> = {
-            mode: "sync",
-            $valueType: [] as readonly (typeof value)[],
-            $stateType: [] as readonly string[],
-            priority: 0,
-            usage: [],
-            leadingNames: new Set<string>(),
-            acceptingAnyToken: false,
-            initialState: "seed",
-            parse(context) {
-              return {
-                success: true as const,
-                next: context,
-                consumed: [],
-              };
-            },
-            complete() {
-              return {
-                success: true as const,
-                value,
-              };
-            },
-            suggest() {
-              return [];
-            },
-            getDocFragments() {
-              return { fragments: [] };
-            },
-          };
-          const parser = wrap(inner);
+        },
+        suggest: async function* () {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      Object.defineProperty(inner, extractPhase2SeedKey, {
+        value() {
+          extracted = true;
+          return Promise.resolve(null);
+        },
+      });
+      const parser = wrap(inner);
+      const outerState = injectAnnotations([undefined] as [undefined], {
+        [Symbol.for(`@test/issue-594/${name}/wrapped-async-phase2`)]: true,
+      });
 
-          const seed = extractPhase2Seed(parser, ["live"]);
+      const seed = await extractPhase2Seed(parser, outerState);
 
-          assert.deepEqual(seed, {
-            value,
-          });
-          assert.equal(ownKeysCalls, 0);
-          assert.equal(descriptorCalls, 0);
+      assert.deepEqual(seed, {
+        value: "resolved",
+      });
+      assert.ok(completedUnwrappedState);
+      assert.ok(!extracted);
+    });
+
+    it(`${name} phase-two seed extraction skips nested normalization when no delegated carrier is present`, () => {
+      let ownKeysCalls = 0;
+      let descriptorCalls = 0;
+      const value = new Proxy(
+        { nested: { value: "ok" } },
+        {
+          ownKeys(target) {
+            ownKeysCalls++;
+            return Reflect.ownKeys(target);
+          },
+          getOwnPropertyDescriptor(target, key) {
+            descriptorCalls++;
+            return Reflect.getOwnPropertyDescriptor(target, key);
+          },
         },
       );
-    }
-  },
-);
+      const inner: Parser<"sync", typeof value, string> = {
+        mode: "sync",
+        $valueType: [] as readonly (typeof value)[],
+        $stateType: [] as readonly string[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set<string>(),
+        acceptingAnyToken: false,
+        initialState: "seed",
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete() {
+          return {
+            success: true as const,
+            value,
+          };
+        },
+        suggest() {
+          return [];
+        },
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
+      const parser = wrap(inner);
+
+      const seed = extractPhase2Seed(parser, ["live"]);
+
+      assert.deepEqual(seed, {
+        value,
+      });
+      assert.equal(ownKeysCalls, 0);
+      assert.equal(descriptorCalls, 0);
+    });
+  }
+});
 
 describe("leadingNames", () => {
   it("should forward from inner parser for optional()", () => {
@@ -10431,10 +10326,7 @@ describe("leadingNames", () => {
 
   it("should forward from inner parser for map()", () => {
     const inner = option("--count", integer());
-    assert.deepEqual(
-      map(inner, (n) => n * 2).leadingNames,
-      inner.leadingNames,
-    );
+    assert.deepEqual(map(inner, (n) => n * 2).leadingNames, inner.leadingNames);
   });
 
   it("should forward from inner parser for multiple()", () => {
@@ -10521,9 +10413,8 @@ describe("multiple() dependency source extraction", () => {
     });
     const parser = multiple(inner);
 
-    const result = parser.dependencyMetadata?.source?.extractSourceValue(
-      rawState,
-    );
+    const result =
+      parser.dependencyMetadata?.source?.extractSourceValue(rawState);
 
     assert.deepEqual(result, { success: true, value: "prod" });
     assert.deepEqual(visited, [rawState]);
@@ -10754,9 +10645,7 @@ describe("multiple() phase-two seed extraction", () => {
   const nestedDeferredKeys: DeferredMap = new Map<
     PropertyKey,
     DeferredMap | null
-  >(
-    [["inner", null]],
-  );
+  >([["inner", null]]);
 
   function createSyncDeferredItemParser(): Parser<"sync", unknown, string> {
     return {
@@ -10827,10 +10716,11 @@ describe("multiple() phase-two seed extraction", () => {
     assert.ok(result != null && typeof result === "object");
     assert.ok(!("then" in result), "deferred result must be resolved");
     assert.ok(!("success" in result) || result.success === true);
-    assert.deepEqual(
-      (result as { readonly value?: unknown }).value,
-      ["", { ready: false }, { inner: "", stable: "kept" }],
-    );
+    assert.deepEqual((result as { readonly value?: unknown }).value, [
+      "",
+      { ready: false },
+      { inner: "", stable: "kept" },
+    ]);
     assert.ok((result as { readonly deferred?: unknown }).deferred);
     assert.deepEqual(
       (result as { readonly deferredKeys?: unknown }).deferredKeys,
@@ -10843,9 +10733,7 @@ describe("multiple() phase-two seed extraction", () => {
 
   it("preserves deferred item metadata during sync completion", () => {
     const parser = multipleLocal(createSyncDeferredItemParser());
-    assertDeferredItems(
-      parser.complete(["scalar", "structured", "partial"]),
-    );
+    assertDeferredItems(parser.complete(["scalar", "structured", "partial"]));
   });
 
   it("preserves deferred item metadata during async completion", async () => {
@@ -10892,11 +10780,7 @@ describe("multiple() phase-two seed extraction", () => {
   it("combines non-empty sync item seeds from the seed hook", () => {
     const parser = multipleLocal(createSyncDeferredItemParser());
 
-    const seed = extractPhase2Seed(parser, [
-      "scalar",
-      "structured",
-      "partial",
-    ]);
+    const seed = extractPhase2Seed(parser, ["scalar", "structured", "partial"]);
 
     assertDeferredItems(seed);
   });
@@ -10948,10 +10832,9 @@ describe("multiple() phase-two seed extraction", () => {
     const wrappedItem = injectAnnotations("optique.json", {
       [marker]: true,
     });
-    const seed = completeOrExtractPhase2Seed(
-      multipleLocal(child, { min: 1 }),
-      [wrappedItem],
-    );
+    const seed = completeOrExtractPhase2Seed(multipleLocal(child, { min: 1 }), [
+      wrappedItem,
+    ]);
 
     assert.deepEqual(seed, { value: ["optique.json"] });
   });
@@ -11576,9 +11459,7 @@ describe("withDefault() phase-two seed extraction", () => {
 
 describe("map() phase-two seed extraction", () => {
   function createExtractOnlyParser(
-    seed:
-      | { readonly value: number; readonly deferred?: true }
-      | null,
+    seed: { readonly value: number; readonly deferred?: true } | null,
   ): Parser<"sync", number, number> {
     const parser: Parser<"sync", number, number> = {
       mode: "sync",
@@ -11613,12 +11494,9 @@ describe("map() phase-two seed extraction", () => {
   }
 
   it("propagates non-deferred transform failures", () => {
-    const parser = mapLocal(
-      createExtractOnlyParser({ value: 1 }),
-      (_value) => {
-        throw new Error("Seed transform boom.");
-      },
-    );
+    const parser = mapLocal(createExtractOnlyParser({ value: 1 }), (_value) => {
+      throw new Error("Seed transform boom.");
+    });
 
     assert.throws(
       () => completeOrExtractPhase2Seed(parser, 1),
@@ -11643,13 +11521,10 @@ describe("map() phase-two seed extraction", () => {
       },
     );
 
-    assert.deepEqual(
-      completeOrExtractPhase2Seed(parser, 1),
-      {
-        value: undefined,
-        deferred: true,
-      },
-    );
+    assert.deepEqual(completeOrExtractPhase2Seed(parser, 1), {
+      value: undefined,
+      deferred: true,
+    });
   });
 
   it("returns undefined placeholder when a mapped placeholder throws", () => {
@@ -11858,10 +11733,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
 
   describe("withDefault()", () => {
     it("forwards validation to the inner parser", () => {
-      const parser = withDefault(
-        option("-x", integer({ min: 1, max: 10 })),
-        5,
-      );
+      const parser = withDefault(option("-x", integer({ min: 1, max: 10 })), 5);
       assert.ok(typeof parser.validateValue === "function");
       const result = parser.validateValue!(99);
       assert.ok(result && typeof result === "object" && "success" in result);
@@ -11869,10 +11741,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
     });
 
     it("accepts valid values from the inner parser's type", () => {
-      const parser = withDefault(
-        option("-x", integer({ min: 1, max: 10 })),
-        5,
-      );
+      const parser = withDefault(option("-x", integer({ min: 1, max: 10 })), 5);
       const result = parser.validateValue!(7);
       assert.ok(result && typeof result === "object" && "success" in result);
       assert.ok(result.success);
@@ -12067,9 +11936,9 @@ describe("validateValue forwarding through modifiers (#414)", () => {
             input === "json" || input === "yaml"
               ? { success: true as const, value: input }
               : {
-                success: false as const,
-                error: message`Invalid value: ${text(input)}.`,
-              },
+                  success: false as const,
+                  error: message`Invalid value: ${text(input)}.`,
+                },
           );
         },
         format(value) {
@@ -12166,7 +12035,8 @@ describe("validateValue forwarding through modifiers (#414)", () => {
       const parser = multiple(option("-x", string()));
       const stringResult = parser.validateValue!("admin" as never);
       assert.ok(
-        stringResult && typeof stringResult === "object" &&
+        stringResult &&
+          typeof stringResult === "object" &&
           "success" in stringResult,
       );
       assert.ok(!stringResult.success);
@@ -12420,9 +12290,7 @@ describe("validateValue forwarding through modifiers (#414)", () => {
 
     it("nonEmpty() forwards validateValue in async mode", async () => {
       const parser = nonEmpty(
-        multiple(
-          option("--format", asyncChoice(["json", "yaml"] as const)),
-        ),
+        multiple(option("--format", asyncChoice(["json", "yaml"] as const))),
       );
       assert.ok(typeof parser.validateValue === "function");
       const result = parser.validateValue!(["json", "xml" as never]);
@@ -12561,9 +12429,8 @@ describe("deferredValue", () => {
     // fallback resolver.
     const parser = object({
       x: deferredValue(
-        map(
-          option("--value", string()),
-          (value): string | undefined => value === "none" ? undefined : value,
+        map(option("--value", string()), (value): string | undefined =>
+          value === "none" ? undefined : value,
         ),
         () => "fallback",
       ),
@@ -12784,9 +12651,8 @@ describe("deferredValue", () => {
 
     it("allows an async fallback even when the wrapped parser is sync", async () => {
       const parser = object({
-        token: deferredValue(
-          option("--token", string()),
-          () => Promise.resolve("async-fb"),
+        token: deferredValue(option("--token", string()), () =>
+          Promise.resolve("async-fb"),
         ),
       });
       const result = parse(parser, []);

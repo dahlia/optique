@@ -163,9 +163,7 @@ export interface TextConfig {
   /** Initial value pre-filled in the prompt. */
   readonly initialValue?: string;
   /** Validation function called when the user submits. */
-  readonly validate?: (
-    value: string,
-  ) => string | void | Promise<string | void>;
+  readonly validate?: (value: string) => string | void | Promise<string | void>;
   /**
    * Overrides prompt execution. Useful for testing.
    * @since 1.3.0 Added the execution context parameter.
@@ -185,9 +183,7 @@ export interface PasswordConfig {
   /** Mask character shown while typing. */
   readonly mask?: string;
   /** Validation function called when the user submits. */
-  readonly validate?: (
-    value: string,
-  ) => string | void | Promise<string | void>;
+  readonly validate?: (value: string) => string | void | Promise<string | void>;
   /**
    * Overrides prompt execution. Useful for testing.
    * @since 1.3.0 Added the execution context parameter.
@@ -234,9 +230,7 @@ export interface NumberPromptConfig {
   /** Maximum accepted value. */
   readonly max?: number;
   /** Additional validation after numeric conversion. */
-  readonly validate?: (
-    value: number,
-  ) => string | void | Promise<string | void>;
+  readonly validate?: (value: number) => string | void | Promise<string | void>;
   /**
    * Overrides prompt execution. Useful for testing.
    * @since 1.3.0 Added the execution context parameter.
@@ -356,16 +350,18 @@ export type StringPromptConfig =
  * @since 1.2.0
  * @since 1.3.0 Added conditional prompt skipping.
  */
-export type PromptConfig<T> =
-  & BasePromptConfig<Exclude<T, null | undefined>>
-  & PromptCondition<T>;
+export type PromptConfig<T> = BasePromptConfig<Exclude<T, null | undefined>> &
+  PromptCondition<T>;
 
-type BasePromptConfig<T> = T extends boolean ? ConfirmConfig
-  : T extends number ? NumberPromptConfig
-  : T extends string ? StringPromptConfig
-  : T extends readonly string[]
-    ? MultiselectConfig | AutocompleteMultiselectConfig
-  : never;
+type BasePromptConfig<T> = T extends boolean
+  ? ConfirmConfig
+  : T extends number
+    ? NumberPromptConfig
+    : T extends string
+      ? StringPromptConfig
+      : T extends readonly string[]
+        ? MultiselectConfig | AutocompleteMultiselectConfig
+        : never;
 
 /**
  * Union of every prompt configuration this package can execute,
@@ -390,18 +386,14 @@ type ClackText = (config: {
   readonly signal?: AbortSignal;
   readonly placeholder?: string;
   readonly initialValue?: string;
-  readonly validate?: (
-    value: string,
-  ) => string | void | Promise<string | void>;
+  readonly validate?: (value: string) => string | void | Promise<string | void>;
 }) => Promise<unknown>;
 
 type ClackPassword = (config: {
   readonly message: string;
   readonly signal?: AbortSignal;
   readonly mask?: string;
-  readonly validate?: (
-    value: string,
-  ) => string | void | Promise<string | void>;
+  readonly validate?: (value: string) => string | void | Promise<string | void>;
 }) => Promise<unknown>;
 
 type ClackConfirm = (config: {
@@ -425,22 +417,24 @@ type ClackMultiselect = (config: {
 }) => Promise<unknown>;
 
 type ClackAutocomplete = (
-  config:
-    & Omit<AutocompleteConfig, "type" | "options" | "validate" | "prompter">
-    & {
-      readonly options: readonly Option[];
-      readonly signal?: AbortSignal;
-      readonly validate: (value: unknown) => string | undefined;
-    },
+  config: Omit<
+    AutocompleteConfig,
+    "type" | "options" | "validate" | "prompter"
+  > & {
+    readonly options: readonly Option[];
+    readonly signal?: AbortSignal;
+    readonly validate: (value: unknown) => string | undefined;
+  },
 ) => Promise<unknown>;
 
 type ClackAutocompleteMultiselect = (
-  config:
-    & Omit<AutocompleteMultiselectConfig, "type" | "options" | "prompter">
-    & {
-      readonly options: readonly Option[];
-      readonly signal?: AbortSignal;
-    },
+  config: Omit<
+    AutocompleteMultiselectConfig,
+    "type" | "options" | "prompter"
+  > & {
+    readonly options: readonly Option[];
+    readonly signal?: AbortSignal;
+  },
 ) => Promise<unknown>;
 
 /**
@@ -490,61 +484,65 @@ export function prompt<M extends Mode, TValue, TState>(
   const promptWithAdapter = createPromptAdapter<RuntimePromptConfig>({
     execute: executePromptRaw,
     getDefaultValue: getConfigDefault,
-    ...(pendingMessage == null ? {} : {
-      async whilePending<T>(
-        work: () => Promise<T>,
-        { signal }: PromptPendingContext,
-      ): Promise<T> {
-        if (signal?.aborted) return work();
-        // Own abort cleanup rather than forwarding the signal: the parse can
-        // stop waiting before a resolver that ignores cancellation settles.
-        let finished = false;
-        let rejectCancellation!: (reason: unknown) => void;
-        const cancelled = new Promise<never>((_resolve, reject) => {
-          rejectCancellation = reject;
-        });
-        const indicator = getPromptFunctions().spinner({
-          cancelMessage: pendingMessage,
-          onCancel() {
-            if (finished) return;
-            // Clack has already stopped its timer and restored the terminal.
-            finished = true;
-            signal?.removeEventListener("abort", onAbort);
-            rejectCancellation(
-              new DOMException("Prompt cancelled.", "AbortError"),
-            );
+    ...(pendingMessage == null
+      ? {}
+      : {
+          async whilePending<T>(
+            work: () => Promise<T>,
+            { signal }: PromptPendingContext,
+          ): Promise<T> {
+            if (signal?.aborted) return work();
+            // Own abort cleanup rather than forwarding the signal: the parse can
+            // stop waiting before a resolver that ignores cancellation settles.
+            let finished = false;
+            let rejectCancellation!: (reason: unknown) => void;
+            const cancelled = new Promise<never>((_resolve, reject) => {
+              rejectCancellation = reject;
+            });
+            const indicator = getPromptFunctions().spinner({
+              cancelMessage: pendingMessage,
+              onCancel() {
+                if (finished) return;
+                // Clack has already stopped its timer and restored the terminal.
+                finished = true;
+                signal?.removeEventListener("abort", onAbort);
+                rejectCancellation(
+                  new DOMException("Prompt cancelled.", "AbortError"),
+                );
+              },
+            });
+            const finish = (outcome: "stop" | "error" | "cancel") => {
+              if (finished) return;
+              finished = true;
+              signal?.removeEventListener("abort", onAbort);
+              indicator[outcome](pendingMessage);
+            };
+            const onAbort = () => finish("cancel");
+            try {
+              indicator.start(pendingMessage);
+              signal?.addEventListener("abort", onAbort, { once: true });
+              // Native SIGINT/SIGTERM cancellation must stop waiting even when
+              // the resolver ignores cancellation. Race consumes late settlement.
+              const result = await Promise.race([work(), cancelled]);
+              finish("stop");
+              return result;
+            } catch (error) {
+              finish(signal?.aborted ? "cancel" : "error");
+              throw error;
+            } finally {
+              signal?.removeEventListener("abort", onAbort);
+            }
           },
-        });
-        const finish = (outcome: "stop" | "error" | "cancel") => {
-          if (finished) return;
-          finished = true;
-          signal?.removeEventListener("abort", onAbort);
-          indicator[outcome](pendingMessage);
-        };
-        const onAbort = () => finish("cancel");
-        try {
-          indicator.start(pendingMessage);
-          signal?.addEventListener("abort", onAbort, { once: true });
-          // Native SIGINT/SIGTERM cancellation must stop waiting even when
-          // the resolver ignores cancellation. Race consumes late settlement.
-          const result = await Promise.race([work(), cancelled]);
-          finish("stop");
-          return result;
-        } catch (error) {
-          finish(signal?.aborted ? "cancel" : "error");
-          throw error;
-        } finally {
-          signal?.removeEventListener("abort", onAbort);
-        }
-      },
-    }),
+        }),
   });
   return promptWithAdapter(parser, config, options);
 }
 
 function getConfigDefault(config: unknown): unknown {
   if (
-    config != null && typeof config === "object" && "initialValue" in config
+    config != null &&
+    typeof config === "object" &&
+    "initialValue" in config
   ) {
     return (config as { readonly initialValue?: unknown }).initialValue;
   }
@@ -569,18 +567,21 @@ async function executePromptRaw<TValue>(
     if (context.previousValidationMessage !== undefined) {
       prompts.logError(formatMessage(context.previousValidationMessage));
     }
-    const disabled = cfg.type === "autocomplete-multiselect"
-      ? getDisabledOptionValues(normalizeOptions(cfg.options))
-      : undefined;
+    const disabled =
+      cfg.type === "autocomplete-multiselect"
+        ? getDisabledOptionValues(normalizeOptions(cfg.options))
+        : undefined;
     while (true) {
       result = await executeClackPromptWithSignal(cfg, prompts, context.signal);
       if (
-        cfg.type !== "autocomplete-multiselect" || disabled === undefined ||
+        cfg.type !== "autocomplete-multiselect" ||
+        disabled === undefined ||
         !Array.isArray(result)
-      ) break;
+      )
+        break;
       // Clack can toggle a disabled initial cursor before any navigation.
-      const values = result.filter((value: unknown) =>
-        typeof value !== "string" || !disabled.has(value)
+      const values = result.filter(
+        (value: unknown) => typeof value !== "string" || !disabled.has(value),
       );
       if (cfg.required === true && result.length > 0 && values.length === 0) {
         prompts.logError("No option selected.");
@@ -629,9 +630,16 @@ async function executeClackPromptWithSignal(
 }
 
 function isPromptType(value: unknown): value is RuntimePromptConfig["type"] {
-  return value === "text" || value === "password" || value === "confirm" ||
-    value === "number" || value === "select" || value === "multiselect" ||
-    value === "autocomplete" || value === "autocomplete-multiselect";
+  return (
+    value === "text" ||
+    value === "password" ||
+    value === "confirm" ||
+    value === "number" ||
+    value === "select" ||
+    value === "multiselect" ||
+    value === "autocomplete" ||
+    value === "autocomplete-multiselect"
+  );
 }
 
 function executeClackPrompt(
@@ -759,11 +767,12 @@ function executeClackPrompt(
 function normalizeNumberResult<TValue>(
   result: unknown,
 ): ValueParserResult<TValue> {
-  const parsed = typeof result === "number" && Number.isFinite(result)
-    ? result
-    : typeof result === "string"
-    ? parseNumberPromptValue(result)
-    : null;
+  const parsed =
+    typeof result === "number" && Number.isFinite(result)
+      ? result
+      : typeof result === "string"
+        ? parseNumberPromptValue(result)
+        : null;
   if (parsed == null) {
     return { success: false, error: message`No number provided.` };
   }

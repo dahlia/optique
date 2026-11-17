@@ -15,11 +15,12 @@ for (const outer of ["object", "tuple", "concat"] as const) {
       prompter: () => Promise.resolve("fallback"),
     });
     const rest = passThrough({ format: "nextToken" });
-    const parser = outer === "object"
-      ? object({ bound, rest })
-      : outer === "tuple"
-      ? tuple([bound, rest])
-      : concat(tuple([bound]), tuple([rest]));
+    const parser =
+      outer === "object"
+        ? object({ bound, rest })
+        : outer === "tuple"
+          ? tuple([bound, rest])
+          : concat(tuple([bound]), tuple([rest]));
     const expected = await parseAsync<unknown>(cmd, ["run", "-m"]);
     assert.ok(!expected.success);
     assert.deepEqual(
@@ -40,11 +41,12 @@ for (const outer of ["object", "tuple", "concat"] as const) {
       prompter: () => Promise.resolve([]),
     });
     const known = optional(option("-m", string()));
-    const parser = outer === "object"
-      ? object({ bound, known })
-      : outer === "tuple"
-      ? tuple([bound, known])
-      : concat(tuple([bound]), tuple([known]));
+    const parser =
+      outer === "object"
+        ? object({ bound, known })
+        : outer === "tuple"
+          ? tuple([bound, known])
+          : concat(tuple([bound]), tuple([known]));
     const expected = await parseAsync<unknown>(known, ["-m"]);
     assert.ok(!expected.success);
     assert.deepEqual(

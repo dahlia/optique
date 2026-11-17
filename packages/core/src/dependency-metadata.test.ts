@@ -56,8 +56,8 @@ function createDerivedLogLevel(env: ReturnType<typeof createEnvSource>) {
 async function resolveExtractResult(
   result:
     | ReturnType<
-      NonNullable<ParserDependencyMetadata["source"]>["extractSourceValue"]
-    >
+        NonNullable<ParserDependencyMetadata["source"]>["extractSourceValue"]
+      >
     | undefined,
 ) {
   return await result;
@@ -89,9 +89,7 @@ function createDerivedFromMulti(
   });
 }
 
-function createAsyncSourceMetadata(
-  sourceId: symbol,
-): ParserDependencyMetadata {
+function createAsyncSourceMetadata(sourceId: symbol): ParserDependencyMetadata {
   return {
     source: {
       kind: "source",
@@ -100,7 +98,7 @@ function createAsyncSourceMetadata(
       async extractSourceValue(state) {
         await Promise.resolve();
         return isDependencySourceState(state) &&
-            state[dependencyId] === sourceId
+          state[dependencyId] === sourceId
           ? state.result
           : undefined;
       },
@@ -158,38 +156,32 @@ describe("extractDependencyMetadata", () => {
     if (!result.success) assert.equal(result.error, parseError);
   });
 
-  test(
-    "extractSourceValue preserves successful undefined value",
-    async () => {
-      const sourceId = Symbol("async-source");
-      const metadata = createAsyncSourceMetadata(sourceId);
-      assert.ok(metadata?.source?.extractSourceValue !== undefined);
-      const sourceState = createDependencySourceState(
-        { success: true, value: undefined },
-        sourceId,
-      );
-      const result = await resolveExtractResult(
-        metadata.source.extractSourceValue(sourceState),
-      );
-      assert.ok(result !== undefined);
-      assert.ok(result.success);
-      if (result.success) assert.equal(result.value, undefined);
-    },
-  );
+  test("extractSourceValue preserves successful undefined value", async () => {
+    const sourceId = Symbol("async-source");
+    const metadata = createAsyncSourceMetadata(sourceId);
+    assert.ok(metadata?.source?.extractSourceValue !== undefined);
+    const sourceState = createDependencySourceState(
+      { success: true, value: undefined },
+      sourceId,
+    );
+    const result = await resolveExtractResult(
+      metadata.source.extractSourceValue(sourceState),
+    );
+    assert.ok(result !== undefined);
+    assert.ok(result.success);
+    if (result.success) assert.equal(result.value, undefined);
+  });
 
-  test(
-    "extractSourceValue returns undefined for undefined input and passes through plain results",
-    () => {
-      const env = createEnvSource();
-      const metadata = extractDependencyMetadata(env);
-      assert.ok(metadata?.source?.extractSourceValue !== undefined);
-      assert.equal(metadata.source.extractSourceValue(undefined), undefined);
-      assert.deepEqual(
-        metadata.source.extractSourceValue({ success: true, value: "x" }),
-        { success: true, value: "x" },
-      );
-    },
-  );
+  test("extractSourceValue returns undefined for undefined input and passes through plain results", () => {
+    const env = createEnvSource();
+    const metadata = extractDependencyMetadata(env);
+    assert.ok(metadata?.source?.extractSourceValue !== undefined);
+    assert.equal(metadata.source.extractSourceValue(undefined), undefined);
+    assert.deepEqual(
+      metadata.source.extractSourceValue({ success: true, value: "x" }),
+      { success: true, value: "x" },
+    );
+  });
 
   test("extractSourceValue rejects malformed bare results", () => {
     const env = createEnvSource();
@@ -218,20 +210,20 @@ describe("extractDependencyMetadata", () => {
 
   test("extracts source and derived capabilities from a derived source", () => {
     const env = createEnvSource();
-    const level = dependency(env.deriveSync({
-      metavar: "LEVEL" as NonEmptyString,
-      factory: () => choice(["debug"] as const),
-      defaultValue: () => "dev" as const,
-    }));
+    const level = dependency(
+      env.deriveSync({
+        metavar: "LEVEL" as NonEmptyString,
+        factory: () => choice(["debug"] as const),
+        defaultValue: () => "dev" as const,
+      }),
+    );
 
     const metadata = extractDependencyMetadata(level);
 
     assert.ok(metadata?.source != null);
     assert.ok(metadata.derived != null);
     assert.equal(metadata.source.sourceId, level[dependencySourceId]);
-    assert.deepEqual(metadata.derived.dependencyIds, [
-      env[dependencySourceId],
-    ]);
+    assert.deepEqual(metadata.derived.dependencyIds, [env[dependencySourceId]]);
   });
 
   test("derived capability replayParse works", () => {
@@ -270,7 +262,7 @@ describe("extractDependencyMetadata", () => {
 
     assert.deepEqual(
       suggestions.flatMap((suggestion) =>
-        suggestion.kind === "literal" ? [suggestion.text] : []
+        suggestion.kind === "literal" ? [suggestion.text] : [],
       ),
       ["warn", "error"],
     );
@@ -390,10 +382,9 @@ describe("extractDependencyMetadata", () => {
     // Replay should pass the full tuple ["dev"], not just "dev".
     // If it passes "dev" (a scalar), the factory would receive "d"
     // as its first arg since spread treats a string as an iterable.
-    const result = metadata.derived.replayParse(
-      "https://dev.example.com",
-      ["dev"],
-    );
+    const result = metadata.derived.replayParse("https://dev.example.com", [
+      "dev",
+    ]);
     assert.ok(!(result instanceof Promise));
     assert.ok(result.success);
   });

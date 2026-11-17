@@ -288,10 +288,7 @@ export function loggingOptions(
       const defaultLevel = config.default ?? "info";
       validateLogLevel(defaultLevel, "default");
 
-      levelParser = withDefault(
-        option(short, long, logLevel()),
-        defaultLevel,
-      );
+      levelParser = withDefault(option(short, long, logLevel()), defaultLevel);
       break;
     }
 
@@ -318,16 +315,17 @@ export function loggingOptions(
 
     default:
       throw new TypeError(
-        `Unsupported level configuration: ${
-          String((config as Record<string, unknown>).level)
-        }.  Expected "option", "verbosity", or "debug".`,
+        `Unsupported level configuration: ${String(
+          (config as Record<string, unknown>).level,
+        )}.  Expected "option", "verbosity", or "debug".`,
       );
   }
 
   // Default log output is console
-  const defaultOutput: LogOutput = typeof outputFormatter === "function"
-    ? { type: "console", formatter: outputFormatter }
-    : { type: "console" };
+  const defaultOutput: LogOutput =
+    typeof outputFormatter === "function"
+      ? { type: "console", formatter: outputFormatter }
+      : { type: "console" };
 
   let outputParser: Parser<"sync", LogOutput, unknown>;
   if (outputEnabled) {
@@ -338,7 +336,7 @@ export function loggingOptions(
     ) as unknown as Parser<"sync", LogOutput, unknown>;
   } else if (typeof outputFormatter === "string") {
     outputParser = createTextFormatterOption(outputFormatter).map((formatter) =>
-      formatter == null ? defaultOutput : { type: "console", formatter }
+      formatter == null ? defaultOutput : { type: "console", formatter },
     );
   } else {
     outputParser = {

@@ -29,10 +29,10 @@ export interface PathErrorOptions {
   invalidExtension?:
     | Message
     | ((
-      input: string,
-      extensions: readonly string[],
-      actualExtension: string,
-    ) => Message);
+        input: string,
+        extensions: readonly string[],
+        actualExtension: string,
+      ) => Message);
 
   /**
    * Custom error message when path does not exist.
@@ -289,8 +289,7 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
     typeof options.placeholder !== "string"
   ) {
     throw new TypeError(
-      `Expected placeholder to be a string, but got ${typeof options
-        .placeholder}: ${String(options.placeholder)}.`,
+      `Expected placeholder to be a string, but got ${typeof options.placeholder}: ${String(options.placeholder)}.`,
     );
   }
   const mustExist = "mustExist" in options ? options.mustExist : false;
@@ -311,9 +310,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
         return {
           success: false,
           error: options.errors?.emptyPath
-            ? (typeof options.errors.emptyPath === "function"
+            ? typeof options.errors.emptyPath === "function"
               ? options.errors.emptyPath(input)
-              : options.errors.emptyPath)
+              : options.errors.emptyPath
             : message`Path must not be empty.`,
         };
       }
@@ -323,17 +322,17 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
         const base = /[/\\]$/.test(input) ? "" : basename(input);
         if (!extensions.some((ext) => base.endsWith(ext))) {
           const ext = extname(input);
-          const actualExt = ext ||
-            (base.startsWith(".") ? base : "no extension");
+          const actualExt =
+            ext || (base.startsWith(".") ? base : "no extension");
           return {
             success: false,
             error: options.errors?.invalidExtension
-              ? (typeof options.errors.invalidExtension === "function"
+              ? typeof options.errors.invalidExtension === "function"
                 ? options.errors.invalidExtension(input, extensions, actualExt)
-                : options.errors.invalidExtension)
-              : message`Expected file with extension ${
-                text(extensions.join(", "))
-              }, got ${text(actualExt)}.`,
+                : options.errors.invalidExtension
+              : message`Expected file with extension ${text(
+                  extensions.join(", "),
+                )}, got ${text(actualExt)}.`,
           };
         }
       }
@@ -344,9 +343,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
           return {
             success: false,
             error: options.errors?.pathAlreadyExists
-              ? (typeof options.errors.pathAlreadyExists === "function"
+              ? typeof options.errors.pathAlreadyExists === "function"
                 ? options.errors.pathAlreadyExists(input)
-                : options.errors.pathAlreadyExists)
+                : options.errors.pathAlreadyExists
               : message`Path ${text(input)} already exists.`,
           };
         }
@@ -358,9 +357,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
             return {
               success: false,
               error: options.errors?.parentNotFound
-                ? (typeof options.errors.parentNotFound === "function"
+                ? typeof options.errors.parentNotFound === "function"
                   ? options.errors.parentNotFound(parentDir)
-                  : options.errors.parentNotFound)
+                  : options.errors.parentNotFound
                 : message`Parent directory ${text(parentDir)} does not exist.`,
             };
           }
@@ -375,9 +374,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
           return {
             success: false,
             error: options.errors?.pathNotFound
-              ? (typeof options.errors.pathNotFound === "function"
+              ? typeof options.errors.pathNotFound === "function"
                 ? options.errors.pathNotFound(input)
-                : options.errors.pathNotFound)
+                : options.errors.pathNotFound
               : message`Path ${text(input)} does not exist.`,
           };
         }
@@ -388,9 +387,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
           return {
             success: false,
             error: options.errors?.notAFile
-              ? (typeof options.errors.notAFile === "function"
+              ? typeof options.errors.notAFile === "function"
                 ? options.errors.notAFile(input)
-                : options.errors.notAFile)
+                : options.errors.notAFile
               : message`Expected a file, but ${text(input)} is not a file.`,
           };
         }
@@ -398,12 +397,12 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
           return {
             success: false,
             error: options.errors?.notADirectory
-              ? (typeof options.errors.notADirectory === "function"
+              ? typeof options.errors.notADirectory === "function"
                 ? options.errors.notADirectory(input)
-                : options.errors.notADirectory)
-              : message`Expected a directory, but ${
-                text(input)
-              } is not a directory.`,
+                : options.errors.notADirectory
+              : message`Expected a directory, but ${text(
+                  input,
+                )} is not a directory.`,
           };
         }
       }
@@ -415,9 +414,9 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
           return {
             success: false,
             error: options.errors?.parentNotFound
-              ? (typeof options.errors.parentNotFound === "function"
+              ? typeof options.errors.parentNotFound === "function"
                 ? options.errors.parentNotFound(parentDir)
-                : options.errors.parentNotFound)
+                : options.errors.parentNotFound
               : message`Parent directory ${text(parentDir)} does not exist.`,
           };
         }
@@ -434,13 +433,14 @@ export function path(options: PathOptions = {}): ValueParser<"sync", string> {
         pattern: prefix,
         type: type === "either" ? "any" : type,
         extensions,
-        includeHidden: basename(prefix).startsWith(".") &&
-          basename(prefix) !== "..",
-        description: type === "directory"
-          ? message`Directory`
-          : type === "file"
-          ? message`File`
-          : message`File or directory`,
+        includeHidden:
+          basename(prefix).startsWith(".") && basename(prefix) !== "..",
+        description:
+          type === "directory"
+            ? message`Directory`
+            : type === "file"
+              ? message`File`
+              : message`File or directory`,
       };
     },
   };

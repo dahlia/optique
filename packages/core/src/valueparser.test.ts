@@ -84,9 +84,9 @@ const numberChoicesArbitrary = fc.uniqueArray(safeIntegerArbitrary, {
   minLength: 1,
 });
 const lowercaseWordArbitrary = fc.string({
-  unit: fc.integer({ min: 0x61, max: 0x7a }).map((codePoint) =>
-    String.fromCharCode(codePoint)
-  ),
+  unit: fc
+    .integer({ min: 0x61, max: 0x7a })
+    .map((codePoint) => String.fromCharCode(codePoint)),
   minLength: 1,
 });
 
@@ -123,14 +123,12 @@ describe("isValueParser", () => {
       parse: () => ({ success: true as const, value: "test" }),
       format: (v: string) => v,
     };
-    assert.throws(
-      () => isValueParser(invalidParser),
-      {
-        name: "TypeError",
-        message: "Value parser is missing the required placeholder property. " +
-          "All value parsers must define a placeholder value.",
-      },
-    );
+    assert.throws(() => isValueParser(invalidParser), {
+      name: "TypeError",
+      message:
+        "Value parser is missing the required placeholder property. " +
+        "All value parsers must define a placeholder value.",
+    });
   });
 
   it("should return false for objects missing metavar property", () => {
@@ -324,16 +322,17 @@ describe("property-based parser laws", () => {
           assert.equal(parser.format(result.value), value);
         }
 
-        const suggestions = [...parser.suggest!(prefix)].filter((
-          suggestion,
-        ) => suggestion.kind === "literal");
+        const suggestions = [...parser.suggest!(prefix)].filter(
+          (suggestion) => suggestion.kind === "literal",
+        );
         assert.ok(
           suggestions.some((suggestion) => suggestion.text === selected),
         );
         assert.ok(
-          suggestions.every((suggestion) =>
-            choices.includes(suggestion.text) &&
-            suggestion.text.startsWith(prefix)
+          suggestions.every(
+            (suggestion) =>
+              choices.includes(suggestion.text) &&
+              suggestion.text.startsWith(prefix),
           ),
         );
       }),
@@ -685,14 +684,11 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected a valid integer, but got " },
-            { type: "value", value: "invalid" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a valid integer, but got " },
+          { type: "value", value: "invalid" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -702,19 +698,16 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            {
-              type: "text",
-              text: "Expected a value greater than or equal to ",
-            },
-            { type: "text", text: "10" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "5" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Expected a value greater than or equal to ",
+          },
+          { type: "text", text: "10" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "5" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -724,16 +717,13 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected a value less than or equal to " },
-            { type: "text", text: "100" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "150" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a value less than or equal to " },
+          { type: "text", text: "100" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "150" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -743,14 +733,11 @@ describe("integer", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected a valid integer, but got " },
-            { type: "value", value: "invalid" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a valid integer, but got " },
+          { type: "value", value: "invalid" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -760,34 +747,28 @@ describe("integer", () => {
       const result1 = parser.parse("-5");
       assert.ok(!result1.success);
       if (!result1.success) {
-        assert.deepEqual(
-          result1.error,
-          [
-            {
-              type: "text",
-              text: "Expected a value greater than or equal to ",
-            },
-            { type: "text", text: "0" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "-5" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result1.error, [
+          {
+            type: "text",
+            text: "Expected a value greater than or equal to ",
+          },
+          { type: "text", text: "0" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "-5" },
+          { type: "text", text: "." },
+        ] as const);
       }
 
       const result2 = parser.parse("150");
       assert.ok(!result2.success);
       if (!result2.success) {
-        assert.deepEqual(
-          result2.error,
-          [
-            { type: "text", text: "Expected a value less than or equal to " },
-            { type: "text", text: "100" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "150" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result2.error, [
+          { type: "text", text: "Expected a value less than or equal to " },
+          { type: "text", text: "100" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "150" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
   });
@@ -918,10 +899,7 @@ describe("integer", () => {
 
   describe("contradictory min > max", () => {
     it("should throw RangeError for number mode when min > max", () => {
-      assert.throws(
-        () => integer({ min: 10, max: 5 }),
-        RangeError,
-      );
+      assert.throws(() => integer({ min: 10, max: 5 }), RangeError);
     });
 
     it("should throw RangeError for bigint mode when min > max", () => {
@@ -942,78 +920,45 @@ describe("integer", () => {
     it("should throw RangeError when fractional bounds leave no integer in range", () => {
       // 1.5 <= 1.9 so the earlier min>max check passes, but Math.ceil(1.5)=2
       // and Math.floor(1.9)=1, leaving no safe integer in [1.5, 1.9].
-      assert.throws(
-        () => integer({ min: 1.5, max: 1.9 }),
-        {
-          name: "RangeError",
-          message: /contains no safe integers/u,
-        },
-      );
+      assert.throws(() => integer({ min: 1.5, max: 1.9 }), {
+        name: "RangeError",
+        message: /contains no safe integers/u,
+      });
     });
   });
 
   describe("non-finite bounds", () => {
     it("should throw RangeError when min is NaN", () => {
-      assert.throws(
-        () => integer({ min: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => integer({ min: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when max is NaN", () => {
-      assert.throws(
-        () => integer({ max: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => integer({ max: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when min is Infinity", () => {
-      assert.throws(
-        () => integer({ min: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => integer({ min: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when min is -Infinity", () => {
-      assert.throws(
-        () => integer({ min: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => integer({ min: -Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when max is Infinity", () => {
-      assert.throws(
-        () => integer({ max: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => integer({ max: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when max is -Infinity", () => {
-      assert.throws(
-        () => integer({ max: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => integer({ max: -Infinity as never }), RangeError);
     });
   });
 
   describe("type discriminant validation", () => {
     it("should reject invalid type discriminant", () => {
-      assert.throws(
-        () => integer({ type: "num" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => integer({ type: 123 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => integer({ type: null as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => integer({ type: "" as never }),
-        TypeError,
-      );
+      assert.throws(() => integer({ type: "num" as never }), TypeError);
+      assert.throws(() => integer({ type: 123 as never }), TypeError);
+      assert.throws(() => integer({ type: null as never }), TypeError);
+      assert.throws(() => integer({ type: "" as never }), TypeError);
     });
 
     it("should accept valid type discriminant", () => {
@@ -1055,18 +1000,15 @@ describe("choice", () => {
       const result1 = parser.parse("maybe");
       assert.ok(!result1.success);
       if (!result1.success) {
-        assert.deepEqual(
-          result1.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "yes" },
-            { type: "text", text: " and " },
-            { type: "value", value: "no" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "maybe" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result1.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "yes" },
+          { type: "text", text: " and " },
+          { type: "value", value: "no" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "maybe" },
+          { type: "text", text: "." },
+        ] as const);
       }
 
       const result2 = parser.parse("YES");
@@ -1114,10 +1056,7 @@ describe("choice", () => {
     });
 
     it("should throw TypeError for empty choice list", () => {
-      assert.throws(
-        () => choice([]),
-        TypeError,
-      );
+      assert.throws(() => choice([]), TypeError);
     });
 
     it("should handle choices with special characters", () => {
@@ -1288,9 +1227,10 @@ describe("choice", () => {
         success: true,
         value: "DRY_RUN",
       });
-      assert.deepEqual([...parser.suggest!("dry-")], [
-        { kind: "literal", text: "DRY_RUN" },
-      ]);
+      assert.deepEqual(
+        [...parser.suggest!("dry-")],
+        [{ kind: "literal", text: "DRY_RUN" }],
+      );
       assert.deepEqual(parser.choices, ["DRY_RUN", "force"]);
       assert.equal(parser.placeholder, "DRY_RUN");
       assert.equal(parser.format("DRY_RUN"), "DRY_RUN");
@@ -1319,9 +1259,10 @@ describe("choice", () => {
       const parser = choice(["DRY_RUN", "DRY_RUN", "force"], { key });
 
       assert.deepEqual(parser.choices, ["DRY_RUN", "force"]);
-      assert.deepEqual([...parser.suggest!("dry_")], [
-        { kind: "literal", text: "DRY_RUN" },
-      ]);
+      assert.deepEqual(
+        [...parser.suggest!("dry_")],
+        [{ kind: "literal", text: "DRY_RUN" }],
+      );
     });
 
     it("rejects distinct choices with the same key", () => {
@@ -1409,20 +1350,17 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "alpha" },
-            { type: "text", text: ", " },
-            { type: "value", value: "beta" },
-            { type: "text", text: ", and " },
-            { type: "value", value: "gamma" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "delta" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "alpha" },
+          { type: "text", text: ", " },
+          { type: "value", value: "beta" },
+          { type: "text", text: ", and " },
+          { type: "value", value: "gamma" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "delta" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -1432,24 +1370,18 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "only" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "other" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "only" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "other" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
     it("should throw TypeError for empty choice list", () => {
-      assert.throws(
-        () => choice([] as string[]),
-        TypeError,
-      );
+      assert.throws(() => choice([] as string[]), TypeError);
     });
 
     it("should provide structured error messages for case insensitive parser", () => {
@@ -1458,18 +1390,15 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "YES" },
-            { type: "text", text: " and " },
-            { type: "value", value: "NO" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "maybe" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "YES" },
+          { type: "text", text: " and " },
+          { type: "value", value: "NO" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "maybe" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -1481,20 +1410,17 @@ describe("choice", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "High" },
-            { type: "text", text: ", " },
-            { type: "value", value: "Medium" },
-            { type: "text", text: ", and " },
-            { type: "value", value: "Low" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "none" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "High" },
+          { type: "text", text: ", " },
+          { type: "value", value: "Medium" },
+          { type: "text", text: ", and " },
+          { type: "value", value: "Low" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "none" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
   });
@@ -1517,52 +1443,31 @@ describe("choice", () => {
     });
 
     it("should reject empty string in choices", () => {
-      assert.throws(
-        () => choice(["", "value"]),
-        TypeError,
-      );
+      assert.throws(() => choice(["", "value"]), TypeError);
     });
 
     it("should reject a single empty string choice", () => {
-      assert.throws(
-        () => choice([""]),
-        TypeError,
-      );
+      assert.throws(() => choice([""]), TypeError);
     });
 
     it("should reject all-empty-string choices", () => {
-      assert.throws(
-        () => choice(["", ""]),
-        TypeError,
-      );
+      assert.throws(() => choice(["", ""]), TypeError);
     });
 
     it("should reject unsupported types like boolean", () => {
-      assert.throws(
-        () => choice([true] as never),
-        TypeError,
-      );
+      assert.throws(() => choice([true] as never), TypeError);
     });
 
     it("should reject unsupported types like object", () => {
-      assert.throws(
-        () => choice([{}] as never),
-        TypeError,
-      );
+      assert.throws(() => choice([{}] as never), TypeError);
     });
 
     it("should reject mixed string and number choices (number first)", () => {
-      assert.throws(
-        () => choice([1, "2"] as never),
-        TypeError,
-      );
+      assert.throws(() => choice([1, "2"] as never), TypeError);
     });
 
     it("should reject mixed string and number choices (string first)", () => {
-      assert.throws(
-        () => choice(["a", 1] as never),
-        TypeError,
-      );
+      assert.throws(() => choice(["a", 1] as never), TypeError);
     });
 
     it("should handle choices with unicode characters", () => {
@@ -1655,14 +1560,11 @@ describe("choice", () => {
     });
 
     it("should throw TypeError for case-insensitive choices like ['a', 'A']", () => {
-      assert.throws(
-        () => choice(["a", "A"], { caseInsensitive: true }),
-        {
-          name: "TypeError",
-          message:
-            /Ambiguous choices for case-insensitive matching:.*"a".*"A".*normalize to.*"a"/,
-        },
-      );
+      assert.throws(() => choice(["a", "A"], { caseInsensitive: true }), {
+        name: "TypeError",
+        message:
+          /Ambiguous choices for case-insensitive matching:.*"a".*"A".*normalize to.*"a"/,
+      });
     });
 
     it("should allow ['a', 'A'] without caseInsensitive", () => {
@@ -1862,13 +1764,15 @@ describe("choice", () => {
       const result = parser.parse("devo");
       assert.ok(!result.success);
       if (!result.success) {
-        const errorStr = result.error.map((t) => {
-          if (t.type === "text") return t.text;
-          if (t.type === "value") return t.value;
-          if (t.type === "optionName") return t.optionName;
-          if (t.type === "lineBreak") return "\n";
-          return "";
-        }).join("");
+        const errorStr = result.error
+          .map((t) => {
+            if (t.type === "text") return t.text;
+            if (t.type === "value") return t.value;
+            if (t.type === "optionName") return t.optionName;
+            if (t.type === "lineBreak") return "\n";
+            return "";
+          })
+          .join("");
         assert.ok(
           errorStr.includes("Did you mean"),
           `Expected "Did you mean" in error: ${errorStr}`,
@@ -1885,13 +1789,15 @@ describe("choice", () => {
       const result = parser.parse("devo");
       assert.ok(!result.success);
       if (!result.success) {
-        const errorStr = result.error.map((t) => {
-          if (t.type === "text") return t.text;
-          if (t.type === "value") return t.value;
-          if (t.type === "optionName") return t.optionName;
-          if (t.type === "lineBreak") return "\n";
-          return "";
-        }).join("");
+        const errorStr = result.error
+          .map((t) => {
+            if (t.type === "text") return t.text;
+            if (t.type === "value") return t.value;
+            if (t.type === "optionName") return t.optionName;
+            if (t.type === "lineBreak") return "\n";
+            return "";
+          })
+          .join("");
         assert.ok(
           !errorStr.includes("Did you mean"),
           `Should not contain "Did you mean": ${errorStr}`,
@@ -1904,13 +1810,15 @@ describe("choice", () => {
       const result = parser.parse("devo");
       assert.ok(!result.success);
       if (!result.success) {
-        const errorStr = result.error.map((t) => {
-          if (t.type === "text") return t.text;
-          if (t.type === "value") return t.value;
-          if (t.type === "optionName") return t.optionName;
-          if (t.type === "lineBreak") return "\n";
-          return "";
-        }).join("");
+        const errorStr = result.error
+          .map((t) => {
+            if (t.type === "text") return t.text;
+            if (t.type === "value") return t.value;
+            if (t.type === "optionName") return t.optionName;
+            if (t.type === "lineBreak") return "\n";
+            return "";
+          })
+          .join("");
         assert.ok(
           !errorStr.includes("Did you mean"),
           `Should not contain "Did you mean": ${errorStr}`,
@@ -1923,13 +1831,15 @@ describe("choice", () => {
       const result = parser.parse("devoxxx");
       assert.ok(!result.success);
       if (!result.success) {
-        const errorStr = result.error.map((t) => {
-          if (t.type === "text") return t.text;
-          if (t.type === "value") return t.value;
-          if (t.type === "optionName") return t.optionName;
-          if (t.type === "lineBreak") return "\n";
-          return "";
-        }).join("");
+        const errorStr = result.error
+          .map((t) => {
+            if (t.type === "text") return t.text;
+            if (t.type === "value") return t.value;
+            if (t.type === "optionName") return t.optionName;
+            if (t.type === "lineBreak") return "\n";
+            return "";
+          })
+          .join("");
         assert.ok(
           !errorStr.includes("Did you mean"),
           `Should not contain "Did you mean" for distant input: ${errorStr}`,
@@ -1944,13 +1854,15 @@ describe("choice", () => {
       const result = parser.parse("devo");
       assert.ok(!result.success);
       if (!result.success) {
-        const errorStr = result.error.map((t) => {
-          if (t.type === "text") return t.text;
-          if (t.type === "value") return t.value;
-          if (t.type === "optionName") return t.optionName;
-          if (t.type === "lineBreak") return "\n";
-          return "";
-        }).join("");
+        const errorStr = result.error
+          .map((t) => {
+            if (t.type === "text") return t.text;
+            if (t.type === "value") return t.value;
+            if (t.type === "optionName") return t.optionName;
+            if (t.type === "lineBreak") return "\n";
+            return "";
+          })
+          .join("");
         assert.ok(
           errorStr.includes("customHint"),
           `Expected "customHint" in error: ${errorStr}`,
@@ -1965,13 +1877,15 @@ describe("choice", () => {
       const result = parser.parse("devo");
       assert.ok(!result.success);
       if (!result.success) {
-        const errorStr = result.error.map((t) => {
-          if (t.type === "text") return t.text;
-          if (t.type === "value") return t.value;
-          if (t.type === "optionName") return t.optionName;
-          if (t.type === "lineBreak") return "\n";
-          return "";
-        }).join("");
+        const errorStr = result.error
+          .map((t) => {
+            if (t.type === "text") return t.text;
+            if (t.type === "value") return t.value;
+            if (t.type === "optionName") return t.optionName;
+            if (t.type === "lineBreak") return "\n";
+            return "";
+          })
+          .join("");
         assert.ok(
           !errorStr.includes("Did you mean"),
           `Should not contain "Did you mean": ${errorStr}`,
@@ -1980,10 +1894,10 @@ describe("choice", () => {
     });
 
     it("should throw TypeError for invalid suggest value like true", () => {
-      assert.throws(
-        () => choice(["dev", "prod"], { suggest: true as never }),
-        { name: "TypeError", message: /Expected suggest to be/i },
-      );
+      assert.throws(() => choice(["dev", "prod"], { suggest: true as never }), {
+        name: "TypeError",
+        message: /Expected suggest to be/i,
+      });
     });
 
     it("should throw TypeError for suggest string typo like nearset", () => {
@@ -1994,10 +1908,10 @@ describe("choice", () => {
     });
 
     it("should throw TypeError for suggest: 0", () => {
-      assert.throws(
-        () => choice(["dev", "prod"], { suggest: 0 as never }),
-        { name: "TypeError", message: /Expected suggest to be/i },
-      );
+      assert.throws(() => choice(["dev", "prod"], { suggest: 0 as never }), {
+        name: "TypeError",
+        message: /Expected suggest to be/i,
+      });
     });
 
     it("should throw TypeError for negative maxDistance", () => {
@@ -2086,18 +2000,15 @@ describe("choice", () => {
       const result1 = parser.parse("9");
       assert.ok(!result1.success);
       if (!result1.success) {
-        assert.deepEqual(
-          result1.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "8" },
-            { type: "text", text: " and " },
-            { type: "value", value: "10" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "9" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result1.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "8" },
+          { type: "text", text: " and " },
+          { type: "value", value: "10" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "9" },
+          { type: "text", text: "." },
+        ] as const);
       }
 
       const result2 = parser.parse("abc");
@@ -2237,10 +2148,9 @@ describe("choice", () => {
     it("should handle custom error messages for number choices", () => {
       const parser = choice([8, 10], {
         errors: {
-          invalidChoice: (
-            input,
-            _choices,
-          ) => [{ type: "text", text: `Invalid bit depth: ${input}` }],
+          invalidChoice: (input, _choices) => [
+            { type: "text", text: `Invalid bit depth: ${input}` },
+          ],
         },
       });
 
@@ -2254,18 +2164,15 @@ describe("choice", () => {
     });
 
     it("should throw TypeError for empty number choice list", () => {
-      assert.throws(
-        () => choice([] as number[]),
-        TypeError,
-      );
+      assert.throws(() => choice([] as number[]), TypeError);
     });
 
     it("should throw TypeError when any choice is NaN", () => {
       // NaN in number choices is caught at construction time, not at parse time.
-      assert.throws(
-        () => choice([NaN]),
-        { name: "TypeError", message: "NaN is not allowed in number choices." },
-      );
+      assert.throws(() => choice([NaN]), {
+        name: "TypeError",
+        message: "NaN is not allowed in number choices.",
+      });
     });
 
     it("should reject hex, binary, octal, and scientific notation", () => {
@@ -2451,18 +2358,15 @@ describe("choice", () => {
       const result2 = parser.parse("0");
       assert.ok(!result2.success);
       if (!result2.success) {
-        assert.deepEqual(
-          result2.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "-0" },
-            { type: "text", text: " and " },
-            { type: "value", value: "1" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "0" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result2.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "-0" },
+          { type: "text", text: " and " },
+          { type: "value", value: "1" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "0" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -2564,10 +2468,7 @@ describe("choice", () => {
     });
 
     it("should throw TypeError for empty choices", () => {
-      assert.throws(
-        () => choice([] as string[]),
-        TypeError,
-      );
+      assert.throws(() => choice([] as string[]), TypeError);
     });
 
     it("should expose single-element array for single choice", () => {
@@ -2590,17 +2491,13 @@ describe("choice", () => {
     it("should not produce duplicate string suggestions", () => {
       const parser = choice(["json", "json", "yaml"]);
       const suggestions = [...parser.suggest!("j")];
-      assert.deepEqual(suggestions, [
-        { kind: "literal", text: "json" },
-      ]);
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "json" }]);
     });
 
     it("should not produce duplicate number suggestions", () => {
       const parser = choice([1, 1, 2]);
       const suggestions = [...parser.suggest!("1")];
-      assert.deepEqual(suggestions, [
-        { kind: "literal", text: "1" },
-      ]);
+      assert.deepEqual(suggestions, [{ kind: "literal", text: "1" }]);
     });
 
     it("should not include duplicates in string error messages", () => {
@@ -2608,18 +2505,15 @@ describe("choice", () => {
       const result = parser.parse("xml");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "json" },
-            { type: "text", text: " and " },
-            { type: "value", value: "yaml" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "xml" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "json" },
+          { type: "text", text: " and " },
+          { type: "value", value: "yaml" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "xml" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -2628,18 +2522,15 @@ describe("choice", () => {
       const result = parser.parse("3");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected one of " },
-            { type: "value", value: "1" },
-            { type: "text", text: " and " },
-            { type: "value", value: "2" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "3" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected one of " },
+          { type: "value", value: "1" },
+          { type: "text", text: " and " },
+          { type: "value", value: "2" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "3" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -2780,9 +2671,10 @@ describe("normalizeInput", () => {
       success: true,
       value: "debug",
     });
-    assert.deepEqual([...(parser.suggest?.(" de") ?? [])], [
-      { kind: "literal", text: "debug" },
-    ]);
+    assert.deepEqual(
+      [...(parser.suggest?.(" de") ?? [])],
+      [{ kind: "literal", text: "debug" }],
+    );
     assert.deepEqual(parser.choices, ["error", "warn", "debug"]);
     assert.equal(parser.metavar, "TYPE");
     assert.equal(parser.placeholder, "error");
@@ -2915,7 +2807,7 @@ describe("normalizeInput", () => {
       metavar: "LEVEL",
       mode: "sync",
       factory: (value) =>
-        choice(value === "dev" ? ["debug"] as const : ["warn"] as const),
+        choice(value === "dev" ? (["debug"] as const) : (["warn"] as const)),
       defaultValue: () => "dev" as const,
     });
     const parser = normalizeInput(derived, (s) => s.trim());
@@ -2932,9 +2824,10 @@ describe("normalizeInput", () => {
       value: "warn",
     });
     const suggestions = [];
-    for await (
-      const suggestion of parser[suggestWithDependency]?.(" wa", "prod") ?? []
-    ) {
+    for await (const suggestion of parser[suggestWithDependency]?.(
+      " wa",
+      "prod",
+    ) ?? []) {
       suggestions.push(suggestion);
     }
     assert.deepEqual(suggestions, [{ kind: "literal", text: "warn" }]);
@@ -2948,7 +2841,7 @@ describe("normalizeInput", () => {
       metavar: "LEVEL",
       mode: "sync",
       factory: (value) =>
-        choice(value === "dev" ? ["debug"] as const : ["warn"] as const),
+        choice(value === "dev" ? (["debug"] as const) : (["warn"] as const)),
       defaultValue: () => "dev" as const,
     });
     const level = normalizeInput(derived, (input) => {
@@ -2968,9 +2861,10 @@ describe("normalizeInput", () => {
     assert.ok(!failure.success);
     assert.deepEqual(failure.error, message`Failed to normalize input.`);
     const suggestions = [];
-    for await (
-      const suggestion of level[suggestWithDependency]?.("broken", "prod") ?? []
-    ) {
+    for await (const suggestion of level[suggestWithDependency]?.(
+      "broken",
+      "prod",
+    ) ?? []) {
       suggestions.push(suggestion);
     }
     assert.deepEqual(suggestions, []);
@@ -3002,8 +2896,8 @@ describe("normalizeInput", () => {
 describe("transform", () => {
   it("should transform parsed values", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
-      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
-      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+      map: (value) => (value === "foo" ? ("FOO" as const) : ("BAR" as const)),
+      unmap: (value) => (value === "FOO" ? ("foo" as const) : ("bar" as const)),
     });
 
     const result = parser.parse("foo");
@@ -3014,8 +2908,8 @@ describe("transform", () => {
 
   it("should preserve parse failures from the inner parser", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
-      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
-      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+      map: (value) => (value === "foo" ? ("FOO" as const) : ("BAR" as const)),
+      unmap: (value) => (value === "FOO" ? ("foo" as const) : ("bar" as const)),
     });
 
     const result = parser.parse("baz");
@@ -3034,8 +2928,8 @@ describe("transform", () => {
 
   it("should format values through the inverse mapping", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
-      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
-      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+      map: (value) => (value === "foo" ? ("FOO" as const) : ("BAR" as const)),
+      unmap: (value) => (value === "FOO" ? ("foo" as const) : ("bar" as const)),
     });
 
     const formatted = parser.format("BAR");
@@ -3203,8 +3097,8 @@ describe("transform", () => {
 
   it("should transform placeholder and choices metadata", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
-      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
-      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+      map: (value) => (value === "foo" ? ("FOO" as const) : ("BAR" as const)),
+      unmap: (value) => (value === "FOO" ? ("foo" as const) : ("bar" as const)),
     });
 
     assert.equal(parser.placeholder, "FOO");
@@ -3235,8 +3129,8 @@ describe("transform", () => {
 
   it("should delegate suggestions as input strings", () => {
     const parser = transform(choice(["foo", "bar"] as const), {
-      map: (value) => value === "foo" ? "FOO" as const : "BAR" as const,
-      unmap: (value) => value === "FOO" ? "foo" as const : "bar" as const,
+      map: (value) => (value === "foo" ? ("FOO" as const) : ("BAR" as const)),
+      unmap: (value) => (value === "FOO" ? ("foo" as const) : ("bar" as const)),
     });
 
     const suggestions = [...(parser.suggest?.("f") ?? [])];
@@ -3266,13 +3160,10 @@ describe("transform", () => {
       unmap: (value) => "x".repeat(value),
     });
 
-    assert.throws(
-      () => [...(parser.suggest?.("f") ?? [])],
-      {
-        name: "TypeError",
-        message: "Synchronous mode cannot wrap AsyncIterable value.",
-      },
-    );
+    assert.throws(() => [...(parser.suggest?.("f") ?? [])], {
+      name: "TypeError",
+      message: "Synchronous mode cannot wrap AsyncIterable value.",
+    });
   });
 
   it("should preserve async value parser mode", async () => {
@@ -3325,13 +3216,10 @@ describe("transform", () => {
       unmap: (value) => "x".repeat(value),
     });
 
-    assert.throws(
-      () => parser.parse("abcd"),
-      {
-        name: "TypeError",
-        message: "Synchronous mode cannot wrap Promise value.",
-      },
-    );
+    assert.throws(() => parser.parse("abcd"), {
+      name: "TypeError",
+      message: "Synchronous mode cannot wrap Promise value.",
+    });
   });
 
   it("should reject promises from sync inner parser validation", () => {
@@ -3351,13 +3239,10 @@ describe("transform", () => {
       unmap: (value) => "x".repeat(value),
     });
 
-    assert.throws(
-      () => parser.validate?.(3),
-      {
-        name: "TypeError",
-        message: "Synchronous mode cannot wrap Promise value.",
-      },
-    );
+    assert.throws(() => parser.validate?.(3), {
+      name: "TypeError",
+      message: "Synchronous mode cannot wrap Promise value.",
+    });
   });
 
   it("should preserve deferred results when mapping throws", () => {
@@ -3487,7 +3372,7 @@ describe("transform", () => {
         ),
       defaultValue() {
         defaultCalls++;
-        return defaultCalls === 1 ? "dev" as const : "prod" as const;
+        return defaultCalls === 1 ? ("dev" as const) : ("prod" as const);
       },
     });
     const parser = transform(level, {
@@ -3503,10 +3388,7 @@ describe("transform", () => {
 
     assert.ok(result.success);
     assert.equal(result.value, "DEBUG");
-    assert.deepEqual(
-      getSnapshottedDefaultDependencyValues(result),
-      ["dev"],
-    );
+    assert.deepEqual(getSnapshottedDefaultDependencyValues(result), ["dev"]);
     assert.equal(defaultCalls, 1);
   });
 
@@ -3532,11 +3414,7 @@ describe("transform", () => {
             return value.toUpperCase() as "DEBUG" | "INFO" | "WARN" | "ERROR";
           },
           unmap(value) {
-            return value.toLowerCase() as
-              | "debug"
-              | "info"
-              | "warn"
-              | "error";
+            return value.toLowerCase() as "debug" | "info" | "warn" | "error";
           },
         }),
       ),
@@ -3570,26 +3448,17 @@ describe("transform", () => {
             return value.toUpperCase() as "DEBUG" | "INFO" | "WARN" | "ERROR";
           },
           unmap(value) {
-            return value.toLowerCase() as
-              | "debug"
-              | "info"
-              | "warn"
-              | "error";
+            return value.toLowerCase() as "debug" | "info" | "warn" | "error";
           },
         }),
       ),
     });
 
-    const suggestions = suggestSync(parser, [
-      "--mode",
-      "prod",
-      "--level",
-      "",
-    ]);
+    const suggestions = suggestSync(parser, ["--mode", "prod", "--level", ""]);
 
     assert.deepEqual(
       suggestions.map((suggestion) =>
-        suggestion.kind === "literal" ? suggestion.text : suggestion.pattern
+        suggestion.kind === "literal" ? suggestion.text : suggestion.pattern,
       ),
       ["warn", "error"],
     );
@@ -3632,7 +3501,7 @@ describe("transform", () => {
     const transformed = parser as DerivedValueParser<"sync", string, unknown>;
     const suggest = transformed[suggestWithDependency];
     assert.ok(suggest != null);
-    const suggestions = [...suggest("", undefined) as Iterable<unknown>];
+    const suggestions = [...(suggest("", undefined) as Iterable<unknown>)];
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "ctx-" }]);
   });
@@ -3681,12 +3550,10 @@ describe("biject", () => {
   });
 
   it("should preserve value types for numeric object keys", () => {
-    const parser = biject(
-      {
-        1: "one",
-        2: "two",
-      } as const,
-    );
+    const parser = biject({
+      1: "one",
+      2: "two",
+    } as const);
 
     const result = parser.parse("1");
 
@@ -3711,27 +3578,18 @@ describe("biject", () => {
   });
 
   it("should reject null or primitive mappings", () => {
-    assert.throws(
-      () => biject(null as never),
-      {
-        name: "TypeError",
-        message: "Expected object.",
-      },
-    );
-    assert.throws(
-      () => biject(42 as never),
-      {
-        name: "TypeError",
-        message: "Expected object.",
-      },
-    );
-    assert.throws(
-      () => biject("abc" as never),
-      {
-        name: "TypeError",
-        message: "Expected object.",
-      },
-    );
+    assert.throws(() => biject(null as never), {
+      name: "TypeError",
+      message: "Expected object.",
+    });
+    assert.throws(() => biject(42 as never), {
+      name: "TypeError",
+      message: "Expected object.",
+    });
+    assert.throws(() => biject("abc" as never), {
+      name: "TypeError",
+      message: "Expected object.",
+    });
   });
 
   it("should reject inputs outside the mapping keys", () => {
@@ -3905,30 +3763,21 @@ describe("biject", () => {
     });
 
     assert.equal(parser.format(second), "second");
-    assert.throws(
-      () => biject({ first: shared, second: shared }),
-      RangeError,
-    );
+    assert.throws(() => biject({ first: shared, second: shared }), RangeError);
   });
 
   it("should throw RangeError for empty mappings", () => {
-    assert.throws(
-      () => biject({}),
-      {
-        name: "RangeError",
-        message: "Expected at least one biject entry.",
-      },
-    );
+    assert.throws(() => biject({}), {
+      name: "RangeError",
+      message: "Expected at least one biject entry.",
+    });
   });
 
   it("should reject empty keys through the choice parser", () => {
-    assert.throws(
-      () => biject({ "": "empty" }),
-      {
-        name: "TypeError",
-        message: "Empty strings are not allowed as choices.",
-      },
-    );
+    assert.throws(() => biject({ "": "empty" }), {
+      name: "TypeError",
+      message: "Empty strings are not allowed as choices.",
+    });
   });
 });
 
@@ -4302,14 +4151,11 @@ describe("float", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected a valid number, but got " },
-            { type: "value", value: "invalid" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a valid number, but got " },
+          { type: "value", value: "invalid" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -4319,19 +4165,16 @@ describe("float", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            {
-              type: "text",
-              text: "Expected a value greater than or equal to ",
-            },
-            { type: "text", text: "0" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "-5.5" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Expected a value greater than or equal to ",
+          },
+          { type: "text", text: "0" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "-5.5" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -4341,16 +4184,13 @@ describe("float", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected a value less than or equal to " },
-            { type: "text", text: "100" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "150.5" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a value less than or equal to " },
+          { type: "text", text: "100" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "150.5" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
   });
@@ -4465,10 +4305,7 @@ describe("float", () => {
 
   describe("contradictory min > max", () => {
     it("should throw RangeError when min > max", () => {
-      assert.throws(
-        () => float({ min: 10, max: 5 }),
-        RangeError,
-      );
+      assert.throws(() => float({ min: 10, max: 5 }), RangeError);
     });
 
     it("should not throw when min equals max", () => {
@@ -4478,45 +4315,27 @@ describe("float", () => {
 
   describe("non-finite bounds", () => {
     it("should throw RangeError when min is NaN", () => {
-      assert.throws(
-        () => float({ min: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => float({ min: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when max is NaN", () => {
-      assert.throws(
-        () => float({ max: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => float({ max: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when min is Infinity", () => {
-      assert.throws(
-        () => float({ min: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => float({ min: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when min is -Infinity", () => {
-      assert.throws(
-        () => float({ min: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => float({ min: -Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when max is Infinity", () => {
-      assert.throws(
-        () => float({ max: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => float({ max: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when max is -Infinity", () => {
-      assert.throws(
-        () => float({ max: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => float({ max: -Infinity as never }), RangeError);
     });
   });
 });
@@ -4616,18 +4435,15 @@ describe("url", () => {
       const result3 = parser.parse("ftp://example.com");
       assert.ok(!result3.success);
       if (!result3.success) {
-        assert.deepEqual(
-          result3.error,
-          [
-            { type: "text", text: "URL protocol " },
-            { type: "value", value: "ftp:" },
-            { type: "text", text: " is not allowed. Allowed protocols: " },
-            { type: "value", value: "http:" },
-            { type: "text", text: " and " },
-            { type: "value", value: "https:" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result3.error, [
+          { type: "text", text: "URL protocol " },
+          { type: "value", value: "ftp:" },
+          { type: "text", text: " is not allowed. Allowed protocols: " },
+          { type: "value", value: "http:" },
+          { type: "text", text: " and " },
+          { type: "value", value: "https:" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -4655,13 +4471,10 @@ describe("url", () => {
     });
 
     it("should throw TypeError when empty protocol list is provided", () => {
-      assert.throws(
-        () => url({ allowedProtocols: [] }),
-        {
-          name: "TypeError",
-          message: "allowedProtocols must not be empty.",
-        },
-      );
+      assert.throws(() => url({ allowedProtocols: [] }), {
+        name: "TypeError",
+        message: "allowedProtocols must not be empty.",
+      });
     });
   });
 
@@ -4775,14 +4588,11 @@ describe("url", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Invalid URL: " },
-            { type: "value", value: "not-a-url" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Invalid URL: " },
+          { type: "value", value: "not-a-url" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -4792,16 +4602,13 @@ describe("url", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "URL protocol " },
-            { type: "value", value: "http:" },
-            { type: "text", text: " is not allowed. Allowed protocols: " },
-            { type: "value", value: "https:" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "URL protocol " },
+          { type: "value", value: "http:" },
+          { type: "text", text: " is not allowed. Allowed protocols: " },
+          { type: "value", value: "https:" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
   });
@@ -4863,75 +4670,52 @@ describe("url", () => {
 
   describe("allowedProtocols validation", () => {
     it("should reject non-string entries", () => {
-      assert.throws(
-        () => url({ allowedProtocols: [123 as never] }),
-        {
-          name: "TypeError",
-          message: /got: 123\./,
-        },
-      );
-      assert.throws(
-        () => url({ allowedProtocols: [null as never] }),
-        {
-          name: "TypeError",
-          message: /got: null\./,
-        },
-      );
-      assert.throws(
-        () => url({ allowedProtocols: [undefined as never] }),
-        {
-          name: "TypeError",
-          message: /got: undefined\./,
-        },
-      );
+      assert.throws(() => url({ allowedProtocols: [123 as never] }), {
+        name: "TypeError",
+        message: /got: 123\./,
+      });
+      assert.throws(() => url({ allowedProtocols: [null as never] }), {
+        name: "TypeError",
+        message: /got: null\./,
+      });
+      assert.throws(() => url({ allowedProtocols: [undefined as never] }), {
+        name: "TypeError",
+        message: /got: undefined\./,
+      });
     });
 
     it("should reject entries missing the trailing colon", () => {
-      assert.throws(
-        () => url({ allowedProtocols: ["https" as never] }),
-        {
-          name: "TypeError",
-          message: /got: "https"\./,
-        },
-      );
-      assert.throws(
-        () => url({ allowedProtocols: ["http" as never] }),
-        {
-          name: "TypeError",
-          message: /got: "http"\./,
-        },
-      );
+      assert.throws(() => url({ allowedProtocols: ["https" as never] }), {
+        name: "TypeError",
+        message: /got: "https"\./,
+      });
+      assert.throws(() => url({ allowedProtocols: ["http" as never] }), {
+        name: "TypeError",
+        message: /got: "http"\./,
+      });
     });
 
     it("should reject entries with :// suffix", () => {
-      assert.throws(
-        () => url({ allowedProtocols: ["https://" as never] }),
-        {
-          name: "TypeError",
-          message: /got: "https:\/\/"\./,
-        },
-      );
+      assert.throws(() => url({ allowedProtocols: ["https://" as never] }), {
+        name: "TypeError",
+        message: /got: "https:\/\/"\./,
+      });
     });
 
     it("should reject empty string", () => {
-      assert.throws(
-        () => url({ allowedProtocols: ["" as never] }),
-        {
-          name: "TypeError",
-          message: /got: ""\./,
-        },
-      );
+      assert.throws(() => url({ allowedProtocols: ["" as never] }), {
+        name: "TypeError",
+        message: /got: ""\./,
+      });
     });
 
     it("should accept valid protocol entries", () => {
       assert.doesNotThrow(() => url({ allowedProtocols: ["https:"] }));
       assert.doesNotThrow(() => url({ allowedProtocols: ["HTTP:"] }));
-      assert.doesNotThrow(
-        () => url({ allowedProtocols: ["https:", "http:", "ftp:"] }),
+      assert.doesNotThrow(() =>
+        url({ allowedProtocols: ["https:", "http:", "ftp:"] }),
       );
-      assert.doesNotThrow(
-        () => url({ allowedProtocols: ["custom+proto:"] }),
-      );
+      assert.doesNotThrow(() => url({ allowedProtocols: ["custom+proto:"] }));
     });
 
     it("should deduplicate case-only duplicates", () => {
@@ -5050,12 +4834,7 @@ describe("origin()", () => {
 
   describe("credentials", () => {
     it("should reject credentials in either mode", () => {
-      for (
-        const parser of [
-          origin(),
-          origin({ extraComponents: "reject" }),
-        ]
-      ) {
+      for (const parser of [origin(), origin({ extraComponents: "reject" })]) {
         const result = parser.parse("https://user:pw@example.com/");
         assert.ok(!result.success);
       }
@@ -5101,13 +4880,11 @@ describe("origin()", () => {
   describe("opaque origins", () => {
     it("should reject schemes that have no origin", () => {
       const parser = origin();
-      for (
-        const input of [
-          "mailto:user@example.com",
-          "data:text/plain,hi",
-          "file:///tmp/example",
-        ]
-      ) {
+      for (const input of [
+        "mailto:user@example.com",
+        "data:text/plain,hi",
+        "file:///tmp/example",
+      ]) {
         assert.ok(!parser.parse(input).success, `Should reject ${input}`);
       }
     });
@@ -5121,13 +4898,11 @@ describe("origin()", () => {
   describe("allowedProtocols", () => {
     it("should accept any scheme with a tuple origin by default", () => {
       const parser = origin();
-      for (
-        const input of [
-          "ftp://example.com",
-          "ws://example.com",
-          "wss://example.com",
-        ]
-      ) {
+      for (const input of [
+        "ftp://example.com",
+        "ws://example.com",
+        "wss://example.com",
+      ]) {
         assert.ok(parser.parse(input).success, `Should accept ${input}`);
       }
     });
@@ -5138,18 +4913,15 @@ describe("origin()", () => {
       const result = parser.parse("ftp://example.com");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "URL protocol " },
-            { type: "value", value: "ftp:" },
-            { type: "text", text: " is not allowed. Allowed protocols: " },
-            { type: "value", value: "http:" },
-            { type: "text", text: " and " },
-            { type: "value", value: "https:" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "URL protocol " },
+          { type: "value", value: "ftp:" },
+          { type: "text", text: " is not allowed. Allowed protocols: " },
+          { type: "value", value: "http:" },
+          { type: "text", text: " and " },
+          { type: "value", value: "https:" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -5264,17 +5036,15 @@ describe("origin()", () => {
 
   describe("option validation", () => {
     it("should throw TypeError for an unknown extraComponents value", () => {
-      assert.throws(
-        () => origin({ extraComponents: "keep" as never }),
-        { name: "TypeError" },
-      );
+      assert.throws(() => origin({ extraComponents: "keep" as never }), {
+        name: "TypeError",
+      });
     });
 
     it("should throw TypeError for an unknown trailingDot value", () => {
-      assert.throws(
-        () => origin({ trailingDot: "remove" as never }),
-        { name: "TypeError" },
-      );
+      assert.throws(() => origin({ trailingDot: "remove" as never }), {
+        name: "TypeError",
+      });
     });
   });
 
@@ -5341,13 +5111,10 @@ describe("origin()", () => {
       const result = parser.parse("nope");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Bad origin " },
-            { type: "value", value: "nope" },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Bad origin " },
+          { type: "value", value: "nope" },
+        ] as const);
       }
     });
 
@@ -5359,13 +5126,10 @@ describe("origin()", () => {
       const result = parser.parse("http://example.com");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "No " },
-            { type: "value", value: "http:" },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "No " },
+          { type: "value", value: "http:" },
+        ] as const);
       }
     });
   });
@@ -5580,10 +5344,7 @@ describe("locale", () => {
     it("should handle private use subtags", () => {
       const parser = locale({});
 
-      const privateUseCases = [
-        "en-x-private",
-        "en-US-x-private",
-      ];
+      const privateUseCases = ["en-x-private", "en-US-x-private"];
 
       for (const privateUse of privateUseCases) {
         const result = parser.parse(privateUse);
@@ -5600,11 +5361,7 @@ describe("locale", () => {
     it("should handle grandfathered locale tags", () => {
       const parser = locale({});
 
-      const grandfatheredCases = [
-        "i-default",
-        "i-klingon",
-        "art-lojban",
-      ];
+      const grandfatheredCases = ["i-default", "i-klingon", "art-lojban"];
 
       for (const grandfathered of grandfatheredCases) {
         const result = parser.parse(grandfathered);
@@ -5684,14 +5441,11 @@ describe("locale", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Invalid locale: " },
-            { type: "value", value: "x-private-only" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Invalid locale: " },
+          { type: "value", value: "x-private-only" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -5709,12 +5463,7 @@ describe("locale", () => {
     it("should provide structured error messages for malformed locales", () => {
       const parser = locale({});
 
-      const malformedLocales = [
-        "en-",
-        "-US",
-        "en--US",
-        "toolongcode",
-      ];
+      const malformedLocales = ["en-", "-US", "en--US", "toolongcode"];
 
       for (const malformed of malformedLocales) {
         const result = parser.parse(malformed);
@@ -5723,14 +5472,11 @@ describe("locale", () => {
           `Should reject malformed locale ${malformed}`,
         );
         if (!result.success) {
-          assert.deepEqual(
-            result.error,
-            [
-              { type: "text", text: "Invalid locale: " },
-              { type: "value", value: malformed },
-              { type: "text", text: "." },
-            ] as const,
-          );
+          assert.deepEqual(result.error, [
+            { type: "text", text: "Invalid locale: " },
+            { type: "value", value: malformed },
+            { type: "text", text: "." },
+          ] as const);
         }
       }
     });
@@ -5955,32 +5701,26 @@ describe("uuid", () => {
       const result1 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
       assert.ok(!result1.success);
       if (!result1.success) {
-        assert.deepEqual(
-          result1.error,
-          [
-            { type: "text", text: "Expected UUID version " },
-            { type: "value", value: "4" },
-            { type: "text", text: ", but got version " },
-            { type: "value", value: "1" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result1.error, [
+          { type: "text", text: "Expected UUID version " },
+          { type: "value", value: "4" },
+          { type: "text", text: ", but got version " },
+          { type: "value", value: "1" },
+          { type: "text", text: "." },
+        ] as const);
       }
 
       // UUID v5 (name-based with SHA-1)
       const result2 = parser.parse("6ba7b815-9dad-51d1-80b4-00c04fd430c8");
       assert.ok(!result2.success);
       if (!result2.success) {
-        assert.deepEqual(
-          result2.error,
-          [
-            { type: "text", text: "Expected UUID version " },
-            { type: "value", value: "4" },
-            { type: "text", text: ", but got version " },
-            { type: "value", value: "5" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result2.error, [
+          { type: "text", text: "Expected UUID version " },
+          { type: "value", value: "4" },
+          { type: "text", text: ", but got version " },
+          { type: "value", value: "5" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6003,20 +5743,17 @@ describe("uuid", () => {
       const result4 = parser.parse("6ba7b813-9dad-31d1-80b4-00c04fd430c8");
       assert.ok(!result4.success);
       if (!result4.success) {
-        assert.deepEqual(
-          result4.error,
-          [
-            { type: "text", text: "Expected UUID version " },
-            { type: "value", value: "1" },
-            { type: "text", text: ", " },
-            { type: "value", value: "4" },
-            { type: "text", text: ", or " },
-            { type: "value", value: "5" },
-            { type: "text", text: ", but got version " },
-            { type: "value", value: "3" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result4.error, [
+          { type: "text", text: "Expected UUID version " },
+          { type: "value", value: "1" },
+          { type: "text", text: ", " },
+          { type: "value", value: "4" },
+          { type: "text", text: ", or " },
+          { type: "value", value: "5" },
+          { type: "text", text: ", but got version " },
+          { type: "value", value: "3" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6094,16 +5831,13 @@ describe("uuid", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected a valid UUID in format " },
-            { type: "value", value: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "not-a-uuid" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a valid UUID in format " },
+          { type: "value", value: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "not-a-uuid" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6113,16 +5847,13 @@ describe("uuid", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected UUID version " },
-            { type: "value", value: "4" },
-            { type: "text", text: ", but got version " },
-            { type: "value", value: "5" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected UUID version " },
+          { type: "value", value: "4" },
+          { type: "text", text: ", but got version " },
+          { type: "value", value: "5" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6132,18 +5863,15 @@ describe("uuid", () => {
 
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected UUID version " },
-            { type: "value", value: "1" },
-            { type: "text", text: ", or " },
-            { type: "value", value: "4" },
-            { type: "text", text: ", but got version " },
-            { type: "value", value: "5" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected UUID version " },
+          { type: "value", value: "1" },
+          { type: "text", text: ", or " },
+          { type: "value", value: "4" },
+          { type: "text", text: ", but got version " },
+          { type: "value", value: "5" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
   });
@@ -6178,19 +5906,16 @@ describe("uuid", () => {
       for (const digit of hexDigits) {
         const input = `6ba7b800-9dad-${digit}1d1-80b4-00c04fd430c8` as const;
         const result = parser.parse(input);
-        assert.ok(
-          !result.success,
-          `Should reject version ${digit}: ${input}`,
-        );
+        assert.ok(!result.success, `Should reject version ${digit}: ${input}`);
       }
     });
 
     it("should accept versions 1 through 8 by default", () => {
       const parser = uuid({});
       for (let v = 1; v <= 8; v++) {
-        const input = `6ba7b800-9dad-${
-          v.toString(16)
-        }1d1-80b4-00c04fd430c8` as const;
+        const input = `6ba7b800-9dad-${v.toString(
+          16,
+        )}1d1-80b4-00c04fd430c8` as const;
         const result = parser.parse(input);
         assert.ok(result.success, `Should accept version ${v}: ${input}`);
       }
@@ -6202,10 +5927,7 @@ describe("uuid", () => {
       for (const v of invalidVariants) {
         const input = `550e8400-e29b-41d4-${v}716-446655440000` as const;
         const result = parser.parse(input);
-        assert.ok(
-          !result.success,
-          `Should reject variant ${v}: ${input}`,
-        );
+        assert.ok(!result.success, `Should reject variant ${v}: ${input}`);
       }
     });
 
@@ -6215,10 +5937,7 @@ describe("uuid", () => {
       for (const v of validVariants) {
         const input = `550e8400-e29b-41d4-${v}716-446655440000` as const;
         const result = parser.parse(input);
-        assert.ok(
-          result.success,
-          `Should accept variant ${v}: ${input}`,
-        );
+        assert.ok(result.success, `Should accept variant ${v}: ${input}`);
       }
     });
 
@@ -6319,12 +6038,8 @@ describe("uuid", () => {
 
     it("should accept nil and max UUIDs with allowedVersions and strict: false", () => {
       const parser = uuid({ allowedVersions: [4], strict: false });
-      assert.ok(
-        parser.parse("00000000-0000-0000-0000-000000000000").success,
-      );
-      assert.ok(
-        parser.parse("ffffffff-ffff-ffff-ffff-ffffffffffff").success,
-      );
+      assert.ok(parser.parse("00000000-0000-0000-0000-000000000000").success);
+      assert.ok(parser.parse("ffffffff-ffff-ffff-ffff-ffffffffffff").success);
     });
 
     it("should reject non-RFC variant in default strict mode (issue #334)", () => {
@@ -6333,39 +6048,31 @@ describe("uuid", () => {
       const r1 = parser.parse("123e4567-e89b-12d3-c456-426614174000");
       assert.ok(!r1.success);
       if (!r1.success) {
-        assert.deepEqual(
-          r1.error,
-          [
-            {
-              type: "text",
-              text:
-                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
-            },
-            { type: "value", value: "c" },
-            { type: "text", text: " in " },
-            { type: "value", value: "123e4567-e89b-12d3-c456-426614174000" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(r1.error, [
+          {
+            type: "text",
+            text: "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+          },
+          { type: "value", value: "c" },
+          { type: "text", text: " in " },
+          { type: "value", value: "123e4567-e89b-12d3-c456-426614174000" },
+          { type: "text", text: "." },
+        ] as const);
       }
       // variant 'f' is outside RFC 9562 set
       const r2 = parser.parse("123e4567-e89b-12d3-f456-426614174000");
       assert.ok(!r2.success);
       if (!r2.success) {
-        assert.deepEqual(
-          r2.error,
-          [
-            {
-              type: "text",
-              text:
-                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
-            },
-            { type: "value", value: "f" },
-            { type: "text", text: " in " },
-            { type: "value", value: "123e4567-e89b-12d3-f456-426614174000" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(r2.error, [
+          {
+            type: "text",
+            text: "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+          },
+          { type: "value", value: "f" },
+          { type: "text", text: " in " },
+          { type: "value", value: "123e4567-e89b-12d3-f456-426614174000" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6375,20 +6082,16 @@ describe("uuid", () => {
       const result = parser.parse("123e4567-e89b-12d3-f456-426614174000");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            {
-              type: "text",
-              text:
-                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
-            },
-            { type: "value", value: "f" },
-            { type: "text", text: " in " },
-            { type: "value", value: "123e4567-e89b-12d3-f456-426614174000" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+          },
+          { type: "value", value: "f" },
+          { type: "text", text: " in " },
+          { type: "value", value: "123e4567-e89b-12d3-f456-426614174000" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6397,20 +6100,16 @@ describe("uuid", () => {
       const result = parser.parse("550e8400-e29b-41d4-0716-446655440000");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            {
-              type: "text",
-              text:
-                "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
-            },
-            { type: "value", value: "0" },
-            { type: "text", text: " in " },
-            { type: "value", value: "550e8400-e29b-41d4-0716-446655440000" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Expected RFC 9562 variant (8, 9, a, or b at position 20), but got ",
+          },
+          { type: "value", value: "0" },
+          { type: "text", text: " in " },
+          { type: "value", value: "550e8400-e29b-41d4-0716-446655440000" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6419,17 +6118,14 @@ describe("uuid", () => {
       const result = parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            {
-              type: "text",
-              text: "Expected UUID version 1 through 8, but got version ",
-            },
-            { type: "value", value: "0" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Expected UUID version 1 through 8, but got version ",
+          },
+          { type: "value", value: "0" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -6469,30 +6165,17 @@ describe("uuid", () => {
       const options: { strict: boolean } = { strict: false };
       const parser = uuid(options);
       // v0 UUID should pass with strict: false
-      assert.ok(
-        parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8").success,
-      );
+      assert.ok(parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8").success);
       // Mutate strict after construction
       options.strict = true;
       // Parser should still accept v0
-      assert.ok(
-        parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8").success,
-      );
+      assert.ok(parser.parse("6ba7b800-9dad-01d1-80b4-00c04fd430c8").success);
     });
 
     it("should reject non-boolean strict option", () => {
-      assert.throws(
-        () => uuid({ strict: 1 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => uuid({ strict: "true" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => uuid({ strict: 0 as never }),
-        TypeError,
-      );
+      assert.throws(() => uuid({ strict: 1 as never }), TypeError);
+      assert.throws(() => uuid({ strict: "true" as never }), TypeError);
+      assert.throws(() => uuid({ strict: 0 as never }), TypeError);
     });
 
     it("should snapshot errors.invalidVariant at construction time", () => {
@@ -6628,22 +6311,14 @@ describe("uuid", () => {
       const versions: number[] = [4];
       const parser = uuid({ allowedVersions: versions });
       // v4 UUID should pass
-      assert.ok(
-        parser.parse("550e8400-e29b-41d4-a716-446655440000").success,
-      );
+      assert.ok(parser.parse("550e8400-e29b-41d4-a716-446655440000").success);
       // v1 UUID should fail
-      assert.ok(
-        !parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
-      );
+      assert.ok(!parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success);
       // Mutate versions after construction
       versions[0] = 1;
       // Parser should still accept v4 and reject v1
-      assert.ok(
-        parser.parse("550e8400-e29b-41d4-a716-446655440000").success,
-      );
-      assert.ok(
-        !parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success,
-      );
+      assert.ok(parser.parse("550e8400-e29b-41d4-a716-446655440000").success);
+      assert.ok(!parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8").success);
     });
 
     it("should snapshot errors.invalidUuid at construction time", () => {
@@ -6669,15 +6344,11 @@ describe("uuid", () => {
         errors: errors as never,
       });
       // v1 UUID triggers disallowedVersion
-      const result = parser.parse(
-        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-      );
+      const result = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
       assert.ok(!result.success);
       if (!result.success) assert.equal(result.error, "original error");
       errors.disallowedVersion = "mutated error";
-      const result2 = parser.parse(
-        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-      );
+      const result2 = parser.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8");
       assert.ok(!result2.success);
       if (!result2.success) assert.equal(result2.error, "original error");
     });
@@ -6706,9 +6377,9 @@ describe("error customization", () => {
         pattern: /^\d+$/,
         errors: {
           patternMismatch: (input, pattern) =>
-            message`Value ${input} does not match pattern ${
-              text(pattern.source)
-            }.`,
+            message`Value ${input} does not match pattern ${text(
+              pattern.source,
+            )}.`,
         },
       });
 
@@ -6778,9 +6449,9 @@ describe("error customization", () => {
         min: 10,
         errors: {
           belowMinimum: (value, min) =>
-            message`Value ${text(value.toString())} is too small (minimum: ${
-              text(min.toString())
-            }).`,
+            message`Value ${text(value.toString())} is too small (minimum: ${text(
+              min.toString(),
+            )}).`,
         },
       });
 
@@ -6800,9 +6471,9 @@ describe("error customization", () => {
         max: 100,
         errors: {
           aboveMaximum: (value, max) =>
-            message`Value ${text(value.toString())} exceeds maximum of ${
-              text(max.toString())
-            }.`,
+            message`Value ${text(value.toString())} exceeds maximum of ${text(
+              max.toString(),
+            )}.`,
         },
       });
 
@@ -6838,9 +6509,9 @@ describe("error customization", () => {
         min: 0.5,
         errors: {
           belowMinimum: (value, min) =>
-            message`${
-              text(value.toString())
-            } is below the minimum threshold of ${text(min.toString())}.`,
+            message`${text(
+              value.toString(),
+            )} is below the minimum threshold of ${text(min.toString())}.`,
         },
       });
 
@@ -6859,9 +6530,9 @@ describe("error customization", () => {
         max: 10.0,
         errors: {
           aboveMaximum: (value, max) =>
-            message`${text(value.toString())} exceeds the maximum limit of ${
-              text(max.toString())
-            }.`,
+            message`${text(value.toString())} exceeds the maximum limit of ${text(
+              max.toString(),
+            )}.`,
         },
       });
 
@@ -6896,9 +6567,9 @@ describe("error customization", () => {
         allowedProtocols: ["https:"],
         errors: {
           disallowedProtocol: (protocol, allowedProtocols) =>
-            message`Protocol ${protocol} not allowed. Use: ${
-              values(allowedProtocols)
-            }.`,
+            message`Protocol ${protocol} not allowed. Use: ${values(
+              allowedProtocols,
+            )}.`,
         },
       });
 
@@ -6966,11 +6637,11 @@ describe("error customization", () => {
         allowedVersions: [4],
         errors: {
           disallowedVersion: (version, allowedVersions) =>
-            message`UUID version ${
-              text(version.toString())
-            } not supported. Need version ${
-              values(allowedVersions.map((v) => v.toString()))
-            }.`,
+            message`UUID version ${text(
+              version.toString(),
+            )} not supported. Need version ${values(
+              allowedVersions.map((v) => v.toString()),
+            )}.`,
         },
       });
 
@@ -7006,9 +6677,10 @@ describe("error customization", () => {
       assert.ok(!result2.success);
       // Should use default error message for belowMinimum
       assert.ok(
-        result2.error.some((term) =>
-          term.type === "text" &&
-          term.text.includes("Expected a value greater than or equal to")
+        result2.error.some(
+          (term) =>
+            term.type === "text" &&
+            term.text.includes("Expected a value greater than or equal to"),
         ),
       );
     });
@@ -7020,9 +6692,10 @@ describe("error customization", () => {
       assert.ok(!result.success);
       // Should use default error message
       assert.ok(
-        result.error.some((term) =>
-          term.type === "text" &&
-          term.text.includes("Expected a value greater than or equal to")
+        result.error.some(
+          (term) =>
+            term.type === "text" &&
+            term.text.includes("Expected a value greater than or equal to"),
         ),
       );
     });
@@ -7037,9 +6710,9 @@ describe("ValueParser suggest() methods", () => {
       });
 
       const suggestions = Array.from(parser.suggest!("ht"));
-      const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
-      ).sort();
+      const texts = suggestions
+        .map((s) => (s.kind === "literal" ? s.text : s.pattern || ""))
+        .sort();
 
       assert.deepEqual(texts, ["http://", "https://"]);
     });
@@ -7050,9 +6723,9 @@ describe("ValueParser suggest() methods", () => {
       });
 
       const suggestions = Array.from(parser.suggest!("h"));
-      const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
-      ).sort();
+      const texts = suggestions
+        .map((s) => (s.kind === "literal" ? s.text : s.pattern || ""))
+        .sort();
 
       assert.deepEqual(texts, ["http://", "https://"]);
     });
@@ -7079,9 +6752,9 @@ describe("ValueParser suggest() methods", () => {
       });
 
       const suggestions = Array.from(parser.suggest!("ht"));
-      const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
-      ).sort();
+      const texts = suggestions
+        .map((s) => (s.kind === "literal" ? s.text : s.pattern || ""))
+        .sort();
 
       assert.deepEqual(texts, ["http://", "https://"]);
     });
@@ -7093,19 +6766,19 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("m"));
       const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
       assert.deepEqual(texts, ["mailto:"]);
 
       const suggestions2 = Array.from(parser.suggest!("u"));
       const texts2 = suggestions2.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
       assert.deepEqual(texts2, ["urn:"]);
 
       const suggestions3 = Array.from(parser.suggest!("h"));
       const texts3 = suggestions3.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
       assert.deepEqual(texts3, ["https://"]);
     });
@@ -7115,14 +6788,8 @@ describe("ValueParser suggest() methods", () => {
         allowedProtocols: ["mailto:", "https:"],
       });
 
-      assert.deepEqual(
-        Array.from(parser.suggest!("mailto:someone")),
-        [],
-      );
-      assert.deepEqual(
-        Array.from(parser.suggest!("https:")),
-        [],
-      );
+      assert.deepEqual(Array.from(parser.suggest!("mailto:someone")), []);
+      assert.deepEqual(Array.from(parser.suggest!("https:")), []);
     });
   });
 
@@ -7132,7 +6799,7 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("en"));
       const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
 
       assert.ok(texts.includes("en"));
@@ -7146,7 +6813,7 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("de"));
       const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
 
       assert.ok(texts.includes("de"));
@@ -7159,7 +6826,7 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("EN"));
       const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
 
       assert.ok(texts.length > 0);
@@ -7271,14 +6938,8 @@ describe("string", () => {
     });
 
     it("should throw TypeError when pattern is not a RegExp", () => {
-      assert.throws(
-        () => string({ pattern: "abc" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => string({ pattern: 123 as never }),
-        TypeError,
-      );
+      assert.throws(() => string({ pattern: "abc" as never }), TypeError);
+      assert.throws(() => string({ pattern: 123 as never }), TypeError);
     });
 
     it("should snapshot pattern at construction time", () => {
@@ -7344,13 +7005,10 @@ describe("regExp()", () => {
     });
 
     it("should reject an empty metavar", () => {
-      assert.throws(
-        () => regExp({ metavar: "" as NonEmptyString }),
-        {
-          name: "TypeError",
-          message: "Expected a non-empty string.",
-        },
-      );
+      assert.throws(() => regExp({ metavar: "" as NonEmptyString }), {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      });
     });
 
     it("should reject invalid flags when constructed", () => {
@@ -7358,13 +7016,10 @@ describe("regExp()", () => {
     });
 
     it("should reject non-string flags when constructed", () => {
-      assert.throws(
-        () => regExp({ flags: 1 as never }),
-        {
-          name: "TypeError",
-          message: "Expected flags to be a string, but got number: 1.",
-        },
-      );
+      assert.throws(() => regExp({ flags: 1 as never }), {
+        name: "TypeError",
+        message: "Expected flags to be a string, but got number: 1.",
+      });
     });
 
     it("should reject duplicate flags when constructed", () => {
@@ -7496,10 +7151,12 @@ describe("regExp()", () => {
       const parser: ValueParser<"async", RegExp> = {
         ...spreadable,
         mode: "async",
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await -- async promotes the parser mode
         async parse(input: string) {
           return syncParser.parse(input);
         },
+        /* oxlint-enable require-await */
       };
       assert.ok(typeof parser.validate === "function");
 
@@ -7572,11 +7229,11 @@ describe("integer edge cases", () => {
       if (!result2.success) {
         assert.deepEqual(
           result2.error,
-          message`Expected a safe integer between ${
-            text(Number.MIN_SAFE_INTEGER.toLocaleString("en"))
-          } and ${
-            text(Number.MAX_SAFE_INTEGER.toLocaleString("en"))
-          }, but got ${"9007199254740992"}. Use type: "bigint" for large values.`,
+          message`Expected a safe integer between ${text(
+            Number.MIN_SAFE_INTEGER.toLocaleString("en"),
+          )} and ${text(
+            Number.MAX_SAFE_INTEGER.toLocaleString("en"),
+          )}, but got ${"9007199254740992"}. Use type: "bigint" for large values.`,
         );
       }
 
@@ -7637,10 +7294,7 @@ describe("integer edge cases", () => {
       const result = parser.parse("9007199254740993");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          message`Value out of safe range.`,
-        );
+        assert.deepEqual(result.error, message`Value out of safe range.`);
       }
     });
 
@@ -8162,14 +7816,11 @@ describe("port", () => {
       const result = parser.parse("abc");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Expected a valid port number, but got " },
-            { type: "value", value: "abc" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Expected a valid port number, but got " },
+          { type: "value", value: "abc" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -8179,19 +7830,16 @@ describe("port", () => {
       const result = parser.parse("80");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            {
-              type: "text",
-              text: "Expected a port number greater than or equal to ",
-            },
-            { type: "text", text: "1,024" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "80" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Expected a port number greater than or equal to ",
+          },
+          { type: "text", text: "1,024" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "80" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -8201,19 +7849,16 @@ describe("port", () => {
       const result = parser.parse("10000");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            {
-              type: "text",
-              text: "Expected a port number less than or equal to ",
-            },
-            { type: "text", text: "9,000" },
-            { type: "text", text: ", but got " },
-            { type: "value", value: "10000" },
-            { type: "text", text: "." },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          {
+            type: "text",
+            text: "Expected a port number less than or equal to ",
+          },
+          { type: "text", text: "9,000" },
+          { type: "text", text: ", but got " },
+          { type: "value", value: "10000" },
+          { type: "text", text: "." },
+        ] as const);
       }
     });
 
@@ -8223,18 +7868,14 @@ describe("port", () => {
       const result = parser.parse("80");
       assert.ok(!result.success);
       if (!result.success) {
-        assert.deepEqual(
-          result.error,
-          [
-            { type: "text", text: "Port " },
-            { type: "value", value: "80" },
-            {
-              type: "text",
-              text:
-                " is a well-known port (1-1023) and may require elevated privileges.",
-            },
-          ] as const,
-        );
+        assert.deepEqual(result.error, [
+          { type: "text", text: "Port " },
+          { type: "value", value: "80" },
+          {
+            type: "text",
+            text: " is a well-known port (1-1023) and may require elevated privileges.",
+          },
+        ] as const);
       }
     });
   });
@@ -8278,9 +7919,9 @@ describe("port", () => {
         min: 1024,
         errors: {
           belowMinimum: (port, min) =>
-            message`Port ${text(port.toString())} is below minimum ${
-              text(min.toString())
-            }.`,
+            message`Port ${text(port.toString())} is below minimum ${text(
+              min.toString(),
+            )}.`,
         },
       });
 
@@ -8302,9 +7943,9 @@ describe("port", () => {
         max: 9000,
         errors: {
           aboveMaximum: (port, max) =>
-            message`Port ${text(port.toString())} exceeds maximum ${
-              text(max.toString())
-            }.`,
+            message`Port ${text(port.toString())} exceeds maximum ${text(
+              max.toString(),
+            )}.`,
         },
       });
 
@@ -8420,18 +8061,12 @@ describe("port", () => {
         () => port({ disallowWellKnown: "no" as never }),
         TypeError,
       );
-      assert.throws(
-        () => port({ disallowWellKnown: 1 as never }),
-        TypeError,
-      );
+      assert.throws(() => port({ disallowWellKnown: 1 as never }), TypeError);
       assert.throws(
         () => port({ disallowWellKnown: "true" as never }),
         TypeError,
       );
-      assert.throws(
-        () => port({ disallowWellKnown: 0 as never }),
-        TypeError,
-      );
+      assert.throws(() => port({ disallowWellKnown: 0 as never }), TypeError);
       assert.throws(
         () => port({ disallowWellKnown: null as never }),
         TypeError,
@@ -8496,22 +8131,10 @@ describe("port", () => {
 
   describe("type discriminant validation", () => {
     it("should reject invalid type discriminant", () => {
-      assert.throws(
-        () => port({ type: "num" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => port({ type: 123 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => port({ type: null as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => port({ type: "" as never }),
-        TypeError,
-      );
+      assert.throws(() => port({ type: "num" as never }), TypeError);
+      assert.throws(() => port({ type: 123 as never }), TypeError);
+      assert.throws(() => port({ type: null as never }), TypeError);
+      assert.throws(() => port({ type: "" as never }), TypeError);
     });
 
     it("should accept valid type discriminant", () => {
@@ -8539,10 +8162,7 @@ describe("port", () => {
 
         for (const addr of validAddresses) {
           const result = parser.parse(addr);
-          assert.ok(
-            result.success,
-            `Should accept valid IPv4 address ${addr}`,
-          );
+          assert.ok(result.success, `Should accept valid IPv4 address ${addr}`);
           if (result.success) {
             assert.equal(result.value, addr);
           }
@@ -8726,11 +8346,7 @@ describe("port", () => {
       it("should allow link-local IPs by default", () => {
         const parser = ipv4();
 
-        const linkLocalIps = [
-          "169.254.0.0",
-          "169.254.1.1",
-          "169.254.255.255",
-        ];
+        const linkLocalIps = ["169.254.0.0", "169.254.1.1", "169.254.255.255"];
 
         for (const ip of linkLocalIps) {
           const result = parser.parse(ip);
@@ -8741,11 +8357,7 @@ describe("port", () => {
       it("should reject link-local IPs when disallowed", () => {
         const parser = ipv4({ allowLinkLocal: false });
 
-        const linkLocalIps = [
-          "169.254.0.0",
-          "169.254.1.1",
-          "169.254.255.255",
-        ];
+        const linkLocalIps = ["169.254.0.0", "169.254.1.1", "169.254.255.255"];
 
         for (const ip of linkLocalIps) {
           const result = parser.parse(ip);
@@ -8971,10 +8583,7 @@ describe("port", () => {
 
   describe("contradictory min > max", () => {
     it("should throw RangeError for number mode when min > max", () => {
-      assert.throws(
-        () => port({ min: 1000, max: 100 }),
-        RangeError,
-      );
+      assert.throws(() => port({ min: 1000, max: 100 }), RangeError);
     });
 
     it("should throw RangeError for bigint mode when min > max", () => {
@@ -8989,81 +8598,51 @@ describe("port", () => {
     });
 
     it("should not throw when min equals max (bigint mode)", () => {
-      assert.doesNotThrow(
-        () => port({ type: "bigint", min: 8080n, max: 8080n }),
+      assert.doesNotThrow(() =>
+        port({ type: "bigint", min: 8080n, max: 8080n }),
       );
     });
 
     it("should throw RangeError when min exceeds default max", () => {
-      assert.throws(
-        () => port({ min: 70000 }),
-        RangeError,
-      );
+      assert.throws(() => port({ min: 70000 }), RangeError);
     });
 
     it("should throw RangeError when max is below default min", () => {
-      assert.throws(
-        () => port({ max: 0 }),
-        RangeError,
-      );
+      assert.throws(() => port({ max: 0 }), RangeError);
     });
 
     it("should throw RangeError when bigint min exceeds default max", () => {
-      assert.throws(
-        () => port({ type: "bigint", min: 70000n }),
-        RangeError,
-      );
+      assert.throws(() => port({ type: "bigint", min: 70000n }), RangeError);
     });
 
     it("should throw RangeError when bigint max is below default min", () => {
-      assert.throws(
-        () => port({ type: "bigint", max: 0n }),
-        RangeError,
-      );
+      assert.throws(() => port({ type: "bigint", max: 0n }), RangeError);
     });
   });
 
   describe("non-finite bounds", () => {
     it("should throw RangeError when min is NaN", () => {
-      assert.throws(
-        () => port({ min: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => port({ min: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when max is NaN", () => {
-      assert.throws(
-        () => port({ max: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => port({ max: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when min is Infinity", () => {
-      assert.throws(
-        () => port({ min: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => port({ min: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when min is -Infinity", () => {
-      assert.throws(
-        () => port({ min: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => port({ min: -Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when max is Infinity", () => {
-      assert.throws(
-        () => port({ max: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => port({ max: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when max is -Infinity", () => {
-      assert.throws(
-        () => port({ max: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => port({ max: -Infinity as never }), RangeError);
     });
   });
 });
@@ -9104,8 +8683,14 @@ describe("hostname()", () => {
       assert.strictEqual(result6.value, "localhost");
 
       // Long but valid (253 chars)
-      const longHostname = "a".repeat(63) + "." + "b".repeat(63) + "." +
-        "c".repeat(63) + "." + "d".repeat(59);
+      const longHostname =
+        "a".repeat(63) +
+        "." +
+        "b".repeat(63) +
+        "." +
+        "c".repeat(63) +
+        "." +
+        "d".repeat(59);
       const result7 = parser.parse(longHostname);
       assert.ok(result7.success);
       assert.strictEqual(result7.value, longHostname);
@@ -9313,9 +8898,7 @@ describe("hostname()", () => {
         allowWildcard: true,
       });
 
-      for (
-        const variant of ["*.localhost", "*.LOCALHOST", "*.LocalHost"]
-      ) {
+      for (const variant of ["*.localhost", "*.LOCALHOST", "*.LocalHost"]) {
         const result = parser.parse(variant);
         assert.ok(!result.success, `expected ${variant} to be rejected`);
         assert.deepStrictEqual(result.error, [
@@ -9375,57 +8958,49 @@ describe("hostname()", () => {
     });
 
     it("should throw RangeError when maxLength is 0", () => {
-      assert.throws(
-        () => hostname({ maxLength: 0 }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => hostname({ maxLength: 0 }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when maxLength is negative", () => {
-      assert.throws(
-        () => hostname({ maxLength: -1 }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => hostname({ maxLength: -1 }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when maxLength is NaN", () => {
-      assert.throws(
-        () => hostname({ maxLength: NaN }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => hostname({ maxLength: NaN }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when maxLength is fractional", () => {
-      assert.throws(
-        () => hostname({ maxLength: 1.5 }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => hostname({ maxLength: 1.5 }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should not throw when maxLength is 1", () => {
-      assert.doesNotThrow(
-        () => hostname({ maxLength: 1 }),
-      );
+      assert.doesNotThrow(() => hostname({ maxLength: 1 }));
     });
 
     it("should default to 253 characters", () => {
       const parser = hostname();
 
       // 253 chars should be valid
-      const validHostname = "a".repeat(63) + "." + "b".repeat(63) + "." +
-        "c".repeat(63) + "." + "d".repeat(61);
+      const validHostname =
+        "a".repeat(63) +
+        "." +
+        "b".repeat(63) +
+        "." +
+        "c".repeat(63) +
+        "." +
+        "d".repeat(61);
       const result1 = parser.parse(validHostname);
       assert.strictEqual(validHostname.length, 253);
       assert.ok(result1.success);
@@ -9631,36 +9206,25 @@ describe("hostname()", () => {
 
   describe("runtime option type validation", () => {
     it("should throw TypeError for non-boolean allowWildcard", () => {
-      assert.throws(
-        () => hostname({ allowWildcard: "yes" as never }),
-        {
-          name: "TypeError",
-          message:
-            "Expected allowWildcard to be a boolean, but got string: yes.",
-        },
-      );
+      assert.throws(() => hostname({ allowWildcard: "yes" as never }), {
+        name: "TypeError",
+        message: "Expected allowWildcard to be a boolean, but got string: yes.",
+      });
     });
 
     it("should throw TypeError for non-boolean allowUnderscore", () => {
-      assert.throws(
-        () => hostname({ allowUnderscore: "yes" as never }),
-        {
-          name: "TypeError",
-          message:
-            "Expected allowUnderscore to be a boolean, but got string: yes.",
-        },
-      );
+      assert.throws(() => hostname({ allowUnderscore: "yes" as never }), {
+        name: "TypeError",
+        message:
+          "Expected allowUnderscore to be a boolean, but got string: yes.",
+      });
     });
 
     it("should throw TypeError for non-boolean allowLocalhost", () => {
-      assert.throws(
-        () => hostname({ allowLocalhost: "no" as never }),
-        {
-          name: "TypeError",
-          message:
-            "Expected allowLocalhost to be a boolean, but got string: no.",
-        },
-      );
+      assert.throws(() => hostname({ allowLocalhost: "no" as never }), {
+        name: "TypeError",
+        message: "Expected allowLocalhost to be a boolean, but got string: no.",
+      });
     });
   });
 });
@@ -10036,9 +9600,7 @@ describe("email()", () => {
     it("should reject malformed display name with multiple angle-bracket groups", () => {
       const parser = email({ allowDisplayName: true });
 
-      const result1 = parser.parse(
-        "Name <user@example.com> extra <x@y.com>",
-      );
+      const result1 = parser.parse("Name <user@example.com> extra <x@y.com>");
       assert.ok(!result1.success);
 
       const result2 = parser.parse(
@@ -10078,9 +9640,7 @@ describe("email()", () => {
     it("should accept mixed quoted and unquoted words in display name", () => {
       const parser = email({ allowDisplayName: true });
 
-      const result1 = parser.parse(
-        'John "Johnny" Doe <john@example.com>',
-      );
+      const result1 = parser.parse('John "Johnny" Doe <john@example.com>');
       assert.ok(result1.success);
       assert.strictEqual(result1.value, "john@example.com");
 
@@ -10092,9 +9652,7 @@ describe("email()", () => {
     it("should accept quoted display names containing angle brackets", () => {
       const parser = email({ allowDisplayName: true });
 
-      const result = parser.parse(
-        '"Team <Ops>" <alerts@example.com>',
-      );
+      const result = parser.parse('"Team <Ops>" <alerts@example.com>');
       assert.ok(result.success);
       assert.strictEqual(result.value, "alerts@example.com");
     });
@@ -10204,23 +9762,17 @@ describe("email()", () => {
     });
 
     it("should throw TypeError when allowedDomains is empty", () => {
-      assert.throws(
-        () => email({ allowedDomains: [] }),
-        {
-          name: "TypeError",
-          message: "allowedDomains must not be empty.",
-        },
-      );
+      assert.throws(() => email({ allowedDomains: [] }), {
+        name: "TypeError",
+        message: "allowedDomains must not be empty.",
+      });
     });
 
     it("should throw TypeError when allowedDomains is empty with allowMultiple", () => {
-      assert.throws(
-        () => email({ allowedDomains: [], allowMultiple: true }),
-        {
-          name: "TypeError",
-          message: "allowedDomains must not be empty.",
-        },
-      );
+      assert.throws(() => email({ allowedDomains: [], allowMultiple: true }), {
+        name: "TypeError",
+        message: "allowedDomains must not be empty.",
+      });
     });
   });
 
@@ -10413,18 +9965,18 @@ describe("email()", () => {
     });
 
     it("should throw TypeError for non-string allowedDomains entries", () => {
-      assert.throws(
-        () => email({ allowedDomains: [123 as never] }),
-        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
-      );
-      assert.throws(
-        () => email({ allowedDomains: [null as never] }),
-        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
-      );
-      assert.throws(
-        () => email({ allowedDomains: [undefined as never] }),
-        { name: "TypeError", message: /allowedDomains\[0\].*must be a string/ },
-      );
+      assert.throws(() => email({ allowedDomains: [123 as never] }), {
+        name: "TypeError",
+        message: /allowedDomains\[0\].*must be a string/,
+      });
+      assert.throws(() => email({ allowedDomains: [null as never] }), {
+        name: "TypeError",
+        message: /allowedDomains\[0\].*must be a string/,
+      });
+      assert.throws(() => email({ allowedDomains: [undefined as never] }), {
+        name: "TypeError",
+        message: /allowedDomains\[0\].*must be a string/,
+      });
     });
 
     it("should throw TypeError for allowedDomains entries with leading @", () => {
@@ -10472,13 +10024,10 @@ describe("email()", () => {
     });
 
     it("should throw TypeError for empty string allowedDomains entries", () => {
-      assert.throws(
-        () => email({ allowedDomains: [""] as never }),
-        {
-          name: "TypeError",
-          message: /allowedDomains\[0\].*not a valid domain/,
-        },
-      );
+      assert.throws(() => email({ allowedDomains: [""] as never }), {
+        name: "TypeError",
+        message: /allowedDomains\[0\].*not a valid domain/,
+      });
     });
 
     it("should throw TypeError for malformed domain syntax", () => {
@@ -10507,13 +10056,10 @@ describe("email()", () => {
         },
       );
       // No dot (bare label)
-      assert.throws(
-        () => email({ allowedDomains: ["localhost"] as never }),
-        {
-          name: "TypeError",
-          message: /allowedDomains\[0\].*not a valid domain/,
-        },
-      );
+      assert.throws(() => email({ allowedDomains: ["localhost"] as never }), {
+        name: "TypeError",
+        message: /allowedDomains\[0\].*not a valid domain/,
+      });
       // Leading hyphen
       assert.throws(
         () => email({ allowedDomains: ["-example.com"] as never }),
@@ -10542,13 +10088,10 @@ describe("email()", () => {
         },
       );
       // IPv4-like dotted-quad
-      assert.throws(
-        () => email({ allowedDomains: ["192.168.0.1"] as never }),
-        {
-          name: "TypeError",
-          message: /allowedDomains\[0\].*not a valid domain/,
-        },
-      );
+      assert.throws(() => email({ allowedDomains: ["192.168.0.1"] as never }), {
+        name: "TypeError",
+        message: /allowedDomains\[0\].*not a valid domain/,
+      });
       assert.throws(
         () => email({ allowedDomains: ["999.999.999.999"] as never }),
         {
@@ -10559,15 +10102,11 @@ describe("email()", () => {
     });
 
     it("should accept valid allowedDomains entries without throwing", () => {
-      assert.doesNotThrow(
-        () => email({ allowedDomains: ["example.com", "test.org"] }),
+      assert.doesNotThrow(() =>
+        email({ allowedDomains: ["example.com", "test.org"] }),
       );
-      assert.doesNotThrow(
-        () => email({ allowedDomains: ["sub.example.com"] }),
-      );
-      assert.doesNotThrow(
-        () => email({ allowedDomains: ["my-domain.co.uk"] }),
-      );
+      assert.doesNotThrow(() => email({ allowedDomains: ["sub.example.com"] }));
+      assert.doesNotThrow(() => email({ allowedDomains: ["my-domain.co.uk"] }));
     });
   });
 });
@@ -10953,10 +10492,7 @@ describe("portRange()", () => {
     });
 
     it("should reflect custom separator in default metavar", () => {
-      assert.strictEqual(
-        portRange({ separator: ":" }).metavar,
-        "PORT:PORT",
-      );
+      assert.strictEqual(portRange({ separator: ":" }).metavar, "PORT:PORT");
       assert.strictEqual(
         portRange({ separator: " to " }).metavar,
         "PORT to PORT",
@@ -11067,26 +10603,14 @@ describe("portRange()", () => {
     });
 
     it("should reject non-boolean allowSingle option", () => {
-      assert.throws(
-        () => portRange({ allowSingle: "no" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ allowSingle: 1 as never }),
-        TypeError,
-      );
+      assert.throws(() => portRange({ allowSingle: "no" as never }), TypeError);
+      assert.throws(() => portRange({ allowSingle: 1 as never }), TypeError);
       assert.throws(
         () => portRange({ allowSingle: "true" as never }),
         TypeError,
       );
-      assert.throws(
-        () => portRange({ allowSingle: 0 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ allowSingle: null as never }),
-        TypeError,
-      );
+      assert.throws(() => portRange({ allowSingle: 0 as never }), TypeError);
+      assert.throws(() => portRange({ allowSingle: null as never }), TypeError);
     });
 
     it("should reject non-boolean allowSingle option (bigint)", () => {
@@ -11115,22 +10639,10 @@ describe("portRange()", () => {
 
   describe("type discriminant validation", () => {
     it("should reject invalid type discriminant", () => {
-      assert.throws(
-        () => portRange({ type: "num" as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ type: 123 as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ type: null as never }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ type: "" as never }),
-        TypeError,
-      );
+      assert.throws(() => portRange({ type: "num" as never }), TypeError);
+      assert.throws(() => portRange({ type: 123 as never }), TypeError);
+      assert.throws(() => portRange({ type: null as never }), TypeError);
+      assert.throws(() => portRange({ type: "" as never }), TypeError);
     });
 
     it("should accept valid type discriminant", () => {
@@ -11142,49 +10654,25 @@ describe("portRange()", () => {
 
   describe("separator validation", () => {
     it("should reject empty separator", () => {
-      assert.throws(
-        () => portRange({ separator: "" }),
-        {
-          name: "TypeError",
-          message: "Expected separator to not be empty.",
-        },
-      );
-      assert.throws(
-        () => portRange({ type: "bigint", separator: "" }),
-        {
-          name: "TypeError",
-          message: "Expected separator to not be empty.",
-        },
-      );
+      assert.throws(() => portRange({ separator: "" }), {
+        name: "TypeError",
+        message: "Expected separator to not be empty.",
+      });
+      assert.throws(() => portRange({ type: "bigint", separator: "" }), {
+        name: "TypeError",
+        message: "Expected separator to not be empty.",
+      });
     });
 
     it("should reject separator containing digits", () => {
-      assert.throws(
-        () => portRange({ separator: "0" }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ separator: "8" }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ separator: "123" }),
-        TypeError,
-      );
-      assert.throws(
-        () => portRange({ separator: "a1b" }),
-        TypeError,
-      );
+      assert.throws(() => portRange({ separator: "0" }), TypeError);
+      assert.throws(() => portRange({ separator: "8" }), TypeError);
+      assert.throws(() => portRange({ separator: "123" }), TypeError);
+      assert.throws(() => portRange({ separator: "a1b" }), TypeError);
       // Unicode digits (Arabic-Indic)
-      assert.throws(
-        () => portRange({ separator: "\u0661" }),
-        TypeError,
-      );
+      assert.throws(() => portRange({ separator: "\u0661" }), TypeError);
       // Unicode digits (Devanagari)
-      assert.throws(
-        () => portRange({ separator: "\u0967" }),
-        TypeError,
-      );
+      assert.throws(() => portRange({ separator: "\u0967" }), TypeError);
     });
 
     it("should reject separator containing digits (bigint)", () => {
@@ -11208,10 +10696,7 @@ describe("portRange()", () => {
 
   describe("contradictory min > max", () => {
     it("should throw RangeError for number mode when min > max", () => {
-      assert.throws(
-        () => portRange({ min: 9000, max: 1000 }),
-        RangeError,
-      );
+      assert.throws(() => portRange({ min: 9000, max: 1000 }), RangeError);
     });
 
     it("should throw RangeError for bigint mode when min > max", () => {
@@ -11226,23 +10711,17 @@ describe("portRange()", () => {
     });
 
     it("should not throw when min equals max (bigint mode)", () => {
-      assert.doesNotThrow(
-        () => portRange({ type: "bigint", min: 8080n, max: 8080n }),
+      assert.doesNotThrow(() =>
+        portRange({ type: "bigint", min: 8080n, max: 8080n }),
       );
     });
 
     it("should throw RangeError when min exceeds default max", () => {
-      assert.throws(
-        () => portRange({ min: 70000 }),
-        RangeError,
-      );
+      assert.throws(() => portRange({ min: 70000 }), RangeError);
     });
 
     it("should throw RangeError when max is below default min", () => {
-      assert.throws(
-        () => portRange({ max: 0 }),
-        RangeError,
-      );
+      assert.throws(() => portRange({ max: 0 }), RangeError);
     });
   });
 });
@@ -11835,13 +11314,10 @@ describe("socketAddress()", () => {
 
   describe("separator validation", () => {
     it("should reject empty separator", () => {
-      assert.throws(
-        () => socketAddress({ separator: "", defaultPort: 80 }),
-        {
-          name: "TypeError",
-          message: "Expected separator to not be empty.",
-        },
-      );
+      assert.throws(() => socketAddress({ separator: "", defaultPort: 80 }), {
+        name: "TypeError",
+        message: "Expected separator to not be empty.",
+      });
     });
 
     it("should reject separator containing digits", () => {
@@ -12011,14 +11487,13 @@ describe("socketAddress()", () => {
         // separator should be embedded as escaped text in format example
         const formatTerm = result.error.find(
           (t: { type: string; text?: string }) =>
-            t.type === "text" &&
-            t.text === `host${escaped}port`,
+            t.type === "text" && t.text === `host${escaped}port`,
         );
         assert.ok(
           formatTerm !== undefined,
-          `expected text term "host${escaped}port" for separator ${
-            JSON.stringify(separator)
-          }`,
+          `expected text term "host${escaped}port" for separator ${JSON.stringify(
+            separator,
+          )}`,
         );
         // separator should never appear as a value term
         const hasValueSep = result.error.some(
@@ -12027,9 +11502,9 @@ describe("socketAddress()", () => {
         );
         assert.ok(
           !hasValueSep,
-          `separator ${
-            JSON.stringify(separator)
-          } should not appear as a value term`,
+          `separator ${JSON.stringify(
+            separator,
+          )} should not appear as a value term`,
         );
       }
     });
@@ -13223,8 +12698,7 @@ describe("socketAddress()", () => {
         { type: "value", value: "80" },
         {
           type: "text",
-          text:
-            " is a well-known port (1-1023) and may require elevated privileges.",
+          text: " is a well-known port (1-1023) and may require elevated privileges.",
         },
       ]);
     });
@@ -14202,36 +13676,27 @@ describe("macAddress()", () => {
 
   describe("option validation", () => {
     it("should throw TypeError for invalid separator value", () => {
-      assert.throws(
-        () => macAddress({ separator: "foo" as never }),
-        {
-          name: "TypeError",
-          message:
-            'Expected separator to be one of ":", "-", ".", "none", "any", but got string: "foo".',
-        },
-      );
+      assert.throws(() => macAddress({ separator: "foo" as never }), {
+        name: "TypeError",
+        message:
+          'Expected separator to be one of ":", "-", ".", "none", "any", but got string: "foo".',
+      });
     });
 
     it("should throw TypeError for invalid outputSeparator value", () => {
-      assert.throws(
-        () => macAddress({ outputSeparator: "any" as never }),
-        {
-          name: "TypeError",
-          message:
-            'Expected outputSeparator to be one of ":", "-", ".", "none", but got string: "any".',
-        },
-      );
+      assert.throws(() => macAddress({ outputSeparator: "any" as never }), {
+        name: "TypeError",
+        message:
+          'Expected outputSeparator to be one of ":", "-", ".", "none", but got string: "any".',
+      });
     });
 
     it("should throw TypeError for invalid case value", () => {
-      assert.throws(
-        () => macAddress({ case: "weird" as never }),
-        {
-          name: "TypeError",
-          message:
-            'Expected case to be one of "preserve", "upper", "lower", but got string: "weird".',
-        },
-      );
+      assert.throws(() => macAddress({ case: "weird" as never }), {
+        name: "TypeError",
+        message:
+          'Expected case to be one of "preserve", "upper", "lower", but got string: "weird".',
+      });
     });
 
     it("should accept all valid separator values", () => {
@@ -14328,79 +13793,62 @@ describe("domain()", () => {
     });
 
     it("should throw TypeError when allowSubdomains is false and minLabels > 2", () => {
-      assert.throws(
-        () => domain({ allowSubdomains: false, minLabels: 3 }),
-        {
-          name: "TypeError",
-          message:
-            "allowSubdomains: false is incompatible with minLabels > 2, " +
-            "as non-subdomain domains have exactly 2 labels.",
-        },
-      );
+      assert.throws(() => domain({ allowSubdomains: false, minLabels: 3 }), {
+        name: "TypeError",
+        message:
+          "allowSubdomains: false is incompatible with minLabels > 2, " +
+          "as non-subdomain domains have exactly 2 labels.",
+      });
     });
 
     it("should not throw when allowSubdomains is false and minLabels is 2", () => {
-      assert.doesNotThrow(
-        () => domain({ allowSubdomains: false, minLabels: 2 }),
+      assert.doesNotThrow(() =>
+        domain({ allowSubdomains: false, minLabels: 2 }),
       );
     });
 
     it("should not throw when allowSubdomains is false and minLabels is 1", () => {
-      assert.doesNotThrow(
-        () => domain({ allowSubdomains: false, minLabels: 1 }),
+      assert.doesNotThrow(() =>
+        domain({ allowSubdomains: false, minLabels: 1 }),
       );
     });
 
     it("should not throw when allowSubdomains is true and minLabels > 2", () => {
-      assert.doesNotThrow(
-        () => domain({ allowSubdomains: true, minLabels: 3 }),
+      assert.doesNotThrow(() =>
+        domain({ allowSubdomains: true, minLabels: 3 }),
       );
     });
 
     it("should throw RangeError when minLabels is 0", () => {
-      assert.throws(
-        () => domain({ minLabels: 0 }),
-        {
-          name: "RangeError",
-          message: "minLabels must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ minLabels: 0 }), {
+        name: "RangeError",
+        message: "minLabels must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when minLabels is negative", () => {
-      assert.throws(
-        () => domain({ minLabels: -1 }),
-        {
-          name: "RangeError",
-          message: "minLabels must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ minLabels: -1 }), {
+        name: "RangeError",
+        message: "minLabels must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when minLabels is NaN", () => {
-      assert.throws(
-        () => domain({ minLabels: NaN }),
-        {
-          name: "RangeError",
-          message: "minLabels must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ minLabels: NaN }), {
+        name: "RangeError",
+        message: "minLabels must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when minLabels is fractional", () => {
-      assert.throws(
-        () => domain({ minLabels: 1.5 }),
-        {
-          name: "RangeError",
-          message: "minLabels must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ minLabels: 1.5 }), {
+        name: "RangeError",
+        message: "minLabels must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should not throw when minLabels is 1", () => {
-      assert.doesNotThrow(
-        () => domain({ minLabels: 1 }),
-      );
+      assert.doesNotThrow(() => domain({ minLabels: 1 }));
     });
   });
 
@@ -14444,86 +13892,65 @@ describe("domain()", () => {
     });
 
     it("should throw TypeError when allowedTlds is empty", () => {
-      assert.throws(
-        () => domain({ allowedTlds: [] }),
-        {
-          name: "TypeError",
-          message: "allowedTlds must not be empty.",
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: [] }), {
+        name: "TypeError",
+        message: "allowedTlds must not be empty.",
+      });
     });
 
     it("should throw TypeError for non-string entry", () => {
-      assert.throws(
-        () => domain({ allowedTlds: [123 as never] }),
-        {
-          name: "TypeError",
-          message: "allowedTlds[0] must be a string, but got number.",
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: [123 as never] }), {
+        name: "TypeError",
+        message: "allowedTlds[0] must be a string, but got number.",
+      });
     });
 
     it("should throw TypeError for array entry", () => {
-      assert.throws(
-        () => domain({ allowedTlds: [["com"] as never] }),
-        {
-          name: "TypeError",
-          message: "allowedTlds[0] must be a string, but got array.",
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: [["com"] as never] }), {
+        name: "TypeError",
+        message: "allowedTlds[0] must be a string, but got array.",
+      });
     });
 
     it("should throw TypeError for entry containing a dot", () => {
-      assert.throws(
-        () => domain({ allowedTlds: [".com"] as never }),
-        {
-          name: "TypeError",
-          message: 'allowedTlds[0] must not contain dots: ".com".',
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: [".com"] as never }), {
+        name: "TypeError",
+        message: 'allowedTlds[0] must not contain dots: ".com".',
+      });
     });
 
     it("should throw TypeError for entry with leading whitespace", () => {
-      assert.throws(
-        () => domain({ allowedTlds: [" com"] as never }),
-        {
-          name: "TypeError",
-          message: "allowedTlds[0] must not have leading or trailing " +
-            'whitespace: " com".',
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: [" com"] as never }), {
+        name: "TypeError",
+        message:
+          "allowedTlds[0] must not have leading or trailing " +
+          'whitespace: " com".',
+      });
     });
 
     it("should throw TypeError for entry with trailing whitespace", () => {
-      assert.throws(
-        () => domain({ allowedTlds: ["com "] as never }),
-        {
-          name: "TypeError",
-          message: "allowedTlds[0] must not have leading or trailing " +
-            'whitespace: "com ".',
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: ["com "] as never }), {
+        name: "TypeError",
+        message:
+          "allowedTlds[0] must not have leading or trailing " +
+          'whitespace: "com ".',
+      });
     });
 
     it("should throw TypeError for entry with leading and trailing whitespace", () => {
-      assert.throws(
-        () => domain({ allowedTlds: [" com "] as never }),
-        {
-          name: "TypeError",
-          message: "allowedTlds[0] must not have leading or trailing " +
-            'whitespace: " com ".',
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: [" com "] as never }), {
+        name: "TypeError",
+        message:
+          "allowedTlds[0] must not have leading or trailing " +
+          'whitespace: " com ".',
+      });
     });
 
     it("should throw TypeError for empty string entry", () => {
-      assert.throws(
-        () => domain({ allowedTlds: [""] as never }),
-        {
-          name: "TypeError",
-          message: "allowedTlds[0] must not be an empty string.",
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: [""] as never }), {
+        name: "TypeError",
+        message: "allowedTlds[0] must not be an empty string.",
+      });
     });
 
     it("should include index in error message", () => {
@@ -14537,33 +13964,24 @@ describe("domain()", () => {
     });
 
     it("should throw TypeError for entry starting with hyphen", () => {
-      assert.throws(
-        () => domain({ allowedTlds: ["-com"] as never }),
-        {
-          name: "TypeError",
-          message: 'allowedTlds[0] is not a valid DNS label: "-com".',
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: ["-com"] as never }), {
+        name: "TypeError",
+        message: 'allowedTlds[0] is not a valid DNS label: "-com".',
+      });
     });
 
     it("should throw TypeError for entry ending with hyphen", () => {
-      assert.throws(
-        () => domain({ allowedTlds: ["com-"] as never }),
-        {
-          name: "TypeError",
-          message: 'allowedTlds[0] is not a valid DNS label: "com-".',
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: ["com-"] as never }), {
+        name: "TypeError",
+        message: 'allowedTlds[0] is not a valid DNS label: "com-".',
+      });
     });
 
     it("should throw TypeError for entry with underscore", () => {
-      assert.throws(
-        () => domain({ allowedTlds: ["co_m"] as never }),
-        {
-          name: "TypeError",
-          message: 'allowedTlds[0] is not a valid DNS label: "co_m".',
-        },
-      );
+      assert.throws(() => domain({ allowedTlds: ["co_m"] as never }), {
+        name: "TypeError",
+        message: 'allowedTlds[0] is not a valid DNS label: "co_m".',
+      });
     });
   });
 
@@ -14846,15 +14264,13 @@ describe("domain()", () => {
 
     it("should reject all-numeric domains like IPv4 addresses", () => {
       const parser = domain();
-      for (
-        const input of [
-          "192.168.0.1",
-          "127.0.0.1",
-          "999.999.999.999",
-          "1.2",
-          "12.34.56",
-        ]
-      ) {
+      for (const input of [
+        "192.168.0.1",
+        "127.0.0.1",
+        "999.999.999.999",
+        "1.2",
+        "12.34.56",
+      ]) {
         const result = parser.parse(input);
         assert.ok(!result.success, `Expected ${input} to be rejected`);
         assert.deepStrictEqual(result.error, [
@@ -14867,13 +14283,7 @@ describe("domain()", () => {
 
     it("should accept domains with some numeric labels", () => {
       const parser = domain();
-      for (
-        const input of [
-          "123.456.com",
-          "example.123",
-          "1.example.com",
-        ]
-      ) {
+      for (const input of ["123.456.com", "example.123", "1.example.com"]) {
         const result = parser.parse(input);
         assert.ok(result.success, `Expected ${input} to be accepted`);
       }
@@ -15009,9 +14419,9 @@ describe("domain()", () => {
     it("should accept domain at exactly 253 characters", () => {
       const parser = domain();
       // 63 + 1 + 63 + 1 + 63 + 1 + 58 + 1 + 2 = 253
-      const domain253 = `${"a".repeat(63)}.${"b".repeat(63)}.${
-        "c".repeat(63)
-      }.${"d".repeat(58)}.co`;
+      const domain253 = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(
+        63,
+      )}.${"d".repeat(58)}.co`;
       assert.strictEqual(domain253.length, 253);
       const result = parser.parse(domain253);
       assert.ok(result.success);
@@ -15066,43 +14476,31 @@ describe("domain()", () => {
     });
 
     it("should throw RangeError when maxLength is 0", () => {
-      assert.throws(
-        () => domain({ maxLength: 0 }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ maxLength: 0 }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when maxLength is negative", () => {
-      assert.throws(
-        () => domain({ maxLength: -1 }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ maxLength: -1 }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when maxLength is NaN", () => {
-      assert.throws(
-        () => domain({ maxLength: NaN }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ maxLength: NaN }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should throw RangeError when maxLength is fractional", () => {
-      assert.throws(
-        () => domain({ maxLength: 1.5 }),
-        {
-          name: "RangeError",
-          message: "maxLength must be an integer greater than or equal to 1.",
-        },
-      );
+      assert.throws(() => domain({ maxLength: 1.5 }), {
+        name: "RangeError",
+        message: "maxLength must be an integer greater than or equal to 1.",
+      });
     });
 
     it("should snapshot errors.tooLong at construction time", () => {
@@ -15125,24 +14523,18 @@ describe("domain()", () => {
 
   describe("runtime option type validation", () => {
     it("should throw TypeError for non-boolean allowSubdomains", () => {
-      assert.throws(
-        () => domain({ allowSubdomains: "no" as never }),
-        {
-          name: "TypeError",
-          message:
-            "Expected allowSubdomains to be a boolean, but got string: no.",
-        },
-      );
+      assert.throws(() => domain({ allowSubdomains: "no" as never }), {
+        name: "TypeError",
+        message:
+          "Expected allowSubdomains to be a boolean, but got string: no.",
+      });
     });
 
     it("should throw TypeError for non-boolean lowercase", () => {
-      assert.throws(
-        () => domain({ lowercase: "yes" as never }),
-        {
-          name: "TypeError",
-          message: "Expected lowercase to be a boolean, but got string: yes.",
-        },
-      );
+      assert.throws(() => domain({ lowercase: "yes" as never }), {
+        name: "TypeError",
+        message: "Expected lowercase to be a boolean, but got string: yes.",
+      });
     });
   });
 });
@@ -15329,9 +14721,7 @@ describe("ipv6()", () => {
 
     it("should reject too many groups", () => {
       const parser = ipv6();
-      const result = parser.parse(
-        "2001:db8:85a3:0:0:8a2e:370:7334:extra",
-      );
+      const result = parser.parse("2001:db8:85a3:0:0:8a2e:370:7334:extra");
       assert.ok(!result.success);
     });
 
@@ -15358,9 +14748,7 @@ describe("ipv6()", () => {
     it("should use custom invalidIpv6 message", () => {
       const parser = ipv6({
         errors: {
-          invalidIpv6: [
-            { type: "text", text: "Not a valid IPv6!" },
-          ],
+          invalidIpv6: [{ type: "text", text: "Not a valid IPv6!" }],
         },
       });
       const result = parser.parse("invalid");
@@ -15391,9 +14779,7 @@ describe("ipv6()", () => {
       const parser = ipv6({
         allowLoopback: false,
         errors: {
-          loopbackNotAllowed: [
-            { type: "text", text: "No loopback!" },
-          ],
+          loopbackNotAllowed: [{ type: "text", text: "No loopback!" }],
         },
       });
       const result = parser.parse("::1");
@@ -15407,9 +14793,7 @@ describe("ipv6()", () => {
       const parser = ipv6({
         allowLinkLocal: false,
         errors: {
-          linkLocalNotAllowed: [
-            { type: "text", text: "No link-local!" },
-          ],
+          linkLocalNotAllowed: [{ type: "text", text: "No link-local!" }],
         },
       });
       const result = parser.parse("fe80::1");
@@ -15423,9 +14807,7 @@ describe("ipv6()", () => {
       const parser = ipv6({
         allowUniqueLocal: false,
         errors: {
-          uniqueLocalNotAllowed: [
-            { type: "text", text: "No unique local!" },
-          ],
+          uniqueLocalNotAllowed: [{ type: "text", text: "No unique local!" }],
         },
       });
       const result = parser.parse("fc00::1");
@@ -15439,9 +14821,7 @@ describe("ipv6()", () => {
       const parser = ipv6({
         allowMulticast: false,
         errors: {
-          multicastNotAllowed: [
-            { type: "text", text: "No multicast!" },
-          ],
+          multicastNotAllowed: [{ type: "text", text: "No multicast!" }],
         },
       });
       const result = parser.parse("ff02::1");
@@ -15455,9 +14835,7 @@ describe("ipv6()", () => {
       const parser = ipv6({
         allowZero: false,
         errors: {
-          zeroNotAllowed: [
-            { type: "text", text: "No zero address!" },
-          ],
+          zeroNotAllowed: [{ type: "text", text: "No zero address!" }],
         },
       });
       const result = parser.parse("::");
@@ -15483,9 +14861,7 @@ describe("ipv6()", () => {
   describe("edge cases", () => {
     it("should compress leading zeros", () => {
       const parser = ipv6();
-      const result = parser.parse(
-        "2001:0db8:0000:0000:0000:0000:0000:0001",
-      );
+      const result = parser.parse("2001:0db8:0000:0000:0000:0000:0000:0001");
       assert.ok(result.success);
       assert.strictEqual(result.value, "2001:db8::1");
     });
@@ -15636,9 +15012,7 @@ describe("ip()", () => {
     it("should use shared loopbackNotAllowed for IPv4", () => {
       const parser = ip({
         errors: {
-          loopbackNotAllowed: [
-            { type: "text", text: "No loopback allowed!" },
-          ],
+          loopbackNotAllowed: [{ type: "text", text: "No loopback allowed!" }],
         },
         ipv4: { allowLoopback: false },
       });
@@ -15652,9 +15026,7 @@ describe("ip()", () => {
     it("should use shared loopbackNotAllowed for IPv6", () => {
       const parser = ip({
         errors: {
-          loopbackNotAllowed: [
-            { type: "text", text: "No loopback allowed!" },
-          ],
+          loopbackNotAllowed: [{ type: "text", text: "No loopback allowed!" }],
         },
         ipv6: { allowLoopback: false },
       });
@@ -15670,9 +15042,7 @@ describe("ip()", () => {
     it("should use custom invalidIP message", () => {
       const parser = ip({
         errors: {
-          invalidIP: [
-            { type: "text", text: "Not a valid IP!" },
-          ],
+          invalidIP: [{ type: "text", text: "Not a valid IP!" }],
         },
       });
       const result = parser.parse("invalid");
@@ -15738,10 +15108,7 @@ describe("ip()", () => {
     it("should reject IPv4-mapped addresses with leading zeros", () => {
       const parser = ip();
 
-      const withLeadingZeros = [
-        "::ffff:01.02.03.04",
-        "::ffff:192.168.001.1",
-      ];
+      const withLeadingZeros = ["::ffff:01.02.03.04", "::ffff:192.168.001.1"];
 
       for (const addr of withLeadingZeros) {
         const result = parser.parse(addr);
@@ -16055,9 +15422,7 @@ describe("cidr()", () => {
     it("should use custom invalidCidr message", () => {
       const parser = cidr({
         errors: {
-          invalidCidr: [
-            { type: "text", text: "Not a valid CIDR!" },
-          ],
+          invalidCidr: [{ type: "text", text: "Not a valid CIDR!" }],
         },
       });
       const result = parser.parse("invalid");
@@ -16086,9 +15451,7 @@ describe("cidr()", () => {
       const parser = cidr({
         minPrefix: 16,
         errors: {
-          prefixBelowMinimum: [
-            { type: "text", text: "Too small!" },
-          ],
+          prefixBelowMinimum: [{ type: "text", text: "Too small!" }],
         },
       });
       const result = parser.parse("192.0.2.0/8");
@@ -16102,9 +15465,7 @@ describe("cidr()", () => {
       const parser = cidr({
         maxPrefix: 24,
         errors: {
-          prefixAboveMaximum: [
-            { type: "text", text: "Too large!" },
-          ],
+          prefixAboveMaximum: [{ type: "text", text: "Too large!" }],
         },
       });
       const result = parser.parse("192.0.2.0/32");
@@ -16129,10 +15490,7 @@ describe("cidr()", () => {
 
   describe("contradictory minPrefix > maxPrefix", () => {
     it("should throw RangeError when minPrefix > maxPrefix", () => {
-      assert.throws(
-        () => cidr({ minPrefix: 30, maxPrefix: 20 }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ minPrefix: 30, maxPrefix: 20 }), RangeError);
     });
 
     it("should not throw when minPrefix equals maxPrefix", () => {
@@ -16140,17 +15498,11 @@ describe("cidr()", () => {
     });
 
     it("should throw RangeError when minPrefix exceeds IPv4 max", () => {
-      assert.throws(
-        () => cidr({ version: 4, minPrefix: 64 }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ version: 4, minPrefix: 64 }), RangeError);
     });
 
     it("should throw RangeError when maxPrefix is negative", () => {
-      assert.throws(
-        () => cidr({ maxPrefix: -1 }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ maxPrefix: -1 }), RangeError);
     });
 
     it("should not throw when minPrefix is at IPv4 max", () => {
@@ -16162,73 +15514,43 @@ describe("cidr()", () => {
     });
 
     it("should throw RangeError when minPrefix exceeds IPv6 max", () => {
-      assert.throws(
-        () => cidr({ version: 6, minPrefix: 129 }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ version: 6, minPrefix: 129 }), RangeError);
     });
 
     it("should throw RangeError when minPrefix is negative", () => {
-      assert.throws(
-        () => cidr({ minPrefix: -5 }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ minPrefix: -5 }), RangeError);
     });
 
     it("should throw RangeError when maxPrefix exceeds IPv4 max", () => {
-      assert.throws(
-        () => cidr({ version: 4, maxPrefix: 33 }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ version: 4, maxPrefix: 33 }), RangeError);
     });
 
     it("should throw RangeError when maxPrefix exceeds IPv6 max", () => {
-      assert.throws(
-        () => cidr({ version: 6, maxPrefix: 200 }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ version: 6, maxPrefix: 200 }), RangeError);
     });
 
     it("should throw RangeError when minPrefix is NaN", () => {
-      assert.throws(
-        () => cidr({ minPrefix: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ minPrefix: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when maxPrefix is NaN", () => {
-      assert.throws(
-        () => cidr({ maxPrefix: NaN as never }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ maxPrefix: NaN as never }), RangeError);
     });
 
     it("should throw RangeError when minPrefix is Infinity", () => {
-      assert.throws(
-        () => cidr({ minPrefix: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ minPrefix: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when minPrefix is -Infinity", () => {
-      assert.throws(
-        () => cidr({ minPrefix: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ minPrefix: -Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when maxPrefix is Infinity", () => {
-      assert.throws(
-        () => cidr({ maxPrefix: Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ maxPrefix: Infinity as never }), RangeError);
     });
 
     it("should throw RangeError when maxPrefix is -Infinity", () => {
-      assert.throws(
-        () => cidr({ maxPrefix: -Infinity as never }),
-        RangeError,
-      );
+      assert.throws(() => cidr({ maxPrefix: -Infinity as never }), RangeError);
     });
   });
 
@@ -16499,9 +15821,9 @@ describe("cidr()", () => {
         minPrefix: 16,
         errors: {
           prefixBelowMinimum: (actual, minimum) =>
-            message`prefix ${text(String(actual))} below ${
-              text(String(minimum))
-            }.`,
+            message`prefix ${text(String(actual))} below ${text(
+              String(minimum),
+            )}.`,
         },
       });
       const result = parser.parse("192.168.0.0/8");
@@ -16521,9 +15843,9 @@ describe("cidr()", () => {
         maxPrefix: 24,
         errors: {
           prefixAboveMaximum: (actual, maximum) =>
-            message`prefix ${text(String(actual))} above ${
-              text(String(maximum))
-            }.`,
+            message`prefix ${text(String(actual))} above ${text(
+              String(maximum),
+            )}.`,
         },
       });
       const result = parser.parse("127.0.0.0/32");
@@ -16987,9 +16309,9 @@ describe("branch coverage regressions", () => {
     const invalidPrefix = cidr({
       errors: {
         invalidPrefix: (prefix, version) =>
-          message`prefix ${text(prefix.toString())} invalid for v${
-            text(version.toString())
-          }`,
+          message`prefix ${text(prefix.toString())} invalid for v${text(
+            version.toString(),
+          )}`,
       },
     });
     const ipv6TooWide = invalidPrefix.parse("2001:db8::/129");
@@ -17329,11 +16651,7 @@ describe("branch coverage regressions", () => {
       });
 
       const bigintParser = integer({ type: "bigint" });
-      assert.throws(
-        () => bigintParser.parse("123"),
-        TypeError,
-        "bigint boom",
-      );
+      assert.throws(() => bigintParser.parse("123"), TypeError, "bigint boom");
 
       const bigintPortParser = port({ type: "bigint" });
       assert.throws(
@@ -17454,23 +16772,20 @@ describe("branch coverage regressions", () => {
           'Expected every element of allowedVersions to be an integer, but got value "Symbol(version)" of type "symbol".',
       },
     );
-    assert.throws(
-      () => uuid({ allowedVersions: [[4]] as never }),
-      {
-        name: "TypeError",
-        message:
-          'Expected every element of allowedVersions to be an integer, but got value "4" of type "array".',
-      },
-    );
+    assert.throws(() => uuid({ allowedVersions: [[4]] as never }), {
+      name: "TypeError",
+      message:
+        'Expected every element of allowedVersions to be an integer, but got value "4" of type "array".',
+    });
   });
 
   it("uses UUID version policy errors for otherwise well-formed UUIDs", () => {
     const strictParser = uuid({
       errors: {
         disallowedVersion: (version, allowedVersions) =>
-          message`version ${text(String(version))} not in ${
-            text(allowedVersions.join(","))
-          }`,
+          message`version ${text(String(version))} not in ${text(
+            allowedVersions.join(","),
+          )}`,
       },
     });
     const strictResult = strictParser.parse(
@@ -17763,9 +17078,9 @@ describe("branch coverage regressions", () => {
       ipv4: { allowPrivate: false },
       errors: {
         invalidPrefix: (prefix, version) =>
-          message`bad prefix ${text(prefix.toString())} for version ${
-            text(version.toString())
-          }`,
+          message`bad prefix ${text(prefix.toString())} for version ${text(
+            version.toString(),
+          )}`,
       },
     }).parse("192.168.0.0/33");
     assert.ok(!prefixCallback.success);
@@ -17786,14 +17101,12 @@ describe("format() for network-address value parsers", () => {
 
   it("macAddress() parse-format round-trips for all separator styles", () => {
     const mac = macAddress();
-    for (
-      const input of [
-        "aa:bb:cc:dd:ee:ff",
-        "aa-bb-cc-dd-ee-ff",
-        "aabb.ccdd.eeff",
-        "aabbccddeeff",
-      ]
-    ) {
+    for (const input of [
+      "aa:bb:cc:dd:ee:ff",
+      "aa-bb-cc-dd-ee-ff",
+      "aabb.ccdd.eeff",
+      "aabbccddeeff",
+    ]) {
       const parsed = mac.parse(input);
       assert.ok(parsed.success);
       if (parsed.success) {
@@ -18062,7 +17375,7 @@ describe("ValueParser.normalize()", () => {
 describe("checkBooleanOption", () => {
   it("should not throw when options is undefined", () => {
     assert.doesNotThrow(() =>
-      checkBooleanOption<{ foo?: boolean }>(undefined, "foo")
+      checkBooleanOption<{ foo?: boolean }>(undefined, "foo"),
     );
   });
 
@@ -18079,23 +17392,17 @@ describe("checkBooleanOption", () => {
   });
 
   it("should throw TypeError for a string value", () => {
-    assert.throws(
-      () => checkBooleanOption({ foo: "yes" }, "foo"),
-      {
-        name: "TypeError",
-        message: "Expected foo to be a boolean, but got string: yes.",
-      },
-    );
+    assert.throws(() => checkBooleanOption({ foo: "yes" }, "foo"), {
+      name: "TypeError",
+      message: "Expected foo to be a boolean, but got string: yes.",
+    });
   });
 
   it("should throw TypeError for a number value", () => {
-    assert.throws(
-      () => checkBooleanOption({ foo: 1 }, "foo"),
-      {
-        name: "TypeError",
-        message: "Expected foo to be a boolean, but got number: 1.",
-      },
-    );
+    assert.throws(() => checkBooleanOption({ foo: 1 }, "foo"), {
+      name: "TypeError",
+      message: "Expected foo to be a boolean, but got number: 1.",
+    });
   });
 });
 
@@ -18104,13 +17411,13 @@ describe("checkEnumOption", () => {
 
   it("should not throw when options is undefined", () => {
     assert.doesNotThrow(() =>
-      checkEnumOption<{ foo?: string }>(undefined, "foo", allowed)
+      checkEnumOption<{ foo?: string }>(undefined, "foo", allowed),
     );
   });
 
   it("should not throw when the key is absent", () => {
     assert.doesNotThrow(() =>
-      checkEnumOption<{ foo?: string }>({}, "foo", allowed)
+      checkEnumOption<{ foo?: string }>({}, "foo", allowed),
     );
   });
 
@@ -18121,35 +17428,25 @@ describe("checkEnumOption", () => {
   });
 
   it("should throw TypeError for an invalid string value", () => {
-    assert.throws(
-      () => checkEnumOption({ foo: "x" }, "foo", allowed),
-      {
-        name: "TypeError",
-        message:
-          'Expected foo to be one of "a", "b", "c", but got string: "x".',
-      },
-    );
+    assert.throws(() => checkEnumOption({ foo: "x" }, "foo", allowed), {
+      name: "TypeError",
+      message: 'Expected foo to be one of "a", "b", "c", but got string: "x".',
+    });
   });
 
   it("should throw TypeError for a non-string value", () => {
-    assert.throws(
-      () => checkEnumOption({ foo: 42 }, "foo", allowed),
-      {
-        name: "TypeError",
-        message: 'Expected foo to be one of "a", "b", "c", but got number: 42.',
-      },
-    );
+    assert.throws(() => checkEnumOption({ foo: 42 }, "foo", allowed), {
+      name: "TypeError",
+      message: 'Expected foo to be one of "a", "b", "c", but got number: 42.',
+    });
   });
 
   it("should render symbol values in TypeError messages", () => {
-    assert.throws(
-      () => checkEnumOption({ foo: Symbol("x") }, "foo", allowed),
-      {
-        name: "TypeError",
-        message:
-          'Expected foo to be one of "a", "b", "c", but got symbol: Symbol(x).',
-      },
-    );
+    assert.throws(() => checkEnumOption({ foo: Symbol("x") }, "foo", allowed), {
+      name: "TypeError",
+      message:
+        'Expected foo to be one of "a", "b", "c", but got symbol: Symbol(x).',
+    });
   });
 });
 
@@ -18527,9 +17824,9 @@ describe("fileSize()", () => {
 
     it("round-trips representative byte values through format and parse", () => {
       const parser = fileSize();
-      for (
-        const bytes of [0, 512, 1000, 1024, 1_500_000, 1_048_576, 1_073_741_824]
-      ) {
+      for (const bytes of [
+        0, 512, 1000, 1024, 1_500_000, 1_048_576, 1_073_741_824,
+      ]) {
         const formatted = parser.format(bytes);
         const result = parser.parse(formatted);
         assert.ok(
@@ -18650,9 +17947,9 @@ describe("fileSize()", () => {
       const r = parser.parse("-1MB");
       assert.ok(!r.success);
       if (!r.success) {
-        const expected = message`Negative size ${
-          text(String(-1_000_000))
-        } not allowed`;
+        const expected = message`Negative size ${text(
+          String(-1_000_000),
+        )} not allowed`;
         assert.deepEqual(r.error, expected);
       }
     });
@@ -18812,16 +18109,14 @@ describe("fileSize()—bigint mode", () => {
 
     it("round-trips with siAsBinary: true", () => {
       const parser = fileSize({ type: "bigint", siAsBinary: true });
-      for (
-        const bytes of [
-          0n,
-          512n,
-          1_024n,
-          1_048_576n,
-          1_073_741_824n,
-          1_152_921_504_606_846_976n,
-        ]
-      ) {
+      for (const bytes of [
+        0n,
+        512n,
+        1_024n,
+        1_048_576n,
+        1_073_741_824n,
+        1_152_921_504_606_846_976n,
+      ]) {
         const formatted = parser.format(bytes);
         const result = parser.parse(formatted);
         assert.ok(
@@ -18943,24 +18238,15 @@ describe("fileSize()—bigint mode", () => {
     });
 
     it("formats 1_000_000_000_000_000_000n (1EB) as 1EB", () => {
-      assert.equal(
-        bigintParser.format(1_000_000_000_000_000_000n),
-        "1EB",
-      );
+      assert.equal(bigintParser.format(1_000_000_000_000_000_000n), "1EB");
     });
 
     it("formats 1_152_921_504_606_846_976n (1EiB) as 1EiB", () => {
-      assert.equal(
-        bigintParser.format(1_152_921_504_606_846_976n),
-        "1EiB",
-      );
+      assert.equal(bigintParser.format(1_152_921_504_606_846_976n), "1EiB");
     });
 
     it("formats 1_729_382_256_910_270_464n (1.5EiB) as 1.5EiB", () => {
-      assert.equal(
-        bigintParser.format(1_729_382_256_910_270_464n),
-        "1.5EiB",
-      );
+      assert.equal(bigintParser.format(1_729_382_256_910_270_464n), "1.5EiB");
     });
 
     it("formats 0n as 0B", () => {
@@ -18999,14 +18285,11 @@ describe("fileSize()—bigint mode", () => {
     it("round-trips any non-negative bigint up to 1000 EB via fast-check", () => {
       const maxBytes = 1_000n * 1_000_000_000_000_000_000n;
       fc.assert(
-        fc.property(
-          fc.bigInt({ min: 0n, max: maxBytes }),
-          (bytes) => {
-            const formatted = bigintParser.format(bytes);
-            const r = bigintParser.parse(formatted);
-            return r.success && r.value === bytes;
-          },
-        ),
+        fc.property(fc.bigInt({ min: 0n, max: maxBytes }), (bytes) => {
+          const formatted = bigintParser.format(bytes);
+          const r = bigintParser.parse(formatted);
+          return r.success && r.value === bytes;
+        }),
         propertyParameters,
       );
     });
@@ -19617,31 +18900,19 @@ describe("color()", () => {
 
   describe("format()", () => {
     it("formats opaque color as #rrggbb", () => {
-      assert.equal(
-        color().format({ r: 255, g: 0, b: 0, a: 1 }),
-        "#ff0000",
-      );
+      assert.equal(color().format({ r: 255, g: 0, b: 0, a: 1 }), "#ff0000");
     });
 
     it("formats #000000", () => {
-      assert.equal(
-        color().format({ r: 0, g: 0, b: 0, a: 1 }),
-        "#000000",
-      );
+      assert.equal(color().format({ r: 0, g: 0, b: 0, a: 1 }), "#000000");
     });
 
     it("formats #ffffff", () => {
-      assert.equal(
-        color().format({ r: 255, g: 255, b: 255, a: 1 }),
-        "#ffffff",
-      );
+      assert.equal(color().format({ r: 255, g: 255, b: 255, a: 1 }), "#ffffff");
     });
 
     it("formats transparent as #00000000", () => {
-      assert.equal(
-        color().format({ r: 0, g: 0, b: 0, a: 0 }),
-        "#00000000",
-      );
+      assert.equal(color().format({ r: 0, g: 0, b: 0, a: 0 }), "#00000000");
     });
 
     it("formats 50% alpha as #rrggbb80", () => {
@@ -19659,11 +18930,13 @@ describe("color()", () => {
             const parser = color();
             const original: Color = { r, g, b, a: 1 };
             const result = parser.parse(parser.format(original));
-            return result.success &&
+            return (
+              result.success &&
               result.value.r === r &&
               result.value.g === g &&
               result.value.b === b &&
-              result.value.a === 1;
+              result.value.a === 1
+            );
           },
         ),
         propertyParameters,
@@ -19821,7 +19094,7 @@ describe("color()", () => {
     it("suggests named colors matching prefix", () => {
       const suggestions = [...color().suggest!("re")]
         .filter((s) => s.kind === "literal")
-        .map((s) => s.kind === "literal" ? s.text : "");
+        .map((s) => (s.kind === "literal" ? s.text : ""));
       assert.ok(suggestions.includes("red"), "should include 'red'");
       assert.ok(
         suggestions.includes("rebeccapurple"),
@@ -19832,7 +19105,7 @@ describe("color()", () => {
     it("suggest prefix 're' does not include 'blue'", () => {
       const suggestions = [...color().suggest!("re")]
         .filter((s) => s.kind === "literal")
-        .map((s) => s.kind === "literal" ? s.text : "");
+        .map((s) => (s.kind === "literal" ? s.text : ""));
       assert.ok(!suggestions.includes("blue"));
     });
 
@@ -19844,7 +19117,7 @@ describe("color()", () => {
     it("case-insensitive prefix: 'RE' matches named colors", () => {
       const suggestions = [...color().suggest!("RE")]
         .filter((s) => s.kind === "literal")
-        .map((s) => s.kind === "literal" ? s.text : "");
+        .map((s) => (s.kind === "literal" ? s.text : ""));
       assert.ok(suggestions.includes("red"));
     });
 
@@ -19875,43 +19148,31 @@ describe("cron()", () => {
     });
 
     it("empty metavar throws TypeError", () => {
-      assert.throws(
-        () => cron({ metavar: "" as NonEmptyString }),
-        {
-          name: "TypeError",
-          message: "Expected a non-empty string.",
-        },
-      );
+      assert.throws(() => cron({ metavar: "" as NonEmptyString }), {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      });
     });
 
     it("non-boolean seconds throws TypeError", () => {
-      assert.throws(
-        () => cron({ seconds: "yes" as never }),
-        {
-          name: "TypeError",
-          message: "Expected seconds to be a boolean, but got string: yes.",
-        },
-      );
+      assert.throws(() => cron({ seconds: "yes" as never }), {
+        name: "TypeError",
+        message: "Expected seconds to be a boolean, but got string: yes.",
+      });
     });
 
     it("non-boolean years throws TypeError", () => {
-      assert.throws(
-        () => cron({ years: "yes" as never }),
-        {
-          name: "TypeError",
-          message: "Expected years to be a boolean, but got string: yes.",
-        },
-      );
+      assert.throws(() => cron({ years: "yes" as never }), {
+        name: "TypeError",
+        message: "Expected years to be a boolean, but got string: yes.",
+      });
     });
 
     it("non-boolean quartz throws TypeError", () => {
-      assert.throws(
-        () => cron({ quartz: "yes" as never }),
-        {
-          name: "TypeError",
-          message: "Expected quartz to be a boolean, but got string: yes.",
-        },
-      );
+      assert.throws(() => cron({ quartz: "yes" as never }), {
+        name: "TypeError",
+        message: "Expected quartz to be a boolean, but got string: yes.",
+      });
     });
 
     it("default placeholder is midnight daily", () => {
@@ -20134,10 +19395,7 @@ describe("cron()", () => {
         year: "2026",
       };
 
-      assert.equal(
-        parser.format(expression),
-        "0 */10 9-17 * * MON-FRI 2026",
-      );
+      assert.equal(parser.format(expression), "0 */10 9-17 * * MON-FRI 2026");
     });
 
     it("round-trips parsed expressions", () => {
@@ -20191,9 +19449,7 @@ describe("cron()", () => {
       assert.ok(secondsResult != null);
       assert.ok(!secondsResult.success);
 
-      const yearsResult = cron({ years: true }).validate?.(
-        expression as never,
-      );
+      const yearsResult = cron({ years: true }).validate?.(expression as never);
       assert.ok(yearsResult != null);
       assert.ok(!yearsResult.success);
 
@@ -20250,24 +19506,18 @@ describe("semVer()", () => {
     });
 
     it("non-boolean allowPrefix throws TypeError", () => {
-      assert.throws(
-        () => semVer({ allowPrefix: "yes" as never }),
-        {
-          name: "TypeError",
-          message: "Expected allowPrefix to be a boolean, but got string: yes.",
-        },
-      );
+      assert.throws(() => semVer({ allowPrefix: "yes" as never }), {
+        name: "TypeError",
+        message: "Expected allowPrefix to be a boolean, but got string: yes.",
+      });
     });
 
     it("invalid type option throws TypeError", () => {
-      assert.throws(
-        () => semVer({ type: "number" as never }),
-        {
-          name: "TypeError",
-          message:
-            'Expected type to be one of "string", "object", but got string: "number".',
-        },
-      );
+      assert.throws(() => semVer({ type: "number" as never }), {
+        name: "TypeError",
+        message:
+          'Expected type to be one of "string", "object", but got string: "number".',
+      });
     });
 
     it("placeholder for string mode is 0.0.0", () => {
@@ -20440,9 +19690,7 @@ describe("semVer()", () => {
     });
 
     it("parses version with pre-release and metadata", () => {
-      const result = semVer({ type: "object" }).parse(
-        "2.3.4-rc.1+sha.abc123",
-      );
+      const result = semVer({ type: "object" }).parse("2.3.4-rc.1+sha.abc123");
       assert.ok(result.success);
       assert.deepEqual(result.value, {
         major: 2,
@@ -20475,10 +19723,7 @@ describe("semVer()", () => {
 
     it("string mode with pre-release", () => {
       const p = semVer();
-      assert.equal(
-        p.format("1.0.0-alpha.1" as SemVerString),
-        "1.0.0-alpha.1",
-      );
+      assert.equal(p.format("1.0.0-alpha.1" as SemVerString), "1.0.0-alpha.1");
     });
 
     it("object mode formats major.minor.patch", () => {
@@ -20555,11 +19800,7 @@ describe("semVer()", () => {
     it("property-based round-trip for string mode", () => {
       const p = semVer();
       const semverArbitrary = fc
-        .tuple(
-          fc.nat({ max: 999 }),
-          fc.nat({ max: 999 }),
-          fc.nat({ max: 999 }),
-        )
+        .tuple(fc.nat({ max: 999 }), fc.nat({ max: 999 }), fc.nat({ max: 999 }))
         .map(([ma, mi, pa]) => `${ma}.${mi}.${pa}`);
       fc.assert(
         fc.property(semverArbitrary, (v) => {
@@ -20687,13 +19928,10 @@ describe("json()", () => {
     });
 
     it("empty metavar throws TypeError", () => {
-      assert.throws(
-        () => json({ metavar: "" as NonEmptyString }),
-        {
-          name: "TypeError",
-          message: "Expected a non-empty string.",
-        },
-      );
+      assert.throws(() => json({ metavar: "" as NonEmptyString }), {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      });
     });
 
     it("accepts a pre-typed JsonOptions variable", () => {
@@ -20724,15 +19962,12 @@ describe("json()", () => {
     });
 
     it("invalid rootType throws TypeError at construction", () => {
-      assert.throws(
-        () => json({ rootType: "invalid" as never }),
-        {
-          name: "TypeError",
-          message:
-            'Expected rootType to be one of "string", "number", "boolean",' +
-            ' "null", "object", "array", but got string: "invalid".',
-        },
-      );
+      assert.throws(() => json({ rootType: "invalid" as never }), {
+        name: "TypeError",
+        message:
+          'Expected rootType to be one of "string", "number", "boolean",' +
+          ' "null", "object", "array", but got string: "invalid".',
+      });
     });
 
     it("throws TypeError when placeholder is Infinity", () => {
@@ -20842,14 +20077,15 @@ describe("json()", () => {
       if (!result.success) {
         const msg = result.error;
         const prefix = "Not a valid JSON:";
-        const firstText = Array.isArray(msg) && msg[0]?.type === "text"
-          ? (msg[0].text as string)
-          : "";
+        const firstText =
+          Array.isArray(msg) && msg[0]?.type === "text"
+            ? (msg[0].text as string)
+            : "";
         assert.ok(
           firstText.startsWith(prefix) && firstText.length > prefix.length,
-          `Expected error to start with "${prefix}" followed by SyntaxError detail, got: ${
-            JSON.stringify(msg)
-          }`,
+          `Expected error to start with "${prefix}" followed by SyntaxError detail, got: ${JSON.stringify(
+            msg,
+          )}`,
         );
       }
     });
@@ -21097,10 +20333,9 @@ describe("json()", () => {
       const parser = json({
         rootType: "object",
         errors: {
-          invalidRootType: (
-            value: Json,
-            expected: string,
-          ) => [text(`want ${expected}, got ${typeof value}`)],
+          invalidRootType: (value: Json, expected: string) => [
+            text(`want ${expected}, got ${typeof value}`),
+          ],
         },
       });
       const result = parser.parse("42");
@@ -21606,13 +20841,7 @@ describe("keyValue", () => {
     it("should reject fallback values that are not key-value tuples", () => {
       const parser = keyValue();
 
-      for (
-        const value of [
-          "admin",
-          ["key"],
-          ["key", "value", "extra"],
-        ]
-      ) {
+      for (const value of ["admin", ["key"], ["key", "value", "extra"]]) {
         const result = parser.validate?.(value as never);
 
         assert.ok(result);
@@ -21813,7 +21042,7 @@ describe("keyValue", () => {
     it("should suggest keys with the separator appended before the separator", () => {
       const parser = keyValue({ key: choice(["host", "port"] as const) });
 
-      const suggestions = [...parser.suggest?.("h") ?? []];
+      const suggestions = [...(parser.suggest?.("h") ?? [])];
 
       assert.deepEqual(suggestions, [{ kind: "literal", text: "host=" }]);
     });
@@ -21824,7 +21053,7 @@ describe("keyValue", () => {
         value: choice(["debug", "info"] as const),
       });
 
-      const suggestions = [...parser.suggest?.("mode=d") ?? []];
+      const suggestions = [...(parser.suggest?.("mode=d") ?? [])];
 
       assert.deepEqual(suggestions, [{ kind: "literal", text: "mode=debug" }]);
     });
@@ -21835,7 +21064,7 @@ describe("keyValue", () => {
         value: choice(["debug"] as const),
       });
 
-      const suggestions = [...parser.suggest?.("moed=d") ?? []];
+      const suggestions = [...(parser.suggest?.("moed=d") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21845,7 +21074,7 @@ describe("keyValue", () => {
         value: choice(["debug"] as const),
       });
 
-      const suggestions = [...parser.suggest?.("=d") ?? []];
+      const suggestions = [...(parser.suggest?.("=d") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21866,7 +21095,7 @@ describe("keyValue", () => {
         value: choice(["debug"] as const),
       });
 
-      const suggestions = [...parser.suggest?.("default=d") ?? []];
+      const suggestions = [...(parser.suggest?.("default=d") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21874,7 +21103,7 @@ describe("keyValue", () => {
     it("should not suggest keys that cannot round-trip", () => {
       const parser = keyValue({ key: choice(["A=B"] as const) });
 
-      const suggestions = [...parser.suggest?.("A") ?? []];
+      const suggestions = [...(parser.suggest?.("A") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21885,7 +21114,7 @@ describe("keyValue", () => {
         key: choice(["A="] as const),
       });
 
-      const suggestions = [...parser.suggest?.("A") ?? []];
+      const suggestions = [...(parser.suggest?.("A") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21908,7 +21137,7 @@ describe("keyValue", () => {
       };
       const parser = keyValue({ key });
 
-      const suggestions = [...parser.suggest?.("A") ?? []];
+      const suggestions = [...(parser.suggest?.("A") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21919,7 +21148,7 @@ describe("keyValue", () => {
         value: choice(["B=C"] as const),
       });
 
-      const suggestions = [...parser.suggest?.("A=B") ?? []];
+      const suggestions = [...(parser.suggest?.("A=B") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21931,7 +21160,7 @@ describe("keyValue", () => {
         value: choice(["=B"] as const),
       });
 
-      const suggestions = [...parser.suggest?.("A==") ?? []];
+      const suggestions = [...(parser.suggest?.("A==") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21954,7 +21183,7 @@ describe("keyValue", () => {
       };
       const parser = keyValue({ split: "last", value });
 
-      const suggestions = [...parser.suggest?.("A=B") ?? []];
+      const suggestions = [...(parser.suggest?.("A=B") ?? [])];
 
       assert.deepEqual(suggestions, []);
     });
@@ -21966,12 +21195,10 @@ describe("keyValue", () => {
         value: choice(["C"] as const),
       });
 
-      const partialSuggestions = [...parser.suggest?.("A=") ?? []];
-      const completeKeySuggestions = [...parser.suggest?.("A=B") ?? []];
+      const partialSuggestions = [...(parser.suggest?.("A=") ?? [])];
+      const completeKeySuggestions = [...(parser.suggest?.("A=B") ?? [])];
 
-      assert.deepEqual(partialSuggestions, [
-        { kind: "literal", text: "A=B=" },
-      ]);
+      assert.deepEqual(partialSuggestions, [{ kind: "literal", text: "A=B=" }]);
       assert.deepEqual(completeKeySuggestions, [
         { kind: "literal", text: "A=B=" },
       ]);
@@ -21990,7 +21217,7 @@ describe("keyValue", () => {
       };
       const parser = keyValue({ value });
 
-      const suggestions = [...parser.suggest?.("out=src/") ?? []];
+      const suggestions = [...(parser.suggest?.("out=src/") ?? [])];
 
       assert.deepEqual(suggestions, [
         { kind: "file", type: "file", pattern: "out=src/", prefix: "out=" },
@@ -22014,13 +21241,18 @@ describe("keyValue", () => {
         },
       };
       const parser = keyValue({ separator: ":", value: keyValue({ value }) });
-      assert.deepEqual([...parser.suggest?.("group:out=src/") ?? []], [{
-        kind: "file",
-        type: "directory",
-        pattern: "group:out=src/",
-        prefix: "group:out=",
-        includeHidden: true,
-      }]);
+      assert.deepEqual(
+        [...(parser.suggest?.("group:out=src/") ?? [])],
+        [
+          {
+            kind: "file",
+            type: "directory",
+            pattern: "group:out=src/",
+            prefix: "group:out=",
+            includeHidden: true,
+          },
+        ],
+      );
     });
 
     it("should preserve file suggestions with non-parseable patterns", () => {
@@ -22044,7 +21276,7 @@ describe("keyValue", () => {
       };
       const parser = keyValue({ value });
 
-      const suggestions = [...parser.suggest?.("out=src/") ?? []];
+      const suggestions = [...(parser.suggest?.("out=src/") ?? [])];
 
       assert.deepEqual(suggestions, [
         {
@@ -22081,9 +21313,7 @@ describe("keyValue", () => {
     });
 
     it("should preserve nested deferred keys from child parsers", () => {
-      const nestedDeferredKeys = new Map<PropertyKey, null>([
-        ["name", null],
-      ]);
+      const nestedDeferredKeys = new Map<PropertyKey, null>([["name", null]]);
       const value: ValueParser<"sync", { readonly name: string }> = {
         mode: "sync",
         metavar: "VALUE",
@@ -22204,10 +21434,7 @@ describe("keyValue", () => {
         key: choice(["host", "port"] as const),
         value: integer(),
       });
-      parser satisfies ValueParser<
-        "sync",
-        readonly ["host" | "port", number]
-      >;
+      parser satisfies ValueParser<"sync", readonly ["host" | "port", number]>;
 
       const result = parser.parse("port=5432");
       assert.ok(result.success);
@@ -22282,9 +21509,8 @@ describe("keyValue", () => {
 
       const result = parser.parse("port=5432");
       assert.ok(result.success);
-      const value:
-        | readonly [string, number]
-        | readonly [string, string] = result.value;
+      const value: readonly [string, number] | readonly [string, string] =
+        result.value;
       assert.equal(value[0], "port");
       // @ts-expect-error: optional undefined options use default string parsers.
       const numericOnly: readonly [string, number] = result.value;
@@ -22314,13 +21540,10 @@ describe("keyValue", () => {
 
   describe("construction errors", () => {
     it("should reject an empty separator", () => {
-      assert.throws(
-        () => keyValue({ separator: "" }),
-        {
-          name: "TypeError",
-          message: "Expected a non-empty string.",
-        },
-      );
+      assert.throws(() => keyValue({ separator: "" }), {
+        name: "TypeError",
+        message: "Expected a non-empty string.",
+      });
     });
 
     it("should reject async child parsers", () => {
@@ -22360,20 +21583,14 @@ describe("keyValue", () => {
         defaultValue: () => "dev",
       });
 
-      assert.throws(
-        () => keyValue({ key: derived }),
-        {
-          name: "TypeError",
-          message: /dependency-derived key parsers/u,
-        },
-      );
-      assert.throws(
-        () => keyValue({ value: derived }),
-        {
-          name: "TypeError",
-          message: /dependency-derived value parsers/u,
-        },
-      );
+      assert.throws(() => keyValue({ key: derived }), {
+        name: "TypeError",
+        message: /dependency-derived key parsers/u,
+      });
+      assert.throws(() => keyValue({ value: derived }), {
+        name: "TypeError",
+        message: /dependency-derived value parsers/u,
+      });
     });
   });
 });
@@ -22762,13 +21979,13 @@ describe("firstOf", () => {
           const match = /^(.+)\[([^\]]+)\]$/.exec(input);
           return match == null
             ? {
-              success: false,
-              error: message`Expected a time zone annotation.`,
-            }
+                success: false,
+                error: message`Expected a time zone annotation.`,
+              }
             : {
-              success: true,
-              value: new FakeZonedDateTime(match[1], match[2]),
-            };
+                success: true,
+                value: new FakeZonedDateTime(match[1], match[2]),
+              };
         },
         format: (value) => value.toString(),
       };
@@ -22809,10 +22026,9 @@ describe("firstOf", () => {
       // objects; ownership comparison must not distinguish the two
       // prototypes.
       const parser = firstOf(json({ rootType: "object" }), choice(["none"]));
-      const value: Record<string, number> = Object.assign(
-        Object.create(null),
-        { a: 1 },
-      );
+      const value: Record<string, number> = Object.assign(Object.create(null), {
+        a: 1,
+      });
       const result = parser.validate?.(value);
       assert.ok(result?.success);
       assert.deepEqual(result.value, { a: 1 });
@@ -23022,18 +22238,18 @@ describe("firstOf", () => {
         choice(["auto", "always"]),
         choice(["all", "never"]),
       );
-      const suggestions = [...parser.suggest?.("a") ?? []];
+      const suggestions = [...(parser.suggest?.("a") ?? [])];
       assert.deepEqual(
-        suggestions.map((s) => s.kind === "literal" ? s.text : s.kind),
+        suggestions.map((s) => (s.kind === "literal" ? s.text : s.kind)),
         ["auto", "always", "all"],
       );
     });
 
     it("should deduplicate identical suggestions across constituents", () => {
       const parser = firstOf(choice(["auto", "max"]), choice(["auto", "min"]));
-      const suggestions = [...parser.suggest?.("") ?? []];
+      const suggestions = [...(parser.suggest?.("") ?? [])];
       assert.deepEqual(
-        suggestions.map((s) => s.kind === "literal" ? s.text : s.kind),
+        suggestions.map((s) => (s.kind === "literal" ? s.text : s.kind)),
         ["auto", "max", "min"],
       );
     });

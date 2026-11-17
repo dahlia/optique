@@ -44,41 +44,41 @@ type RandomParserAst =
   | { readonly kind: "argument" }
   | { readonly kind: "optional"; readonly child: RandomParserAst }
   | {
-    readonly kind: "multiple";
-    readonly child: RandomParserAst;
-    readonly min: 0 | 1;
-    readonly max: 1 | 2 | 3;
-  }
+      readonly kind: "multiple";
+      readonly child: RandomParserAst;
+      readonly min: 0 | 1;
+      readonly max: 1 | 2 | 3;
+    }
   | {
-    readonly kind: "object";
-    readonly left: RandomParserAst;
-    readonly right: RandomParserAst;
-  }
+      readonly kind: "object";
+      readonly left: RandomParserAst;
+      readonly right: RandomParserAst;
+    }
   | {
-    readonly kind: "tuple";
-    readonly left: RandomParserAst;
-    readonly right: RandomParserAst;
-  }
+      readonly kind: "tuple";
+      readonly left: RandomParserAst;
+      readonly right: RandomParserAst;
+    }
   | {
-    readonly kind: "or";
-    readonly left: RandomParserAst;
-    readonly right: RandomParserAst;
-  };
+      readonly kind: "or";
+      readonly left: RandomParserAst;
+      readonly right: RandomParserAst;
+    };
 
 type OracleOptionSpec =
   | {
-    readonly key: string;
-    readonly name: `--${string}`;
-    readonly kind: "flag";
-    readonly required: boolean;
-  }
+      readonly key: string;
+      readonly name: `--${string}`;
+      readonly kind: "flag";
+      readonly required: boolean;
+    }
   | {
-    readonly key: string;
-    readonly name: `--${string}`;
-    readonly kind: "value";
-    readonly required: boolean;
-    readonly choices: readonly string[];
-  };
+      readonly key: string;
+      readonly name: `--${string}`;
+      readonly kind: "value";
+      readonly required: boolean;
+      readonly choices: readonly string[];
+    };
 
 interface OracleCliSpec {
   readonly command: string;
@@ -159,11 +159,11 @@ function randomParserAstArbitrary(
   depth: number,
 ): fc.Arbitrary<RandomParserAst> {
   const leaf = fc.oneof(
-    identifierArbitrary.map((name: string) =>
-      ({ kind: "flag", name }) as const
+    identifierArbitrary.map(
+      (name: string) => ({ kind: "flag", name }) as const,
     ),
-    identifierArbitrary.map((name: string) =>
-      ({ kind: "optionInt", name }) as const
+    identifierArbitrary.map(
+      (name: string) => ({ kind: "optionInt", name }) as const,
     ),
     fc.constant({ kind: "argument" } as const),
   );
@@ -183,8 +183,9 @@ function randomParserAstArbitrary(
         min: fc.constantFrom<0 | 1>(0, 1),
         max: fc.constantFrom<1 | 2 | 3>(1, 2, 3),
       })
-      .filter((bounds: { readonly min: 0 | 1; readonly max: 1 | 2 | 3 }) =>
-        bounds.min <= bounds.max
+      .filter(
+        (bounds: { readonly min: 0 | 1; readonly max: 1 | 2 | 3 }) =>
+          bounds.min <= bounds.max,
       ),
     fc.record({ kind: fc.constant("object"), left: child, right: child }),
     fc.record({ kind: fc.constant("tuple"), left: child, right: child }),
@@ -194,12 +195,7 @@ function randomParserAstArbitrary(
 
 const randomParserAst = randomParserAstArbitrary(3);
 
-const oracleChoicePool = [
-  "dev",
-  "prod",
-  "test",
-  "stage",
-] as const;
+const oracleChoicePool = ["dev", "prod", "test", "stage"] as const;
 
 const oracleChoiceSetArbitrary = fc.uniqueArray(
   fc.constantFrom(...oracleChoicePool),
@@ -215,53 +211,59 @@ const oracleCliSpecArbitrary: fc.Arbitrary<OracleCliSpec> = fc
     maxLength: 4,
   })
   .chain((names: readonly string[]) =>
-    fc.record({
-      command: identifierArbitrary,
-      kinds: fc.array(fc.constantFrom<"flag" | "value">("flag", "value"), {
-        minLength: names.length,
-        maxLength: names.length,
-      }),
-      required: fc.array(fc.boolean(), {
-        minLength: names.length,
-        maxLength: names.length,
-      }),
-      choiceSets: fc.array(oracleChoiceSetArbitrary, {
-        minLength: names.length,
-        maxLength: names.length,
-      }),
-    }).map(({
-      command,
-      kinds,
-      required,
-      choiceSets,
-    }: {
-      readonly command: string;
-      readonly kinds: readonly ("flag" | "value")[];
-      readonly required: readonly boolean[];
-      readonly choiceSets: readonly (readonly string[])[];
-    }) => ({
-      command,
-      options: names.map((name: string, index: number): OracleOptionSpec => {
-        const key = `opt${index}`;
-        const optionName = longOptionName(name);
-        if (kinds[index] === "flag") {
-          return {
-            key,
-            name: optionName,
-            kind: "flag",
-            required: required[index] ?? false,
-          };
-        }
+    fc
+      .record({
+        command: identifierArbitrary,
+        kinds: fc.array(fc.constantFrom<"flag" | "value">("flag", "value"), {
+          minLength: names.length,
+          maxLength: names.length,
+        }),
+        required: fc.array(fc.boolean(), {
+          minLength: names.length,
+          maxLength: names.length,
+        }),
+        choiceSets: fc.array(oracleChoiceSetArbitrary, {
+          minLength: names.length,
+          maxLength: names.length,
+        }),
+      })
+      .map(
+        ({
+          command,
+          kinds,
+          required,
+          choiceSets,
+        }: {
+          readonly command: string;
+          readonly kinds: readonly ("flag" | "value")[];
+          readonly required: readonly boolean[];
+          readonly choiceSets: readonly (readonly string[])[];
+        }) => ({
+          command,
+          options: names.map(
+            (name: string, index: number): OracleOptionSpec => {
+              const key = `opt${index}`;
+              const optionName = longOptionName(name);
+              if (kinds[index] === "flag") {
+                return {
+                  key,
+                  name: optionName,
+                  kind: "flag",
+                  required: required[index] ?? false,
+                };
+              }
 
-        return {
-          key,
-          name: optionName,
-          kind: "value",
-          required: required[index] ?? false,
-          choices: choiceSets[index] ?? ["dev"],
-        };
-      }),
-    }))
+              return {
+                key,
+                name: optionName,
+                kind: "value",
+                required: required[index] ?? false,
+                choices: choiceSets[index] ?? ["dev"],
+              };
+            },
+          ),
+        }),
+      ),
   );
 
 function compileRandomParserAst(
@@ -330,9 +332,9 @@ function parseOracleCliSpec(
   args: readonly string[],
 ):
   | {
-    readonly success: true;
-    readonly value: Readonly<Record<string, unknown>>;
-  }
+      readonly success: true;
+      readonly value: Readonly<Record<string, unknown>>;
+    }
   | { readonly success: false } {
   if (args.length < 1 || args[0] !== spec.command) {
     return { success: false };
@@ -461,10 +463,9 @@ function literalSuggestionTexts(
   suggestions: readonly Suggestion[],
 ): readonly string[] {
   return suggestions
-    .filter((
-      suggestion,
-    ): suggestion is Extract<Suggestion, { kind: "literal" }> =>
-      suggestion.kind === "literal"
+    .filter(
+      (suggestion): suggestion is Extract<Suggestion, { kind: "literal" }> =>
+        suggestion.kind === "literal",
     )
     .map((suggestion) => suggestion.text);
 }
@@ -478,7 +479,7 @@ function literalSuggestionSet(
 function toSuggestionArgs(
   before: readonly string[],
   prefix: string,
-): [string, ...readonly string[]] {
+): [string, ...(readonly string[])] {
   return before.length > 0
     ? [before[0]!, ...before.slice(1), prefix]
     : [prefix];
@@ -805,11 +806,7 @@ describe("property-based tests", () => {
         randomParserAst,
         fc.array(adversarialTokenArbitrary, { minLength: 0, maxLength: 8 }),
         adversarialTokenArbitrary,
-        (
-          ast: RandomParserAst,
-          args: readonly string[],
-          prefix: string,
-        ) => {
+        (ast: RandomParserAst, args: readonly string[], prefix: string) => {
           const parser = compileRandomParserAst(ast);
           const first = parseSync(parser, args);
           const argv = toSuggestionArgs(args, prefix);
@@ -839,12 +836,12 @@ describe("property-based tests", () => {
         fc.string({ minLength: 1, maxLength: 3 }),
         (basePrefix: string, suffix: string) => {
           const extendedPrefix = `${basePrefix}${suffix}`;
-          const baseSuggestions = literalSuggestionSet(suggestSync(parser, [
-            basePrefix,
-          ]));
-          const extendedSuggestions = literalSuggestionSet(suggestSync(parser, [
-            extendedPrefix,
-          ]));
+          const baseSuggestions = literalSuggestionSet(
+            suggestSync(parser, [basePrefix]),
+          );
+          const extendedSuggestions = literalSuggestionSet(
+            suggestSync(parser, [extendedPrefix]),
+          );
 
           for (const suggestion of extendedSuggestions) {
             assert.ok(baseSuggestions.has(suggestion));
@@ -873,14 +870,12 @@ describe("property-based tests", () => {
           suffix: string,
         ) => {
           const extendedPrefix = `${basePrefix}${suffix}`;
-          const baseSuggestions = literalSuggestionSet(suggestSync(parser, [
-            optionName,
-            basePrefix,
-          ]));
-          const extendedSuggestions = literalSuggestionSet(suggestSync(parser, [
-            optionName,
-            extendedPrefix,
-          ]));
+          const baseSuggestions = literalSuggestionSet(
+            suggestSync(parser, [optionName, basePrefix]),
+          );
+          const extendedSuggestions = literalSuggestionSet(
+            suggestSync(parser, [optionName, extendedPrefix]),
+          );
 
           for (const suggestion of extendedSuggestions) {
             assert.ok(baseSuggestions.has(suggestion));
@@ -913,11 +908,13 @@ describe("property-based tests", () => {
     ] as const;
     const prefixArbitrary = fc.oneof(
       fc.string({ minLength: 0, maxLength: 6 }),
-      fc.constantFrom(...domainTokens).chain((token: string) =>
-        fc
-          .integer({ min: 0, max: token.length })
-          .map((length: number) => token.slice(0, length))
-      ),
+      fc
+        .constantFrom(...domainTokens)
+        .chain((token: string) =>
+          fc
+            .integer({ min: 0, max: token.length })
+            .map((length: number) => token.slice(0, length)),
+        ),
     );
 
     fc.assert(
@@ -938,7 +935,7 @@ describe("property-based tests", () => {
 
           for (const suggestion of suggestions) {
             const alignsWithDomain = domainTokens.some((token: string) =>
-              token.startsWith(suggestion)
+              token.startsWith(suggestion),
             );
             assert.ok(alignsWithDomain);
           }
@@ -1584,8 +1581,8 @@ describe("property-based tests", () => {
           const args = !present
             ? []
             : separated
-            ? ["--count", invalidValue]
-            : [`--count=${invalidValue}`];
+              ? ["--count", invalidValue]
+              : [`--count=${invalidValue}`];
 
           const result = parseSync(parser, args);
 
@@ -1653,14 +1650,8 @@ describe("property-based tests", () => {
           candidateMax: number,
         ) => {
           fc.pre(looseMin <= looseMax);
-          const tightMin = Math.min(
-            looseMax,
-            Math.max(looseMin, candidateMin),
-          );
-          const tightMax = Math.max(
-            tightMin,
-            Math.min(looseMax, candidateMax),
-          );
+          const tightMin = Math.min(looseMax, Math.max(looseMin, candidateMin));
+          const tightMax = Math.max(tightMin, Math.min(looseMax, candidateMax));
 
           const looseParser = object({
             values: multiple(argument(string()), {
@@ -1749,9 +1740,14 @@ describe("property-based tests", () => {
           levelFirst: boolean,
         ) => {
           const effectiveMode = includeMode ? mode : "prod";
-          const level = effectiveMode === "dev"
-            ? (pickFirst ? "debug" : "trace")
-            : (pickFirst ? "warn" : "error");
+          const level =
+            effectiveMode === "dev"
+              ? pickFirst
+                ? "debug"
+                : "trace"
+              : pickFirst
+                ? "warn"
+                : "error";
 
           const modeTokens = includeMode ? ["--mode", mode] : [];
           const levelTokens = ["--level", level] as const;
@@ -1821,10 +1817,10 @@ describe("property-based tests", () => {
           mode === "dev" && target === "node"
             ? (["inspect", "watch"] as const)
             : mode === "dev" && target === "browser"
-            ? (["hmr", "source-map"] as const)
-            : mode === "prod" && target === "node"
-            ? (["cluster", "pm2"] as const)
-            : (["minify", "sri"] as const),
+              ? (["hmr", "source-map"] as const)
+              : mode === "prod" && target === "node"
+                ? (["cluster", "pm2"] as const)
+                : (["minify", "sri"] as const),
         ),
       defaultValues: () => ["dev", "node"] as const,
     });
@@ -1853,13 +1849,14 @@ describe("property-based tests", () => {
         ) => {
           const resolvedMode = includeMode ? mode : "dev";
           const resolvedTarget = includeTarget ? target : "node";
-          const choices = resolvedMode === "dev" && resolvedTarget === "node"
-            ? (["inspect", "watch"] as const)
-            : resolvedMode === "dev" && resolvedTarget === "browser"
-            ? (["hmr", "source-map"] as const)
-            : resolvedMode === "prod" && resolvedTarget === "node"
-            ? (["cluster", "pm2"] as const)
-            : (["minify", "sri"] as const);
+          const choices =
+            resolvedMode === "dev" && resolvedTarget === "node"
+              ? (["inspect", "watch"] as const)
+              : resolvedMode === "dev" && resolvedTarget === "browser"
+                ? (["hmr", "source-map"] as const)
+                : resolvedMode === "prod" && resolvedTarget === "node"
+                  ? (["cluster", "pm2"] as const)
+                  : (["minify", "sri"] as const);
           const preset = pickFirst ? choices[0] : choices[1];
 
           const blocks = [
@@ -2092,7 +2089,7 @@ describe("property-based tests", () => {
       fc.asyncProperty(
         fc.array(adversarialTokenArbitrary, { minLength: 1, maxLength: 8 }),
         async (args: readonly string[]) => {
-          const argv = args as [string, ...readonly string[]];
+          const argv = args as [string, ...(readonly string[])];
           assert.doesNotThrow(() => suggestSync(parser, argv));
 
           const syncSuggestions = suggestSync(parser, argv);
@@ -2239,15 +2236,16 @@ describe("property-based tests", () => {
           includeDebug: boolean,
           insertionSeed: number,
         ) => {
-          const insertionIndex = passthroughTokens.length < 1
-            ? 0
-            : insertionSeed % (passthroughTokens.length + 1);
+          const insertionIndex =
+            passthroughTokens.length < 1
+              ? 0
+              : insertionSeed % (passthroughTokens.length + 1);
           const args = includeDebug
             ? [
-              ...passthroughTokens.slice(0, insertionIndex),
-              "--debug",
-              ...passthroughTokens.slice(insertionIndex),
-            ]
+                ...passthroughTokens.slice(0, insertionIndex),
+                "--debug",
+                ...passthroughTokens.slice(insertionIndex),
+              ]
             : [...passthroughTokens];
 
           const syncResult = parseSync(parser, args);
@@ -2365,9 +2363,8 @@ describe("property-based tests", () => {
           ];
           const ordered = reverseOrder ? [...selected].reverse() : selected;
           const separatedArgs = ordered.map(shortOptionName);
-          const bundledArgs = ordered.length < 1
-            ? []
-            : [`-${ordered.join("")}`];
+          const bundledArgs =
+            ordered.length < 1 ? [] : [`-${ordered.join("")}`];
 
           const separated = parseSync(parser, separatedArgs);
           const bundled = parseSync(parser, bundledArgs);

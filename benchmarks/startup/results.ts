@@ -47,15 +47,22 @@ export interface Report {
 /** Enforces bounded structure, process validity, output hashes and quantiles. */
 export function validateReport(value: unknown): asserts value is Report {
   const report = record(value);
-  const count = report.sampleCount, warmups = report.warmupCount;
+  const count = report.sampleCount,
+    warmups = report.warmupCount;
   if (
     report.schemaVersion !== 1 ||
     !["smoke", "baseline"].includes(String(report.mode)) ||
-    !Number.isSafeInteger(count) || typeof count !== "number" || count < 1 ||
-    count > 1000 || !Number.isSafeInteger(warmups) ||
-    typeof warmups !== "number" || warmups < 0 || warmups > 20 ||
+    !Number.isSafeInteger(count) ||
+    typeof count !== "number" ||
+    count < 1 ||
+    count > 1000 ||
+    !Number.isSafeInteger(warmups) ||
+    typeof warmups !== "number" ||
+    warmups < 0 ||
+    warmups > 20 ||
     (report.mode === "baseline" && count < 100)
-  ) throw new TypeError("Malformed report header.");
+  )
+    throw new TypeError("Malformed report header.");
   const metadata = record(report.metadata);
   for (const key of ["revision", "identity", "manifestHash"]) {
     if (typeof metadata[key] !== "string" || metadata[key] === "") {
@@ -64,42 +71,51 @@ export function validateReport(value: unknown): asserts value is Report {
   }
   record(metadata.runtimes);
   if (
-    !Array.isArray(report.cases) || report.cases.length < 1 ||
+    !Array.isArray(report.cases) ||
+    report.cases.length < 1 ||
     report.cases.length > 100
-  ) throw new TypeError("Missing or excessive report cases.");
+  )
+    throw new TypeError("Missing or excessive report cases.");
   const outputs = record(report.outputs);
   for (const [hash, raw] of Object.entries(outputs)) {
     const output = record(raw);
     if (
-      typeof output.stdout !== "string" || typeof output.stderr !== "string" ||
+      typeof output.stdout !== "string" ||
+      typeof output.stderr !== "string" ||
       sha256(
-          JSON.stringify({ stdout: output.stdout, stderr: output.stderr }),
-        ) !== hash
-    ) throw new TypeError("Corrupt output table.");
+        JSON.stringify({ stdout: output.stdout, stderr: output.stderr }),
+      ) !== hash
+    )
+      throw new TypeError("Corrupt output table.");
   }
   const ids: string[] = [];
   for (const raw of report.cases) {
     const item = record(raw);
     if (
-      typeof item.id !== "string" || ids.includes(item.id) ||
+      typeof item.id !== "string" ||
+      ids.includes(item.id) ||
       typeof item.loadingMode !== "string" ||
       !Number.isInteger(item.expectedStatus) ||
       typeof item.expectedOutputHash !== "string" ||
       outputs[item.expectedOutputHash] == null
-    ) throw new TypeError("Invalid or duplicate report case.");
+    )
+      throw new TypeError("Invalid or duplicate report case.");
     ids.push(item.id);
     const command = record(item.command);
     if (
       typeof command.executable !== "string" ||
-      typeof command.cwd !== "string" || !Array.isArray(command.args) ||
+      typeof command.cwd !== "string" ||
+      !Array.isArray(command.args) ||
       command.args.some((arg) => typeof arg !== "string") ||
-      Object.values(record(command.env)).some((setting) =>
-        typeof setting !== "string"
+      Object.values(record(command.env)).some(
+        (setting) => typeof setting !== "string",
       )
-    ) throw new TypeError("Invalid report command.");
-    for (
-      const [key, length] of [["samples", count], ["warmups", warmups]] as const
-    ) {
+    )
+      throw new TypeError("Invalid report command.");
+    for (const [key, length] of [
+      ["samples", count],
+      ["warmups", warmups],
+    ] as const) {
       const samples = item[key];
       if (!Array.isArray(samples) || samples.length !== length) {
         throw new TypeError("Wrong report sample count.");
@@ -108,11 +124,15 @@ export function validateReport(value: unknown): asserts value is Report {
         const sample = record(rawSample);
         if (
           typeof sample.wallMs !== "number" ||
-          !Number.isFinite(sample.wallMs) || sample.wallMs < 0 ||
-          sample.status !== item.expectedStatus || sample.signal !== null ||
-          sample.error !== null || typeof sample.outputHash !== "string" ||
+          !Number.isFinite(sample.wallMs) ||
+          sample.wallMs < 0 ||
+          sample.status !== item.expectedStatus ||
+          sample.signal !== null ||
+          sample.error !== null ||
+          typeof sample.outputHash !== "string" ||
           outputs[sample.outputHash] == null
-        ) throw new TypeError("Invalid report sample.");
+        )
+          throw new TypeError("Invalid report sample.");
         if (sample.outputHash !== item.expectedOutputHash) {
           throw new TypeError(
             "Sample output differs from its case expectation.",
@@ -121,9 +141,10 @@ export function validateReport(value: unknown): asserts value is Report {
       }
     }
     const times = (item.samples as Record<string, unknown>[]).map((sample) =>
-      Number(sample.wallMs)
+      Number(sample.wallMs),
     );
-    const summary = record(item.summary), expected = summarize(times);
+    const summary = record(item.summary),
+      expected = summarize(times);
     for (const key of ["count", "medianMs", "p95Ms"] as const) {
       if (summary[key] !== expected[key]) {
         throw new TypeError("Report summary does not match raw samples.");
@@ -131,12 +152,16 @@ export function validateReport(value: unknown): asserts value is Report {
     }
   }
   if (
-    !Array.isArray(report.order) || report.order.length !== count ||
-    report.order.some((row) =>
-      !Array.isArray(row) || row.length !== ids.length ||
-      [...row].sort().join("\0") !== [...ids].sort().join("\0")
+    !Array.isArray(report.order) ||
+    report.order.length !== count ||
+    report.order.some(
+      (row) =>
+        !Array.isArray(row) ||
+        row.length !== ids.length ||
+        [...row].sort().join("\0") !== [...ids].sort().join("\0"),
     )
-  ) throw new TypeError("Invalid interleaving order.");
+  )
+    throw new TypeError("Invalid interleaving order.");
   if (Buffer.byteLength(JSON.stringify(report)) > 5 * 1024 * 1024) {
     throw new RangeError("Report exceeds 5 MiB.");
   }

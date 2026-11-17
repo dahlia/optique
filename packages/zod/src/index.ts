@@ -139,9 +139,7 @@ interface BooleanSchemaInfo {
  * safe to expose `choices` and `suggest()`—wrappers that can narrow
  * the accepted domain (effects, catch) suppress choice exposure.
  */
-function analyzeBooleanSchema(
-  schema: z.Schema<unknown>,
-): BooleanSchemaInfo {
+function analyzeBooleanSchema(schema: z.Schema<unknown>): BooleanSchemaInfo {
   const result = analyzeBooleanInner(schema, true, new WeakSet());
   if (!result.isBoolean) {
     return { isBoolean: false, exposeChoices: false, isCoerced: false };
@@ -168,13 +166,15 @@ function analyzeBooleanInner(
     // Zod v4 inlines refinements as checks on the schema itself.
     // When custom checks are present, the accepted domain may be
     // narrowed, so suppress choices.
-    const hasCustomChecks = Array.isArray(def.checks) &&
-      def.checks.some((c) =>
-        c.kind === "custom" ||
-        (c as { type?: string }).type === "custom" ||
-        // Zod v4 superRefine/check stores type under _zod.def.check
-        (c as { _zod?: { def?: { check?: string } } })
-            ._zod?.def?.check === "custom"
+    const hasCustomChecks =
+      Array.isArray(def.checks) &&
+      def.checks.some(
+        (c) =>
+          c.kind === "custom" ||
+          (c as { type?: string }).type === "custom" ||
+          // Zod v4 superRefine/check stores type under _zod.def.check
+          (c as { _zod?: { def?: { check?: string } } })._zod?.def?.check ===
+            "custom",
       );
     return {
       isBoolean: true,
@@ -185,11 +185,16 @@ function analyzeBooleanInner(
 
   // Wrappers that preserve the input domain—choices stay valid
   if (
-    typeName === "ZodOptional" || typeName === "optional" ||
-    typeName === "ZodNullable" || typeName === "nullable" ||
-    typeName === "ZodDefault" || typeName === "default" ||
-    typeName === "ZodReadonly" || typeName === "readonly" ||
-    typeName === "prefault" || typeName === "nonoptional"
+    typeName === "ZodOptional" ||
+    typeName === "optional" ||
+    typeName === "ZodNullable" ||
+    typeName === "nullable" ||
+    typeName === "ZodDefault" ||
+    typeName === "default" ||
+    typeName === "ZodReadonly" ||
+    typeName === "readonly" ||
+    typeName === "prefault" ||
+    typeName === "nonoptional"
   ) {
     const innerType = def.innerType;
     if (innerType != null) {
@@ -230,9 +235,10 @@ function analyzeBooleanInner(
   // Zod v3 stores the inner schema on _def.type (an object),
   // while Zod v4 uses _def.innerType.
   if (typeName === "ZodBranded" || typeName === "branded") {
-    const innerType = def.innerType ??
+    const innerType =
+      def.innerType ??
       (typeof def.type === "object" && def.type != null
-        ? def.type as z.Schema<unknown>
+        ? (def.type as z.Schema<unknown>)
         : undefined);
     if (innerType != null) {
       return analyzeBooleanInner(innerType, false, visited);
@@ -271,28 +277,23 @@ function analyzeBooleanInner(
  * Pre-converts a CLI string input to an actual boolean value using
  * CLI-friendly literals (true/false, 1/0, yes/no, on/off).
  */
-function preConvertBoolean(
-  input: string,
-): ValueParserResult<boolean> {
+function preConvertBoolean(input: string): ValueParserResult<boolean> {
   const normalized = input.trim().toLowerCase();
-  if (
-    (BOOL_TRUE_LITERALS as readonly string[]).includes(normalized)
-  ) {
+  if ((BOOL_TRUE_LITERALS as readonly string[]).includes(normalized)) {
     return { success: true, value: true };
   }
-  if (
-    (BOOL_FALSE_LITERALS as readonly string[]).includes(normalized)
-  ) {
+  if ((BOOL_FALSE_LITERALS as readonly string[]).includes(normalized)) {
     return { success: true, value: false };
   }
   return {
     success: false,
-    error: message`Invalid Boolean value: ${input}. Expected one of ${
-      valueSet([...BOOL_TRUE_LITERALS, ...BOOL_FALSE_LITERALS], {
+    error: message`Invalid Boolean value: ${input}. Expected one of ${valueSet(
+      [...BOOL_TRUE_LITERALS, ...BOOL_FALSE_LITERALS],
+      {
         fallback: "",
         locale: "en-US",
-      })
-    }.`,
+      },
+    )}.`,
   };
 }
 
@@ -344,8 +345,8 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
           return check.version === "v4"
             ? "IPV4"
             : check.version === "v6"
-            ? "IPV6"
-            : "IP";
+              ? "IPV6"
+              : "IP";
         }
         if (kind === "jwt") return "JWT";
         if (kind === "emoji") return "EMOJI";
@@ -366,7 +367,8 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
         // Zod v4 uses check.kind === "int"
         // Zod v3 uses check.isInt === true or check.format === "safeint"
         if (
-          check.kind === "int" || check.isInt === true ||
+          check.kind === "int" ||
+          check.isInt === true ||
           check.format === "safeint"
         ) {
           return "INTEGER";
@@ -390,8 +392,10 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
   //    type "enum").  Gate on inferChoices() so that numeric native enums
   //    fall back to "VALUE".
   if (
-    typeName === "ZodEnum" || typeName === "enum" ||
-    typeName === "ZodNativeEnum" || typeName === "nativeEnum"
+    typeName === "ZodEnum" ||
+    typeName === "enum" ||
+    typeName === "ZodNativeEnum" ||
+    typeName === "nativeEnum"
   ) {
     return inferChoices(schema) != null ? "CHOICE" : "VALUE";
   }
@@ -414,8 +418,10 @@ function inferMetavar(schema: z.Schema<unknown>): NonEmptyString {
 
   // 8. Handle optional/nullable wrappers by unwrapping
   if (
-    typeName === "ZodOptional" || typeName === "optional" ||
-    typeName === "ZodNullable" || typeName === "nullable"
+    typeName === "ZodOptional" ||
+    typeName === "optional" ||
+    typeName === "ZodNullable" ||
+    typeName === "nullable"
   ) {
     const innerType = def.innerType;
     if (innerType != null) {
@@ -470,9 +476,9 @@ function inferChoices(
     const entries = def.entries;
     if (entries != null && typeof entries === "object") {
       const result = new Set<string>();
-      for (
-        const val of Object.values(entries as Record<string, string | number>)
-      ) {
+      for (const val of Object.values(
+        entries as Record<string, string | number>,
+      )) {
         if (typeof val === "string") {
           result.add(val);
         } else {
@@ -490,12 +496,14 @@ function inferChoices(
   if (typeName === "ZodNativeEnum" || typeName === "nativeEnum") {
     const values = def.values;
     if (
-      values != null && typeof values === "object" && !Array.isArray(values)
+      values != null &&
+      typeof values === "object" &&
+      !Array.isArray(values)
     ) {
       const result = new Set<string>();
-      for (
-        const val of Object.values(values as Record<string, string | number>)
-      ) {
+      for (const val of Object.values(
+        values as Record<string, string | number>,
+      )) {
         if (typeof val === "string") {
           result.add(val);
         } else {
@@ -552,9 +560,12 @@ function inferChoices(
 
   // Optional/nullable/default wrappers → unwrap
   if (
-    typeName === "ZodOptional" || typeName === "optional" ||
-    typeName === "ZodNullable" || typeName === "nullable" ||
-    typeName === "ZodDefault" || typeName === "default"
+    typeName === "ZodOptional" ||
+    typeName === "optional" ||
+    typeName === "ZodNullable" ||
+    typeName === "nullable" ||
+    typeName === "ZodDefault" ||
+    typeName === "default"
   ) {
     const innerType = def.innerType;
     if (innerType != null) {
@@ -690,14 +701,11 @@ export function zod<T>(
   validateOptions("zod", options);
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
-  const metavar = options.metavar ??
-    (boolInfo.isBoolean ? "BOOLEAN" : inferMetavar(schema));
+  const metavar =
+    options.metavar ?? (boolInfo.isBoolean ? "BOOLEAN" : inferMetavar(schema));
   ensureNonEmptyString(metavar);
 
-  function doSafeParse(
-    input: unknown,
-    rawInput: string,
-  ): ValueParserResult<T> {
+  function doSafeParse(input: unknown, rawInput: string): ValueParserResult<T> {
     let result;
     try {
       result = schema.safeParse(input);
@@ -719,9 +727,10 @@ export function zod<T>(
     if (options.errors?.zodError) {
       return {
         success: false,
-        error: typeof options.errors.zodError === "function"
-          ? options.errors.zodError(result.error, rawInput)
-          : options.errors.zodError,
+        error:
+          typeof options.errors.zodError === "function"
+            ? options.errors.zodError(result.error, rawInput)
+            : options.errors.zodError,
       };
     }
 
@@ -773,12 +782,14 @@ export function zod<T>(
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };
       }
-      const zodError = new ZodError([{
-        code: "invalid_type",
-        expected: "boolean",
-        message: `Invalid Boolean value: ${rawInput}`,
-        path: [],
-      }]);
+      const zodError = new ZodError([
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: `Invalid Boolean value: ${rawInput}`,
+          path: [],
+        },
+      ]);
       return {
         success: false,
         error: options.errors.zodError(zodError, rawInput),
@@ -793,33 +804,30 @@ export function zod<T>(
     placeholder: options.placeholder,
     ...(boolInfo.exposeChoices
       ? {
-        choices: Object.freeze([true, false]) as readonly T[],
-        suggest(prefix: string) {
-          const allLiterals = [
-            ...BOOL_TRUE_LITERALS,
-            ...BOOL_FALSE_LITERALS,
-          ];
-          const normalizedPrefix = prefix.toLowerCase();
-          return allLiterals
-            .filter((lit) => lit.startsWith(normalizedPrefix))
-            .map((lit) => ({ kind: "literal" as const, text: lit }));
-        },
-      }
+          choices: Object.freeze([true, false]) as readonly T[],
+          suggest(prefix: string) {
+            const allLiterals = [...BOOL_TRUE_LITERALS, ...BOOL_FALSE_LITERALS];
+            const normalizedPrefix = prefix.toLowerCase();
+            return allLiterals
+              .filter((lit) => lit.startsWith(normalizedPrefix))
+              .map((lit) => ({ kind: "literal" as const, text: lit }));
+          },
+        }
       : choices != null && choices.length > 0
-      ? {
-        // Safe cast: inferChoices() only extracts values from schemas
-        // that accept string input and return it as-is (enum, literal,
-        // union of string literals).
-        choices: Object.freeze(choices) as readonly T[],
-        *suggest(prefix: string) {
-          for (const c of choices) {
-            if (c.startsWith(prefix)) {
-              yield { kind: "literal" as const, text: c };
-            }
+        ? {
+            // Safe cast: inferChoices() only extracts values from schemas
+            // that accept string input and return it as-is (enum, literal,
+            // union of string literals).
+            choices: Object.freeze(choices) as readonly T[],
+            *suggest(prefix: string) {
+              for (const c of choices) {
+                if (c.startsWith(prefix)) {
+                  yield { kind: "literal" as const, text: c };
+                }
+              }
+            },
           }
-        },
-      }
-      : {}),
+        : {}),
 
     parse(input: string): ValueParserResult<T> {
       if (boolInfo.isBoolean) {
@@ -870,8 +878,8 @@ export function zodAsync<T>(
   validateOptions("zodAsync", options);
   const choices = inferChoices(schema);
   const boolInfo = analyzeBooleanSchema(schema);
-  const metavar = options.metavar ??
-    (boolInfo.isBoolean ? "BOOLEAN" : inferMetavar(schema));
+  const metavar =
+    options.metavar ?? (boolInfo.isBoolean ? "BOOLEAN" : inferMetavar(schema));
   ensureNonEmptyString(metavar);
 
   async function doSafeParse(
@@ -887,9 +895,10 @@ export function zodAsync<T>(
     if (options.errors?.zodError) {
       return {
         success: false,
-        error: typeof options.errors.zodError === "function"
-          ? options.errors.zodError(result.error, rawInput)
-          : options.errors.zodError,
+        error:
+          typeof options.errors.zodError === "function"
+            ? options.errors.zodError(result.error, rawInput)
+            : options.errors.zodError,
       };
     }
 
@@ -922,12 +931,14 @@ export function zodAsync<T>(
       if (typeof options.errors.zodError !== "function") {
         return { success: false, error: options.errors.zodError };
       }
-      const zodError = new ZodError([{
-        code: "invalid_type",
-        expected: "boolean",
-        message: `Invalid Boolean value: ${rawInput}`,
-        path: [],
-      }]);
+      const zodError = new ZodError([
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: `Invalid Boolean value: ${rawInput}`,
+          path: [],
+        },
+      ]);
       return {
         success: false,
         error: options.errors.zodError(zodError, rawInput),
@@ -942,32 +953,29 @@ export function zodAsync<T>(
     placeholder: options.placeholder,
     ...(boolInfo.exposeChoices
       ? {
-        choices: Object.freeze([true, false]) as readonly T[],
-        async *suggest(prefix: string) {
-          const allLiterals = [
-            ...BOOL_TRUE_LITERALS,
-            ...BOOL_FALSE_LITERALS,
-          ];
-          const normalizedPrefix = prefix.toLowerCase();
-          for (const lit of allLiterals) {
-            if (lit.startsWith(normalizedPrefix)) {
-              yield { kind: "literal" as const, text: lit };
+          choices: Object.freeze([true, false]) as readonly T[],
+          async *suggest(prefix: string) {
+            const allLiterals = [...BOOL_TRUE_LITERALS, ...BOOL_FALSE_LITERALS];
+            const normalizedPrefix = prefix.toLowerCase();
+            for (const lit of allLiterals) {
+              if (lit.startsWith(normalizedPrefix)) {
+                yield { kind: "literal" as const, text: lit };
+              }
             }
-          }
-        },
-      }
+          },
+        }
       : choices != null && choices.length > 0
-      ? {
-        choices: Object.freeze(choices) as readonly T[],
-        async *suggest(prefix: string) {
-          for (const c of choices) {
-            if (c.startsWith(prefix)) {
-              yield { kind: "literal" as const, text: c };
-            }
+        ? {
+            choices: Object.freeze(choices) as readonly T[],
+            async *suggest(prefix: string) {
+              for (const c of choices) {
+                if (c.startsWith(prefix)) {
+                  yield { kind: "literal" as const, text: c };
+                }
+              }
+            },
           }
-        },
-      }
-      : {}),
+        : {}),
 
     async parse(input: string): Promise<ValueParserResult<T>> {
       if (boolInfo.isBoolean) {

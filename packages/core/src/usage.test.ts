@@ -26,17 +26,13 @@ import * as fc from "fast-check";
 describe("formatUsage", () => {
   describe("argument terms", () => {
     it("should format a simple argument", () => {
-      const usage: Usage = [
-        { type: "argument", metavar: "FILE" },
-      ];
+      const usage: Usage = [{ type: "argument", metavar: "FILE" }];
       const result = formatUsage("test", usage);
       assert.equal(result, "test FILE");
     });
 
     it("should format argument with colors", () => {
-      const usage: Usage = [
-        { type: "argument", metavar: "FILE" },
-      ];
+      const usage: Usage = [{ type: "argument", metavar: "FILE" }];
       const result = formatUsage("test", usage, { colors: true });
       assert.equal(result, "\x1b[1mtest\x1b[0m \x1b[4mFILE\x1b[0m");
     });
@@ -143,17 +139,13 @@ describe("formatUsage", () => {
 
   describe("command terms", () => {
     it("should format a command", () => {
-      const usage: Usage = [
-        { type: "command", name: "init" },
-      ];
+      const usage: Usage = [{ type: "command", name: "init" }];
       const result = formatUsage("test", usage);
       assert.equal(result, "test init");
     });
 
     it("should format command with colors", () => {
-      const usage: Usage = [
-        { type: "command", name: "init" },
-      ];
+      const usage: Usage = [{ type: "command", name: "init" }];
       const result = formatUsage("test", usage, { colors: true });
       assert.equal(result, "\x1b[1mtest\x1b[0m \x1b[1minit\x1b[0m");
     });
@@ -198,10 +190,12 @@ describe("formatUsage", () => {
       const usage: Usage = [
         {
           type: "optional",
-          terms: [{
-            type: "option",
-            names: ["--verbose", "-v"],
-          }],
+          terms: [
+            {
+              type: "option",
+              names: ["--verbose", "-v"],
+            },
+          ],
         },
       ];
       const result = formatUsage("test", usage);
@@ -212,10 +206,12 @@ describe("formatUsage", () => {
       const usage: Usage = [
         {
           type: "optional",
-          terms: [{
-            type: "optional",
-            terms: [{ type: "argument", metavar: "FILE" }],
-          }],
+          terms: [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
         },
       ];
       const result = formatUsage("test", usage);
@@ -356,11 +352,13 @@ describe("formatUsage", () => {
       const usage: Usage = [
         {
           type: "multiple",
-          terms: [{
-            type: "option",
-            names: ["--include", "-I"],
-            metavar: "PATTERN",
-          }],
+          terms: [
+            {
+              type: "option",
+              names: ["--include", "-I"],
+              metavar: "PATTERN",
+            },
+          ],
           min: 3,
         },
       ];
@@ -409,11 +407,13 @@ describe("formatUsage", () => {
               { type: "command", name: "commit" },
               {
                 type: "optional",
-                terms: [{
-                  type: "option",
-                  names: ["--message", "-m"],
-                  metavar: "MSG",
-                }],
+                terms: [
+                  {
+                    type: "option",
+                    names: ["--message", "-m"],
+                    metavar: "MSG",
+                  },
+                ],
               },
             ],
             [
@@ -439,20 +439,24 @@ describe("formatUsage", () => {
         { type: "command", name: "tool" },
         {
           type: "optional",
-          terms: [{
-            type: "exclusive",
-            terms: [
-              [{ type: "option", names: ["--verbose", "-v"] }],
-              [{ type: "option", names: ["--quiet", "-q"] }],
-            ],
-          }],
+          terms: [
+            {
+              type: "exclusive",
+              terms: [
+                [{ type: "option", names: ["--verbose", "-v"] }],
+                [{ type: "option", names: ["--quiet", "-q"] }],
+              ],
+            },
+          ],
         },
         {
           type: "multiple",
-          terms: [{
-            type: "optional",
-            terms: [{ type: "argument", metavar: "FILE" }],
-          }],
+          terms: [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
           min: 0,
         },
       ];
@@ -478,9 +482,7 @@ describe("formatUsage", () => {
     });
 
     it("should format usage with all-hidden terms", () => {
-      const usage: Usage = [
-        { type: "command", name: "secret", hidden: true },
-      ];
+      const usage: Usage = [{ type: "command", name: "secret", hidden: true }];
       const result = formatUsage("test", usage);
       assert.equal(result, "test");
     });
@@ -704,10 +706,7 @@ describe("maxWidth option", () => {
       },
     ];
     const result = formatUsage("test", usage, { maxWidth: 15 });
-    assert.equal(
-      result,
-      "test tool (\n--verbose/-v |\n--quiet/-q |\nCONFIG)",
-    );
+    assert.equal(result, "test tool (\n--verbose/-v |\n--quiet/-q |\nCONFIG)");
   });
 
   it("should wrap multiple terms with nested structure", () => {
@@ -720,11 +719,13 @@ describe("maxWidth option", () => {
             { type: "command", name: "commit" },
             {
               type: "optional",
-              terms: [{
-                type: "option",
-                names: ["--message", "-m"],
-                metavar: "MSG",
-              }],
+              terms: [
+                {
+                  type: "option",
+                  names: ["--message", "-m"],
+                  metavar: "MSG",
+                },
+              ],
             },
           ],
           [
@@ -750,11 +751,13 @@ describe("maxWidth option", () => {
       { type: "command", name: "tool" },
       {
         type: "multiple",
-        terms: [{
-          type: "option",
-          names: ["--include", "-I"],
-          metavar: "PATTERN",
-        }],
+        terms: [
+          {
+            type: "option",
+            names: ["--include", "-I"],
+            metavar: "PATTERN",
+          },
+        ],
         min: 2,
       },
     ];
@@ -891,17 +894,13 @@ describe("maxWidth option", () => {
 
 describe("programName parameter", () => {
   it("should include program name in output", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "FILE" },
-    ];
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
     const result = formatUsage("myapp", usage);
     assert.equal(result, "myapp FILE");
   });
 
   it("should work with different program names", () => {
-    const usage: Usage = [
-      { type: "option", names: ["--verbose", "-v"] },
-    ];
+    const usage: Usage = [{ type: "option", names: ["--verbose", "-v"] }];
     const result1 = formatUsage("tool1", usage);
     const result2 = formatUsage("another-tool", usage);
 
@@ -910,71 +909,40 @@ describe("programName parameter", () => {
   });
 
   it("should handle program name with spaces", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "FILE" },
-    ];
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
     const result = formatUsage("my program", usage);
     assert.equal(result, "my program FILE");
   });
 
   it("should throw TypeError for empty program name", () => {
     const usage: Usage = [{ type: "argument", metavar: "FILE" }];
-    assert.throws(
-      () => formatUsage("", usage),
-      TypeError,
-    );
+    assert.throws(() => formatUsage("", usage), TypeError);
   });
 
   it("should throw TypeError for program name with control characters", () => {
     const usage: Usage = [{ type: "argument", metavar: "FILE" }];
-    assert.throws(
-      () => formatUsage("bad\nname", usage),
-      TypeError,
-    );
-    assert.throws(
-      () => formatUsage("bad\rname", usage),
-      TypeError,
-    );
-    assert.throws(
-      () => formatUsage("bad\x00name", usage),
-      TypeError,
-    );
+    assert.throws(() => formatUsage("bad\nname", usage), TypeError);
+    assert.throws(() => formatUsage("bad\rname", usage), TypeError);
+    assert.throws(() => formatUsage("bad\x00name", usage), TypeError);
   });
 
   it("should throw TypeError for non-string program name", () => {
     const usage: Usage = [{ type: "argument", metavar: "FILE" }];
-    assert.throws(
-      () => formatUsage(123 as never, usage),
-      TypeError,
-    );
-    assert.throws(
-      () => formatUsage(Symbol("x") as never, usage),
-      TypeError,
-    );
+    assert.throws(() => formatUsage(123 as never, usage), TypeError);
+    assert.throws(() => formatUsage(Symbol("x") as never, usage), TypeError);
   });
 
   it("should throw TypeError for Unicode line-breaking characters", () => {
     const usage: Usage = [{ type: "argument", metavar: "FILE" }];
-    assert.throws(
-      () => formatUsage("bad\x85name", usage),
-      TypeError,
-    );
-    assert.throws(
-      () => formatUsage("bad\u2028name", usage),
-      TypeError,
-    );
-    assert.throws(
-      () => formatUsage("bad\u2029name", usage),
-      TypeError,
-    );
+    assert.throws(() => formatUsage("bad\x85name", usage), TypeError);
+    assert.throws(() => formatUsage("bad\u2028name", usage), TypeError);
+    assert.throws(() => formatUsage("bad\u2029name", usage), TypeError);
   });
 });
 
 describe("Unicode display width in formatUsage", () => {
   it("should account for CJK program name width", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "FILE" },
-    ];
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
     // "앱" = 2 display columns.  With maxWidth 7, "앱 FILE" = 2+1+4 = 7,
     // fits on one line.
     const result = formatUsage("앱", usage, { maxWidth: 7 });
@@ -982,27 +950,21 @@ describe("Unicode display width in formatUsage", () => {
   });
 
   it("should wrap CJK program name at correct width", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "FILE" },
-    ];
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
     // "앱" = 2 display columns.  With maxWidth 6, "앱 FILE" = 7 > 6, wraps.
     const result = formatUsage("앱", usage, { maxWidth: 6 });
     assert.equal(result, "앱\nFILE");
   });
 
   it("should account for CJK metavar width", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "한글" },
-    ];
+    const usage: Usage = [{ type: "argument", metavar: "한글" }];
     // "app 한글" = 3+1+4 = 8.  With maxWidth 8, fits on one line.
     const result = formatUsage("app", usage, { maxWidth: 8 });
     assert.equal(result, "app 한글");
   });
 
   it("should wrap CJK metavar at correct width", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "한글" },
-    ];
+    const usage: Usage = [{ type: "argument", metavar: "한글" }];
     // "app 한글" = 8.  With maxWidth 7, wraps.
     const result = formatUsage("app", usage, { maxWidth: 7 });
     assert.equal(result, "app\n한글");
@@ -1016,14 +978,20 @@ describe("expandCommands option", () => {
       {
         type: "exclusive",
         terms: [
-          [{ type: "command", name: "add" }, {
-            type: "argument",
-            metavar: "FILE",
-          }],
-          [{ type: "command", name: "commit" }, {
-            type: "option",
-            names: ["--message", "-m"],
-          }],
+          [
+            { type: "command", name: "add" },
+            {
+              type: "argument",
+              metavar: "FILE",
+            },
+          ],
+          [
+            { type: "command", name: "commit" },
+            {
+              type: "option",
+              names: ["--message", "-m"],
+            },
+          ],
         ],
       },
     ];
@@ -1041,14 +1009,20 @@ describe("expandCommands option", () => {
       {
         type: "exclusive",
         terms: [
-          [{ type: "command", name: "add" }, {
-            type: "argument",
-            metavar: "FILE",
-          }],
-          [{ type: "command", name: "commit" }, {
-            type: "option",
-            names: ["--message", "-m"],
-          }],
+          [
+            { type: "command", name: "add" },
+            {
+              type: "argument",
+              metavar: "FILE",
+            },
+          ],
+          [
+            { type: "command", name: "commit" },
+            {
+              type: "option",
+              names: ["--message", "-m"],
+            },
+          ],
         ],
       },
     ];
@@ -1063,14 +1037,20 @@ describe("expandCommands option", () => {
       {
         type: "exclusive",
         terms: [
-          [{ type: "command", name: "add" }, {
-            type: "argument",
-            metavar: "FILE",
-          }],
-          [{ type: "command", name: "commit" }, {
-            type: "option",
-            names: ["--message", "-m"],
-          }],
+          [
+            { type: "command", name: "add" },
+            {
+              type: "argument",
+              metavar: "FILE",
+            },
+          ],
+          [
+            { type: "command", name: "commit" },
+            {
+              type: "option",
+              names: ["--message", "-m"],
+            },
+          ],
         ],
       },
     ];
@@ -1113,14 +1093,18 @@ describe("expandCommands option", () => {
         type: "exclusive",
         terms: [
           [{ type: "optional", terms: [{ type: "command", name: "init" }] }],
-          [{
-            type: "optional",
-            terms: [{ type: "option", names: ["--verbose"] }],
-          }],
-          [{
-            type: "optional",
-            terms: [{ type: "argument", metavar: "FILE" }],
-          }],
+          [
+            {
+              type: "optional",
+              terms: [{ type: "option", names: ["--verbose"] }],
+            },
+          ],
+          [
+            {
+              type: "optional",
+              terms: [{ type: "argument", metavar: "FILE" }],
+            },
+          ],
         ],
       },
     ];
@@ -1138,14 +1122,20 @@ describe("expandCommands option", () => {
       {
         type: "exclusive",
         terms: [
-          [{ type: "command", name: "some-command" }, {
-            type: "argument",
-            metavar: "ARG",
-          }],
-          [{ type: "command", name: "s", hidden: true }, {
-            type: "argument",
-            metavar: "ARG",
-          }],
+          [
+            { type: "command", name: "some-command" },
+            {
+              type: "argument",
+              metavar: "ARG",
+            },
+          ],
+          [
+            { type: "command", name: "s", hidden: true },
+            {
+              type: "argument",
+              metavar: "ARG",
+            },
+          ],
         ],
       },
     ];
@@ -1435,10 +1425,12 @@ describe("formatUsageTerm", () => {
     it("should format nested optional", () => {
       const term: UsageTerm = {
         type: "optional",
-        terms: [{
-          type: "optional",
-          terms: [{ type: "argument", metavar: "FILE" }],
-        }],
+        terms: [
+          {
+            type: "optional",
+            terms: [{ type: "argument", metavar: "FILE" }],
+          },
+        ],
       };
       const result = formatUsageTerm(term);
       assert.equal(result, "[[FILE]]");
@@ -1552,11 +1544,13 @@ describe("formatUsageTerm", () => {
     it("should format multiple with min 3", () => {
       const term: UsageTerm = {
         type: "multiple",
-        terms: [{
-          type: "option",
-          names: ["--include", "-I"],
-          metavar: "PATTERN",
-        }],
+        terms: [
+          {
+            type: "option",
+            names: ["--include", "-I"],
+            metavar: "PATTERN",
+          },
+        ],
         min: 3,
       };
       const result = formatUsageTerm(term);
@@ -1661,11 +1655,13 @@ describe("formatUsageTerm", () => {
     it("should wrap multiple term when exceeding maxWidth", () => {
       const term: UsageTerm = {
         type: "multiple",
-        terms: [{
-          type: "option",
-          names: ["--include", "-I"],
-          metavar: "PATTERN",
-        }],
+        terms: [
+          {
+            type: "option",
+            names: ["--include", "-I"],
+            metavar: "PATTERN",
+          },
+        ],
         min: 2,
       };
       const result = formatUsageTerm(term, { maxWidth: 20 });
@@ -1914,25 +1910,19 @@ describe("formatUsageTerm", () => {
 describe("normalizeUsage", () => {
   describe("basic term types", () => {
     it("should not modify argument terms", () => {
-      const usage: Usage = [
-        { type: "argument", metavar: "FILE" },
-      ];
+      const usage: Usage = [{ type: "argument", metavar: "FILE" }];
       const result = normalizeUsage(usage);
       assert.deepEqual(result, usage);
     });
 
     it("should not modify option terms", () => {
-      const usage: Usage = [
-        { type: "option", names: ["--verbose", "-v"] },
-      ];
+      const usage: Usage = [{ type: "option", names: ["--verbose", "-v"] }];
       const result = normalizeUsage(usage);
       assert.deepEqual(result, usage);
     });
 
     it("should not modify command terms", () => {
-      const usage: Usage = [
-        { type: "command", name: "init" },
-      ];
+      const usage: Usage = [{ type: "command", name: "init" }];
       const result = normalizeUsage(usage);
       assert.deepEqual(result, usage);
     });
@@ -1965,13 +1955,17 @@ describe("normalizeUsage", () => {
       const usage: Usage = [
         {
           type: "optional",
-          terms: [{
-            type: "optional",
-            terms: [{
+          terms: [
+            {
               type: "optional",
-              terms: [{ type: "argument", metavar: "FILE" }],
-            }],
-          }],
+              terms: [
+                {
+                  type: "optional",
+                  terms: [{ type: "argument", metavar: "FILE" }],
+                },
+              ],
+            },
+          ],
         },
       ];
       const result = normalizeUsage(usage);
@@ -2098,13 +2092,15 @@ describe("normalizeUsage", () => {
           type: "exclusive",
           terms: [
             [{ type: "option", names: ["--verbose", "-v"] }],
-            [{
-              type: "exclusive",
-              terms: [
-                [{ type: "option", names: ["--quiet", "-q"] }],
-                [{ type: "option", names: ["--debug", "-d"] }],
-              ],
-            }],
+            [
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "option", names: ["--quiet", "-q"] }],
+                  [{ type: "option", names: ["--debug", "-d"] }],
+                ],
+              },
+            ],
           ],
         },
       ];
@@ -2128,19 +2124,23 @@ describe("normalizeUsage", () => {
           type: "exclusive",
           terms: [
             [{ type: "option", names: ["--first", "-f"] }],
-            [{
-              type: "exclusive",
-              terms: [
-                [{ type: "option", names: ["--second", "-s"] }],
-                [{
-                  type: "exclusive",
-                  terms: [
-                    [{ type: "option", names: ["--third", "-t"] }],
-                    [{ type: "option", names: ["--fourth", "-4"] }],
+            [
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "option", names: ["--second", "-s"] }],
+                  [
+                    {
+                      type: "exclusive",
+                      terms: [
+                        [{ type: "option", names: ["--third", "-t"] }],
+                        [{ type: "option", names: ["--fourth", "-4"] }],
+                      ],
+                    },
                   ],
-                }],
-              ],
-            }],
+                ],
+              },
+            ],
           ],
         },
       ];
@@ -2256,13 +2256,15 @@ describe("normalizeUsage", () => {
           type: "exclusive",
           terms: [
             [{ type: "option", names: ["--file", "-f"], metavar: "PATH" }],
-            [{
-              type: "exclusive",
-              terms: [
-                [{ type: "argument", metavar: "INPUT" }],
-                [{ type: "command", name: "stdin" }],
-              ],
-            }],
+            [
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "argument", metavar: "INPUT" }],
+                  [{ type: "command", name: "stdin" }],
+                ],
+              },
+            ],
           ],
         },
       ];
@@ -2295,13 +2297,15 @@ describe("normalizeUsage", () => {
                   type: "exclusive",
                   terms: [
                     [{ type: "option", names: ["--verbose", "-v"] }],
-                    [{
-                      type: "exclusive",
-                      terms: [
-                        [{ type: "option", names: ["--quiet", "-q"] }],
-                        [{ type: "option", names: ["--debug", "-d"] }],
-                      ],
-                    }],
+                    [
+                      {
+                        type: "exclusive",
+                        terms: [
+                          [{ type: "option", names: ["--quiet", "-q"] }],
+                          [{ type: "option", names: ["--debug", "-d"] }],
+                        ],
+                      },
+                    ],
                   ],
                 },
               ],
@@ -2342,13 +2346,15 @@ describe("normalizeUsage", () => {
           type: "exclusive",
           terms: [
             [{ type: "option", names: ["--option1", "-1"] }],
-            [{
-              type: "exclusive",
-              terms: [
-                [{ type: "option", names: ["--option2", "-2"] }],
-                [{ type: "option", names: ["--option3", "-3"] }],
-              ],
-            }],
+            [
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "option", names: ["--option2", "-2"] }],
+                  [{ type: "option", names: ["--option3", "-3"] }],
+                ],
+              },
+            ],
           ],
         },
         { type: "argument", metavar: "FILE" },
@@ -2359,13 +2365,15 @@ describe("normalizeUsage", () => {
               type: "exclusive",
               terms: [
                 [{ type: "command", name: "start" }],
-                [{
-                  type: "exclusive",
-                  terms: [
-                    [{ type: "command", name: "stop" }],
-                    [{ type: "command", name: "restart" }],
-                  ],
-                }],
+                [
+                  {
+                    type: "exclusive",
+                    terms: [
+                      [{ type: "command", name: "stop" }],
+                      [{ type: "command", name: "restart" }],
+                    ],
+                  },
+                ],
               ],
             },
           ],
@@ -2411,9 +2419,7 @@ describe("normalizeUsage", () => {
       const usage: Usage = [
         {
           type: "exclusive",
-          terms: [
-            [{ type: "option", names: ["--verbose", "-v"] }],
-          ],
+          terms: [[{ type: "option", names: ["--verbose", "-v"] }]],
         },
       ];
       const result = normalizeUsage(usage);
@@ -2421,37 +2427,27 @@ describe("normalizeUsage", () => {
     });
 
     it("should strip exclusive with empty terms array", () => {
-      const result = normalizeUsage([
-        { type: "exclusive", terms: [] },
-      ]);
+      const result = normalizeUsage([{ type: "exclusive", terms: [] }]);
       assert.deepEqual(result, []);
     });
 
     it("should strip optional with empty terms", () => {
-      const result = normalizeUsage([
-        { type: "optional", terms: [] },
-      ]);
+      const result = normalizeUsage([{ type: "optional", terms: [] }]);
       assert.deepEqual(result, []);
     });
 
     it("should strip multiple with empty terms", () => {
-      const result = normalizeUsage([
-        { type: "multiple", terms: [], min: 0 },
-      ]);
+      const result = normalizeUsage([{ type: "multiple", terms: [], min: 0 }]);
       assert.deepEqual(result, []);
     });
 
     it("should strip option with empty names", () => {
-      const result = normalizeUsage([
-        { type: "option", names: [] as never },
-      ]);
+      const result = normalizeUsage([{ type: "option", names: [] as never }]);
       assert.deepEqual(result, []);
     });
 
     it("should strip command with empty name", () => {
-      const result = normalizeUsage([
-        { type: "command", name: "" } as never,
-      ]);
+      const result = normalizeUsage([{ type: "command", name: "" } as never]);
       assert.deepEqual(result, []);
     });
 
@@ -2466,10 +2462,7 @@ describe("normalizeUsage", () => {
       const result = normalizeUsage([
         {
           type: "exclusive",
-          terms: [
-            [{ type: "argument", metavar: "" } as never],
-            [],
-          ],
+          terms: [[{ type: "argument", metavar: "" } as never], []],
         },
       ]);
 
@@ -2481,19 +2474,25 @@ describe("normalizeUsage", () => {
         {
           type: "exclusive",
           terms: [
-            [{
-              type: "optional",
-              terms: [{ type: "argument", metavar: "" } as never],
-            }],
-            [{
-              type: "multiple",
-              terms: [{ type: "command", name: "" } as never],
-              min: 0,
-            }],
-            [{
-              type: "exclusive",
-              terms: [[{ type: "option", names: [] as never }]],
-            }],
+            [
+              {
+                type: "optional",
+                terms: [{ type: "argument", metavar: "" } as never],
+              },
+            ],
+            [
+              {
+                type: "multiple",
+                terms: [{ type: "command", name: "" } as never],
+                min: 0,
+              },
+            ],
+            [
+              {
+                type: "exclusive",
+                terms: [[{ type: "option", names: [] as never }]],
+              },
+            ],
           ],
         },
       ]);
@@ -2502,16 +2501,12 @@ describe("normalizeUsage", () => {
     });
 
     it("should preserve literal with empty value", () => {
-      const result = normalizeUsage([
-        { type: "literal", value: "" } as never,
-      ]);
+      const result = normalizeUsage([{ type: "literal", value: "" } as never]);
       assert.deepEqual(result, [{ type: "literal", value: "" }]);
     });
 
     it("should preserve exclusive with empty branches", () => {
-      const result = normalizeUsage([
-        { type: "exclusive", terms: [[]] },
-      ]);
+      const result = normalizeUsage([{ type: "exclusive", terms: [[]] }]);
       assert.deepEqual(result, [{ type: "exclusive", terms: [[]] }]);
     });
 
@@ -2519,19 +2514,13 @@ describe("normalizeUsage", () => {
       const result = normalizeUsage([
         {
           type: "exclusive",
-          terms: [
-            [],
-            [{ type: "option", names: ["--verbose"] }],
-          ],
+          terms: [[], [{ type: "option", names: ["--verbose"] }]],
         },
       ]);
       assert.deepEqual(result, [
         {
           type: "exclusive",
-          terms: [
-            [],
-            [{ type: "option", names: ["--verbose"] }],
-          ],
+          terms: [[], [{ type: "option", names: ["--verbose"] }]],
         },
       ]);
     });
@@ -2561,9 +2550,7 @@ describe("normalizeUsage", () => {
       assert.deepEqual(result, [
         {
           type: "exclusive",
-          terms: [
-            [{ type: "option", names: ["--verbose"] }],
-          ],
+          terms: [[{ type: "option", names: ["--verbose"] }]],
         },
       ]);
     });
@@ -2584,10 +2571,7 @@ describe("normalizeUsage", () => {
       assert.deepEqual(result, [
         {
           type: "exclusive",
-          terms: [
-            [],
-            [{ type: "option", names: ["--verbose"] }],
-          ],
+          terms: [[], [{ type: "option", names: ["--verbose"] }]],
         },
       ]);
     });
@@ -2596,9 +2580,7 @@ describe("normalizeUsage", () => {
       const result = normalizeUsage([
         {
           type: "exclusive",
-          terms: [
-            [{ type: "option", names: [] as never }],
-          ],
+          terms: [[{ type: "option", names: [] as never }]],
         },
       ]);
       assert.deepEqual(result, []);
@@ -2612,13 +2594,15 @@ describe("normalizeUsage", () => {
           type: "exclusive",
           terms: [
             [{ type: "option", names: ["--verbose", "-v"] }],
-            [{
-              type: "exclusive",
-              terms: [
-                [{ type: "option", names: ["--quiet", "-q"] }],
-                [{ type: "option", names: ["--debug", "-d"] }],
-              ],
-            }],
+            [
+              {
+                type: "exclusive",
+                terms: [
+                  [{ type: "option", names: ["--quiet", "-q"] }],
+                  [{ type: "option", names: ["--debug", "-d"] }],
+                ],
+              },
+            ],
           ],
         },
       ];
@@ -2642,9 +2626,7 @@ describe("normalizeUsage", () => {
       const result = normalizeUsage(input);
       assert.deepEqual(result, input);
       assert.notEqual(result[0], input[0]);
-      assert.ok(
-        result[0].type === "option" && result[0].names !== term.names,
-      );
+      assert.ok(result[0].type === "option" && result[0].names !== term.names);
     });
 
     it("should return referentially distinct command terms", () => {
@@ -2769,11 +2751,13 @@ describe("normalizeUsage", () => {
         { type: "argument", metavar: "FILE" },
         {
           type: "multiple",
-          terms: [{
-            type: "option",
-            names: ["--include", "-I"],
-            metavar: "PATTERN",
-          }],
+          terms: [
+            {
+              type: "option",
+              names: ["--include", "-I"],
+              metavar: "PATTERN",
+            },
+          ],
           min: 0,
         },
       ];
@@ -2785,11 +2769,13 @@ describe("normalizeUsage", () => {
         },
         {
           type: "multiple",
-          terms: [{
-            type: "option",
-            names: ["--include", "-I"],
-            metavar: "PATTERN",
-          }],
+          terms: [
+            {
+              type: "option",
+              names: ["--include", "-I"],
+              metavar: "PATTERN",
+            },
+          ],
           min: 0,
         },
         { type: "argument", metavar: "FILE" },
@@ -2857,9 +2843,7 @@ describe("normalizeUsage", () => {
 
 describe("extractOptionNames", () => {
   it("should extract option names from a simple option term", () => {
-    const usage: Usage = [
-      { type: "option", names: ["--verbose", "-v"] },
-    ];
+    const usage: Usage = [{ type: "option", names: ["--verbose", "-v"] }];
     const result = extractOptionNames(usage);
     assert.deepEqual(result, new Set(["--verbose", "-v"]));
   });
@@ -2874,17 +2858,13 @@ describe("extractOptionNames", () => {
   });
 
   it("should return empty set for argument terms", () => {
-    const usage: Usage = [
-      { type: "argument", metavar: "FILE" },
-    ];
+    const usage: Usage = [{ type: "argument", metavar: "FILE" }];
     const result = extractOptionNames(usage);
     assert.deepEqual(result, new Set());
   });
 
   it("should return empty set for command terms", () => {
-    const usage: Usage = [
-      { type: "command", name: "init" },
-    ];
+    const usage: Usage = [{ type: "command", name: "init" }];
     const result = extractOptionNames(usage);
     assert.deepEqual(result, new Set());
   });
@@ -3098,10 +3078,7 @@ describe("extractCommandNames hidden filtering", () => {
       { type: "command", name: "fully-hidden", hidden: true },
     ];
     const result = extractCommandNames(usage);
-    assert.deepEqual(
-      result,
-      new Set(["usage-only", "doc-only", "help-only"]),
-    );
+    assert.deepEqual(result, new Set(["usage-only", "doc-only", "help-only"]));
   });
 
   it("should include command aliases", () => {
@@ -3145,15 +3122,11 @@ describe("extractOptionNames includeHidden", () => {
     const usage: Usage = [
       {
         type: "optional",
-        terms: [
-          { type: "option", names: ["--hidden"], hidden: true },
-        ],
+        terms: [{ type: "option", names: ["--hidden"], hidden: true }],
       },
       {
         type: "exclusive",
-        terms: [
-          [{ type: "option", names: ["--also-hidden"], hidden: true }],
-        ],
+        terms: [[{ type: "option", names: ["--also-hidden"], hidden: true }]],
       },
     ];
     const result = extractOptionNames(usage, true);
@@ -3184,9 +3157,7 @@ describe("extractCommandNames includeHidden", () => {
     const usage: Usage = [
       {
         type: "exclusive",
-        terms: [
-          [{ type: "command", name: "hidden", hidden: true }],
-        ],
+        terms: [[{ type: "command", name: "hidden", hidden: true }]],
       },
     ];
     const result = extractCommandNames(usage, true);
@@ -3239,10 +3210,7 @@ describe("extractLiteralValues", () => {
 
   it("should handle empty and null usage", () => {
     assert.deepEqual(extractLiteralValues([]), new Set());
-    assert.deepEqual(
-      extractLiteralValues(null as unknown as Usage),
-      new Set(),
-    );
+    assert.deepEqual(extractLiteralValues(null as unknown as Usage), new Set());
   });
 });
 
@@ -3332,10 +3300,7 @@ describe("extractArgumentMetavars hidden filtering", () => {
       { type: "argument", metavar: "FULLY_HIDDEN", hidden: true },
     ];
     const result = extractArgumentMetavars(usage);
-    assert.deepEqual(
-      result,
-      new Set(["USAGE_ONLY", "DOC_ONLY", "HELP_ONLY"]),
-    );
+    assert.deepEqual(result, new Set(["USAGE_ONLY", "DOC_ONLY", "HELP_ONLY"]));
   });
 });
 
@@ -3353,15 +3318,17 @@ describe("formatUsage hidden visibility", () => {
   });
 
   it("should exclude commands hidden from usage in expanded output", () => {
-    const usage: Usage = [{
-      type: "exclusive",
-      terms: [
-        [{ type: "command", name: "visible" }],
-        [{ type: "command", name: "usage-hidden", hidden: "usage" }],
-        [{ type: "command", name: "help-hidden", hidden: "help" }],
-        [{ type: "command", name: "doc-hidden", hidden: "doc" }],
-      ],
-    }];
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [
+          [{ type: "command", name: "visible" }],
+          [{ type: "command", name: "usage-hidden", hidden: "usage" }],
+          [{ type: "command", name: "help-hidden", hidden: "help" }],
+          [{ type: "command", name: "doc-hidden", hidden: "doc" }],
+        ],
+      },
+    ];
     const result = formatUsage("app", usage, { expandCommands: true });
     assert.equal(result, "app visible\napp doc-hidden");
   });
@@ -3425,14 +3392,7 @@ describe("property-based tests", () => {
   const propertyParameters = { numRuns: 120 } as const;
   const hiddenVisibilityArbitrary = fc.constantFrom<
     HiddenVisibility | undefined
-  >(
-    undefined,
-    false,
-    true,
-    "usage",
-    "doc",
-    "help",
-  );
+  >(undefined, false, true, "usage", "doc", "help");
   const safeStringArbitrary = fc
     .string({ minLength: 0, maxLength: 16 })
     .filter((value: string) => !value.includes("\x1b"));
@@ -3443,12 +3403,10 @@ describe("property-based tests", () => {
       return normalized.length > 0 ? normalized : "x";
     });
   const optionNameArbitrary = fc
-    .tuple(
-      fc.constantFrom("--", "-", "/", "+"),
-      identifierArbitrary,
-    )
-    .map(([prefix, name]: readonly [string, string]) =>
-      `${prefix}${name}` as OptionName
+    .tuple(fc.constantFrom("--", "-", "/", "+"), identifierArbitrary)
+    .map(
+      ([prefix, name]: readonly [string, string]) =>
+        `${prefix}${name}` as OptionName,
     );
   const metavarArbitrary = fc.constantFrom<"ARG" | "FILE" | "PATH" | "VALUE">(
     "ARG",
@@ -3498,22 +3456,30 @@ describe("property-based tests", () => {
         type: "optional" as const,
         terms,
       })),
-      fc.record({
-        terms: usageArbitrary(depth - 1),
-        min: fc.integer({ min: 0, max: 2 }),
-      }).map((
-        { terms, min }: { readonly terms: Usage; readonly min: number },
-      ) => ({
-        type: "multiple" as const,
-        terms,
-        min,
-      })),
-      fc.array(usageArbitrary(depth - 1), { minLength: 1, maxLength: 3 }).map(
-        (terms: readonly Usage[]) => ({
+      fc
+        .record({
+          terms: usageArbitrary(depth - 1),
+          min: fc.integer({ min: 0, max: 2 }),
+        })
+        .map(
+          ({
+            terms,
+            min,
+          }: {
+            readonly terms: Usage;
+            readonly min: number;
+          }) => ({
+            type: "multiple" as const,
+            terms,
+            min,
+          }),
+        ),
+      fc
+        .array(usageArbitrary(depth - 1), { minLength: 1, maxLength: 3 })
+        .map((terms: readonly Usage[]) => ({
           type: "exclusive" as const,
           terms,
-        }),
-      ),
+        })),
     );
   }
 
@@ -3567,10 +3533,7 @@ describe("property-based tests", () => {
             isUsageHidden(mergedAB),
             isUsageHidden(a) || isUsageHidden(b),
           );
-          assert.equal(
-            isDocHidden(mergedAB),
-            isDocHidden(a) || isDocHidden(b),
-          );
+          assert.equal(isDocHidden(mergedAB), isDocHidden(a) || isDocHidden(b));
           assert.equal(
             isSuggestionHidden(mergedAB),
             isSuggestionHidden(a) || isSuggestionHidden(b),
@@ -3780,14 +3743,18 @@ describe("cloneUsage", () => {
 });
 
 describe("acceptsEmpty", () => {
-  const optionalFile: Usage = [{
-    type: "optional",
-    terms: [{ type: "argument", metavar: "FILE" }],
-  }];
-  const optionalDir: Usage = [{
-    type: "optional",
-    terms: [{ type: "argument", metavar: "DIR" }],
-  }];
+  const optionalFile: Usage = [
+    {
+      type: "optional",
+      terms: [{ type: "argument", metavar: "FILE" }],
+    },
+  ];
+  const optionalDir: Usage = [
+    {
+      type: "optional",
+      terms: [{ type: "argument", metavar: "DIR" }],
+    },
+  ];
 
   it("is preserved by cloneUsage()", () => {
     const usage: Usage = [
@@ -3819,34 +3786,46 @@ describe("acceptsEmpty", () => {
       terms: [optionalFile, optionalDir],
       acceptsEmpty: false,
     };
-    const usage: Usage = [{
-      type: "exclusive",
-      terms: [[inner], [{ type: "command", name: "init" }]],
-    }];
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        terms: [[inner], [{ type: "command", name: "init" }]],
+      },
+    ];
     assert.deepEqual(normalizeUsage(usage), usage);
     // Without the record, nested alternatives are flattened as before:
     assert.deepEqual(
-      normalizeUsage([{
-        type: "exclusive",
-        terms: [
-          [{ type: "exclusive", terms: [optionalFile, optionalDir] }],
-          [{ type: "command", name: "init" }],
-        ],
-      }]),
-      [{
-        type: "exclusive",
-        terms: [optionalFile, optionalDir, [{ type: "command", name: "init" }]],
-      }],
+      normalizeUsage([
+        {
+          type: "exclusive",
+          terms: [
+            [{ type: "exclusive", terms: [optionalFile, optionalDir] }],
+            [{ type: "command", name: "init" }],
+          ],
+        },
+      ]),
+      [
+        {
+          type: "exclusive",
+          terms: [
+            optionalFile,
+            optionalDir,
+            [{ type: "command", name: "init" }],
+          ],
+        },
+      ],
     );
   });
 
   it("keeps an annotated group without terms in normalizeUsage()", () => {
-    const usage: Usage = [{
-      type: "multiple",
-      terms: [],
-      min: 2,
-      acceptsEmpty: false,
-    }];
+    const usage: Usage = [
+      {
+        type: "multiple",
+        terms: [],
+        min: 2,
+        acceptsEmpty: false,
+      },
+    ];
     assert.deepEqual(normalizeUsage(usage), usage);
     assert.deepEqual(
       normalizeUsage([{ type: "multiple", terms: [], min: 2 }]),
@@ -3856,37 +3835,45 @@ describe("acceptsEmpty", () => {
 
   it("decides how formatUsage() draws a group", () => {
     assert.equal(
-      formatUsage("app", [{
-        type: "exclusive",
-        terms: [optionalFile, optionalDir],
-        acceptsEmpty: false,
-      }]),
+      formatUsage("app", [
+        {
+          type: "exclusive",
+          terms: [optionalFile, optionalDir],
+          acceptsEmpty: false,
+        },
+      ]),
       "app (FILE | DIR)",
     );
     assert.equal(
-      formatUsage("app", [{
-        type: "exclusive",
-        terms: [[], [{ type: "argument", metavar: "FILE" }]],
-        acceptsEmpty: true,
-      }]),
+      formatUsage("app", [
+        {
+          type: "exclusive",
+          terms: [[], [{ type: "argument", metavar: "FILE" }]],
+          acceptsEmpty: true,
+        },
+      ]),
       "app [FILE]",
     );
     assert.equal(
-      formatUsage("app", [{
-        type: "multiple",
-        terms: optionalFile,
-        min: 1,
-        acceptsEmpty: false,
-      }]),
+      formatUsage("app", [
+        {
+          type: "multiple",
+          terms: optionalFile,
+          min: 1,
+          acceptsEmpty: false,
+        },
+      ]),
       "app FILE...",
     );
     assert.equal(
-      formatUsage("app", [{
-        type: "multiple",
-        terms: [{ type: "argument", metavar: "FILE" }],
-        min: 1,
-        acceptsEmpty: true,
-      }]),
+      formatUsage("app", [
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "FILE" }],
+          min: 1,
+          acceptsEmpty: true,
+        },
+      ]),
       "app [FILE...]",
     );
   });
@@ -3904,10 +3891,12 @@ describe("acceptsEmpty", () => {
 
   it("leaves groups without the record as declared", () => {
     assert.equal(
-      formatUsage("app", [{
-        type: "exclusive",
-        terms: [optionalFile, optionalDir],
-      }]),
+      formatUsage("app", [
+        {
+          type: "exclusive",
+          terms: [optionalFile, optionalDir],
+        },
+      ]),
       "app ([FILE] | [DIR])",
     );
   });

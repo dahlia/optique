@@ -101,15 +101,17 @@ async function withCapturedStderr<T>(
 function isPhase2ContextRequest(
   request: unknown,
 ): request is SourceContextPhase2Request {
-  return request != null &&
+  return (
+    request != null &&
     typeof request === "object" &&
     "phase" in request &&
     (request as { readonly phase?: unknown }).phase === "phase2" &&
-    "parsed" in request;
+    "parsed" in request
+  );
 }
 
 function getPhase2ContextParsed<T>(request: unknown): T | undefined {
-  return isPhase2ContextRequest(request) ? request.parsed as T : undefined;
+  return isPhase2ContextRequest(request) ? (request.parsed as T) : undefined;
 }
 
 async function withPromptFunctionsOverride<T>(
@@ -238,12 +240,7 @@ describe("prompt()", () => {
           Promise.reject(new Error("Prompt should not be called")),
       });
 
-      const result = await parseAsync(parser, [
-        "--tag",
-        "a",
-        "--tag",
-        "c",
-      ]);
+      const result = await parseAsync(parser, ["--tag", "a", "--tag", "c"]);
       assert.ok(result.success);
       assert.deepEqual(result.value, ["a", "c"]);
     });
@@ -279,20 +276,23 @@ describe("prompt()", () => {
   describe("prompt fallback", () => {
     it("should skip the prompt when the runtime condition is false", async () => {
       let promptCalls = 0;
-      const parser = prompt(flag("--gh").map((): boolean => true), {
-        type: "confirm",
-        message: "Use GitHub CLI?",
-        default: true,
-        when: async () => {
-          await Promise.resolve();
-          return false;
+      const parser = prompt(
+        flag("--gh").map((): boolean => true),
+        {
+          type: "confirm",
+          message: "Use GitHub CLI?",
+          default: true,
+          when: async () => {
+            await Promise.resolve();
+            return false;
+          },
+          otherwise: false,
+          prompter: () => {
+            promptCalls++;
+            return Promise.resolve(true);
+          },
         },
-        otherwise: false,
-        prompter: () => {
-          promptCalls++;
-          return Promise.resolve(true);
-        },
-      });
+      );
 
       const result = await parseAsync(parser, []);
 
@@ -609,7 +609,7 @@ describe("prompt()", () => {
       const result = await parseAsync(parser, ["--port"]);
       assert.ok(!result.success);
       const errorText = result.error
-        .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
+        .map((s: Record<string, unknown>) => ("text" in s ? s.text : ""))
         .join("");
       assert.ok(
         errorText.includes("requires"),
@@ -646,13 +646,13 @@ describe("prompt()", () => {
           const result = await parseAsync(parser, []);
           assert.ok(!result.success);
           const errorText = result.error
-            .map((s: Record<string, unknown>) => "text" in s ? s.text : "")
+            .map((s: Record<string, unknown>) => ("text" in s ? s.text : ""))
             .join("");
           assert.ok(
             errorText.includes("Prompt cancelled."),
-            `Expected prompt cancellation error, got: ${
-              JSON.stringify(result.error)
-            }`,
+            `Expected prompt cancellation error, got: ${JSON.stringify(
+              result.error,
+            )}`,
           );
         },
       );
@@ -794,385 +794,431 @@ describe("prompt()", () => {
     });
   });
 
-  describe("shared validation, retries, and aborts", {
-    concurrency: false,
-  }, () => {
-    async function assertSelectionPromptRetries<TValue, TState>(
-      promptName: "select" | "rawlist" | "expand" | "checkbox",
-      answers: readonly [TValue, TValue],
-      createParser: (
-        options: PromptOptions<TValue>,
-      ) => Parser<"async", TValue, TState>,
-    ): Promise<void> {
-      const validationMessage = message`That value is not available.`;
-      const events: string[] = [];
-      let promptCalls = 0;
-      let validationCalls = 0;
+  describe(
+    "shared validation, retries, and aborts",
+    {
+      concurrency: false,
+    },
+    () => {
+      async function assertSelectionPromptRetries<TValue, TState>(
+        promptName: "select" | "rawlist" | "expand" | "checkbox",
+        answers: readonly [TValue, TValue],
+        createParser: (
+          options: PromptOptions<TValue>,
+        ) => Parser<"async", TValue, TState>,
+      ): Promise<void> {
+        const validationMessage = message`That value is not available.`;
+        const events: string[] = [];
+        let promptCalls = 0;
+        let validationCalls = 0;
 
-      await withCapturedStderr(
-        async (chunks) => {
-          await withPromptFunctionsOverride(
-            {
-              [promptName]: () => {
-                promptCalls++;
-                events.push(`prompt:${promptCalls}`);
-                return Promise.resolve(answers[promptCalls - 1]);
-              },
-            },
-            async () => {
-              const parser = createParser({
-                async validate() {
-                  validationCalls++;
-                  events.push(`validate:${validationCalls}`);
-                  await Promise.resolve();
-                  return validationCalls === 1 ? validationMessage : undefined;
+        await withCapturedStderr(
+          async (chunks) => {
+            await withPromptFunctionsOverride(
+              {
+                [promptName]: () => {
+                  promptCalls++;
+                  events.push(`prompt:${promptCalls}`);
+                  return Promise.resolve(answers[promptCalls - 1]);
                 },
-              });
+              },
+              async () => {
+                const parser = createParser({
+                  async validate() {
+                    validationCalls++;
+                    events.push(`validate:${validationCalls}`);
+                    await Promise.resolve();
+                    return validationCalls === 1
+                      ? validationMessage
+                      : undefined;
+                  },
+                });
 
-              const result = await parseAsync(parser, []);
+                const result = await parseAsync(parser, []);
 
-              assert.ok(result.success);
-              assert.deepEqual(result.value, answers[1]);
-            },
-          );
-
-          assert.deepEqual(chunks, [formatMessage(validationMessage) + "\n"]);
-        },
-        () => events.push("stderr"),
-      );
-
-      assert.deepEqual(events, [
-        "prompt:1",
-        "validate:1",
-        "stderr",
-        "prompt:2",
-        "validate:2",
-      ]);
-    }
-
-    it("should infer shared validator values from the wrapped parser", () => {
-      const validator = ((value) =>
-        value.length > 0
-          ? undefined
-          : message`Enter a name.`) satisfies PromptValidator<string>;
-      const options = { validate: validator } satisfies PromptOptions<string>;
-      const parser = prompt(
-        option("--name", string()),
-        { type: "input", message: "Enter name:" },
-        options,
-      );
-
-      prompt(option("--name", string()), {
-        type: "input",
-        message: "Enter name:",
-      }, {
-        // @ts-expect-error The wrapped parser determines the validator value.
-        validate: (_value: number) =>
-          undefined,
-      });
-
-      assert.equal(parser.mode, "async");
-    });
-
-    it("should retry select prompts after shared validation", async () => {
-      await assertSelectionPromptRetries<string, undefined>(
-        "select",
-        ["development", "production"],
-        (options) =>
-          prompt(fail<string>(), {
-            type: "select",
-            message: "Choose environment:",
-            choices: ["development", "production"],
-          }, options),
-      );
-    });
-
-    it("should retry rawlist prompts after shared validation", async () => {
-      await assertSelectionPromptRetries<string, undefined>(
-        "rawlist",
-        ["json", "yaml"],
-        (options) =>
-          prompt(fail<string>(), {
-            type: "rawlist",
-            message: "Choose format:",
-            choices: ["json", "yaml"],
-          }, options),
-      );
-    });
-
-    it("should retry expand prompts after shared validation", async () => {
-      await assertSelectionPromptRetries<string, undefined>(
-        "expand",
-        ["skip", "overwrite"],
-        (options) =>
-          prompt(fail<string>(), {
-            type: "expand",
-            message: "Choose action:",
-            choices: [
-              { value: "skip", key: "s" },
-              { value: "overwrite", key: "o" },
-            ],
-          }, options),
-      );
-    });
-
-    it("should retry checkbox prompts after shared validation", async () => {
-      await assertSelectionPromptRetries<readonly string[], undefined>(
-        "checkbox",
-        [["typescript"], ["typescript", "deno"]],
-        (options) =>
-          prompt(fail<readonly string[]>(), {
-            type: "checkbox",
-            message: "Choose runtimes:",
-            choices: ["typescript", "deno"],
-          }, options),
-      );
-    });
-
-    it("should pass retry context to a custom prompter without writing", async () => {
-      const controller = new AbortController();
-      const validationMessage = message`Choose production.`;
-      const contexts: PromptExecutionContext[] = [];
-      const answers = ["development", "production"] as const;
-
-      await withCapturedStderr(async (chunks) => {
-        const parser = prompt(fail<string>(), {
-          type: "select",
-          message: "Choose environment:",
-          choices: answers,
-          prompter: (context) => {
-            contexts.push(context);
-            return Promise.resolve(answers[context.attempt - 1]);
-          },
-        }, {
-          signal: controller.signal,
-          validate(value) {
-            return value === "production" ? undefined : validationMessage;
-          },
-        });
-
-        const result = await parseAsync(parser, []);
-
-        assert.ok(result.success);
-        assert.equal(result.value, "production");
-        assert.deepEqual(chunks, []);
-      });
-
-      assert.deepEqual(contexts, [
-        { attempt: 1, signal: controller.signal },
-        {
-          attempt: 2,
-          previousValidationMessage: validationMessage,
-          signal: controller.signal,
-        },
-      ]);
-      assert.equal(contexts[1].previousValidationMessage, validationMessage);
-    });
-
-    it("should finish native validation within one shared attempt", async () => {
-      const events: string[] = [];
-      let promptCalls = 0;
-      let nativeValidationCalls = 0;
-      let sharedValidationCalls = 0;
-
-      await withPromptFunctionsOverride(
-        {
-          input: async (config: {
-            readonly validate?: (
-              value: string,
-            ) => boolean | string | Promise<boolean | string>;
-          }) => {
-            promptCalls++;
-            nativeValidationCalls++;
-            events.push("native:invalid");
-            assert.equal(
-              await config.validate?.(""),
-              "Name is required.",
+                assert.ok(result.success);
+                assert.deepEqual(result.value, answers[1]);
+              },
             );
-            nativeValidationCalls++;
-            events.push("native:valid");
-            assert.equal(await config.validate?.("Alice"), true);
-            return "Alice";
+
+            assert.deepEqual(chunks, [formatMessage(validationMessage) + "\n"]);
           },
-        },
-        async () => {
-          const parser = prompt(fail<string>(), {
+          () => events.push("stderr"),
+        );
+
+        assert.deepEqual(events, [
+          "prompt:1",
+          "validate:1",
+          "stderr",
+          "prompt:2",
+          "validate:2",
+        ]);
+      }
+
+      it("should infer shared validator values from the wrapped parser", () => {
+        const validator = ((value) =>
+          value.length > 0
+            ? undefined
+            : message`Enter a name.`) satisfies PromptValidator<string>;
+        const options = { validate: validator } satisfies PromptOptions<string>;
+        const parser = prompt(
+          option("--name", string()),
+          { type: "input", message: "Enter name:" },
+          options,
+        );
+
+        prompt(
+          option("--name", string()),
+          {
             type: "input",
             message: "Enter name:",
-            validate: (value) => value.length > 0 || "Name is required.",
-          }, {
-            validate(value) {
-              sharedValidationCalls++;
-              events.push("shared");
-              assert.equal(value, "Alice");
-              return undefined;
+          },
+          {
+            // @ts-expect-error The wrapped parser determines the validator value.
+            validate: (_value: number) => undefined,
+          },
+        );
+
+        assert.equal(parser.mode, "async");
+      });
+
+      it("should retry select prompts after shared validation", async () => {
+        await assertSelectionPromptRetries<string, undefined>(
+          "select",
+          ["development", "production"],
+          (options) =>
+            prompt(
+              fail<string>(),
+              {
+                type: "select",
+                message: "Choose environment:",
+                choices: ["development", "production"],
+              },
+              options,
+            ),
+        );
+      });
+
+      it("should retry rawlist prompts after shared validation", async () => {
+        await assertSelectionPromptRetries<string, undefined>(
+          "rawlist",
+          ["json", "yaml"],
+          (options) =>
+            prompt(
+              fail<string>(),
+              {
+                type: "rawlist",
+                message: "Choose format:",
+                choices: ["json", "yaml"],
+              },
+              options,
+            ),
+        );
+      });
+
+      it("should retry expand prompts after shared validation", async () => {
+        await assertSelectionPromptRetries<string, undefined>(
+          "expand",
+          ["skip", "overwrite"],
+          (options) =>
+            prompt(
+              fail<string>(),
+              {
+                type: "expand",
+                message: "Choose action:",
+                choices: [
+                  { value: "skip", key: "s" },
+                  { value: "overwrite", key: "o" },
+                ],
+              },
+              options,
+            ),
+        );
+      });
+
+      it("should retry checkbox prompts after shared validation", async () => {
+        await assertSelectionPromptRetries<readonly string[], undefined>(
+          "checkbox",
+          [["typescript"], ["typescript", "deno"]],
+          (options) =>
+            prompt(
+              fail<readonly string[]>(),
+              {
+                type: "checkbox",
+                message: "Choose runtimes:",
+                choices: ["typescript", "deno"],
+              },
+              options,
+            ),
+        );
+      });
+
+      it("should pass retry context to a custom prompter without writing", async () => {
+        const controller = new AbortController();
+        const validationMessage = message`Choose production.`;
+        const contexts: PromptExecutionContext[] = [];
+        const answers = ["development", "production"] as const;
+
+        await withCapturedStderr(async (chunks) => {
+          const parser = prompt(
+            fail<string>(),
+            {
+              type: "select",
+              message: "Choose environment:",
+              choices: answers,
+              prompter: (context) => {
+                contexts.push(context);
+                return Promise.resolve(answers[context.attempt - 1]);
+              },
             },
-          });
+            {
+              signal: controller.signal,
+              validate(value) {
+                return value === "production" ? undefined : validationMessage;
+              },
+            },
+          );
 
           const result = await parseAsync(parser, []);
 
           assert.ok(result.success);
-          assert.equal(result.value, "Alice");
-        },
-      );
+          assert.equal(result.value, "production");
+          assert.deepEqual(chunks, []);
+        });
 
-      assert.equal(promptCalls, 1);
-      assert.equal(nativeValidationCalls, 2);
-      assert.equal(sharedValidationCalls, 1);
-      assert.deepEqual(events, ["native:invalid", "native:valid", "shared"]);
-    });
-
-    it("should honor the shared maximum attempt limit", async () => {
-      const validationMessage = message`Production is required.`;
-      let promptCalls = 0;
-
-      await withCapturedStderr(async (chunks) => {
-        await withPromptFunctionsOverride(
+        assert.deepEqual(contexts, [
+          { attempt: 1, signal: controller.signal },
           {
-            select: () => {
-              promptCalls++;
-              return Promise.resolve("development");
-            },
+            attempt: 2,
+            previousValidationMessage: validationMessage,
+            signal: controller.signal,
           },
-          async () => {
-            const parser = prompt(fail<string>(), {
-              type: "select",
-              message: "Choose environment:",
-              choices: ["development", "production"],
-            }, {
-              maxAttempts: 1,
-              validate: () => validationMessage,
-            });
-
-            const result = await parseAsync(parser, []);
-
-            assert.ok(!result.success);
-            assert.equal(result.error, validationMessage);
-          },
-        );
-
-        assert.deepEqual(chunks, []);
+        ]);
+        assert.equal(contexts[1].previousValidationMessage, validationMessage);
       });
 
-      assert.equal(promptCalls, 1);
-    });
+      it("should finish native validation within one shared attempt", async () => {
+        const events: string[] = [];
+        let promptCalls = 0;
+        let nativeValidationCalls = 0;
+        let sharedValidationCalls = 0;
 
-    it("should treat user cancellation during a retry as terminal", async () => {
-      const validationMessage = message`Production is required.`;
-      let promptCalls = 0;
-      let validationCalls = 0;
-
-      await withCapturedStderr(async () => {
         await withPromptFunctionsOverride(
           {
-            select: () => {
+            input: async (config: {
+              readonly validate?: (
+                value: string,
+              ) => boolean | string | Promise<boolean | string>;
+            }) => {
               promptCalls++;
-              if (promptCalls === 1) return Promise.resolve("development");
-              const error = new Error("User cancelled the prompt.");
-              error.name = "ExitPromptError";
-              throw error;
+              nativeValidationCalls++;
+              events.push("native:invalid");
+              assert.equal(await config.validate?.(""), "Name is required.");
+              nativeValidationCalls++;
+              events.push("native:valid");
+              assert.equal(await config.validate?.("Alice"), true);
+              return "Alice";
             },
           },
           async () => {
-            const parser = prompt(fail<string>(), {
-              type: "select",
-              message: "Choose environment:",
-              choices: ["development", "production"],
-            }, {
-              validate() {
-                validationCalls++;
-                return validationMessage;
+            const parser = prompt(
+              fail<string>(),
+              {
+                type: "input",
+                message: "Enter name:",
+                validate: (value) => value.length > 0 || "Name is required.",
               },
-            });
+              {
+                validate(value) {
+                  sharedValidationCalls++;
+                  events.push("shared");
+                  assert.equal(value, "Alice");
+                  return undefined;
+                },
+              },
+            );
 
             const result = await parseAsync(parser, []);
 
-            assert.ok(!result.success);
-            assert.equal(formatMessage(result.error), "Prompt cancelled.");
+            assert.ok(result.success);
+            assert.equal(result.value, "Alice");
           },
         );
+
+        assert.equal(promptCalls, 1);
+        assert.equal(nativeValidationCalls, 2);
+        assert.equal(sharedValidationCalls, 1);
+        assert.deepEqual(events, ["native:invalid", "native:valid", "shared"]);
       });
 
-      assert.equal(promptCalls, 2);
-      assert.equal(validationCalls, 1);
-    });
+      it("should honor the shared maximum attempt limit", async () => {
+        const validationMessage = message`Production is required.`;
+        let promptCalls = 0;
 
-    it("should reject a pre-aborted signal before invoking Inquirer.js", async () => {
-      const controller = new AbortController();
-      const reason = { code: "stopped" };
-      controller.abort(reason);
-
-      await withCapturedStderr(async (chunks) => {
-        await withPromptFunctionsOverride(
-          {
-            input: () => {
-              assert.fail("Inquirer.js should not be called.");
+        await withCapturedStderr(async (chunks) => {
+          await withPromptFunctionsOverride(
+            {
+              select: () => {
+                promptCalls++;
+                return Promise.resolve("development");
+              },
             },
-          },
-          async () => {
-            const parser = prompt(fail<string>(), {
-              type: "input",
-              message: "Enter name:",
-            }, { signal: controller.signal });
+            async () => {
+              const parser = prompt(
+                fail<string>(),
+                {
+                  type: "select",
+                  message: "Choose environment:",
+                  choices: ["development", "production"],
+                },
+                {
+                  maxAttempts: 1,
+                  validate: () => validationMessage,
+                },
+              );
 
-            await assert.rejects(
-              () => parseAsync(parser, []),
-              (error: unknown) => error === reason,
-            );
-          },
-        );
+              const result = await parseAsync(parser, []);
 
-        assert.deepEqual(chunks, []);
-      });
-    });
-
-    it("should reject with the signal reason during an active prompt", async () => {
-      const controller = new AbortController();
-      const reason = { code: "stopped" };
-      const started = deferred<void>();
-      const attempt = deferred<string>();
-      const contexts: (InquirerPromptContext | undefined)[] = [];
-
-      await withCapturedStderr(async (chunks) => {
-        await withPromptFunctionsOverride(
-          {
-            input: (
-              _config: Record<string, unknown>,
-              context?: InquirerPromptContext,
-            ) => {
-              contexts.push(context);
-              started.resolve(undefined);
-              return attempt.promise;
+              assert.ok(!result.success);
+              assert.equal(result.error, validationMessage);
             },
-          },
-          async () => {
-            const parser = prompt(fail<string>(), {
-              type: "input",
-              message: "Enter name:",
-            }, { signal: controller.signal });
+          );
 
-            const parsing = parseAsync(parser, []);
-            await started.promise;
-            controller.abort(reason);
+          assert.deepEqual(chunks, []);
+        });
 
-            await assert.rejects(
-              () => parsing,
-              (error: unknown) => error === reason,
-            );
-
-            const abortError = new Error("Prompt aborted.");
-            abortError.name = "AbortPromptError";
-            attempt.reject(abortError);
-            await Promise.resolve();
-          },
-        );
-
-        assert.deepEqual(chunks, []);
+        assert.equal(promptCalls, 1);
       });
 
-      assert.deepEqual(contexts, [{ signal: controller.signal }]);
-    });
-  });
+      it("should treat user cancellation during a retry as terminal", async () => {
+        const validationMessage = message`Production is required.`;
+        let promptCalls = 0;
+        let validationCalls = 0;
+
+        await withCapturedStderr(async () => {
+          await withPromptFunctionsOverride(
+            {
+              select: () => {
+                promptCalls++;
+                if (promptCalls === 1) return Promise.resolve("development");
+                const error = new Error("User cancelled the prompt.");
+                error.name = "ExitPromptError";
+                throw error;
+              },
+            },
+            async () => {
+              const parser = prompt(
+                fail<string>(),
+                {
+                  type: "select",
+                  message: "Choose environment:",
+                  choices: ["development", "production"],
+                },
+                {
+                  validate() {
+                    validationCalls++;
+                    return validationMessage;
+                  },
+                },
+              );
+
+              const result = await parseAsync(parser, []);
+
+              assert.ok(!result.success);
+              assert.equal(formatMessage(result.error), "Prompt cancelled.");
+            },
+          );
+        });
+
+        assert.equal(promptCalls, 2);
+        assert.equal(validationCalls, 1);
+      });
+
+      it("should reject a pre-aborted signal before invoking Inquirer.js", async () => {
+        const controller = new AbortController();
+        const reason = { code: "stopped" };
+        controller.abort(reason);
+
+        await withCapturedStderr(async (chunks) => {
+          await withPromptFunctionsOverride(
+            {
+              input: () => {
+                assert.fail("Inquirer.js should not be called.");
+              },
+            },
+            async () => {
+              const parser = prompt(
+                fail<string>(),
+                {
+                  type: "input",
+                  message: "Enter name:",
+                },
+                { signal: controller.signal },
+              );
+
+              await assert.rejects(
+                () => parseAsync(parser, []),
+                (error: unknown) => error === reason,
+              );
+            },
+          );
+
+          assert.deepEqual(chunks, []);
+        });
+      });
+
+      it("should reject with the signal reason during an active prompt", async () => {
+        const controller = new AbortController();
+        const reason = { code: "stopped" };
+        const started = deferred<void>();
+        const attempt = deferred<string>();
+        const contexts: (InquirerPromptContext | undefined)[] = [];
+
+        await withCapturedStderr(async (chunks) => {
+          await withPromptFunctionsOverride(
+            {
+              input: (
+                _config: Record<string, unknown>,
+                context?: InquirerPromptContext,
+              ) => {
+                contexts.push(context);
+                started.resolve(undefined);
+                return attempt.promise;
+              },
+            },
+            async () => {
+              const parser = prompt(
+                fail<string>(),
+                {
+                  type: "input",
+                  message: "Enter name:",
+                },
+                { signal: controller.signal },
+              );
+
+              const parsing = parseAsync(parser, []);
+              await started.promise;
+              controller.abort(reason);
+
+              await assert.rejects(
+                () => parsing,
+                (error: unknown) => error === reason,
+              );
+
+              const abortError = new Error("Prompt aborted.");
+              abortError.name = "AbortPromptError";
+              attempt.reject(abortError);
+              await Promise.resolve();
+            },
+          );
+
+          assert.deepEqual(chunks, []);
+        });
+
+        assert.deepEqual(contexts, [{ signal: controller.signal }]);
+      });
+    },
+  );
 
   describe("object() composition", () => {
     it("runs prompt fields sequentially inside object()", async () => {
@@ -1451,46 +1497,43 @@ describe("prompt()", () => {
       assert.equal(result.value.port, 8080);
     });
 
-    it(
-      "prompts when prompt(bindEnv(...)) is parsed after getAnnotations() without passing annotations",
-      async () => {
-        const context = createEnvContext({
-          source: (key) => ({ APP_NAME: "env-name" })[key],
-          prefix: "APP_",
-        });
-        const annotations = context.getAnnotations();
-        if (annotations instanceof Promise) {
-          throw new TypeError("Expected synchronous annotations.");
-        }
-        assert.ok(
-          Object.getOwnPropertySymbols(annotations).length > 0,
-          "Expected getAnnotations() to capture env-backed annotations.",
-        );
-        let promptCalls = 0;
-        const parser = object({
-          name: prompt(
-            bindEnv(option("--name", string()), {
-              context,
-              key: "NAME",
-              parser: string(),
-            }),
-            {
-              type: "input",
-              message: "Enter name:",
-              prompter: () => {
-                promptCalls += 1;
-                return Promise.resolve("prompted-name");
-              },
+    it("prompts when prompt(bindEnv(...)) is parsed after getAnnotations() without passing annotations", async () => {
+      const context = createEnvContext({
+        source: (key) => ({ APP_NAME: "env-name" })[key],
+        prefix: "APP_",
+      });
+      const annotations = context.getAnnotations();
+      if (annotations instanceof Promise) {
+        throw new TypeError("Expected synchronous annotations.");
+      }
+      assert.ok(
+        Object.getOwnPropertySymbols(annotations).length > 0,
+        "Expected getAnnotations() to capture env-backed annotations.",
+      );
+      let promptCalls = 0;
+      const parser = object({
+        name: prompt(
+          bindEnv(option("--name", string()), {
+            context,
+            key: "NAME",
+            parser: string(),
+          }),
+          {
+            type: "input",
+            message: "Enter name:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompted-name");
             },
-          ),
-        });
+          },
+        ),
+      });
 
-        const result = await parseAsync(parser, []);
-        assert.ok(result.success);
-        assert.equal(result.value.name, "prompted-name");
-        assert.equal(promptCalls, 1);
-      },
-    );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.name, "prompted-name");
+      assert.equal(promptCalls, 1);
+    });
 
     it("skips prompt for prompt(optional(bindEnv(...))) inside object()", async () => {
       // Regression: optional wraps the inner bindEnv state in an array
@@ -1695,27 +1738,26 @@ describe("prompt()", () => {
               return Promise.resolve("prompted");
             },
           };
-          const name = wrapper === "bare"
-            ? prompt(option("--name", string()), config)
-            : wrapper === "optional"
-            ? prompt(optional(option("--name", string())), config)
-            : prompt(
-              withDefault(option("--name", string()), "default"),
-              config,
-            );
+          const name =
+            wrapper === "bare"
+              ? prompt(option("--name", string()), config)
+              : wrapper === "optional"
+                ? prompt(optional(option("--name", string())), config)
+                : prompt(
+                    withDefault(option("--name", string()), "default"),
+                    config,
+                  );
           const tags = multiple(option("--tag", string()));
-          const parser = construct === "tuple"
-            ? tuple([tags, name])
-            : concat(tuple([tags]), tuple([name]));
+          const parser =
+            construct === "tuple"
+              ? tuple([tags, name])
+              : concat(tuple([tags]), tuple([name]));
           const annotations = { [Symbol.for("@test/issue-960")]: "present" };
-          const result = await parseAsync(parser, [
-            "--name",
-            "original",
-            "--tag",
-            "a",
-            "--tag",
-            "b",
-          ], { annotations });
+          const result = await parseAsync(
+            parser,
+            ["--name", "original", "--tag", "a", "--tag", "b"],
+            { annotations },
+          );
           assert.deepEqual(calls, []);
           assert.deepEqual(result, {
             success: true,
@@ -1789,10 +1831,9 @@ describe("prompt()", () => {
         complete: (state) => ({ success: true, value: state }),
         suggest: function* () {},
         getDocFragments: () => ({ fragments: [] }),
-        getSuggestRuntimeNodes: (
-          state,
-          path,
-        ) => [{ parser: inner, state, path }],
+        getSuggestRuntimeNodes: (state, path) => [
+          { parser: inner, state, path },
+        ],
       };
       const parser = prompt(inner, {
         type: "input",
@@ -1906,8 +1947,8 @@ describe("prompt()", () => {
                 permissive
                   ? ["deno", "npm"]
                   : value === "fresh"
-                  ? ["deno"]
-                  : ["npm"],
+                    ? ["deno"]
+                    : ["npm"],
               ),
             defaultValue: () => "fresh" as const,
           });
@@ -1920,63 +1961,61 @@ describe("prompt()", () => {
           );
           const fw2 = source("--fw2");
           const out = option("--out", pm);
-          const parser = construct === "tuple"
-            ? tuple([cond, fw2, out])
-            : construct === "concat"
-            ? concat(tuple([cond]), tuple([fw2]), tuple([out]))
-            : map(object({ cond, fw2, out }), (value) =>
-              [value.cond, value.fw2, value.out] as const);
+          const parser =
+            construct === "tuple"
+              ? tuple([cond, fw2, out])
+              : construct === "concat"
+                ? concat(tuple([cond]), tuple([fw2]), tuple([out]))
+                : map(
+                    object({ cond, fw2, out }),
+                    (value) => [value.cond, value.fw2, value.out] as const,
+                  );
           for (const innerPm of ["deno", "npm"]) {
             for (const outerPm of ["deno", "npm"]) {
-              for (
-                const args of [
-                  [
-                    "--kind",
-                    "a",
-                    "--fw",
-                    "fresh",
-                    "--fw2",
-                    "hono",
-                    "--pm",
-                    innerPm,
-                    "--out",
-                    outerPm,
-                  ],
-                  [
-                    "--fw2",
-                    "hono",
-                    "--kind",
-                    "a",
-                    "--fw",
-                    "fresh",
-                    "--pm",
-                    innerPm,
-                    "--out",
-                    outerPm,
-                  ],
-                  [
-                    "--kind",
-                    "a",
-                    "--fw",
-                    "fresh",
-                    "--pm",
-                    innerPm,
-                    "--out",
-                    outerPm,
-                    "--fw2",
-                    "hono",
-                  ],
-                ]
-              ) {
+              for (const args of [
+                [
+                  "--kind",
+                  "a",
+                  "--fw",
+                  "fresh",
+                  "--fw2",
+                  "hono",
+                  "--pm",
+                  innerPm,
+                  "--out",
+                  outerPm,
+                ],
+                [
+                  "--fw2",
+                  "hono",
+                  "--kind",
+                  "a",
+                  "--fw",
+                  "fresh",
+                  "--pm",
+                  innerPm,
+                  "--out",
+                  outerPm,
+                ],
+                [
+                  "--kind",
+                  "a",
+                  "--fw",
+                  "fresh",
+                  "--pm",
+                  innerPm,
+                  "--out",
+                  outerPm,
+                  "--fw2",
+                  "hono",
+                ],
+              ]) {
                 const result = await parseAsync(parser, args);
                 assert.deepEqual(calls, []);
                 // #957 governs derived-value precedence, independently of #960.
                 if (permissive) assert.ok(result.success);
                 if (result.success) {
-                  assert.equal(
-                    result.value[1],
-                    "hono",
-                  );
+                  assert.equal(result.value[1], "hono");
                 }
               }
             }
@@ -1999,50 +2038,48 @@ describe("prompt()", () => {
   describe("consumed-token detection", () => {
     it("marks object placeholders as fully deferred", async () => {
       const marker = Symbol.for("@test/inquirer/object-placeholder");
-      const inner:
-        & Parser<
-          "sync",
-          { readonly name: string; readonly meta: { readonly id: string } },
-          { readonly ready: boolean }
-        >
-        & {
-          readonly placeholder: {
-            readonly name: string;
-            readonly meta: { readonly id: string };
-          };
-        } = {
-          mode: "sync",
-          $valueType: [] as readonly {
-            readonly name: string;
-            readonly meta: { readonly id: string };
-          }[],
-          $stateType: [] as readonly { readonly ready: boolean }[],
-          priority: 0,
-          usage: [],
-          leadingNames: new Set(),
-          acceptingAnyToken: false,
-          initialState: { ready: true },
-          placeholder: { name: "", meta: { id: "" } },
-          parse(context) {
-            return {
-              success: true as const,
-              next: context,
-              consumed: [],
-            };
-          },
-          complete(state) {
-            assert.equal(getAnnotations(state)?.[marker], "seen");
-            return { success: true as const, value: undefined as never };
-          },
-          shouldDeferCompletion(state) {
-            assert.equal(getAnnotations(state)?.[marker], "seen");
-            return true;
-          },
-          *suggest() {},
-          getDocFragments() {
-            return { fragments: [] };
-          },
+      const inner: Parser<
+        "sync",
+        { readonly name: string; readonly meta: { readonly id: string } },
+        { readonly ready: boolean }
+      > & {
+        readonly placeholder: {
+          readonly name: string;
+          readonly meta: { readonly id: string };
         };
+      } = {
+        mode: "sync",
+        $valueType: [] as readonly {
+          readonly name: string;
+          readonly meta: { readonly id: string };
+        }[],
+        $stateType: [] as readonly { readonly ready: boolean }[],
+        priority: 0,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: { ready: true },
+        placeholder: { name: "", meta: { id: "" } },
+        parse(context) {
+          return {
+            success: true as const,
+            next: context,
+            consumed: [],
+          };
+        },
+        complete(state) {
+          assert.equal(getAnnotations(state)?.[marker], "seen");
+          return { success: true as const, value: undefined as never };
+        },
+        shouldDeferCompletion(state) {
+          assert.equal(getAnnotations(state)?.[marker], "seen");
+          return true;
+        },
+        *suggest() {},
+        getDocFragments() {
+          return { fragments: [] };
+        },
+      };
       const parser = prompt(inner, {
         type: "input",
         message: "profile?",
@@ -2451,49 +2488,46 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 0);
     });
 
-    it(
-      "prompts when prompt(bindConfig(...)) is parsed after getAnnotations() without passing annotations",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-        const annotations = await context.getAnnotations(
-          { phase: "phase2", parsed: { any: true } },
+    it("prompts when prompt(bindConfig(...)) is parsed after getAnnotations() without passing annotations", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      const annotations = await context.getAnnotations(
+        { phase: "phase2", parsed: { any: true } },
+        {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      );
+      assert.ok(
+        Object.getOwnPropertySymbols(annotations).length > 0,
+        "Expected getAnnotations() to capture config-backed annotations.",
+      );
+      let promptCalls = 0;
+      const parser = object({
+        apiKey: prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
           {
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
-          },
-        );
-        assert.ok(
-          Object.getOwnPropertySymbols(annotations).length > 0,
-          "Expected getAnnotations() to capture config-backed annotations.",
-        );
-        let promptCalls = 0;
-        const parser = object({
-          apiKey: prompt(
-            bindConfig(option("--api-key", string()), {
-              context,
-              key: "apiKey",
-            }),
-            {
-              type: "password",
-              message: "API key:",
-              prompter: () => {
-                promptCalls += 1;
-                return Promise.resolve("prompt-secret");
-              },
+            type: "password",
+            message: "API key:",
+            prompter: () => {
+              promptCalls += 1;
+              return Promise.resolve("prompt-secret");
             },
-          ),
-        });
+          },
+        ),
+      });
 
-        const result = await parseAsync(parser, []);
-        assert.ok(result.success);
-        assert.equal(result.value.apiKey, "prompt-secret");
-        assert.equal(promptCalls, 1);
-      },
-    );
+      const result = await parseAsync(parser, []);
+      assert.ok(result.success);
+      assert.equal(result.value.apiKey, "prompt-secret");
+      assert.equal(promptCalls, 1);
+    });
 
     it("prompts when bindEnv() has no value and env var is absent", async () => {
       // prompt(bindEnv(...)) must fall back to the interactive prompt when
@@ -2580,22 +2614,20 @@ describe("prompt()", () => {
       assert.equal(result.value, true);
     });
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "skips the prompt when runWith() resolves a config value in phase 2",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "runs the prompt once when runWith() finds no config value in phase 2",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "skips the prompt when runWith() resolves a config value in phase 2",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "runs the prompt once when runWith() finds no config value in phase 2",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -2628,22 +2660,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "skips the prompt in object() when runAsync() resolves a config value in phase 2",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "runs the prompt once in object() when runAsync() finds no config value in phase 2",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "skips the prompt in object() when runAsync() resolves a config value in phase 2",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "runs the prompt once in object() when runAsync() finds no config value in phase 2",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -2686,9 +2716,9 @@ describe("prompt()", () => {
         id: Symbol.for("@test/prompt-phase-two"),
         phase: "two-pass",
         getAnnotations(request?: SourceContextRequest) {
-          const phase2ParsedValue = getPhase2ContextParsed<
-            { readonly config: string }
-          >(request);
+          const phase2ParsedValue = getPhase2ContextParsed<{
+            readonly config: string;
+          }>(request);
           if (phase2ParsedValue === undefined) {
             return {};
           }
@@ -2717,28 +2747,122 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 2);
     });
 
-    it(
-      "hides deferred config-backed prompts from other phase-two contexts",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-        let phase2Parsed: { readonly apiKey?: string | undefined } | undefined;
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/config-prompt-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            const phase2ParsedValue = getPhase2ContextParsed<{
-              readonly apiKey?: string | undefined;
-            }>(parsed);
-            if (phase2ParsedValue === undefined) {
-              return {};
-            }
-            phase2Parsed = phase2ParsedValue;
+    it("hides deferred config-backed prompts from other phase-two contexts", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let phase2Parsed: { readonly apiKey?: string | undefined } | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/config-prompt-phase-two"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          const phase2ParsedValue = getPhase2ContextParsed<{
+            readonly apiKey?: string | undefined;
+          }>(parsed);
+          if (phase2ParsedValue === undefined) {
             return {};
+          }
+          phase2Parsed = phase2ParsedValue;
+          return {};
+        },
+      };
+      const parser = object({
+        apiKey: prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
+          {
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
           },
-        };
-        const parser = object({
+        ),
+      });
+
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      });
+
+      assert.equal(phase2Parsed, undefined);
+      assert.deepEqual(result, { apiKey: "config-secret" });
+    });
+
+    it("hides top-level deferred prompts from other phase-two contexts", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      let sawUndefined = false;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/top-level-config-prompt-phase-two"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          sawUndefined =
+            isPhase2ContextRequest(parsed) &&
+            getPhase2ContextParsed(parsed) === undefined;
+          return {};
+        },
+      };
+      const parser = prompt(
+        bindConfig(option("--api-key", string()), {
+          context,
+          key: "apiKey",
+        }),
+        {
+          type: "password",
+          message: "API key:",
+          prompter: () => Promise.resolve("prompt-secret"),
+        },
+      );
+
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      });
+
+      assert.ok(sawUndefined);
+      assert.equal(result, "config-secret");
+    });
+
+    it("passes through deferred prompt values inside non-plain phase-two context inputs", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      class ConfigInput {
+        readonly apiKey: string | undefined;
+
+        constructor(apiKey: string | undefined) {
+          this.apiKey = apiKey;
+        }
+      }
+
+      let phase2Parsed: ConfigInput | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/non-plain-phase-two"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          const phase2ParsedValue = getPhase2ContextParsed<ConfigInput>(parsed);
+          if (phase2ParsedValue !== undefined) {
+            phase2Parsed = phase2ParsedValue;
+          }
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
           apiKey: prompt(
             bindConfig(option("--api-key", string()), {
               context,
@@ -2750,229 +2874,102 @@ describe("prompt()", () => {
               prompter: () => Promise.resolve("prompt-secret"),
             },
           ),
-        });
+        }),
+        (value) => new ConfigInput(value.apiKey),
+      );
 
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              }),
-            },
-          },
-        );
-
-        assert.equal(phase2Parsed, undefined);
-        assert.deepEqual(result, { apiKey: "config-secret" });
-      },
-    );
-
-    it(
-      "hides top-level deferred prompts from other phase-two contexts",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-        let sawUndefined = false;
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/top-level-config-prompt-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            sawUndefined = isPhase2ContextRequest(parsed) &&
-              getPhase2ContextParsed(parsed) === undefined;
-            return {};
-          },
-        };
-        const parser = prompt(
-          bindConfig(option("--api-key", string()), {
-            context,
-            key: "apiKey",
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
           }),
-          {
-            type: "password",
-            message: "API key:",
-            prompter: () => Promise.resolve("prompt-secret"),
-          },
-        );
+        },
+      });
 
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              }),
-            },
-          },
-        );
+      assert.ok(phase2Parsed instanceof ConfigInput);
+      assert.equal(phase2Parsed.apiKey, "");
+      assert.ok(result instanceof ConfigInput);
+      assert.equal(result.apiKey, "config-secret");
+    });
 
-        assert.ok(sawUndefined);
-        assert.equal(result, "config-secret");
-      },
-    );
+    it("handles class with private fields in deferred phase-two contexts", async () => {
+      // Regression test for https://github.com/dahlia/optique/issues/307
+      // Private fields caused the old proxy-based sanitization to throw
+      // TypeError because proxies cannot access private fields through
+      // the receiver.  The placeholder approach avoids this entirely.
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
 
-    it(
-      "passes through deferred prompt values inside non-plain phase-two context inputs",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-
-        class ConfigInput {
-          readonly apiKey: string | undefined;
-
-          constructor(apiKey: string | undefined) {
-            this.apiKey = apiKey;
-          }
+      class SecretHolder {
+        #secret: string;
+        constructor(secret: string) {
+          this.#secret = secret;
         }
-
-        let phase2Parsed: ConfigInput | undefined;
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/non-plain-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            const phase2ParsedValue = getPhase2ContextParsed<ConfigInput>(
-              parsed,
-            );
-            if (phase2ParsedValue !== undefined) {
-              phase2Parsed = phase2ParsedValue;
-            }
-            return {};
-          },
-        };
-
-        const parser = map(
-          object({
-            apiKey: prompt(
-              bindConfig(option("--api-key", string()), {
-                context,
-                key: "apiKey",
-              }),
-              {
-                type: "password",
-                message: "API key:",
-                prompter: () => Promise.resolve("prompt-secret"),
-              },
-            ),
-          }),
-          (value) => new ConfigInput(value.apiKey),
-        );
-
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              }),
-            },
-          },
-        );
-
-        assert.ok(phase2Parsed instanceof ConfigInput);
-        assert.equal(phase2Parsed.apiKey, "");
-        assert.ok(result instanceof ConfigInput);
-        assert.equal(result.apiKey, "config-secret");
-      },
-    );
-
-    it(
-      "handles class with private fields in deferred phase-two contexts",
-      async () => {
-        // Regression test for https://github.com/dahlia/optique/issues/307
-        // Private fields caused the old proxy-based sanitization to throw
-        // TypeError because proxies cannot access private fields through
-        // the receiver.  The placeholder approach avoids this entirely.
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-
-        class SecretHolder {
-          #secret: string;
-          constructor(secret: string) {
-            this.#secret = secret;
-          }
-          get masked(): string {
-            return this.#secret.replace(/./g, "*");
-          }
+        get masked(): string {
+          return this.#secret.replace(/./g, "*");
         }
+      }
 
-        let phase2Threw = false;
-        let phase2SawSecretHolder = false;
-        let phase2Masked: string | undefined;
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/private-field-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            const phase2Parsed = getPhase2ContextParsed<SecretHolder>(parsed);
-            if (phase2Parsed !== undefined) {
-              phase2SawSecretHolder = phase2Parsed instanceof SecretHolder;
-              try {
-                // Accessing the getter should not throw even though
-                // the class uses private fields.
-                phase2Masked = phase2Parsed.masked;
-              } catch {
-                phase2Threw = true;
-              }
+      let phase2Threw = false;
+      let phase2SawSecretHolder = false;
+      let phase2Masked: string | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/private-field-phase-two"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          const phase2Parsed = getPhase2ContextParsed<SecretHolder>(parsed);
+          if (phase2Parsed !== undefined) {
+            phase2SawSecretHolder = phase2Parsed instanceof SecretHolder;
+            try {
+              // Accessing the getter should not throw even though
+              // the class uses private fields.
+              phase2Masked = phase2Parsed.masked;
+            } catch {
+              phase2Threw = true;
             }
-            return {};
-          },
-        };
+          }
+          return {};
+        },
+      };
 
-        const parser = map(
-          object({
-            apiKey: prompt(
-              bindConfig(option("--api-key", string()), {
-                context,
-                key: "apiKey",
-              }),
-              {
-                type: "password",
-                message: "API key:",
-                prompter: () => Promise.resolve("prompt-secret"),
-              },
-            ),
-          }),
-          (value) => new SecretHolder(value.apiKey),
-        );
-
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "real-secret" },
-                meta: undefined,
-              }),
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
             },
-          },
-        );
+          ),
+        }),
+        (value) => new SecretHolder(value.apiKey),
+      );
 
-        // Phase-two context sees the mapped placeholder instance and
-        // accessing its private-field-backed getter must not throw.
-        assert.ok(!phase2Threw);
-        assert.ok(phase2SawSecretHolder);
-        assert.equal(phase2Masked, "");
-        assert.ok(result instanceof SecretHolder);
-        assert.equal(result.masked, "***********");
-      },
-    );
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "real-secret" },
+            meta: undefined,
+          }),
+        },
+      });
+
+      // Phase-two context sees the mapped placeholder instance and
+      // accessing its private-field-backed getter must not throw.
+      assert.ok(!phase2Threw);
+      assert.ok(phase2SawSecretHolder);
+      assert.equal(phase2Masked, "");
+      assert.ok(result instanceof SecretHolder);
+      assert.equal(result.masked, "***********");
+    });
 
     it("passes through deferred prompt values inside Set phase-two context inputs", async () => {
       const context = createConfigContext({
@@ -3024,75 +3021,67 @@ describe("prompt()", () => {
       assert.deepEqual([...result], ["config-secret"]);
     });
 
-    it(
-      "passes through deferred prompt values in Set own properties during phase two",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
+    it("passes through deferred prompt values in Set own properties during phase two", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
 
-        class BoxSet extends Set<string | undefined> {
-          apiKey: string | undefined;
+      class BoxSet extends Set<string | undefined> {
+        apiKey: string | undefined;
 
-          constructor(value: string | undefined) {
-            super([value]);
-            this.apiKey = value;
-          }
+        constructor(value: string | undefined) {
+          super([value]);
+          this.apiKey = value;
         }
+      }
 
-        let phase2WasBoxSet = false;
-        let phase2ApiKey: string | undefined;
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/set-own-prop-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            const phase2Parsed = getPhase2ContextParsed<BoxSet>(parsed);
-            if (phase2Parsed instanceof BoxSet) {
-              phase2WasBoxSet = true;
-              phase2ApiKey = phase2Parsed.apiKey;
-            }
-            return {};
-          },
-        };
+      let phase2WasBoxSet = false;
+      let phase2ApiKey: string | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/set-own-prop-phase-two"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          const phase2Parsed = getPhase2ContextParsed<BoxSet>(parsed);
+          if (phase2Parsed instanceof BoxSet) {
+            phase2WasBoxSet = true;
+            phase2ApiKey = phase2Parsed.apiKey;
+          }
+          return {};
+        },
+      };
 
-        const parser = map(
-          object({
-            apiKey: prompt(
-              bindConfig(option("--api-key", string()), {
-                context,
-                key: "apiKey",
-              }),
-              {
-                type: "password",
-                message: "API key:",
-                prompter: () => Promise.resolve("prompt-secret"),
-              },
-            ),
-          }),
-          (value) => new BoxSet(value.apiKey),
-        );
-
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              }),
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
             },
-          },
-        );
+          ),
+        }),
+        (value) => new BoxSet(value.apiKey),
+      );
 
-        assert.ok(phase2WasBoxSet);
-        assert.equal(phase2ApiKey, "");
-        assert.ok(result instanceof BoxSet);
-        assert.equal(result.apiKey, "config-secret");
-      },
-    );
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      });
+
+      assert.ok(phase2WasBoxSet);
+      assert.equal(phase2ApiKey, "");
+      assert.ok(result instanceof BoxSet);
+      assert.equal(result.apiKey, "config-secret");
+    });
 
     it("keeps nested clean collection subclasses unproxied in phase two", async () => {
       const context = createConfigContext({
@@ -3134,20 +3123,15 @@ describe("prompt()", () => {
         (value) => ({ clean: cleanSet, apiKey: value.apiKey }),
       );
 
-      const result = await runWith(
-        parser,
-        "test",
-        [dynamicContext, context],
-        {
-          args: [],
-          contextOptions: {
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
-          },
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
         },
-      );
+      });
 
       assert.ok(phase2Set instanceof BoxSet);
       assert.equal(phase2Set, cleanSet);
@@ -3207,20 +3191,15 @@ describe("prompt()", () => {
         (value) => ({ clean: cleanBox, apiKey: value.apiKey }),
       );
 
-      const result = await runWith(
-        parser,
-        "test",
-        [dynamicContext, context],
-        {
-          args: [],
-          contextOptions: {
-            load: () => ({
-              config: { apiKey: "config-secret" },
-              meta: undefined,
-            }),
-          },
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
         },
-      );
+      });
 
       assert.equal(phase2Box, cleanBox);
       assert.equal(phase2Value, "clean");
@@ -3228,72 +3207,64 @@ describe("prompt()", () => {
       assert.equal(result.apiKey, "config-secret");
     });
 
-    it(
-      "passes through deferred prompt values inside nested non-plain phase-two inputs",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
+    it("passes through deferred prompt values inside nested non-plain phase-two inputs", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
 
-        class InnerInput {
-          readonly apiKey: string | undefined;
+      class InnerInput {
+        readonly apiKey: string | undefined;
 
-          constructor(apiKey: string | undefined) {
-            this.apiKey = apiKey;
-          }
+        constructor(apiKey: string | undefined) {
+          this.apiKey = apiKey;
         }
+      }
 
-        let phase2ApiKey: string | undefined;
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/nested-non-plain-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            const phase2Parsed = getPhase2ContextParsed<{
-              readonly inner: InnerInput;
-            }>(parsed);
-            if (phase2Parsed != null) {
-              phase2ApiKey = phase2Parsed.inner.apiKey;
-            }
-            return {};
-          },
-        };
+      let phase2ApiKey: string | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/nested-non-plain-phase-two"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          const phase2Parsed = getPhase2ContextParsed<{
+            readonly inner: InnerInput;
+          }>(parsed);
+          if (phase2Parsed != null) {
+            phase2ApiKey = phase2Parsed.inner.apiKey;
+          }
+          return {};
+        },
+      };
 
-        const parser = map(
-          object({
-            apiKey: prompt(
-              bindConfig(option("--api-key", string()), {
-                context,
-                key: "apiKey",
-              }),
-              {
-                type: "password",
-                message: "API key:",
-                prompter: () => Promise.resolve("prompt-secret"),
-              },
-            ),
-          }),
-          (value) => ({ inner: new InnerInput(value.apiKey) }),
-        );
-
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              }),
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
             },
-          },
-        );
+          ),
+        }),
+        (value) => ({ inner: new InnerInput(value.apiKey) }),
+      );
 
-        assert.equal(phase2ApiKey, "");
-        assert.equal(result.inner.apiKey, "config-secret");
-      },
-    );
+      const result = await runWith(parser, "test", [dynamicContext, context], {
+        args: [],
+        contextOptions: {
+          load: () => ({
+            config: { apiKey: "config-secret" },
+            meta: undefined,
+          }),
+        },
+      });
+
+      assert.equal(phase2ApiKey, "");
+      assert.equal(result.inner.apiKey, "config-secret");
+    });
 
     it("hides top-level deferred prompt values from config loaders", async () => {
       const context = createConfigContext({
@@ -3365,63 +3336,55 @@ describe("prompt()", () => {
       assert.deepEqual(result, { apiKey: "config-secret" });
     });
 
-    it(
-      "collapses all-deferred object to undefined for phase-two contexts and loaders",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-        const metadataByParsed = new WeakMap<object, string>();
-        const identityContext: SourceContext = {
-          id: Symbol.for("@test/scrubbed-phase-two-identity"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            const phase2Parsed = getPhase2ContextParsed<object>(parsed);
-            if (phase2Parsed != null && typeof phase2Parsed === "object") {
-              metadataByParsed.set(phase2Parsed, "seen");
-            }
-            return {};
-          },
-        };
-        let loaderMetadata: string | undefined;
-        const parser = object({
-          apiKey: prompt(
-            bindConfig(option("--api-key", string()), {
-              context,
-              key: "apiKey",
-            }),
-            {
-              type: "password",
-              message: "API key:",
-              prompter: () => Promise.resolve("prompt-secret"),
-            },
-          ),
-        });
-
-        const result = await runWith(
-          parser,
-          "test",
-          [identityContext, context],
+    it("collapses all-deferred object to undefined for phase-two contexts and loaders", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+      const metadataByParsed = new WeakMap<object, string>();
+      const identityContext: SourceContext = {
+        id: Symbol.for("@test/scrubbed-phase-two-identity"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          const phase2Parsed = getPhase2ContextParsed<object>(parsed);
+          if (phase2Parsed != null && typeof phase2Parsed === "object") {
+            metadataByParsed.set(phase2Parsed, "seen");
+          }
+          return {};
+        },
+      };
+      let loaderMetadata: string | undefined;
+      const parser = object({
+        apiKey: prompt(
+          bindConfig(option("--api-key", string()), {
+            context,
+            key: "apiKey",
+          }),
           {
-            args: [],
-            contextOptions: {
-              load: (parsed) => {
-                loaderMetadata = metadataByParsed.get(parsed as object);
-                return {
-                  config: { apiKey: "config-secret" },
-                  meta: undefined,
-                };
-              },
-            },
+            type: "password",
+            message: "API key:",
+            prompter: () => Promise.resolve("prompt-secret"),
           },
-        );
+        ),
+      });
 
-        // When all fields are deferred, the entire object is replaced
-        // with undefined, so the WeakMap identity check does not apply.
-        assert.equal(loaderMetadata, undefined);
-        assert.deepEqual(result, { apiKey: "config-secret" });
-      },
-    );
+      const result = await runWith(parser, "test", [identityContext, context], {
+        args: [],
+        contextOptions: {
+          load: (parsed) => {
+            loaderMetadata = metadataByParsed.get(parsed as object);
+            return {
+              config: { apiKey: "config-secret" },
+              meta: undefined,
+            };
+          },
+        },
+      });
+
+      // When all fields are deferred, the entire object is replaced
+      // with undefined, so the WeakMap identity check does not apply.
+      assert.equal(loaderMetadata, undefined);
+      assert.deepEqual(result, { apiKey: "config-secret" });
+    });
 
     it("passes through deferred prompt values inside Set loader inputs", async () => {
       const context = createConfigContext({
@@ -3517,225 +3480,204 @@ describe("prompt()", () => {
       assert.equal(result.apiKey, "config-secret");
     });
 
-    it(
-      "passes mapped placeholder values through to phase-two contexts (intentional trade-off)",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-
-        let phase2Token: string | undefined;
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/mapped-placeholder-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            const phase2Parsed = getPhase2ContextParsed<{
-              readonly token: string;
-            }>(parsed);
-            if (phase2Parsed != null) {
-              phase2Token = phase2Parsed.token;
-            }
-            return {};
-          },
-        };
-
-        const parser = map(
-          object({
-            apiKey: prompt(
-              bindConfig(option("--api-key", string()), {
-                context,
-                key: "apiKey",
-              }),
-              {
-                type: "password",
-                message: "API key:",
-                prompter: () => Promise.resolve("prompt-secret"),
-              },
-            ),
-          }),
-          (value) => ({ token: value.apiKey }),
-        );
-
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              }),
-            },
-          },
-        );
-
-        // map() drops deferredKeys because the transform is opaque.
-        // The placeholder "" leaks through to the two-pass context.
-        // This is an intentional trade-off: forwarding stale inner
-        // keys would risk stripping the wrong output fields.
-        assert.equal(phase2Token, "");
-        assert.equal(result.token, "config-secret");
-      },
-    );
-
-    it(
-      "falls back to undefined when map() transform throws on deferred placeholder",
-      async () => {
-        const context = createConfigContext({
-          schema: createPromptConfigSchema(),
-        });
-
-        let phase2Parsed: unknown = "not-called";
-        const dynamicContext: SourceContext = {
-          id: Symbol.for("@test/mapped-throw-phase-two"),
-          phase: "two-pass",
-          getAnnotations(parsed?: unknown) {
-            phase2Parsed = getPhase2ContextParsed(parsed);
-            return {};
-          },
-        };
-
-        const parser = map(
-          object({
-            apiKey: prompt(
-              bindConfig(option("--api-key", string()), {
-                context,
-                key: "apiKey",
-              }),
-              {
-                type: "password",
-                message: "API key:",
-                prompter: () => Promise.resolve("prompt-secret"),
-              },
-            ),
-          }),
-          (value) => {
-            // This transform crashes on the placeholder because
-            // it assumes apiKey is non-empty.
-            if (value.apiKey.length === 0) {
-              throw new Error("apiKey must be non-empty");
-            }
-            return { token: value.apiKey.toUpperCase() };
-          },
-        );
-
-        const result = await runWith(
-          parser,
-          "test",
-          [dynamicContext, context],
-          {
-            args: [],
-            contextOptions: {
-              load: () => ({
-                config: { apiKey: "config-secret" },
-                meta: undefined,
-              }),
-            },
-          },
-        );
-
-        // When the transform throws on a deferred placeholder, map()
-        // catches the error and produces undefined with deferred: true.
-        // prepareParsedForContexts() sees deferred without deferredKeys,
-        // so it passes through (which is undefined).
-        assert.equal(phase2Parsed, undefined);
-        assert.equal(result.token, "CONFIG-SECRET");
-      },
-    );
-  });
-
-  it(
-    "map() placeholder is not corrupted by pure transforms across parses",
-    async () => {
+    it("passes mapped placeholder values through to phase-two contexts (intentional trade-off)", async () => {
       const context = createConfigContext({
         schema: createPromptConfigSchema(),
       });
 
-      // Spy context that records the phase-one parsed value so we can
-      // verify that the placeholder shape survives the map() transform.
-      const phaseOneValues: unknown[] = [];
-      const spyContext: SourceContext = {
-        id: Symbol("spy"),
+      let phase2Token: string | undefined;
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/mapped-placeholder-phase-two"),
         phase: "two-pass",
         getAnnotations(parsed?: unknown) {
-          const phase2Parsed = getPhase2ContextParsed(parsed);
-          if (phase2Parsed !== undefined) {
-            phaseOneValues.push(phase2Parsed);
+          const phase2Parsed = getPhase2ContextParsed<{
+            readonly token: string;
+          }>(parsed);
+          if (phase2Parsed != null) {
+            phase2Token = phase2Parsed.token;
           }
           return {};
         },
       };
 
       const parser = map(
-        prompt(
-          bindConfig(option("--api-key", string()), {
-            context,
-            key: "apiKey",
-          }),
-          {
-            type: "password",
-            message: "API key:",
-            prompter: () => Promise.resolve("prompt-secret"),
-          },
-        ),
-        (v) => ({ token: v }),
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => ({ token: value.apiKey }),
       );
 
-      // First runWith
-      const result1 = await runWith(parser, "test", [context, spyContext], {
+      const result = await runWith(parser, "test", [dynamicContext, context], {
         args: [],
         contextOptions: {
           load: () => ({
-            config: { apiKey: "config-1" },
+            config: { apiKey: "config-secret" },
             meta: undefined,
           }),
         },
       });
-      assert.equal(result1.token, "config-1");
 
-      // The phase-one value should have { token: <string> } shape
-      assert.equal(phaseOneValues.length, 1);
-      const p1 = phaseOneValues[0] as { token: unknown };
-      assert.equal(typeof p1.token, "string");
+      // map() drops deferredKeys because the transform is opaque.
+      // The placeholder "" leaks through to the two-pass context.
+      // This is an intentional trade-off: forwarding stale inner
+      // keys would risk stripping the wrong output fields.
+      assert.equal(phase2Token, "");
+      assert.equal(result.token, "config-secret");
+    });
 
-      // Second runWith—placeholder should not be corrupted
-      const result2 = await runWith(parser, "test", [context, spyContext], {
+    it("falls back to undefined when map() transform throws on deferred placeholder", async () => {
+      const context = createConfigContext({
+        schema: createPromptConfigSchema(),
+      });
+
+      let phase2Parsed: unknown = "not-called";
+      const dynamicContext: SourceContext = {
+        id: Symbol.for("@test/mapped-throw-phase-two"),
+        phase: "two-pass",
+        getAnnotations(parsed?: unknown) {
+          phase2Parsed = getPhase2ContextParsed(parsed);
+          return {};
+        },
+      };
+
+      const parser = map(
+        object({
+          apiKey: prompt(
+            bindConfig(option("--api-key", string()), {
+              context,
+              key: "apiKey",
+            }),
+            {
+              type: "password",
+              message: "API key:",
+              prompter: () => Promise.resolve("prompt-secret"),
+            },
+          ),
+        }),
+        (value) => {
+          // This transform crashes on the placeholder because
+          // it assumes apiKey is non-empty.
+          if (value.apiKey.length === 0) {
+            throw new Error("apiKey must be non-empty");
+          }
+          return { token: value.apiKey.toUpperCase() };
+        },
+      );
+
+      const result = await runWith(parser, "test", [dynamicContext, context], {
         args: [],
         contextOptions: {
           load: () => ({
-            config: { apiKey: "config-2" },
+            config: { apiKey: "config-secret" },
             meta: undefined,
           }),
         },
       });
-      assert.equal(result2.token, "config-2");
 
-      // Verify that the second run also produced a valid phase-one value
-      assert.equal(phaseOneValues.length, 2);
-      const p2 = phaseOneValues[1] as { token: unknown };
-      assert.equal(typeof p2.token, "string");
-    },
-  );
+      // When the transform throws on a deferred placeholder, map()
+      // catches the error and produces undefined with deferred: true.
+      // prepareParsedForContexts() sees deferred without deferredKeys,
+      // so it passes through (which is undefined).
+      assert.equal(phase2Parsed, undefined);
+      assert.equal(result.token, "CONFIG-SECRET");
+    });
+  });
+
+  it("map() placeholder is not corrupted by pure transforms across parses", async () => {
+    const context = createConfigContext({
+      schema: createPromptConfigSchema(),
+    });
+
+    // Spy context that records the phase-one parsed value so we can
+    // verify that the placeholder shape survives the map() transform.
+    const phaseOneValues: unknown[] = [];
+    const spyContext: SourceContext = {
+      id: Symbol("spy"),
+      phase: "two-pass",
+      getAnnotations(parsed?: unknown) {
+        const phase2Parsed = getPhase2ContextParsed(parsed);
+        if (phase2Parsed !== undefined) {
+          phaseOneValues.push(phase2Parsed);
+        }
+        return {};
+      },
+    };
+
+    const parser = map(
+      prompt(
+        bindConfig(option("--api-key", string()), {
+          context,
+          key: "apiKey",
+        }),
+        {
+          type: "password",
+          message: "API key:",
+          prompter: () => Promise.resolve("prompt-secret"),
+        },
+      ),
+      (v) => ({ token: v }),
+    );
+
+    // First runWith
+    const result1 = await runWith(parser, "test", [context, spyContext], {
+      args: [],
+      contextOptions: {
+        load: () => ({
+          config: { apiKey: "config-1" },
+          meta: undefined,
+        }),
+      },
+    });
+    assert.equal(result1.token, "config-1");
+
+    // The phase-one value should have { token: <string> } shape
+    assert.equal(phaseOneValues.length, 1);
+    const p1 = phaseOneValues[0] as { token: unknown };
+    assert.equal(typeof p1.token, "string");
+
+    // Second runWith—placeholder should not be corrupted
+    const result2 = await runWith(parser, "test", [context, spyContext], {
+      args: [],
+      contextOptions: {
+        load: () => ({
+          config: { apiKey: "config-2" },
+          meta: undefined,
+        }),
+      },
+    });
+    assert.equal(result2.token, "config-2");
+
+    // Verify that the second run also produced a valid phase-one value
+    assert.equal(phaseOneValues.length, 2);
+    const p2 = phaseOneValues[1] as { token: unknown };
+    assert.equal(typeof p2.token, "string");
+  });
 
   describe("prompt deferral through wrapper combinators", () => {
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "optional(bindConfig(...)): skips the prompt when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "optional(bindConfig(...)): runs the prompt when config is absent",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "optional(bindConfig(...)): skips the prompt when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "optional(bindConfig(...)): runs the prompt when config is absent",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -3770,22 +3712,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "group(bindConfig(...)): skips the prompt when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "group(bindConfig(...)): runs the prompt when config is absent",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "group(bindConfig(...)): skips the prompt when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "group(bindConfig(...)): runs the prompt when config is absent",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -3821,22 +3761,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "map(bindConfig(...)): skips the prompt when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "CONFIG-SECRET",
-          0,
-        ],
-        [
-          "map(bindConfig(...)): runs the prompt when config is absent",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "map(bindConfig(...)): skips the prompt when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "CONFIG-SECRET",
+        0,
+      ],
+      [
+        "map(bindConfig(...)): runs the prompt when config is absent",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -3872,22 +3810,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "withDefault(bindConfig(...)): skips the prompt when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "withDefault(bindConfig(...)): runs the prompt when config is absent",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "withDefault(bindConfig(...)): skips the prompt when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "withDefault(bindConfig(...)): runs the prompt when config is absent",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -3923,22 +3859,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "object() + optional(bindConfig(...)): skips prompt when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "object() + optional(bindConfig(...)): runs prompt when config absent",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "object() + optional(bindConfig(...)): skips prompt when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "object() + optional(bindConfig(...)): runs prompt when config absent",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -3977,22 +3911,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "object() + group(bindConfig(...)): skips prompt when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "object() + group(bindConfig(...)): runs prompt when config absent",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "object() + group(bindConfig(...)): skips prompt when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "object() + group(bindConfig(...)): runs prompt when config absent",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -4032,22 +3964,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "object() + withDefault(bindConfig(...)): skips prompt when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "config-secret",
-          0,
-        ],
-        [
-          "object() + withDefault(bindConfig(...)): runs prompt when config absent",
-          {} satisfies PromptConfigData,
-          "prompt-secret",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "object() + withDefault(bindConfig(...)): skips prompt when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "config-secret",
+        0,
+      ],
+      [
+        "object() + withDefault(bindConfig(...)): runs prompt when config absent",
+        {} satisfies PromptConfigData,
+        "prompt-secret",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -4087,22 +4017,20 @@ describe("prompt()", () => {
       });
     }
 
-    for (
-      const [label, config, expectedValue, expectedPromptCalls] of [
-        [
-          "map(prompt(bindConfig(...))): skips prompt and applies transform when config resolves",
-          { apiKey: "config-secret" } satisfies PromptConfigData,
-          "CONFIG-SECRET",
-          0,
-        ],
-        [
-          "map(prompt(bindConfig(...))): runs prompt and applies transform when config is absent",
-          {} satisfies PromptConfigData,
-          "PROMPT-SECRET",
-          1,
-        ],
-      ] as const
-    ) {
+    for (const [label, config, expectedValue, expectedPromptCalls] of [
+      [
+        "map(prompt(bindConfig(...))): skips prompt and applies transform when config resolves",
+        { apiKey: "config-secret" } satisfies PromptConfigData,
+        "CONFIG-SECRET",
+        0,
+      ],
+      [
+        "map(prompt(bindConfig(...))): runs prompt and applies transform when config is absent",
+        {} satisfies PromptConfigData,
+        "PROMPT-SECRET",
+        1,
+      ],
+    ] as const) {
       it(label, async () => {
         const context = createConfigContext({
           schema: createPromptConfigSchema(),
@@ -4215,12 +4143,14 @@ describe("prompt()", () => {
         },
       );
 
-      assert.deepEqual(calls, [{
-        message: "Enter ratio:",
-        min: -2,
-        max: 2,
-        step: "any",
-      }]);
+      assert.deepEqual(calls, [
+        {
+          message: "Enter ratio:",
+          min: -2,
+          max: 2,
+          step: "any",
+        },
+      ]);
     });
   });
 
@@ -4312,10 +4242,12 @@ describe("prompt()", () => {
         },
       );
 
-      assert.deepEqual(calls, [{
-        message: "Choose color:",
-        choices: [],
-      }]);
+      assert.deepEqual(calls, [
+        {
+          message: "Choose color:",
+          choices: [],
+        },
+      ]);
     });
 
     it("preserves separator-only choice arrays", async () => {
@@ -4370,14 +4302,18 @@ describe("prompt()", () => {
         },
       );
 
-      assert.deepEqual(calls, [{
-        message: "Choose entry:",
-        choices: [{
-          value: "hidden",
-          name: "",
-          disabled: "Not available.",
-        }],
-      }]);
+      assert.deepEqual(calls, [
+        {
+          message: "Choose entry:",
+          choices: [
+            {
+              value: "hidden",
+              name: "",
+              disabled: "Not available.",
+            },
+          ],
+        },
+      ]);
     });
   });
 
@@ -4431,25 +4367,22 @@ describe("prompt()", () => {
         leadingNames: new Set(),
         acceptingAnyToken: false,
         initialState: {},
-        parse(
-          context: ParserContext<{ readonly token?: string }>,
-        ): Promise<{
+        parse(context: ParserContext<{ readonly token?: string }>): Promise<{
           success: true;
           next: ParserContext<{ readonly token?: string }>;
           consumed: readonly string[];
         }> {
-          const consumed = context.buffer.length >= 2
-            ? context.buffer.slice(0, 2)
-            : [];
+          const consumed =
+            context.buffer.length >= 2 ? context.buffer.slice(0, 2) : [];
           return Promise.resolve({
             success: true,
             next: { ...context, state: { token: "ok", [annotationKey]: {} } },
             consumed,
           });
         },
-        complete(
-          _state: { readonly token?: string },
-        ): Promise<{ success: true; value: string }> {
+        complete(_state: {
+          readonly token?: string;
+        }): Promise<{ success: true; value: string }> {
           return Promise.resolve({ success: true, value: "from-cli-state" });
         },
         suggest(): AsyncIterable<Suggestion> {
@@ -4482,17 +4415,15 @@ describe("prompt()", () => {
       if (!first.success) return;
 
       const suggestions: Suggestion[] = [];
-      for await (
-        const suggestion of parser.suggest(
-          {
-            buffer: [],
-            state: first.next.state,
-            optionsTerminated: false,
-            usage: parser.usage,
-          },
-          "i",
-        )
-      ) {
+      for await (const suggestion of parser.suggest(
+        {
+          buffer: [],
+          state: first.next.state,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "i",
+      )) {
         suggestions.push(suggestion);
       }
       assert.equal(suggestions.length, 1);
@@ -4520,168 +4451,153 @@ describe("prompt()", () => {
       assert.equal(docDefault, "UPPER");
     });
 
-    it(
-      "does not cache prompt results across independent complete() calls",
-      async () => {
-        // After the phase-based redesign (issue #233), `prompt()` no
-        // longer caches prompted results keyed by state identity.  The
-        // old sentinel cache was the root cause of cross-parse reuse:
-        // because `parser.initialState` is a shared object, a WeakMap
-        // cache keyed by it would incorrectly return a previous parse
-        // invocation's prompted value on a subsequent `parse*()` call.
-        //
-        // With no cache, two independent `complete()` calls with the
-        // same state run the prompter twice.  Within a single parse
-        // invocation this is fine because object() calls complete()
-        // at most once per field in the real phase.
-        let promptCalls = 0;
-        const inner: Parser<"async", string, undefined> = {
-          mode: "async",
-          $valueType: [] as readonly string[],
-          $stateType: [] as readonly undefined[],
-          priority: 5,
-          usage: [],
-          leadingNames: new Set(),
-          acceptingAnyToken: false,
-          initialState: undefined,
-          parse(_context: ParserContext<undefined>) {
-            return Promise.resolve({
-              success: false as const,
-              consumed: 0,
-              error: message`inner parse failure`,
-            });
-          },
-          complete() {
-            return Promise.resolve({
-              success: false as const,
-              error: message`inner complete failure`,
-            });
-          },
-          suggest() {
-            return {
-              async *[Symbol.asyncIterator](): AsyncIterableIterator<
-                Suggestion
-              > {
-                yield* [];
-              },
-            };
-          },
-          getDocFragments(): DocFragments {
-            return { fragments: [] };
-          },
-        };
+    it("does not cache prompt results across independent complete() calls", async () => {
+      // After the phase-based redesign (issue #233), `prompt()` no
+      // longer caches prompted results keyed by state identity.  The
+      // old sentinel cache was the root cause of cross-parse reuse:
+      // because `parser.initialState` is a shared object, a WeakMap
+      // cache keyed by it would incorrectly return a previous parse
+      // invocation's prompted value on a subsequent `parse*()` call.
+      //
+      // With no cache, two independent `complete()` calls with the
+      // same state run the prompter twice.  Within a single parse
+      // invocation this is fine because object() calls complete()
+      // at most once per field in the real phase.
+      let promptCalls = 0;
+      const inner: Parser<"async", string, undefined> = {
+        mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 5,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(_context: ParserContext<undefined>) {
+          return Promise.resolve({
+            success: false as const,
+            consumed: 0,
+            error: message`inner parse failure`,
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: false as const,
+            error: message`inner complete failure`,
+          });
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
 
-        const parser = prompt(inner, {
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value",
+        prompter: () => {
+          promptCalls++;
+          return Promise.resolve("from-prompt");
+        },
+      });
+
+      const initialState = parser.initialState;
+      const first = await parser.complete(initialState);
+      const second = await parser.complete(initialState);
+
+      assert.ok(first.success);
+      assert.ok(second.success);
+      assert.equal(promptCalls, 2);
+    });
+
+    it("does not prompt when other required fields are missing", async () => {
+      // After the phase-based redesign (issue #233), the
+      // completability probe runs with
+      // ExecutionContext.phase === "parse" and does not fire the
+      // prompter.  This means a parse that is going to fail because
+      // of another missing option no longer spuriously prompts the
+      // user during the probe.
+      const promptedValues = ["first", "second"];
+      let promptCalls = 0;
+
+      const parser = object({
+        prompted: prompt(option("--prompted", string()), {
           type: "input",
-          message: "Enter value",
+          message: "Enter prompted",
           prompter: () => {
+            const value = promptedValues[promptCalls];
             promptCalls++;
-            return Promise.resolve("from-prompt");
+            return Promise.resolve(value);
           },
-        });
+        }),
+        required: option("--required", string()),
+      });
 
-        const initialState = parser.initialState;
-        const first = await parser.complete(initialState);
-        const second = await parser.complete(initialState);
+      // First parse fails because --required is missing; the prompt
+      // must NOT fire during the completability probe.
+      const first = await parseAsync(parser, []);
+      assert.ok(!first.success);
+      assert.equal(promptCalls, 0);
 
-        assert.ok(first.success);
-        assert.ok(second.success);
-        assert.equal(promptCalls, 2);
-      },
-    );
+      // Second parse succeeds: the real completion pass fires the
+      // prompt once and the first prompted value is used.
+      const second = await parseAsync(parser, ["--required", "ok"]);
+      assert.ok(second.success);
+      if (second.success) {
+        assert.equal(second.value.prompted, "first");
+        assert.equal(second.value.required, "ok");
+      }
+      assert.equal(promptCalls, 1);
+    });
 
-    it(
-      "does not prompt when other required fields are missing",
-      async () => {
-        // After the phase-based redesign (issue #233), the
-        // completability probe runs with
-        // ExecutionContext.phase === "parse" and does not fire the
-        // prompter.  This means a parse that is going to fail because
-        // of another missing option no longer spuriously prompts the
-        // user during the probe.
-        const promptedValues = ["first", "second"];
-        let promptCalls = 0;
+    it("does not reuse prompted values across successful parse invocations", async () => {
+      // Regression test for the cross-parse cache reuse bug identified
+      // in review of the #233 fix: because `parser.initialState` is a
+      // shared object, a state-keyed WeakMap would reuse the previous
+      // parse invocation's prompted value on subsequent `parseAsync()`
+      // calls of the same parser.  After removing the within-invocation
+      // cache, each successful parse must fire the prompter anew.
+      const promptedValues = ["first-prompted", "second-prompted"];
+      let promptCalls = 0;
 
-        const parser = object({
-          prompted: prompt(option("--prompted", string()), {
-            type: "input",
-            message: "Enter prompted",
-            prompter: () => {
-              const value = promptedValues[promptCalls];
-              promptCalls++;
-              return Promise.resolve(value);
-            },
-          }),
-          required: option("--required", string()),
-        });
+      const parser = object({
+        prompted: prompt(option("--prompted", string()), {
+          type: "input",
+          message: "Enter prompted",
+          prompter: () => {
+            const value = promptedValues[promptCalls] ?? "fallback";
+            promptCalls++;
+            return Promise.resolve(value);
+          },
+        }),
+        required: option("--required", string()),
+      });
 
-        // First parse fails because --required is missing; the prompt
-        // must NOT fire during the completability probe.
-        const first = await parseAsync(parser, []);
-        assert.ok(!first.success);
-        assert.equal(promptCalls, 0);
+      const first = await parseAsync(parser, ["--required", "v1"]);
+      assert.ok(first.success);
+      if (first.success) {
+        assert.equal(first.value.prompted, "first-prompted");
+        assert.equal(first.value.required, "v1");
+      }
+      assert.equal(promptCalls, 1);
 
-        // Second parse succeeds: the real completion pass fires the
-        // prompt once and the first prompted value is used.
-        const second = await parseAsync(parser, ["--required", "ok"]);
-        assert.ok(second.success);
-        if (second.success) {
-          assert.equal(second.value.prompted, "first");
-          assert.equal(second.value.required, "ok");
-        }
-        assert.equal(promptCalls, 1);
-      },
-    );
-
-    it(
-      "does not reuse prompted values across successful parse invocations",
-      async () => {
-        // Regression test for the cross-parse cache reuse bug identified
-        // in review of the #233 fix: because `parser.initialState` is a
-        // shared object, a state-keyed WeakMap would reuse the previous
-        // parse invocation's prompted value on subsequent `parseAsync()`
-        // calls of the same parser.  After removing the within-invocation
-        // cache, each successful parse must fire the prompter anew.
-        const promptedValues = ["first-prompted", "second-prompted"];
-        let promptCalls = 0;
-
-        const parser = object({
-          prompted: prompt(option("--prompted", string()), {
-            type: "input",
-            message: "Enter prompted",
-            prompter: () => {
-              const value = promptedValues[promptCalls] ?? "fallback";
-              promptCalls++;
-              return Promise.resolve(value);
-            },
-          }),
-          required: option("--required", string()),
-        });
-
-        const first = await parseAsync(parser, ["--required", "v1"]);
-        assert.ok(first.success);
-        if (first.success) {
-          assert.equal(first.value.prompted, "first-prompted");
-          assert.equal(first.value.required, "v1");
-        }
-        assert.equal(promptCalls, 1);
-
-        const second = await parseAsync(parser, ["--required", "v2"]);
-        assert.ok(second.success);
-        if (second.success) {
-          assert.equal(second.value.prompted, "second-prompted");
-          assert.equal(second.value.required, "v2");
-        }
-        assert.equal(promptCalls, 2);
-      },
-    );
+      const second = await parseAsync(parser, ["--required", "v2"]);
+      assert.ok(second.success);
+      if (second.success) {
+        assert.equal(second.value.prompted, "second-prompted");
+        assert.equal(second.value.required, "v2");
+      }
+      assert.equal(promptCalls, 2);
+    });
 
     it("falls back to prompt when annotation-carrying cliState complete fails", async () => {
-      const inner: Parser<
-        "async",
-        string,
-        Record<PropertyKey, unknown>
-      > = {
+      const inner: Parser<"async", string, Record<PropertyKey, unknown>> = {
         mode: "async",
         $valueType: [] as readonly string[],
         $stateType: [] as readonly Record<PropertyKey, unknown>[],
@@ -4740,68 +4656,65 @@ describe("prompt()", () => {
       }
     });
 
-    it(
-      "does not rebox omitted cliState without the inheritance marker",
-      async () => {
-        const annotations = { [Symbol("annotation")]: true };
-        const seenStates: unknown[] = [];
-        const inner: Parser<"async", string, undefined> = {
-          mode: "async",
-          $valueType: [] as readonly string[],
-          $stateType: [] as readonly undefined[],
-          priority: 5,
-          usage: [],
-          leadingNames: new Set(),
-          acceptingAnyToken: false,
-          initialState: undefined,
-          parse(context) {
-            seenStates.push(context.state);
-            return Promise.resolve({
-              success: true as const,
-              next: {
-                ...context,
-                state: undefined,
-              },
-              consumed: [],
-            });
-          },
-          complete() {
-            return Promise.resolve({
-              success: true as const,
-              value: "ok",
-            });
-          },
-          shouldDeferCompletion: () => true,
-          async *suggest() {},
-          getDocFragments(): DocFragments {
-            return { fragments: [] };
-          },
-        };
+    it("does not rebox omitted cliState without the inheritance marker", async () => {
+      const annotations = { [Symbol("annotation")]: true };
+      const seenStates: unknown[] = [];
+      const inner: Parser<"async", string, undefined> = {
+        mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly undefined[],
+        priority: 5,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          seenStates.push(context.state);
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              state: undefined,
+            },
+            consumed: [],
+          });
+        },
+        complete() {
+          return Promise.resolve({
+            success: true as const,
+            value: "ok",
+          });
+        },
+        shouldDeferCompletion: () => true,
+        async *suggest() {},
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
 
-        const parser = prompt(inner, {
-          type: "input",
-          message: "Enter value",
-        });
-        const first = await parser.parse({
-          buffer: [],
-          state: injectAnnotations(parser.initialState, annotations),
-          optionsTerminated: false,
-          usage: parser.usage,
-        });
-        assert.ok(first.success);
-        if (!first.success) return;
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value",
+      });
+      const first = await parser.parse({
+        buffer: [],
+        state: injectAnnotations(parser.initialState, annotations),
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(first.success);
+      if (!first.success) return;
 
-        const second = await parser.parse({
-          buffer: [],
-          state: first.next.state,
-          optionsTerminated: false,
-          usage: parser.usage,
-        });
-        assert.ok(second.success);
-        assert.equal(seenStates.length, 2);
-        assert.equal(seenStates[1], undefined);
-      },
-    );
+      const second = await parser.parse({
+        buffer: [],
+        state: first.next.state,
+        optionsTerminated: false,
+        usage: parser.usage,
+      });
+      assert.ok(second.success);
+      assert.equal(seenStates.length, 2);
+      assert.equal(seenStates[1], undefined);
+    });
 
     it("executes built-in prompt branches via prompt-function override", async () => {
       const controller = new AbortController();
@@ -4878,129 +4791,177 @@ describe("prompt()", () => {
         },
         async () => {
           assert.ok(
-            (await parseAsync(
-              prompt(fail<boolean>(), {
-                type: "confirm",
-                message: "confirm?",
-                default: true,
-              }, { signal: controller.signal }),
-              [],
-            )).success,
-          );
-
-          assert.ok(
-            (await parseAsync(
-              prompt(fail<number>(), {
-                type: "number",
-                message: "number?",
-                default: 3,
-                min: 1,
-                max: 10,
-                step: 1,
-              }, { signal: controller.signal }),
-              [],
-            )).success,
-          );
-
-          assert.ok(
-            (await parseAsync(
-              prompt(fail<string>(), {
-                type: "input",
-                message: "input?",
-                default: "x",
-                validate: (value) => value.length > 0,
-              }, { signal: controller.signal }),
-              [],
-            )).success,
-          );
-
-          assert.ok(
-            (await parseAsync(
-              prompt(fail<string>(), {
-                type: "password",
-                message: "password?",
-                mask: true,
-                validate: (value) => value.length > 0,
-              }, { signal: controller.signal }),
-              [],
-            )).success,
-          );
-
-          assert.ok(
-            (await parseAsync(
-              prompt(fail<string>(), {
-                type: "editor",
-                message: "editor?",
-                default: "draft",
-                validate: (value) => value.length > 0,
-              }, { signal: controller.signal }),
-              [],
-            )).success,
-          );
-
-          assert.ok(
-            (await parseAsync(
-              prompt(fail<string>(), {
-                type: "select",
-                message: "select?",
-                default: "green",
-                choices: [
-                  "red",
+            (
+              await parseAsync(
+                prompt(
+                  fail<boolean>(),
                   {
-                    value: "green",
-                    name: "Green",
-                    description: "desc",
-                    short: "g",
+                    type: "confirm",
+                    message: "confirm?",
+                    default: true,
                   },
-                  { value: "blue", name: "Blue", disabled: "skip" },
-                ],
-              }, { signal: controller.signal }),
-              [],
-            )).success,
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
           );
 
           assert.ok(
-            (await parseAsync(
-              prompt(fail<string>(), {
-                type: "rawlist",
-                message: "rawlist?",
-                default: "prod",
-                choices: [
-                  "dev",
-                  { value: "prod", name: "Production" },
-                ],
-              }, { signal: controller.signal }),
-              [],
-            )).success,
+            (
+              await parseAsync(
+                prompt(
+                  fail<number>(),
+                  {
+                    type: "number",
+                    message: "number?",
+                    default: 3,
+                    min: 1,
+                    max: 10,
+                    step: 1,
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
           );
 
           assert.ok(
-            (await parseAsync(
-              prompt(fail<string>(), {
-                type: "expand",
-                message: "expand?",
-                default: "info",
-                choices: [
-                  { value: "debug", key: "d" },
-                  { value: "info", key: "i", name: "Info" },
-                ],
-              }, { signal: controller.signal }),
-              [],
-            )).success,
+            (
+              await parseAsync(
+                prompt(
+                  fail<string>(),
+                  {
+                    type: "input",
+                    message: "input?",
+                    default: "x",
+                    validate: (value) => value.length > 0,
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
           );
 
           assert.ok(
-            (await parseAsync(
-              prompt(fail<readonly string[]>(), {
-                type: "checkbox",
-                message: "checkbox?",
-                choices: [
-                  "a",
-                  { value: "c", name: "C", disabled: false },
-                ],
-              }, { signal: controller.signal }),
-              [],
-            )).success,
+            (
+              await parseAsync(
+                prompt(
+                  fail<string>(),
+                  {
+                    type: "password",
+                    message: "password?",
+                    mask: true,
+                    validate: (value) => value.length > 0,
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
+          );
+
+          assert.ok(
+            (
+              await parseAsync(
+                prompt(
+                  fail<string>(),
+                  {
+                    type: "editor",
+                    message: "editor?",
+                    default: "draft",
+                    validate: (value) => value.length > 0,
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
+          );
+
+          assert.ok(
+            (
+              await parseAsync(
+                prompt(
+                  fail<string>(),
+                  {
+                    type: "select",
+                    message: "select?",
+                    default: "green",
+                    choices: [
+                      "red",
+                      {
+                        value: "green",
+                        name: "Green",
+                        description: "desc",
+                        short: "g",
+                      },
+                      { value: "blue", name: "Blue", disabled: "skip" },
+                    ],
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
+          );
+
+          assert.ok(
+            (
+              await parseAsync(
+                prompt(
+                  fail<string>(),
+                  {
+                    type: "rawlist",
+                    message: "rawlist?",
+                    default: "prod",
+                    choices: ["dev", { value: "prod", name: "Production" }],
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
+          );
+
+          assert.ok(
+            (
+              await parseAsync(
+                prompt(
+                  fail<string>(),
+                  {
+                    type: "expand",
+                    message: "expand?",
+                    default: "info",
+                    choices: [
+                      { value: "debug", key: "d" },
+                      { value: "info", key: "i", name: "Info" },
+                    ],
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
+          );
+
+          assert.ok(
+            (
+              await parseAsync(
+                prompt(
+                  fail<readonly string[]>(),
+                  {
+                    type: "checkbox",
+                    message: "checkbox?",
+                    choices: ["a", { value: "c", name: "C", disabled: false }],
+                  },
+                  { signal: controller.signal },
+                ),
+                [],
+              )
+            ).success,
           );
         },
       );
@@ -5135,8 +5096,10 @@ describe("prompt()", () => {
       assert.ok(!("default" in (byName.get("rawlist") ?? {})));
       assert.ok(!("default" in (byName.get("expand") ?? {})));
       assert.ok(
-        !("name" in (((byName.get("select")?.choices as unknown[])?.[0] ??
-          {}) as object)),
+        !(
+          "name" in
+          (((byName.get("select")?.choices as unknown[])?.[0] ?? {}) as object)
+        ),
       );
       assert.deepEqual(inquirerContext, {});
     });
@@ -5197,14 +5160,15 @@ describe("prompt()", () => {
       });
       assert.ok(parsedNoCli.success);
       if (!parsedNoCli.success) return;
-      for await (
-        const _ of wrapped.suggest({
+      for await (const _ of wrapped.suggest(
+        {
           buffer: [],
           state: parsedNoCli.next.state,
           optionsTerminated: false,
           usage: wrapped.usage,
-        }, "")
-      ) {
+        },
+        "",
+      )) {
         // consume suggestions
       }
 
@@ -5216,25 +5180,27 @@ describe("prompt()", () => {
       });
       assert.ok(parsedCli.success);
       if (!parsedCli.success) return;
-      for await (
-        const _ of wrapped.suggest({
+      for await (const _ of wrapped.suggest(
+        {
           buffer: [],
           state: parsedCli.next.state,
           optionsTerminated: false,
           usage: wrapped.usage,
-        }, "")
-      ) {
+        },
+        "",
+      )) {
         // consume suggestions
       }
 
-      for await (
-        const _ of wrapped.suggest({
+      for await (const _ of wrapped.suggest(
+        {
           buffer: [],
           state: { tag: "RAW" } as unknown as never,
           optionsTerminated: false,
           usage: wrapped.usage,
-        }, "")
-      ) {
+        },
+        "",
+      )) {
         // consume suggestions
       }
 
@@ -5288,9 +5254,7 @@ describe("prompt()", () => {
             },
             suggest(context) {
               return {
-                async *[Symbol.asyncIterator](): AsyncIterableIterator<
-                  Suggestion
-                > {
+                async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
                   yield {
                     kind: "literal",
                     text: String(
@@ -5304,9 +5268,10 @@ describe("prompt()", () => {
             getDocFragments(_state, defaultValue) {
               return {
                 fragments: [],
-                footer: defaultValue === "cfg-default"
-                  ? message`default-propagated`
-                  : undefined,
+                footer:
+                  defaultValue === "cfg-default"
+                    ? message`default-propagated`
+                    : undefined,
               };
             },
           };
@@ -5327,26 +5292,25 @@ describe("prompt()", () => {
           assert.ok(parsed.success);
           if (!parsed.success) return;
 
-          const parsedState = parsed.next.state as
-            & Record<PropertyKey, unknown>
-            & {
-              readonly hasCliValue?: boolean;
-            };
+          const parsedState = parsed.next.state as Record<
+            PropertyKey,
+            unknown
+          > & {
+            readonly hasCliValue?: boolean;
+          };
           assert.equal(parsedState.hasCliValue, false);
           assert.equal(getAnnotations(parsed.next.state), annotations);
 
           const suggestions: Suggestion[] = [];
-          for await (
-            const s of wrapped.suggest(
-              {
-                buffer: [],
-                state: parsed.next.state,
-                optionsTerminated: false,
-                usage: wrapped.usage,
-              } as ParserContext<unknown>,
-              "",
-            )
-          ) {
+          for await (const s of wrapped.suggest(
+            {
+              buffer: [],
+              state: parsed.next.state,
+              optionsTerminated: false,
+              usage: wrapped.usage,
+            } as ParserContext<unknown>,
+            "",
+          )) {
             suggestions.push(s);
           }
           assert.ok(suggestions.length >= 1);
@@ -5523,70 +5487,65 @@ describe("prompt()", () => {
       assert.equal(promptCalls, 0);
     });
 
-    it(
-      "delegates to annotation-backed primitive wrapper states before prompting",
-      async () => {
-        const marker = Symbol.for("@test/prompt-primitive-wrapper-complete");
-        let promptCalls = 0;
+    it("delegates to annotation-backed primitive wrapper states before prompting", async () => {
+      const marker = Symbol.for("@test/prompt-primitive-wrapper-complete");
+      let promptCalls = 0;
 
-        const inner: Parser<"async", string, string | undefined> = {
-          mode: "async",
-          $valueType: [] as readonly string[],
-          $stateType: [] as readonly (string | undefined)[],
-          priority: 1,
-          usage: [],
-          leadingNames: new Set(),
-          acceptingAnyToken: false,
-          initialState: undefined,
-          parse(context) {
-            return Promise.resolve({
-              success: true as const,
-              next: {
-                ...context,
-                state: injectAnnotations(undefined, { [marker]: "annotated" }),
-              },
-              consumed: [],
-            });
-          },
-          complete(state) {
-            return Promise.resolve(
-              getAnnotations(state)?.[marker] === "annotated"
-                ? { success: true as const, value: "from-annotations" }
-                : { success: false as const, error: message`missing` },
-            );
-          },
-          suggest() {
-            return {
-              async *[Symbol.asyncIterator](): AsyncIterableIterator<
-                Suggestion
-              > {
-                yield* [];
-              },
-            };
-          },
-          getDocFragments(): DocFragments {
-            return { fragments: [] };
-          },
-        };
+      const inner: Parser<"async", string, string | undefined> = {
+        mode: "async",
+        $valueType: [] as readonly string[],
+        $stateType: [] as readonly (string | undefined)[],
+        priority: 1,
+        usage: [],
+        leadingNames: new Set(),
+        acceptingAnyToken: false,
+        initialState: undefined,
+        parse(context) {
+          return Promise.resolve({
+            success: true as const,
+            next: {
+              ...context,
+              state: injectAnnotations(undefined, { [marker]: "annotated" }),
+            },
+            consumed: [],
+          });
+        },
+        complete(state) {
+          return Promise.resolve(
+            getAnnotations(state)?.[marker] === "annotated"
+              ? { success: true as const, value: "from-annotations" }
+              : { success: false as const, error: message`missing` },
+          );
+        },
+        suggest() {
+          return {
+            async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
+              yield* [];
+            },
+          };
+        },
+        getDocFragments(): DocFragments {
+          return { fragments: [] };
+        },
+      };
 
-        const parser = prompt(inner, {
-          type: "input",
-          message: "Enter value:",
-          prompter: () => {
-            promptCalls += 1;
-            return Promise.resolve("prompted");
-          },
-        });
+      const parser = prompt(inner, {
+        type: "input",
+        message: "Enter value:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("prompted");
+        },
+      });
 
-        const result = await parseAsync(parser, [], {
-          annotations: { [marker]: "annotated" } satisfies Annotations,
-        });
+      const result = await parseAsync(parser, [], {
+        annotations: { [marker]: "annotated" } satisfies Annotations,
+      });
 
-        assert.ok(result.success);
-        assert.equal(result.value, "from-annotations");
-        assert.equal(promptCalls, 0);
-      },
-    );
+      assert.ok(result.success);
+      assert.equal(result.value, "from-annotations");
+      assert.equal(promptCalls, 0);
+    });
 
     it("preserves annotations for non-plain inner states", async () => {
       const marker = Symbol.for("@test/prompt-class-state");
@@ -5960,14 +5919,11 @@ describe("prompt()", () => {
         },
       });
 
-      await assert.rejects(
-        async () => {
-          await parseAsync(parser, ["cli"], {
-            annotations: { [marker]: "annotated" } satisfies Annotations,
-          });
-        },
-        /boom/,
-      );
+      await assert.rejects(async () => {
+        await parseAsync(parser, ["cli"], {
+          annotations: { [marker]: "annotated" } satisfies Annotations,
+        });
+      }, /boom/);
 
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
@@ -5979,9 +5935,8 @@ describe("prompt()", () => {
   describe("prompt revalidation", () => {
     it("accepts prompted value when map() transforms the domain", async () => {
       const parser = prompt(
-        map(
-          option("--color", choice(["red", "green", "blue"])),
-          (c) => c.toUpperCase(),
+        map(option("--color", choice(["red", "green", "blue"])), (c) =>
+          c.toUpperCase(),
         ),
         {
           type: "input",
@@ -6009,14 +5964,11 @@ describe("prompt()", () => {
     });
 
     it("accepts prompted string not matching inner pattern", async () => {
-      const parser = prompt(
-        option("--name", string({ pattern: /^[A-Z]+$/ })),
-        {
-          type: "input",
-          message: "Name:",
-          prompter: () => Promise.resolve("abc"),
-        },
-      );
+      const parser = prompt(option("--name", string({ pattern: /^[A-Z]+$/ })), {
+        type: "input",
+        message: "Name:",
+        prompter: () => Promise.resolve("abc"),
+      });
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.equal(result.value, "abc");
@@ -6037,14 +5989,11 @@ describe("prompt()", () => {
     });
 
     it("accepts prompted string matching pattern", async () => {
-      const parser = prompt(
-        option("--name", string({ pattern: /^[A-Z]+$/ })),
-        {
-          type: "input",
-          message: "Name:",
-          prompter: () => Promise.resolve("ABC"),
-        },
-      );
+      const parser = prompt(option("--name", string({ pattern: /^[A-Z]+$/ })), {
+        type: "input",
+        message: "Name:",
+        prompter: () => Promise.resolve("ABC"),
+      });
       const result = await parseAsync(parser, []);
       assert.ok(result.success);
       assert.equal(result.value, "ABC");
@@ -6052,19 +6001,14 @@ describe("prompt()", () => {
 
     it("still validates CLI input correctly", async () => {
       let promptCalls = 0;
-      const parser = prompt(
-        option("--port", integer({ min: 1024 })),
-        {
-          type: "number",
-          message: "Port:",
-          prompter: () => {
-            promptCalls += 1;
-            return Promise.reject(
-              new TypeError("Prompt should not be called."),
-            );
-          },
+      const parser = prompt(option("--port", integer({ min: 1024 })), {
+        type: "number",
+        message: "Port:",
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.reject(new TypeError("Prompt should not be called."));
         },
-      );
+      });
       const valid = await parseAsync(parser, ["--port", "8080"]);
       assert.ok(valid.success);
       assert.equal(valid.value, 8080);
@@ -6171,74 +6115,71 @@ describe("prompt() with dependency sources", () => {
     assert.ok(!result.success);
   });
 
-  it(
-    "lets a phase-two structural value win over a seed prompt answer",
-    async () => {
-      type SharedConfig = { readonly b?: "dev" | "prod" };
-      const shared = dependency(choice(["dev", "prod"] as const));
-      const seen: string[] = [];
-      const sharedLevel = shared.derive({
-        metavar: "LEVEL",
-        mode: "sync",
-        factory: (value: "dev" | "prod") => {
-          seen.push(value);
-          return choice(
-            value === "dev"
-              ? (["debug", "common"] as const)
-              : (["silent", "common"] as const),
-          );
-        },
-        defaultValue: () => "dev" as const,
-      });
-      const context = createConfigContext<SharedConfig>({
-        schema: {
-          "~standard": {
-            version: 1,
-            vendor: "optique-test",
-            validate(input: unknown) {
-              return { value: input as SharedConfig };
-            },
+  it("lets a phase-two structural value win over a seed prompt answer", async () => {
+    type SharedConfig = { readonly b?: "dev" | "prod" };
+    const shared = dependency(choice(["dev", "prod"] as const));
+    const seen: string[] = [];
+    const sharedLevel = shared.derive({
+      metavar: "LEVEL",
+      mode: "sync",
+      factory: (value: "dev" | "prod") => {
+        seen.push(value);
+        return choice(
+          value === "dev"
+            ? (["debug", "common"] as const)
+            : (["silent", "common"] as const),
+        );
+      },
+      defaultValue: () => "dev" as const,
+    });
+    const context = createConfigContext<SharedConfig>({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return { value: input as SharedConfig };
           },
         },
-      });
-      let promptCalls = 0;
-      const parser = object({
-        a: prompt(option("--a", shared), {
-          type: "select",
-          message: "A:",
-          choices: ["dev", "prod"],
-          prompter: () => {
-            promptCalls += 1;
-            return Promise.resolve("dev");
-          },
-        }),
-        b: bindConfig(option("--b", shared), {
-          context,
-          key: "b",
-          default: "dev",
-        }),
-        level: option("--level", sharedLevel),
-      });
-
-      // The seed pass demands the source (CLI --level), so the prompt
-      // for `a` answers "dev" there.  Phase two then supplies a
-      // structural config value "prod" for the later occurrence `b`,
-      // which must win in the final pass: the final replay must see
-      // "prod".
-      const result = await runWith(parser, "test", [context], {
-        args: ["--level", "common"],
-        contextOptions: {
-          load: () => ({ config: { b: "prod" }, meta: undefined }),
+      },
+    });
+    let promptCalls = 0;
+    const parser = object({
+      a: prompt(option("--a", shared), {
+        type: "select",
+        message: "A:",
+        choices: ["dev", "prod"],
+        prompter: () => {
+          promptCalls += 1;
+          return Promise.resolve("dev");
         },
-      });
+      }),
+      b: bindConfig(option("--b", shared), {
+        context,
+        key: "b",
+        default: "dev",
+      }),
+      level: option("--level", sharedLevel),
+    });
 
-      assert.equal(result.a, "dev");
-      assert.equal(result.b, "prod");
-      assert.equal(result.level, "common");
-      assert.equal(promptCalls, 1);
-      assert.equal(seen.at(-1), "prod");
-    },
-  );
+    // The seed pass demands the source (CLI --level), so the prompt
+    // for `a` answers "dev" there.  Phase two then supplies a
+    // structural config value "prod" for the later occurrence `b`,
+    // which must win in the final pass: the final replay must see
+    // "prod".
+    const result = await runWith(parser, "test", [context], {
+      args: ["--level", "common"],
+      contextOptions: {
+        load: () => ({ config: { b: "prod" }, meta: undefined }),
+      },
+    });
+
+    assert.equal(result.a, "dev");
+    assert.equal(result.b, "prod");
+    assert.equal(result.level, "common");
+    assert.equal(promptCalls, 1);
+    assert.equal(seen.at(-1), "prod");
+  });
 
   it("preserves inner source extraction when prompt() wraps bindEnv()", async () => {
     const envContext = createEnvContext({
@@ -6274,101 +6215,97 @@ describe("prompt() with dependency sources", () => {
       modeParser.dependencyMetadata?.source != null,
       "Expected source metadata.",
     );
-    const extracted = await modeParser.dependencyMetadata.source
-      .extractSourceValue(parseResult.next.state);
+    const extracted =
+      await modeParser.dependencyMetadata.source.extractSourceValue(
+        parseResult.next.state,
+      );
     assert.deepEqual(extracted, { success: true, value: "prod" });
   });
 
-  it(
-    "preserves inner source extraction when prompt() wraps bindEnv() at initial state",
-    async () => {
-      const envContext = createEnvContext({
-        prefix: "APP_",
-        source: (key) => ({ APP_MODE: "prod" })[key],
-      });
-      const annotations = envContext.getAnnotations();
-      if (annotations instanceof Promise) {
-        throw new TypeError("Expected synchronous annotations.");
-      }
-      const modeParser = prompt(
-        bindEnv(option("--mode", mode), {
-          context: envContext,
-          key: "MODE",
-          parser: choice(["dev", "prod"] as const),
-        }),
-        {
-          type: "select",
-          message: "Select mode:",
-          choices: ["dev", "prod"],
-          prompter: () =>
-            Promise.reject(new Error("Prompt should not be called")),
-        },
-      );
+  it("preserves inner source extraction when prompt() wraps bindEnv() at initial state", async () => {
+    const envContext = createEnvContext({
+      prefix: "APP_",
+      source: (key) => ({ APP_MODE: "prod" })[key],
+    });
+    const annotations = envContext.getAnnotations();
+    if (annotations instanceof Promise) {
+      throw new TypeError("Expected synchronous annotations.");
+    }
+    const modeParser = prompt(
+      bindEnv(option("--mode", mode), {
+        context: envContext,
+        key: "MODE",
+        parser: choice(["dev", "prod"] as const),
+      }),
+      {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      },
+    );
 
-      assert.ok(
-        modeParser.dependencyMetadata?.source != null,
-        "Expected source metadata.",
+    assert.ok(
+      modeParser.dependencyMetadata?.source != null,
+      "Expected source metadata.",
+    );
+    const extracted =
+      await modeParser.dependencyMetadata.source.extractSourceValue(
+        injectAnnotations(modeParser.initialState, annotations),
       );
-      const extracted = await modeParser.dependencyMetadata.source
-        .extractSourceValue(
-          injectAnnotations(modeParser.initialState, annotations),
-        );
-      assert.deepEqual(extracted, { success: true, value: "prod" });
-    },
-  );
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+  });
 
-  it(
-    "preserves inner source extraction when prompt() wraps bindConfig() at initial state",
-    async () => {
-      const configContext = createConfigContext<
-        { readonly mode?: "dev" | "prod" }
-      >({
-        schema: {
-          "~standard": {
-            version: 1,
-            vendor: "optique-test",
-            validate(input: unknown) {
-              return {
-                value: input as { readonly mode?: "dev" | "prod" },
-              };
-            },
+  it("preserves inner source extraction when prompt() wraps bindConfig() at initial state", async () => {
+    const configContext = createConfigContext<{
+      readonly mode?: "dev" | "prod";
+    }>({
+      schema: {
+        "~standard": {
+          version: 1,
+          vendor: "optique-test",
+          validate(input: unknown) {
+            return {
+              value: input as { readonly mode?: "dev" | "prod" },
+            };
           },
         },
-      });
-      const annotations = await configContext.getAnnotations(
-        { phase: "phase2", parsed: {} },
-        {
-          load: () => ({
-            config: { mode: "prod" as const },
-            meta: undefined,
-          }),
-        },
-      );
-      const modeParser = prompt(
-        bindConfig(option("--mode", mode), {
-          context: configContext,
-          key: "mode",
+      },
+    });
+    const annotations = await configContext.getAnnotations(
+      { phase: "phase2", parsed: {} },
+      {
+        load: () => ({
+          config: { mode: "prod" as const },
+          meta: undefined,
         }),
-        {
-          type: "select",
-          message: "Select mode:",
-          choices: ["dev", "prod"],
-          prompter: () =>
-            Promise.reject(new Error("Prompt should not be called")),
-        },
-      );
+      },
+    );
+    const modeParser = prompt(
+      bindConfig(option("--mode", mode), {
+        context: configContext,
+        key: "mode",
+      }),
+      {
+        type: "select",
+        message: "Select mode:",
+        choices: ["dev", "prod"],
+        prompter: () =>
+          Promise.reject(new Error("Prompt should not be called")),
+      },
+    );
 
-      assert.ok(
-        modeParser.dependencyMetadata?.source != null,
-        "Expected source metadata.",
+    assert.ok(
+      modeParser.dependencyMetadata?.source != null,
+      "Expected source metadata.",
+    );
+    const extracted =
+      await modeParser.dependencyMetadata.source.extractSourceValue(
+        injectAnnotations(modeParser.initialState, annotations),
       );
-      const extracted = await modeParser.dependencyMetadata.source
-        .extractSourceValue(
-          injectAnnotations(modeParser.initialState, annotations),
-        );
-      assert.deepEqual(extracted, { success: true, value: "prod" });
-    },
-  );
+    assert.deepEqual(extracted, { success: true, value: "prod" });
+  });
 
   it("delegates source extraction for raw inner states", async () => {
     const sourceId = Symbol("raw-prompt-source");
@@ -6405,9 +6342,9 @@ describe("prompt() with dependency sources", () => {
           preservesSourceValue: true,
           extractSourceValue(state) {
             return state != null &&
-                typeof state === "object" &&
-                "value" in state &&
-                typeof state.value === "string"
+              typeof state === "object" &&
+              "value" in state &&
+              typeof state.value === "string"
               ? { success: true as const, value: state.value }
               : undefined;
           },
@@ -6423,112 +6360,33 @@ describe("prompt() with dependency sources", () => {
       parser.dependencyMetadata?.source != null,
       "Expected source metadata.",
     );
-    const extracted = await parser.dependencyMetadata.source
-      .extractSourceValue({ value: "prod" });
+    const extracted = await parser.dependencyMetadata.source.extractSourceValue(
+      { value: "prod" },
+    );
 
     assert.deepEqual(extracted, { success: true, value: "prod" });
   });
 
   describe("shared-buffer wrapper contracts", () => {
     for (const kind of ["tuple", "concat"] as const) {
-      it(
-        `${kind}() skips prompt when bindEnv() resolves dependency source`,
-        async () => {
-          const envContext = createEnvContext({
-            prefix: "APP_",
-            source: (key) => ({ APP_MODE: "prod" })[key],
-          });
-          const annotations = envContext.getAnnotations();
-          if (annotations instanceof Promise) {
-            throw new TypeError("Expected synchronous annotations.");
-          }
-          const wrappedParser = bindEnv(option("--mode", mode), {
-            context: envContext,
-            key: "MODE",
-            parser: choice(["dev", "prod"] as const),
-          });
-          let promptCalls = 0;
-          const guardedParser = kind === "tuple"
+      it(`${kind}() skips prompt when bindEnv() resolves dependency source`, async () => {
+        const envContext = createEnvContext({
+          prefix: "APP_",
+          source: (key) => ({ APP_MODE: "prod" })[key],
+        });
+        const annotations = envContext.getAnnotations();
+        if (annotations instanceof Promise) {
+          throw new TypeError("Expected synchronous annotations.");
+        }
+        const wrappedParser = bindEnv(option("--mode", mode), {
+          context: envContext,
+          key: "MODE",
+          parser: choice(["dev", "prod"] as const),
+        });
+        let promptCalls = 0;
+        const guardedParser =
+          kind === "tuple"
             ? tuple([
-              prompt(wrappedParser, {
-                type: "select",
-                message: "Select mode:",
-                choices: ["dev", "prod"],
-                prompter: () => {
-                  promptCalls += 1;
-                  return Promise.resolve("dev" as const);
-                },
-              }),
-              option("--level", level),
-            ])
-            : concat(
-              tuple([
-                prompt(wrappedParser, {
-                  type: "select",
-                  message: "Select mode:",
-                  choices: ["dev", "prod"],
-                  prompter: () => {
-                    promptCalls += 1;
-                    return Promise.resolve("dev" as const);
-                  },
-                }),
-              ]),
-              tuple([
-                option("--level", level),
-              ]),
-            );
-          const result = await parseAsync(
-            guardedParser,
-            ["--level", "silent"],
-            { annotations },
-          );
-
-          assert.ok(result.success);
-          assert.deepEqual(result.value, ["prod", "silent"]);
-          assert.equal(promptCalls, 0);
-
-          const suggestionTexts = (
-            await suggestAsync(
-              guardedParser,
-              ["--level", "s"],
-              { annotations },
-            )
-          )
-            .filter((suggestion) => suggestion.kind === "literal")
-            .map((suggestion) => suggestion.text);
-          assert.ok(suggestionTexts.includes("silent"));
-          assert.ok(suggestionTexts.includes("strict"));
-          assert.ok(!suggestionTexts.includes("debug"));
-          assert.ok(!suggestionTexts.includes("verbose"));
-          assert.equal(promptCalls, 0);
-        },
-      );
-
-      for (
-        const wrapperKind of ["optional", "withDefault"] as const
-      ) {
-        it(
-          `${kind}() skips prompt when ${wrapperKind}(bindEnv(...)) resolves dependency source`,
-          async () => {
-            const envContext = createEnvContext({
-              prefix: "APP_",
-              source: (key) => ({ APP_MODE: "prod" })[key],
-            });
-            const annotations = envContext.getAnnotations();
-            if (annotations instanceof Promise) {
-              throw new TypeError("Expected synchronous annotations.");
-            }
-            const boundParser = bindEnv(option("--mode", mode), {
-              context: envContext,
-              key: "MODE",
-              parser: choice(["dev", "prod"] as const),
-            });
-            const wrappedParser = wrapperKind === "optional"
-              ? optional(boundParser)
-              : withDefault(boundParser, "dev" as const);
-            let promptCalls = 0;
-            const parser = kind === "tuple"
-              ? tuple([
                 prompt(wrappedParser, {
                   type: "select",
                   message: "Select mode:",
@@ -6540,7 +6398,7 @@ describe("prompt() with dependency sources", () => {
                 }),
                 option("--level", level),
               ])
-              : concat(
+            : concat(
                 tuple([
                   prompt(wrappedParser, {
                     type: "select",
@@ -6552,45 +6410,181 @@ describe("prompt() with dependency sources", () => {
                     },
                   }),
                 ]),
-                tuple([
-                  option("--level", level),
-                ]),
+                tuple([option("--level", level)]),
               );
+        const result = await parseAsync(guardedParser, ["--level", "silent"], {
+          annotations,
+        });
 
-            const result = await parseAsync(
-              parser,
-              ["--level", "silent"],
-              { annotations },
-            );
+        assert.ok(result.success);
+        assert.deepEqual(result.value, ["prod", "silent"]);
+        assert.equal(promptCalls, 0);
 
-            assert.ok(result.success);
-            assert.deepEqual(result.value, ["prod", "silent"]);
-            assert.equal(promptCalls, 0);
+        const suggestionTexts = (
+          await suggestAsync(guardedParser, ["--level", "s"], { annotations })
+        )
+          .filter((suggestion) => suggestion.kind === "literal")
+          .map((suggestion) => suggestion.text);
+        assert.ok(suggestionTexts.includes("silent"));
+        assert.ok(suggestionTexts.includes("strict"));
+        assert.ok(!suggestionTexts.includes("debug"));
+        assert.ok(!suggestionTexts.includes("verbose"));
+        assert.equal(promptCalls, 0);
+      });
 
-            const suggestionTexts = (
-              await suggestAsync(
-                parser,
-                ["--level", "s"],
-                { annotations },
-              )
-            )
-              .filter((suggestion) => suggestion.kind === "literal")
-              .map((suggestion) => suggestion.text);
-            assert.ok(suggestionTexts.includes("silent"));
-            assert.ok(suggestionTexts.includes("strict"));
-            assert.ok(!suggestionTexts.includes("debug"));
-            assert.ok(!suggestionTexts.includes("verbose"));
-            assert.equal(promptCalls, 0);
-          },
-        );
+      for (const wrapperKind of ["optional", "withDefault"] as const) {
+        it(`${kind}() skips prompt when ${wrapperKind}(bindEnv(...)) resolves dependency source`, async () => {
+          const envContext = createEnvContext({
+            prefix: "APP_",
+            source: (key) => ({ APP_MODE: "prod" })[key],
+          });
+          const annotations = envContext.getAnnotations();
+          if (annotations instanceof Promise) {
+            throw new TypeError("Expected synchronous annotations.");
+          }
+          const boundParser = bindEnv(option("--mode", mode), {
+            context: envContext,
+            key: "MODE",
+            parser: choice(["dev", "prod"] as const),
+          });
+          const wrappedParser =
+            wrapperKind === "optional"
+              ? optional(boundParser)
+              : withDefault(boundParser, "dev" as const);
+          let promptCalls = 0;
+          const parser =
+            kind === "tuple"
+              ? tuple([
+                  prompt(wrappedParser, {
+                    type: "select",
+                    message: "Select mode:",
+                    choices: ["dev", "prod"],
+                    prompter: () => {
+                      promptCalls += 1;
+                      return Promise.resolve("dev" as const);
+                    },
+                  }),
+                  option("--level", level),
+                ])
+              : concat(
+                  tuple([
+                    prompt(wrappedParser, {
+                      type: "select",
+                      message: "Select mode:",
+                      choices: ["dev", "prod"],
+                      prompter: () => {
+                        promptCalls += 1;
+                        return Promise.resolve("dev" as const);
+                      },
+                    }),
+                  ]),
+                  tuple([option("--level", level)]),
+                );
+
+          const result = await parseAsync(parser, ["--level", "silent"], {
+            annotations,
+          });
+
+          assert.ok(result.success);
+          assert.deepEqual(result.value, ["prod", "silent"]);
+          assert.equal(promptCalls, 0);
+
+          const suggestionTexts = (
+            await suggestAsync(parser, ["--level", "s"], { annotations })
+          )
+            .filter((suggestion) => suggestion.kind === "literal")
+            .map((suggestion) => suggestion.text);
+          assert.ok(suggestionTexts.includes("silent"));
+          assert.ok(suggestionTexts.includes("strict"));
+          assert.ok(!suggestionTexts.includes("debug"));
+          assert.ok(!suggestionTexts.includes("verbose"));
+          assert.equal(promptCalls, 0);
+        });
       }
 
-      it(
-        `${kind}() skips prompt when bindConfig() resolves dependency source`,
-        async () => {
-          const configContext = createConfigContext<
-            { readonly mode?: "dev" | "prod" }
-          >({
+      it(`${kind}() skips prompt when bindConfig() resolves dependency source`, async () => {
+        const configContext = createConfigContext<{
+          readonly mode?: "dev" | "prod";
+        }>({
+          schema: {
+            "~standard": {
+              version: 1,
+              vendor: "optique-test",
+              validate(input: unknown) {
+                return {
+                  value: input as { readonly mode?: "dev" | "prod" },
+                };
+              },
+            },
+          },
+        });
+        const annotations = await configContext.getAnnotations(
+          { phase: "phase2", parsed: {} },
+          {
+            load: () => ({
+              config: { mode: "prod" as const },
+              meta: undefined,
+            }),
+          },
+        );
+        let promptCalls = 0;
+        const wrappedParser = bindConfig(option("--mode", mode), {
+          context: configContext,
+          key: "mode",
+        });
+        const parser =
+          kind === "tuple"
+            ? tuple([
+                prompt(wrappedParser, {
+                  type: "select",
+                  message: "Select mode:",
+                  choices: ["dev", "prod"],
+                  prompter: () => {
+                    promptCalls += 1;
+                    return Promise.resolve("dev" as const);
+                  },
+                }),
+                option("--level", level),
+              ])
+            : concat(
+                tuple([
+                  prompt(wrappedParser, {
+                    type: "select",
+                    message: "Select mode:",
+                    choices: ["dev", "prod"],
+                    prompter: () => {
+                      promptCalls += 1;
+                      return Promise.resolve("dev" as const);
+                    },
+                  }),
+                ]),
+                tuple([option("--level", level)]),
+              );
+        const result = await parseAsync(parser, ["--level", "silent"], {
+          annotations,
+        });
+
+        assert.ok(result.success);
+        assert.deepEqual(result.value, ["prod", "silent"]);
+        assert.equal(promptCalls, 0);
+
+        const suggestionTexts = (
+          await suggestAsync(parser, ["--level", "s"], { annotations })
+        )
+          .filter((suggestion) => suggestion.kind === "literal")
+          .map((suggestion) => suggestion.text);
+        assert.ok(suggestionTexts.includes("silent"));
+        assert.ok(suggestionTexts.includes("strict"));
+        assert.ok(!suggestionTexts.includes("debug"));
+        assert.ok(!suggestionTexts.includes("verbose"));
+        assert.equal(promptCalls, 0);
+      });
+
+      for (const wrapperKind of ["optional", "withDefault"] as const) {
+        it(`${kind}() skips prompt when ${wrapperKind}(bindConfig(...)) resolves dependency source`, async () => {
+          const configContext = createConfigContext<{
+            readonly mode?: "dev" | "prod";
+          }>({
             schema: {
               "~standard": {
                 version: 1,
@@ -6613,119 +6607,17 @@ describe("prompt() with dependency sources", () => {
             },
           );
           let promptCalls = 0;
-          const wrappedParser = bindConfig(option("--mode", mode), {
+          const boundParser = bindConfig(option("--mode", mode), {
             context: configContext,
             key: "mode",
           });
-          const parser = kind === "tuple"
-            ? tuple([
-              prompt(wrappedParser, {
-                type: "select",
-                message: "Select mode:",
-                choices: ["dev", "prod"],
-                prompter: () => {
-                  promptCalls += 1;
-                  return Promise.resolve("dev" as const);
-                },
-              }),
-              option("--level", level),
-            ])
-            : concat(
-              tuple([
-                prompt(wrappedParser, {
-                  type: "select",
-                  message: "Select mode:",
-                  choices: ["dev", "prod"],
-                  prompter: () => {
-                    promptCalls += 1;
-                    return Promise.resolve("dev" as const);
-                  },
-                }),
-              ]),
-              tuple([
-                option("--level", level),
-              ]),
-            );
-          const result = await parseAsync(
-            parser,
-            ["--level", "silent"],
-            { annotations },
-          );
-
-          assert.ok(result.success);
-          assert.deepEqual(result.value, ["prod", "silent"]);
-          assert.equal(promptCalls, 0);
-
-          const suggestionTexts = (
-            await suggestAsync(
-              parser,
-              ["--level", "s"],
-              { annotations },
-            )
-          )
-            .filter((suggestion) => suggestion.kind === "literal")
-            .map((suggestion) => suggestion.text);
-          assert.ok(suggestionTexts.includes("silent"));
-          assert.ok(suggestionTexts.includes("strict"));
-          assert.ok(!suggestionTexts.includes("debug"));
-          assert.ok(!suggestionTexts.includes("verbose"));
-          assert.equal(promptCalls, 0);
-        },
-      );
-
-      for (
-        const wrapperKind of ["optional", "withDefault"] as const
-      ) {
-        it(
-          `${kind}() skips prompt when ${wrapperKind}(bindConfig(...)) resolves dependency source`,
-          async () => {
-            const configContext = createConfigContext<
-              { readonly mode?: "dev" | "prod" }
-            >({
-              schema: {
-                "~standard": {
-                  version: 1,
-                  vendor: "optique-test",
-                  validate(input: unknown) {
-                    return {
-                      value: input as { readonly mode?: "dev" | "prod" },
-                    };
-                  },
-                },
-              },
-            });
-            const annotations = await configContext.getAnnotations(
-              { phase: "phase2", parsed: {} },
-              {
-                load: () => ({
-                  config: { mode: "prod" as const },
-                  meta: undefined,
-                }),
-              },
-            );
-            let promptCalls = 0;
-            const boundParser = bindConfig(option("--mode", mode), {
-              context: configContext,
-              key: "mode",
-            });
-            const wrappedParser = wrapperKind === "optional"
+          const wrappedParser =
+            wrapperKind === "optional"
               ? optional(boundParser)
               : withDefault(boundParser, "dev" as const);
-            const parser = kind === "tuple"
+          const parser =
+            kind === "tuple"
               ? tuple([
-                prompt(wrappedParser, {
-                  type: "select",
-                  message: "Select mode:",
-                  choices: ["dev", "prod"],
-                  prompter: () => {
-                    promptCalls += 1;
-                    return Promise.resolve("dev" as const);
-                  },
-                }),
-                option("--level", level),
-              ])
-              : concat(
-                tuple([
                   prompt(wrappedParser, {
                     type: "select",
                     message: "Select mode:",
@@ -6735,37 +6627,41 @@ describe("prompt() with dependency sources", () => {
                       return Promise.resolve("dev" as const);
                     },
                   }),
-                ]),
-                tuple([
                   option("--level", level),
-                ]),
-              );
-            const result = await parseAsync(
-              parser,
-              ["--level", "silent"],
-              { annotations },
-            );
+                ])
+              : concat(
+                  tuple([
+                    prompt(wrappedParser, {
+                      type: "select",
+                      message: "Select mode:",
+                      choices: ["dev", "prod"],
+                      prompter: () => {
+                        promptCalls += 1;
+                        return Promise.resolve("dev" as const);
+                      },
+                    }),
+                  ]),
+                  tuple([option("--level", level)]),
+                );
+          const result = await parseAsync(parser, ["--level", "silent"], {
+            annotations,
+          });
 
-            assert.ok(result.success);
-            assert.deepEqual(result.value, ["prod", "silent"]);
-            assert.equal(promptCalls, 0);
+          assert.ok(result.success);
+          assert.deepEqual(result.value, ["prod", "silent"]);
+          assert.equal(promptCalls, 0);
 
-            const suggestionTexts = (
-              await suggestAsync(
-                parser,
-                ["--level", "s"],
-                { annotations },
-              )
-            )
-              .filter((suggestion) => suggestion.kind === "literal")
-              .map((suggestion) => suggestion.text);
-            assert.ok(suggestionTexts.includes("silent"));
-            assert.ok(suggestionTexts.includes("strict"));
-            assert.ok(!suggestionTexts.includes("debug"));
-            assert.ok(!suggestionTexts.includes("verbose"));
-            assert.equal(promptCalls, 0);
-          },
-        );
+          const suggestionTexts = (
+            await suggestAsync(parser, ["--level", "s"], { annotations })
+          )
+            .filter((suggestion) => suggestion.kind === "literal")
+            .map((suggestion) => suggestion.text);
+          assert.ok(suggestionTexts.includes("silent"));
+          assert.ok(suggestionTexts.includes("strict"));
+          assert.ok(!suggestionTexts.includes("debug"));
+          assert.ok(!suggestionTexts.includes("verbose"));
+          assert.equal(promptCalls, 0);
+        });
       }
     }
   });
@@ -6854,9 +6750,10 @@ describe("prompt() with derived configurations", () => {
       packageManager: prompt(
         option("--package-manager", packageManager),
         derivePromptConfig(framework, (value) => {
-          const choices = value === "fresh"
-            ? (["deno"] as const)
-            : (["npm", "pnpm"] as const);
+          const choices =
+            value === "fresh"
+              ? (["deno"] as const)
+              : (["npm", "pnpm"] as const);
           resolvedChoices.push(choices);
           return {
             type: "select",
@@ -6936,20 +6833,25 @@ describe("prompt() with zero-dependency derived configurations", () => {
       { signal: controller.signal },
     );
 
-    const result = await withPromptFunctionsOverride({
-      select(config: { readonly choices: readonly unknown[] }) {
-        selectChoices.push(config.choices);
-        return Promise.resolve("b.txt");
+    const result = await withPromptFunctionsOverride(
+      {
+        select(config: { readonly choices: readonly unknown[] }) {
+          selectChoices.push(config.choices);
+          return Promise.resolve("b.txt");
+        },
       },
-    }, () => parseAsync(parser, []));
+      () => parseAsync(parser, []),
+    );
 
     assert.ok(result.success);
     assert.equal(result.value, "b.txt");
     assert.deepEqual(signals, [controller.signal]);
-    assert.deepEqual(selectChoices, [[
-      { value: "a.txt", name: "a.txt" },
-      { value: "b.txt", name: "b.txt" },
-    ]]);
+    assert.deepEqual(selectChoices, [
+      [
+        { value: "a.txt", name: "a.txt" },
+        { value: "b.txt", name: "b.txt" },
+      ],
+    ]);
   });
 
   it("type-checks a separately declared configuration", async () => {
@@ -6990,91 +6892,102 @@ describe("search prompts", () => {
     ]);
     const queries: (string | undefined)[] = [];
     const validate = (value: string) => value === "east" || "Choose east.";
-    await withPromptFunctionsOverride({
-      search: async (config: {
-        readonly source: (
-          term: string | undefined,
-          context: { readonly signal: AbortSignal },
-        ) => Promise<readonly unknown[]>;
-        readonly default?: string;
-        readonly pageSize?: number;
-        readonly validate?: typeof validate;
-      }, context: { readonly signal?: AbortSignal }) => {
-        assert.equal(context.signal, outer.signal);
-        assert.equal(config.default, "");
-        assert.equal(config.pageSize, 8);
-        assert.equal(config.validate, validate);
-        assert.deepEqual(
-          await config.source(undefined, { signal: first.signal }),
-          [{ value: "east", name: "east" }, choices[1], separator],
-        );
-        first.abort();
-        const result = await config.source("we", { signal: second.signal });
-        assert.deepEqual(result, [
-          { value: "east", name: "east" },
-          choices[1],
-          separator,
-        ]);
-        assert.equal(result[2], separator);
-        return Promise.resolve("east");
-      },
-    }, async () => {
-      const parser = prompt(option("--region", string()), {
-        type: "search",
-        message: "Region",
-        default: "",
-        pageSize: 8,
-        validate,
-        source: (term, { signal }) => {
-          queries.push(term);
-          assert.equal(
-            signal,
-            term === undefined ? first.signal : second.signal,
+    await withPromptFunctionsOverride(
+      {
+        search: async (
+          config: {
+            readonly source: (
+              term: string | undefined,
+              context: { readonly signal: AbortSignal },
+            ) => Promise<readonly unknown[]>;
+            readonly default?: string;
+            readonly pageSize?: number;
+            readonly validate?: typeof validate;
+          },
+          context: { readonly signal?: AbortSignal },
+        ) => {
+          assert.equal(context.signal, outer.signal);
+          assert.equal(config.default, "");
+          assert.equal(config.pageSize, 8);
+          assert.equal(config.validate, validate);
+          assert.deepEqual(
+            await config.source(undefined, { signal: first.signal }),
+            [{ value: "east", name: "east" }, choices[1], separator],
           );
-          assert.notEqual(signal, outer.signal);
-          return term === undefined ? choices : Promise.resolve(choices);
+          first.abort();
+          const result = await config.source("we", { signal: second.signal });
+          assert.deepEqual(result, [
+            { value: "east", name: "east" },
+            choices[1],
+            separator,
+          ]);
+          assert.equal(result[2], separator);
+          return Promise.resolve("east");
         },
-      }, { signal: outer.signal });
-      assert.deepEqual(await parseAsync(parser, []), {
-        success: true,
-        value: "east",
-      });
-      assert.deepEqual(queries, [undefined, "we"]);
-    });
+      },
+      async () => {
+        const parser = prompt(
+          option("--region", string()),
+          {
+            type: "search",
+            message: "Region",
+            default: "",
+            pageSize: 8,
+            validate,
+            source: (term, { signal }) => {
+              queries.push(term);
+              assert.equal(
+                signal,
+                term === undefined ? first.signal : second.signal,
+              );
+              assert.notEqual(signal, outer.signal);
+              return term === undefined ? choices : Promise.resolve(choices);
+            },
+          },
+          { signal: outer.signal },
+        );
+        assert.deepEqual(await parseAsync(parser, []), {
+          success: true,
+          value: "east",
+        });
+        assert.deepEqual(queries, [undefined, "we"]);
+      },
+    );
   });
 
   it("should turn synchronous source throws into rejected source calls", async () => {
     const failure = new Error("Source failed.");
-    await withPromptFunctionsOverride({
-      search: async (
-        config: {
+    await withPromptFunctionsOverride(
+      {
+        search: async (config: {
           readonly source: (
             term: string | undefined,
             context: { readonly signal: AbortSignal },
           ) => Promise<unknown>;
+        }) => {
+          await assert.rejects(
+            config.source("e", { signal: new AbortController().signal }),
+            (error) => error === failure,
+          );
+          return Promise.resolve("east");
         },
-      ) => {
-        await assert.rejects(
-          config.source("e", { signal: new AbortController().signal }),
-          (error) => error === failure,
-        );
-        return Promise.resolve("east");
       },
-    }, async () => {
-      assert.deepEqual(
-        await parseAsync(
-          prompt(option("--region", string()), {
-            type: "search",
-            message: "Region",
-            source: () => {
-              throw failure;
-            },
-          }),
-          [],
-        ),
-        { success: true, value: "east" },
-      );
-    });
+      async () => {
+        assert.deepEqual(
+          await parseAsync(
+            prompt(option("--region", string()), {
+              type: "search",
+              message: "Region",
+              source: () => {
+                throw failure;
+              },
+            }),
+            [],
+          ),
+          { success: true, value: "east" },
+        );
+      },
+    );
   });
 
   it("should bypass search source for CLI and custom prompters", async () => {
@@ -7108,7 +7021,7 @@ describe("search prompts", () => {
               type: "search",
               message: "Region",
               source: () => ["east"],
-            })
+            }),
           ),
         );
         assert.deepEqual(await parseAsync(parser, []), {
@@ -7120,24 +7033,27 @@ describe("search prompts", () => {
   });
 
   it("should retain user cancellation handling for search", async () => {
-    await withPromptFunctionsOverride({
-      search: () => {
-        const error = new Error("Cancelled.");
-        error.name = "ExitPromptError";
-        return Promise.reject(error);
+    await withPromptFunctionsOverride(
+      {
+        search: () => {
+          const error = new Error("Cancelled.");
+          error.name = "ExitPromptError";
+          return Promise.reject(error);
+        },
       },
-    }, async () => {
-      const result = await parseAsync(
-        prompt(option("--region", string()), {
-          type: "search",
-          message: "Region",
-          source: () => [],
-        }),
-        [],
-      );
-      assert.ok(!result.success);
-      assert.equal(formatMessage(result.error), "Prompt cancelled.");
-    });
+      async () => {
+        const result = await parseAsync(
+          prompt(option("--region", string()), {
+            type: "search",
+            message: "Region",
+            source: () => [],
+          }),
+          [],
+        );
+        assert.ok(!result.success);
+        assert.equal(formatMessage(result.error), "Prompt cancelled.");
+      },
+    );
   });
 
   it("should restrict search to string-valued parsers", () => {
@@ -7159,34 +7075,41 @@ describe("search abort", () => {
       entered = resolve;
     });
     let receivedSignal: AbortSignal | undefined;
-    await withPromptFunctionsOverride({
-      search: (
-        _config: unknown,
-        context: { readonly signal?: AbortSignal },
-      ) => {
-        receivedSignal = context.signal;
-        entered();
-        return new Promise((_resolve, reject) => {
-          receivedSignal?.addEventListener(
-            "abort",
-            () => reject(receivedSignal?.reason),
-            { once: true },
-          );
-        });
+    await withPromptFunctionsOverride(
+      {
+        search: (
+          _config: unknown,
+          context: { readonly signal?: AbortSignal },
+        ) => {
+          receivedSignal = context.signal;
+          entered();
+          return new Promise((_resolve, reject) => {
+            receivedSignal?.addEventListener(
+              "abort",
+              () => reject(receivedSignal?.reason),
+              { once: true },
+            );
+          });
+        },
       },
-    }, async () => {
-      const parser = prompt(option("--region", string()), {
-        type: "search",
-        message: "Region",
-        source: () => [],
-      }, { signal: controller.signal });
-      const pending = parseAsync(parser, []);
-      await ready;
-      controller.abort(reason);
-      await assert.rejects(pending, (error) => error === reason);
-      assert.ok(receivedSignal?.aborted);
-      assert.equal(receivedSignal.reason, reason);
-    });
+      async () => {
+        const parser = prompt(
+          option("--region", string()),
+          {
+            type: "search",
+            message: "Region",
+            source: () => [],
+          },
+          { signal: controller.signal },
+        );
+        const pending = parseAsync(parser, []);
+        await ready;
+        controller.abort(reason);
+        await assert.rejects(pending, (error) => error === reason);
+        assert.ok(receivedSignal?.aborted);
+        assert.equal(receivedSignal.reason, reason);
+      },
+    );
   });
 });
 
@@ -7196,9 +7119,10 @@ describe("prompt() with mapped optional and defaulted parsers", () => {
     for (const hasCliValue of [false, true]) {
       it(`should ${hasCliValue ? "use CLI input" : "prompt"} for mapped ${wrapper}() under unrelated annotations`, async () => {
         const inner = option("--name", string());
-        const wrapped = wrapper === "optional"
-          ? optional(inner)
-          : withDefault(inner, "default");
+        const wrapped =
+          wrapper === "optional"
+            ? optional(inner)
+            : withDefault(inner, "default");
         let promptCalls = 0;
         const parser = prompt(
           map(wrapped, (value) => (value ?? "missing").toUpperCase()),
@@ -7230,7 +7154,7 @@ describe("prompt() with mapped optional and defaulted parsers", () => {
   it("should skip prompting when a mapped defaulted parser has an env source", async () => {
     const context = createEnvContext({
       prefix: "TEST_",
-      source: (key) => key === "TEST_NAME" ? "from-env" : undefined,
+      source: (key) => (key === "TEST_NAME" ? "from-env" : undefined),
     });
     const annotations = context.getAnnotations();
     if (annotations instanceof Promise) {
