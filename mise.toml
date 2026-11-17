@@ -148,6 +148,16 @@ run = "node scripts/tooling/format.mjs --write"
 description = "Build all packages for npm publishing"
 run = "pnpm run --filter '!{docs}' -r build"
 
+[tasks."docs:build"]
+description = "Build production documentation and check Twoslash examples"
+dir = "docs"
+env = { NODE_OPTIONS = "--max-old-space-size=12288" }
+run = [
+  "pnpm run build:packages",
+  "node .vitepress/warm-twoslash-cache.mts",
+  "pnpm exec vitepress build",
+]
+
 [tasks."testing:cli:build"]
 description = "Build the testing package and its dependencies"
 run = 'pnpm --filter "@optique/testing..." -r build'

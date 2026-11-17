@@ -1,6 +1,6 @@
 {
   "recommendations": [
-    "denoland.vscode-deno",
+    "oxc.oxc-vscode",
     "streetsidesoftware.code-spell-checker"
   ]
 }

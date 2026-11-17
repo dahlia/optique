@@ -15,6 +15,8 @@ concurrency:
 
 env:
   MISE_EXPERIMENTAL: true
+  MISE_AUTO_INSTALL: "0"
+  MISE_TASK_RUN_AUTO_INSTALL: "false"
 
 jobs:
   check:
@@ -40,21 +42,14 @@ jobs:
         experimental: true
         install: true
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
-    - run: mise exec deno@2.9 -- deno task test --coverage --junit-path=junit.xml
-    - if: ${{ !cancelled() }}
-      uses: codecov/codecov-action@v6
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: junit.xml
-        report_type: test_results
-    - uses: codecov/codecov-action@v6
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage/lcov.info
+    - run: mise install deno@2.9
+    - run: mise run check:deno
+    - run: mise run check:publish
+    - run: mise run test:deno
 
   test-node:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
     - uses: actions/checkout@v6
     - run: sudo apt-get install -y zsh
@@ -64,6 +59,17 @@ jobs:
         install: true
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: mise run test:node
+    - run: mise run coverage
+    - if: ${{ !cancelled() }}
+      uses: codecov/codecov-action@v6
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage/junit/*.xml
+        report_type: test_results
+    - uses: codecov/codecov-action@v6
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage/lcov.info
 
   test-bun:
     runs-on: ubuntu-24.04
@@ -99,15 +105,108 @@ jobs:
       with:
         experimental: true
         install: true
-        install_args: node deno bun github:pnpm/pnpm
+        install_args: node deno@2.9 bun github:pnpm/pnpm
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
     - run: mise deps
     - run: mise run --jobs 1 testing:cli:${{ matrix.runtime }}
       timeout-minutes: 3
 
-  publish:
+  bootstrap-node:
+    permissions:
+      contents: read
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      MISE_AUTO_INSTALL: "0"
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+    - uses: actions/checkout@v6
+    - if: runner.os == 'Linux'
+      run: sudo apt-get install -y zsh
+    - name: Isolate tool installations and the Deno cache
+      shell: pwsh
+      run: |
+        "MISE_DATA_DIR=$env:RUNNER_TEMP/mise-deno-free" >> $env:GITHUB_ENV
+        "DENO_DIR=$env:RUNNER_TEMP/deno-empty" >> $env:GITHUB_ENV
+        "DENO_SENTINEL_LOG=$env:RUNNER_TEMP/deno-attempts.log" >> $env:GITHUB_ENV
+    - uses: jdx/mise-action@v4
+      with:
+        experimental: true
+        install: false
+        cache: false
+        add_shims_to_path: false
+    - name: Install and prove the failing Deno sentinel
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        $PSNativeCommandUseErrorActionPreference = $false
+        $bin = Join-Path $env:RUNNER_TEMP "deno-sentinel"
+        New-Item -ItemType Directory -Force $bin, $env:DENO_DIR | Out-Null
+        if ($IsWindows) {
+          # A real executable catches direct spawn/execFile calls as well as shells.
+          $source = Join-Path $bin "Sentinel.cs"
+          [IO.File]::WriteAllText($source, @'
+        using System;
+        using System.IO;
+        class Sentinel {
+          static int Main(string[] args) {
+            File.AppendAllText(Environment.GetEnvironmentVariable("DENO_SENTINEL_LOG"),
+              String.Join(" ", args) + Environment.NewLine);
+            return 97;
+          }
+        }
+        '@)
+          $deno = Join-Path $bin "deno.exe"
+          & "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo "/out:$deno" $source
+          if ($LASTEXITCODE -ne 0) { throw "Could not compile the Deno sentinel." }
+        } else {
+          $deno = Join-Path $bin "deno"
+          [IO.File]::WriteAllText($deno, @'
+        #!/bin/sh
+        printf '%s\n' "$*" >> "$DENO_SENTINEL_LOG"
+        exit 97
+        '@, [Text.UTF8Encoding]::new($false))
+          chmod +x $deno
+          if ($LASTEXITCODE -ne 0) { throw "Could not make the Deno sentinel executable." }
+        }
+        & $deno --version
+        if ($LASTEXITCODE -ne 97 -or !(Test-Path $env:DENO_SENTINEL_LOG)) {
+          throw "The Deno sentinel did not record its self-test."
+        }
+        Remove-Item $env:DENO_SENTINEL_LOG
+        $bin >> $env:GITHUB_PATH
+        # Do not propagate the expected self-test failure as the step status.
+        exit 0
+    - name: Bootstrap and run Node-only contributor tasks
+      shell: bash
+      run: |
+        set -euxo pipefail
+        mise install
+        mise deps
+        mise run fmt
+        git diff --exit-code
+        mise run check
+        mise run check:versions --fix
+        git diff --exit-code
+        mise run dev
+        mise run docs:build
+        mise run coverage
+    - name: Reject every attempted Deno launch, even an ignored failure
+      if: ${{ always() }}
+      shell: pwsh
+      run: |
+        if (Test-Path $env:DENO_SENTINEL_LOG) {
+          Get-Content $env:DENO_SENTINEL_LOG
+          throw "Node-only bootstrap attempted to launch Deno."
+        }
+
+  publish-jsr:
     if: github.event_name == 'push'
-    needs: [test-node, test-deno, test-bun, test-cli-windows, check]
+    needs: [test-node, test-deno, test-bun, test-cli-windows, check, bootstrap-node]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -120,10 +219,11 @@ jobs:
         experimental: true
         install: true
         log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
+    - run: mise install deno@2.9
     - run: |
         set -ex
         if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-        mise run check:versions
+          mise run check:versions
           [[ "$(jq -r '.version' packages/core/deno.json)" == "$GITHUB_REF_NAME" ]]
         else
           jq \
@@ -149,6 +249,38 @@ jobs:
             sleep 10
           fi
         done
+
+  publish-npm:
+    if: github.event_name == 'push'
+    needs: [test-node, test-deno, test-bun, test-cli-windows, check, bootstrap-node]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v6
+    - uses: jdx/mise-action@v4
+      with:
+        experimental: true
+        install: true
+        log_level: ${{ runner.debug == '1' && 'debug' || 'info' }}
+    - run: |
+        set -ex
+        if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+          mise run check:versions
+          [[ "$(jq -r '.version' packages/core/deno.json)" == "$GITHUB_REF_NAME" ]]
+        else
+          jq \
+            --arg build "$GITHUB_RUN_NUMBER" \
+            --arg commit "${GITHUB_SHA::8}" \
+            '.version = .version + "-dev." + $build + "+" + $commit' \
+            packages/core/deno.json > /tmp/deno.json
+          mv /tmp/deno.json packages/core/deno.json
+          mise run check:versions --fix
+        fi
+    - run: |
+        set -ex
         if [[ "$GITHUB_REF_TYPE" == tag ]]; then
           pnpm publish \
             --recursive \
@@ -168,7 +300,7 @@ jobs:
 
   public-docs:
     if: github.event_name == 'push'
-    needs: [publish]
+    needs: [publish-npm]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
